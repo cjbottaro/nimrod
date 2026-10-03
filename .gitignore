@@ -1,0 +1,30 @@
+# Dependencies and build output
+node_modules/
+dist/
+target/
+/src-tauri/gen/
+*.tsbuildinfo
+.vite/
+
+# Test artifacts
+/test-results/
+/playwright-report/
+/coverage/
+
+# Local environment and tool overrides (keep shareable examples)
+.env
+.env.*
+!.env.example
+!.env.*.example
+/mise.local.toml
+/.mise.local.toml
+
+# Local Git worktrees
+/.worktrees/
+/worktrees/
+
+# OS metadata and logs
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.log

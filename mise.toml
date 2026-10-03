@@ -1,0 +1,16 @@
+[tools]
+rust = "1.98.1"
+node = "25.9.0"
+
+[tasks.dev]
+run = "npm run tauri dev"
+
+[tasks.check]
+run = "npm test && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml"
+
+[tasks.build]
+run = "npm run tauri build -- --bundles app"
+
+[tasks.install-cli]
+description = "Install nimrod in ~/.local/bin without changing shell configuration"
+run = "bash scripts/install-cli.sh"

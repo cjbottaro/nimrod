@@ -1,0 +1,214 @@
+export interface PaletteItem {
+  id: string;
+  label: string;
+  detail?: string;
+  keywords?: string;
+  run(): void | Promise<void>;
+  next?: boolean;
+}
+export interface PalettePage { items: PaletteItem[]; notice?: string; }
+export interface PaletteOptions {
+  commands(): PaletteItem[];
+  sessions(): Promise<PalettePage>;
+  openSessions(): PalettePage;
+  canOpen(): boolean;
+}
+export interface SelectionRequest {
+  choose(options: string[], current?: string): Promise<string | undefined>;
+  error(message: string): void;
+  finish(): void;
+  cancel(): void;
+}
+
+/** Window-local navigation UI, not a harness command dispatcher. */
+export function installCommandPalette(win: Window, dialog: HTMLDialogElement, options: PaletteOptions) {
+  const realm = win as Window & typeof globalThis;
+  const doc = dialog.ownerDocument;
+  const input = dialog.querySelector<HTMLInputElement>('#palette-input')!;
+  const list = dialog.querySelector<HTMLElement>('#palette-list')!;
+  const title = dialog.querySelector<HTMLElement>('#palette-title')!;
+  const status = dialog.querySelector<HTMLElement>('#palette-status')!;
+  const back = dialog.querySelector<HTMLButtonElement>('#palette-back')!;
+  const retry = dialog.querySelector<HTMLButtonElement>('#palette-refresh')!;
+  const create = dialog.querySelector<HTMLButtonElement>('#palette-create')!;
+  const hint = dialog.querySelector<HTMLElement>('#palette-hint')!;
+  const controller = new realm.AbortController();
+  const signal = controller.signal;
+  let mode: 'commands' | 'sessions' | 'selection' | 'name' = 'commands';
+  let items: PaletteItem[] = [], matches: PaletteItem[] = [];
+  let selected = 0;
+  let generation = 0;
+  let commandQuery = '';
+  let notice = '';
+  let loading = false;
+  let opener: HTMLElement | undefined;
+  let afterClose: (() => void | Promise<void>) | undefined;
+  let resolveChoice: ((value: string | undefined) => void) | undefined;
+  let retryAction: (() => void) | undefined;
+  let createNamed: ((name: string) => void | Promise<void>) | undefined;
+  let composing = false;
+
+  function cancelChoice(): void { const resolve = resolveChoice; resolveChoice = undefined; resolve?.(undefined); }
+  function validName(): boolean { return !!input.value.trim() && !/[\r\n\0]/.test(input.value); }
+  function draw(): void {
+    const naming = mode === 'name';
+    dialog.dataset.mode = mode;
+    list.hidden = naming; create.hidden = !naming; hint.hidden = naming;
+    if (naming) {
+      input.setAttribute('role', 'textbox');
+      for (const attr of ['aria-expanded', 'aria-controls', 'aria-autocomplete', 'aria-activedescendant']) input.removeAttribute(attr);
+      input.setAttribute('aria-busy', 'false');
+      create.disabled = !validName();
+      list.replaceChildren();
+      status.textContent = 'Enter to create · Esc to cancel';
+      return;
+    }
+    input.setAttribute('role', 'combobox'); input.setAttribute('aria-expanded', 'true');
+    input.setAttribute('aria-controls', 'palette-list'); input.setAttribute('aria-autocomplete', 'list');
+    const previous = matches[selected]?.id;
+    const words = input.value.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
+    matches = items.filter(item => words.every(word => `${item.label} ${item.detail || ''} ${item.keywords || ''}`.toLocaleLowerCase().includes(word)));
+    selected = Math.max(0, matches.findIndex(item => item.id === previous));
+    list.replaceChildren(...matches.map((item, index) => {
+      const row = doc.createElement('div'); row.id = `palette-option-${index}`; row.setAttribute('role', 'option'); row.dataset.index = String(index);
+      const label = doc.createElement('span'); label.textContent = item.label;
+      const detail = doc.createElement('small'); detail.textContent = item.detail || '';
+      row.append(label, detail); row.title = item.keywords || item.detail || item.label;
+      return row;
+    }));
+    const noun = mode === 'commands' ? 'commands' : mode === 'sessions' ? 'sessions' : 'options';
+    status.textContent = loading ? `Loading ${noun}…` : notice || (matches.length ? `${matches.length} ${noun}` : items.length || mode === 'commands' ? `No matching ${noun}.` : mode === 'sessions' ? 'No sessions yet.' : 'No options available.');
+    input.setAttribute('aria-busy', String(loading));
+    selection();
+  }
+  function selection(): void {
+    for (const [index, row] of [...list.children].entries()) row.setAttribute('aria-selected', String(index === selected));
+    const row = list.children[selected] as HTMLElement | undefined;
+    if (row) {
+      input.setAttribute('aria-activedescendant', row.id);
+      if (row.offsetTop < list.scrollTop) list.scrollTop = row.offsetTop;
+      else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight;
+    } else input.removeAttribute('aria-activedescendant');
+  }
+  function commands(): void {
+    cancelChoice(); createNamed = undefined; generation++; mode = 'commands'; loading = false; notice = ''; items = options.commands(); matches = []; selected = 0;
+    title.textContent = 'Commands'; input.placeholder = 'Type a command…'; input.setAttribute('aria-label', 'Search commands');
+    input.value = commandQuery; back.hidden = true; retry.hidden = true; retryAction = undefined; draw(); input.focus();
+  }
+  function beginPage(kind: 'sessions' | 'selection', heading: string, placeholder: string, onRetry: () => void, keepQuery = false): number | undefined {
+    if (!dialog.open && !open()) return;
+    if (mode === 'commands') commandQuery = input.value;
+    cancelChoice(); createNamed = undefined; mode = kind; title.textContent = heading; input.placeholder = placeholder;
+    input.setAttribute('aria-label', kind === 'sessions' ? 'Search project sessions' : heading);
+    back.hidden = false; retry.hidden = false; retryAction = onRetry;
+    retry.textContent = kind === 'sessions' ? 'Refresh' : 'Retry';
+    loading = true; notice = ''; items = []; matches = []; selected = 0;
+    if (!keepQuery) input.value = '';
+    const request = ++generation;
+    draw(); input.focus(); return request;
+  }
+  async function sessions(kind: 'resume' | 'open' = 'resume', refresh = false): Promise<void> {
+    const isResume = kind === 'resume';
+    const request = beginPage('sessions', isResume ? 'Resume session' : 'Switch session', isResume ? 'Type to filter project sessions…' : 'Type to filter open sessions…', () => { void sessions(kind, true); }, refresh);
+    if (request === undefined) return;
+    try {
+      const page = isResume ? await options.sessions() : options.openSessions();
+      if (!dialog.open || generation !== request) return;
+      items = page.items; notice = page.notice || '';
+    } catch (error) {
+      if (!dialog.open || generation !== request) return;
+      notice = `Could not load sessions: ${error}. Use Refresh to retry.`;
+    }
+    if (dialog.open && generation === request) { loading = false; draw(); }
+  }
+  function startSelection(heading: string, onRetry: () => void): SelectionRequest | undefined {
+    const request = beginPage('selection', heading, 'Type to filter…', onRetry);
+    if (request === undefined) return;
+    const current = () => dialog.open && generation === request && mode === 'selection';
+    return {
+      choose(values, selectedValue) {
+        if (!current()) return Promise.resolve(undefined);
+        return new Promise(resolve => {
+          cancelChoice(); resolveChoice = resolve;
+          items = values.map(value => ({ id: value, label: value, detail: value === selectedValue ? 'Current' : '', run: () => resolve(value) }));
+          matches = items; selected = Math.max(0, items.findIndex(item => item.id === selectedValue));
+          loading = false; notice = ''; draw();
+        });
+      },
+      error(message) { if (current()) { loading = false; notice = message; draw(); } },
+      finish() { if (current() && loading) { loading = false; notice = 'Pi did not provide choices. Retry when the session is ready.'; draw(); } },
+      cancel() { if (current()) { cancelChoice(); dialog.close(); } },
+    };
+  }
+  function namedSession(onCreate: (name: string) => void | Promise<void>): void {
+    if (doc.querySelector('dialog[open]:not(#command-palette)')) return;
+    if (!dialog.open && !open()) return;
+    if (mode === 'commands') commandQuery = input.value;
+    cancelChoice(); generation++; mode = 'name'; createNamed = onCreate; composing = false;
+    title.textContent = 'New named session'; input.placeholder = 'Session name…'; input.setAttribute('aria-label', 'Session name');
+    input.value = ''; back.hidden = true; retry.hidden = true; retryAction = undefined;
+    loading = false; notice = ''; items = []; matches = []; selected = 0;
+    draw(); input.focus();
+  }
+  function submitName(): void {
+    if (!dialog.open || mode !== 'name' || !createNamed || composing || !validName() || doc.querySelector('dialog[open]:not(#command-palette)')) return;
+    const action = createNamed, name = input.value.trim();
+    createNamed = undefined;
+    // Use the same post-close action boundary as navigation, not a prompt.
+    afterClose = () => action(name);
+    dialog.close();
+  }
+  function open(): boolean {
+    if (!options.canOpen() || doc.querySelector('dialog[open]')) return false;
+    opener = doc.activeElement instanceof realm.HTMLElement ? doc.activeElement : undefined;
+    commandQuery = ''; afterClose = undefined;
+    dialog.showModal(); commands(); return true;
+  }
+  function choose(index = selected): void {
+    const item = matches[index];
+    if (!item || loading) return;
+    if (item.next) { void item.run(); return; }
+    // The action owns resolution after native focus restoration. Dismissal alone cancels.
+    resolveChoice = undefined;
+    afterClose = item.run;
+    dialog.close();
+  }
+  function escape(): void { if (mode !== 'commands' && mode !== 'name') commands(); else dialog.close(); }
+  input.addEventListener('compositionstart', () => { composing = true; }, { signal });
+  input.addEventListener('compositionend', () => { composing = false; }, { signal });
+  input.addEventListener('input', () => { matches = []; selected = 0; draw(); }, { signal });
+  dialog.addEventListener('keydown', event => {
+    if (event.isComposing || event.keyCode === 229) return;
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); escape(); }
+    else if (event.target === input && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault(); if (matches.length) selected = (selected + (event.key === 'ArrowDown' ? 1 : -1) + matches.length) % matches.length; selection();
+      } else if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) { if (mode === 'name') submitName(); else choose(); } }
+    } else if (event.target === create && event.key === 'Enter' && event.repeat) {
+      event.preventDefault();
+    }
+  }, { signal });
+  dialog.addEventListener('cancel', event => { event.preventDefault(); escape(); }, { signal });
+  dialog.addEventListener('close', () => {
+    cancelChoice(); createNamed = undefined; generation++;
+    const action = afterClose; afterClose = undefined;
+    if (!doc.querySelector('dialog[open]') && opener?.isConnected && !opener.closest('[hidden], [inert]')) opener.focus({ preventScroll: true });
+    if (action) void Promise.resolve().then(action).catch(error => {
+      // An action error is not a reason to replay it (especially a launch).
+      if (open()) { notice = String(error); draw(); }
+    });
+  }, { signal });
+  list.addEventListener('mousedown', event => event.preventDefault(), { signal });
+  list.addEventListener('click', event => {
+    const row = (event.target as HTMLElement).closest<HTMLElement>('[data-index]'); if (row) choose(Number(row.dataset.index));
+  }, { signal });
+  create.addEventListener('click', submitName, { signal });
+  back.addEventListener('click', commands, { signal });
+  retry.addEventListener('click', () => retryAction?.(), { signal });
+  win.addEventListener('keydown', event => {
+    if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.altKey || event.key.toLowerCase() !== 'p' || event.isComposing || event.keyCode === 229 || event.repeat) return;
+    if (dialog.open) { event.preventDefault(); return; }
+    if (open()) event.preventDefault();
+  }, { signal });
+  return { open, sessions: () => sessions('resume'), openSessions: () => sessions('open'), namedSession, startSelection, dispose: () => { cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
+}

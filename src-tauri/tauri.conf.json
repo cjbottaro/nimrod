@@ -1,0 +1,16 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Nimrod", "version": "0.1.0", "identifier": "dev.nimrod.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev", "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "npm run build", "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [{ "create": false, "label": "main", "title": "Nimrod", "width": 1000, "height": 800, "minWidth": 560, "minHeight": 420 }],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'",
+      "devCsp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost http://127.0.0.1:1420 ws://127.0.0.1:1420; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'"
+    }
+  },
+  "bundle": { "active": true, "targets": ["app"], "resources": ["resources/*", "../THIRD_PARTY_NOTICES.md"], "icon": ["icons/icon.png", "icons/icon.icns", "icons/icon.ico"] }
+}

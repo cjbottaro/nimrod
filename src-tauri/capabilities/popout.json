@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "popout",
+  "description": "Read-only code snapshot windows",
+  "windows": ["popout-*"],
+  "permissions": ["core:default", "core:window:allow-close", "core:window:allow-set-title", "core:webview:allow-set-webview-zoom", "clipboard-manager:allow-write-text"]
+}

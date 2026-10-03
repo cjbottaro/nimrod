@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Terminal launcher only. The app owns workspace routing and single-instance IPC.
+set -euo pipefail
+
+usage() {
+  printf '%s\n' 'Usage: nimrod [DIRECTORY]' '       nimrod -- DIRECTORY' '' \
+    'Open or focus a project. Defaults to the current directory.' \
+    'No session is started or resumed.' '' \
+    'NIMROD_APP overrides the .app location on macOS, or executable on Linux.'
+}
+fail() { printf 'nimrod: %s\n' "$*" >&2; exit 1; }
+
+if [[ $# -eq 1 && ( $1 == --help || $1 == -h ) ]]; then usage; exit 0; fi
+if [[ ${1-} == -- ]]; then
+  shift
+elif [[ ${1-} == -* ]]; then
+  fail 'Unknown option. Use nimrod --help.'
+fi
+[[ $# -le 1 ]] || fail 'Expected one project directory. Use nimrod --help.'
+requested=${1-.}
+[[ -n $requested && -d $requested ]] || fail "Not a project directory: $requested"
+workspace=$(CDPATH= cd -P -- "$requested" && pwd -P) || fail "Cannot open project: $requested"
+
+# Resolve an installed symlink back to this checkout, including relative links.
+source_path=${BASH_SOURCE[0]}
+while [[ -L $source_path ]]; do
+  source_dir=$(CDPATH= cd -P -- "$(dirname "$source_path")" && pwd -P)
+  source_path=$(readlink "$source_path")
+  [[ $source_path == /* ]] || source_path=$source_dir/$source_path
+done
+repo=$(CDPATH= cd -P -- "$(dirname "$source_path")/.." && pwd -P)
+
+case $(uname -s) in
+  Darwin)
+    app=${NIMROD_APP:-$repo/src-tauri/target/release/bundle/macos/Nimrod.app}
+    [[ -d $app && -x $app/Contents/MacOS/nimrod ]] || fail "Build not found at $app. Run mise run build or set NIMROD_APP."
+    app=$(CDPATH= cd -P -- "$app" && pwd -P)
+    # --args alone is ignored for an already-running app. The transient second
+    # launch forwards to the existing instance through Tauri, then exits.
+    exec /usr/bin/open -n -a "$app" --args --workspace "$workspace"
+    ;;
+  Linux)
+    app=${NIMROD_APP:-$repo/src-tauri/target/release/nimrod}
+    [[ -f $app && -x $app ]] || fail "Executable not found at $app. Build Nimrod or set NIMROD_APP."
+    nohup "$app" --workspace "$workspace" </dev/null >/dev/null 2>&1 &
+    ;;
+  *) fail 'This launcher currently supports macOS and Linux.' ;;
+esac

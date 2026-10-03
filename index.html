@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nimrod</title></head>
+<body>
+  <header id="workspace-bar">
+    <button id="toggle-sidebar" type="button" class="secondary" aria-label="Toggle session sidebar" aria-expanded="true" aria-controls="session-sidebar" title="Toggle sidebar · ⌘/Ctrl B">☰</button>
+    <span class="wordmark">nimrod<span class="spark">✦</span></span>
+    <span id="workspace-label">Your coding project</span><span id="mode-badge">PoC</span>
+    <button id="open-palette" type="button" class="secondary" aria-label="Open command palette" aria-haspopup="dialog" aria-controls="command-palette" title="Command palette · ⌘/Ctrl ⇧ P">⌘⇧P</button>
+    <button id="open-workspace" type="button" class="secondary">Open project…</button>
+    <button id="disconnect" hidden>Disconnect</button>
+    <button id="open-settings" type="button" aria-label="Open Settings" aria-haspopup="dialog" aria-controls="settings-page" title="Settings · ⌘/Ctrl ,"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-1 3-3 1-2 3 2 2-1 3 3 2 3-1 2 3 3-1 1-3 3-1 2-3-2-2 1-3-3-2-3 1-2-3Z"/><circle cx="12" cy="11" r="3"/></svg></button>
+  </header>
+  <p id="storage-error" role="alert" hidden></p>
+  <div id="workspace-layout">
+  <aside id="session-sidebar" aria-label="Open sessions" hidden>
+    <button id="sidebar-new" type="button">+ New session</button>
+    <div id="open-sessions" aria-label="Open sessions"></div>
+  </aside>
+  <div id="workspace-content">
+  <p id="launch-error" role="alert"></p>
+  <main id="welcome" hidden>
+    <div class="welcome-copy"><span class="eyebrow">A place for the work around the code.</span><h1>Give your agents<br>a room of their own.</h1><p>Pi first. Bespoke integrations, not a lowest-common-denominator chat box.</p></div>
+    <form id="launch-form">
+      <label for="cwd">Project folder</label><div class="path-row"><input id="cwd" required autocomplete="off" spellcheck="false"><button id="browse" type="button">Choose…</button><button id="enter-workspace" type="button">Open</button></div>
+      <div class="launch-actions"><button id="start-pi" type="submit" disabled>New session</button><button id="resume-file" type="button" class="secondary" disabled>Resume session file…</button><button id="resume-last" type="button" class="secondary" disabled hidden>Resume last session</button></div>
+      <div class="launch-actions"><button id="start-temporary" type="button" class="secondary" disabled>Temporary session</button><button id="start-demo" type="button" class="secondary" disabled>Try offline demo</button><button id="recover-draft" type="button" class="secondary" disabled hidden>Recover unattached draft…</button></div>
+      <p class="fine-print">A project is a directory. Select open sessions in the sidebar; find earlier work with ⌘/Ctrl ⇧ P → Resume session. Background agents keep running.<br>Pi owns conversation history. New sessions are written after an assistant response. Resume is explicit.</p>
+      <div id="recent-workspaces" aria-label="Recent projects"></div>
+    </form>
+  </main>
+  <section id="workspace-empty" aria-labelledby="workspace-empty-title" hidden>
+    <h1 id="workspace-empty-title">No open sessions</h1>
+    <p>Start a new session or resume an earlier conversation in this project.</p>
+    <div class="launch-actions"><button id="workspace-new" type="button" disabled>New session</button><button id="workspace-resume" type="button" class="secondary" disabled>Resume session…</button></div>
+  </section>
+  <div id="conversation" hidden></div>
+  </div>
+  </div>
+
+  <!-- Full-window page in the native dialog top layer: the workspace stays laid out and mounted. -->
+  <dialog id="settings-page" aria-labelledby="settings-title">
+    <header class="settings-header"><button id="settings-back" type="button" class="secondary" title="Back · Escape">← Back</button><h1 id="settings-title">Settings</h1></header>
+    <div class="settings-content">
+      <p class="settings-hint">Settings file: <code id="settings-file-path"></code><br>App-managed state: <code id="state-file-path"></code><br>Valid file edits synchronize automatically across windows.</p>
+      <p id="preferences-error" role="alert" hidden></p>
+      <section aria-labelledby="appearance-title">
+        <h2 id="appearance-title">Appearance</h2><p class="settings-description">Changes apply immediately and are remembered.</p>
+        <label for="theme-picker">Color theme</label>
+        <select id="theme-picker" aria-label="Color theme" title="Color theme"><option value="nimrod">Nimrod (system)</option></select>
+        <input id="theme-file" type="file" accept=".json,.jsonc,application/json" aria-label="Import VS Code color theme" hidden>
+        <p class="settings-hint">Choose “Import color theme…” to add a VS Code JSON/JSONC theme. Select an imported theme to remove its local copy.</p>
+        <div id="theme-notice" role="status" hidden><span id="theme-notice-text"></span><button id="theme-notice-dismiss" type="button" aria-label="Dismiss theme notice">×</button></div>
+        <label for="zoom-level">Zoom</label>
+        <select id="zoom-level" aria-label="App zoom" title="App zoom · ⌘/Ctrl +, −, 0" disabled><option>100%</option></select>
+        <p class="settings-hint">⌘/Ctrl + / − anywhere in the app. ⌘/Ctrl 0 resets to 100%.</p>
+        <p id="zoom-error" role="status" hidden></p>
+      </section>
+      <section aria-labelledby="runtime-title">
+        <h2 id="runtime-title">Runtime</h2><p class="settings-description">Save paths for the next session. Your running session is never restarted.</p>
+        <form id="runtime-settings">
+          <fieldset id="runtime-fields" disabled>
+            <label for="pi-path">Pi executable (or CLI JavaScript file)</label><input id="pi-path" required autocomplete="off" spellcheck="false">
+            <label for="node-path">Node executable</label><input id="node-path" required autocomplete="off" spellcheck="false">
+            <p class="settings-hint">Use an executable on PATH or its full path. Paths are checked when the next session starts.</p>
+            <button id="save-runtime" type="submit">Save runtime paths</button>
+          </fieldset>
+          <p id="runtime-status" role="status">Detecting runtime paths…</p>
+        </form>
+      </section>
+    </div>
+  </dialog>
+
+  <dialog id="host-dialog"><form method="dialog"><h2 id="host-dialog-title"></h2><p id="host-dialog-description"></p><select id="host-dialog-select" size="8" aria-label="Choose an option"></select><textarea id="host-dialog-input" rows="5" aria-label="Enter text"></textarea><div class="dialog-actions"><button value="cancel" class="secondary">Cancel</button><button value="ok">Confirm</button></div></form></dialog>
+  <dialog id="command-palette" aria-labelledby="palette-title">
+    <header class="palette-heading"><button id="palette-back" type="button" class="secondary" aria-label="Back to commands" hidden>←</button><strong id="palette-title">Commands</strong><button id="palette-refresh" type="button" class="secondary" hidden>Refresh</button><span id="palette-hint">Esc to go back</span></header>
+    <div class="palette-input-row"><input id="palette-input" type="text" role="combobox" aria-expanded="true" aria-controls="palette-list" aria-autocomplete="list" aria-describedby="palette-status" aria-label="Search commands" autocomplete="off" spellcheck="false"><button id="palette-create" type="button" hidden disabled>Create</button></div>
+    <div id="palette-list" role="listbox" aria-label="Navigation results"></div>
+    <p id="palette-status" role="status"></p>
+  </dialog>
+  <script type="module" src="/src/main.ts"></script>
+</body></html>

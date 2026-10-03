@@ -1,0 +1,6 @@
+body.code-popout-window { position:relative; display:flex; flex-direction:column; overflow:hidden; }
+.popout-content { flex:1; min-height:0; overflow:auto; padding:12px 20px 20px; }
+.popout-document > :first-child { margin-top:0; }
+.popout-markdown { padding-right:38px; }
+.popout-copy-source { position:absolute; top:12px; right:20px; display:flex; }
+.popout-error { margin:10px 20px; padding-right:38px; color:var(--vscode-errorForeground); }
