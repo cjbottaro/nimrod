@@ -12,15 +12,17 @@ implementation, storage, invariants, platform workarounds or test coverage.
 ## Product boundaries
 
 - Pop-outs capture immutable, read-only content; they are not editable notes or files.
-- They belong to the selected session in each project window, not the globally
-  focused window. Other projects retain their independently selected sessions.
+- Snapshots belong to sessions within projects. Only the active project family's
+  selected-session references are visible: the project window and its own pop-outs
+  share one focus scope. Other projects retain independently selected sessions and
+  running agents, but their references are hidden until that project is activated.
 - Copy/Pop out are icon-only, in that left-to-right order: Pop out, Copy. Buttons
   have accessible labels/tooltips; copy success shows a checkmark for 1.2 seconds.
 - Identical content/language anywhere in one session shares a pop-out. This is
   intentional, including identical content in different turns.
 - Switching sessions hides/shows references; closing the source session/project
   preserves saved snapshots. Explicit pop-out Close removes the saved reference
-  and file. App Quit preserves snapshots.
+  and file. Confirmed source-session tree deletion removes associated windows, state references and files too, including unmounted projects. Failed/unknown deletions retain them. App Quit preserves snapshots.
 - Temporary/demo and pre-first-save pop-outs are runtime-only. Provisional
   saved-session snapshots promote after verified Pi persistence, even in background.
 - No original message ID, block ordinal, transcript key or backlink is tracked.
@@ -196,6 +198,40 @@ captures geometry and flushes pop-out state before existing owned-child shutdown
 there is also an event-cached final-exit fallback. Do not route project Close/Quit
 through the explicit pop-out deletion path.
 
+## Project focus and visibility
+
+`Registry.focused_window` tracks the last native Nimrod window receiving
+`WindowEvent::Focused(true)`. A `popout-<uuid>` resolves to its entry's owning project;
+ordinary window labels identify their own project scope. Visibility requires both
+that foreground owner and the owner's selected mounted session, with no retirement.
+The welcome window has no selected references, so focusing it hides project pop-outs.
+
+- `src-tauri/src/main.rs` handles focus before the pop-out-specific early return.
+  `on_focus` records the new scope synchronously; a same-owner reference focus does
+  not trigger a project switch. Ignore blur events: project-to-pop-out transfer,
+  native dialogs and switching to an external app must not hide the reference being
+  used. A late focus event for an already removed pop-out is ignored.
+- `hide_inactive` hides outgoing references immediately, without waiting behind
+  the operations mutex or snapshot IO. `reconcile_visibility` then serializes the
+  passive presentation of existing references. These focus paths do not read
+  snapshot files, change selected sessions, write persistence or invoke Pi.
+- Session synchronization also hides newly ineligible references before waiting
+  for native operations. Background first-save promotion/restore can still proceed,
+  but its windows stay hidden while another project owns the foreground scope.
+- `show_restored` receives a latest-eligibility closure. On macOS it checks that
+  closure inside the main-thread callback immediately before native presentation;
+  a queued callback cannot reveal a project switched away from during restore.
+  Other platforms check before their existing native show API; native acceptance
+  remains platform-specific.
+- Do not acquire `WorkspaceWindows.directories` in the main-thread focus callback:
+  project routing holds that mutex across native window creation. Focus routing
+  uses only the short-lived pop-out registry lock. Asynchronous session sync can
+  seed a focused owner only when no native focus event has yet been observed.
+- Explicit open must pass the same foreground-project/session eligibility checks.
+  Do not allow a late queued click in a background project to activate its reference.
+- This reacts to native window focus, not a hard-coded ⌘\` handler. Preserve OS
+  window cycling and Linux/possible future Windows activation conventions.
+
 ## Native focus: keep the two paths separate
 
 **Automatic restore/switch:** `popout_windows::show_restored`.
@@ -239,20 +275,26 @@ Relevant tests:
   hashing, owner isolation, corrupt/missing files, rollback, geometry/no resurrection,
   legacy metadata compatibility and content larger than global state limits.
 - Rust tests in `popouts.rs`/`popout_windows.rs`: owner/revision/retirement isolation,
-  runtime-independent matching, visibility guards and automatic/explicit path separation.
+  runtime-independent matching, project focus round-trips, selected-session filtering,
+  same-owner pop-out focus, blur/welcome/closed-window handling, latest-scope guards
+  while operations are busy, minimization guards and automatic/explicit path separation.
 
 Run `mise run check` and `mise run build`. Rendering/scrolling changes also warrant
 `npm run test:browser`; these are offline fixtures, not the user's app. Never launch
 or interrupt that app, run live compaction/model work, or modify user session/state
 files to test persistence without explicit authorization.
 
-Last runtime-change evidence: 224 TS tests, 45 default Rust tests (two opt-in real-Pi
-smokes ignored), packaged macOS build. Fourteen offline WebKit tests passed for the
-content-first UI; they were not rerun for the later native-only focus correction.
+Last runtime-change evidence: 258 TS tests, 64 default Rust tests (two opt-in real-Pi
+smokes ignored), packaged macOS build. These current-checkout totals include other
+feature work. Five new native registry tests cover project visibility/focus policy;
+compiler/unit evidence does not establish native window cycling acceptance.
+Fourteen offline WebKit tests passed for the earlier content-first UI; they were not
+rerun for the later native-only focus/project-visibility changes.
 See [verification](../../../../docs/verification.md) for the latest recorded evidence.
 
 Do not infer native acceptance from compiler/source-guard/jsdom/browser tests.
 Ask the user to verify saved-session quit/relaunch focus, reference visibility on
-switch, close-versus-quit persistence, explicit-click focus, minimization, geometry
+session and project-window switching (including ⌘\`), own-pop-out focus without hiding
+its references, close-versus-quit persistence, explicit-click focus, minimization, geometry
 and multi-display behavior. Offline demos cannot verify restart persistence because
 those sessions deliberately have runtime-only pop-outs.

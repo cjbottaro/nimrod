@@ -14,16 +14,16 @@ export interface ComposerKeyboardEvent {
   keyCode: number;
 }
 
-/** Maps an unmodified Enter to the delivery Pi accepts in the current main-agent state. */
+/** Maps Enter/Option-Enter to delivery in the current main-agent state. */
 export function keyboardSubmissionMode(event: ComposerKeyboardEvent, mainBusy: boolean): KeyboardSubmissionMode | undefined {
   if (event.key !== "Enter" || event.shiftKey || event.isComposing || event.keyCode === 229) return undefined;
   if (!mainBusy) return "normal";
-  return "steer";
+  return event.altKey ? "followUp" : "steer";
 }
 
 export function keyboardHint(mainBusy: boolean): string {
   if (!mainBusy) return "Enter to send · Shift+Enter for newline";
-  return "Enter to steer · Shift+Enter for newline";
+  return "Enter to steer · Option-Enter to queue · Shift+Enter for newline";
 }
 
 /** Keep the primary composer affordance stable while its main-agent action changes. */

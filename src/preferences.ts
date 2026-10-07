@@ -22,6 +22,7 @@ export function parseSettings(text: string): Record<string, unknown> {
   const errors: ParseError[] = [];
   const settings = parse(text, errors, { allowTrailingComma: true, disallowComments: false });
   if (errors.length || !settings || typeof settings !== 'object' || Array.isArray(settings)) throw new Error('Settings must be a valid JSON/JSONC object.');
+  if (settings['notifications.enabled'] !== undefined && typeof settings['notifications.enabled'] !== 'boolean') throw new Error('notifications.enabled must be a boolean.');
   const zoom = settings['appearance.zoom'];
   if (zoom !== undefined && !ZOOM_LEVELS.includes(zoom)) throw new Error('Invalid appearance.zoom percentage.');
   for (const key of ['runtime.piPath', 'runtime.nodePath']) {
@@ -127,6 +128,8 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
       if (JSON.stringify(library.imports) !== JSON.stringify(settings['appearance.importedThemes'] ?? [])) values['appearance.importedThemes'] = library.imports;
       return patch(values);
     },
+    notificationsEnabled() { return settings['notifications.enabled'] !== false; },
+    saveNotifications(enabled: boolean) { return patch({ 'notifications.enabled': enabled }); },
     zoom() { return settings['appearance.zoom'] ?? DEFAULT_ZOOM; },
     saveZoom(percent: number) { return patch({ 'appearance.zoom': percent }); },
     readState(key: string) { return snapshot?.state[key]; },

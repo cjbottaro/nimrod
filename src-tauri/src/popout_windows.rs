@@ -6,12 +6,19 @@ fn needs_show(visible: bool, minimized: bool) -> bool {
 }
 
 #[cfg(target_os = "macos")]
-pub async fn show_restored(window: &tauri::WebviewWindow) -> Result<(), String> {
+pub async fn show_restored(
+    window: &tauri::WebviewWindow,
+    still_visible: impl FnOnce() -> bool + Send + 'static,
+) -> Result<(), String> {
     let target = window.clone();
     let (send, receive) = tokio::sync::oneshot::channel();
     window
         .run_on_main_thread(move || {
             let result = (|| {
+                // Focus/session selection may change while this callback is queued.
+                if !still_visible() {
+                    return Ok(());
+                }
                 let pointer = target.ns_window().map_err(|e| e.to_string())?;
                 if pointer.is_null() {
                     return Err("Pop-out native window is unavailable".into());
@@ -35,13 +42,18 @@ pub async fn show_restored(window: &tauri::WebviewWindow) -> Result<(), String> 
 }
 
 #[cfg(not(target_os = "macos"))]
-pub async fn show_restored(window: &tauri::WebviewWindow) -> Result<(), String> {
+pub async fn show_restored(
+    window: &tauri::WebviewWindow,
+    still_visible: impl FnOnce() -> bool + Send + 'static,
+) -> Result<(), String> {
     // Preserve the existing platform API, but never re-show an already visible or
     // minimized window. Native Windows/Linux focus acceptance remains separate.
-    if needs_show(
-        window.is_visible().map_err(|e| e.to_string())?,
-        window.is_minimized().map_err(|e| e.to_string())?,
-    ) {
+    if still_visible()
+        && needs_show(
+            window.is_visible().map_err(|e| e.to_string())?,
+            window.is_minimized().map_err(|e| e.to_string())?,
+        )
+    {
         window.show().map_err(|e| e.to_string())?;
     }
     Ok(())
@@ -61,9 +73,6 @@ mod tests {
     fn automatic_restore_and_explicit_open_have_separate_focus_paths() {
         let source = include_str!("popouts.rs");
         let automatic = source
-            .split("pub async fn sync_popout_sessions")
-            .nth(1)
-            .unwrap()
             .split("pub async fn open_code_popout")
             .next()
             .unwrap();

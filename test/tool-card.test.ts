@@ -102,7 +102,7 @@ test("Agent previews use description for normalized agent names without catching
     const tool = card(doc, { name, arguments: { description: "Investigate the reducer", prompt: "long full prompt", subagent_type: "Explore" } });
     const preview = tool.querySelector<HTMLElement>(".tool-card-preview");
     assert.equal(preview?.textContent, "Investigate the reducer", name);
-    assert.equal(preview?.title, "Investigate the reducer", name);
+    assert.equal(preview?.hasAttribute("title"), false, name);
   }
 
   const missingDescription = card(doc, { name: "agent", arguments: { prompt: "long full prompt" } });
@@ -118,7 +118,7 @@ test("steer_subagent previews its raw message field for normalized names", () =>
   for (const name of ["steer_subagent", "functions.steer_subagent"]) {
     const tool = card(doc, { name, arguments: { agentId: "agent-1", message } });
     assert.equal(tool.querySelector(".tool-card-preview")?.textContent, message, name);
-    assert.equal(tool.querySelector(".tool-card-preview")?.getAttribute("title"), message, name);
+    assert.equal(tool.querySelector(".tool-card-preview")?.hasAttribute("title"), false, name);
     assert.match(tool.querySelector(".tool-raw-inputs pre")?.textContent || "", /"message"/);
   }
 });
@@ -135,8 +135,25 @@ test("tool summary keeps its name and running spinner while a long preview is tr
   assert.ok(summary?.querySelector(".tool-card-spinner"));
   assert.equal(summary?.querySelector(".tool-card-summary")?.firstElementChild?.className, "tool-card-spinner");
   assert.equal(preview?.textContent, command);
-  assert.equal(preview?.title, command);
+  assert.equal(preview?.hasAttribute("title"), false);
   assert.equal(tool.querySelector<HTMLDetailsElement>(".tool-raw-inputs")?.open, false);
+});
+
+test("tool cards have no hover tooltips on initial render or lifecycle updates", () => {
+  const doc = document();
+  const tool = card(doc, { name: "bash", toolStatus: undefined, arguments: '{"command":"pwd",' });
+  assert.equal(tool.querySelector("[title]"), null);
+  for (const block of [
+    { toolStatus: "running" as const },
+    { toolStatus: "finished" as const, uiPhase: "thinking" as const },
+    { toolStatus: "running" as const, uiPhase: "stopped" as const },
+    { toolStatus: "result" as const },
+    { toolStatus: "result" as const, isError: true },
+  ]) {
+    updateToolCard(doc, tool, { name: "bash", arguments: { command: "echo updated" }, ...block });
+    assert.equal(tool.querySelector("[title]"), null);
+    assert.match(tool.querySelector("summary")?.getAttribute("aria-label") || "", /^bash \(/);
+  }
 });
 
 test("streaming updates retain the connected spinner rather than replacing or reparenting it", () => {

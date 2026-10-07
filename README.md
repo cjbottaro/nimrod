@@ -68,22 +68,24 @@ Runtime paths are discovered from PATH/common install locations; Node lookup als
 ## Included
 
 - Tauri 2 shell and Rust-owned subprocess, no additional Node backend (Pi itself uses Node).
-- One project directory per window and a collapsible session sidebar with activity indicators. The sidebar has a flat open-session list and does not repeat the project directory or duplicate history actions. Opening a directory already open in Nimrod focuses its window.
+- One project directory per window and a collapsible session sidebar with activity indicators. The sidebar has **All** and **Needs attention** views: a most-recently-used open-session list or a stable inbox for input requests, unread completions and failures. Only Pi-acknowledged messages update recency; selecting or renaming a session leaves its position unchanged. Background output does not reshuffle All, and reordering preserves the sidebar reading position. Needs attention leaves the conversation area blank without a selected inbox row; agents keep running, and explicit navigation to a filtered-out session switches to All. It does not repeat the project directory or duplicate history actions. [Sidebar views →](docs/workspace-sessions.md#sidebar-views) Opening a directory already open in Nimrod focuses its window.
 - **⌘/Ctrl ⇧ P** command palette: choose **Resume session…**, then type to filter this project's history by name, preview or file path. **Switch session…** lists only sessions open in the sidebar; **Resume session…** lists all resumable project sessions. The palette also contains the less-common session actions.
-- **New session** is persistent by default; **New named session…** is a compact palette step with a single-line field and inline Create button (Enter creates; Esc cancels), then starts Pi with its native `--name` option (requires a Pi runtime supporting that option). Temporary sessions and offline demos are explicit alternatives. Open historical sessions from the palette or an exact file. Closing a session does not delete history.
+- **New session** is persistent by default; **New named session…** is a compact palette step with a single-line field and inline Create button (Enter creates; Esc cancels), then starts Pi with its native `--name` option (requires a Pi runtime supporting that option). Temporary sessions and offline demos are explicit alternatives. Open historical sessions from the palette or an exact file. Closing a saved session does not delete history. Temporary/offline-demo sessions keep no persisted conversation state; Close discards their drafts and pop-outs.
 - Existing transcript, Markdown/code highlighting, reasoning/tool cards, disclosure timers, queue recovery, and bottom-follow behavior.
-- **Pop-outs:** keep code or rendered Markdown visible in separate, session-scoped windows. Saved-session references survive restart; Copy briefly shows a checkmark. [Pop-out guide →](docs/pop-outs.md)
+- **Pop-outs:** keep code or rendered Markdown visible in separate windows for the active project's selected session. Saved-session references survive restart; Copy briefly shows a checkmark. [Pop-out guide →](docs/pop-outs.md)
 - Fluid conversation layout: transcript, status, and composer follow the window width with consistent side padding rather than a fixed-width centered column.
-- Enter to send/steer; Shift+Enter for newline; Stop to clear queues then abort.
+- Enter to send/steer; Option-Enter (Alt+Enter on Linux) to queue only while the main agent is working, hinted immediately after Enter to steer; Shift+Enter for newline; Stop to clear queues then abort.
 - Acknowledged submission handling: preserve newer drafts; never replay uncertain submissions.
 - `/name`, idle-only `/compact` (with optional instructions), Pi-discovered slash commands, scoped-model picker, supported thinking levels, native Pi cost/context metrics. **Select model…** and **Select thinking level…** (searchable as “effort”) are command-palette actions; the status-area buttons open those same filtered pickers. Current values are marked, and unavailable/error states are explicit even before a new session's first save.
+- Native **background-session notifications** for completion, input needed and failures; Settings → Notifications controls alerts, offers a delivery test, read-only macOS diagnostics and the last attempt/error. Completion alerts preview the agent’s response; click-to-session routing remains deferred. [Notification guide →](docs/notifications.md)
 - RPC extension notifications, text widgets/statuses, and input/select/confirm/editor dialogs. TUI-only widgets remain unsupported.
 - File links to VS Code (`path:line:column`, `path#Lline`, or `file:///…#Lline`), HTTP(S) links to the default browser. Plain unlinked path text is not automatically linkified.
 - Scoped local drafts, file-backed JSONC preferences in `~/.config/nimrod/settings.json`, separate app-managed state in `~/.local/state/nimrod/state.json`, and the **Nimrod scheme**—this app's custom theme, with dark and light variants. Blue-gray foundations, mint/teal accents, and warm gold details; defined in `src/theme.css`.
 - A separate **Settings page** (gear button or **⌘/Ctrl ,**) for Appearance and Runtime preferences; opening it leaves the conversation and Pi running. Valid external settings edits synchronize across windows; comments and unrelated keys survive UI saves. Absolute XDG root overrides are supported on all platforms. [Settings behavior →](docs/settings.md)
 - A **theme picker in Settings → Appearance** with **Nimrod (system)** and **Dracula**, plus local imports of standalone VS Code color-theme `.json`/`.jsonc` files. Themes switch immediately and are remembered. See [themes and import instructions](docs/themes.md).
 - Whole-app webview zoom, default **125%**, saved between launches. Use **Settings → Appearance → Zoom** or **⌘/Ctrl + / −**; **⌘/Ctrl 0** resets to 100%. Range: 75–200%.
-- Explicit disconnect and observed child shutdown on window close/quit.
+- **Delete session tree…** in the Project bar and palette uses the installed Pi delete-tree extension, shows a custom, scrollable tree confirmation and waits for owned writers to stop before removal. Confirmed deletions remove associated drafts/references and select the next surviving sidebar session. No filesystem fallback. [Session deletion →](docs/workspace-sessions.md#delete-session-tree)
+- Project-bar **Restart session** icon for saved sessions: stop the selected agent and resume its exact history without replaying messages. Disabled for temporary sessions and before first save. Native **File → Open project…** replaces the Project bar's open button; the command palette is keyboard-only. [Projects and sessions →](docs/workspace-sessions.md)
 
 ## Themes
 
@@ -95,7 +97,7 @@ Terminal themes and `.vsix` extension packages aren't interchangeable with these
 
 A **project is a directory**—no Git repository, manifest or registration required. Its canonical path identifies the project, scopes its sessions, and is their working directory. One project belongs to each window; the path remains visible in the project bar. Gitignored worktree subdirectories are a useful layout, but launching a session in a different directory currently requires a separate project window, even when that directory is nested inside another project.
 
-Choose a project directory and **Open**, or use **Open project…**. Opening a project never launches Pi. The sidebar shows open sessions and their activity. Use **New session** or **⌘/Ctrl ⇧ P → Resume session…** to open a conversation; selecting an already-open session focuses it. Background agents keep running when you switch sessions. Each session retains its draft, disclosures and scroll position.
+Choose a project directory and **Open** on the welcome screen, or use **File → Open project…** (**⌘/Ctrl O**). Opening a project never launches Pi. The sidebar shows open sessions and their activity. Use **New session** or **⌘/Ctrl ⇧ P → Resume session…** to open a conversation; selecting an already-open session focuses it. Background agents keep running when you switch sessions. Each session retains its draft, disclosures and scroll position.
 
 The palette's session list filters as you type. Escape returns to commands (retaining your command query); Escape again closes the palette and restores focus. History is loaded only when requested, with visible loading/error states and Refresh. The palette remains modal while background streaming continues.
 
@@ -106,8 +108,8 @@ Session discovery reads Pi's default cwd-scoped session directory (or its sessio
 ## Not currently included
 
 - Background process continuity.
-- Session deletion, forks, tree navigation, reload commands, or integrated diffs.
-- Other harnesses, generic adapters, updates, signing/notarization, mobile builds, or a production installer.
+- Forks, tree navigation, Pi's `/reload` command, or integrated diffs.
+- Other harnesses, generic adapters, updates, Developer ID signing/notarization, mobile builds, or a production installer.
 
 Deferred slash commands (including `/resume`) are rejected explicitly, not silently submitted as chat; resume is a palette or exact-file action. Automatic Pi compaction remains visible and blocks that session's composer. Window reload reaps that window's children before allowing another launch and never replays a prompt.
 
@@ -119,7 +121,7 @@ Deferred slash commands (including `/resume`) are rejected explicitly, not silen
 
 Stop any other Pi/Nimrod/VS Code process using the file before resuming. Nimrod serializes its own child shutdown but cannot exclude external writers or eliminate external file-change races. Resume restores Pi's active-context history, not an in-flight process, pending queue, or every abandoned/pre-compaction branch.
 
-Drafts, recovered text, and uncertain submissions are scoped by canonical session file. New sessions use provisional draft identities until their file exists; temporary and demo drafts are separate per tab. Libraries and remembered tab layouts are scoped to the project directory. **Recover unattached draft…** explicitly copies a legacy PoC or unfinished provisional draft into a new session, preserving uncertainty and the recovery source. Nothing is submitted automatically, and history never counts as an acknowledgement. Browser-storage failure is reported but is not a durable-draft guarantee.
+Drafts, recovered text, and uncertain submissions are scoped by canonical session file. New sessions use provisional draft identities until their file exists; temporary and demo drafts stay only in memory per open session and are discarded on Close, window close, quit or reload. Libraries and remembered tab layouts are scoped to the project directory. **Recover unattached draft…** explicitly copies a legacy PoC or unfinished provisional draft into a new session, preserving uncertainty and the recovery source. Nothing is submitted automatically, and history never counts as an acknowledgement. Browser-storage failure is reported but is not a durable-draft guarantee.
 
 The pre-persistence development conversation was temporary; this build does not retroactively save it.
 
@@ -127,12 +129,14 @@ The pre-persistence development conversation was temporary; this build does not 
 
 ```sh
 mise run check  # TS + UI tests; Rust fmt, clippy, process tests
-mise run build  # macOS .app (unsigned local build)
+mise run build  # macOS .app (local ad-hoc signing + signature verification)
 
 # Real WebKit scrolling regression (offline demo only)
 npx playwright install webkit  # one-time browser installation
 npm run test:browser
 ```
+
+Local macOS bundles are ad-hoc signed as a whole application and verified by `mise run build`; this needs no certificate or Apple Developer account. UserNotifications rejects a linker-only executable signature even when macOS notification settings are enabled. Ad-hoc identity may require permission to be granted again after rebuilding; Developer ID signing/notarization remains deferred. [Notification setup →](docs/notifications.md)
 
 JavaScript/Rust Tauri packages must remain on compatible **major/minor** versions. Lockfiles are included; update both sides deliberately.
 

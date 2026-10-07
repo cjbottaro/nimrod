@@ -10,7 +10,7 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }))
   const win = dom.window; stubDialogs(win);
   const dialog = win.document.querySelector<HTMLDialogElement>('#command-palette')!;
   const input = win.document.querySelector<HTMLInputElement>('#palette-input')!;
-  const opener = win.document.querySelector<HTMLButtonElement>('#open-palette')!; opener.focus();
+  const opener = win.document.querySelector<HTMLButtonElement>('#open-settings')!; opener.focus();
   const calls: string[] = [];
   let allowed = true;
   const palette = installCommandPalette(win as unknown as Window, dialog, {

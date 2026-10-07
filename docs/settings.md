@@ -24,6 +24,7 @@ Absolute `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the corresponding roots
 {
   "appearance.theme": "nimrod", // Or "dracula" / an imported theme ID
   "appearance.zoom": 125,
+  "notifications.enabled": true,
   "runtime.piPath": "/path/to/pi",
   "runtime.nodePath": "/path/to/node"
 }
@@ -51,6 +52,10 @@ Project settings and personal project overrides are not implemented yet. There i
 
 Existing theme and zoom choices are migrated into the file-backed preferences. Restoring zoom does not rewrite the settings file.
 
+## Notifications
+
+**Background session alerts** are on by default. The On/Off picker saves immediately and synchronizes across windows without changing running sessions. **Send test notification** checks the native delivery path without starting an agent; it is disabled while alerts are off. The status line shows the latest attempt/suppression/error plus macOS policy and foreground-handler diagnostics after a test. **Refresh notification diagnostics** is read-only and remains available with alerts off; it neither posts a notification nor requests permission. macOS authorization and submission errors also appear in the project error area; OS notification settings still apply. See [notifications](notifications.md) for triggers, focus suppression, privacy and current native limitations.
+
 ## Runtime
 
 Pi and Node executable paths now live here instead of the launch form.
@@ -67,7 +72,7 @@ Project-folder selection and explicit new saved / exact-file resume / temporary 
 
 ## Implementation and verification
 
-- `index.html` / `src/theme.css`: full-page Settings surface, grouped Appearance/Runtime controls, minimal project-bar gear.
+- `index.html` / `src/theme.css`: full-page Settings surface, grouped Appearance/Notifications/Runtime controls, minimal project-bar gear.
 - `src/settings.ts`: navigation/shortcut handling and the explicit runtime Save boundary.
 - `src/preferences.ts`: JSONC edits, legacy migration, revision-ordered synchronization, and native persistence bridge.
 - `src-tauri/src/preferences.rs`: XDG paths, serialized/atomic writes, file polling, last-valid snapshots, and conflict checks.

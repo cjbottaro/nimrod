@@ -9,7 +9,7 @@ run = "npm run tauri dev"
 run = "npm test && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml"
 
 [tasks.build]
-run = "npm run tauri build -- --bundles app"
+run = "npm run tauri build -- --bundles app && npm run verify:bundle"
 
 [tasks.install-cli]
 description = "Install nimrod in ~/.local/bin without changing shell configuration"

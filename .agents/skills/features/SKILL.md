@@ -1,6 +1,6 @@
 ---
 name: features
-description: Feature implementation guide for Nimrod. Load when designing, implementing, debugging or reviewing features, or updating their documentation. Use the index to read only the relevant detailed references, including pop-outs, code copying, snapshot persistence and native reference-window focus.
+description: Feature implementation guide for Nimrod. Load when designing, implementing, debugging or reviewing features, or updating their documentation. Use the index to read only the relevant detailed references, including session management, reload/restart, session tree deletion, pop-outs, code copying, snapshot persistence and native reference-window focus.
 ---
 
 # Nimrod features
@@ -15,15 +15,21 @@ items relevant to the task. Follow repository `AGENTS.md` and
 
 | Feature / work area | Implementation reference | Human guide |
 | --- | --- | --- |
-| Pop-outs, code Copy actions, content hashing, snapshot persistence, session visibility, reference-window focus and geometry | [Pop-outs](references/pop-outs.md) | [Pop-outs](../../../docs/pop-outs.md) |
+| Transcript tool/reasoning cards, tooltip-free summaries and accessible status labels | [Transcript cards](references/transcript-cards.md) | [Rendering behavior](../../../docs/architecture.md#rendering-contract-retained-from-pi-gui) |
+| Composer keyboard hints, working-only follow-up queueing and delivery fallback | [Composer](references/composer.md) | [Pi-specific behavior](../../../docs/architecture.md#pi-specific-behavior) |
+| Session sidebar All / Needs attention views, persisted last-used order and prompt-only acknowledgement-driven recency (selection/rename never reorder), viewport anchoring, stable inbox order, selected-row retention, working empty-state, blank conversation surfaces and filtered navigation | [Sidebar views](references/sidebar-attention.md) | [Sidebar views](../../../docs/workspace-sessions.md#sidebar-views) |
+| Background-session desktop notifications, response previews, macOS authorization/delivery and bundle signing, test alerts/read-only foreground diagnostics, focus suppression and preferences | [Notifications](references/notifications.md) | [Notifications](../../../docs/notifications.md) |
+| Session management: delete session trees, palette-styled custom tree review, installed Pi bridge, batch selection/state cleanup, cross-window locks, partial outcomes and quarantined recovery | [Session deletion](references/session-deletion.md) | [Delete session tree](../../../docs/workspace-sessions.md#delete-session-tree) |
+| Session management: temporary-session disposal, reload/Restart session, lifecycle ownership, exact-file resume, draft preservation, Project bar and native Open project menu | [Projects and sessions](references/projects-and-sessions.md#session-management) | [Projects and sessions](../../../docs/workspace-sessions.md#session-management) |
+| Pop-outs, code Copy actions, content hashing, snapshot persistence, project/session visibility, reference-window focus and geometry | [Pop-outs](references/pop-outs.md) | [Pop-outs](../../../docs/pop-outs.md) |
 
 Features without a reference yet: consult their existing docs and source; add a
 reference when doing substantive feature work rather than inventing details.
 
 ## Keeping documentation useful
 
-- Human guides belong in `docs/`: concise usage, observable behavior and limitations.
-- Agent details belong in `references/<feature>.md`: decisions, code map, invariants,
+- **External docs** are user guides in `docs/`: concise usage, observable behavior and limitations.
+- **Internal docs** are this features skill and `references/<feature>.md`: decisions, code map, invariants,
   data formats, concurrency/lifecycle, platform pitfalls, tests and verification gaps.
 - Update the human guide and reference together when behavior changes. Keep
   implementation-only changes in the reference instead of inflating the human guide.

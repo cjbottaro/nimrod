@@ -220,6 +220,18 @@ impl SnapshotStore<'_> {
         )?;
         Ok(())
     }
+    pub fn session_ids(&self, files: &std::collections::HashSet<PathBuf>) -> Vec<String> {
+        self.0
+            .snapshot()
+            .state
+            .iter()
+            .filter_map(|(key, value)| {
+                let id = key.strip_prefix(PREFIX)?;
+                let file = value["pi"]["path"].as_str()?;
+                files.contains(Path::new(file)).then(|| id.to_owned())
+            })
+            .collect()
+    }
     pub fn remove(&self, id: &str) -> Result<Option<String>, String> {
         let path = self.path(id)?;
         // Remove the reference first: an interrupted deletion leaves an unreferenced
@@ -249,6 +261,26 @@ mod tests {
             fingerprint: fingerprint(&snapshot.language, &snapshot.text),
             geometry: None,
         }
+    }
+    #[test]
+    fn deletion_finds_saved_references_in_closed_projects_without_touching_other_sessions() {
+        let temp = tempfile::tempdir().unwrap();
+        let preferences = Preferences::isolated(temp.path());
+        let store = SnapshotStore(&preferences);
+        let snapshot = snapshot();
+        let a = reference(Path::new("/closed-project"), &snapshot);
+        let b = reference(Path::new("/other-project"), &snapshot);
+        store.save_new(&a, &snapshot).unwrap();
+        store.save_new(&b, &snapshot).unwrap();
+        let files = [a.pi.path.clone()].into_iter().collect();
+        assert_eq!(store.session_ids(&files), vec![a.id.clone()]);
+        for id in store.session_ids(&files) {
+            store.remove(&id).unwrap();
+        }
+        assert!(!store.path(&a.id).unwrap().exists());
+        assert!(store.path(&b.id).unwrap().exists());
+        assert!(store.references(&a.cwd, &a.pi).0.is_empty());
+        assert_eq!(store.references(&b.cwd, &b.pi).0.len(), 1);
     }
     fn snapshot() -> CodeSnapshot {
         CodeSnapshot {

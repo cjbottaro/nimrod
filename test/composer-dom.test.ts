@@ -31,20 +31,24 @@ test("composer primary action is Send while idle or background-only, and Stop on
   assert.equal(send.disabled, true, "normal sends remain protected while acceptance is pending or unknown");
 });
 
-test("Enter maps to normal or steer delivery without taking over newline or IME input", () => {
+test("Enter steers and Option-Enter queues only while working, preserving newline and IME input", () => {
   const event = (overrides: Partial<Parameters<typeof keyboardSubmissionMode>[0]> = {}) => ({
     key: "Enter", shiftKey: false, altKey: false, isComposing: false, keyCode: 0, ...overrides,
   });
 
   assert.equal(keyboardSubmissionMode(event(), false), "normal");
   assert.equal(keyboardSubmissionMode(event(), true), "steer");
-  assert.equal(keyboardSubmissionMode(event({ altKey: true }), true), "steer");
+  assert.equal(keyboardSubmissionMode(event({ altKey: true }), true), "followUp");
+  assert.equal(keyboardSubmissionMode(event({ altKey: true }), false), "normal");
+  assert.equal(keyboardSubmissionMode(event({ altKey: true, shiftKey: true }), true), undefined);
+  assert.equal(keyboardSubmissionMode(event({ altKey: true, isComposing: true }), true), undefined);
+  assert.equal(keyboardSubmissionMode(event({ altKey: true, keyCode: 229 }), true), undefined);
   assert.equal(keyboardSubmissionMode(event({ shiftKey: true }), true), undefined);
   assert.equal(keyboardSubmissionMode(event({ isComposing: true }), true), undefined);
   assert.equal(keyboardSubmissionMode(event({ keyCode: 229 }), true), undefined);
   assert.equal(keyboardSubmissionMode(event({ key: "a" }), true), undefined);
   assert.equal(keyboardHint(false), "Enter to send · Shift+Enter for newline");
-  assert.equal(keyboardHint(true), "Enter to steer · Shift+Enter for newline");
+  assert.equal(keyboardHint(true), "Enter to steer · Option-Enter to queue · Shift+Enter for newline");
 });
 
 test("composer auto-resizes to a capped height and scrolls only beyond the cap", () => {

@@ -34,9 +34,10 @@ The status area and composer together form the **interaction area**.
 
 - **Project** — one canonical directory associated with a window and used as its sessions' working directory. No Git repository, manifest or registration is required; opening a directory opens a project. A project may contain gitignored worktree directories, but sessions launched with a different working directory currently belong to a separate project window. “Workspace” is retained only in internal identifiers and compatibility keys.
 - **Open session** — a conversation kept open within the project; selecting another session does not stop its agent. There is no visible tab strip. Internal `Tab`/`tabs` identifiers and existing storage keys are implementation details.
-- **Session sidebar** — collapsible navigation showing a flat list of open sessions, their activity and close controls. It does not repeat the project directory, contain an Open sessions disclosure, or include history/action buttons. There is no All sessions section or persistent sidebar search field.
-- **Command palette** — the modal command selector opened by Cmd/Ctrl+Shift+P or the project-bar palette button.
-- **Switch session** — the command-palette picker for switching only between open sessions shown in the sidebar, including temporary/demo sessions. It does not discover historical sessions.
+- **Session sidebar** — collapsible navigation showing open sessions, their activity and close controls, with **All** / **Needs attention** view tabs. It does not repeat the project directory, contain an Open sessions disclosure, or include history/action buttons. There is no All sessions section or persistent sidebar search field.
+- **Command palette** — the modal command selector opened by Cmd/Ctrl+Shift+P; there is no Project bar palette button.
+- **Sidebar views** — **All** shows every open session most recently used first. Only Pi-acknowledged messages (`prompt` requests) update **last used**; selecting/reading, renaming, other metadata/control operations, New/Resume and background output/completion do not change order. Saved entries retain recency across reopening. Reordering preserves the sidebar viewport instead of chasing the moved row; explicit navigation and returning to All reveal the selected session. **Needs attention** shows outstanding input, unread completed responses and session failures in stable arrival order; resolved selected rows stay until leaving. Its empty state shows **N sessions working…** with a reduced-motion-aware pulse while agents are busy; otherwise **No sessions need attention**. The conversation area is blank without a selected row in the current view; a working session without attention is hidden on entry. New arrivals never open themselves. Explicit navigation to a filtered-out session switches to All. These are filters, not conversation tabs or saved-history lists.
+- **Switch session** — the command-palette picker for switching between all open sessions, including those hidden by a sidebar view and temporary/demo sessions. It does not discover historical sessions.
 - **Session picker** — the palette's **Resume session** step: type-to-filter all resumable project history, including closed sessions, with already-open sessions marked. Escape returns to commands; Escape from commands closes the palette.
 - **Open session** is not necessarily running: it may be active, idle, or inactive pending explicit resume. Do not label the whole section “Live sessions”.
 - **New session** — the normal, persistent default. **New named session** — a compact command-palette step with a focused single-line name field and inline **Create** button; Enter creates, Esc cancels. Starts a persistent session using Pi's native `--name` launch option. **Temporary session** — an explicitly selected, visibly marked exception, absent from historical listings.
@@ -48,7 +49,7 @@ See [project/session implementation](../../../docs/workspace-sessions.md) for li
 
 | Term | Meaning | Current code anchor |
 | --- | --- | --- |
-| **Project bar** | Top strip containing the sidebar toggle, Nimrod wordmark, project directory, active-session mode badge, command palette button, Open project, Disconnect, and Settings gear. Preferences themselves live on the Settings page. | `#workspace-bar` |
+| **Project bar** | Top strip containing the sidebar toggle, Nimrod wordmark, project directory, active-session mode badge, Restart session icon, Delete session tree icon, and Settings gear. Preferences themselves live on the Settings page. | `#workspace-bar` |
 | **Settings page** | Full-window preferences surface opened by the gear or ⌘/Ctrl comma; Appearance and Runtime sections, with Back/Escape navigation. Covers the still-mounted project using native dialog modality. | `#settings-page` |
 | **Transcript** | Conversation history: user/assistant entries and their content. | `#messages` |
 | **Transcript pane** | The independently scrolling container around the transcript. | `#transcript-viewport` |
@@ -70,7 +71,7 @@ Use **conversation area** for a session's transcript and interaction area togeth
   - **Output viewport** — the independently scrollable tool-output region.
   - **Raw inputs** — the nested disclosure containing full arguments.
 - **Code block** — formatted code with a language label, icon-only **Pop out** (left) and **Copy** (right) buttons. Copy briefly displays a checkmark after success; both actions have tooltips and accessible labels.
-- **Pop-out** — a separate reference window showing captured code or rendered Markdown, scoped to the selected session. **Copy source** is the whole-document Copy icon in a Markdown pop-out, distinct from nested code-block Copy. See the [feature guide](../../../docs/pop-outs.md) for behavior and [implementation reference](../features/references/pop-outs.md) for internals.
+- **Pop-out** — a separate reference window showing captured code or rendered Markdown, visible for the active project's selected session. Focusing a pop-out keeps its owning project active; switching project windows hides the outgoing project's references. **Copy source** is the whole-document Copy icon in a Markdown pop-out, distinct from nested code-block Copy. See the [feature guide](../../../docs/pop-outs.md) for behavior and [implementation reference](../features/references/pop-outs.md) for internals.
 - **Parallel-tools overview** — the temporary card summarizing genuinely overlapping tool executions; it does not replace individual tool cards.
 - **Skill disclosure** — the collapsed skill body within a user turn, labeled `/skill:name`; user arguments remain outside it.
 
@@ -78,6 +79,7 @@ A **card** does not imply a visible rectangular border. A **disclosure** is an e
 
 ## Controls and feedback
 
+- **Desktop notification** — an OS-level background-session alert, distinct from in-app Pi extension notices. **Background session alerts** is its On/Off control in Settings → Notifications. **Send test notification** checks OS delivery without launching an agent; the adjacent status line records the latest attempt/suppression/error and macOS policy/foreground-handler diagnostics. **Refresh notification diagnostics** reads those values without posting an alert or requesting permission. Current banners do not provide reliable click-to-session routing.
 - **Activity indicator** — a spinner or dot, with accompanying status text where present. Specify main-agent, subagent, tool, or reasoning when ambiguous.
 - **Model picker / thinking-level picker** — searchable command-palette selection pages, opened through **Select model…** / **Select thinking level…** or the status-area model/thinking buttons. “Effort” is a search alias for thinking level. Current values are marked; Escape returns to commands. These use the same selection surface as Resume session, not the extension select dialog.
 - **Usage metrics** — harness-reported cost and context estimates in the status area.
@@ -87,6 +89,9 @@ A **card** does not imply a visible rectangular border. A **disclosure** is an e
 - **Keyboard hints** — the shortcut text beneath the prompt field.
 - **Submission notice** — acknowledgement uncertainty, validation, or recovery feedback near the composer.
 - **Slash suggestions** — the command autocomplete popup above the composer.
+- **Restart session** — the Project bar's reload-style icon (and palette action) that stops the selected Pi process and resumes its exact saved history without replaying messages. Disabled for temporary/demo sessions, before first save, and during lifecycle transitions. This is not a webview reload or a new conversation.
+- **Delete session tree** — the Project bar's trash icon (and palette action) for the selected saved session and its descendants. Uses the installed Pi extension's preview/execute bridge and a custom, scrollable tree-confirmation dialog. Confirmed successes remove associated drafts/references and select the next surviving sidebar row, falling back from Needs attention to All when needed. Temporary/unsaved sessions cannot be deleted; affected work must be idle. This is distinct from closing a session. Failed/unknown outcomes retain inactive sessions for explicit recovery through Resume session.
+- **Open project** — native File-menu action (Cmd/Ctrl+O), not a Project bar button or command-palette action. The welcome screen still offers directory selection.
 - **Settings gear** — the project-bar button that opens the Settings page; it does not stop the session.
 - **Runtime paths** — saved Pi/Node executable preferences under Settings → Runtime. **Save runtime paths** commits them for the next session, not the current process.
 - **Zoom picker** — the percentage selector in Settings → Appearance; it adjusts native webview page zoom.

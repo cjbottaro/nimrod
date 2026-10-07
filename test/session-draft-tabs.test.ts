@@ -15,20 +15,19 @@ test('tab selections share a library without overwriting sibling drafts or resum
   assert.equal(restoreComposerState(a.read()).draft, 'A');
   const restored = new SessionDrafts(saved, null, () => {});
   assert.equal(restoreComposerState(restored.select('file:/sessions/a.jsonl')).draft, 'A');
-  assert.equal(restoreComposerState(restored.select('temporary:/project:b')).draft, 'new B');
+  assert.equal(restoreComposerState(b.read()).draft, 'new B');
+  assert.equal(restored.select('temporary:/project:b'), undefined, 'temporary siblings do not survive restore');
   assert.equal(restored.last?.sessionId, 'a');
 });
 
-test('temporary and demo drafts remain explicitly recoverable after their tabs are gone', () => {
+test('temporary and demo drafts are not recoverable after their tabs are gone', () => {
   const library = new SessionDrafts({ drafts: {
     'temporary:/project:a': { draft: 'temporary draft', submission: { id: 'pending', text: 'possibly sent', mode: 'steer', status: 'pending' } },
     'demo:/project:b': { draft: 'demo draft' },
     'file:/sessions/owned.jsonl': { draft: 'persistent draft' },
   } }, null, () => {});
-  const sources = library.recoverable();
-  assert.deepEqual(sources.map(s => s.key), ['temporary:/project:a', 'demo:/project:b']);
-  const restored = restoreComposerState(library.select('unassigned:new', sources[0].key));
-  assert.equal(restored.submission?.status, 'unknown');
-  assert.equal(restored.draft, 'temporary draft');
-  assert.equal(restoreComposerState(library.select(sources[0].key)).draft, 'temporary draft');
+  assert.deepEqual(library.recoverable(), []);
+  assert.equal(library.select('temporary:/project:a'), undefined);
+  assert.equal(library.select('demo:/project:b'), undefined);
+  assert.equal(restoreComposerState(library.select('file:/sessions/owned.jsonl')).draft, 'persistent draft');
 });

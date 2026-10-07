@@ -21,7 +21,7 @@ try {
     const css = ${JSON.stringify(css)};
     document.getElementById('theme-css').textContent = css;
     document.getElementById('welcome').hidden = true;
-    document.getElementById('disconnect').hidden = false;
+    document.getElementById('restart-session').disabled = false;
     document.getElementById('mode-badge').textContent = 'Fixture · no model';
     const conversation = document.getElementById('conversation'); conversation.hidden = false;
     conversation.innerHTML = ${JSON.stringify(transcript)};

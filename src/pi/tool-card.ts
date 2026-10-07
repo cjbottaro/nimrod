@@ -48,7 +48,6 @@ export function updateToolCard(document: Document, details: HTMLDetailsElement, 
   if (!summary || !summaryContent) return;
 
   summary.setAttribute("aria-label", `${name} (${status})`);
-  summary.title = status === "thinking" ? "Tool finished — thinking about its result" : status === "running" ? "Running" : status === "stopped" ? "Execution interrupted" : status;
   let indicator = summaryContent.querySelector<HTMLElement>(".tool-card-spinner, .tool-card-dot");
   const indicatorClass = status === "running" || status === "pending" || status === "thinking" ? "tool-card-spinner" : `tool-card-dot tool-card-${status}`;
   if (!indicator || indicator.className !== indicatorClass) {
@@ -59,7 +58,6 @@ export function updateToolCard(document: Document, details: HTMLDetailsElement, 
     else summaryContent.prepend(next);
     indicator = next;
   }
-  indicator.title = status;
 
   let title = summaryContent.querySelector<HTMLElement>(".tool-card-title");
   if (!title) {
@@ -74,7 +72,6 @@ export function updateToolCard(document: Document, details: HTMLDetailsElement, 
   if (presentation) {
     if (preview) {
       preview.textContent = presentation.value;
-      preview.title = presentation.value;
     } else {
       summaryContent.append(inputPreview(document, presentation));
     }
@@ -243,7 +240,6 @@ function inputPreview(document: Document, presentation: InputPresentation): HTML
   const preview = document.createElement("span");
   preview.className = "tool-card-preview";
   preview.textContent = presentation.value;
-  preview.title = presentation.value;
   return preview;
 }
 

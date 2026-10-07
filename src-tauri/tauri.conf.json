@@ -12,5 +12,5 @@
       "devCsp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost http://127.0.0.1:1420 ws://127.0.0.1:1420; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'"
     }
   },
-  "bundle": { "active": true, "targets": ["app"], "resources": ["resources/*", "../THIRD_PARTY_NOTICES.md"], "icon": ["icons/icon.png", "icons/icon.icns", "icons/icon.ico"] }
+  "bundle": { "active": true, "targets": ["app"], "macOS": { "signingIdentity": "-" }, "resources": ["resources/*", "../THIRD_PARTY_NOTICES.md"], "icon": ["icons/icon.png", "icons/icon.icns", "icons/icon.ico"] }
 }

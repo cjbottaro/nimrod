@@ -1,13 +1,16 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod cli;
+mod delete_bridge;
 mod links;
 mod native_menu;
+mod notifications;
 mod popout_store;
 mod popout_windows;
 mod popouts;
 mod preferences;
 mod process;
 mod session_catalog;
+mod session_deletion;
 #[cfg(test)]
 mod session_smoke;
 mod sessions;
@@ -139,6 +142,13 @@ async fn start_pi(
     if app.state::<ExitState>().closing.load(Ordering::SeqCst) {
         return Err("Nimrod is shutting down".into());
     }
+    if app
+        .state::<session_deletion::SessionDeletion>()
+        .snapshot()
+        .pending
+    {
+        return Err("Session deletion is pending; new launches are blocked".into());
+    }
     if token.is_empty() || token.len() > 128 {
         return Err("Invalid session token".into());
     }
@@ -180,6 +190,12 @@ async fn start_pi(
                 return Err(
                     "The remembered session file was replaced with a different session".into(),
                 );
+            }
+            if app
+                .state::<session_deletion::SessionDeletion>()
+                .blocked(&info.path)
+            {
+                return Err("Session is quarantined after deletion. Explicitly select it through Resume session to validate and recover it.".into());
             }
             Some(info)
         }
@@ -341,6 +357,9 @@ fn request_exit(app: &tauri::AppHandle) {
     }
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
+        app.state::<session_deletion::SessionDeletion>()
+            .shutdown()
+            .await;
         popouts::flush(&app).await;
         let result = app.state::<WorkspaceHost>().shutdown().await;
         if let Err(error) = result {
@@ -380,11 +399,19 @@ fn main() {
             app.state::<cli::CliRequests>().enqueue(app, request);
         }))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(move |app| {
+            if let Err(error) = notifications::initialize(app.handle()) {
+                // Notification integration must not prevent normal app startup;
+                // subsequent prepare/diagnostics commands report the same failure.
+                eprintln!("Notifications initialization: {error}");
+            }
             native_menu::install(app.handle())?;
             let home = app.path().home_dir()?;
-            app.manage(preferences::Preferences::new(&home));
+            let preferences = preferences::Preferences::new(&home);
+            app.manage(session_deletion::SessionDeletion::new(&preferences));
+            app.manage(preferences);
             preferences::watch(app.handle());
             let workspace = match &initial {
                 cli::Request::Workspace(path) => Some(path.clone()),
@@ -397,6 +424,15 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             runtime_defaults,
+            session_deletion::delete_session_tree,
+            session_deletion::deletion_snapshot,
+            session_deletion::acknowledge_deletion,
+            session_deletion::confirm_session_deletion,
+            session_deletion::recover_deletion_session,
+            notifications::prepare_notifications,
+            notifications::notify_session,
+            notifications::test_notification,
+            notifications::notification_diagnostics,
             popouts::open_code_popout,
             popouts::sync_popout_sessions,
             popouts::code_popout_snapshot,
@@ -418,9 +454,28 @@ fn main() {
         .on_menu_event(|app, event| {
             if native_menu::is_quit(event.id().as_ref()) {
                 request_exit(app);
+            } else if native_menu::is_open_project(event.id().as_ref()) {
+                native_menu::open_project(app);
             }
         })
         .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Focused(focused) = event {
+                let app = window.app_handle();
+                if app
+                    .state::<popouts::Popouts>()
+                    .on_focus(window.label(), *focused)
+                {
+                    if let Err(error) = popouts::hide_inactive(app) {
+                        popouts::notify_error(app, error);
+                    }
+                    let app = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(error) = popouts::reconcile_visibility(&app).await {
+                            popouts::notify_error(&app, error);
+                        }
+                    });
+                }
+            }
             if window.label().starts_with("popout-") {
                 match event {
                     tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
@@ -452,6 +507,10 @@ fn main() {
             }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
+                window
+                    .app_handle()
+                    .state::<session_deletion::SessionDeletion>()
+                    .cancel_owner(window.label());
                 window
                     .app_handle()
                     .state::<popouts::Popouts>()

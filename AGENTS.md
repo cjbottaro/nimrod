@@ -2,11 +2,14 @@
 
 A dedicated cross-platform agent workspace, with bespoke harness integrations. Pi is the first and only implemented harness; do not invent a generic harness protocol before a concrete second integration.
 
+Platform direction: macOS first, Linux next, and possibly Windows later. Nimrod is not a macOS-only product. Design new features—including notifications—with portable behavior and narrow platform-specific native integrations where needed; do not assume macOS APIs or desktop conventions apply everywhere. Windows remains a possible future target, not a current parity commitment. Distinguish intended support from actual per-platform verification.
+
 Read README.md and docs/architecture.md before changes. Preserve exact streaming, acknowledgement, tool disclosure, focus and scroll behavior inherited from Pi GUI. Harnesses remain authoritative for conversations, tools, models and configuration.
 
 - For UI discussions or changes, load [nimrod-ui-vocabulary](.agents/skills/nimrod-ui-vocabulary/SKILL.md) and use its shared terminology. Keep agreed vocabulary there rather than duplicating it here.
 - For feature implementation/debugging/review, load the shared [features](.agents/skills/features/SKILL.md) skill, then only the relevant per-feature references from its index.
-- Document every new or changed feature in two layers: a concise human guide in `docs/` (usage, visible behavior, limitations) and a detailed reference in `.agents/skills/features/references/` (code map, invariants, storage, platform pitfalls, tests). Update both with behavior changes and add new items to the features skill index; link human guides from the docs index/README. Keep detailed internals and debugging history in agent references, not walls of prose in human docs.
+- **Internal docs** means the agent-facing [features skill](.agents/skills/features/SKILL.md) and its detailed references in `.agents/skills/features/references/` (code map, invariants, storage, platform pitfalls, tests). **External docs** means the user-facing guides in `docs/` (usage, visible behavior, limitations), not publication or deployment outside this repository.
+- Document every new or changed feature in both internal and external docs. Update both with behavior changes and add new items to the features skill index; link user guides from `docs/README.md` and the main README. Keep detailed internals and debugging history in feature references, not walls of prose in user docs.
 - Rust is installed and pinned through mise.toml. Use `mise exec -- cargo ...` or `mise run check`.
 - Implement directly unless delegation is requested/approved. No commits or pushes without permission.
 - Keep work local. Tests use fixtures; no paid model requests, live compaction, user-session deletion, or changes to upstream Pi/extensions without explicit authorization.

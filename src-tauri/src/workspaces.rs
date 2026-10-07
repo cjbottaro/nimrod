@@ -18,6 +18,7 @@ pub struct WorkspaceHost {
     // Serialize reservation/start/observed shutdown, including duplicate-file checks.
     sessions: Mutex<HashMap<String, OwnedSession>>,
     closing: Mutex<std::collections::HashSet<String>>,
+    deleting: Mutex<Option<std::collections::HashSet<PathBuf>>>,
 }
 
 impl WorkspaceHost {
@@ -33,6 +34,9 @@ impl WorkspaceHost {
         let closing = self.closing.lock().await;
         if closing.contains(window) || closing.contains("*") {
             return Err("Project is closing".into());
+        }
+        if self.deleting.lock().await.is_some() {
+            return Err("Session deletion is pending; new launches are blocked".into());
         }
         let mut sessions = self.sessions.lock().await;
         if sessions.contains_key(&token) {
@@ -74,6 +78,21 @@ impl WorkspaceHost {
     }
 
     pub async fn write(&self, window: &str, token: &str, message: Value) -> Result<(), String> {
+        let gate = self.deleting.lock().await;
+        if let Some(files) = gate.as_ref() {
+            let sessions = self.sessions.lock().await;
+            if sessions
+                .get(token)
+                .filter(|s| s.window == window)
+                .is_some_and(|s| s.file.as_ref().is_some_and(|file| files.contains(file)))
+                && !matches!(
+                    message["type"].as_str(),
+                    Some("get_state" | "get_messages" | "get_session_stats" | "get_commands")
+                )
+            {
+                return Err("This session is locked for deletion".into());
+            }
+        }
         self.owned(window, token).await?.write(token, message).await
     }
 
@@ -116,6 +135,37 @@ impl WorkspaceHost {
         stop_sessions(&self.sessions, tokens).await
     }
 
+    pub async fn begin_deletion(&self) -> Result<(), String> {
+        let _lifecycle = self.closing.lock().await;
+        let mut gate = self.deleting.lock().await;
+        if gate.is_some() {
+            return Err("Another deletion is pending".into());
+        }
+        *gate = Some(Default::default());
+        Ok(())
+    }
+    pub async fn freeze_deletion(&self, files: std::collections::HashSet<PathBuf>) {
+        *self.deleting.lock().await = Some(files);
+    }
+    pub async fn end_deletion(&self) {
+        *self.deleting.lock().await = None;
+    }
+    pub async fn deletion_owners(
+        &self,
+        files: &std::collections::HashSet<PathBuf>,
+    ) -> Vec<(String, String, PathBuf)> {
+        self.sessions
+            .lock()
+            .await
+            .iter()
+            .filter_map(|(token, s)| {
+                s.file
+                    .as_ref()
+                    .filter(|f| files.contains(*f))
+                    .map(|f| (s.window.clone(), token.clone(), f.clone()))
+            })
+            .collect()
+    }
     pub async fn close_window(&self, window: &str) -> Result<(), String> {
         self.closing.lock().await.insert(window.into());
         self.stop_window(window, None).await
@@ -212,6 +262,82 @@ mod tests {
             Arc::new(move |packet| tx.send(packet).map_err(|e| e.to_string())),
             rx,
         )
+    }
+
+    #[tokio::test]
+    async fn deletion_barrier_blocks_new_writers_and_freezes_only_affected_sessions() {
+        let host = WorkspaceHost::default();
+        let cwd = std::env::temp_dir();
+        let file = cwd.join("deletion-owned-fixture.jsonl");
+        let (out, _rx) = output();
+        host.start(
+            "one",
+            echo(),
+            cwd.clone(),
+            "affected".into(),
+            Some(file.clone()),
+            out.clone(),
+        )
+        .await
+        .unwrap();
+        host.start(
+            "two",
+            echo(),
+            cwd.clone(),
+            "unrelated".into(),
+            None,
+            out.clone(),
+        )
+        .await
+        .unwrap();
+        host.begin_deletion().await.unwrap();
+        assert!(
+            host.start(
+                "three",
+                echo(),
+                cwd.clone(),
+                "new".into(),
+                None,
+                out.clone()
+            )
+            .await
+            .is_err()
+        );
+        host.freeze_deletion([file.clone()].into_iter().collect())
+            .await;
+        assert!(
+            host.write(
+                "one",
+                "affected",
+                json!({"type":"prompt", "id":"blocked", "message":"never sent"})
+            )
+            .await
+            .is_err()
+        );
+        host.write(
+            "one",
+            "affected",
+            json!({"type":"get_state", "id":"idle-check"}),
+        )
+        .await
+        .unwrap();
+        host.write(
+            "two",
+            "unrelated",
+            json!({"type":"prompt", "id":"allowed", "message":"fixture echo"}),
+        )
+        .await
+        .unwrap();
+        let owners = host.deletion_owners(&[file].into_iter().collect()).await;
+        assert_eq!(owners.len(), 1);
+        assert_eq!(owners[0].1, "affected");
+        host.stop_window("one", Some("affected")).await.unwrap();
+        assert!(host.cwd("two", "unrelated").await.is_ok());
+        host.end_deletion().await;
+        host.start("three", echo(), cwd, "new".into(), None, out)
+            .await
+            .unwrap();
+        host.stop_all().await.unwrap();
     }
 
     #[tokio::test]

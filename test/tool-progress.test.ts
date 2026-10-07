@@ -85,14 +85,15 @@ test("tool failures are immediate and disconnect or settlement stops every unfin
   }
 });
 
-test("single-tool thinking keeps the spinner and tooltip without an expanded status line", () => {
+test("single-tool thinking keeps the spinner and accessible status without a tooltip or expanded status line", () => {
   const dom = new JSDOM("<body></body>"); const document = dom.window.document;
   const block: ContentBlock = { type: "toolCall", id: "a", name: "read", arguments: { path: "a.ts" }, toolStatus: "running" };
   const card = renderToolCard(document, block, document.createElement("details")); document.body.append(card);
   const spinner = card.querySelector(".tool-card-spinner");
   updateToolCard(document, card, { ...block, toolStatus: "finished", executionOutput: "output", uiPhase: "thinking" });
   assert.equal(card.querySelector(".tool-card-spinner"), spinner);
-  assert.match(card.querySelector("summary")!.title, /thinking/i);
+  assert.match(card.querySelector("summary")!.getAttribute("aria-label") || "", /thinking/i);
+  assert.equal(card.querySelector("[title]"), null);
   assert.equal(card.querySelector(".tool-phase"), null);
   updateToolCard(document, card, { ...block, toolStatus: "finished", executionOutput: "output" });
   assert.ok(card.querySelector(".tool-card-succeeded"));

@@ -20,6 +20,22 @@ test('JSONC edits preserve comments, unknown fields, and unrelated settings', ()
   for (const value of ['[]', '{bad}', '{"appearance.zoom":126}', '{"runtime.piPath":""}', '{"appearance.importedThemes":[{}]}']) assert.throws(() => parseSettings(value));
 });
 
+test('notifications default on, persist through JSONC edits, and retain last valid values', async () => {
+  const f = fixture(); const p = await f.install();
+  try {
+    assert.equal(p.notificationsEnabled(), true);
+    f.host.external('// keep me\n{"custom":true}');
+    await p.saveNotifications(false);
+    assert.equal(p.notificationsEnabled(), false);
+    assert.match(f.host.value.text, /keep me/);
+    assert.equal(parseSettings(f.host.value.text).custom, true);
+    f.host.external('{"notifications.enabled":"false"}');
+    assert.equal(p.notificationsEnabled(), false);
+    assert.throws(() => parseSettings('{"notifications.enabled":null}'));
+    f.host.external('{}'); assert.equal(p.notificationsEnabled(), true);
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
 test('legacy migration excludes drafts and never deletes their recovery sources', () => {
   const f = fixture(); const storage = f.dom.window.localStorage;
   try {

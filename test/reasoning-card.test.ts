@@ -43,13 +43,18 @@ test("reasoning retains its live spinner and first-line preview then turns green
   doc.body.append(card);
   card.open = true;
   const spinner = card.querySelector(".tool-card-spinner");
+  assert.equal(card.querySelector("[title]"), null);
+  assert.equal(card.querySelector("summary")?.getAttribute("aria-label"), "Reasoning (streaming)");
   updateReasoningCard(card, "\nFirst line\nMore reasoning arrives", render, true);
   assert.equal(card.querySelector(".tool-card-spinner"), spinner);
   assert.equal(card.querySelector(".reasoning-preview")?.textContent, "First line");
+  assert.equal(card.querySelector("[title]"), null);
   assert.equal(card.open, true);
   updateReasoningCard(card, "\nFirst line\nFull reasoning", render, false);
   assert.ok(card.querySelector(".tool-card-succeeded"));
   assert.equal(card.querySelector(".tool-card-spinner"), null);
+  assert.equal(card.querySelector("[title]"), null);
+  assert.equal(card.querySelector("summary")?.getAttribute("aria-label"), "Reasoning (complete)");
   assert.equal(card.querySelector(".reasoning-body")?.textContent, "\nFirst line\nFull reasoning");
 });
 

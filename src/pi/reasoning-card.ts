@@ -44,7 +44,6 @@ export function updateReasoningCard(details: HTMLDetailsElement, thinking: strin
   const line = thinking.split(/\r?\n/).find(line => line.trim())?.trim() || "";
   const preview = details.querySelector<HTMLElement>(".reasoning-preview")!;
   preview.textContent = line;
-  preview.title = line;
   const body = details.querySelector<HTMLElement>(".reasoning-body")!;
   body.replaceChildren(render(thinking));
 }

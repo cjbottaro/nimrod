@@ -15,14 +15,17 @@ icon, to the left of **Copy**. Copy briefly becomes a checkmark after success.
 
 ## Sessions and persistence
 
-Only the selected session's pop-outs are visible in each project window.
-Switching sessions hides/shows their windows.
+Only the active project's selected-session pop-outs are visible. Switching project
+windows (for example, ⌘\` on macOS) hides the previous project's pop-outs and shows
+the incoming project's. Switching sessions does the same within a project.
+Focusing a pop-out itself keeps its project's references visible.
 
 | Action | Result |
 | --- | --- |
 | Quit and reopen the saved session | Restore its pop-outs and window positions/sizes |
 | Close the source session or project | Keep saved pop-outs for reopening that session |
 | Close a pop-out, or press ⌘W / Ctrl+W in it | Remove that pop-out, without affecting the session |
+| Successfully delete the source session tree | Remove references belonging to the deleted sessions, including saved snapshots |
 
 On macOS, automatic restoration leaves keyboard focus on the composer or active
 dialog. Explicitly clicking Pop out focuses the reference window.

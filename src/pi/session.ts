@@ -20,6 +20,9 @@ export interface SessionUi {
   openLink(href: string): Promise<void>;
   copy(text: string): Promise<void>;
   changed(state: ConversationState): void;
+  attention?(kind: 'completed' | 'input' | 'failed', response?: string): void;
+  /** Only a successful prompt RPC is conversational use; metadata/control RPCs aren't. */
+  promptAccepted?(): void;
   disconnected?(): void;
   identity?(file: string | undefined, id: string | undefined): Promise<void>;
 }
@@ -39,6 +42,9 @@ export class PiSession {
   private contextRefreshNeeded = false;
   private contextRefreshing = false;
   private dialogQueue = Promise.resolve();
+  private notificationRun = false;
+  private notificationResponse?: string;
+  private notificationOutcome: 'completed' | 'failed' | 'aborted' = 'completed';
   private model: ModelThinkingController;
   private stats: SessionStatsController;
 
@@ -112,6 +118,17 @@ export class PiSession {
     }
   }
 
+  async refreshDeletionState(): Promise<void> {
+    if (this.disconnected) return;
+    if (this.compactionRequest || this.submission) throw new Error('A session operation is pending');
+    await this.rpc.request('get_state', {}, 20_000, response => {
+      const data = record(response.data); this.applyState(data);
+      if (typeof data.pendingMessageCount === 'number') this.state = { ...this.state, queue: { ...this.state.queue, pendingCount: data.pendingMessageCount } };
+    });
+    this.publish();
+    if (this.compactionRequest || this.submission) throw new Error('A session operation is pending');
+  }
+
   publish(): void {
     this.ui.publish({ type: 'snapshot', build: 'Nimrod PoC', commands: this.commands,
       state: { ...this.state, messages: projectToolTimeline(this.state.messages, this.state.toolProgress) } });
@@ -137,9 +154,22 @@ export class PiSession {
   }
 
   private event(event: JsonRecord): void {
+    if (this.disconnected) return;
+    if (event.type === 'agent_start') { this.notificationRun = true; this.notificationOutcome = 'completed'; this.notificationResponse = undefined; }
+    if (event.type === 'message_end' && record(event.message).role === 'assistant') {
+      const content = record(event.message).content;
+      // Only this live run's latest finalized assistant text—not thinking/tools/history.
+      this.notificationResponse = typeof content === 'string' ? content.slice(0, 16_384) : Array.isArray(content)
+        ? content.filter(block => record(block).type === 'text' && typeof record(block).text === 'string')
+          .map(block => String(record(block).text).slice(0, 16_384)).join('\n\n').slice(0, 16_384) : undefined;
+      const reason = record(event.message).stopReason;
+      if (this.notificationOutcome !== 'aborted') this.notificationOutcome = reason === 'error' ? 'failed' : reason === 'aborted' ? 'aborted' : 'completed';
+    }
     if (event.type === 'extension_ui_request') { this.extensionUi(event); return; }
     if (event.type === 'process_error') {
       this.disconnected = true;
+      this.notificationRun = false;
+      this.ui.attention?.('failed');
       this.ui.disconnected?.();
       this.stats.dispose();
       this.model.disconnect();
@@ -147,6 +177,10 @@ export class PiSession {
     }
     this.state = reduceRpcEvent(this.state, event);
     this.publish();
+    if (event.type === 'agent_settled' && this.notificationRun && !this.state.busy) {
+      this.notificationRun = false;
+      if (this.notificationOutcome !== 'aborted') this.ui.attention?.(this.notificationOutcome, this.notificationOutcome === 'completed' ? this.notificationResponse : undefined);
+    }
     if (event.type === 'agent_settled' || event.type === 'compaction_end' || (!this.state.temporary && event.type === 'message_end')) this.stats.refresh();
     if (event.type === 'compaction_end' && event.result) this.contextRefreshNeeded = true;
     if (this.contextRefreshNeeded && !this.state.busy && !this.state.compacting) void this.refreshContext();
@@ -175,6 +209,7 @@ export class PiSession {
         case 'prompt': await this.submit(message); break;
         case 'compact': await this.compact(message); break;
         case 'stop':
+          this.notificationOutcome = 'aborted';
           if (!this.state.compacting) {
             const response = await this.rpc.request('clear_queue');
             const data = record(response.data);
@@ -215,11 +250,14 @@ export class PiSession {
         if (/[\r\n]/.test(name)) { receipt('rejected', 'Session names must be a single line.'); return; }
         if (this.disconnected) { receipt('rejected', 'Pi disconnected before renaming.'); return; }
         await this.rename(name);
-      } else {
-        // Always include fallback steering, even when our last snapshot said idle.
-        await this.rpc.request('prompt', { message: text, streamingBehavior: 'steer' });
+        receipt('accepted');
+        return;
       }
+      // Queue only during main-agent work; all other sends retain fallback steering.
+      const streamingBehavior = message.mode === 'followUp' && this.state.busy ? 'followUp' : 'steer';
+      await this.rpc.request('prompt', { message: text, streamingBehavior });
       receipt('accepted');
+      this.ui.promptAccepted?.();
     } catch (error) { receipt(error instanceof RpcResponseError ? 'rejected' : 'unknown', errorText(error)); }
     finally { this.submission = undefined; }
   }
@@ -277,6 +315,7 @@ export class PiSession {
     if (!['select', 'confirm', 'input', 'editor'].includes(String(method))) return;
     this.dialogQueue = this.dialogQueue.then(async () => {
       if (this.disconnected) return;
+      this.ui.attention?.('input');
       const title = typeof event.title === 'string' ? event.title : 'Pi request';
       let fields: JsonRecord = { cancelled: true };
       if (method === 'confirm') fields = { confirmed: await this.ui.confirm(title, String(event.message || '')) };

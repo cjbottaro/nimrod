@@ -8,12 +8,14 @@ import type { Packet } from '../../src/pi/transport';
 import type { JsonRecord } from '../../src/pi/types';
 import { MemoryPreferences } from '../preferences-fixture';
 import type { PreferencesSnapshot } from '../../src/preferences';
+import type { DeletionEvent } from '../../src/session-deletion';
 
 type TestWindow = Window & {
   __fixtureHost(command: string, args: JsonRecord): Promise<unknown>;
   __fixtureChannels: Record<string, { onmessage(packet: Packet): void }>;
   __fixtureSettled: number;
   __fixturePreferenceReceive?: (snapshot: PreferencesSnapshot) => void;
+  __fixtureDeletionReceive?: (event: DeletionEvent) => void;
 };
 export const visible = (id: string) => `.session-view:not([hidden]) [data-pi-id="${id}"]`;
 
@@ -63,6 +65,12 @@ export async function demoFixture(page: Page) {
     if (command === 'window_workspace') return null;
     if (command === 'open_workspace') return { cwd: process.cwd(), current: true };
     if (command === 'sync_popout_sessions') return { warnings: [] };
+    if (command === 'deletion_snapshot') return { pending: false, quarantine: [], files: [] };
+    if (command === 'confirm_session_deletion' || command === 'acknowledge_deletion') return; // Recorded only, no worker or deletion.
+    if (command === 'plugin:window|is_focused') return true;
+    if (command === 'prepare_notifications') return;
+    if (command === 'notification_diagnostics') return 'macOS: authorized; desktop alerts: enabled; style: temporary; Notification Center: enabled; app active: yes; foreground handler calls: 1 (requests Banner + List).';
+    if (command === 'notify_session' || command === 'test_notification') return 'submitted'; // Recorded only: never emit real OS notifications.
     if (command === 'list_workspace_sessions') return { sessions: [], warnings: [] };
     if (command === 'start_pi') {
       const token = String(args.token);
@@ -93,6 +101,7 @@ export async function demoFixture(page: Page) {
       transformCallback: (callback: (event: unknown) => void) => { const id = callbacks.size + 1; callbacks.set(id, callback); return id; }, unregisterCallback: () => {},
       invoke: async (command: string, args: JsonRecord = {}) => {
         if (command === 'plugin:event|listen' && args.event === 'nimrod-preferences') state.__fixturePreferenceReceive = payload => callbacks.get(Number(args.handler))?.({ payload });
+        if (command === 'plugin:event|listen' && args.event === 'nimrod-session-deletion') state.__fixtureDeletionReceive = payload => callbacks.get(Number(args.handler))?.({ payload });
         if (command === 'plugin:event|unlisten') state.__fixturePreferenceReceive = undefined;
         if (command === 'start_pi') {
           state.__fixtureChannels[String(args.token)] = args.onEvent as { onmessage(packet: Packet): void };
@@ -120,6 +129,7 @@ export async function demoFixture(page: Page) {
   }));
   return {
     errors, metrics, calls, children,
+    async deletionEvent(event: DeletionEvent) { await page.evaluate(payload => (window as unknown as TestWindow).__fixtureDeletionReceive?.(payload), event); },
     async editPreferences(text: string) {
       preferences.external(text);
       await page.evaluate(snapshot => (window as unknown as TestWindow).__fixturePreferenceReceive?.(snapshot), await preferences.snapshot());

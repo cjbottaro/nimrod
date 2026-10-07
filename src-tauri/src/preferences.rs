@@ -118,6 +118,12 @@ fn jsonc(text: &str) -> Result<Value, String> {
 fn validate(text: &str) -> Result<(), String> {
     let value = jsonc(text)?;
     let object = value.as_object().ok_or("Settings must be a JSON object")?;
+    if object
+        .get("notifications.enabled")
+        .is_some_and(|v| !v.is_boolean())
+    {
+        return Err("notifications.enabled must be a boolean".into());
+    }
     if let Some(zoom) = object.get("appearance.zoom") {
         if ![75, 90, 100, 110, 125, 150, 175, 200]
             .iter()
@@ -271,6 +277,13 @@ impl Preferences {
         {
             snapshot.revision += 1;
         }
+    }
+
+    pub fn notifications_enabled(&self) -> bool {
+        jsonc(&self.snapshot().text)
+            .ok()
+            .and_then(|value| value.get("notifications.enabled").and_then(Value::as_bool))
+            .unwrap_or(true)
     }
 
     pub fn snapshot(&self) -> Snapshot {
@@ -466,6 +479,8 @@ mod tests {
         assert!(validate("{/* unfinished").is_err());
         assert!(validate("{\"appearance.zoom\":126}").is_err());
         assert!(validate("[]").is_err());
+        assert!(validate("{\"notifications.enabled\":\"yes\"}").is_err());
+        validate("{\"notifications.enabled\":false}").unwrap();
         assert!(validate("{\"runtime.piPath\":\"\"}").is_err());
     }
     #[test]
