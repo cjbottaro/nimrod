@@ -127,6 +127,7 @@ Native desktop alerts share product policy across platforms: live settled comple
 ## Rendering contract retained from Pi GUI
 
 - Tool generation, execution output, final result, and result processing are separate states.
+- Each invocation has one tool card, identified by Pi’s tool-call ID. Assistant content, execution updates and results can establish or update it. Cards use the same summary treatment whether embedded in an assistant turn or temporarily standalone—no extra `TOOL: …` heading. Later assistant content can refine placement without replacing the card or resetting its disclosure/output inspection position. Duplicate earlier-phase events do not rewind a completed result.
 - Tool and reasoning card summaries, indicators and input previews do not show hover tooltips. Expand the card for full inputs or reasoning; accessible status labels remain. Copy/Pop out and other control tooltips are unchanged.
 - Cards start closed. Only sustained non-empty execution updates can auto-open a running tool after 500ms; final results do not qualify. Manual choices win and auto-open has a minimum dwell.
 - Preserve connected spinner/disclosure nodes through incremental updates.

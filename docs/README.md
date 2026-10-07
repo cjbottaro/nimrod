@@ -2,6 +2,8 @@
 
 ## Feature guides
 
+- [Transcript cards](architecture.md#rendering-contract-retained-from-pi-gui) — consistent tool summaries, invocation identity and disclosure behavior.
+
 - [Notifications](notifications.md) — background-session desktop alerts, preferences and native limitations.
 
 - [Pop-outs](pop-outs.md) — keep code/Markdown visible; session visibility and persistence.

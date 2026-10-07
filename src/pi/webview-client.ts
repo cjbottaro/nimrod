@@ -11,6 +11,7 @@ import { showCopyResult } from './code-actions';
 import { persistWebviewState, restoreComposerState } from "./webview-state";
 import { captureStreamingOutput, createToolDetails, renderToolCard as renderToolCardDom, restoreStreamingOutput, updateToolCard, toolCardIsBusy } from "./tool-card";
 import { ToolDisclosureController } from "./tool-disclosure";
+import { toolMessageBlock } from "./tool-call";
 import { TranscriptScroll } from "./transcript-scroll";
 import { renderReasoningCard, updateReasoningCard } from "./reasoning-card";
 import { transcriptRolePresentation } from "./transcript-presentation";
@@ -50,6 +51,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   let renderScheduled = false;
   const rendered = new Map<string, { node: HTMLElement; signature: string }>();
   const expanded = new Map<string, boolean>();
+  const toolCards = new Map<string, HTMLDetailsElement>();
   const transcriptScroll = new TranscriptScroll(window, transcriptViewport);
   const toolDisclosure = new ToolDisclosureController(expanded, undefined, () => {
     transcriptScroll.request(transcriptScroll.capture());
@@ -62,6 +64,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     disposed = true;
     listeners.abort();
     toolDisclosure.dispose();
+    toolCards.clear();
     transcriptScroll.dispose();
     transcriptResizeObserver?.disconnect();
   }
@@ -166,7 +169,14 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   }
 
   function renderToolCard(block: ContentBlock, detailKey: string): HTMLDetailsElement {
-    const details = renderToolCardDom(document, block, toolDetail(detailKey));
+    // Identity belongs to the invocation, not its current message/placement.
+    const key = safeText(block.id) ? `tool:${safeText(block.id)}` : detailKey;
+    let details = toolCards.get(key);
+    if (details) updateToolCard(document, details, block);
+    else {
+      details = renderToolCardDom(document, block, toolDetail(key));
+      toolCards.set(key, details);
+    }
     applyToolDetailsLifecycle(details, block);
     return details;
   }
@@ -231,13 +241,6 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     return article;
   }
 
-  function toolMessageBlock(message: DisplayMessage): ContentBlock {
-    return {
-      type: "toolCall", id: message.toolCallId, name: message.toolName, arguments: message.content,
-      executionOutput: message.output, hasStreamingOutput: message.hasStreamingOutput, resultOutput: message.resultOutput, isError: message.isError, toolStatus: message.toolStatus, uiPhase: message.uiPhase,
-    };
-  }
-
   /** Patches tool cards in their existing article so active spinner nodes never disconnect. */
   function patchMessage(node: HTMLElement, message: DisplayMessage): boolean {
     if (node.dataset.key !== safeText(message.key) || node.classList.contains(safeText(message.role)) === false) return false;
@@ -251,6 +254,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     if (message.role === "tool") {
       const tool = Array.from(node.children).find((child): child is HTMLDetailsElement => child instanceof HTMLDetailsElement && child.classList.contains("tool-card"));
       if (!tool) return false;
+      node.setAttribute("aria-label", transcriptRolePresentation("tool", safeText(message.toolName)).ariaLabel!);
       const block = toolMessageBlock(message);
       updateToolCard(document, tool, block);
       applyToolDetailsLifecycle(tool, block);
@@ -475,6 +479,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
 
   function render(state: State): void {
     const wasAtBottom = transcriptScroll.capture();
+    const outputPositions = new Map(Array.from(toolCards, ([key, card]) => [key, captureStreamingOutput(card)]));
     displayedState = state;
     renderActivity(state);
     renderModelControls(state);
@@ -487,10 +492,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       nextKeys.add(key);
       const signature = JSON.stringify(message);
       let entry = rendered.get(key);
-      let previousToolOutput: ReturnType<typeof captureStreamingOutput>;
-      let toolOutputChanged = false;
       if (!entry || entry.signature !== signature) {
-        previousToolOutput = entry ? captureStreamingOutput(entry.node) : undefined;
         if (entry && patchMessage(entry.node, message)) {
           entry.signature = signature;
         } else {
@@ -499,20 +501,21 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
           entry = { node, signature };
           rendered.set(key, entry);
         }
-        toolOutputChanged = true;
       }
       const currentAtIndex = messages.children.item(index);
       if (currentAtIndex !== entry.node) messages.insertBefore(entry.node, currentAtIndex || null);
-      if (toolOutputChanged) {
-        const renderedNode = entry.node;
-        requestAnimationFrame(() => restoreStreamingOutput(renderedNode, previousToolOutput));
-      }
     });
     for (const [key, entry] of rendered) {
       if (!nextKeys.has(key)) {
         entry.node.remove();
         rendered.delete(key);
       }
+    }
+    for (const [key, card] of toolCards) {
+      if (!card.isConnected) toolCards.delete(key);
+      else requestAnimationFrame(() => {
+        if (!disposed && card.isConnected) restoreStreamingOutput(card, outputPositions.get(key));
+      });
     }
     transcriptScroll.request(wasAtBottom);
   }
@@ -606,6 +609,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     if (data.type === "sessionReset") {
       // An explicit launch boundary only; ordinary snapshots retain all live UI state.
       toolDisclosure.dispose();
+      toolCards.clear();
       expanded.clear();
       rendered.clear();
       messages.replaceChildren();

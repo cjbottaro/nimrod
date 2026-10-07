@@ -105,6 +105,8 @@ The palette's session list filters as you type. Escape returns to commands (reta
 
 Session discovery reads Pi's default cwd-scoped session directory (or its session-directory environment override); custom locations can be opened through **Open session file…**. See [project behavior and implementation](docs/workspace-sessions.md) for storage, discovery and native-verification boundaries.
 
+Tool cards use the same summary treatment whether embedded in an assistant turn or temporarily standalone; assistant content and execution activity update one card per invocation. See [transcript rendering behavior](docs/architecture.md#rendering-contract-retained-from-pi-gui).
+
 ## Not currently included
 
 - Background process continuity.

@@ -15,7 +15,7 @@ items relevant to the task. Follow repository `AGENTS.md` and
 
 | Feature / work area | Implementation reference | Human guide |
 | --- | --- | --- |
-| Transcript tool/reasoning cards, tooltip-free summaries and accessible status labels | [Transcript cards](references/transcript-cards.md) | [Rendering behavior](../../../docs/architecture.md#rendering-contract-retained-from-pi-gui) |
+| Transcript tool/reasoning cards, call-ID keyed updates/placement, tooltip-free summaries and accessible status labels | [Transcript cards](references/transcript-cards.md) | [Rendering behavior](../../../docs/architecture.md#rendering-contract-retained-from-pi-gui) |
 | Composer keyboard hints, working-only follow-up queueing and delivery fallback | [Composer](references/composer.md) | [Pi-specific behavior](../../../docs/architecture.md#pi-specific-behavior) |
 | Session sidebar All / Needs attention views, persisted last-used order and prompt-only acknowledgement-driven recency (selection/rename never reorder), viewport anchoring, stable inbox order, selected-row retention, working empty-state, blank conversation surfaces and filtered navigation | [Sidebar views](references/sidebar-attention.md) | [Sidebar views](../../../docs/workspace-sessions.md#sidebar-views) |
 | Background-session desktop notifications, response previews, macOS authorization/delivery and bundle signing, test alerts/read-only foreground diagnostics, focus suppression and preferences | [Notifications](references/notifications.md) | [Notifications](../../../docs/notifications.md) |

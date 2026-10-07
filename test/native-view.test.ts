@@ -3,6 +3,7 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { webviewHtml, rendererBundle } from './view-fixture';
 import { createSafeMarkdownRenderer } from '../src/pi/safe-markdown';
+import { initialConversationState, reduceRpcEvent } from '../src/pi/reducer';
 
 function fixture() {
   const dom = new JSDOM(webviewHtml(), { runScripts: 'outside-only', pretendToBeVisual: true });
@@ -95,6 +96,66 @@ test('streaming updates preserve connected tool spinner and manual disclosure', 
     assert.equal(details.querySelector('.tool-card-spinner'), spinner);
     assert.equal(spinner.isConnected, true);
     assert.equal(details.open, true);
+  } finally { f.dom.window.close(); }
+});
+
+for (const assistantFirst of [false, true]) test(`either source creates one stable card (assistant first: ${assistantFirst})`, () => {
+  const f = fixture();
+  try {
+    let state = initialConversationState();
+    const apply = (event: Record<string, unknown>) => {
+      state = reduceRpcEvent(state, event); f.snapshot({ ...state });
+      assert.equal(f.win.document.querySelectorAll('.tool-card').length, 1);
+      assert.equal(f.win.document.querySelectorAll('article > .label').length, 0);
+      assert.equal(f.sent.filter(m => m.type === 'renderError').length, 0);
+    };
+    const assistant = { type: 'message_start', message: { role: 'assistant', timestamp: 1, content: [{ type: 'toolCall', id: 'read-1', name: 'read', arguments: { path: 'README.md' } }] } };
+    const execution = { type: 'tool_execution_start', toolCallId: 'read-1', toolName: 'read', args: { path: 'README.md' } };
+    apply(assistantFirst ? assistant : execution);
+    const card = f.win.document.querySelector<HTMLDetailsElement>('.tool-card')!;
+    card.open = true; card.dispatchEvent(new f.win.Event('toggle'));
+    apply({ type: 'tool_execution_update', toolCallId: 'read-1', partialResult: { content: [{ type: 'text', text: 'live' }] } });
+    const spinner = card.querySelector('.tool-card-spinner');
+    const output = card.querySelector<HTMLElement>('.tool-output')!;
+    Object.defineProperties(output, { scrollHeight: { value: 1_000 }, clientHeight: { value: 100 } });
+    output.scrollTop = 37;
+    apply(assistantFirst ? execution : assistant);
+    assert.equal(f.win.document.querySelector('.tool-card'), card);
+    assert.equal(card.querySelector('.tool-card-spinner'), spinner);
+    assert.equal(card.querySelector('.tool-output'), output);
+    assert.equal(output.scrollTop, 37);
+    assert.equal(card.open, true);
+    assert.equal(card.querySelector('.tool-card-preview')?.textContent, 'README.md');
+    apply({ type: 'message_update', assistantMessageEvent: { type: 'toolcall_start', contentIndex: 0, id: 'read-1', toolName: 'read' } });
+    assert.equal(card.querySelector('.tool-output'), output);
+    const result = { role: 'toolResult', toolCallId: 'read-1', toolName: 'read', content: [{ type: 'text', text: 'final' }] };
+    apply({ type: 'turn_end', toolResults: [result] });
+    apply({ type: 'message_end', message: result });
+    apply(execution); // A duplicate start must not rewind the finished card.
+    assert.equal(card.querySelector('.tool-card-spinner'), null);
+    assert.equal(card.querySelector('[data-output-kind="result"] .tool-output')?.textContent, 'final');
+    assert.equal(card.open, true);
+    assert.equal(f.win.document.querySelector('.tool-card'), card);
+    f.receive({ type: 'sessionReset' });
+    f.snapshot({ ...state });
+    assert.notEqual(f.win.document.querySelector('.tool-card'), card);
+    assert.equal(f.win.document.querySelector<HTMLDetailsElement>('.tool-card')!.open, false);
+  } finally { f.dom.window.close(); }
+});
+
+test('each tool output retains its own inspection position in a multi-tool turn', () => {
+  const f = fixture();
+  try {
+    const tool = (id: string, text: string) => ({ type: 'toolCall', id, name: 'bash', arguments: { command: id }, toolStatus: 'running', executionOutput: text });
+    const snapshot = (text: string) => f.snapshot({ messages: [{ key: 'multi', role: 'assistant', content: [tool('a', text), tool('b', text)] }] });
+    snapshot('one');
+    const outputs = Array.from(f.win.document.querySelectorAll<HTMLElement>('.tool-output'));
+    outputs.forEach((output, index) => {
+      Object.defineProperties(output, { scrollHeight: { value: 1_000 }, clientHeight: { value: 100 } });
+      output.scrollTop = 30 + index * 50;
+    });
+    snapshot('one\\ntwo');
+    assert.deepEqual(outputs.map(output => output.scrollTop), [30, 80]);
   } finally { f.dom.window.close(); }
 });
 

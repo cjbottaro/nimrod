@@ -1,6 +1,7 @@
 import { AgentMessage, ContentBlock, ConversationState, DisplayMessage, ExtensionWidget, JsonRecord, NativeSessionStats } from "./types";
 
 import { updateToolProgress } from "./tool-progress";
+import { mergeToolCall as mergeToolBlock, toolMessageBlock, type ToolCallUpdate as ToolUpdate } from "./tool-call";
 
 export const initialConversationState = (): ConversationState => ({
   messages: [],
@@ -142,7 +143,7 @@ function reduceConversationEvent(state: ConversationState, event: JsonRecord): C
       name,
       executionOutput,
       ...(type === "tool_execution_update" && executionOutput.trim() ? { hasStreamingOutput: true } : {}),
-      isError: type === "tool_execution_end" && event.isError === true,
+      ...(type === "tool_execution_end" ? { isError: event.isError === true } : {}),
       toolStatus: type === "tool_execution_end" ? "finished" : "running",
     });
   }
@@ -186,17 +187,6 @@ function applyToolResult(state: ConversationState, message: AgentMessage): Conve
   });
 }
 
-interface ToolUpdate {
-  id: string;
-  name?: string;
-  arguments?: unknown;
-  executionOutput?: string;
-  hasStreamingOutput?: boolean;
-  resultOutput?: string;
-  isError?: boolean;
-  toolStatus?: "running" | "finished" | "result";
-}
-
 /** Attaches all tool lifecycle information to exactly one card, keyed by toolCallId. */
 function applyToolUpdate(state: ConversationState, update: ToolUpdate): ConversationState {
   const messages = [...state.messages];
@@ -219,48 +209,26 @@ function applyToolUpdate(state: ConversationState, update: ToolUpdate): Conversa
     if (existing >= 0) {
       messages[existing] = mergeOrphanTool(messages[existing], update);
     } else {
-      messages.push({
-        key: `tool-${update.id}`,
-        role: "tool",
-        toolCallId: update.id,
-        toolName: update.name || "tool",
-        content: update.arguments === undefined ? undefined : safeJson(update.arguments),
-        output: update.executionOutput,
-        hasStreamingOutput: update.hasStreamingOutput,
-        resultOutput: update.resultOutput,
-        isError: update.isError,
-        toolStatus: update.toolStatus,
-        streaming: update.toolStatus === "running",
-      });
+      messages.push(mergeOrphanTool({
+        key: `tool-${update.id}`, role: "tool", toolCallId: update.id,
+      }, update));
     }
   }
   return { ...state, messages };
 }
 
-function mergeToolBlock(block: ContentBlock, update: ToolUpdate): ContentBlock {
-  return {
-    ...block,
-    name: update.name || block.name || "tool",
-    arguments: update.arguments === undefined ? block.arguments : update.arguments,
-    executionOutput: update.executionOutput === undefined ? block.executionOutput : update.executionOutput,
-    hasStreamingOutput: update.hasStreamingOutput === undefined ? block.hasStreamingOutput : update.hasStreamingOutput || block.hasStreamingOutput,
-    resultOutput: update.resultOutput === undefined ? block.resultOutput : update.resultOutput,
-    isError: update.isError === undefined ? block.isError : update.isError,
-    toolStatus: update.toolStatus || block.toolStatus,
-  };
-}
-
 function mergeOrphanTool(message: DisplayMessage, update: ToolUpdate): DisplayMessage {
+  const block = mergeToolBlock(toolMessageBlock(message), update);
   return {
     ...message,
-    toolName: update.name || message.toolName,
-    content: update.arguments === undefined ? message.content : safeJson(update.arguments),
-    output: update.executionOutput === undefined ? message.output : update.executionOutput,
-    hasStreamingOutput: update.hasStreamingOutput === undefined ? message.hasStreamingOutput : update.hasStreamingOutput || message.hasStreamingOutput,
-    resultOutput: update.resultOutput === undefined ? message.resultOutput : update.resultOutput,
-    isError: update.isError === undefined ? message.isError : update.isError,
-    toolStatus: update.toolStatus || message.toolStatus,
-    streaming: update.toolStatus === "running",
+    toolName: block.name,
+    content: block.arguments === undefined ? undefined : safeJson(block.arguments),
+    output: block.executionOutput,
+    hasStreamingOutput: block.hasStreamingOutput,
+    resultOutput: block.resultOutput,
+    isError: block.isError,
+    toolStatus: block.toolStatus,
+    streaming: block.toolStatus === "running",
   };
 }
 
@@ -278,15 +246,11 @@ function reconcileOrphanTools(messages: DisplayMessage[]): DisplayMessage[] {
       if (!orphan) return block;
       consumed.add(block.id);
       changed = true;
+      const update = toolMessageBlock(orphan);
       return mergeToolBlock(block, {
-        id: block.id,
-        name: orphan.toolName,
-        arguments: parseJson(orphan.content),
-        executionOutput: orphan.output,
-        hasStreamingOutput: orphan.hasStreamingOutput,
-        resultOutput: orphan.resultOutput,
-        isError: orphan.isError,
-        toolStatus: orphan.toolStatus,
+        ...update, id: block.id,
+        // Complete assistant inputs are authoritative; execution fills partial/missing ones.
+        arguments: block.arguments && typeof block.arguments === "object" ? block.arguments : update.arguments,
       });
     });
     return changed ? { ...message, content } : message;
@@ -328,7 +292,12 @@ function applyMessageDelta(state: ConversationState, raw: unknown): Conversation
 
   if (kind === "text_start") content[contentIndex] = { type: "text", text: "" };
   else if (kind === "thinking_start") content[contentIndex] = { type: "thinking", thinking: "", thinkingComplete: false };
-  else if (kind === "toolcall_start") content[contentIndex] = { type: "toolCall", id: string(raw.id), name: string(raw.toolName), arguments: "" };
+  else if (kind === "toolcall_start") {
+    const id = string(raw.id);
+    content[contentIndex] = existing?.type === "toolCall" && existing.id === id
+      ? mergeToolBlock(existing, { id, name: string(raw.toolName) })
+      : { type: "toolCall", id, name: string(raw.toolName), arguments: "" };
+  }
   else if (kind === "text_delta") content[contentIndex] = { type: "text", text: `${existing?.text || ""}${string(raw.delta)}` };
   else if (kind === "thinking_delta") content[contentIndex] = { type: "thinking", thinking: `${existing?.thinking || ""}${string(raw.delta)}`, thinkingComplete: false };
   else if (kind === "text_end" && typeof raw.content === "string") content[contentIndex] = { type: "text", text: raw.content };
@@ -343,15 +312,9 @@ function applyMessageDelta(state: ConversationState, raw: unknown): Conversation
     // Keep execution state that can arrive before the model's terminal tool-call event.
     // toolcall_end is authoritative for identity/arguments, not the execution lifecycle.
     const completed = toolCallBlock(raw.toolCall);
-    content[contentIndex] = {
-      ...existing,
-      ...completed,
-      ...(existing?.executionOutput !== undefined ? { executionOutput: existing.executionOutput } : {}),
-      ...(existing?.hasStreamingOutput !== undefined ? { hasStreamingOutput: existing.hasStreamingOutput } : {}),
-      ...(existing?.resultOutput !== undefined ? { resultOutput: existing.resultOutput } : {}),
-      ...(existing?.isError !== undefined ? { isError: existing.isError } : {}),
-      ...(existing?.toolStatus !== undefined ? { toolStatus: existing.toolStatus } : {}),
-    };
+    content[contentIndex] = mergeToolBlock(existing || completed, {
+      id: completed.id || "", name: completed.name, arguments: completed.arguments,
+    });
   }
   else return state;
 
@@ -398,11 +361,6 @@ function contentText(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content.map((block) => isRecord(block) && typeof block.text === "string" ? block.text : "").join("");
-}
-
-function parseJson(value: unknown): unknown {
-  if (typeof value !== "string") return value;
-  try { return JSON.parse(value); } catch { return value; }
 }
 
 function isDisplayable(message: AgentMessage): boolean {
