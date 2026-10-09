@@ -60,7 +60,17 @@ export function isMac(window: Window): boolean { return /Mac|iPhone|iPad/i.test(
 export function shortcutLabel(binding: string, mac: boolean): string {
   return binding.split('+').map(part => ({ primary: mac ? '⌘' : 'Ctrl', cmd: '⌘', ctrl: 'Ctrl', alt: mac ? 'Option' : 'Alt', shift: mac ? '⇧' : 'Shift', backspace: 'Backspace', plus: '+', arrowup: '↑', arrowdown: '↓', arrowleft: '←', arrowright: '→' }[part] ?? (part.length === 1 ? part.toUpperCase() : part[0].toUpperCase() + part.slice(1)))).join('+');
 }
-function eventKey(event: KeyboardEvent): string {
+function optionBaseKey(event: KeyboardEvent, mac?: boolean): string | undefined {
+  // macOS Option changes event.key (Option-N commonly reports Dead/˜), even
+  // with Command held. Use the letter/digit code only for that transformed
+  // Command-Option case; retain readable layout characters and plain typing.
+  if (mac === false || !event.metaKey || !event.altKey || !(event.key === 'Dead' || event.key.length === 1 && !/^[a-z0-9]$/i.test(event.key))) return;
+  const code = /^(?:Key([A-Z])|Digit([0-9]))$/.exec(event.code);
+  return code ? (code[1] ?? code[2]).toLowerCase() : undefined;
+}
+function eventKey(event: KeyboardEvent, mac?: boolean): string {
+  const optionKey = optionBaseKey(event, mac);
+  if (optionKey) return optionKey;
   if (event.code === 'BracketLeft') return '[';
   if (event.code === 'BracketRight') return ']';
   if (event.key === '+' || event.key === '=') return 'plus';
@@ -68,7 +78,7 @@ function eventKey(event: KeyboardEvent): string {
 }
 export function matchesBinding(event: KeyboardEvent, binding: string, mac?: boolean): boolean {
   const parts = binding.split('+'), key = parts.pop()!;
-  if (eventKey(event) !== key) return false;
+  if (eventKey(event, mac) !== key) return false;
   const primary = parts.includes('primary');
   const primaryMatches = mac === undefined ? event.metaKey !== event.ctrlKey : mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
   if (primary ? !primaryMatches : event.metaKey !== parts.includes('cmd') || event.ctrlKey !== parts.includes('ctrl')) return false;
@@ -76,14 +86,15 @@ export function matchesBinding(event: KeyboardEvent, binding: string, mac?: bool
   return event.altKey === parts.includes('alt') && (key === 'plus' || event.shiftKey === parts.includes('shift'));
 }
 export function recordBinding(event: KeyboardEvent, mac: boolean): string | undefined {
-  if (event.isComposing || event.keyCode === 229 || event.repeat || ['Meta', 'Control', 'Shift', 'Alt', 'Dead', 'Unidentified'].includes(event.key)) return;
+  if (event.isComposing || event.keyCode === 229 || event.repeat || ['Meta', 'Control', 'Shift', 'Alt', 'Unidentified'].includes(event.key)) return;
+  if (event.key === 'Dead' && !optionBaseKey(event, mac)) return;
   const parts: string[] = [];
   if (mac ? event.metaKey : event.ctrlKey) parts.push('primary');
   if (!mac && event.metaKey) parts.push('cmd');
   if (mac && event.ctrlKey) parts.push('ctrl');
   if (event.altKey) parts.push('alt');
-  if (event.shiftKey && eventKey(event) !== 'plus') parts.push('shift');
-  parts.push(eventKey(event));
+  if (event.shiftKey && eventKey(event, mac) !== 'plus') parts.push('shift');
+  parts.push(eventKey(event, mac));
   return validateBinding(parts.join('+'));
 }
 function equivalent(a: string, b: string, mac: boolean): boolean {

@@ -1,5 +1,12 @@
 # PoC verification
 
+## macOS Command-Option key normalization
+
+- A unit regression reproduces the matcher’s rejection of `key: Dead/˜/ñ, code: KeyN, metaKey: true, altKey: true` against New named session’s `primary+alt+n`. Matching and recording now share a narrow fallback to letter/digit codes for transformed macOS Command+Option events. Readable layout letters remain unchanged; plain Option typing, known non-macOS platforms, IME/229 and repeat guards are preserved. No defaults or saved overrides are rewritten.
+- Work was isolated on branch `fix/option-keybindings` in `.worktrees/keybinding-option-key`. `mise run check` passes **341 TypeScript/Node tests**, formatting/Clippy and **76 default Rust tests** (two opt-in Pi smokes ignored). All **three targeted keybinding offline WebKit tests** pass, including injected Option-derived event shapes opening/canceling/recording the naming step without a new process, draft loss or preference write. The complete browser suite was not rerun for this matcher/recorder-only fix.
+- `mise run build` packages and verifies the signed worktree artifact at **`.worktrees/keybinding-option-key/src-tauri/target/release/bundle/macos/Nimrod.app`**. The primary checkout/default bundle and running app were untouched. No live Pi/model request, user-session deletion, OS-setting change or upstream extension modification occurred.
+- The injected events address a blind spot in Playwright’s prior literal `Meta+Alt+N` test; they do not establish what the user’s actual native keyboard layout reports or prove end-to-end native acceptance. Alternate layouts requiring a true unmodified-character map and actual macOS shortcut delivery still need user validation.
+
 ## Sidebar historical recency, time labels and indicators
 
 - Implemented on `feature/sidebar-recency-time`, initially in `/tmp/nimrod-sidebar-recency-time` at `26e551e`, then moved to `.worktrees/sidebar-recency-time` and rebased onto `f149f66` before integration. Both documentation histories and the confirmation-keyboard fix were retained. Validation/build stayed in the feature worktree; the main app bundle was not replaced.

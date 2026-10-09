@@ -47,6 +47,31 @@ test('recording and matching normalize platform modifiers, Shift and zoom punctu
   } finally { f.dom.window.close(); }
 });
 
+test('macOS Command-Option shortcuts normalize Option dead keys consistently for dispatch and recording', () => {
+  const f = fixture(), ran: ActionId[] = [];
+  const dispatch = installKeybindingDispatch(f.win, { read: () => ({}), enabled: () => true, run: id => { ran.push(id); }, error: error => { throw error; } });
+  try {
+    for (const key of ['Dead', '˜', 'ñ']) {
+      const event = f.event(key, { code: 'KeyN', metaKey: true, altKey: true });
+      assert.equal(matchesBinding(event, 'primary+alt+n', true), true, key);
+      assert.equal(recordBinding(event, true), 'primary+alt+n', key);
+      assert.equal(matchesBinding(event, 'primary+n', true), false, 'Option remains a required modifier');
+      f.win.dispatchEvent(event); assert.equal(event.defaultPrevented, true);
+    }
+    assert.deepEqual(ran, ['new-named', 'new-named', 'new-named']);
+    const typing = f.event('Dead', { code: 'KeyN', altKey: true }); f.win.dispatchEvent(typing);
+    assert.equal(typing.defaultPrevented, false); assert.equal(recordBinding(typing, true), undefined);
+    assert.equal(matchesBinding(f.event('Dead', { code: 'KeyN', ctrlKey: true, altKey: true }), 'primary+alt+n', false), false);
+    assert.equal(matchesBinding(f.event('z', { code: 'KeyY', metaKey: true, altKey: true }), 'primary+alt+z', true), true, 'already-readable layout characters stay layout-aware');
+    for (const extra of [{ isComposing: true }, { keyCode: 229 }, { repeat: true }]) {
+      const event = f.event('Dead', { code: 'KeyN', metaKey: true, altKey: true, ...extra });
+      assert.equal(recordBinding(event, true), undefined); f.win.dispatchEvent(event);
+    }
+    assert.equal(ran.length, 3);
+    assert.equal(recordBinding(f.event('Dead', { code: 'Unidentified', metaKey: true, altKey: true }), true), undefined);
+  } finally { dispatch.dispose(); f.dom.window.close(); }
+});
+
 test('key matching distinguishes modifiers and handles bracket switching across shifted layouts', () => {
   const f = fixture();
   try {

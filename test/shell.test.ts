@@ -235,7 +235,8 @@ test('session navigation and named-session defaults open their distinct pickers 
     assert.equal(f.calls.filter(call => call.command === 'start_pi').length, starts);
     escape(); await f.tick(); assert.equal(prompt.value, 'Navigation must retain this draft'); assert.equal(f.win.document.activeElement, prompt);
     key('n', { altKey: true, repeat: true }); key('k', { isComposing: true }); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
-    key('n', { altKey: true }); await submitSessionName(f, 'Shortcut named session');
+    // Native macOS Option-N can report a dead key rather than the letter n.
+    key('Dead', { code: 'KeyN', altKey: true }); await submitSessionName(f, 'Shortcut named session');
     const launches = f.calls.filter(call => call.command === 'start_pi'); assert.equal(launches.length, starts + 1);
     assert.equal((launches.at(-1)!.args.config as JsonRecord).sessionName, 'Shortcut named session');
     assert.equal((launches.at(-1)!.args.config as JsonRecord).mode, 'saved');

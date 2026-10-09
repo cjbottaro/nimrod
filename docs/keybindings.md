@@ -54,6 +54,8 @@ Only user overrides are stored in [settings.json](settings.md#files-and-synchron
 }
 ```
 
+On macOS, Command+Option shortcuts still identify the underlying letter/digit when Option produces a dead key or alternate symbol (for example, Option+N’s tilde). Matching and the recorder share this normalization. Plain Option typing and IME composition are not treated as application shortcuts. This fallback uses standard letter/digit key positions when the unmodified layout character is unavailable; alternate keyboard layouts still need native validation.
+
 `primary` means Cmd on macOS and Ctrl on Linux. Explicit `cmd` and `ctrl` modifiers are also accepted. Modifier order is `primary`, `cmd`, `ctrl`, `alt`, `shift`, followed by the lowercase key. Use names such as `backspace`, `enter`, `arrowup`, or `plus`. Each action accepts up to eight single-keystroke shortcuts. Omitted actions inherit built-in defaults; an empty array disables the action’s shortcuts. Reset removes that action’s override; Reset all leaves an empty overrides object.
 
 Valid external edits apply automatically. Conflicting file-authored shortcuts execute neither action and report a conflict; resolve them in the editor. Unknown action IDs are retained for compatibility, but cannot execute an action this build does not implement.

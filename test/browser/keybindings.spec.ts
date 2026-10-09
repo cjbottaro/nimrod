@@ -29,6 +29,37 @@ test('session shortcut defaults open Switch, Resume and New named directly witho
   } finally { await demo.close(); }
 });
 
+test('native-shaped Command-Option-N dead-key events open and record New named without modifying the offline draft', async ({ page }) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, 'platform', { value: 'MacIntel', configurable: true }));
+  const demo = await demoFixture(page);
+  try {
+    const prompt = page.locator(visible('prompt')); await prompt.fill('Keep this Option-key draft');
+    const starts = demo.calls.filter(call => call.command === 'start_pi').length;
+    // Playwright's keyboard.press sends key="n" here, unlike the Option-derived
+    // key values reported by native macOS layouts. Exercise those shapes too.
+    for (const key of ['Dead', '˜', 'ñ']) {
+      const consumed = await prompt.evaluate((node, key) => {
+        const event = new KeyboardEvent('keydown', { key, code: 'KeyN', metaKey: true, altKey: true, bubbles: true, cancelable: true });
+        node.dispatchEvent(event); return event.defaultPrevented;
+      }, key);
+      expect(consumed).toBe(true);
+      await expect(page.locator('#palette-title')).toHaveText('New named session');
+      await expect(page.locator('#palette-input')).toBeFocused();
+      await page.keyboard.press('Escape'); await expect(page.locator('#command-palette')).not.toBeVisible();
+      await expect(prompt).toHaveValue('Keep this Option-key draft'); await expect(prompt).toBeFocused();
+    }
+    await page.locator('#open-settings').click();
+    await page.locator('.keybinding-row[data-action="new-named"]').getByRole('button', { name: /^Change/ }).click();
+    await page.locator('#keybinding-record').evaluate(node => node.dispatchEvent(new KeyboardEvent('keydown', { key: 'Dead', code: 'KeyN', metaKey: true, altKey: true, bubbles: true, cancelable: true })));
+    await expect(page.locator('#keybinding-record')).toHaveValue('⌘+Option+N');
+    await expect(page.locator('#keybinding-save')).toBeEnabled();
+    await page.locator('#keybinding-cancel').click(); await page.locator('#settings-back').click();
+    expect(demo.calls.filter(call => call.command === 'start_pi')).toHaveLength(starts);
+    expect(demo.calls.filter(call => call.command === 'preferences_settings')).toHaveLength(0);
+    expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
 test('keybinding recording, reassignment, unbinding and reset preserve the offline conversation', async ({ page }) => {
   const demo = await demoFixture(page);
   try {
