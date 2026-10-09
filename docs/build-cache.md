@@ -12,8 +12,10 @@ mise run build
 Mise sets `RUSTC_WRAPPER=sccache` and `CARGO_INCREMENTAL=0`. Builds in `main`
 and worktrees using this configuration automatically read and populate the same
 machine-local compiler cache. No Homebrew installation, symlinks or shared Cargo
-target directory are needed. Existing worktrees need the configuration change too;
-they do not receive tracked-file changes merely because main has them.
+target directory are needed. Worktrees under this repository's `.worktrees/`
+inherit main's mise configuration automatically, including existing branches with
+older `mise.toml` files, unless they explicitly override it. Worktrees outside this
+repository directory need the updated configuration in their own branch.
 
 ## What is shared
 

@@ -10,8 +10,11 @@
   disk cache and preserve personal overrides. Default size is 10 GiB.
 - Targets, frontend output and app bundles remain checkout-local. Never point
   worktree builds at the primary checkout's default target or running app bundle.
-- Main and old worktrees need this tracked configuration before their compiler
-  invocations contribute to the cache. Tool installation alone does not enable it.
+- Mise merges ancestor configs: once main has this configuration, existing and new
+  worktrees nested under `.worktrees/` inherit the wrapper, incremental setting and
+  tool pin without changing their tracked files. Explicit child overrides can
+  supersede them. External worktrees need the configuration in their own branch.
+  Tool installation alone does not enable the wrapper outside this config hierarchy.
 - User guide: `docs/build-cache.md`, linked from README and documentation index.
 
 ## Cache boundaries / pitfalls
@@ -58,4 +61,10 @@ Clippy and 76 Rust tests (two opt-in real-Pi tests ignored).
 `CARGO_NET_OFFLINE=true mise run build` passed packaging and macOS signature
 verification for `.worktrees/shared-build-cache/src-tauri/target/release/bundle/macos/Nimrod.app`.
 Both used the task worktree only; main's default/running bundle was untouched.
+After merging into main, verified `mise exec -- printenv RUSTC_WRAPPER
+CARGO_INCREMENTAL` and `mise exec -- sccache --version` in main and every existing
+worktree (card-plugin-plan, keybinding-option-key, native-session-deletion,
+resume-session-picker, session-terminology, shared-build-cache, sidebar-filters).
+All resolved `sccache`, `0` and version 0.18.0. Existing in-progress worktree edits
+were preserved; no child overrides, branch merges or app launches were needed.
 Linux and Windows cache behavior and native application acceptance are unverified.
