@@ -16,6 +16,7 @@ items relevant to the task. Follow repository `AGENTS.md` and
 | Feature / work area | Implementation reference | Human guide |
 | --- | --- | --- |
 | Transcript tool/reasoning cards, call-ID keyed updates/placement, tooltip-free summaries and accessible status labels | [Transcript cards](references/transcript-cards.md) | [Rendering behavior](../../../docs/architecture.md#rendering-contract-retained-from-pi-gui) |
+| Customizable project/app keybindings, recorder UI, conflict reassignment, JSONC overrides and action/all reset | [Keybindings](references/keybindings.md) | [Keybindings](../../../docs/keybindings.md) |
 | Composer keyboard hints, working-only follow-up queueing and delivery fallback | [Composer](references/composer.md) | [Pi-specific behavior](../../../docs/architecture.md#pi-specific-behavior) |
 | Resizable session sidebar, per-project app-state width, zoom-aware drag/keyboard controls and responsive clamping | [Sidebar resizing](references/sidebar-resize.md) | [Sidebar width](../../../docs/workspace-sessions.md#sidebar-width) |
 | Session sidebar All / Needs attention views, persisted last-used order and prompt-only acknowledgement-driven recency (selection/rename never reorder), viewport anchoring, stable inbox order, selected-row retention, working empty-state, blank conversation surfaces and filtered navigation | [Sidebar views](references/sidebar-attention.md) | [Sidebar views](../../../docs/workspace-sessions.md#sidebar-views) |

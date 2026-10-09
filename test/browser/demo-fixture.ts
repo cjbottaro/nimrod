@@ -27,7 +27,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
       builder.onLoad({ filter: /.*/, namespace: 'raw' }, args => ({ contents: readFileSync(args.path, 'utf8'), loader: 'text' }));
     } }],
   });
-  const css = ['src/pi/transcript.css', 'src/theme.css', 'src/workspace.css'].map(p => readFileSync(p, 'utf8')).join('\n');
+  const css = ['src/pi/transcript.css', 'src/theme.css', 'src/workspace.css', 'src/keybindings.css'].map(p => readFileSync(p, 'utf8')).join('\n');
   const html = readFileSync('index.html', 'utf8').replace('<script type="module" src="/src/main.ts"></script>', '').replace('</head>', `<style>${css}</style></head>`);
   const children = new Map<string, ChildProcessWithoutNullStreams>();
   let delivery = Promise.resolve();

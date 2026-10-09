@@ -22,11 +22,14 @@ import { restoreComposerState } from './pi/webview-state';
 import { Dialogs } from './dialogs';
 import { installCommandPalette, type PalettePage } from './command-palette';
 import { installSettings, installRuntimeSettings } from './settings';
+import { ACTIONS, bindingsFor, installKeybindingDispatch, isMac, shortcutLabel, type ActionId } from './keybindings';
+import { installKeybindingEditor } from './keybinding-editor';
 import { installSessionPopouts } from './session-popouts';
 import transcript from './pi/transcript.html?raw';
 import './pi/transcript.css';
 import './theme.css';
 import './workspace.css';
+import './keybindings.css';
 
 const required = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 async function main(): Promise<void> {
@@ -50,7 +53,12 @@ const welcome = required('welcome'), conversation = required('conversation');
 const error = required('launch-error'), cwd = required<HTMLInputElement>('cwd');
 const dialogs = new Dialogs();
 const deletionReview = installDeletionReview(required<HTMLDialogElement>('deletion-review'));
-const settings = installSettings(window, required<HTMLDialogElement>('settings-page'), required<HTMLButtonElement>('open-settings'), required<HTMLButtonElement>('settings-back'));
+const settings = installSettings(window, required<HTMLDialogElement>('settings-page'), required<HTMLButtonElement>('open-settings'), required<HTMLButtonElement>('settings-back'), false);
+const keybindingEditor = installKeybindingEditor(window, required('settings-page').querySelector<HTMLElement>('.settings-content')!, {
+  read: () => preferences.keybindings(),
+  save: (id, bindings, reassign) => preferences.saveKeybinding(id, bindings, reassign, isMac(window)),
+  resetAll: () => preferences.resetKeybindings(),
+});
 const settingsKey = 'nimrod.poc.launch';
 const recentKey = 'nimrod.workspaces.v1';
 const lastKey = 'nimrod.last-session.v1';
@@ -142,7 +150,7 @@ const themes = installThemes({
 const zoom = installZoom(window, required<HTMLSelectElement>('zoom-level'), required('zoom-error'), {
   read: () => preferences.zoom(), save: percent => preferences.saveZoom(percent),
   apply: scale => getCurrentWebview().setZoom(scale),
-});
+}, false);
 const notificationPicker = required<HTMLSelectElement>('notification-mode');
 const notificationStatus = required('notification-status');
 const notificationTest = required<HTMLButtonElement>('notification-test');
@@ -225,11 +233,12 @@ const deletion = new SessionDeletion({
   error: message => { error.textContent = message; },
 });
 const unlistenDeletion = await listen<DeletionEvent>('nimrod-session-deletion', event => { void deletion.handle(event.payload); });
-preferences.subscribe(() => { runtime.reload(); themes.reload(); void zoom.reload(); reloadNotifications(); });
+preferences.subscribe(() => { runtime.reload(); themes.reload(); void zoom.reload(); reloadNotifications(); keybindingEditor.reload(); refreshShortcutHints(); });
 window.addEventListener('unload', () => {
   unloading = true;
   sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion();
   for (const tab of tabs) { tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.session?.rpc.disconnect('Window closed'); }
+  keybindingDispatch.dispose(); keybindingEditor.dispose();
   palette.dispose(); zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose();
 }, { once: true });
 
@@ -432,6 +441,7 @@ async function paletteSessions(): Promise<PalettePage> {
 }
 const palette = installCommandPalette(window, required<HTMLDialogElement>('command-palette'), {
   canOpen: () => ready && !settings.isOpen,
+  shortcuts: false,
   sessions: paletteSessions,
   openSessions: openSessionPicker,
   commands: () => {
@@ -455,7 +465,8 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     ...(active ? [{ id: 'close', label: 'Close session', detail: active.title, run: () => closeTab(active!) }] : []),
     { id: 'sidebar', label: sidebarVisible ? 'Hide sidebar' : 'Show sidebar', run: () => required<HTMLButtonElement>('toggle-sidebar').click() },
     { id: 'settings', label: 'Settings', run: () => required<HTMLButtonElement>('open-settings').click() },
-    ];
+    { id: 'keybindings', label: 'Edit keybindings…', run: openKeybindings },
+    ].map(item => ({ ...item, shortcut: ACTIONS.some(action => action.id === item.id) ? shortcutHint(item.id as ActionId) : undefined }));
   },
 });
 function button(text: string, click: () => void): HTMLButtonElement {
@@ -859,17 +870,55 @@ required('open-sessions').addEventListener('keydown', event => {
   const next = event.key === 'Home' ? visible[0] : event.key === 'End' ? visible[visible.length - 1] : event.key === 'ArrowDown' ? visible[(index + 1) % visible.length] : event.key === 'ArrowUp' ? visible[(index - 1 + visible.length) % visible.length] : undefined;
   if (next) { event.preventDefault(); next.row.focus(); }
 });
-window.addEventListener('keydown', event => {
-  if (!(event.metaKey || event.ctrlKey) || event.altKey || event.isComposing || document.querySelector('dialog[open]')) return;
-  if (event.shiftKey) {
-    if (event.code === 'BracketLeft') { event.preventDefault(); cycleTab(-1); }
-    if (event.code === 'BracketRight') { event.preventDefault(); cycleTab(1); }
-    return;
-  }
-  if (event.key.toLowerCase() === 't') { event.preventDefault(); void newSession(); }
-  if (event.key.toLowerCase() === 'w' && presented) { event.preventDefault(); void closeTab(presented); }
-  if (event.key.toLowerCase() === 'b') { event.preventDefault(); required<HTMLButtonElement>('toggle-sidebar').click(); }
+function shortcutHint(id: ActionId): string {
+  return bindingsFor(id, preferences.keybindings()).map(binding => shortcutLabel(binding, isMac(window))).join(' / ');
+}
+function refreshShortcutHints(): void {
+  const settingsButton = required('open-settings');
+  if (!settingsButton.classList.contains('error')) settingsButton.title = ['Settings', shortcutHint('settings')].filter(Boolean).join(' · ');
+  required('toggle-sidebar').title = ['Toggle sidebar', shortcutHint('sidebar')].filter(Boolean).join(' · ');
+  required('zoom-level').title = ['App zoom', shortcutHint('zoom-in'), shortcutHint('zoom-out'), shortcutHint('zoom-reset')].filter(Boolean).join(' · ');
+  const zoomHint = required('zoom-level').nextElementSibling;
+  if (zoomHint) zoomHint.textContent = `Zoom in: ${shortcutHint('zoom-in') || 'unbound'} · Zoom out: ${shortcutHint('zoom-out') || 'unbound'} · Reset to 100%: ${shortcutHint('zoom-reset') || 'unbound'}. Shortcuts pause in other dialogs.`;
+}
+function openKeybindings(): void { settings.open(); if (settings.isOpen) keybindingEditor.focus(); }
+const keybindingDispatch = installKeybindingDispatch(window, {
+  read: () => preferences.keybindings(),
+  enabled: id => {
+    if (unloading) return false;
+    if (['settings', 'zoom-in', 'zoom-out', 'zoom-reset'].includes(id)) return true;
+    if (!ready) return false;
+    if (['close', 'model', 'thinking', 'restart', 'delete'].includes(id)) return !!presented;
+    return true;
+  },
+  run: (id: ActionId) => {
+    switch (id) {
+      case 'new': return newSession();
+      case 'temporary': return newSession('temporary');
+      case 'delete': return presented ? deleteSession(presented) : undefined;
+      case 'model': return presented ? pickPreference(presented, 'model') : undefined;
+      case 'thinking': return presented ? pickPreference(presented, 'thinking') : undefined;
+      case 'palette': palette.open(); return;
+      case 'close': return presented ? closeTab(presented) : undefined;
+      case 'sidebar': required<HTMLButtonElement>('toggle-sidebar').click(); return;
+      case 'previous': cycleTab(-1); return;
+      case 'next': cycleTab(1); return;
+      case 'settings': settings.open(); return;
+      case 'keybindings': openKeybindings(); return;
+      case 'zoom-in': zoom.run('in'); return;
+      case 'zoom-out': zoom.run('out'); return;
+      case 'zoom-reset': zoom.run('reset'); return;
+      case 'resume': return palette.sessions();
+      case 'switch-session': return palette.openSessions();
+      case 'new-named': return newNamedSession();
+      case 'restart': return presented ? restartSession(presented) : undefined;
+      case 'file': return pickSession();
+      case 'demo': return newSession('temporary', true);
+    }
+  },
+  error: message => { error.textContent = String(message); },
 });
+refreshShortcutHints();
 async function boot(): Promise<void> {
   controls(); renderRecents();
   try {

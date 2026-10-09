@@ -161,6 +161,53 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   };
 }
 
+test('customizable requested shortcuts use normal session/model/effort actions without submitting drafts', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', modelFixture: true, fileExists: () => false });
+  const key = (key: string, extra: KeyboardEventInit = {}) => f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key, metaKey: true, bubbles: true, cancelable: true, ...extra }));
+  const escape = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  try {
+    key('n'); await f.tick(); await f.tick();
+    assert.equal((f.calls.find(call => call.command === 'start_pi')!.args.config as JsonRecord).mode, 'saved');
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Retain this draft'; prompt.dispatchEvent(new f.win.Event('input'));
+    key('m'); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Select model');
+    f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+    key('e'); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Select thinking level'); escape(); escape();
+    const before = f.calls.filter(call => call.command === 'start_pi').length;
+    key('n', { repeat: true }); key('n', { isComposing: true }); await f.tick(); assert.equal(f.calls.filter(call => call.command === 'start_pi').length, before);
+    key('N', { shiftKey: true }); await f.tick(); await f.tick();
+    assert.equal((f.calls.filter(call => call.command === 'start_pi').at(-1)!.args.config as JsonRecord).mode, 'temporary');
+    assert.equal(prompt.value, 'Retain this draft'); assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
+    key('Backspace'); await f.tick(); assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false, 'temporary session is not deletable');
+    f.openSettings(); key('n'); await f.tick(); assert.equal(f.calls.filter(call => call.command === 'start_pi').length, before + 1);
+    f.back();
+    f.preferences.external('{"keybindings":{"new":[],"temporary":["primary+j"],"palette":["primary+l"]}}');
+    key('n'); await f.tick(); assert.equal(f.calls.filter(call => call.command === 'start_pi').length, before + 1);
+    key('j'); await f.tick(); await f.tick(); assert.equal(f.calls.filter(call => call.command === 'start_pi').length, before + 2);
+    f.openPalette(); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false, 'old palette binding is disabled');
+    key('l'); assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
+    assert.match(f.element('palette-list').textContent!, /Ctrl\+J/);
+    escape(); f.openSettings(); assert.ok(f.element('keybindings-section')); assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
+  } finally { f.win.close(); }
+});
+
+test('Cmd-Backspace invokes the existing review and Cancel preserves the selected saved session', async () => {
+  let answer!: (value: boolean) => void;
+  const f = await fixture(undefined, { windowWorkspace: '/project', confirmReview: args => answer(args.confirmed === true), deleteTree: async emit => {
+    const confirmed = new Promise<boolean>(resolve => { answer = resolve; });
+    emit({ id: 'keybinding-review', phase: 'review', files: ['/sessions/new.jsonl'], results: [], pending: true, tree: [{ file: '/sessions/new.jsonl', title: 'Root' }] });
+    assert.equal(await confirmed, false); return [];
+  } });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Do not erase draft'; prompt.dispatchEvent(new f.win.Event('input'));
+    prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Backspace', metaKey: true, bubbles: true, cancelable: true })); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('deletion-review').open, true); assert.equal(f.calls.filter(call => call.command === 'delete_session_tree').length, 1);
+    f.element<HTMLDialogElement>('deletion-review').close('cancel'); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 1); assert.equal(prompt.value, 'Do not erase draft');
+    assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
+  } finally { f.win.close(); }
+});
+
 test('sidebar resizing restores and persists per-project app state without harness or settings effects', async () => {
   for (const [project, width] of [['/project', 340], ['/other', 410]] as const) {
     const key = `nimrod.sidebar.width:${project}`;

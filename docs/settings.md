@@ -47,7 +47,7 @@ Project settings and personal project overrides are not implemented yet. There i
 ## Appearance
 
 - **Color theme:** existing Nimrod/Dracula picker, import, and removal actions. Changes apply immediately and are saved. See [themes.md](themes.md).
-- **Zoom:** whole-app zoom, default 125%, with the existing saved preference. **⌘/Ctrl + / − / 0** continue to work throughout the app, not only on this page.
+- **Zoom:** whole-app zoom, default 125%, with the existing saved preference. **⌘/Ctrl + / − / 0** are the customizable defaults. Zoom shortcuts work on this page and in the project, but pause through other dialogs.
 - Theme/import/zoom notices are shown alongside their controls in Settings.
 
 Existing theme and zoom choices are migrated into the file-backed preferences. Restoring zoom does not rewrite the settings file.
@@ -55,6 +55,10 @@ Existing theme and zoom choices are migrated into the file-backed preferences. R
 ## Notifications
 
 **Background session alerts** are on by default. The On/Off picker saves immediately and synchronizes across windows without changing running sessions. **Send test notification** checks the native delivery path without starting an agent; it is disabled while alerts are off. The status line shows the latest attempt/suppression/error plus macOS policy and foreground-handler diagnostics after a test. **Refresh notification diagnostics** is read-only and remains available with alerts off; it neither posts a notification nor requests permission. macOS authorization and submission errors also appear in the project error area; OS notification settings still apply. See [notifications](notifications.md) for triggers, focus suppression, privacy and current native limitations.
+
+## Keybindings
+
+Search Nimrod actions, record shortcuts, remove bindings, or restore defaults per action/all actions. Conflicts require explicit reassignment, and saved changes synchronize across project windows without touching running sessions. See [Keybindings](keybindings.md) for defaults, reset semantics and configuration syntax. Composer delivery and Pi’s internal keymap are unchanged.
 
 ## Runtime
 

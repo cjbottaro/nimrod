@@ -25,7 +25,7 @@ The **Session sidebar** shows a flat list of open conversations, activity and pe
 
 Closing a session waits for its agent to stop before removing it from the sidebar. Saved-session history and drafts remain; temporary/offline-demo state is discarded entirely. Active work and temporary sessions require confirmation. Canceling Close or a failed agent shutdown keeps the session and its in-memory draft available. A closed session has no Nimrod-owned Pi process; an open session may be inactive. Reopening a project restores saved sidebar entries without starting Pi; selecting one resumes it. Closing a project window stops only its children; quitting stops all owned children. No background daemon.
 
-Other shortcuts: **⌘/Ctrl T** creates a session, **⌘/Ctrl W** closes it, **⌘/Ctrl B** toggles the sidebar, and **⌘/Ctrl ⇧ [ / ]** switches open sessions.
+Default shortcuts (customizable in [Settings → Keybindings](keybindings.md)): **⌘/Ctrl N** (or **⌘/Ctrl T**) creates a session, **⌘/Ctrl ⇧ N** creates a temporary session, **⌘/Ctrl Backspace** opens deletion review, **⌘/Ctrl M** selects a model, **⌘/Ctrl E** selects thinking level/effort, **⌘/Ctrl W** closes it, **⌘/Ctrl B** toggles the sidebar, and **⌘/Ctrl ⇧ [ / ]** switches open sessions.
 
 ### Sidebar width
 

@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod cli;
 mod delete_bridge;
+mod keybindings;
 mod links;
 mod native_menu;
 mod notifications;
@@ -456,6 +457,22 @@ fn main() {
                 request_exit(app);
             } else if native_menu::is_open_project(event.id().as_ref()) {
                 native_menu::open_project(app);
+            } else if event.id().as_ref() == native_menu::MINIMIZE_ID {
+                if let Some(window) = app
+                    .webview_windows()
+                    .values()
+                    .find(|w| w.is_focused().unwrap_or(false))
+                {
+                    let _ = window.minimize();
+                }
+            } else if event.id().as_ref() == native_menu::CLOSE_WINDOW_ID {
+                if let Some(window) = app
+                    .webview_windows()
+                    .values()
+                    .find(|w| w.is_focused().unwrap_or(false))
+                {
+                    let _ = window.close();
+                }
             }
         })
         .on_window_event(|window, event| {

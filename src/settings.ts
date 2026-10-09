@@ -2,7 +2,7 @@ export const RUNTIME_STORAGE_KEY = 'nimrod.runtime.v1';
 export interface RuntimePaths { pi: string; node: string; }
 
 /** A full-window settings page, using native modality to keep the workspace inert but laid out. */
-export function installSettings(window: Window, page: HTMLDialogElement, openButton: HTMLButtonElement, backButton: HTMLButtonElement): {
+export function installSettings(window: Window, page: HTMLDialogElement, openButton: HTMLButtonElement, backButton: HTMLButtonElement, shortcuts = true): {
   readonly isOpen: boolean;
   open(): void;
   close(): void;
@@ -30,7 +30,7 @@ export function installSettings(window: Window, page: HTMLDialogElement, openBut
   openButton.addEventListener('click', open);
   backButton.addEventListener('click', close);
   page.addEventListener('cancel', cancel);
-  window.addEventListener('keydown', keydown);
+  if (shortcuts) window.addEventListener('keydown', keydown);
   return { get isOpen() { return page.open; }, open, close, dispose() {
     openButton.removeEventListener('click', open);
     backButton.removeEventListener('click', close);

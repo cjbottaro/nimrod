@@ -20,7 +20,7 @@ interface ZoomHost {
 }
 
 /** Native page zoom, not font-size or CSS transform. Serialize IPC so older changes cannot win. */
-export function installZoom(window: Window, select: HTMLSelectElement, notice: HTMLElement, host: ZoomHost): { ready: Promise<void>; reload(): Promise<void>; dispose(): void } {
+export function installZoom(window: Window, select: HTMLSelectElement, notice: HTMLElement, host: ZoomHost, shortcuts = true): { ready: Promise<void>; run(action: 'in' | 'out' | 'reset'): void; reload(): Promise<void>; dispose(): void } {
   let applied = 100;
   let requested = DEFAULT_ZOOM;
   let work = Promise.resolve();
@@ -59,20 +59,22 @@ export function installZoom(window: Window, select: HTMLSelectElement, notice: H
     const percent = Number(select.value);
     if (ZOOM_LEVELS.some(level => level === percent)) void change(percent);
   };
-  const onKey = (event: KeyboardEvent) => {
-    const action = zoomShortcut(event);
-    if (!action) return;
-    event.preventDefault();
+  const run = (action: 'in' | 'out' | 'reset') => {
     const index = ZOOM_LEVELS.findIndex(level => level === requested);
     const percent = action === 'reset' ? 100 : ZOOM_LEVELS[Math.max(0, Math.min(ZOOM_LEVELS.length - 1, index + (action === 'in' ? 1 : -1)))];
     void change(percent);
   };
+  const onKey = (event: KeyboardEvent) => {
+    const action = zoomShortcut(event);
+    if (!action) return;
+    event.preventDefault(); run(action);
+  };
   select.addEventListener('change', onChange);
-  window.addEventListener('keydown', onKey);
+  if (shortcuts) window.addEventListener('keydown', onKey);
   let initial: unknown;
   try { initial = host.read(); } catch { /* use the personal default */ }
   const ready = change(savedZoom(initial), false);
-  return { ready, reload() {
+  return { ready, run, reload() {
     const percent = savedZoom(host.read());
     return percent === requested ? work : change(percent, false);
   }, dispose() {

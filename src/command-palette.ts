@@ -2,6 +2,7 @@ export interface PaletteItem {
   id: string;
   label: string;
   detail?: string;
+  shortcut?: string;
   keywords?: string;
   run(): void | Promise<void>;
   next?: boolean;
@@ -12,6 +13,7 @@ export interface PaletteOptions {
   sessions(): Promise<PalettePage>;
   openSessions(): PalettePage;
   canOpen(): boolean;
+  shortcuts?: boolean;
 }
 export interface SelectionRequest {
   choose(options: string[], current?: string): Promise<string | undefined>;
@@ -73,7 +75,9 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       const row = doc.createElement('div'); row.id = `palette-option-${index}`; row.setAttribute('role', 'option'); row.dataset.index = String(index);
       const label = doc.createElement('span'); label.textContent = item.label;
       const detail = doc.createElement('small'); detail.textContent = item.detail || '';
-      row.append(label, detail); row.title = item.keywords || item.detail || item.label;
+      row.append(label, detail);
+      if (item.shortcut) { const shortcut = doc.createElement('kbd'); shortcut.textContent = item.shortcut; row.append(shortcut); }
+      row.title = item.keywords || item.detail || item.label;
       return row;
     }));
     const noun = mode === 'commands' ? 'commands' : mode === 'sessions' ? 'sessions' : 'options';
@@ -206,6 +210,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   back.addEventListener('click', commands, { signal });
   retry.addEventListener('click', () => retryAction?.(), { signal });
   win.addEventListener('keydown', event => {
+    if (options.shortcuts === false || event.defaultPrevented) return;
     if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.altKey || event.key.toLowerCase() !== 'p' || event.isComposing || event.keyCode === 229 || event.repeat) return;
     if (dialog.open) { event.preventDefault(); return; }
     if (open()) event.preventDefault();

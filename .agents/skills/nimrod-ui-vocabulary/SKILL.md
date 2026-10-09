@@ -50,7 +50,7 @@ See [project/session implementation](../../../docs/workspace-sessions.md) for li
 | Term | Meaning | Current code anchor |
 | --- | --- | --- |
 | **Project bar** | Top strip containing the sidebar toggle, Nimrod wordmark, project directory, active-session mode badge, Restart session icon, Delete session tree icon, and Settings gear. Preferences themselves live on the Settings page. | `#workspace-bar` |
-| **Settings page** | Full-window preferences surface opened by the gear or ⌘/Ctrl comma; Appearance and Runtime sections, with Back/Escape navigation. Covers the still-mounted project using native dialog modality. | `#settings-page` |
+| **Settings page** | Full-window preferences surface opened by the gear or ⌘/Ctrl comma; Appearance, Notifications, Keybindings and Runtime sections, with Back/Escape navigation. Covers the still-mounted project using native dialog modality. | `#settings-page` |
 | **Transcript** | Conversation history: user/assistant entries and their content. | `#messages` |
 | **Transcript pane** | The independently scrolling container around the transcript. | `#transcript-viewport` |
 | **Status area** | Agent activity, model/thinking controls, usage metrics, extension statuses, and queued/recoverable messages. | `#activity` |
@@ -87,6 +87,7 @@ A **card** does not imply a visible rectangular border. A **disclosure** is an e
 - **Prompt field** — the editable text input inside the composer (`#prompt`).
 - **Send/Stop button** — the composer's primary action (`#send`).
 - **Keyboard hints** — the shortcut text beneath the prompt field.
+- **Keybinding editor** — Settings → Keybindings: searchable Nimrod action list with effective shortcut(s), scope, Modified indicators and Add/Remove/Reset controls. **Key recorder** is its nested dialog for capturing a shortcut without executing it; **Reassign** explicitly removes conflicting bindings. **Reset all** restores built-in defaults after confirmation. Composer delivery shortcuts and Pi’s internal keymap are outside this editor.
 - **Submission notice** — acknowledgement uncertainty, validation, or recovery feedback near the composer.
 - **Slash suggestions** — the command autocomplete popup above the composer.
 - **Restart session** — the Project bar's reload-style icon (and palette action) that stops the selected Pi process and resumes its exact saved history without replaying messages. Disabled for temporary/demo sessions, before first save, and during lifecycle transitions. This is not a webview reload or a new conversation.

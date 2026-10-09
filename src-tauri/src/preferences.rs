@@ -118,6 +118,9 @@ fn jsonc(text: &str) -> Result<Value, String> {
 fn validate(text: &str) -> Result<(), String> {
     let value = jsonc(text)?;
     let object = value.as_object().ok_or("Settings must be a JSON object")?;
+    if let Some(bindings) = object.get("keybindings") {
+        crate::keybindings::validate(bindings)?;
+    }
     if object
         .get("notifications.enabled")
         .is_some_and(|v| !v.is_boolean())

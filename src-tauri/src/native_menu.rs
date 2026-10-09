@@ -5,6 +5,8 @@ use tauri_plugin_dialog::DialogExt;
 
 pub const QUIT_ID: &str = "nimrod.quit";
 pub const OPEN_PROJECT_ID: &str = "nimrod.open-project";
+pub const MINIMIZE_ID: &str = "nimrod.minimize";
+pub const CLOSE_WINDOW_ID: &str = "nimrod.close-window";
 
 pub fn is_quit(id: &str) -> bool {
     id == QUIT_ID
@@ -26,6 +28,10 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
     let mut inserted = false;
     #[cfg(target_os = "macos")]
     let quit_text = PredefinedMenuItem::quit(app, None)?.text()?;
+    let minimize_text = PredefinedMenuItem::minimize(app, None)?.text()?;
+    let minimize = MenuItem::with_id(app, MINIMIZE_ID, &minimize_text, true, None::<&str>)?;
+    let close_text = PredefinedMenuItem::close_window(app, None)?.text()?;
+    let close = MenuItem::with_id(app, CLOSE_WINDOW_ID, &close_text, true, None::<&str>)?;
     #[cfg(target_os = "macos")]
     let quit = MenuItem::with_id(app, QUIT_ID, &quit_text, true, Some("CmdOrCtrl+Q"))?;
     #[cfg(target_os = "macos")]
@@ -36,11 +42,22 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
                 submenu.insert_items(&[&open, &PredefinedMenuItem::separator(app)?], 0)?;
                 inserted = true;
             }
-            // The predefined macOS Quit invokes NSApplication terminate: directly,
-            // bypassing Tauri's cancellable ExitRequested boundary.
-            #[cfg(target_os = "macos")]
             for (index, item) in submenu.items()?.into_iter().enumerate() {
                 if let MenuItemKind::Predefined(item) = item {
+                    // Keep Minimize in the menu, but free Cmd-M for Select model.
+                    // Custom items without accelerators keep native menus from
+                    // consuming keys before the webview applies user overrides.
+                    if item.text()? == minimize_text {
+                        submenu.remove(&item)?;
+                        submenu.insert(&minimize, index)?;
+                    }
+                    // Cmd-W belongs to the configurable Close session action.
+                    if item.text()? == close_text {
+                        submenu.remove(&item)?;
+                        submenu.insert(&close, index)?;
+                    }
+                    // The predefined macOS Quit bypasses cancellable shutdown.
+                    #[cfg(target_os = "macos")]
                     if item.text()? == quit_text {
                         submenu.remove(&item)?;
                         submenu.insert(&quit, index)?;

@@ -1,5 +1,13 @@
 # PoC verification
 
+## Customizable keybindings
+
+- Settings → Keybindings lists Nimrod actions, records single-keystroke shortcuts without execution, exposes explicit conflict reassignment, unbinding and per-action/all reset. Only overrides persist in JSONC; valid external edits synchronize across windows. Your requested New/Temporary/Delete/Model/Effort defaults are included; Cmd/Ctrl+T remains a compatibility alias for New.
+- One project-shell dispatcher preserves modal/IME/repeat priority and routes to existing lifecycle/model/deletion methods. Cmd/Ctrl+Backspace opens the normal review rather than deleting immediately. Native Minimize/Close Window remain menu actions without competing accelerators. Composer delivery, Pi keymaps and pop-out shortcuts are unchanged.
+- `mise run check` passes **326 TypeScript/Node tests**, formatting/Clippy and **73 default Rust tests** (two opt-in real-Pi smokes ignored). All **25 offline WebKit tests** pass, including recording/reassignment/reset and retained session DOM/draft/disclosure. Browser output is isolated at `/tmp/nimrod-keybindings-browser-final`.
+- `CARGO_TARGET_DIR=<repository>/src-tauri/target/keybindings-check mise run build` succeeds and verifies the signed macOS artifact at **`src-tauri/target/keybindings-check/release/bundle/macos/Nimrod.app`**. A separate target avoids replacing the default/running app bundle. Counts reflect the combined checkout, including concurrent sidebar work; existing staged/unstaged changes were preserved.
+- No user app/window was launched or interrupted, no live Pi/model request or real session deletion occurred, and no installed extension, OS setting, permission or notification was changed. Native Cmd+M/menu execution, alternate keyboard layouts, macOS visual/focus acceptance and Linux/possible Windows platform verification remain for user validation.
+
 ## Sidebar row trash action
 
 - Every sidebar row has a trash button immediately left of Close. It targets that row's saved session tree through the existing immediate loading/tree-confirmation flow, without selecting or resuming the row. Close remains non-destructive for saved history. Eligibility is shared with the Project bar action, including a live pending-send guard that does not misuse reload restoration.

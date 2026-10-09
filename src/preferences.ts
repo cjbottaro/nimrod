@@ -2,6 +2,7 @@ import { applyEdits, modify, parse, type ParseError } from 'jsonc-parser';
 import { runtimePaths, RUNTIME_STORAGE_KEY } from './settings';
 import { readLibrary, THEME_STORAGE_KEY, type ThemeLibrary } from './themes/theme';
 import { DEFAULT_ZOOM, ZOOM_LEVELS, ZOOM_STORAGE_KEY } from './zoom';
+import { KEYBINDINGS_SETTING, readKeyOverrides, changeBinding, bindingsFor, type ActionId } from './keybindings';
 
 export interface PreferencesSnapshot {
   text: string;
@@ -23,6 +24,7 @@ export function parseSettings(text: string): Record<string, unknown> {
   const settings = parse(text, errors, { allowTrailingComma: true, disallowComments: false });
   if (errors.length || !settings || typeof settings !== 'object' || Array.isArray(settings)) throw new Error('Settings must be a valid JSON/JSONC object.');
   if (settings['notifications.enabled'] !== undefined && typeof settings['notifications.enabled'] !== 'boolean') throw new Error('notifications.enabled must be a boolean.');
+  readKeyOverrides(settings[KEYBINDINGS_SETTING]);
   const zoom = settings['appearance.zoom'];
   if (zoom !== undefined && !ZOOM_LEVELS.includes(zoom)) throw new Error('Invalid appearance.zoom percentage.');
   for (const key of ['runtime.piPath', 'runtime.nodePath']) {
@@ -128,6 +130,30 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
       if (JSON.stringify(library.imports) !== JSON.stringify(settings['appearance.importedThemes'] ?? [])) values['appearance.importedThemes'] = library.imports;
       return patch(values);
     },
+    keybindings() { return readKeyOverrides(settings[KEYBINDINGS_SETTING]); },
+    saveKeybinding(id: ActionId, bindings: readonly string[] | undefined, reassign: boolean, mac: boolean) {
+      const before = readKeyOverrides(settings[KEYBINDINGS_SETTING]);
+      const reviewed = changeBinding(before, id, bindings, reassign, mac);
+      return enqueue(async () => {
+        receive(await host.snapshot());
+        if (!snapshot || snapshot.error) throw new Error(snapshot?.error || 'Preferences unavailable.');
+        // Compute reassignment against the latest source and edit only affected action
+        // properties, preserving unrelated action edits and JSONC comments.
+        const latest = readKeyOverrides(settings[KEYBINDINGS_SETTING]);
+        if (JSON.stringify(bindingsFor(id, latest)) !== JSON.stringify(bindingsFor(id, before))) throw new Error('This action changed. Review its updated shortcuts and save again.');
+        const changes = changeBinding(latest, id, bindings, reassign, mac);
+        if (JSON.stringify(changes) !== JSON.stringify(reviewed)) throw new Error('Keybinding conflicts changed. Review the updated shortcuts and save again.');
+        let text = snapshot.text;
+        for (const [action, shortcuts] of Object.entries(changes)) {
+          text = applyEdits(text, modify(text, [KEYBINDINGS_SETTING, action], shortcuts, { formattingOptions: { insertSpaces: true, tabSize: 2 } }));
+        }
+        parseSettings(text);
+        if (text === snapshot.text) return;
+        try { receive(await host.settings(snapshot.text, text)); }
+        catch (error) { receive(await host.snapshot()); throw error; }
+      });
+    },
+    resetKeybindings() { return patch({ [KEYBINDINGS_SETTING]: {} }); },
     notificationsEnabled() { return settings['notifications.enabled'] !== false; },
     saveNotifications(enabled: boolean) { return patch({ 'notifications.enabled': enabled }); },
     zoom() { return settings['appearance.zoom'] ?? DEFAULT_ZOOM; },
