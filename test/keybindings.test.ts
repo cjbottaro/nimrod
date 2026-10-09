@@ -18,9 +18,15 @@ function fixture() {
   return { dom, win, doc, get, event };
 }
 
-test('defaults include requested actions and retained shortcuts; absence, unbinding and reset differ', () => {
+test('defaults distinguish creation, named creation, open-session switching and saved-history search', () => {
   for (const [id, binding] of [['new', 'primary+n'], ['temporary', 'primary+shift+n'], ['delete', 'primary+backspace'], ['model', 'primary+m'], ['thinking', 'primary+e']] as const) assert.ok(bindingsFor(id, {}).includes(binding));
-  assert.ok(bindingsFor('new', {}).includes('primary+t'));
+  assert.deepEqual(bindingsFor('new', {}), ['primary+n']);
+  assert.deepEqual(bindingsFor('new-named', {}), ['primary+alt+n']);
+  assert.deepEqual(bindingsFor('switch-session', {}), ['primary+t']);
+  assert.equal(ACTIONS.some(action => action.defaults.some(binding => String(binding) === 'primary+p')), false);
+  assert.deepEqual(bindingsFor('resume', {}), ['primary+k']);
+  assert.deepEqual(bindingsFor('new', { new: ['primary+t'] }), ['primary+t'], 'explicit overrides are not migrated');
+  for (const action of ACTIONS) assert.deepEqual(changeBinding({}, action.id, undefined, false, true), { [action.id]: undefined }, 'defaults are conflict-free');
   assert.deepEqual(bindingsFor('new', { new: [] }), []);
   assert.deepEqual(bindingsFor('new', { new: ['primary+j'] }), ['primary+j']);
   assert.deepEqual(changeBinding({ new: [] }, 'new', undefined, false, true), { new: undefined });
@@ -82,7 +88,7 @@ test('dispatch intercepts before text editing, consumes repeats/unavailable acti
 
 test('reassignment and individual reset report conflicts, including explicit platform aliases', () => {
   assert.throws(() => changeBinding({}, 'model', ['cmd+n'], false, true), /New session/);
-  assert.deepEqual(changeBinding({}, 'model', ['cmd+n'], true, true), { model: ['cmd+n'], new: ['primary+t'] });
+  assert.deepEqual(changeBinding({}, 'model', ['cmd+n'], true, true), { model: ['cmd+n'], new: [] });
   assert.throws(() => changeBinding({ new: ['primary+j'], model: ['primary+n'] }, 'new', undefined, false, true), /Select model/);
   assert.deepEqual(changeBinding({ new: ['primary+j'], model: ['primary+n'] }, 'new', undefined, true, true), { new: undefined, model: [] });
 });
@@ -100,7 +106,7 @@ test('preferences save per-action JSONC patches against fresh snapshots, retain 
     await p.saveKeybinding('thinking', ['primary+r'], false, true);
     assert.deepEqual(p.keybindings().model, ['primary+u']);
     await p.saveKeybinding('new', undefined, false, true); assert.equal(p.keybindings().new, undefined);
-    await p.saveKeybinding('model', ['primary+n'], true, true); assert.deepEqual(p.keybindings().new, ['primary+t']);
+    await p.saveKeybinding('model', ['primary+n'], true, true); assert.deepEqual(p.keybindings().new, []);
     await p.resetKeybindings(); assert.deepEqual(p.keybindings(), {}); assert.equal(parseSettings(host.value.text).future, true); assert.match(host.value.text, /preserve/);
   } finally { p.dispose(); dom.window.close(); }
 });
@@ -171,9 +177,10 @@ test('editor searches, records without dispatch, requires explicit reassignment,
     assert.match(f.get('keybinding-conflicts').textContent!, /New session/); assert.equal(f.get<HTMLButtonElement>('keybinding-save').disabled, true);
     f.get<HTMLInputElement>('keybinding-reassign').checked = true; f.get('keybinding-reassign').dispatchEvent(new f.dom.window.Event('change'));
     f.get<HTMLButtonElement>('keybinding-save').click(); await tick();
-    assert.deepEqual(overrides, { model: ['primary+n'], new: ['primary+t'] }); assert.equal(f.get<HTMLDialogElement>('keybinding-recorder').open, false); assert.equal(f.doc.activeElement, search);
+    assert.deepEqual(overrides, { model: ['primary+n'], new: [] }); assert.equal(f.get<HTMLDialogElement>('keybinding-recorder').open, false); assert.equal(f.doc.activeElement, search);
     click('Reset Select model…'); f.get<HTMLButtonElement>('keybinding-save').click(); await tick(); assert.equal(overrides.model, undefined);
-    click('Remove New session shortcut ⌘+T'); await tick(); assert.deepEqual(overrides.new, []);
+    click('Reset New session'); f.get<HTMLButtonElement>('keybinding-save').click(); await tick(); assert.equal(overrides.new, undefined);
+    click('Remove New session shortcut ⌘+N'); await tick(); assert.deepEqual(overrides.new, []);
     click('Add shortcut for New session'); f.get('keybinding-record').dispatchEvent(f.event('j', { metaKey: true }));
     fail = true; f.get<HTMLButtonElement>('keybinding-save').click(); await tick(); assert.deepEqual(overrides.new, []); assert.equal(f.get<HTMLDialogElement>('keybinding-recorder').open, true); assert.match(f.get('keybinding-status').textContent!, /disk conflict/); assert.match(f.get('keybinding-conflicts').textContent!, /disk conflict/);
     fail = false; f.get('keybinding-record').dispatchEvent(f.event('Escape')); assert.equal(f.get<HTMLDialogElement>('keybinding-recorder').open, false);

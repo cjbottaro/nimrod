@@ -190,6 +190,47 @@ test('customizable requested shortcuts use normal session/model/effort actions w
   } finally { f.win.close(); }
 });
 
+test('session navigation and named-session defaults open their distinct pickers without accidental launches', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', catalog: [
+    { path: '/sessions/closed.jsonl', sessionId: 'closed-id', name: 'Closed history', preview: 'Historical conversation', modified: 1 },
+  ] });
+  const key = (key: string, extra: KeyboardEventInit = {}) => {
+    const event = new f.win.KeyboardEvent('keydown', { key, metaKey: true, bubbles: true, cancelable: true, ...extra });
+    f.win.dispatchEvent(event); return event;
+  };
+  const escape = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  try {
+    key('n'); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Navigation must retain this draft'; prompt.dispatchEvent(new f.win.Event('input')); prompt.focus();
+    const starts = f.calls.filter(call => call.command === 'start_pi').length;
+    key('t'); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Switch session');
+    assert.equal(f.element('palette-list').children.length, 1); assert.doesNotMatch(f.element('palette-list').textContent!, /Closed history/);
+    assert.equal(f.calls.some(call => call.command === 'list_workspace_sessions'), false);
+    f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, false); assert.equal(f.calls.filter(call => call.command === 'start_pi').length, starts);
+    assert.equal(key('p').defaultPrevented, false); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+    key('k'); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Resume session');
+    assert.match(f.element('palette-list').textContent!, /Closed history/); assert.match(f.element('palette-list').textContent!, /Open/);
+    assert.equal(f.calls.filter(call => call.command === 'list_workspace_sessions').length, 1);
+    key('t'); key('n', { altKey: true }); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Resume session');
+    escape(); escape();
+    key('n', { altKey: true }); await f.tick(); assert.equal(f.element('palette-title').textContent, 'New named session');
+    assert.equal(f.calls.filter(call => call.command === 'start_pi').length, starts);
+    escape(); await f.tick(); assert.equal(prompt.value, 'Navigation must retain this draft'); assert.equal(f.win.document.activeElement, prompt);
+    key('n', { altKey: true, repeat: true }); key('k', { isComposing: true }); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+    key('n', { altKey: true }); await submitSessionName(f, 'Shortcut named session');
+    const launches = f.calls.filter(call => call.command === 'start_pi'); assert.equal(launches.length, starts + 1);
+    assert.equal((launches.at(-1)!.args.config as JsonRecord).sessionName, 'Shortcut named session');
+    assert.equal((launches.at(-1)!.args.config as JsonRecord).mode, 'saved');
+    assert.equal(prompt.value, 'Navigation must retain this draft');
+    assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
+    f.preferences.external('{"keybindings":{"new-named":[],"switch-session":["primary+j"],"resume":[]}}');
+    key('t'); key('k'); key('n', { altKey: true }); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+    key('j'); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Switch session');
+    assert.equal(f.calls.filter(call => call.command === 'start_pi').length, starts + 1);
+  } finally { f.win.close(); }
+});
+
 test('Cmd-Backspace invokes the existing review and Cancel preserves the selected saved session', async () => {
   let answer!: (value: boolean) => void;
   const f = await fixture(undefined, { windowWorkspace: '/project', confirmReview: args => answer(args.confirmed === true), deleteTree: async emit => {

@@ -1,6 +1,34 @@
 import { expect, test } from '@playwright/test';
 import { demoFixture, visible } from './demo-fixture';
 
+test('session shortcut defaults open Switch, Resume and New named directly without disturbing the offline draft', async ({ page }) => {
+  const demo = await demoFixture(page);
+  try {
+    const primary = await page.evaluate(() => /Mac|iPhone|iPad/i.test(navigator.platform)) ? 'Meta' : 'Control';
+    const prompt = page.locator(visible('prompt')); await prompt.fill('Keep this draft');
+    const starts = demo.calls.filter(call => call.command === 'start_pi').length;
+    await page.keyboard.press(primary + '+T'); await expect(page.locator('#palette-title')).toHaveText('Switch session');
+    await expect(page.locator('#palette-list [role=option]')).toHaveCount(1);
+    expect(demo.calls.some(call => call.command === 'list_workspace_sessions')).toBe(false);
+    await page.locator('#palette-input').press('Enter'); await expect(page.locator('#command-palette')).not.toBeVisible();
+    await expect(prompt).toHaveValue('Keep this draft'); await expect(prompt).toBeFocused();
+    await page.keyboard.press(primary + '+K'); await expect(page.locator('#palette-title')).toHaveText('Resume session');
+    await expect.poll(() => demo.calls.filter(call => call.command === 'list_workspace_sessions').length).toBe(1);
+    await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
+    await page.keyboard.press(primary + '+Alt+N'); await expect(page.locator('#palette-title')).toHaveText('New named session');
+    await expect(page.locator('#palette-input')).toBeFocused();
+    await page.locator('#palette-input').fill('Do not launch this fixture'); await page.keyboard.press('Escape');
+    await expect(page.locator('#command-palette')).not.toBeVisible(); await expect(prompt).toHaveValue('Keep this draft'); await expect(prompt).toBeFocused();
+    await page.locator('#open-settings').click();
+    await expect(page.locator('.keybinding-row[data-action="new"] button').filter({ hasText: /N$/ })).toHaveCount(1);
+    await expect(page.locator('.keybinding-row[data-action="switch-session"] button').filter({ hasText: /T$/ })).toHaveCount(1);
+    await expect(page.locator('.keybinding-row[data-action="switch-session"] button').filter({ hasText: /P$/ })).toHaveCount(0);
+    expect(demo.calls.filter(call => call.command === 'start_pi')).toHaveLength(starts);
+    expect(demo.calls.filter(call => call.command === 'preferences_settings')).toHaveLength(0);
+    expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
 test('keybinding recording, reassignment, unbinding and reset preserve the offline conversation', async ({ page }) => {
   const demo = await demoFixture(page);
   try {

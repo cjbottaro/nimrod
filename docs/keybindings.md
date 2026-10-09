@@ -16,19 +16,24 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 
 | Action | Shortcut |
 | --- | --- |
-| New session | Cmd/Ctrl+N (Cmd/Ctrl+T also retained) |
+| New session | Cmd/Ctrl+N |
+| New named session… | Cmd+Option+N / Ctrl+Alt+N |
 | New temporary session | Cmd/Ctrl+Shift+N |
 | Delete session tree… | Cmd/Ctrl+Backspace |
 | Select model… | Cmd/Ctrl+M |
 | Select thinking level… (“effort”) | Cmd/Ctrl+E |
 | Command palette | Cmd/Ctrl+Shift+P |
+| Switch session… | Cmd/Ctrl+T |
+| Resume session… | Cmd/Ctrl+K |
 | Close session | Cmd/Ctrl+W |
 | Toggle session sidebar | Cmd/Ctrl+B |
 | Previous / next open session | Cmd/Ctrl+Shift+[ / ] |
 | Settings | Cmd/Ctrl+, |
 | Zoom in / out / reset to 100% | Cmd/Ctrl+Plus / Minus / 0 |
 
-Other listed actions can be assigned shortcuts even if they have no default. Plus and Equals both invoke Zoom in.
+**Switch session** searches only open sessions, including temporary sessions and sessions hidden by the sidebar view. **Resume session** searches saved project history, including closed sessions; choosing an already-open entry focuses it. **New named session** opens the name field first; type a name and press Enter to create it. Cmd/Ctrl+P has no Nimrod default binding.
+
+Other listed actions can be assigned shortcuts even if they have no default. Plus and Equals both invoke Zoom in. Existing user overrides remain unchanged when defaults change; Reset the affected action to adopt its new defaults.
 
 **Delete opens the existing session-tree review; it does not immediately delete a session.** Its normal saved-session/idle eligibility rules still apply. Closing a saved session is not deletion. Temporary sessions use their existing Close/disposal flow.
 
@@ -41,7 +46,7 @@ Only user overrides are stored in [settings.json](settings.md#files-and-synchron
 ```jsonc
 {
   "keybindings": {
-    "new": ["primary+n", "primary+t"],
+    "new": ["primary+n"],
     "temporary": ["primary+shift+n"],
     "model": ["primary+j"],
     "thinking": [] // Intentionally unbound

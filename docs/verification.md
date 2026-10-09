@@ -1,5 +1,12 @@
 # PoC verification
 
+## Session creation and navigation shortcut defaults
+
+- New is Cmd/Ctrl+N only; New named is Cmd+Option+N / Ctrl+Alt+N; Temporary remains Cmd/Ctrl+Shift+N. Switch session is Cmd/Ctrl+T only, Resume session is Cmd/Ctrl+K, and Cmd/Ctrl+P is unbound. Existing explicit user overrides remain unchanged; action/all reset restores these updated defaults.
+- Unit/shell coverage checks conflict-free defaults, distinct open-session/history/naming pickers, no accidental launches, literal named-session creation, draft preservation, unbound Cmd+P, modal/IME/repeat guards and override precedence. Both targeted offline WebKit keybinding tests pass, including direct shortcut delivery and cancellation/focus preservation; the complete browser suite was not rerun for this defaults-only update.
+- `mise run check` passes **327 TypeScript/Node tests**, formatting/Clippy and **73 default Rust tests** (two opt-in Pi smokes ignored). `CARGO_TARGET_DIR=<repository>/src-tauri/target/keybindings-check mise run build` packages and verifies the signed macOS app without replacing the default/running bundle. Browser artifacts are isolated at `/tmp/nimrod-session-shortcuts-browser`.
+- No user app/window launch/interruption, live Pi/model request, real-session deletion or upstream extension change occurred. Native shortcut/menu/layout acceptance and Linux/platform verification remain separate from automated fixture/WebKit evidence.
+
 ## Customizable keybindings
 
 - Settings → Keybindings lists Nimrod actions, records single-keystroke shortcuts without execution, exposes explicit conflict reassignment, unbinding and per-action/all reset. Only overrides persist in JSONC; valid external edits synchronize across windows. Your requested New/Temporary/Delete/Model/Effort defaults are included; Cmd/Ctrl+T remains a compatibility alias for New.

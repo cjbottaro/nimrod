@@ -1,6 +1,6 @@
 export const KEYBINDINGS_SETTING = 'keybindings';
 export const ACTIONS = [
-  { id: 'new', label: 'New session', scope: 'project', defaults: ['primary+n', 'primary+t'] },
+  { id: 'new', label: 'New session', scope: 'project', defaults: ['primary+n'] },
   { id: 'temporary', label: 'New temporary session', scope: 'project', defaults: ['primary+shift+n'] },
   { id: 'delete', label: 'Delete session tree…', scope: 'project', defaults: ['primary+backspace'] },
   { id: 'model', label: 'Select model…', scope: 'project', defaults: ['primary+m'] },
@@ -15,9 +15,9 @@ export const ACTIONS = [
   { id: 'zoom-in', label: 'Zoom in', scope: 'app', defaults: ['primary+plus'] },
   { id: 'zoom-out', label: 'Zoom out', scope: 'app', defaults: ['primary+-'] },
   { id: 'zoom-reset', label: 'Reset zoom to 100%', scope: 'app', defaults: ['primary+0'] },
-  { id: 'resume', label: 'Resume session…', scope: 'project', defaults: [] },
-  { id: 'switch-session', label: 'Switch session…', scope: 'project', defaults: [] },
-  { id: 'new-named', label: 'New named session…', scope: 'project', defaults: [] },
+  { id: 'resume', label: 'Resume session…', scope: 'project', defaults: ['primary+k'] },
+  { id: 'switch-session', label: 'Switch session…', scope: 'project', defaults: ['primary+t'] },
+  { id: 'new-named', label: 'New named session…', scope: 'project', defaults: ['primary+alt+n'] },
   { id: 'restart', label: 'Restart session', scope: 'project', defaults: [] },
   { id: 'file', label: 'Open session file…', scope: 'project', defaults: [] },
   { id: 'demo', label: 'New offline demo', scope: 'project', defaults: [] },
