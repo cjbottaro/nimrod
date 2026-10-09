@@ -50,7 +50,11 @@ export function installDeletionReview(dialog: HTMLDialogElement) {
     finish(!confirm.disabled && dialog.returnValue === 'delete');
   };
   const onKey = (event: KeyboardEvent) => {
-    if (event.key === 'Enter' && (event.isComposing || event.keyCode === 229 || event.repeat)) event.preventDefault();
+    if (!dialog.open || !['Enter', 'Escape'].includes(event.key)) return;
+    event.preventDefault(); event.stopPropagation();
+    if (event.isComposing || event.keyCode === 229 || (event.key === 'Enter' && event.repeat)) return;
+    if (event.key === 'Escape') dialog.close('cancel');
+    else if (pending && !confirm.disabled) dialog.close('delete');
   };
   dialog.addEventListener('close', onClose);
   dialog.addEventListener('keydown', onKey);

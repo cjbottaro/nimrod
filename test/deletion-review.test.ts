@@ -152,11 +152,31 @@ test('review waits behind an existing modal and rejects disconnected/cyclic tree
   } finally { f.dispose(); }
 });
 
+test('Enter confirms from Cancel focus and Escape cancels from Delete focus', async () => {
+  const f = fixture();
+  try {
+    const answer = f.controller.review({ id: 'enter', sessions });
+    assert.equal(f.doc.activeElement?.id, 'deletion-cancel');
+    const enter = new f.dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    f.doc.activeElement!.dispatchEvent(enter);
+    assert.equal(enter.defaultPrevented, true); assert.equal(await answer, true);
+    const next = f.controller.review({ id: 'escape', sessions });
+    f.doc.querySelector<HTMLButtonElement>('#deletion-confirm')!.focus();
+    f.doc.activeElement!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    assert.equal(await next, false);
+    f.controller.loading(); f.advance(150);
+    f.doc.activeElement!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    assert.equal(f.dialog.open, true, 'Enter cannot confirm or cancel a loading preview');
+    f.doc.activeElement!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    assert.equal(await f.controller.review({ id: 'late', sessions }), false);
+  } finally { f.dispose(); }
+});
+
 test('repeated and composing Enter cannot activate the destructive form', () => {
   const f = fixture();
   try {
     void f.controller.review({ id: 'review', sessions });
-    for (const extra of [{ repeat: true }, { isComposing: true }]) {
+    for (const extra of [{ repeat: true }, { isComposing: true }, { keyCode: 229 }]) {
       const event = new f.dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...extra });
       f.doc.querySelector('#deletion-confirm')!.dispatchEvent(event); assert.equal(event.defaultPrevented, true);
     }

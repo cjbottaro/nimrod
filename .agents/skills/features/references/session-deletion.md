@@ -11,7 +11,7 @@ installed extension, runtime executable or chat command participates in deletion
 | File | Role |
 | --- | --- |
 | `index.html`, `src/theme.css`, `src/workspace.css` | Trash icons, themed loading and scrollable nested-tree review |
-| `src/deletion-review.ts` | Safe iterative tree rendering, cross-project labels, loading/cancellation latch, Cancel-first focus and modal/IME guards |
+| `src/deletion-review.ts` | Safe iterative tree rendering, cross-project labels, loading/cancellation latch, Cancel-first focus, Enter-confirm/Esc-cancel shortcuts and modal/IME guards |
 | `src/main.ts` | Saved-row eligibility, window-targeted event subscription, reports, renderer locks, reconciliation and recovery |
 | `src/session-deletion.ts` | Ordered frontend events, idle acknowledgement, partial-result reconciliation and quarantine |
 | `src/pi/session.ts` | `refreshDeletionState`: fresh `get_state` and pending-operation/queue checks without model work |
@@ -170,7 +170,7 @@ The review and palette share `.workspace-modal`: themed background/foreground,
 panel border, radius, shadow, padding, backdrop and top placement. Content sizing
 is separate. The capture-phase document `close` listener must ignore the review's
 own close: re-showing there resets returnValue and can turn Delete into Cancel.
-Cancel has initial focus; Escape cancels, repeated/composing Enter cannot confirm.
+Cancel has initial focus; Escape cancels and Enter confirms regardless of button focus. Both shortcuts prevent native focused-button activation. Enter does nothing until a pending populated review enables Delete; repeated/composing/keyCode-229 Enter cannot confirm. Loading Escape still latches cancellation.
 Native HTML focus restoration stays authoritative; replacement activation does
 not focus through another modal.
 
@@ -228,6 +228,7 @@ Snapshots reconcile locks and missed completion as well as guards.
 - `test/deletion-review.test.ts`, `test/session-deletion.test.ts` and
   `test/deleted-drafts.test.ts` retain safe labels/focus, local cancellation,
   partial/unknown reconciliation, pending-state guards and file-scoped cleanup.
+  Keyboard tests cover Enter from Cancel focus, Escape from Delete focus, composing/repeated/keyCode-229 Enter suppression, and Enter/Escape during loading. Offline WebKit checks Enter yields one correlated true answer and Escape one false answer.
   A deterministic window timer in modal tests verifies the 149/150 ms boundary,
   fast ready-only opening, slow in-place replacement and timer cleanup on failure,
   cancellation, disposal and existing-modal transitions.

@@ -27,7 +27,19 @@ export class Dialogs {
       if (this.select.options.length) this.select.selectedIndex = 0;
       this.inputNode.value = prefill || '';
       this.dialog.returnValue = '';
-      this.dialog.addEventListener('close', () => resolve(this.dialog.returnValue !== 'ok' ? undefined : options ? this.select.value : message !== undefined ? 'confirmed' : this.inputNode.value), { once: true });
+      const onKey = (event: KeyboardEvent) => {
+        // Confirmation shortcuts must not inherit the focused Cancel button's
+        // native Enter activation. Input/select dialogs retain their own behavior.
+        if (message === undefined || !this.dialog.open || !['Enter', 'Escape'].includes(event.key)) return;
+        event.preventDefault(); event.stopPropagation();
+        if (event.isComposing || event.keyCode === 229 || (event.key === 'Enter' && event.repeat)) return;
+        this.dialog.close(event.key === 'Enter' ? 'ok' : 'cancel');
+      };
+      this.dialog.addEventListener('keydown', onKey);
+      this.dialog.addEventListener('close', () => {
+        this.dialog.removeEventListener('keydown', onKey);
+        resolve(this.dialog.returnValue !== 'ok' ? undefined : options ? this.select.value : message !== undefined ? 'confirmed' : this.inputNode.value);
+      }, { once: true });
       this.dialog.showModal();
       if (options) this.select.focus(); else if (message === undefined) this.inputNode.focus();
     }));

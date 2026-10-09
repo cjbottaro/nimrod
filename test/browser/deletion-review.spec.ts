@@ -93,7 +93,8 @@ test('session-tree confirmation is scrollable app UI with safe default focus, ca
     expect(demo.calls.find(c => c.command === 'confirm_session_deletion')?.args).toMatchObject({ id: 'cancel-review', confirmed: false });
     await demo.deletionEvent({ id: '', phase: 'release', files: [], results: [], pending: false });
     await demo.deletionEvent(review('accept-review'));
-    await page.locator('#deletion-confirm').click();
+    await expect(page.locator('#deletion-cancel')).toBeFocused();
+    await page.keyboard.press('Enter');
     await expect(dialog).not.toBeVisible();
     await expect.poll(() => demo.calls.filter(c => c.command === 'confirm_session_deletion')).toHaveLength(2);
     expect(demo.calls.filter(c => c.command === 'confirm_session_deletion')[1].args).toMatchObject({ id: 'accept-review', confirmed: true });

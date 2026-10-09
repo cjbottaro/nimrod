@@ -64,6 +64,31 @@ test('sidebar sessions keep independent drafts and a background agent live witho
   } finally { await demo.close(); }
 });
 
+test('temporary Close uses Escape to cancel and Enter to confirm without replaying the draft', async ({ page }) => {
+  const demo = await demoFixture(page);
+  try {
+    const prompt = page.locator(visible('prompt'));
+    await prompt.fill('Keep until confirmed');
+    const stops = demo.calls.filter(c => c.command === 'stop_pi').length;
+    await page.locator('.session-close').click();
+    await expect(page.locator('#host-dialog')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#host-dialog')).not.toBeVisible();
+    await expect(page.locator(sessions)).toHaveCount(1);
+    await expect(prompt).toHaveValue('Keep until confirmed');
+    expect(demo.calls.filter(c => c.command === 'stop_pi')).toHaveLength(stops);
+    await page.locator('.session-close').click();
+    // Enter must confirm even with the Cancel button focused.
+    await page.locator('#host-dialog button[value="cancel"]').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#host-dialog')).not.toBeVisible();
+    await expect(page.locator(sessions)).toHaveCount(0);
+    expect(demo.calls.filter(c => c.command === 'stop_pi')).toHaveLength(stops + 1);
+    expect(demo.calls.some(c => (c.args.message as { type?: string })?.type === 'prompt')).toBe(false);
+    expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
 test('Settings test notification is recorded without running another agent and Off disables it', async ({ page }) => {
   const demo = await demoFixture(page);
   try {

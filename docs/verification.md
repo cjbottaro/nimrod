@@ -1,5 +1,11 @@
 # PoC verification
 
+## Session confirmation keyboard shortcuts
+
+- Close confirmations (including temporary sessions) and populated Delete session tree reviews now use Enter to confirm and Esc to cancel regardless of focused button. Composing/keyCode-229/repeated Enter is suppressed; Enter cannot accept a loading deletion preview. Extension input/select behavior is unchanged.
+- In `.worktrees/session-confirm-keys` (`fix/session-confirm-keys`), `mise run check` passes **333 TypeScript/Node tests**, Rust formatting/Clippy and **74 Rust tests** (two opt-in Pi smokes ignored). `mise run build` packages/ad-hoc-signs/verifies the worktree macOS app. All **28 offline WebKit tests** pass, including actual keyboard cancellation/confirmation of temporary Close and a single correlated deletion answer.
+- No user app/window was launched or interrupted, real session deleted, live Pi/model request made, or installed extension changed. The main checkout's app bundle was not replaced. Native Tauri and Linux/Windows keyboard acceptance remain for user validation.
+
 ## Native deletion integration with current main
 
 - The deletion-only patch was isolated from the worktree's copied uncommitted baseline and applied on top of current main, preserving the subsequent sidebar/keybinding/default-shortcut commits. Only overlapping verification-note additions required conflict resolution; both histories were retained. A local stash keeps the original worktree snapshot as a backup.
