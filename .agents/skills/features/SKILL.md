@@ -15,6 +15,7 @@ items relevant to the task. Follow repository `AGENTS.md` and
 
 | Feature / work area | Implementation reference | Human guide |
 | --- | --- | --- |
+| Mise-managed Rust compiler cache shared across main/worktrees, checkout-local targets and build artifacts | [Build cache](references/build-cache.md) | [Build cache](../../../docs/build-cache.md) |
 | Transcript tool/reasoning cards, call-ID keyed updates/placement, tooltip-free summaries and accessible status labels | [Transcript cards](references/transcript-cards.md) | [Rendering behavior](../../../docs/architecture.md#rendering-contract-retained-from-pi-gui) |
 | Customizable project/app keybindings, recorder UI, conflict reassignment, JSONC overrides and action/all reset | [Keybindings](references/keybindings.md) | [Keybindings](../../../docs/keybindings.md) |
 | Composer keyboard hints, working-only follow-up queueing and delivery fallback | [Composer](references/composer.md) | [Pi-specific behavior](../../../docs/architecture.md#pi-specific-behavior) |

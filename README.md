@@ -6,7 +6,7 @@ A dedicated cross-platform app for directory-backed coding projects and agent ha
 
 ## Run
 
-Rust and Node are pinned in `mise.toml`. Rust was installed through **mise**, not Homebrew or a standalone manual installer.
+Rust, Node and sccache are pinned in `mise.toml`. Rust was installed through **mise**, not Homebrew or a standalone manual installer.
 
 ```sh
 cd ~/Projects/nimrod
@@ -129,6 +129,11 @@ Drafts, recovered text, and uncertain submissions are scoped by canonical sessio
 The pre-persistence development conversation was temporary; this build does not retroactively save it.
 
 ## Build and verify
+
+Mise enables a shared, machine-local **sccache compiler cache** for Rust builds.
+`main` and worktrees with this configuration reuse compatible dependency compilations
+in both directions, while each checkout keeps its own `target/` and app bundle.
+Run `mise install` after updating an existing checkout. [Build cache details →](docs/build-cache.md)
 
 ```sh
 mise run check  # TS + UI tests; Rust fmt, clippy, process tests

@@ -16,6 +16,7 @@
 
 - [Architecture](architecture.md) — boundaries and behavior contracts.
 - [Verification](verification.md) — tested behavior and remaining native/platform checks.
+- [Build cache](build-cache.md) — mise-managed Rust compiler caching shared across main and worktrees, with separate app artifacts.
 - [Theme catalog plan](theme-catalog-plan.md) — proposed work, not shipped behavior.
 
 Detailed implementation references are indexed by the repository's
