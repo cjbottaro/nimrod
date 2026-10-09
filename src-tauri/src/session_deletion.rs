@@ -1,8 +1,7 @@
-//! App-wide, Pi-specific deletion transaction. All filesystem removals remain
-//! inside the user's installed delete-session-tree extension.
+//! App-wide, Pi-specific file deletion with owner-scoped confirmation and writer barriers.
 use crate::{
-    delete_bridge::{DeleteBridge, DeleteResult, ReviewSession, review_tree},
     preferences::Preferences,
+    session_files::{self, DeleteResult, ReviewSession},
     workspace_windows::WorkspaceWindows,
     workspaces::WorkspaceHost,
 };
@@ -12,7 +11,7 @@ use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{
-        Arc, Mutex,
+        Mutex,
         atomic::{AtomicBool, Ordering},
     },
     time::Duration,
@@ -61,8 +60,7 @@ pub struct SessionDeletion {
     closing: AtomicBool,
     cancelled: AtomicBool,
     owner: Mutex<String>,
-    worker_failed: AtomicBool,
-    worker: Mutex<Option<Arc<DeleteBridge>>>,
+    state_invalid: AtomicBool,
     files: Mutex<Vec<PathBuf>>,
     quarantine: Mutex<HashSet<PathBuf>>,
     round: AsyncMutex<Round>,
@@ -99,7 +97,7 @@ impl SessionDeletion {
             deleted: Mutex::new(deleted.unwrap_or_default().into_iter().collect()),
             quarantine: Mutex::new(parsed.unwrap_or_default().into_iter().collect()),
             running: AtomicBool::new(invalid),
-            worker_failed: AtomicBool::new(invalid),
+            state_invalid: AtomicBool::new(invalid),
             ..Default::default()
         }
     }
@@ -125,7 +123,7 @@ impl SessionDeletion {
             quarantine: self.quarantine.lock().unwrap().iter().cloned().collect(),
             files: self.files.lock().unwrap().clone(),
             deleted: self.deleted.lock().unwrap().iter().cloned().collect(),
-            error: self.worker_failed.load(Ordering::SeqCst).then(|| "Deletion worker/state cannot be verified. Session launches remain blocked; resolve the error and restart Nimrod.".into()),
+            error: self.state_invalid.load(Ordering::SeqCst).then(|| "Deletion state cannot be verified. Session launches remain blocked; resolve the error and restart Nimrod.".into()),
         }
     }
     fn remember(&self, app: &tauri::AppHandle, files: &[PathBuf]) -> Result<(), String> {
@@ -140,10 +138,6 @@ impl SessionDeletion {
     pub async fn shutdown(&self) {
         self.closing.store(true, Ordering::SeqCst);
         self.notified.notify_one();
-        let worker = self.worker.lock().unwrap().clone();
-        if let Some(worker) = worker {
-            let _ = worker.stop().await;
-        }
     }
     pub fn cancel_owner(&self, window: &str) {
         if *self.owner.lock().unwrap() == window {
@@ -156,15 +150,19 @@ impl SessionDeletion {
         app: &tauri::AppHandle,
         phase: &str,
         files: &[PathBuf],
+        projects: &HashSet<PathBuf>,
     ) -> Result<HashMap<String, Vec<SessionReport>>, String> {
-        let participants: HashSet<_> = app
-            .state::<WorkspaceWindows>()
-            .directories
-            .lock()
-            .unwrap()
-            .keys()
-            .cloned()
-            .collect();
+        let membership = files.iter().cloned().collect();
+        let owners = app
+            .state::<WorkspaceHost>()
+            .deletion_owners(&membership)
+            .await;
+        let participants = affected_windows(
+            &app.state::<WorkspaceWindows>().directories.lock().unwrap(),
+            projects,
+            &owners,
+            &self.owner.lock().unwrap(),
+        );
         let id = uuid::Uuid::new_v4().to_string();
         *self.round.lock().await = Round {
             id: id.clone(),
@@ -241,8 +239,8 @@ pub async fn recover_deletion_session(
     session_id: String,
 ) -> Result<(), String> {
     let state = app.state::<SessionDeletion>();
-    if state.running.load(Ordering::SeqCst) || state.worker_failed.load(Ordering::SeqCst) {
-        return Err("Deletion worker has not finished; recovery is blocked".into());
+    if state.running.load(Ordering::SeqCst) || state.state_invalid.load(Ordering::SeqCst) {
+        return Err("Deletion is pending or state is invalid; recovery is blocked".into());
     }
     let cwd = project(&app, window.label())?;
     let file = crate::sessions::inspect(&path, &cwd)?;
@@ -293,16 +291,12 @@ fn expand(value: &str, home: &Path, cwd: &Path) -> PathBuf {
         }
     }
 }
-fn locations(home: &Path, cwd: &Path) -> Result<(PathBuf, PathBuf), String> {
+fn store_location(home: &Path, cwd: &Path) -> Result<PathBuf, String> {
     let agent = std::env::var("PI_CODING_AGENT_DIR")
         .ok()
         .filter(|s| !s.is_empty())
         .map(|s| expand(&s, home, cwd))
         .unwrap_or_else(|| home.join(".pi/agent"));
-    let extension = agent
-        .join("extensions/delete-session-tree.ts")
-        .canonicalize()
-        .map_err(|e| format!("Installed delete-session-tree extension unavailable: {e}"))?;
     let store = std::env::var("PI_CODING_AGENT_SESSION_DIR")
         .ok()
         .filter(|s| !s.is_empty())
@@ -310,7 +304,23 @@ fn locations(home: &Path, cwd: &Path) -> Result<(PathBuf, PathBuf), String> {
         .unwrap_or_else(|| agent.join("sessions"))
         .canonicalize()
         .map_err(|e| format!("Pi session store unavailable: {e}"))?;
-    Ok((extension, store))
+    Ok(store)
+}
+fn affected_windows(
+    directories: &HashMap<String, PathBuf>,
+    projects: &HashSet<PathBuf>,
+    owners: &[(String, String, PathBuf)],
+    initiator: &str,
+) -> HashSet<String> {
+    directories
+        .iter()
+        .filter(|(window, cwd)| {
+            window.as_str() == initiator
+                || projects.contains(*cwd)
+                || owners.iter().any(|(owner, _, _)| owner == *window)
+        })
+        .map(|(window, _)| window.clone())
+        .collect()
 }
 fn validate_idle(
     reports: &HashMap<String, Vec<SessionReport>>,
@@ -374,8 +384,6 @@ pub async fn delete_session_tree(
     window: tauri::Window,
     root: PathBuf,
     session_id: String,
-    pi: PathBuf,
-    node: PathBuf,
 ) -> Result<Vec<DeleteResult>, String> {
     let state = app.state::<SessionDeletion>();
     if state.closing.load(Ordering::SeqCst)
@@ -409,46 +417,17 @@ pub async fn delete_session_tree(
                     .into(),
             );
         }
-        let (extension, store) =
-            locations(&app.path().home_dir().map_err(|e| e.to_string())?, &cwd)?;
-        let node = crate::executable(&node)?;
-        let pi = crate::executable(&pi)?;
-        let mut command = if pi
-            .extension()
-            .is_some_and(|e| e == "js" || e == "mjs" || e == "cjs")
-        {
-            let mut cmd = tokio::process::Command::new(&node);
-            cmd.arg(pi);
-            cmd
-        } else {
-            if pi.extension().is_some_and(|e| e == "cmd" || e == "bat") {
-                return Err("Select Pi's CLI JavaScript file, not a shell wrapper".into());
-            }
-            tokio::process::Command::new(pi)
-        };
-        command
-            .args(crate::delete_bridge::FLAGS)
-            .arg("--extension")
-            .arg(&extension)
-            .arg("--pi-gui-delete-bridge");
-        let mut paths = vec![node.parent().ok_or("Invalid Node path")?.to_path_buf()];
-        paths.extend(std::env::split_paths(
-            &std::env::var_os("PATH").unwrap_or_default(),
-        ));
-        command.env(
-            "PATH",
-            std::env::join_paths(paths).map_err(|e| e.to_string())?,
-        );
-        let worker = DeleteBridge::start(command, cwd.clone()).await?;
-        *state.worker.lock().unwrap() = Some(worker.clone());
-        worker.verify(&extension).await?;
-        let plan = worker.preview(&store, &cwd, &selected.path).await?;
-        if crate::sessions::inspect(&plan.root, &cwd)?.session_id != session_id { return Err("Selected session identity changed during preview; nothing deleted".into()); }
-        let files: Vec<_> = plan.sessions.iter().map(|s| s.file.clone()).collect();
+        let store = store_location(&app.path().home_dir().map_err(|e| e.to_string())?, &cwd)?;
+        let root = selected.path;
+        let plan = tauri::async_runtime::spawn_blocking(move || session_files::preview(&store, &root, &cwd, &session_id))
+            .await.map_err(|e| e.to_string())??;
+        let files = plan.files();
+        let tree = plan.tree();
+        let projects = tree.iter().map(|session| session.cwd.clone()).collect();
         *state.files.lock().unwrap() = files.clone();
         let membership: HashSet<_> = files.iter().cloned().collect();
         host.freeze_deletion(membership.clone()).await;
-        let reports = state.reports(&app, "lock", &files).await?;
+        let reports = state.reports(&app, "lock", &files, &projects).await?;
         validate_idle(
             &reports,
             &host.deletion_owners(&membership).await,
@@ -456,8 +435,6 @@ pub async fn delete_session_tree(
         )?;
         if state.closing.load(Ordering::SeqCst) || state.cancelled.load(Ordering::SeqCst) || app.get_webview_window(window.label()).is_none() { return Err("Deletion cancelled before confirmation".into()); }
         let review_id = uuid::Uuid::new_v4().to_string();
-        let tree_plan = plan.clone();
-        let tree = tauri::async_runtime::spawn_blocking(move || review_tree(&tree_plan)).await.map_err(|e| e.to_string())??;
         *state.review.lock().unwrap() = Some(ReviewRound { id: review_id.clone(), owner: window.label().into(), answer: None });
         app.emit_to(window.label(), EVENT, DeletionEvent { id: review_id, phase: "review".into(), files: files.clone(), results: vec![], message: None, pending: true, tree: Some(tree) }).map_err(|e| e.to_string())?;
         let answer = loop {
@@ -472,14 +449,17 @@ pub async fn delete_session_tree(
         {
             return Err("Deletion cancelled before shutdown".into());
         }
-        let final_reports = state.reports(&app, "check", &files).await?;
+        let final_reports = state.reports(&app, "check", &files, &projects).await?;
         let owners = host.deletion_owners(&membership).await;
         validate_idle(&final_reports, &owners, &membership)?;
         let relevant = |reports: &HashMap<String, Vec<SessionReport>>| -> HashMap<String, Vec<SessionReport>> {
             reports.iter().filter_map(|(window, sessions)| { let relevant: Vec<_> = sessions.iter().filter(|s| membership.contains(&s.file)).cloned().collect(); (!relevant.is_empty()).then(|| (window.clone(), relevant)) }).collect()
         };
         if relevant(&reports) != relevant(&final_reports) { return Err("Affected open sessions or drafts changed during confirmation; preview again, nothing deleted".into()); }
-        // Persist quarantine BEFORE stopping writers or consuming the plugin token.
+        let check_plan = plan.clone();
+        tauri::async_runtime::spawn_blocking(move || session_files::revalidate(&check_plan))
+            .await.map_err(|e| e.to_string())??;
+        // Persist quarantine BEFORE stopping writers or unlinking any file.
         state.remember(&app, &files)?;
         stopping = true;
         app.emit(
@@ -505,29 +485,17 @@ pub async fn delete_session_tree(
         {
             return Err("Deletion cancelled before removal".into());
         }
-        results = worker.execute(&plan).await?;
+        let execution_app = app.clone();
+        results = tauri::async_runtime::spawn_blocking(move || session_files::execute(&plan, || {
+            let state = execution_app.state::<SessionDeletion>();
+            state.closing.load(Ordering::SeqCst) || state.cancelled.load(Ordering::SeqCst)
+        })).await.map_err(|e| e.to_string())??;
         Ok(())
     }
     .await;
-    let worker = state.worker.lock().unwrap().clone();
-    let stopped = if let Some(worker) = worker {
-        worker.stop().await
-    } else {
-        Ok(())
-    };
-    let worker_pending = stopped.is_err();
-    if worker_pending {
-        state.worker_failed.store(true, Ordering::SeqCst);
-        // Keep the global launch barrier: an unobserved worker could still remove files.
-    } else {
-        *state.worker.lock().unwrap() = None;
-    }
-    let mut error = match (operation.err(), stopped.err()) {
-        (Some(operation), Some(stop)) => Some(format!(
-            "{operation}; deletion-worker exit not observed: {stop}"
-        )),
-        (operation, stop) => operation.or(stop),
-    };
+    // The blocking execute task is awaited, even on partial failure. No external
+    // worker can continue deleting after the transaction releases its barrier.
+    let mut error = operation.err();
     if error.is_none() && results.iter().any(|result| !result.deleted) {
         error = Some(format!(
             "Deleted {} of {} sessions. Some sessions could not be deleted.",
@@ -568,23 +536,17 @@ pub async fn delete_session_tree(
         files,
         results: results.clone(),
         message: error.clone(),
-        pending: worker_pending,
+        pending: false,
         tree: None,
     };
-    if !worker_pending {
-        host.end_deletion().await;
-        state.files.lock().unwrap().clear();
-        *state.round.lock().await = Round::default();
-        state.owner.lock().unwrap().clear();
-        // Make shutdown state and completion publication one synchronous transition.
-        // A new transaction cannot publish begin before this operation's completion,
-        // and snapshots taken after completion must not retain a stale launch lock.
-        state.publish_completion(|| {
-            let _ = app.emit(EVENT, event);
-        });
-    } else {
+    host.end_deletion().await;
+    state.files.lock().unwrap().clear();
+    *state.round.lock().await = Round::default();
+    state.owner.lock().unwrap().clear();
+    // Publish completion atomically with release of the app-level launch barrier.
+    state.publish_completion(|| {
         let _ = app.emit(EVENT, event);
-    }
+    });
     if let Some(error) = error {
         Err(error)
     } else {
@@ -659,6 +621,33 @@ mod tests {
         });
         state.begin().unwrap();
         assert!(state.snapshot().pending);
+    }
+    #[test]
+    fn only_affected_projects_and_native_owners_participate_not_unrelated_windows() {
+        let directories = [
+            ("initiator".into(), PathBuf::from("/one")),
+            ("descendant".into(), PathBuf::from("/two")),
+            ("native-owner".into(), PathBuf::from("/legacy")),
+            ("unrelated".into(), PathBuf::from("/other")),
+        ]
+        .into_iter()
+        .collect();
+        let projects = [PathBuf::from("/one"), PathBuf::from("/two")]
+            .into_iter()
+            .collect();
+        let owners = vec![(
+            "native-owner".into(),
+            "token".into(),
+            PathBuf::from("/store/child"),
+        )];
+        let participants = affected_windows(&directories, &projects, &owners, "initiator");
+        assert_eq!(
+            participants,
+            ["initiator", "descendant", "native-owner"]
+                .into_iter()
+                .map(String::from)
+                .collect()
+        );
     }
     #[test]
     fn busy_descendants_or_unreported_owned_writers_block_deletion() {

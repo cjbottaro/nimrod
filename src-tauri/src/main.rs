@@ -1,6 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod cli;
-mod delete_bridge;
 mod keybindings;
 mod links;
 mod native_menu;
@@ -12,6 +11,7 @@ mod preferences;
 mod process;
 mod session_catalog;
 mod session_deletion;
+mod session_files;
 #[cfg(test)]
 mod session_smoke;
 mod sessions;

@@ -2,211 +2,244 @@
 
 Read the [user guide](../../../../docs/workspace-sessions.md#delete-session-tree),
 [shared vocabulary](../../nimrod-ui-vocabulary/SKILL.md) and
-[project/session reference](projects-and-sessions.md). Pi is authoritative for
-session files, subtree membership and removal. This is not a generic harness API.
+[project/session reference](projects-and-sessions.md). Pi owns the JSONL format
+and conversation writes; Nimrod owns permanent file deletion. No Pi worker,
+installed extension, runtime executable or chat command participates in deletion.
 
 ## Code map
 
 | File | Role |
 | --- | --- |
-| `index.html`, `src/theme.css`, `src/workspace.css` | Trash icon and custom HTML confirmation with a scrollable nested session tree |
-| `src/deletion-review.ts` | Safe iterative tree rendering, Cancel-first focus, modal/IME guards, correlated review answer |
-| `src/main.ts` | Button/palette eligibility, mounted session reports, renderer locks, draft/entry reconciliation, explicit recovery |
-| `src/session-deletion.ts` | Ordered frontend events, lock acknowledgement, partial-result reconciliation, quarantine and pending-worker state |
-| `src/pi/session.ts` | `refreshDeletionState`: fresh `get_state` plus pending-operation/queue checks without model work |
-| `src/pi/webview-client.ts` | Existing deletionLock/deletionState handshake persists composer state and locks submission |
-| `src/pi/session-drafts.ts` | Delete only confirmed-success file drafts; clear matching last pointer |
-| `src-tauri/src/session_deletion.rs` | App-wide native transaction, all-window reports, owner-scoped custom review handshake, observed child exit, persistent quarantine/recovery |
-| `src-tauri/src/delete_bridge.rs` | Dedicated Pi worker, exact command provenance, framing/correlation, preview/results validation and observed worker exit |
-| `src-tauri/src/workspaces.rs` | Native new-launch barrier and affected-file write freeze; owned writer enumeration |
-| `src-tauri/src/main.rs` | IPC registration, quarantine-aware start, deletion worker shutdown on quit, owner-close cancellation |
+| `index.html`, `src/theme.css`, `src/workspace.css` | Trash icons, themed loading and scrollable nested-tree review |
+| `src/deletion-review.ts` | Safe iterative tree rendering, cross-project labels, loading/cancellation latch, Cancel-first focus and modal/IME guards |
+| `src/main.ts` | Saved-row eligibility, window-targeted event subscription, reports, renderer locks, reconciliation and recovery |
+| `src/session-deletion.ts` | Ordered frontend events, idle acknowledgement, partial-result reconciliation and quarantine |
+| `src/pi/session.ts` | `refreshDeletionState`: fresh `get_state` and pending-operation/queue checks without model work |
+| `src/pi/webview-client.ts` | Composer persistence/deletionLock handshake |
+| `src/pi/session-drafts.ts` | Confirmed-success file draft cleanup and matching last-session pointer |
+| `src-tauri/src/session_files.rs` | Bounded store scan, header lineage, fingerprints, revalidation and children-first unlink |
+| `src-tauri/src/session_deletion.rs` | Native transaction, affected-project reports, owner-scoped review, observed writer exit and quarantine |
+| `src-tauri/src/workspaces.rs` | New-launch barrier, affected-file write freeze and native owner enumeration |
+| `src-tauri/src/main.rs` | IPC registration, quarantine-aware startup and owner-close/quit cancellation |
 
-## Installed integration and scope
+The former `delete_bridge.rs` subprocess integration and its fixture have been
+removed. Do not reintroduce extension discovery or `/pi-gui-delete` dispatch.
 
-Use `~/.pi/agent/extensions/delete-session-tree.ts`, or the equivalent beneath
-`PI_CODING_AGENT_DIR`. Resolve the canonical file path; do not bundle, update,
-copy over or change the installed extension or sibling Pi GUI without separate
-permission. The existing extension already supports the private Pi GUI v1 bridge.
+## Store, lineage and file identity
 
-Store is the agent directory's `sessions` root, or the flat
-`PI_CODING_AGENT_SESSION_DIR` override. Expand tilde/relative overrides against the
-selected project consistently with existing discovery. The full store root, not
-only the cwd-encoded project directory, permits cross-project descendants.
-Exact-file sessions outside that store fail preview; there is no broader scan or
-filesystem fallback. Canonical file identity is used for owned writers and reports.
-Hard-link aliases and external writers are outside Nimrod's guarantees.
+The store is `PI_CODING_AGENT_SESSION_DIR`, or the agent directory's `sessions`
+root. `PI_CODING_AGENT_DIR` changes the agent root. Tilde and relative environment
+paths expand against home/the initiating project consistently with discovery.
+The default scan covers cwd-encoded directories under the full store; custom
+flat stores are supported. Exact-file sessions outside this store remain refused.
+Pi runtime CLI/settings-only custom stores are not newly discovered by this work.
 
-Direct RPC `/delete` is deliberately refused by the extension. Do not submit
-`/delete current` to a conversation or implement native `remove_file` fallback.
-The Project bar/palette action targets the selected saved session; a sidebar trash button targets its own saved row as the subtree root without selecting or resuming it. Neither is historical-session picking or within-file conversation-branch deletion.
+`session_files::preview` scans directory entries iteratively and reads the first
+nonblank JSONL record as the Pi v1–3 session header. The selected root must match
+its saved ID and initiating project. Descendants follow **file-level**
+`parentSession` paths, not entry `id`/`parentId` conversation branches. Recorded
+paths must be absolute and are normalized/canonicalized when available. Missing
+ancestor/project directories do not prevent deleting old history. A selected
+root's own parent is outside the reviewed subtree; reachable cycles fail closed.
 
-## Sidebar row action
+Bounds: 100,000 directory entries per store scan, 10,000 files per subtree,
+256 MiB per file, 16 MiB per JSONL record. These are explicit errors, never silent
+sampling. Unreadable/invalid session headers prevent a plan because subtree
+membership cannot be established; unrelated valid transcript bodies are not
+parsed. Symlinks anywhere in the scanned store are refused, including directory
+symlinks. Unix hard-linked session files are refused. An invalid/unreadable file
+error identifies its path; there is no recursive deletion of directories or
+unrestricted arbitrary-path removal.
 
-`createTab` mounts a `.session-delete` button immediately before `.session-close`, as a sibling of the conversation-selection button (never a nested control). Its trusted icon is cloned from the Project bar trash SVG, marked aria-hidden, with a dynamic accessible label `Delete session tree for <name>`. Both actions have compact equal-sized hit targets, transparent surfaces and the existing whole-row hover; enabled trash uses a destructive hover accent. Disabled trash stays transparent rather than inheriting the generic button highlight. No session-row tooltip was added.
+Affected files are read fully with bounded records to validate JSONL, collect the
+latest `session_info` name (falling back to a shortened session ID), and compute
+SHA-256. Identity includes length/mtime and, on Unix, device/inode/ctime. The
+opened handle and current pathname metadata must agree before/after reading.
+Non-Unix identity currently uses length/mtime plus the content hash; replaced
+identical-content files are not guaranteed to be distinguished there.
 
-The callback captures the row's `Tab`, calls `deleteSession(tab)` directly and never calls `activate`. The shared `deletable` predicate drives both row/Project bar disabled states and dispatch revalidation: saved, non-demo/non-temporary, idle and not starting/closing/restarting, pending/locked or quarantined. Native descendant/window idle checks remain authoritative. `submissionPending` inspects the live in-memory draft status; do not use `restoreComposerState` here, because restoration intentionally converts pending to unknown. Composer writes refresh action eligibility only when pending status changes, before any Pi activity snapshot.
+Revalidation rescans membership and compares each affected file's path, header,
+identity and digest. It runs before quarantine/shutdown and again at execution
+start after owned writers have exited. Each exact file is fingerprinted again
+immediately before unlink. External writers are not locked; final pathname races
+and late external descendants remain outside Nimrod's guarantees. Do not claim
+OS-wide writer detection or atomic multi-file deletion.
 
-Rows in both All and Needs attention use the same action. Immediate loading and correlated custom tree review, duplicate-click prevention, cancellation, confirmed-only cleanup and partial/unknown outcomes remain in `SessionDeletion`. Removing a background subtree leaves a surviving selection and its mounted draft/conversation unchanged. Ordinary Close still retains saved history; this action deletes the tree. No new native IPC, extension change, filesystem fallback or chat `/delete` command was introduced.
+Removal uses `std::fs::remove_file` in deterministic children-first order, **not
+OS trash**. Every planned file gets a definitive success/failure result when
+execute returns normally. A failed/cancelled child propagates failure to its
+ancestors, retaining them; independent sibling subtrees may still succeed.
+Execute is one locally owned operation and never automatically replayed.
 
-## Worker and bridge v1
-
-Launch using saved Runtime Pi/Node paths, adding Node's directory to PATH as for
-normal launch. Flags:
-
-```text
---mode rpc --offline --no-session --no-extensions --no-skills
---no-prompt-templates --no-themes --no-context-files --no-tools
---extension <canonical installed extension> --pi-gui-delete-bridge
-```
-
-This is a separate native-owned ProcessHost, never an open conversation. Check
-`get_commands` for `pi-gui-delete`, `source: extension`, and the exact canonical
-extension source. Accept `sourceInfo.path` or the older `path` property. Check
-`get_state` for an unpersisted idle worker. Without verification, never send a
-prompt that might fall through to model work. Fail on unexpected agent/message/tool
-start events. Existing ProcessHost provides bounded LF-only JSON framing, pipe
-shutdown and escalation; no additional Node backend is introduced.
-
-Verified commands are RPC `prompt` records whose messages are:
-
-```text
-/pi-gui-delete {"id":"uuid","action":"preview","directory":"/store","cwd":"/project","root":"/store/root.jsonl"}
-/pi-gui-delete {"id":"uuid","action":"execute","token":"preview-token"}
-```
-
-Completion requires `extension_ui_request`, `method: setStatus`,
-`statusKey: pi-gui-delete-v1`, with JSON `statusText` containing matching `id`,
-`version: 1`, `ok: true`. Generic prompt acceptance is NOT deletion success.
-Unrelated/stale status IDs are ignored. Preview/verification use 20-second deadlines;
-execute has no normal timeout and is never replayed. Disconnects, malformed or
-incomplete result sets are unknown outcomes, not successful deletion.
-
-Preview contains `{token, root, sessions:[{file,title,cwd}]}`. Validate exact root,
-absolute/store-confined paths, unique membership, nonempty token/tree and a 10,000
-session bound. Native exact-file validation also checks the selected root's saved
-ID before and after preview. `review_tree` enriches only that authoritative membership with read-only `parentSession` header metadata for indentation; it does not discover additional files. Header reads are bounded and disconnected/cyclic lineage fails review. Results are `{results:[{file,deleted,error?}]}` with
-exactly one report per preview file. `ok:true` can contain individual failures.
-The plugin owns single-use token consumption, rescanning, parent/ID/inode checks
-and children-first removal; do not duplicate its lineage/deletion algorithm.
-
-## Transaction ordering and ownership
+## Transaction and window ownership
 
 One native transaction per app process:
 
-1. Acquire the native new-launch barrier, broadcast begin, validate selected
-   exact-file ID/cwd and start/verify the worker. Nothing is stopped during preview.
-2. Freeze mutating RPC writes for preview files, leaving read-only idle checks and
-   unrelated conversation writes operational. Block all new starts/resumes until
-   worker shutdown is observed; this covers other windows and late IPC.
-3. Ask every registered project window to acknowledge lock with affected canonical
-   files, current token/title, idleness and recoverable-draft presence. Frontends
-   persist/lock composers and refresh live `get_state` before reporting. Busy means
-   main work/compaction, pending submission/operation, model changes, queues,
-   extension input or documented active/queued background-agent counts. A failed
-   refresh reports busy. Missing readiness/acknowledgement aborts after 25 seconds.
-4. Cross-check every native owned affected writer against the reports. Emit a `review` event only to the initiating project, with a fresh review ID and `tree: [{file,title,parent}]`. The custom HTML dialog shows names in an indented, scrollable tree, one short discard sentence, Cancel and Delete N sessions. Paths appear only for duplicate-name disambiguation. Cancel has initial focus; Escape cancels and repeated/composing Enter cannot confirm. Existing modals keep priority. `confirm_session_deletion` accepts exactly one matching ID from that native owner window; other windows/stale IDs are rejected. Cancellation unlocks and preserves conversations/drafts/processes.
-5. Request a second lock/idle report after confirmation, recheck native ownership
-   and require unchanged affected reports (including draft disclosure). New/changed
-   affected entries, busy work or owner close/quit abort before removal.
-6. Persist quarantine BEFORE any owned writer stop or execute. Stop affected tokens
-   across windows using existing observed-exit lifecycle serialization. Confirm no
-   affected writer remains; stop failure prevents execute. Unrelated children are
-   never stopped. No OS-wide process search or claim of excluding external writers.
-7. Execute the extension token once. Always stop and observe the separate worker
-   afterward. A cached stop result preserves failure rather than treating an empty
-   supervisor slot as success. Unobserved worker exit retains the global barrier.
-8. Clear operation state and release the host gate while the app-level transaction
-   flag still blocks launches. Clear that flag and publish completion together under
-   a synchronous start/finish mutex, so snapshots after completion cannot retain a
-   stale launch lock and a new begin cannot overtake old completion. Correlated
-   round IDs reject stale window acknowledgements.
+1. Acquire native/global new-launch barriers, broadcast begin, validate root
+   ID/cwd and construct the preview in an awaited blocking task. Nothing is stopped.
+2. Freeze affected mutating RPC writes; idle reads and unrelated writes remain
+   operational. New starts/resumes stay blocked until the transaction finishes.
+3. Choose acknowledgement participants from registered windows whose project
+   directories occur in the plan, plus native affected owners and the initiator.
+   Unrelated project windows do not participate. Request locks/fresh `get_state`,
+   token/title, idleness and recoverable-draft presence. Busy includes main work,
+   compaction, pending submission/operation, model changes, queues, extension input
+   and documented active/queued background-agent counts. Failed refresh is busy.
+   Missing affected acknowledgement aborts after 25 seconds without deletion.
+4. Validate every affected owned writer against reports. Emit review **only to
+   the initiator**, with a fresh ID and `tree: [{file,title,parent,cwd}]`. Other
+   affected windows acknowledge silently; they do not show confirmation dialogs.
+   Native `confirm_session_deletion` accepts one matching ID/owner only.
+5. After confirmation, request second lock/idle reports and require unchanged
+   affected session/draft reports and native ownership. Revalidate the file plan.
+6. Persist quarantine **before** stopping any affected child. Stop only affected
+   tokens using existing observed-exit serialization and confirm no writer remains.
+   Failed stop prevents execute; unrelated children are never stopped.
+7. Await native execution on a blocking task. Owner close/quit checks before each
+   unlink stop further removal; already removed files are not rolled back.
+8. Reconcile successes/pop-outs/bookkeeping, clear operation state and release
+   host gate while the app-level transaction still blocks launches. Clear that
+   flag and publish completion atomically under the start/finish transition mutex.
+   A new begin cannot overtake the old completion. Round IDs reject stale reports.
 
-The owner closing or quitting cancels pending review. Once execute is sent, its
-outcome may be partial/unknown; do not reinterpret cancellation as rollback. Quit
-stops the worker through the normal native lifecycle. Window retirement and
-all-window acknowledgement boundaries still need native acceptance.
+Native owner checks remain authoritative if a frontend receives locks late.
+A panic/failed task join has an uncertain outcome: quarantined entries are not
+implicitly resumed or retried. There is no external worker left running after
+completion. Quit marks cancellation; it does not imply rollback.
 
-## UI reconciliation and persistence
+### Tauri targeted-event pitfall
 
-Only `deleted:true` results remove mounted entries and their drafts. `SessionDeletion` reconciles broadcast events, returned command results and definitive success snapshot tombstones idempotently. Do not ignore the command result and assume a separate event arrives first: that race left successful deletions in the sidebar. `deleted(files)` batches all confirmed files, disposes their mounted views/receivers first, then chooses a replacement once. Do not call ordinary Close, reconfirm or stop unrelated tokens. Clear confirmed-success entries from saved
-`nimrod.tabs.v1:<cwd>` layouts and `nimrod.last-session.v1`, including closed-window
-bookkeeping. Mounted draft libraries discard successful file scopes; `purgeDeletedDrafts` also removes only matching file keys/last pointers from project and legacy browser libraries, including closed-project drafts, without rewriting unrelated keys or malformed storage. Browser-storage errors are reported. Failed scopes retain drafts/recovered text/uncertain submissions.
+`listen()` from `@tauri-apps/api/event` defaults to target **Any**, not the current
+window. Tauri delivers even `emit_to(other_label, ...)` to Any-target listeners.
+That caused confirmation in another project, duplicate lock delivery and a
+foreign pending review blocking its serialized acknowledgement queue.
 
-Replacement selection follows the displayed sidebar order: next surviving row below the removed selection, then previous. In Needs attention, if no candidate remains, keep that view and leave the conversation blank; a surviving session in original open order may be remembered for returning to All but must not be shown or resumed. If no sessions remain, All shows the empty project while Needs attention stays blank; never create a new session. See [sidebar visibility](sidebar-attention.md#conversation-visibility-and-blank-surface). Removing a background subtree does not replace a surviving selection. Never select per descendant, accidentally resume a soon-to-be-deleted child, or navigate while a modal owns focus.
+`src/main.ts` must subscribe to deletion with explicit target
+`{kind:'WebviewWindow', label:getCurrentWindow().label}`. Global begin/completion
+broadcasts still reach all windows; lock/check/review target only their intended
+listeners. Do not replace this with a default global listener. The shell fixture
+models Any semantics and tests two distinct window labels.
 
-Successful deletion removes saved pop-out state references, snapshot files and registered native reference windows through `popouts::delete_sessions`, including closed-project references. It is not ordinary source Close (which preserves saved pop-outs). The operations mutex and update-existing geometry writer prevent late resurrection; late opens of quarantined sources are rejected. Cleanup failures are explicit even when Pi file deletion succeeded.
+## Sidebar action and review UI
 
-After shutdown begins, failed/missing/unknown per-file results retain inactive,
-draft-bearing sessions. They show Recovery needed and cannot automatically launch
-on row selection, Retry or Restart. Explicit Resume/exact-file open calls native
-`recover_deletion_session`, checks existing file ID and project cwd after worker
-exit, removes its quarantine and then reuses the existing mounted conversation.
-No prompts/queues are replayed. Missing/replaced files remain unavailable.
+`createTab` mounts `.session-delete` immediately before `.session-close`, as a
+sibling of the conversation-selection control, never nested. Its trusted SVG is
+cloned from the Project bar and aria-hidden; label is `Delete session tree for
+<name>`. Both buttons have compact equal-sized hit targets, transparent surfaces
+and whole-row hover; enabled trash has a destructive hover accent. Disabled trash
+stays transparent. No session-row tooltip is added.
 
-Quarantine/tombstones are stored in app-managed state:
+The callback captures its row's `Tab`, calls `deleteSession(tab)` without
+`activate`, and never resumes/selects a background target. Shared `deletable`
+checks saved, idle, non-demo/non-temporary, lifecycle, pending/lock/quarantine
+state. `submissionPending` reads live draft status: restoration converts pending
+to unknown and is unsuitable for eligibility. Composer writes refresh actions on
+pending-status changes before any Pi activity snapshot. Native checks still win.
 
-```text
-"nimrod.deletion.quarantine.v1": ["/canonical/session.jsonl", ...]
-```
+`SessionDeletion.run` arms the loading review before deletion IPC, but the dialog
+opens with loading only if preparation takes at least **150 ms**. Fast previews
+cancel that timer and open the populated review directly, avoiding a loading/tree
+flash. The themed reduced-motion-aware spinner has `role=status`; tree has
+`aria-busy=true` and Delete is disabled. If loading was already shown, correlated
+review replaces tree contents in place, preserving Cancel focus. Cross-project trees label each row's project;
+file paths are shown additionally for duplicate names. Existing modals keep
+priority. Footer buttons stay visible while only the indented tree scrolls.
 
-Load before restoring sidebar entries. A separate `nimrod.deletion.deleted.v1` path-only success tombstone index appears as `deleted` in snapshots, removes stale restored rows/drafts, and filters stale picker results. These minimal guards contain no conversation/draft/reference content. Explicit validated recovery removes both guards if the same file identity was restored; partial/unknown outcomes are never mistaken for successes. Malformed guards or an unreadable state file fail closed and
-require resolving the state error/restarting the app. Settings-file errors alone
-must not disable normal session startup. Quarantine is independent of draft
-storage, runtime tokens and pop-out snapshots.
+Tree items use a separate `.deletion-tree-row` wrapper, not padding on the nested
+`li`: a 32px minimum row with 6px/8px padding, a decorative 16px session SVG and
+8px text gap. Nested lists indent 24px with theme-token guide lines that stop at
+the last sibling. Root name/icon are subtly emphasized; rows are read-only, with
+no selection/hover affordance or disclosure interaction. Names and path/project
+details share one wrapping text column, so secondary text aligns with names,
+not icons. List roles preserve Safari accessibility despite `list-style:none`;
+icons are aria-hidden/unfocusable. The tree has a restrained themed inset surface.
+Keep vertical padding on rows only: padding on parent `li` accumulates around
+subtrees and creates uneven gaps. Long names and paths wrap without horizontal
+overflow at narrow dialog widths.
 
-Frontend snapshots reconcile locks as well as pending/quarantined state, covering
-missed completion events. Event handling is serialized; old/disposed renderers
-must not delete panels or replay work. Native mutating writes remain authoritative
-if a frontend is late to receive a lock. Keep Close and Restart distinction intact.
-Nimrod cleans its saved references separately from Pi's session-file plugin; the plugin is unchanged.
+Cancel/Escape during loading latches local cancellation. A late review returns
+false without reopening and is acknowledged via the existing ID/owner answer;
+no execute occurs. Native preview/coordination can still finish before barriers
+clear. Terminal events, snapshots, disposal and command `finally` cancel the
+loading timer and close remaining UI; failures before 150 ms never open a late
+modal. Other-modal close events must not bypass the timer, and priority still
+applies after the timer expires. Failure to read deletion state must not clear the
+launch guard.
 
-### Shared modal styling
+The review and palette share `.workspace-modal`: themed background/foreground,
+panel border, radius, shadow, padding, backdrop and top placement. Content sizing
+is separate. The capture-phase document `close` listener must ignore the review's
+own close: re-showing there resets returnValue and can turn Delete into Cancel.
+Cancel has initial focus; Escape cancels, repeated/composing Enter cannot confirm.
+Native HTML focus restoration stays authoritative; replacement activation does
+not focus through another modal.
 
-The deletion review and command palette both use `.workspace-modal` in `index.html`. `src/workspace.css` owns their shared themed surface: editor-widget background, foreground, 1px panel border, 10px radius, widget shadow, 12px padding, backdrop and top-of-window placement. Keep that base shared rather than letting a new dialog fall back to the browser's default light surface. Deletion's title matches the palette's 13px heading and its form uses the same 10px spacing rhythm; normal button geometry remains inherited, with the Delete action retaining its destructive accent.
+## Reconciliation, storage and recovery
 
-Content sizing is separate: deletion uses a narrower width, a bounded flex form and an independently scrolling tree, with footer actions outside the scroll pane. Tests compare computed surface/heading styles to the palette in default, Dracula and system-light themes, and ensure the footer remains inside the dialog after scrolling. Styling does not alter confirmation, cancellation, ownership or reconciliation behavior.
+Only `deleted:true` removes mounted entries/drafts. Broadcast completion, returned
+IPC results and snapshot success tombstones reconcile idempotently; do not assume
+an event arrives before the command result. Batch confirmed files once, dispose
+mounted views/receivers first, then choose replacement once. Never ordinary Close,
+reconfirm, stop unrelated tokens or resume a soon-to-be-deleted descendant.
+Removing a background subtree leaves a surviving selection unchanged. Selection
+uses existing next/previous sidebar behavior; do not create a replacement session.
 
-### Immediate loading review
+Success clears corresponding `nimrod.tabs.v1:<cwd>` layouts, matching last-session
+pointer, file-scoped drafts/recovery text/uncertainty, and saved pop-out state,
+snapshots and registered native reference windows. `purgeDeletedDrafts` handles
+closed-project/legacy browser libraries without rewriting unrelated/malformed
+storage. Cleanup errors are visible. Ordinary source Close preserves saved
+pop-outs; deletion uses `popouts::delete_sessions`. Quarantine rejects late pop-out
+opens; serialized geometry/update-existing writes prevent resurrection.
 
-`SessionDeletion.run` calls `loadingReview` synchronously before invoking native deletion IPC, so worker startup, preview and idle acknowledgements happen behind an already-open dialog. `installDeletionReview.loading` shows a themed, reduced-motion-aware spinner with `role=status`, `aria-busy=true` on the tree and Delete disabled. The correlated review replaces only the tree contents, preserving the modal and Cancel focus. Existing modals still keep priority.
+Failed/missing/unknown results after shutdown begins retain inactive draft-bearing
+entries as **Recovery needed**. Row selection, Retry and Restart cannot launch
+them. Explicit Resume/exact-file open calls `recover_deletion_session`, validates
+saved ID/cwd after the transaction finishes, removes quarantine/tombstones and
+reuses the mounted conversation. Missing/replaced files remain unavailable.
+No prompts, queues or uncertain submissions are replayed.
 
-Cancel/Escape while loading latches cancellation locally. A late review returns `false` without reopening and is acknowledged through the existing owner/ID-scoped native confirmation; no execute is sent. This dismisses the UI, not the in-flight native preview worker: native shutdown/barrier cleanup remains authoritative. Terminal events, snapshots, disposal and the command's `finally` close any remaining loading dialog, including preview failure or failed shutdown-state verification. The latter must not clear the native launch guard. A later eligible deletion resets the loading state.
+App-managed state retains existing path-only guards, so this replacement needs
+no migration:
 
-Unit coverage in `test/deletion-review.test.ts` exercises immediate loading, disabled confirmation, safe cancellation, late review suppression, in-place replacement and queued-modal cleanup. `test/shell.test.ts` holds preview pending to assert the button opens the dialog synchronously; `test/session-deletion.test.ts` checks loading-before-IPC and cleanup on preview/snapshot failure. These fixtures do not execute the installed extension or establish native acceptance.
+- `nimrod.deletion.quarantine.v1`: failed/uncertain scopes and confirmed scopes
+  frozen before shutdown;
+- `nimrod.deletion.deleted.v1`: definitive success tombstones for stale restored
+  sidebar/history/draft state.
 
-### Dialog focus pitfall
+Load guards before restoring entries. Corrupt/unreadable state fails closed and
+requires resolving the state error/restarting. Settings-file errors alone do not
+block startup. Guard state is separate from drafts, runtime tokens and pop-outs.
+Snapshots reconcile locks and missed completion as well as guards.
 
-The review waits behind an existing modal using a document capture-phase `close` listener. Ignore the review dialog's own close in that listener: re-showing it before its target close handler runs resets `returnValue`, turns Delete into Cancel, and can leave the modal open. Existing native HTML focus restoration remains authoritative; batch activation focuses only the selected surviving pane when no dialog is open.
+## Verification and remaining acceptance
 
-## Tests and native acceptance
+- `session_files.rs` tests use disposable directories and **actually unlink only
+  generated fixtures**: cross-project lineage, children-first removal, unrelated
+  retention, changed membership/content/identity, cancellation, partial results,
+  wrong root ID/cwd/store, malformed headers, cycles, symlinks and hard links.
+- `session_deletion.rs` tests cover affected-window selection, fresh writer/idle
+  reports, owner/ID single-use answers, quarantine/corrupt state and success cleanup.
+- `workspaces.rs` tests retain new-launch and affected-write barriers, unrelated
+  writes, exact-token stop/observed exit and failed-shutdown reservations.
+- `test/shell.test.ts` tests two-window targeted review vs global completion,
+  extension-free IPC arguments, row targets without selection/resume, fast-preview
+  loading suppression, duplicate-click guards, cancellation/failure and confirmed-only cleanup.
+- `test/deletion-review.test.ts`, `test/session-deletion.test.ts` and
+  `test/deleted-drafts.test.ts` retain safe labels/focus, local cancellation,
+  partial/unknown reconciliation, pending-state guards and file-scoped cleanup.
+  A deterministic window timer in modal tests verifies the 149/150 ms boundary,
+  fast ready-only opening, slow in-place replacement and timer cleanup on failure,
+  cancellation, disposal and existing-modal transitions.
+- Offline WebKit tests retain scroll/footer/theme/focus behavior and sidebar trash
+  geometry/eligibility. Tree geometry checks 32px even rows, 24px indentation,
+  icon/name alignment and guide lines at 125% zoom, plus wrapped secondary-detail
+  alignment/no horizontal overflow at a narrow viewport. Browser fixtures do not
+  execute native deletion.
 
-- `test/session-deletion.test.ts`: affected-only locks, fresh idle/draft reports,
-  busy/unresponsive descendants, cancellation, partial successes, unknown outcomes,
-  observed-worker barrier, restored quarantine, explicit recovery and disposal.
-- `test/shell.test.ts`: disabled temp/new-session icon, selected and row-targeted saved-file native
-  dispatch, background targets without selection/resume, immediate modal/duplicate-click guards, cancellation/partial failure, live pending/quarantine eligibility and no chat prompt, confirmed-only row/draft cleanup, plugin failure,
-  cancellation and explicit recovery before restored-session launch.
-- Rust `delete_bridge.rs`: real subprocess with `test/fixtures/delete-bridge.mjs`,
-  never Pi or the installed extension. Provenance/unpersisted checks before any
-  prompt; LF/Unicode correlation; acknowledgement versus status completion;
-  single-use tokens; changed/incomplete/disconnected results; no host filesystem
-  removal. Fixture session files remain present even after simulated success.
-- Rust `session_deletion.rs`: cross-window writer/idle checks, confirmation draft
-  disclosure, partial bookkeeping cleanup, persistent/corrupt quarantine and paths.
-- Rust `workspaces.rs`: no new launch during deletion, affected-only mutating write
-  freeze, read-only checks/unrelated writes, token-scoped observed shutdown and
-  barrier release. Existing ownership/shutdown-failure fixtures remain authoritative.
-- `test/deletion-review.test.ts` and offline `test/browser/deletion-review.spec.ts`: actual nested HTML modal, scroll bounds, safe labels, Cancel-first/Escape behavior, one correlated answer, unchanged background drafts/processes. Browser reviews are injected fixtures and do not execute deletion.
-- `test/deleted-drafts.test.ts`: file-scoped cleanup across closed libraries, unrelated/failed scopes retained.
-- `test/browser/sidebar-trash.spec.ts`: visible trash before Close, compact alignment at minimum width, whole-row/transparent disabled hover, accessible labels and disabled offline-demo behavior in both views.
-- Offline WebKit also checks the disabled demo trash icon, keyboard palette and existing
-  scroll/session/focus regressions. No real user deletion, installed-plugin execution,
-  live Pi prompt or paid model request is used for tests.
-
-Latest sidebar-row-action automation: `mise run check` passed 314 TypeScript/Node tests, formatting/Clippy and 71 default Rust tests (two opt-in Pi smokes ignored); the macOS build/signature verification and all 24 offline WebKit tests passed. Only mocked IPC/disposable fixtures and offline children were used; no manual app testing, installed plugin execution or real user deletion was performed.
-
-Run `mise run check`, `mise run build`, and affected offline browser regressions.
-Native custom-dialog focus, multiple real project windows, actual installed
-plugin execution, partial filesystem failures and cross-platform behavior remain
-for authorized native acceptance. Do not claim those from mocked IPC or subprocess
-protocol fixtures. Record exact evidence in [verification](../../../../docs/verification.md). Latest combined checkout: 279 TypeScript/Node tests, 69 default Rust tests (two opt-in Pi smokes ignored), formatting/Clippy, macOS packaging and 18 offline WebKit tests passed. Actual user-file deletion and installed-plugin execution were not used for verification.
+Run `mise run check`, `mise run build` and affected offline WebKit regressions.
+No real user session deletion, live Pi/model request, installed extension change
+or app launch is used for verification. Native multiple-window dialog/idle/close
+acceptance, real filesystem failure modes and Linux/Windows remain unverified;
+do not infer them from mocked IPC or macOS Rust/DOM tests. Record exact results
+in [verification](../../../../docs/verification.md).

@@ -34,13 +34,13 @@ function fixture() {
   return { controller, panels, calls, errors, acknowledgements, batches, event, finish: (value: DeleteResult[] = []) => { results = value; resolveRun(); }, snapshot: (value: DeletionSnapshot) => { snapshot = value; } };
 }
 
-test('loading review opens before IPC and closes on failure even if worker shutdown remains blocked', async () => {
+test('loading review opens before IPC and closes on failure even if deletion state cannot be verified', async () => {
   const calls: string[] = [];
   const controller = new SessionDeletion({
     panels: () => [], acknowledge: async () => {}, recover: async () => {}, changed() {},
     loadingReview: () => { calls.push('loading'); }, cancelReview: () => { calls.push('close'); },
     run: async () => { calls.push('ipc'); throw new Error('Preview unavailable'); },
-    snapshot: async () => { throw new Error('Worker shutdown unknown'); },
+    snapshot: async () => { throw new Error('Deletion state unknown'); },
     error: message => { calls.push(message); },
   });
   const task = controller.run('/root', 'id');
@@ -106,7 +106,7 @@ test('known partial results remove only successful files and quarantine failed i
   assert.equal(f.panels[1].locked, false);
 });
 
-test('unknown outcomes retain all entries and require explicit recovery; an unobserved worker keeps launches blocked', async () => {
+test('unknown outcomes retain all entries and require explicit recovery; pending deletion keeps launches blocked', async () => {
   const f = fixture(); await f.controller.handle(f.event('lock'));
   await f.controller.handle(f.event('complete', { message: 'Outcome unknown', pending: true }));
   assert.equal(f.controller.pending, true); assert.equal(f.panels.some(p => p.removed), false);
@@ -126,7 +126,7 @@ test('quarantine survives a frontend restore and events cannot mutate panels aft
   assert.equal(f.panels[0].removed, false);
 });
 
-test('duplicate delete requests are suppressed and worker state is authoritative after command completion', async () => {
+test('duplicate delete requests are suppressed and native state is authoritative after command completion', async () => {
   const f = fixture(); const first = f.controller.run(f.panels[0].file, 'id');
   await f.controller.run(f.panels[0].file, 'id'); assert.deepEqual(f.calls, ['run']);
   f.snapshot({ pending: true, quarantine: [f.panels[0].file], files: [f.panels[0].file] });

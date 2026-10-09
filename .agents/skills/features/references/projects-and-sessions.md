@@ -60,7 +60,7 @@ Do not call `clear_queue` before restart: that would require a responsive Pi and
 
 ### Delete session trees
 
-The Project bar's trash icon and palette action use the installed Pi extension's separate preview/execute worker. App-wide locks coordinate affected session writers, and persisted quarantine prevents implicit resume after partial/unknown outcomes. This changes neither Close nor Restart semantics; see the [session deletion reference](session-deletion.md) for code, protocol, lifecycle and fixtures.
+The Project bar's trash icon, per-row sidebar trash and palette action use Nimrod's Rust-native session-file preview/removal with confirmation scoped to the initiating window. App-wide locks coordinate affected session writers, and persisted quarantine prevents implicit resume after partial/unknown outcomes. This changes neither Close nor Restart semantics; see the [session deletion reference](session-deletion.md) for code, protocol, lifecycle and fixtures.
 
 ## Ownership, discovery and persistence
 

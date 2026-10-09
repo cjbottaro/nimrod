@@ -222,7 +222,7 @@ const deletion = new SessionDeletion({
     return invoke('acknowledge_deletion', { id, sessions });
   },
   snapshot: () => invoke<DeletionSnapshot>('deletion_snapshot'),
-  run: (root, sessionId) => invoke('delete_session_tree', { root, sessionId, ...runtime.current() }),
+  run: (root, sessionId) => invoke('delete_session_tree', { root, sessionId }),
   recover: (path, sessionId) => invoke('recover_deletion_session', { path, sessionId }),
   changed: () => { for (const tab of tabs) updateTab(tab); controls(); },
   deleted: removeDeletedSessions,
@@ -232,7 +232,8 @@ const deletion = new SessionDeletion({
   cancelReview: deletionReview.cancel,
   error: message => { error.textContent = message; },
 });
-const unlistenDeletion = await listen<DeletionEvent>('nimrod-session-deletion', event => { void deletion.handle(event.payload); });
+// A global (Any-target) listener also receives emit_to events for OTHER windows.
+const unlistenDeletion = await listen<DeletionEvent>('nimrod-session-deletion', event => { void deletion.handle(event.payload); }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
 preferences.subscribe(() => { runtime.reload(); themes.reload(); void zoom.reload(); reloadNotifications(); keybindingEditor.reload(); refreshShortcutHints(); });
 window.addEventListener('unload', () => {
   unloading = true;

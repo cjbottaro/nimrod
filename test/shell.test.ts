@@ -29,6 +29,7 @@ interface ShellOptions {
   stopError?: () => string | undefined;
   startupEvents?: JsonRecord[];
   catalog?: JsonRecord[];
+  windowLabel?: string;
   windowWorkspace?: string;
   windowWorkspaceGate?: Promise<void>;
   windowWorkspaceError?: string;
@@ -65,15 +66,19 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   const preferences = new MemoryPreferences();
   Object.assign(preferences.value.state, options.appState);
   const callbacks = new Map<number, (event: unknown) => void>();
-  let deletionEvent: ((event: DeletionEvent) => void) | undefined;
+  let deletionEvent: ((event: DeletionEvent, target?: string) => void) | undefined;
   Object.assign(win, { TextEncoder, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener() {} }, __TAURI_INTERNALS__: {
-    metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
+    metadata: { currentWindow: { label: options.windowLabel || 'main' }, currentWebview: { label: options.windowLabel || 'main' } },
     transformCallback: (callback: (event: unknown) => void) => { const id = callbacks.size + 1; callbacks.set(id, callback); return id; }, unregisterCallback: () => {},
     invoke: async (command: string, args: JsonRecord = {}) => {
       calls.push({ command, args });
       if (command === 'plugin:event|listen') {
         if (args.event === 'nimrod-preferences') preferences.receive = payload => callbacks.get(Number(args.handler))?.({ payload });
-        if (args.event === 'nimrod-session-deletion') deletionEvent = payload => callbacks.get(Number(args.handler))?.({ payload });
+        if (args.event === 'nimrod-session-deletion') deletionEvent = (payload, target) => {
+          const listenerTarget = args.target as { kind: string; label?: string };
+          // Tauri Any listeners receive even events emitted to a different label.
+          if (!target || listenerTarget.kind === 'Any' || listenerTarget.label === target) callbacks.get(Number(args.handler))?.({ payload });
+        };
         return 1;
       }
       if (command === 'plugin:event|unlisten') return 1;
@@ -155,6 +160,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     confirm: async () => { await tick(); element<HTMLDialogElement>('host-dialog').close('ok'); await tick(); await tick(); },
     saved: () => JSON.parse(win.localStorage.getItem(`nimrod.sessions.v1:${workspace}`) || win.localStorage.getItem('nimrod.sessions.v1') || '{}'),
     sessions,
+    deletionEvent: (event: DeletionEvent, target?: string) => deletionEvent?.(event, target),
     captureChannel: () => channel,
     emit: (event: JsonRecord) => channel.onmessage({ kind: 'rpc', value: event }),
     disconnect: () => channel.onmessage({ kind: 'disconnected', message: 'fixture closed' }),
@@ -526,8 +532,7 @@ test('delete review uses a custom nested modal, Cancel is non-destructive and la
       f.element<HTMLButtonElement>('sidebar-attention').click(); f.emit({ type: 'agent_start' }); f.emit({ type: 'agent_settled' });
       f.win.document.querySelector<HTMLButtonElement>('.session-row')!.click();
       f.element<HTMLButtonElement>('delete-session').click();
-      assert.equal(f.element<HTMLDialogElement>('deletion-review').open, true);
-      assert.match(f.element('deletion-tree').textContent!, /Loading session tree/);
+      assert.equal(f.element<HTMLDialogElement>('deletion-review').open, false, 'fast preview does not flash loading');
       assert.equal(f.element<HTMLButtonElement>('deletion-confirm').disabled, true);
       previewReady(); await f.tick();
       assert.equal(f.element<HTMLDialogElement>('deletion-review').open, true);
@@ -593,7 +598,7 @@ test('sidebar trash targets a background row without selecting/resuming it and p
       assert.equal(trash.disabled, false); assert.equal(rows[2].getAttribute('aria-current'), 'true');
       const starts = f.calls.filter(call => call.command === 'start_pi').length;
       trash.click(); trash.click();
-      assert.equal(f.element<HTMLDialogElement>('deletion-review').open, true, 'row action uses immediate loading review');
+      assert.equal(f.element<HTMLDialogElement>('deletion-review').open, false, 'row action waits briefly before showing loading');
       assert.equal(f.element<HTMLButtonElement>('deletion-confirm').disabled, true);
       for (const button of f.win.document.querySelectorAll<HTMLButtonElement>('.session-delete')) assert.equal(button.disabled, true);
       release(); await f.tick(); await f.tick();
@@ -651,7 +656,29 @@ test('sidebar trash shares selected action guards for unsaved, temporary, busy, 
   } finally { quarantined.win.close(); }
 });
 
-test('delete-tree icon delegates a verified saved session to native plugin integration and removes only confirmed successes', async () => {
+test('deletion review is scoped to its initiating project while global completion reaches both windows', async () => {
+  const owner = await fixture(undefined, { windowLabel: 'one', windowWorkspace: '/one' });
+  const other = await fixture(undefined, { windowLabel: 'two', windowWorkspace: '/two' });
+  try {
+    const review: DeletionEvent = { id: 'review', phase: 'review', pending: true, files: ['/sessions/root'], results: [], tree: [{ file: '/sessions/root', title: 'Root' }] };
+    for (const f of [owner, other]) {
+      const registration = f.calls.find(c => c.command === 'plugin:event|listen' && c.args.event === 'nimrod-session-deletion')!;
+      assert.equal((registration.args.target as JsonRecord).kind, 'WebviewWindow');
+      f.deletionEvent(review, 'one');
+    }
+    await owner.tick(); await other.tick();
+    assert.equal(owner.element<HTMLDialogElement>('deletion-review').open, true);
+    assert.equal(other.element<HTMLDialogElement>('deletion-review').open, false);
+    owner.element<HTMLDialogElement>('deletion-review').close('cancel'); await owner.tick();
+    assert.equal(owner.calls.filter(c => c.command === 'confirm_session_deletion').length, 1);
+    assert.equal(other.calls.some(c => c.command === 'confirm_session_deletion'), false);
+    const complete: DeletionEvent = { id: '', phase: 'release', pending: false, files: [], results: [] };
+    for (const f of [owner, other]) { f.deletionEvent(complete); await f.tick(); }
+    assert.equal(other.element<HTMLButtonElement>('sidebar-new').disabled, false);
+  } finally { owner.dom.window.close(); other.dom.window.close(); }
+});
+
+test('delete-tree icon delegates a verified saved session to native filesystem deletion and removes only confirmed successes', async () => {
   const file = '/sessions/new.jsonl';
   const payload = (phase: DeletionEvent['phase']): DeletionEvent => ({ id: phase, phase, files: [file], results: phase === 'complete' ? [{ file, deleted: true }] : [], pending: phase !== 'complete' });
   const options: ShellOptions = { deleteTree: async emit => {
@@ -671,7 +698,7 @@ test('delete-tree icon delegates a verified saved session to native plugin integ
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Discard only after success'; prompt.dispatchEvent(new f.win.Event('input'));
     trash.click(); trash.click(); await f.tick(); await f.tick(); await f.tick();
     const calls = f.calls.filter(c => c.command === 'delete_session_tree'); assert.equal(calls.length, 1);
-    assert.deepEqual({ ...calls[0].args }, { root: file, sessionId: 'fixture-id', pi: '/bin/pi', node: '/bin/node' });
+    assert.deepEqual({ ...calls[0].args }, { root: file, sessionId: 'fixture-id' });
     assert.equal(f.win.document.querySelectorAll('.session-row').length, 1); // Unrelated temporary session stays open.
     assert.equal(f.saved().drafts[`file:${file}`], undefined);
     assert.equal(f.preferences.value.state['nimrod.last-session.v1'], null);
@@ -680,10 +707,10 @@ test('delete-tree icon delegates a verified saved session to native plugin integ
   } finally { f.dom.window.close(); }
 });
 
-test('unavailable delete plugin and cancelled confirmation keep the conversation and draft without submission', async () => {
+test('failed file preview and cancelled confirmation keep the conversation and draft without submission', async () => {
   for (const cancelled of [false, true]) {
     const options: ShellOptions = { deleteTree: async emit => {
-      if (!cancelled) throw new Error('Installed delete extension unavailable');
+      if (!cancelled) throw new Error('Session store unavailable');
       emit({ id: 'preview', phase: 'lock', files: ['/sessions/new.jsonl'], results: [], pending: true });
       await f.tick(); await f.tick();
       emit({ id: '', phase: 'release', files: ['/sessions/new.jsonl'], results: [], pending: false });
@@ -697,7 +724,7 @@ test('unavailable delete plugin and cancelled confirmation keep the conversation
       assert.equal(f.win.document.querySelectorAll('.session-row').length, 1); assert.equal(prompt.value, 'Keep after cancellation');
       assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false); assert.equal(prompt.readOnly, false);
       assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
-      if (!cancelled) assert.match(f.element('launch-error').textContent!, /extension unavailable/);
+      if (!cancelled) assert.match(f.element('launch-error').textContent!, /Session store unavailable/);
       f.disconnect();
     } finally { f.dom.window.close(); }
   }

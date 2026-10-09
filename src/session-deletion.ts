@@ -113,7 +113,7 @@ export class SessionDeletion {
           const snapshot = await this.deps.snapshot();
           this.load({ ...snapshot, deleted: [...snapshot.deleted || [], ...results.filter(result => result.deleted).map(result => result.file)] });
         }
-        catch (error) { this.deps.error(`Could not verify deletion-worker shutdown: ${error}. Session launches remain blocked.`); }
+        catch (error) { this.deps.error(`Could not verify deletion state: ${error}. Session launches remain blocked.`); }
         this.removeConfirmed(results.filter(result => result.deleted).map(result => result.file));
         this.deps.changed();
       }

@@ -67,7 +67,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'open_workspace') return { cwd: process.cwd(), current: true };
     if (command === 'sync_popout_sessions') return { warnings: [] };
     if (command === 'deletion_snapshot') return { pending: false, quarantine: [], files: [] };
-    if (command === 'confirm_session_deletion' || command === 'acknowledge_deletion') return; // Recorded only, no worker or deletion.
+    if (command === 'confirm_session_deletion' || command === 'acknowledge_deletion') return; // Recorded only, no native file deletion.
     if (command === 'plugin:window|is_focused') return true;
     if (command === 'prepare_notifications') return;
     if (command === 'notification_diagnostics') return 'macOS: authorized; desktop alerts: enabled; style: temporary; Notification Center: enabled; app active: yes; foreground handler calls: 1 (requests Banner + List).';
