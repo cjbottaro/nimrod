@@ -20,7 +20,7 @@ type TestWindow = Window & {
 export const visible = (id: string) => `.session-view:not([hidden]) [data-pi-id="${id}"]`;
 
 /** Real app bundle and independent offline demo children. Never starts Pi. */
-export async function demoFixture(page: Page) {
+export async function demoFixture(page: Page, appState: Record<string, unknown> = {}) {
   const result = await build({ entryPoints: ['src/main.ts'], bundle: true, format: 'iife', platform: 'browser', write: false,
     loader: { '.css': 'empty' }, plugins: [{ name: 'raw', setup(builder) {
       builder.onResolve({ filter: /\.html\?raw$/ }, args => ({ path: path.resolve(args.resolveDir, args.path.replace('?raw', '')), namespace: 'raw' }));
@@ -35,6 +35,7 @@ export async function demoFixture(page: Page) {
   const errors: string[] = [];
   const calls: { command: string; args: JsonRecord }[] = [];
   const preferences = new MemoryPreferences();
+  Object.assign(preferences.value.state, appState);
   page.on('pageerror', error => errors.push(String(error)));
   const send = (token: string, packet: Packet) => {
     if (closing) return;
@@ -129,6 +130,7 @@ export async function demoFixture(page: Page) {
   }));
   return {
     errors, metrics, calls, children,
+    state: () => structuredClone(preferences.value.state),
     async deletionEvent(event: DeletionEvent) { await page.evaluate(payload => (window as unknown as TestWindow).__fixtureDeletionReceive?.(payload), event); },
     async editPreferences(text: string) {
       preferences.external(text);

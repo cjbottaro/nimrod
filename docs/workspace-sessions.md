@@ -12,7 +12,7 @@ A project is a directory—no Git repository, manifest or registration required.
 
 ### Open sessions
 
-The **Session sidebar** shows a flat list of open conversations, activity and Close controls. **New session** starts a persistent conversation. Selecting another session leaves background agents running and retains each conversation's draft, disclosures and scroll position.
+The **Session sidebar** shows a flat list of open conversations, activity and per-row trash/Close controls. **New session** starts a persistent conversation. Selecting another session leaves background agents running and retains each conversation's draft, disclosures and scroll position.
 
 **⌘/Ctrl ⇧ P** opens the keyboard-only **Command palette**:
 
@@ -26,6 +26,14 @@ The **Session sidebar** shows a flat list of open conversations, activity and Cl
 Closing a session waits for its agent to stop before removing it from the sidebar. Saved-session history and drafts remain; temporary/offline-demo state is discarded entirely. Active work and temporary sessions require confirmation. Canceling Close or a failed agent shutdown keeps the session and its in-memory draft available. A closed session has no Nimrod-owned Pi process; an open session may be inactive. Reopening a project restores saved sidebar entries without starting Pi; selecting one resumes it. Closing a project window stops only its children; quitting stops all owned children. No background daemon.
 
 Other shortcuts: **⌘/Ctrl T** creates a session, **⌘/Ctrl W** closes it, **⌘/Ctrl B** toggles the sidebar, and **⌘/Ctrl ⇧ [ / ]** switches open sessions.
+
+### Sidebar width
+
+Drag the sidebar's right edge to resize it. Width is remembered per project in app state, independently of All/Needs attention and whether the sidebar is hidden. A narrower window temporarily caps the width; your preferred size returns when space is available. Narrow windows retain the existing overlay sidebar.
+
+- Focus the resize handle with Tab, then use **Left/Right** for 10px changes, **Shift+Left/Right** for 50px, or **Home/End** for the current limits.
+- **Double-click** the edge to restore the default width. **Escape** cancels an unfinished drag without saving.
+- Resizing keeps sessions running and retains drafts, disclosures, composer focus and transcript follow/reading intent. It does not reorder sessions.
 
 ### Sidebar views
 
@@ -59,7 +67,9 @@ The composer's **Stop** interrupts work without ending its process. Use Restart 
 
 ### Delete session tree
 
-Use the **trash icon beside Restart** in the Project bar, or **Delete session tree…** in the command palette. It targets the selected saved session **and every descendant** created by forks/clones—not just the current conversation.
+Use the **trash icon immediately left of Close** on a session row to delete that saved session **and every descendant** created by forks/clones. It opens the existing tree-confirmation dialog without switching to or resuming that conversation. **Close** only closes the session and retains saved history.
+
+The **trash icon beside Restart** in the Project bar and **Delete session tree…** in the command palette still target the selected saved session and its descendants.
 
 - Requires the installed `delete-session-tree.ts` Pi extension with its GUI bridge. Nimrod does not install/change the plugin or remove session files itself. If it is missing or incompatible, the action reports an error without deletion. Direct RPC `/delete` is not used.
 - Disabled for temporary/offline-demo and unsaved sessions, during lifecycle transitions, or while the selected agent has active/pending work. Every affected open session, including descendants in other Nimrod project windows, must be idle; otherwise deletion is refused without stopping those agents.

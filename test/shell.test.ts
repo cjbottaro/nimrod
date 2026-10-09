@@ -161,6 +161,28 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   };
 }
 
+test('sidebar resizing restores and persists per-project app state without harness or settings effects', async () => {
+  for (const [project, width] of [['/project', 340], ['/other', 410]] as const) {
+    const key = `nimrod.sidebar.width:${project}`;
+    const f = await fixture(undefined, { windowWorkspace: project, appState: { [key]: width, 'nimrod.sidebar.width:/unrelated': 480 } });
+    try {
+      const handle = f.element('sidebar-resizer');
+      assert.equal(handle.hidden, false); assert.equal(handle.getAttribute('aria-valuenow'), String(width));
+      handle.focus(); handle.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true })); await f.tick();
+      assert.equal(f.preferences.value.state[key], width + 10);
+      assert.equal(f.preferences.value.state['nimrod.sidebar.width:/unrelated'], 480);
+      assert.equal(f.calls.some(call => call.command === 'start_pi' || call.command === 'write_pi' || call.command === 'preferences_settings'), false);
+      f.element<HTMLButtonElement>('toggle-sidebar').click();
+      assert.equal(handle.hidden, true); assert.equal(f.win.document.activeElement, f.element('toggle-sidebar'));
+      f.element<HTMLButtonElement>('toggle-sidebar').click();
+      assert.equal(handle.hidden, false); assert.equal(handle.getAttribute('aria-valuenow'), String(width + 10));
+    } finally { f.win.close(); }
+    const restored = await fixture(undefined, { windowWorkspace: project, appState: { [key]: width + 10 } });
+    try { assert.equal(restored.element('sidebar-resizer').getAttribute('aria-valuenow'), String(width + 10)); }
+    finally { restored.win.close(); }
+  }
+});
+
 test('All uses persisted user recency, preserves legacy ties and does not mark restoration as use', async () => {
   const key = 'nimrod.tabs.v1:/project';
   const layout = { tabs: [
@@ -448,6 +470,97 @@ test('confirmed snapshot tombstones clean stale restored layouts and closed draf
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 0);
     assert.equal(f.saved().drafts[`file:${file}`], undefined);
   } finally { f.dom.window.close(); }
+});
+
+test('sidebar trash targets a background row without selecting/resuming it and preserves confirmed-only cleanup', async () => {
+  const root = '/sessions/root', child = '/sessions/child', selected = '/sessions/selected';
+  for (const outcome of ['confirmed', 'cancelled', 'partial', 'failed']) {
+    let release!: () => void, answer!: (confirmed: boolean) => void;
+    const preview = new Promise<void>(resolve => { release = resolve; });
+    const f = await fixture(undefined, { windowWorkspace: '/project', appState: {
+      'nimrod.tabs.v1:/project': { tabs: [
+        { path: root, sessionId: 'fixture-id', name: 'Root', lastUsed: 10 },
+        { path: child, sessionId: 'fixture-id', name: 'Child', lastUsed: 20 },
+        { path: selected, sessionId: 'fixture-id', name: 'Selected', lastUsed: 30 },
+      ], active: selected },
+    }, storage: { 'nimrod.sessions.v1:/project': { drafts: {
+      [`file:${root}`]: { draft: 'Root draft' }, [`file:${child}`]: { draft: 'Child draft' }, [`file:${selected}`]: { draft: 'Selected draft' },
+    } } }, confirmReview: args => answer(args.confirmed === true), deleteTree: async emit => {
+      await preview;
+      const confirmed = new Promise<boolean>(resolve => { answer = resolve; });
+      emit({ id: 'row-review', phase: 'review', files: [root, child], results: [], pending: true,
+        tree: [{ file: root, title: 'Root' }, { file: child, title: 'Child', parent: root }] });
+      if (!await confirmed) return [];
+      return [
+        { file: root, deleted: outcome !== 'failed', error: outcome === 'failed' ? 'Root failed' : undefined },
+        { file: child, deleted: outcome === 'confirmed', error: outcome !== 'confirmed' ? 'Child failed' : undefined },
+      ];
+    } });
+    try {
+      await f.tick(); await f.tick();
+      const rows = f.rows(), prompt = f.element<HTMLTextAreaElement>('prompt');
+      const trash = rows[0].parentElement!.querySelector<HTMLButtonElement>('.session-delete')!;
+      assert.equal(trash.nextElementSibling, rows[0].parentElement!.querySelector('.session-close'));
+      assert.equal(trash.getAttribute('aria-label'), 'Delete session tree for Root');
+      assert.equal(trash.disabled, false); assert.equal(rows[2].getAttribute('aria-current'), 'true');
+      const starts = f.calls.filter(call => call.command === 'start_pi').length;
+      trash.click(); trash.click();
+      assert.equal(f.element<HTMLDialogElement>('deletion-review').open, true, 'row action uses immediate loading review');
+      assert.equal(f.element<HTMLButtonElement>('deletion-confirm').disabled, true);
+      for (const button of f.win.document.querySelectorAll<HTMLButtonElement>('.session-delete')) assert.equal(button.disabled, true);
+      release(); await f.tick(); await f.tick();
+      assert.equal(f.win.document.activeElement, f.element('deletion-cancel'));
+      assert.equal(rows[2].getAttribute('aria-current'), 'true'); assert.equal(rows[0].getAttribute('aria-current'), 'false');
+      f.element<HTMLDialogElement>('deletion-review').close(outcome === 'cancelled' ? 'cancel' : 'delete');
+      await f.tick(); await f.tick(); await f.tick();
+      const calls = f.calls.filter(call => call.command === 'delete_session_tree');
+      assert.equal(calls.length, 1); assert.equal(calls[0].args.root, root); assert.equal(calls[0].args.sessionId, 'fixture-id');
+      assert.equal(f.calls.filter(call => call.command === 'start_pi').length, starts, 'background deletion never resumes its target');
+      assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
+      assert.equal(rows[2].getAttribute('aria-current'), 'true'); assert.equal(f.element('prompt'), prompt); assert.equal(prompt.value, 'Selected draft');
+      const rootDeleted = outcome === 'confirmed' || outcome === 'partial', childDeleted = outcome === 'confirmed';
+      assert.equal(rows[0].isConnected, !rootDeleted); assert.equal(rows[1].isConnected, !childDeleted);
+      assert.equal(f.saved().drafts[`file:${root}`]?.draft, rootDeleted ? undefined : 'Root draft');
+      assert.equal(f.saved().drafts[`file:${child}`]?.draft, childDeleted ? undefined : 'Child draft');
+      assert.equal(f.saved().drafts[`file:${selected}`].draft, 'Selected draft');
+      assert.equal(f.element<HTMLDialogElement>('deletion-review').open, false);
+    } finally { release(); f.win.close(); }
+  }
+});
+
+test('sidebar trash shares selected action guards for unsaved, temporary, busy, pending and quarantined sessions', async () => {
+  let exists = false;
+  const f = await fixture(undefined, { windowWorkspace: '/project', fileExists: () => exists, holdPrompts: true });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    assert.equal(f.rows()[0].parentElement!.querySelector<HTMLButtonElement>('.session-delete')!.disabled, true, 'unwritten saved sessions cannot be deleted');
+    exists = true; f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const trash = f.rows()[1].parentElement!.querySelector<HTMLButtonElement>('.session-delete')!;
+    assert.equal(trash.disabled, false);
+    f.emit({ type: 'agent_start' }); assert.equal(trash.disabled, true);
+    trash.click(); assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false);
+    f.emit({ type: 'agent_settled' }); assert.equal(trash.disabled, false);
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Pending send'; prompt.dispatchEvent(new f.win.Event('input'));
+    prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
+    assert.equal(trash.disabled, true, 'pending acknowledgement blocks deletion');
+    assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, true);
+    trash.click(); assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false);
+    const request = f.calls.find(call => (call.args.message as JsonRecord)?.type === 'prompt')!.args.message as JsonRecord;
+    f.captureChannel().onmessage({ kind: 'rpc', value: { type: 'response', id: request.id, success: true } }); await f.tick();
+    assert.equal(trash.disabled, false, 'receipt settlement refreshes eligibility without an activity event');
+    assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    assert.equal(f.rows()[2].parentElement!.querySelector<HTMLButtonElement>('.session-delete')!.disabled, true);
+    assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false);
+  } finally { f.win.close(); }
+  const quarantined = await fixture(undefined, { windowWorkspace: '/project', deletionSnapshot: { pending: false, quarantine: ['/sessions/root'], files: [] }, appState: {
+    'nimrod.tabs.v1:/project': { tabs: [{ path: '/sessions/root', sessionId: 'fixture-id', name: 'Root' }], active: '/sessions/root' },
+  } });
+  try {
+    const trash = quarantined.rows()[0].parentElement!.querySelector<HTMLButtonElement>('.session-delete')!;
+    assert.equal(trash.disabled, true); trash.click();
+    assert.equal(quarantined.calls.some(call => call.command === 'delete_session_tree' || call.command === 'start_pi'), false);
+  } finally { quarantined.win.close(); }
 });
 
 test('delete-tree icon delegates a verified saved session to native plugin integration and removes only confirmed successes', async () => {

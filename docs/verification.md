@@ -1,5 +1,19 @@
 # PoC verification
 
+## Sidebar row trash action
+
+- Every sidebar row has a trash button immediately left of Close. It targets that row's saved session tree through the existing immediate loading/tree-confirmation flow, without selecting or resuming the row. Close remains non-destructive for saved history. Eligibility is shared with the Project bar action, including a live pending-send guard that does not misuse reload restoration.
+- Shell fixtures cover background targets, duplicate clicks, cancellation, success/partial failure, confirmed-only row/draft cleanup, retained selection/draft, unsaved/temporary/busy/pending/quarantined guards and acknowledgement-only eligibility refresh. Offline WebKit verifies left-of-Close placement/alignment at minimum sidebar width, accessible labels, whole-row transparent hover and disabled demo behavior in both views.
+- `mise run check` passes **314 TypeScript/Node tests**, formatting/Clippy and **71 default Rust tests** (two opt-in Pi smokes ignored). `mise run build` packages and verifies the macOS bundle; all **24 offline WebKit tests** pass. These are combined-checkout totals.
+- Verification was automated only, as requested. No manual app testing, user app/window launch/interruption, real session deletion, installed-extension change, live Pi/model request or OS notification occurred. Native/plugin/platform acceptance was not performed or inferred from fixtures.
+
+## Resizable session sidebar
+
+- A draggable right-edge handle resizes the sidebar, with keyboard steps/bounds, double-click default reset and Escape cancellation. Preferred width is stored independently per canonical project in app state. Temporary window/zoom limits do not overwrite it; hide/show preserves it and narrow windows keep the existing overlay behavior.
+- Unit/shell fixtures cover validation, project isolation, writes only after completed drags, cancellation, responsive clamping, keyboard/accessibility, modal/hidden guards and no settings/harness operations. Offline WebKit at 125% zoom verifies real drag geometry, persistence/restoration, overlay edge alignment, outside-viewport pointer capture, retained drafts/disclosures/focus, live follow and paused older-history reading during later streaming.
+- `mise run check` passes **312 TypeScript/Node tests**, formatting/Clippy and **71 default Rust tests** (two opt-in Pi smokes ignored). `mise run build` packages and verifies the macOS bundle; all **23 offline WebKit tests** pass. Browser artifacts use isolated `/tmp` directories.
+- No user app/window was opened or interrupted, no real Pi/model requests or OS notifications were made, and no installed extensions or user sessions were modified. Native Tauri visual/pointer/zoom acceptance and Linux/Windows verification remain for user validation.
+
 ## Native macOS foreground presentation acceptance
 
 - On **macOS 27.0.1 (26A434)**, the user confirmed that the signed diagnostic build's foreground test alerts become visible after changing Nimrod's OS alert style from **Temporary** to **Persistent**. Signed Notification Center delivery was already accepted. Temporary remained inconsistent with authorization/desktop/center enabled and Focus off.

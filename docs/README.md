@@ -7,7 +7,7 @@
 - [Notifications](notifications.md) — background-session desktop alerts, preferences and native limitations.
 
 - [Pop-outs](pop-outs.md) — keep code/Markdown visible; session visibility and persistence.
-- [Projects and sessions](workspace-sessions.md) — native project menu and session management: opening, closing, [sidebar views and blank attention surfaces](workspace-sessions.md#sidebar-views), [reload/restart](workspace-sessions.md#reload-restart-session), [delete session tree](workspace-sessions.md#delete-session-tree), saved sessions and drafts.
+- [Projects and sessions](workspace-sessions.md) — native project menu and session management: opening, closing, [sidebar width](workspace-sessions.md#sidebar-width), [sidebar views and blank attention surfaces](workspace-sessions.md#sidebar-views), [reload/restart](workspace-sessions.md#reload-restart-session), [delete session tree](workspace-sessions.md#delete-session-tree), saved sessions and drafts.
 - [Settings](settings.md) — appearance, runtime paths and configuration files.
 - [Themes](themes.md) — built-in themes and importing color schemes.
 

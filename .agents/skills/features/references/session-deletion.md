@@ -38,8 +38,15 @@ Hard-link aliases and external writers are outside Nimrod's guarantees.
 
 Direct RPC `/delete` is deliberately refused by the extension. Do not submit
 `/delete current` to a conversation or implement native `remove_file` fallback.
-The UI action targets the selected saved session as the subtree root; it is not
-historical-session picking or within-file conversation-branch deletion.
+The Project bar/palette action targets the selected saved session; a sidebar trash button targets its own saved row as the subtree root without selecting or resuming it. Neither is historical-session picking or within-file conversation-branch deletion.
+
+## Sidebar row action
+
+`createTab` mounts a `.session-delete` button immediately before `.session-close`, as a sibling of the conversation-selection button (never a nested control). Its trusted icon is cloned from the Project bar trash SVG, marked aria-hidden, with a dynamic accessible label `Delete session tree for <name>`. Both actions have compact equal-sized hit targets, transparent surfaces and the existing whole-row hover; enabled trash uses a destructive hover accent. Disabled trash stays transparent rather than inheriting the generic button highlight. No session-row tooltip was added.
+
+The callback captures the row's `Tab`, calls `deleteSession(tab)` directly and never calls `activate`. The shared `deletable` predicate drives both row/Project bar disabled states and dispatch revalidation: saved, non-demo/non-temporary, idle and not starting/closing/restarting, pending/locked or quarantined. Native descendant/window idle checks remain authoritative. `submissionPending` inspects the live in-memory draft status; do not use `restoreComposerState` here, because restoration intentionally converts pending to unknown. Composer writes refresh action eligibility only when pending status changes, before any Pi activity snapshot.
+
+Rows in both All and Needs attention use the same action. Immediate loading and correlated custom tree review, duplicate-click prevention, cancellation, confirmed-only cleanup and partial/unknown outcomes remain in `SessionDeletion`. Removing a background subtree leaves a surviving selection and its mounted draft/conversation unchanged. Ordinary Close still retains saved history; this action deletes the tree. No new native IPC, extension change, filesystem fallback or chat `/delete` command was introduced.
 
 ## Worker and bridge v1
 
@@ -176,8 +183,8 @@ The review waits behind an existing modal using a document capture-phase `close`
 - `test/session-deletion.test.ts`: affected-only locks, fresh idle/draft reports,
   busy/unresponsive descendants, cancellation, partial successes, unknown outcomes,
   observed-worker barrier, restored quarantine, explicit recovery and disposal.
-- `test/shell.test.ts`: disabled temp/new-session icon, selected saved-file native
-  dispatch, no chat prompt, confirmed-only row/draft cleanup, plugin failure,
+- `test/shell.test.ts`: disabled temp/new-session icon, selected and row-targeted saved-file native
+  dispatch, background targets without selection/resume, immediate modal/duplicate-click guards, cancellation/partial failure, live pending/quarantine eligibility and no chat prompt, confirmed-only row/draft cleanup, plugin failure,
   cancellation and explicit recovery before restored-session launch.
 - Rust `delete_bridge.rs`: real subprocess with `test/fixtures/delete-bridge.mjs`,
   never Pi or the installed extension. Provenance/unpersisted checks before any
@@ -191,9 +198,12 @@ The review waits behind an existing modal using a document capture-phase `close`
   barrier release. Existing ownership/shutdown-failure fixtures remain authoritative.
 - `test/deletion-review.test.ts` and offline `test/browser/deletion-review.spec.ts`: actual nested HTML modal, scroll bounds, safe labels, Cancel-first/Escape behavior, one correlated answer, unchanged background drafts/processes. Browser reviews are injected fixtures and do not execute deletion.
 - `test/deleted-drafts.test.ts`: file-scoped cleanup across closed libraries, unrelated/failed scopes retained.
+- `test/browser/sidebar-trash.spec.ts`: visible trash before Close, compact alignment at minimum width, whole-row/transparent disabled hover, accessible labels and disabled offline-demo behavior in both views.
 - Offline WebKit also checks the disabled demo trash icon, keyboard palette and existing
   scroll/session/focus regressions. No real user deletion, installed-plugin execution,
   live Pi prompt or paid model request is used for tests.
+
+Latest sidebar-row-action automation: `mise run check` passed 314 TypeScript/Node tests, formatting/Clippy and 71 default Rust tests (two opt-in Pi smokes ignored); the macOS build/signature verification and all 24 offline WebKit tests passed. Only mocked IPC/disposable fixtures and offline children were used; no manual app testing, installed plugin execution or real user deletion was performed.
 
 Run `mise run check`, `mise run build`, and affected offline browser regressions.
 Native custom-dialog focus, multiple real project windows, actual installed

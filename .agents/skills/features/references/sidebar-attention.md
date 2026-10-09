@@ -12,6 +12,8 @@ Read the [human guide](../../../../docs/workspace-sessions.md#sidebar-views) and
 - `src/main.ts`: attention reasons, view persistence, minimal row moves/visibility, focus and keyboard navigation.
 - `src/pi/session.ts`: existing Pi attention callback for live settled completion, final run/process failures; input dialog lifetime is tracked by the shell's `withTabDialog`.
 
+Per-row trash/Close controls are siblings of the conversation-selection button in both views. Trash targets that row without changing selection or recency; see [session deletion](session-deletion.md#sidebar-row-action) for eligibility, confirmation and cleanup.
+
 ## Membership and resolution
 
 `needsAttention(tab)` is inputCount > 0, unread completion, or a failure flag.
@@ -82,6 +84,8 @@ The count is informational: it does not add working sessions to the inbox or cha
 Keep the status text and ellipsis nodes mounted, updating text only on actual count/state transitions so snapshots do not reset the CSS animation or repeatedly announce unchanged live-region text. Ellipsis is aria-hidden, pulses opacity without changing geometry, and stops animating under `prefers-reduced-motion: reduce`.
 
 ## Storage and boundaries
+
+Sidebar width is independent of these views and recency; see [sidebar resizing](sidebar-resize.md) for its project-scoped app-state key, edge handle, zoom normalization and responsive caps.
 
 App-managed state key: `nimrod.sidebar.view:<canonical cwd>` contains `all` or `attention`. Missing/invalid values default All. It uses the existing Preferences state writer, not user settings or Pi session files. Each mounted window retains its chosen view; external state updates do not rebuild it.
 

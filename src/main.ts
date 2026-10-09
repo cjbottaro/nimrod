@@ -3,6 +3,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { notificationPreview, sessionNotifications, type NotificationDispatch } from './notifications';
 import { SessionAttention } from './session-attention';
+import { installSidebarResize, sidebarWidthKey } from './sidebar-resize';
 import { lastUsed, recentSessions, nextLastUsed, captureSidebarScroll, revealSidebarRow } from './session-recency';
 import { installDeletionReview } from './deletion-review';
 import { SessionDeletion, type DeletionEvent, type DeletionSnapshot } from './session-deletion';
@@ -91,7 +92,7 @@ interface Tab {
   inputCount: number; unread: boolean; failed: boolean; focus?: HTMLElement; notice: HTMLElement;
   cancelPreference?: () => void;
   preferenceTask?: Promise<void>;
-  closeButton: HTMLButtonElement;
+  closeButton: HTMLButtonElement; deleteButton: HTMLButtonElement;
   row: HTMLButtonElement; rowLabel: HTMLElement; rowIndicator: HTMLElement; rowStatus: HTMLElement; rowNode: HTMLElement;
 }
 function stored(key: string): unknown {
@@ -109,6 +110,13 @@ function save(key: string, value: unknown): void {
 function makeDrafts(key = SESSION_STORAGE_KEY): SessionDrafts {
   return new SessionDrafts(stored(key) || stored(SESSION_STORAGE_KEY), stored('nimrod.poc.composer'), value => localStorage.setItem(key, JSON.stringify(value)));
 }
+const sidebarResize = installSidebarResize(window, {
+  layout: required('workspace-layout'), sidebar: required('session-sidebar'),
+  handle: required('sidebar-resizer'), toggle: required('toggle-sidebar'),
+}, {
+  read: () => workspace ? stored(sidebarWidthKey(workspace)) : undefined,
+  save: width => { if (workspace) save(sidebarWidthKey(workspace), width); },
+});
 let drafts = makeDrafts();
 function lastSession(): LastSession | undefined {
   if (workspace) return drafts.last?.cwd === workspace ? drafts.last : undefined;
@@ -220,7 +228,7 @@ const unlistenDeletion = await listen<DeletionEvent>('nimrod-session-deletion', 
 preferences.subscribe(() => { runtime.reload(); themes.reload(); void zoom.reload(); reloadNotifications(); });
 window.addEventListener('unload', () => {
   unloading = true;
-  preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion();
+  sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion();
   for (const tab of tabs) { tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.session?.rpc.disconnect('Window closed'); }
   palette.dispose(); zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose();
 }, { once: true });
@@ -238,6 +246,7 @@ function controls(): void {
   required('resume-last').hidden = !lastSession();
   required('recover-draft').hidden = !recoverableDrafts().length;
   required('session-sidebar').hidden = !workspace || !sidebarVisible;
+  sidebarResize.refresh();
   required('toggle-sidebar').setAttribute('aria-expanded', String(!!workspace && sidebarVisible));
   renderSidebar(); restartControl();
 }
@@ -322,18 +331,27 @@ function presentConversation(tab: Tab | undefined): void {
   badge.title = tab?.file?.path || '';
   restartControl();
 }
+function submissionPending(tab: Tab): boolean {
+  // restoreComposerState intentionally marks pending submissions unknown on reload;
+  // live action eligibility must inspect the actual persisted-in-memory status.
+  const composer = tab.drafts.read() as { submission?: { status?: unknown } } | undefined;
+  return composer?.submission?.status === 'pending';
+}
 function deletionBusy(tab: Tab): boolean {
-  const composer = restoreComposerState(tab.drafts.read());
   const state = tab.session?.state;
-  return tab.starting || tab.closing || tab.restarting || !!tab.inputCount || composer.submission?.status === 'pending' || !!(state && !tab.ended && (state.busy || state.compacting || state.modelControls.changing || state.sessionUnavailable || state.queue.pendingCount || state.queue.steering.length || state.queue.followUp.length || presentActivity(false, '', state.extensionStatuses).subagents));
+  return tab.starting || tab.closing || tab.restarting || !!tab.inputCount || submissionPending(tab) || !!(state && !tab.ended && (state.busy || state.compacting || state.modelControls.changing || state.sessionUnavailable || state.queue.pendingCount || state.queue.steering.length || state.queue.followUp.length || presentActivity(false, '', state.extensionStatuses).subagents));
 }
 function restartable(tab: Tab): boolean { return !!tab.file?.exists && !tab.demo && tab.mode !== 'temporary'; }
+function deletable(tab: Tab | undefined): boolean {
+  return ready && !deletion.pending && !!tab && tabs.includes(tab) && restartable(tab) &&
+    !tab.deleting && !deletion.blocked(tab.file?.path) && !deletionBusy(tab);
+}
 function restartControl(): void {
   const active = presented;
   const button = required<HTMLButtonElement>('restart-session');
   button.disabled = !ready || deletion.pending || !active || !restartable(active) || deletion.blocked(active.file?.path) || active.starting || active.closing || active.restarting;
   const remove = required<HTMLButtonElement>('delete-session');
-  remove.disabled = !ready || deletion.pending || !active || !restartable(active) || deletion.blocked(active.file?.path) || deletionBusy(active);
+  remove.disabled = !deletable(active);
   remove.title = !active ? 'Delete session tree… — no open session' : deletion.pending ? 'Delete session tree… — deletion pending' : deletion.blocked(active.file?.path) ? 'Delete session tree… — recover through Resume session first' : active.demo || active.mode === 'temporary' ? 'Delete session tree… — unavailable for temporary sessions' : !restartable(active) ? 'Delete session tree… — unavailable until saved' : deletionBusy(active) ? 'Delete session tree… — wait for active work to finish' : 'Delete session tree…';
   button.title = !active ? 'Restart session — no open session' : deletion.blocked(active.file?.path) ? 'Restart session — recover through Resume session first' : active.demo || active.mode === 'temporary'
     ? 'Restart session — unavailable for temporary sessions' : !active.file?.exists
@@ -367,6 +385,7 @@ async function openWorkspace(path: string): Promise<boolean> {
 }
 function enterWorkspace(path: string): void {
   workspace = path; cwd.value = path;
+  sidebarResize.reload();
   sidebarView = stored(`nimrod.sidebar.view:${path}`) === 'attention' ? 'attention' : 'all';
   drafts = makeDrafts(`${SESSION_STORAGE_KEY}:${path}`);
   required('workspace-label').textContent = path;
@@ -458,16 +477,23 @@ function createTab(mode: LaunchMode, demo: boolean, file?: SessionFile, title = 
   const rowStatus = document.createElement('small'); text.append(rowLabel, rowStatus);
   const rowIndicator = document.createElement('span'); rowIndicator.className = 'session-indicator'; rowIndicator.setAttribute('aria-hidden', 'true');
   row.append(rowIndicator, text);
+  const deleteButton = button('', () => { void deleteSession(tab); }); deleteButton.className = 'session-delete';
+  deleteButton.append(required('delete-session').querySelector('svg')!.cloneNode(true));
   const closeButton = button('×', () => { void closeTab(tab); }); closeButton.className = 'session-close';
-  rowNode.append(row, closeButton); required('open-sessions').append(rowNode);
-  const tab: Tab = { id, mode, demo, file, title, lastUsed: used, root, notice, closeButton, row, rowLabel, rowIndicator, rowStatus, rowNode,
+  rowNode.append(row, deleteButton, closeButton); required('open-sessions').append(rowNode);
+  const tab: Tab = { id, mode, demo, file, title, lastUsed: used, root, notice, closeButton, deleteButton, row, rowLabel, rowIndicator, rowStatus, rowNode,
     drafts: drafts.fork(), starting: false, closing: false, restarting: false, deleting: false, ended: false, inputCount: 0, unread: false, failed: deletion.blocked(file?.path),
     view: { setActive() {}, dispose() {} } }; 
   root.addEventListener('focusin', event => { if (event.target instanceof HTMLElement) tab.focus = event.target; });
   tab.drafts.select(file ? `file:${file.path}` : mode === 'temporary' ? `${demo ? 'demo' : 'temporary'}:${workspace}:${id}` : `unassigned:${id}`);
   tab.view = mountPiView({
     getState: () => tab.drafts.read(),
-    setState: value => { try { tab.drafts.write(value); } catch (e) { persistenceError(e); } },
+    setState: value => {
+      const pending = submissionPending(tab);
+      try { tab.drafts.write(value); } catch (e) { persistenceError(e); }
+      // A receipt can be pending before Pi publishes any state/activity event.
+      if (pending !== submissionPending(tab)) updateTab(tab);
+    },
     onMessage: receive => { tab.receive = receive; },
     postMessage: message => {
       if (message.type === 'deletionState') return;
@@ -518,6 +544,7 @@ function updateTab(tab: Tab): void {
   tab.rowIndicator.textContent = mark;
   tab.row.setAttribute('aria-label', `${name} — ${status}`);
   tab.row.setAttribute('aria-current', String(tab === presented)); tab.closeButton.setAttribute('aria-label', `Close ${name}`); tab.closeButton.disabled = deletion.pending || tab.closing || tab.starting || tab.restarting;
+  tab.deleteButton.setAttribute('aria-label', `Delete session tree for ${name}`); tab.deleteButton.disabled = !deletable(tab);
   if (presented === tab) presentConversation(tab);
   renderSidebar();
 }
@@ -711,7 +738,7 @@ async function restartSession(tab: Tab): Promise<void> {
   }
 }
 async function deleteSession(tab: Tab): Promise<void> {
-  if (!ready || settings.isOpen || !tabs.includes(tab) || !restartable(tab) || deletionBusy(tab) || deletion.pending || deletion.blocked(tab.file?.path)) return;
+  if (settings.isOpen || !deletable(tab)) return;
   await deletion.run(tab.file!.path, tab.file!.sessionId);
 }
 function removeDeletedSessions(files: string[]): void {
