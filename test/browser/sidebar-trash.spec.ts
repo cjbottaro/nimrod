@@ -22,7 +22,7 @@ test('sidebar trash is left of Close, shares row hover and remains disabled for 
     await trash.click({ force: true }); expect(demo.calls.some(call => call.command === 'delete_session_tree')).toBe(false);
     await page.locator(visible('prompt')).fill('Finish in the background'); await page.locator(visible('prompt')).press('Enter');
     await page.getByRole('tab', { name: /Needs attention/ }).click();
-    await expect(row.locator('.session-row')).toHaveAttribute('aria-label', /Completed/);
+    await expect(row.locator('.session-row')).toHaveAttribute('aria-label', /Unread/);
     await expect(trash).toBeVisible(); await expect(trash).toBeDisabled();
     expect(demo.calls.some(call => call.command === 'delete_session_tree')).toBe(false);
     expect(demo.children.size).toBe(1); expect(demo.errors).toEqual([]);

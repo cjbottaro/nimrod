@@ -1,5 +1,13 @@
 # PoC verification
 
+## Sidebar historical recency, time labels and indicators
+
+- Implemented on `feature/sidebar-recency-time`, initially in `/tmp/nimrod-sidebar-recency-time` at `26e551e`, then moved to `.worktrees/sidebar-recency-time` and rebased onto `f149f66` before integration. Both documentation histories and the confirmation-keyboard fix were retained. Validation/build stayed in the feature worktree; the main app bundle was not replaced.
+- New sessions insert at creation time, including same-clock ties. Resume inserts at remembered or historical user-message recency; Close retains identity-bound timestamps, and confirmed deletion prunes caches even for closed projects. Native read-only metadata ignores mtime/assistant/tool/rename/compaction entries and never acknowledges an uncertain composer draft.
+- Sidebar second lines show relative time/date, while distinct left indicators and accessible labels carry state. Minute/foreground refreshes are text-only, with no sorting, persistence, IPC, focus/scroll change or live-region announcement. Reduced motion disables spinners. Unread completion remains visible even if the prompt receipt is delayed.
+- `CARGO_NET_OFFLINE=true mise run check` passes **340 TypeScript/Node tests**, formatting/Clippy and **76 default Rust tests** (two opt-in Pi smokes ignored). `mise run build` packages and verifies the worktree's macOS bundle signature. All **29 offline WebKit tests** pass on the rebased feature; `git diff --check` passes. Clock-controlled regressions cover New/Resume positioning, cache retention/cleanup, label refresh without reading/draft/focus/ownership changes, and spinner/reduced-motion behavior.
+- Verification was automated only. No user app/window launch/interruption, real user-session deletion, live Pi/model request, upstream extension change or OS notification occurred. Native visual/focus/zoom and Linux/possible Windows acceptance remain unperformed.
+
 ## Session confirmation keyboard shortcuts
 
 - Close confirmations (including temporary sessions) and populated Delete session tree reviews now use Enter to confirm and Esc to cancel regardless of focused button. Composing/keyCode-229/repeated Enter is suppressed; Enter cannot accept a loading deletion preview. Extension input/select behavior is unchanged.

@@ -1,6 +1,6 @@
 /** All's user-driven recency is independent of Pi activity and inbox arrival order. */
 export function lastUsed(value: unknown): number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : 0;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= 8_640_000_000_000_000 ? value : 0;
 }
 export function recentSessions<T extends { lastUsed: number }>(sessions: readonly T[]): T[] {
   // Stable ties retain open order, including layouts predating lastUsed.
@@ -8,7 +8,38 @@ export function recentSessions<T extends { lastUsed: number }>(sessions: readonl
 }
 export function nextLastUsed(sessions: readonly { lastUsed: number }[], now = Date.now()): number {
   const previous = sessions.reduce((latest, session) => Math.max(latest, lastUsed(session.lastUsed)), 0);
-  return Math.max(lastUsed(now), Math.min(Number.MAX_SAFE_INTEGER, previous + 1));
+  return Math.max(lastUsed(now), Math.min(8_640_000_000_000_000, previous + 1));
+}
+
+export interface RecencyIdentity { path: string; sessionId: string; }
+/** Closed sessions retain only identity + recency, never conversation content. */
+export class SessionRecency {
+  private entries = new Map<string, { sessionId: string; lastUsed: number }>();
+  constructor(raw: unknown) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
+    for (const [path, value] of Object.entries(raw)) {
+      const entry = value as { sessionId?: unknown; lastUsed?: unknown } | null;
+      if (path && entry && typeof entry.sessionId === 'string' && entry.sessionId && lastUsed(entry.lastUsed)) {
+        this.entries.set(path, { sessionId: entry.sessionId, lastUsed: lastUsed(entry.lastUsed) });
+      }
+    }
+  }
+  get(identity: RecencyIdentity): number {
+    const entry = this.entries.get(identity.path);
+    return entry?.sessionId === identity.sessionId ? entry.lastUsed : 0;
+  }
+  record(identity: RecencyIdentity, timestamp: unknown): boolean {
+    const used = lastUsed(timestamp);
+    if (!identity.path || !identity.sessionId || !used || used <= this.get(identity)) return false;
+    this.entries.set(identity.path, { sessionId: identity.sessionId, lastUsed: used });
+    return true;
+  }
+  delete(files: readonly string[]): boolean {
+    let changed = false;
+    for (const file of files) if (this.entries.delete(file)) changed = true;
+    return changed;
+  }
+  dump(): Record<string, { sessionId: string; lastUsed: number }> { return Object.fromEntries(this.entries); }
 }
 
 function scale(container: HTMLElement): number {

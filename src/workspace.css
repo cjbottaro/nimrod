@@ -32,7 +32,14 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor:col-resize !important; u
 .session-row-text { display:grid; gap:4px; min-width:0; flex:1; }
 .session-row-text > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .session-row-text small { font-size:11px; color:var(--vscode-descriptionForeground); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.session-indicator { width:12px; flex:none; color:var(--vscode-progressBar-background); text-align:center; }
+.session-indicator { display:inline-flex; align-items:center; justify-content:center; position:relative; box-sizing:border-box; width:14px; height:14px; flex:none; color:var(--vscode-descriptionForeground); font-size:14px; line-height:1; }
+.session-indicator[data-state=ready] { font-size:18px; }
+.session-indicator[data-state=unread] { color:var(--vscode-progressBar-background); }
+.session-indicator[data-state=input], .session-indicator[data-state=recovery] { color:var(--vscode-editorWarning-foreground,var(--vscode-foreground)); font-weight:700; }
+.session-indicator[data-state=failed] { color:var(--vscode-errorForeground); font-weight:700; }
+.session-indicator:is([data-state=working],[data-state=compacting],[data-state=sending],[data-state=starting],[data-state=restarting],[data-state=closing],[data-state=deleting])::before { content:""; box-sizing:border-box; width:12px; height:12px; border:2px solid var(--vscode-panel-border); border-top-color:var(--vscode-progressBar-background); border-radius:50%; animation:sidebar-indicator-spin .9s linear infinite; }
+@keyframes sidebar-indicator-spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion:reduce) { .session-indicator::before { animation:none !important; } }
 .session-delete, .session-close { display:flex; align-items:center; justify-content:center; flex:none; box-sizing:border-box; width:26px; height:26px; color:var(--vscode-descriptionForeground); background:transparent; padding:3px 6px; }
 .session-close { margin-right:3px; }
 .session-delete svg { width:14px; height:14px; }

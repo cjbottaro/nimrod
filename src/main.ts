@@ -4,7 +4,8 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { notificationPreview, sessionNotifications, type NotificationDispatch } from './notifications';
 import { SessionAttention } from './session-attention';
 import { installSidebarResize, sidebarWidthKey } from './sidebar-resize';
-import { lastUsed, recentSessions, nextLastUsed, captureSidebarScroll, revealSidebarRow } from './session-recency';
+import { lastUsed, recentSessions, nextLastUsed, captureSidebarScroll, revealSidebarRow, SessionRecency } from './session-recency';
+import { sessionTime, sessionIndicator, installSessionTimeRefresh } from './session-sidebar';
 import { installDeletionReview } from './deletion-review';
 import { SessionDeletion, type DeletionEvent, type DeletionSnapshot } from './session-deletion';
 import { presentActivity } from './pi/activity-state';
@@ -72,6 +73,7 @@ let active: Tab | undefined;
 // Remember navigation separately from the conversation actually shown by the filter.
 let presented: Tab | undefined;
 const tabs: Tab[] = [];
+let recency = new SessionRecency(undefined);
 const sessionAttention = new SessionAttention();
 let sidebarView: 'all' | 'attention' = 'all';
 function popoutError(message: string): void {
@@ -90,9 +92,9 @@ function syncPopouts(): void {
     ? { path: tab.file.path, sessionId: tab.file.sessionId } : null })), presented?.id ?? null);
 }
 type LaunchMode = 'saved' | 'temporary' | 'resume';
-interface SessionFile { path: string; sessionId: string; exists: boolean; }
+interface SessionFile { path: string; sessionId: string; exists: boolean; lastUserMessageAt?: number; }
 interface LaunchInfo { cwd: string; session?: SessionFile; }
-interface SessionSummary { path: string; sessionId: string; name?: string; preview: string; modified: number; }
+interface SessionSummary { path: string; sessionId: string; name?: string; preview: string; modified: number; lastUserMessageAt?: number; }
 interface Tab {
   id: string; token?: string; title: string; lastUsed: number; mode: LaunchMode; demo: boolean; file?: SessionFile;
   root: HTMLElement; view: PiView; drafts: SessionDrafts; receive?: (message: HostMessage) => void;
@@ -101,7 +103,7 @@ interface Tab {
   cancelPreference?: () => void;
   preferenceTask?: Promise<void>;
   closeButton: HTMLButtonElement; deleteButton: HTMLButtonElement;
-  row: HTMLButtonElement; rowLabel: HTMLElement; rowIndicator: HTMLElement; rowStatus: HTMLElement; rowNode: HTMLElement;
+  row: HTMLButtonElement; rowLabel: HTMLElement; rowIndicator: HTMLElement; rowTime: HTMLTimeElement; rowNode: HTMLElement;
 }
 function stored(key: string): unknown {
   if (!key.startsWith('nimrod.sessions.') && key !== 'nimrod.poc.composer') return localState.has(key) ? localState.get(key) : preferences.readState(key);
@@ -235,8 +237,10 @@ const deletion = new SessionDeletion({
 // A global (Any-target) listener also receives emit_to events for OTHER windows.
 const unlistenDeletion = await listen<DeletionEvent>('nimrod-session-deletion', event => { void deletion.handle(event.payload); }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
 preferences.subscribe(() => { runtime.reload(); themes.reload(); void zoom.reload(); reloadNotifications(); keybindingEditor.reload(); refreshShortcutHints(); });
+const disposeTimeRefresh = installSessionTimeRefresh(window, () => { for (const tab of tabs) refreshTime(tab); });
 window.addEventListener('unload', () => {
   unloading = true;
+  disposeTimeRefresh();
   sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion();
   for (const tab of tabs) { tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.session?.rpc.disconnect('Window closed'); }
   keybindingDispatch.dispose(); keybindingEditor.dispose();
@@ -268,6 +272,7 @@ function sidebarTabs(): Tab[] {
 }
 function touchTab(tab: Tab): void {
   tab.lastUsed = nextLastUsed(tabs);
+  refreshTime(tab);
   renderSidebar(tab.rowNode);
   persistTabs();
 }
@@ -368,8 +373,12 @@ function restartControl(): void {
     ? 'Restart session — available after the first save' : active.restarting ? 'Restarting session…' : 'Restart session';
 }
 function layoutKey(): string { return `nimrod.tabs.v1:${workspace}`; }
+function recencyKey(): string { return `nimrod.recency.v1:${workspace}`; }
 function persistTabs(): void {
   if (!workspace) return;
+  let changed = false;
+  for (const tab of tabs) if (restartable(tab) && recency.record(tab.file!, tab.lastUsed)) changed = true;
+  if (changed) save(recencyKey(), recency.dump());
   save(layoutKey(), { tabs: tabs.filter(t => restartable(t)).map(t => ({ path: t.file!.path, sessionId: t.file!.sessionId, name: t.title, lastUsed: t.lastUsed })), active: active && restartable(active) ? active.file!.path : undefined });
 }
 function recentWorkspaces(): string[] { const raw = stored(recentKey); return Array.isArray(raw) ? raw.filter((s): s is string => typeof s === 'string') : []; }
@@ -387,14 +396,17 @@ async function openWorkspace(path: string): Promise<boolean> {
       save(recentKey, [result.cwd, ...recentWorkspaces().filter(p => p !== result.cwd)].slice(0, 30));
       renderRecents();
       if (!result.current) return false;
-      if (!workspace) enterWorkspace(result.cwd);
+      if (!workspace) await enterWorkspace(result.cwd);
       return workspace === result.cwd;
     } catch (e) { error.textContent = String(e); return false; }
   })();
   try { return await opening; } finally { opening = undefined; }
 }
-function enterWorkspace(path: string): void {
+async function enterWorkspace(path: string): Promise<void> {
   workspace = path; cwd.value = path;
+  recency = new SessionRecency(stored(recencyKey()));
+  if (recency.delete(Object.keys(recency.dump()).filter(file => deletion.removed(file)))) save(recencyKey(), recency.dump());
+  ready = false; controls();
   sidebarResize.reload();
   sidebarView = stored(`nimrod.sidebar.view:${path}`) === 'attention' ? 'attention' : 'all';
   drafts = makeDrafts(`${SESSION_STORAGE_KEY}:${path}`);
@@ -406,10 +418,20 @@ function enterWorkspace(path: string): void {
   for (const value of Array.isArray(layout?.tabs) ? layout.tabs : []) {
     const t = value as (Partial<SessionSummary> & { lastUsed?: unknown }) | null;
     if (!t || typeof t.path !== 'string' || typeof t.sessionId !== 'string' || deletion.removed(t.path) || tabs.some(tab => tab.file?.path === t.path)) continue;
-    const tab = createTab('resume', false, { path: t.path, sessionId: t.sessionId, exists: true }, typeof t.name === 'string' ? t.name : 'Session', lastUsed(t.lastUsed));
+    let used = Math.max(lastUsed(t.lastUsed), recency.get({ path: t.path, sessionId: t.sessionId }));
+    if (!used) {
+      try {
+        const info = await invoke<SessionFile>('inspect_workspace_session', { path: t.path });
+        if (info.path === t.path && info.sessionId === t.sessionId) used = lastUsed(info.lastUserMessageAt);
+      } catch { /* Retain unreadable entries/drafts for explicit recovery; never substitute mtime. */ }
+    }
+    if (unloading) return;
+    if (deletion.removed(t.path)) continue;
+    const tab = createTab('resume', false, { path: t.path, sessionId: t.sessionId, exists: true }, typeof t.name === 'string' ? t.name : 'Session', used);
     tab.drafts.select(`file:${t.path}`);
     tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
   }
+  ready = true;
   const selected = tabs.find(t => t.file?.path === layout?.active) || recentSessions(tabs)[0];
   if (selected) activate(selected, false, false);
   controls();
@@ -421,7 +443,7 @@ function openSessionPicker(): PalettePage {
     items: tabs.map(tab => ({
       id: tab.id,
       label: tab.title,
-      detail: `${tab === presented ? 'Current · ' : ''}${tab.rowStatus.textContent || 'Inactive'}`,
+      detail: `${tab === presented ? 'Current · ' : ''}${indicator(tab).label} · ${sessionTime(tab.lastUsed)}`,
       run: () => activate(tab),
     })),
   };
@@ -430,7 +452,7 @@ async function paletteSessions(): Promise<PalettePage> {
   if (!workspace) return { items: [], notice: 'Open a project first.' };
   const result = await invoke<{ sessions: SessionSummary[]; warnings: string[] }>('list_workspace_sessions');
   const entries = new Map(result.sessions.filter(s => !deletion.removed(s.path)).map(s => [s.path, s]));
-  for (const tab of tabs) if (tab.file?.exists) entries.set(tab.file.path, { ...entries.get(tab.file.path), path: tab.file.path, sessionId: tab.file.sessionId, name: tab.title, preview: entries.get(tab.file.path)?.preview || '', modified: entries.get(tab.file.path)?.modified || Date.now() });
+  for (const tab of tabs) if (tab.file?.exists) entries.set(tab.file.path, { ...entries.get(tab.file.path), path: tab.file.path, sessionId: tab.file.sessionId, name: tab.title, preview: entries.get(tab.file.path)?.preview || '', modified: entries.get(tab.file.path)?.modified || Date.now(), lastUserMessageAt: entries.get(tab.file.path)?.lastUserMessageAt });
   return {
     notice: result.warnings.length ? `${result.warnings.length} session file(s) could not be read. Use Refresh to retry.` : undefined,
     items: [...entries.values()].sort((a, b) => b.modified - a.modified).map(s => ({
@@ -486,14 +508,16 @@ function createTab(mode: LaunchMode, demo: boolean, file?: SessionFile, title = 
   root.setAttribute('aria-labelledby', row.id);
   const text = document.createElement('span'); text.className = 'session-row-text';
   const rowLabel = document.createElement('span');
-  const rowStatus = document.createElement('small'); text.append(rowLabel, rowStatus);
+  const secondary = document.createElement('small'), rowTime = document.createElement('time');
+  rowTime.id = `session-time-${id}`; row.setAttribute('aria-describedby', rowTime.id);
+  secondary.append(rowTime); text.append(rowLabel, secondary);
   const rowIndicator = document.createElement('span'); rowIndicator.className = 'session-indicator'; rowIndicator.setAttribute('aria-hidden', 'true');
   row.append(rowIndicator, text);
   const deleteButton = button('', () => { void deleteSession(tab); }); deleteButton.className = 'session-delete';
   deleteButton.append(required('delete-session').querySelector('svg')!.cloneNode(true));
   const closeButton = button('×', () => { void closeTab(tab); }); closeButton.className = 'session-close';
   rowNode.append(row, deleteButton, closeButton); required('open-sessions').append(rowNode);
-  const tab: Tab = { id, mode, demo, file, title, lastUsed: used, root, notice, closeButton, deleteButton, row, rowLabel, rowIndicator, rowStatus, rowNode,
+  const tab: Tab = { id, mode, demo, file, title, lastUsed: Math.max(lastUsed(used), file ? recency.get(file) : 0), root, notice, closeButton, deleteButton, row, rowLabel, rowIndicator, rowTime, rowNode,
     drafts: drafts.fork(), starting: false, closing: false, restarting: false, deleting: false, ended: false, inputCount: 0, unread: false, failed: deletion.blocked(file?.path),
     view: { setActive() {}, dispose() {} } }; 
   root.addEventListener('focusin', event => { if (event.target instanceof HTMLElement) tab.focus = event.target; });
@@ -527,7 +551,7 @@ function createTab(mode: LaunchMode, demo: boolean, file?: SessionFile, title = 
   tabs.push(tab); updateTab(tab); return tab;
 }
 function activate(tab: Tab, focus = true, reveal = true, scroll = true): void {
-  if (!tabs.includes(tab)) return;
+  if (!ready || !tabs.includes(tab)) return;
   // Explicit navigation reaches every open session, but never leaves a shown
   // conversation without its selected row. Boot/close fallback must not change views.
   if (reveal && sidebarView === 'attention' && !sidebarTabs().includes(tab)) {
@@ -546,16 +570,29 @@ function activate(tab: Tab, focus = true, reveal = true, scroll = true): void {
   // is no separate unavailable-session state for the user to resolve.
   if (presented === tab && tab.file?.exists && !deletion.pending && !deletion.blocked(tab.file.path) && !tab.starting && !tab.closing && !tab.restarting && (!tab.session || tab.ended)) void launch(tab, undefined, true);
 }
+function refreshTime(tab: Tab): void {
+  const label = sessionTime(tab.lastUsed);
+  if (tab.rowTime.textContent !== label) tab.rowTime.textContent = label;
+  const datetime = tab.lastUsed ? new Date(tab.lastUsed).toISOString() : '';
+  if (datetime && tab.rowTime.getAttribute('datetime') !== datetime) tab.rowTime.setAttribute('datetime', datetime);
+  else if (!datetime) tab.rowTime.removeAttribute('datetime');
+}
+function indicator(tab: Tab) {
+  const state = tab.session?.state;
+  return sessionIndicator({ ...tab, blocked: deletion.blocked(tab.file?.path),
+    inactive: tab.ended || !state || state.sessionUnavailable, compacting: state?.compacting,
+    busy: state?.busy || !!(state && presentActivity(false, '', state.extensionStatuses).subagents), pending: submissionPending(tab) });
+}
 function updateTab(tab: Tab): void {
   tab.root.inert = tab.closing || tab.restarting || tab.deleting || tab !== presented;
-  const status = tab.deleting ? 'Deleting' : deletion.blocked(tab.file?.path) ? 'Recovery needed' : tab.restarting ? 'Restarting' : tab.closing ? 'Closing' : tab.starting ? 'Starting' : tab.inputCount ? 'Input needed' : tab.failed ? 'Failed' : tab.ended || !tab.session ? 'Inactive' : tab.session.state.busy ? 'Working' : tab.unread ? 'Completed' : 'Ready';
-  const mark = status === 'Working' || status === 'Starting' || status === 'Restarting' ? '◐' : status === 'Input needed' || status === 'Failed' ? '!' : status === 'Completed' ? '●' : '○';
-  const name = tab.title;
+  const status = indicator(tab), name = tab.title;
   tab.root.setAttribute('aria-busy', String(tab.session?.state.busy === true));
-  tab.rowLabel.textContent = name; tab.rowStatus.textContent = status;
-  tab.rowIndicator.textContent = mark;
-  tab.row.setAttribute('aria-label', `${name} — ${status}`);
-  tab.row.setAttribute('aria-current', String(tab === presented)); tab.closeButton.setAttribute('aria-label', `Close ${name}`); tab.closeButton.disabled = deletion.pending || tab.closing || tab.starting || tab.restarting;
+  tab.rowLabel.textContent = name; refreshTime(tab);
+  if (tab.rowIndicator.dataset.state !== status.state) tab.rowIndicator.dataset.state = status.state;
+  if (tab.rowIndicator.textContent !== status.mark) tab.rowIndicator.textContent = status.mark;
+  tab.row.disabled = !ready;
+  tab.row.setAttribute('aria-label', `${name} — ${status.label}`);
+  tab.row.setAttribute('aria-current', String(tab === presented)); tab.closeButton.setAttribute('aria-label', `Close ${name}`); tab.closeButton.disabled = !ready || deletion.pending || tab.closing || tab.starting || tab.restarting;
   tab.deleteButton.setAttribute('aria-label', `Delete session tree for ${name}`); tab.deleteButton.disabled = !deletable(tab);
   if (presented === tab) presentConversation(tab);
   renderSidebar();
@@ -712,16 +749,29 @@ function newNamedSession(): void {
 }
 async function newSession(mode: LaunchMode = 'saved', demo = false, copyDraft?: string, initialName?: string): Promise<void> {
   if (!ready || deletion.pending || settings.isOpen || !await ensureWorkspace()) return;
-  const tab = createTab(mode, demo); activate(tab); await launch(tab, copyDraft, true, initialName);
+  const tab = createTab(mode, demo, undefined, undefined, nextLastUsed(tabs)); activate(tab); await launch(tab, copyDraft, true, initialName);
 }
-async function openSession(info: Pick<SessionSummary, 'path' | 'sessionId' | 'name'>): Promise<void> {
+async function openSession(info: Pick<SessionSummary, 'path' | 'sessionId' | 'name' | 'lastUserMessageAt'>): Promise<void> {
   if (!ready || deletion.pending || settings.isOpen || !await ensureWorkspace()) return;
   if (deletion.blocked(info.path)) {
     try { await deletion.recover(info.path, info.sessionId); } catch (e) { error.textContent = String(e); return; }
   }
   const existing = tabs.find(tab => tab.file?.path === info.path);
   if (existing) { activate(existing); return; }
-  const tab = createTab('resume', false, { path: info.path, sessionId: info.sessionId, exists: true }, info.name || 'Session');
+  let used = Math.max(recency.get(info), lastUsed(info.lastUserMessageAt));
+  if (info.lastUserMessageAt === undefined) {
+    try {
+      const inspected = await invoke<SessionFile>('inspect_workspace_session', { path: info.path });
+      if (inspected.sessionId !== info.sessionId) throw new Error('The session file was replaced with a different session');
+      info = { ...info, path: inspected.path, lastUserMessageAt: inspected.lastUserMessageAt };
+      used = Math.max(recency.get(info), lastUsed(info.lastUserMessageAt));
+    } catch (e) { error.textContent = String(e); return; }
+  }
+  // Recheck after metadata awaits: duplicate open actions must share one mounted session.
+  if (!ready || unloading || settings.isOpen || deletion.pending || deletion.removed(info.path) || deletion.blocked(info.path)) return;
+  const concurrent = tabs.find(tab => tab.file?.path === info.path);
+  if (concurrent) { activate(concurrent); return; }
+  const tab = createTab('resume', false, { path: info.path, sessionId: info.sessionId, exists: true }, info.name || 'Session', used);
   activate(tab); await launch(tab, undefined, true);
 }
 async function restartSession(tab: Tab): Promise<void> {
@@ -755,6 +805,7 @@ async function deleteSession(tab: Tab): Promise<void> {
 }
 function removeDeletedSessions(files: string[]): void {
   const deleted = new Set(files), before = recentSessions(tabs), shown = [...sidebarTabs()], selected = active;
+  if (recency.delete(files) && workspace) save(recencyKey(), recency.dump());
   const removed = tabs.filter(tab => tab.file && deleted.has(tab.file.path));
   // Dispose the entire subtree before selecting or persisting a replacement.
   for (const tab of removed) disposeTab(tab);
@@ -933,7 +984,7 @@ async function boot(): Promise<void> {
     const path = await invoke<string | null>('window_workspace');
     deletion.load(await invoke<DeletionSnapshot>('deletion_snapshot'));
     ready = true;
-    if (path) { enterWorkspace(path); syncPopouts(); }
+    if (path) { await enterWorkspace(path); syncPopouts(); }
     controls();
   } catch (e) { error.textContent = `Could not initialize the native host: ${e}`; }
 }

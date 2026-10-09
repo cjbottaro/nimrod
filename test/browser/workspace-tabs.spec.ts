@@ -42,7 +42,7 @@ test('sidebar sessions keep independent drafts and a background agent live witho
     await expect(firstRow).toHaveAttribute('aria-label', /Working/);
     await secondRow.click();
     await expect(page.locator(visible('prompt'))).toHaveValue('Second session draft');
-    await expect(firstRow).toHaveAttribute('aria-label', /Completed/);
+    await expect(firstRow).toHaveAttribute('aria-label', /Unread/);
     await expect(page.locator('#sidebar-all')).toHaveAttribute('aria-selected', 'true');
     await expect.poll(() => demo.calls.filter(c => c.command === 'prepare_notifications')).toHaveLength(1);
     await expect.poll(() => demo.calls.filter(c => c.command === 'notify_session')).toHaveLength(1);
@@ -159,7 +159,7 @@ test('empty Needs attention shows working status with a reduced-motion-aware pul
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await expect(dots).toHaveCSS('animation-name', 'none');
     await expect(page.locator('#sidebar-empty')).toHaveText('1 session working…');
-    await expect(page.locator(sessions)).toHaveAttribute('aria-label', /Completed/);
+    await expect(page.locator(sessions)).toHaveAttribute('aria-label', /Unread/);
     await expect(page.locator('#conversation')).toBeHidden();
     await expect(page.locator('#sidebar-attention-count')).toHaveText('1');
     await page.locator(sessions).click();
@@ -186,7 +186,7 @@ test('Needs attention updates in arrival order and retains a read selected sessi
     await newOfflineDemo(page);
     const third = (await page.locator(`${sessions}[aria-current="true"]`).getAttribute('id'))!;
     await page.getByRole('tab', { name: /Needs attention/ }).click();
-    await expect(page.locator(`#${second}`)).toHaveAttribute('aria-label', /Completed/);
+    await expect(page.locator(`#${second}`)).toHaveAttribute('aria-label', /Unread/);
     const visibleRows = page.locator('#open-sessions .open-session:not([hidden]) .session-row');
     await expect(visibleRows).toHaveCount(1);
     await expect(page.locator('#sidebar-attention-count')).toHaveText('1');
@@ -201,7 +201,7 @@ test('Needs attention updates in arrival order and retains a read selected sessi
     await expect(page.locator(`#${third}`)).toHaveAttribute('aria-current', 'true');
     await page.getByRole('tab', { name: /Needs attention/ }).click();
     await expect(page.locator('#conversation')).toBeHidden();
-    await expect(page.locator(`#${first}`)).toHaveAttribute('aria-label', /Completed/);
+    await expect(page.locator(`#${first}`)).toHaveAttribute('aria-label', /Unread/);
     await expect(visibleRows).toHaveCount(2);
     expect(await visibleRows.evaluateAll(nodes => nodes.map(node => node.id))).toEqual([second, first]);
     await page.locator(`#${second}`).click();
@@ -220,7 +220,7 @@ test('Needs attention updates in arrival order and retains a read selected sessi
     await expect(page.locator('#sidebar-empty')).toHaveText('No sessions need attention.');
     await expect(page.locator('#conversation')).toBeHidden();
     await page.getByRole('tab', { name: 'All', exact: true }).click();
-    expect(await visibleRows.evaluateAll(nodes => nodes.map(node => node.id))).toEqual([first, second, third]);
+    expect(await visibleRows.evaluateAll(nodes => nodes.map(node => node.id))).toEqual([first, third, second]);
     expect(demo.children.size).toBe(3);
     expect(demo.calls.filter(c => c.command === 'stop_pi')).toHaveLength(1);
     expect(demo.errors).toEqual([]);
@@ -282,7 +282,7 @@ test('older-history reading position survives hiding a session during background
     await page.locator(visible('prompt')).press('Enter');
     await newOfflineDemo(page);
     await expect(page.locator(sessions)).toHaveCount(2);
-    await expect(firstRow).toHaveAttribute('aria-label', /Completed/);
+    await expect(firstRow).toHaveAttribute('aria-label', /Unread/);
     await firstRow.click();
     await expect.poll(async () => Math.abs((await demo.metrics()).top - top)).toBeLessThanOrEqual(2);
     expect((await demo.metrics()).gap).toBeGreaterThan(100);

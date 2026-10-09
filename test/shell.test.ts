@@ -17,6 +17,9 @@ interface ShellOptions {
   appState?: Record<string, unknown>;
   state?: () => JsonRecord;
   history?: JsonRecord[];
+  fileTimes?: Record<string, number>;
+  clock?: () => number;
+  timeRefresh?: (() => void)[];
   fileExists?: () => boolean;
   selectedId?: string;
   filePath?: string | null;
@@ -51,6 +54,14 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   const dom = new JSDOM(readFileSync('index.html', 'utf8'), { url: options.popout ? 'http://tauri.localhost/?popout' : 'http://tauri.localhost', runScripts: 'outside-only', pretendToBeVisual: true });
   const win = dom.window;
   stubDialogs(win);
+  if (options.clock) win.Date.now = options.clock;
+  if (options.timeRefresh) {
+    const interval = win.setInterval.bind(win);
+    win.setInterval = (handler, delay, ...args) => {
+      if (delay === 60_000 && typeof handler === 'function') options.timeRefresh!.push(handler as () => void);
+      return interval(handler, delay, ...args);
+    };
+  }
   const frames: FrameRequestCallback[] = [];
   win.requestAnimationFrame = cb => { frames.push(cb); return frames.length; };
   const calls: { command: string; args: JsonRecord }[] = [];
@@ -122,7 +133,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         await startGate;
         return { cwd: '/project', session: activeConfig.mode === 'resume' ? { path: activeConfig.sessionFile, sessionId: options.selectedId || 'fixture-id', exists: true } : undefined };
       }
-      if (command === 'inspect_workspace_session') return { path: args.path, sessionId: options.selectedId || 'fixture-id', exists: true };
+      if (command === 'inspect_workspace_session') return { path: args.path, sessionId: options.selectedId || 'fixture-id', exists: true, lastUserMessageAt: options.fileTimes?.[String(args.path)] };
       if (command === 'session_file_info') return { path: args.path, sessionId: args.sessionId, exists: options.fileExists?.() ?? true };
       if (command === 'write_pi') {
         const target = sessions.get(String(args.token)); assert.ok(target);
@@ -277,6 +288,82 @@ test('sidebar resizing restores and persists per-project app state without harne
   }
 });
 
+test('new sessions use creation time, update only after prompt acknowledgement and timer refresh is text-only', async () => {
+  let now = new Date(2026, 6, 17, 12).getTime();
+  const refresh: (() => void)[] = [];
+  const f = await fixture(undefined, { windowWorkspace: '/project', clock: () => now, timeRefresh: refresh, holdPrompts: true });
+  try {
+    for (let i = 0; i < 2; i++) { f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick(); }
+    const rows = f.rows(), order = () => [...f.win.document.querySelectorAll('.session-row')];
+    assert.deepEqual(order(), [rows[1], rows[0]], 'same-clock creations still insert newest first');
+    const times = () => (f.preferences.value.state['nimrod.tabs.v1:/project'] as { tabs: { lastUsed: number }[] }).tabs.map(tab => tab.lastUsed);
+    assert.deepEqual(times(), [now, now + 1]);
+    rows[0].click(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Keep newer draft'; prompt.dispatchEvent(new f.win.Event('input')); prompt.focus();
+    const timestamp = rows[0].querySelector('time')!, node = timestamp;
+    const calls = f.calls.length, state = JSON.stringify(f.preferences.value.state), selected = rows[0].getAttribute('aria-current');
+    now += 120_000; refresh[0]();
+    assert.match(timestamp.textContent!, /^2 minutes ago · /); assert.equal(rows[0].querySelector('time'), node);
+    assert.deepEqual(order(), [rows[1], rows[0]]); assert.equal(rows[0].getAttribute('aria-current'), selected);
+    assert.equal(f.win.document.activeElement, prompt); assert.equal(prompt.value, 'Keep newer draft');
+    assert.equal(f.calls.length, calls); assert.equal(JSON.stringify(f.preferences.value.state), state);
+    prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
+    assert.deepEqual(times(), [now - 120_000, now - 120_000 + 1], 'pending send is not recency');
+    assert.equal(rows[0].querySelector<HTMLElement>('.session-indicator')!.dataset.state, 'sending');
+    const request = f.calls.find(call => (call.args.message as JsonRecord)?.type === 'prompt')!.args.message as JsonRecord;
+    [...f.sessions.values()][0].channel.onmessage({ kind: 'rpc', value: { type: 'response', id: request.id, success: true } }); await f.tick();
+    assert.deepEqual(order(), [rows[0], rows[1]]); assert.equal(times()[0], now);
+    assert.match(timestamp.textContent!, /^Just now · /);
+  } finally { f.win.close(); }
+});
+
+test('history resume inserts at historical recency, Close/Resume retains it and confirmed deletion purges it', async () => {
+  const key = 'nimrod.tabs.v1:/project', cache = 'nimrod.recency.v1:/project';
+  const layout = { tabs: [
+    { path: '/sessions/newer', sessionId: 'fixture-id', name: 'Newer', lastUsed: 1000 },
+    { path: '/sessions/older', sessionId: 'fixture-id', name: 'Older', lastUsed: 100 },
+  ], active: '/sessions/newer' };
+  const options: ShellOptions = { windowWorkspace: '/project', appState: { [key]: layout }, catalog: [
+    { path: '/sessions/restored', sessionId: 'fixture-id', name: 'Restored', preview: '', modified: 9999999999999, lastUserMessageAt: 700 },
+  ], deleteTree: async () => [{ file: '/sessions/restored', deleted: true }] };
+  const f = await fixture(undefined, options);
+  const resume = async () => {
+    f.openPalette(); const query = f.element<HTMLInputElement>('palette-input'); query.value = 'resume session'; query.dispatchEvent(new f.win.Event('input'));
+    query.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
+    [...f.win.document.querySelectorAll<HTMLElement>('#palette-list [role=option]')].find(item => item.textContent!.includes('Restored'))!.click(); await f.tick(); await f.tick();
+  };
+  try {
+    await f.tick(); await resume();
+    const rows = f.rows(), order = () => [...f.win.document.querySelectorAll('.session-row')];
+    assert.deepEqual(order(), [rows[0], rows[2], rows[1]], 'resume neither appends nor bumps to now/mtime');
+    assert.equal((f.preferences.value.state[cache] as JsonRecord)['/sessions/restored'] && ((f.preferences.value.state[cache] as JsonRecord)['/sessions/restored'] as JsonRecord).lastUsed, 700);
+    rows[2].parentElement!.querySelector<HTMLButtonElement>('.session-close')!.click(); await f.tick(); await f.tick();
+    assert.equal(((f.preferences.value.state[cache] as JsonRecord)['/sessions/restored'] as JsonRecord).lastUsed, 700);
+    options.catalog![0].lastUserMessageAt = 600; await resume();
+    const reopened = f.rows()[2]; assert.equal(reopened.querySelector('time')!.getAttribute('datetime'), new Date(700).toISOString());
+    assert.deepEqual(order(), [rows[0], reopened, rows[1]]);
+    f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
+    assert.equal((f.preferences.value.state[cache] as JsonRecord)['/sessions/restored'], undefined);
+  } finally { f.win.close(); }
+});
+
+test('legacy unknown recency seeds before insertion from read-only metadata, not restored RPC history', async () => {
+  const key = 'nimrod.tabs.v1:/project';
+  const f = await fixture(undefined, { windowWorkspace: '/project', appState: { [key]: { tabs: [
+    { path: '/sessions/old', sessionId: 'fixture-id', name: 'Old' },
+    { path: '/sessions/new', sessionId: 'fixture-id', name: 'New' },
+  ] } }, fileTimes: { '/sessions/old': 100, '/sessions/new': 900 }, history: [{ role: 'user', timestamp: 9999999999999, content: 'Do not treat RPC history as acceptance' }] });
+  try {
+    await f.tick(); await f.tick();
+    const rows = f.rows(); assert.deepEqual([...f.win.document.querySelectorAll('.session-row')], [rows[1], rows[0]]);
+    assert.deepEqual((f.preferences.value.state[key] as { tabs: { lastUsed: number }[] }).tabs.map(tab => tab.lastUsed), [100, 900]);
+    assert.equal(f.calls.filter(call => call.command === 'inspect_workspace_session').length, 2);
+    assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
+    assert.equal(rows[0].querySelector<HTMLElement>('.session-indicator')!.dataset.state, 'inactive');
+    assert.equal(rows[1].querySelector<HTMLElement>('.session-indicator')!.dataset.state, 'ready');
+  } finally { f.win.close(); }
+});
+
 test('All uses persisted user recency, preserves legacy ties and does not mark restoration as use', async () => {
   const key = 'nimrod.tabs.v1:/project';
   const layout = { tabs: [
@@ -344,14 +431,14 @@ test('only explicit prompt acknowledgement updates background session recency, n
       rows[0].click(); await f.tick();
       const before = timestamps();
       assert.equal(before[1], used);
-      assert.deepEqual(visible(), [rows[0], rows[1]]);
+      assert.deepEqual(visible(), [rows[1], rows[0]], 'new sessions start at the top, selection does not move them');
       for (const event of [{ type: 'agent_start' }, { type: 'message_end', message: { role: 'user', content: 'Pending prompt', timestamp: 1 } }, { type: 'agent_settled' }]) target.onmessage({ kind: 'rpc', value: event });
       assert.deepEqual(timestamps(), before);
       const request = f.calls.find(call => (call.args.message as JsonRecord)?.type === 'prompt')!.args.message as JsonRecord;
       if (outcome === 'unknown') target.onmessage({ kind: 'disconnected', message: 'Acceptance unknown' });
       else target.onmessage({ kind: 'rpc', value: { type: 'response', id: request.id, success: outcome === 'accepted', error: outcome === 'rejected' ? 'Rejected' : undefined } });
       await f.tick();
-      assert.deepEqual(visible(), outcome === 'accepted' ? [rows[1], rows[0]] : [rows[0], rows[1]]);
+      assert.deepEqual(visible(), [rows[1], rows[0]]);
       assert.equal(rows[0].getAttribute('aria-current'), 'true', 'background acceptance never selects its conversation');
       assert.equal(timestamps()[1] > before[1], outcome === 'accepted');
       assert.equal(f.calls.filter(call => (call.args.message as JsonRecord)?.type === 'prompt').length, 1);
@@ -500,7 +587,7 @@ test('returned deletion results remove a whole subtree once and select according
       const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Deleted draft'; prompt.dispatchEvent(new f.win.Event('input'));
       f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick(); await f.tick();
       assert.equal(f.win.document.querySelectorAll('.session-row').length, 2);
-      const expected = view === 'attention' ? rows[0] : view === 'all-last' ? rows[1] : rows[3];
+      const expected = view === 'all-last' ? rows[1] : rows[0];
       assert.equal(expected.getAttribute('aria-current'), 'true', `${view}: ${rows.map(row => `${row.id}:${row.getAttribute('aria-current')}`).join(', ')}`);
       assert.equal(f.element('sidebar-attention').getAttribute('aria-selected'), String(view === 'attention'));
       assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 4, 'no deleted or intermediate replacement launches');
@@ -872,12 +959,13 @@ test('notifications target background sessions, suppress selected foreground run
     emitFirst({ type: 'agent_start' });
     emitFirst({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: '**Done.**\n\nTests passed.' }, { type: 'thinking', thinking: 'private reasoning' }] } });
     emitFirst({ type: 'agent_end' }); await f.tick();
-    assert.equal(f.rows()[0].querySelector('small')!.textContent, 'Working');
+    assert.match(f.rows()[0].getAttribute('aria-label')!, /Working/);
+    assert.match(f.rows()[0].querySelector('small')!.textContent!, / · /);
     assert.equal(f.calls.filter(c => c.command === 'notify_session').length, 0);
     emitFirst({ type: 'agent_settled' }); emitFirst({ type: 'agent_settled' }); await f.tick();
     const notices = f.calls.filter(c => c.command === 'notify_session');
     assert.equal(f.element('sidebar-all').getAttribute('aria-selected'), 'true');
-    assert.equal(f.rows()[0].querySelector('small')!.textContent, 'Completed');
+    assert.match(f.rows()[0].getAttribute('aria-label')!, /Unread/);
     assert.match(f.element('notification-status').textContent!, /Last completed alert: submitted to the OS/);
     assert.equal(f.calls.filter(c => c.command === 'prepare_notifications').length, 1);
     assert.equal(notices.length, 1);
@@ -1870,7 +1958,7 @@ test('session selection synchronizes only its own pop-outs and Close retains sav
     f.rows()[0].click(); await f.tick();
     sync = f.calls.filter(c => c.command === 'sync_popout_sessions').at(-1)!.args;
     assert.equal(sync.active, first.runtimeId);
-    f.win.document.querySelector<HTMLButtonElement>('.session-close')!.click(); await f.tick(); await f.tick();
+    f.rows()[0].parentElement!.querySelector<HTMLButtonElement>('.session-close')!.click(); await f.tick(); await f.tick();
     sync = f.calls.filter(c => c.command === 'sync_popout_sessions').at(-1)!.args;
     assert.equal(sync.active, second.runtimeId);
     assert.equal((sync.sessions as JsonRecord[]).length, 1);

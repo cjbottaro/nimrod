@@ -22,6 +22,25 @@ pub struct SessionFile {
     pub path: PathBuf,
     pub session_id: String,
     pub exists: bool,
+    pub last_user_message_at: u64,
+}
+
+/// Read-only historical recency, not a live prompt/composer acknowledgement.
+/// All stored branches count; assistant/tool/control entries never do.
+pub fn user_message_timestamp(entry: &Value) -> u64 {
+    if entry["type"] != "message" || entry["message"]["role"] != "user" {
+        return 0;
+    }
+    let valid = |timestamp: u64| timestamp > 0 && timestamp <= 8_640_000_000_000_000;
+    if let Some(timestamp) = entry["message"]["timestamp"].as_u64().filter(|t| valid(*t)) {
+        return timestamp;
+    }
+    entry["timestamp"]
+        .as_str()
+        .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+        .and_then(|date| u64::try_from(date.timestamp_millis()).ok())
+        .filter(|t| valid(*t))
+        .unwrap_or(0)
 }
 
 pub fn inspect(path: &Path, cwd: &Path) -> Result<SessionFile, String> {
@@ -39,6 +58,7 @@ pub fn inspect(path: &Path, cwd: &Path) -> Result<SessionFile, String> {
     let mut reader = BufReader::new(file);
     let mut line = String::new();
     let mut header: Option<Value> = None;
+    let mut last_user_message_at = 0;
     loop {
         line.clear();
         let bytes = reader
@@ -71,6 +91,8 @@ pub fn inspect(path: &Path, cwd: &Path) -> Result<SessionFile, String> {
             header = Some(entry);
         } else if entry["type"] == "session" {
             return Err("Session contains multiple headers".into());
+        } else {
+            last_user_message_at = last_user_message_at.max(user_message_timestamp(&entry));
         }
     }
     let header = header.ok_or("Session has no Pi header")?;
@@ -91,6 +113,7 @@ pub fn inspect(path: &Path, cwd: &Path) -> Result<SessionFile, String> {
         path,
         session_id: header["id"].as_str().unwrap().into(),
         exists: true,
+        last_user_message_at,
     })
 }
 
@@ -118,6 +141,7 @@ pub fn reported_file(path: &Path, cwd: &Path, id: &str) -> Result<SessionFile, S
                 path: parent.join(name),
                 session_id: id.into(),
                 exists: false,
+                last_user_message_at: 0,
             })
         }
         Err(e) => Err(format!("Cannot inspect Pi session file: {e}")),
@@ -256,11 +280,74 @@ mod tests {
     }
 
     #[test]
+    fn reads_only_persisted_user_message_times_not_metadata_or_mtime() {
+        let dir = tempfile::tempdir().unwrap();
+        let cwd = dir.path().canonicalize().unwrap();
+        let path = cwd.join("history.jsonl");
+        let entries = [
+            json!({"type":"message", "message":{"role":"user", "timestamp":1000}}),
+            json!({"type":"message", "timestamp":"2025-06-01T14:30:00.123+02:00", "message":{"role":"user"}}),
+            json!({"type":"message", "message":{"role":"assistant", "timestamp":1900000000000_u64}}),
+            json!({"type":"message", "message":{"role":"toolResult", "timestamp":1900000000000_u64}}),
+            json!({"type":"session_info", "timestamp":"2030-01-01T00:00:00Z", "name":"Renamed"}),
+            json!({"type":"compaction", "timestamp":"2030-01-01T00:00:00Z"}),
+            json!({"type":"message", "message":{"role":"user", "timestamp":0}, "timestamp":"invalid"}),
+        ];
+        let content = header(&cwd)
+            + &entries
+                .iter()
+                .map(|entry| format!("{entry}\n"))
+                .collect::<String>();
+        std::fs::write(&path, &content).unwrap();
+        let expected = 1748781000123;
+        assert_eq!(inspect(&path, &cwd).unwrap().last_user_message_at, expected);
+        assert_eq!(
+            crate::session_catalog::list(&cwd, &cwd).unwrap().sessions[0].last_user_message_at,
+            expected
+        );
+        File::open(&path)
+            .unwrap()
+            .set_times(
+                std::fs::FileTimes::new()
+                    .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1)),
+            )
+            .unwrap();
+        assert_eq!(inspect(&path, &cwd).unwrap().last_user_message_at, expected);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), content);
+        std::fs::write(&path, header(&cwd)).unwrap();
+        assert_eq!(inspect(&path, &cwd).unwrap().last_user_message_at, 0);
+    }
+    #[test]
+    fn validates_timestamp_formats_and_ignores_bad_values_without_rejecting_history() {
+        for value in [
+            json!(null),
+            json!("42"),
+            json!(-1),
+            json!(1.5),
+            json!(9007199254740991_u64),
+        ] {
+            let entry = json!({"type":"message", "message":{"role":"user", "timestamp":value}});
+            assert_eq!(user_message_timestamp(&entry), 0);
+        }
+        let entry = json!({"type":"message", "timestamp":"2025-06-01T12:30:00.123Z", "message":{"role":"user", "timestamp":1234}});
+        assert_eq!(user_message_timestamp(&entry), 1234);
+        for invalid in ["invalid", "1960-01-01T00:00:00Z", "2025-02-30T00:00:00Z"] {
+            assert_eq!(
+                user_message_timestamp(
+                    &json!({"type":"message", "timestamp":invalid, "message":{"role":"user"}})
+                ),
+                0
+            );
+        }
+    }
+
+    #[test]
     fn launch_modes_use_exact_paths_and_never_continue_recent() {
         let file = SessionFile {
             path: PathBuf::from("/sessions/a b.jsonl"),
             session_id: "id".into(),
             exists: true,
+            last_user_message_at: 0,
         };
         for (mode, expected) in [
             (LaunchMode::Saved, vec![]),

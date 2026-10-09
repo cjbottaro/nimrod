@@ -596,6 +596,14 @@ fn deleted_state_updates(
             if &updated != value {
                 updates.insert(key.clone(), updated);
             }
+        } else if key.starts_with("nimrod.recency.v1:") {
+            let mut updated = value.clone();
+            if let Some(entries) = updated.as_object_mut() {
+                entries.retain(|path, _| !files.contains(path.as_str()));
+            }
+            if &updated != value {
+                updates.insert(key.clone(), updated);
+            }
         } else if key == "nimrod.last-session.v1"
             && value["path"]
                 .as_str()
@@ -685,7 +693,7 @@ mod tests {
     }
     #[test]
     fn only_successful_files_are_removed_from_remembered_layouts_and_last_session() {
-        let state = serde_json::from_value(json!({"nimrod.tabs.v1:/one":{"tabs":[{"path":"/store/a"},{"path":"/store/b"}],"active":"/store/a"}, "nimrod.last-session.v1":{"path":"/store/a"},"nimrod.tabs.v1:/malformed":42,"unrelated":true})).unwrap();
+        let state: serde_json::Map<String, serde_json::Value> = serde_json::from_value(json!({"nimrod.tabs.v1:/one":{"tabs":[{"path":"/store/a"},{"path":"/store/b"}],"active":"/store/a"}, "nimrod.last-session.v1":{"path":"/store/a"},"nimrod.tabs.v1:/malformed":42,"unrelated":true})).unwrap();
         let results = vec![
             DeleteResult {
                 file: "/store/a".into(),
@@ -698,12 +706,20 @@ mod tests {
                 error: Some("failure".into()),
             },
         ];
+        let mut state = state;
+        state.insert("nimrod.recency.v1:/closed-project".into(), json!({"/store/a":{"sessionId":"a", "lastUsed":100}, "/store/b":{"sessionId":"b", "lastUsed":200}}));
+        state.insert("nimrod.recency.v1:/malformed".into(), json!(42));
         let updated = deleted_state_updates(&state, &results);
         assert_eq!(
             updated["nimrod.tabs.v1:/one"]["tabs"],
             json!([{"path":"/store/b"}])
         );
         assert_eq!(updated["nimrod.last-session.v1"], serde_json::Value::Null);
+        assert_eq!(
+            updated["nimrod.recency.v1:/closed-project"],
+            json!({"/store/b":{"sessionId":"b", "lastUsed":200}})
+        );
+        assert!(!updated.contains_key("nimrod.recency.v1:/malformed"));
         assert!(!updated.contains_key("unrelated"));
     }
     #[test]

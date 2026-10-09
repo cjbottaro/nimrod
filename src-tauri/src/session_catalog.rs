@@ -17,6 +17,7 @@ pub struct SessionSummary {
     pub name: Option<String>,
     pub preview: String,
     pub modified: u64,
+    pub last_user_message_at: u64,
 }
 
 #[derive(Serialize, Debug, Default)]
@@ -124,6 +125,7 @@ fn summary(path: &Path, cwd: &Path) -> Result<Option<SessionSummary>, String> {
                 session_id: id.into(),
                 name: None,
                 preview: String::new(),
+                last_user_message_at: 0,
                 modified: metadata
                     .modified()
                     .ok()
@@ -136,6 +138,9 @@ fn summary(path: &Path, cwd: &Path) -> Result<Option<SessionSummary>, String> {
         if entry["type"] == "session" {
             return Err("Multiple session headers".into());
         }
+        info.last_user_message_at = info
+            .last_user_message_at
+            .max(crate::sessions::user_message_timestamp(&entry));
         if entry["type"] == "session_info" {
             info.name = entry["name"]
                 .as_str()

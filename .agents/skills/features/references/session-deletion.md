@@ -184,7 +184,8 @@ reconfirm, stop unrelated tokens or resume a soon-to-be-deleted descendant.
 Removing a background subtree leaves a surviving selection unchanged. Selection
 uses existing next/previous sidebar behavior; do not create a replacement session.
 
-Success clears corresponding `nimrod.tabs.v1:<cwd>` layouts, matching last-session
+Success clears corresponding `nimrod.tabs.v1:<cwd>` layouts, `nimrod.recency.v1:<cwd>`
+identity-bound timestamp entries (including closed projects), matching last-session
 pointer, file-scoped drafts/recovery text/uncertainty, and saved pop-out state,
 snapshots and registered native reference windows. `purgeDeletedDrafts` handles
 closed-project/legacy browser libraries without rewriting unrelated/malformed
