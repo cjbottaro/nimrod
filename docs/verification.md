@@ -6,6 +6,8 @@
 - `mise run check` passes **343 TypeScript/Node tests**, Rust formatting/Clippy and **77 default Rust tests** (two opt-in Pi smokes ignored). `mise run build` packages and verifies the signed worktree macOS bundle. Badge/search/activation, disconnected/inactive membership, Close, root/child filtering and exact-file lineage are covered by fixtures. `git diff --check` passes; the browser suite was not rerun.
 - No user app/window launch or interruption, live Pi/model request, user-session modification or installed-extension change occurred. The primary checkout/default app bundle was untouched. Native badge layout and picker acceptance, Linux and possible Windows verification remain for user validation.
 
+Resume integration with `main`: preserved the counted All / Unread / Working filters and updated the Resume regression/docs to their current names. The integrated `mise run check` passes **347 TypeScript/Node tests**, formatting/Clippy and **77 default Rust tests** (two opt-in Pi smokes ignored). The feature was merged into `main`, and `mise run build` rebuilt and verified `src-tauri/target/release/bundle/macos/Nimrod.app` in the primary checkout. The running app was not launched or restarted; native visual acceptance remains outstanding.
+
 ## Counted All / Unread / Working sidebar filters
 
 - Implemented on `feat/sidebar-filters` in `.worktrees/sidebar-filters`. All three views show live session counts including zero; counts overlap. Unread retains input/failure semantics and stable arrival order. Working uses recency order, busy/compaction/reported-subagent membership, excludes input-waiting/unavailable/lifecycle transitions, and retains a selected settled response without counting it as working. Legacy `attention` view state restores as Unread.
