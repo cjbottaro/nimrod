@@ -2,6 +2,7 @@ export interface PaletteItem {
   id: string;
   label: string;
   detail?: string;
+  badge?: string;
   shortcut?: string;
   keywords?: string;
   run(): void | Promise<void>;
@@ -69,13 +70,16 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     input.setAttribute('aria-controls', 'palette-list'); input.setAttribute('aria-autocomplete', 'list');
     const previous = matches[selected]?.id;
     const words = input.value.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
-    matches = items.filter(item => words.every(word => `${item.label} ${item.detail || ''} ${item.keywords || ''}`.toLocaleLowerCase().includes(word)));
+    matches = items.filter(item => words.every(word => `${item.label} ${item.badge || ''} ${item.detail || ''} ${item.keywords || ''}`.toLocaleLowerCase().includes(word)));
     selected = Math.max(0, matches.findIndex(item => item.id === previous));
     list.replaceChildren(...matches.map((item, index) => {
       const row = doc.createElement('div'); row.id = `palette-option-${index}`; row.setAttribute('role', 'option'); row.dataset.index = String(index);
-      const label = doc.createElement('span'); label.textContent = item.label;
+      const heading = doc.createElement('div'); heading.className = 'palette-item-heading';
+      const label = doc.createElement('span'); label.className = 'palette-item-label'; label.textContent = item.label;
+      heading.append(label);
+      if (item.badge) { const badge = doc.createElement('span'); badge.className = 'palette-item-badge'; badge.textContent = item.badge; heading.append(badge); }
       const detail = doc.createElement('small'); detail.textContent = item.detail || '';
-      row.append(label, detail);
+      row.append(heading, detail);
       if (item.shortcut) { const shortcut = doc.createElement('kbd'); shortcut.textContent = item.shortcut; row.append(shortcut); }
       row.title = item.keywords || item.detail || item.label;
       return row;

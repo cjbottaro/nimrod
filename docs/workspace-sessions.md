@@ -12,12 +12,12 @@ A project is a directory—no Git repository, manifest or registration required.
 
 ### Open sessions
 
-The **Session sidebar** shows a flat list of open conversations, activity and per-row trash/Close controls. **New session** starts a persistent conversation. Selecting another session leaves background agents running and retains each conversation's draft, disclosures and scroll position.
+The **Session sidebar** shows a flat list of open conversations, activity and per-row trash/Close controls. **Open** means retained in the sidebar, not necessarily connected. **Connected** means the session has a live connection to its Nimrod-owned agent process; that agent may be idle or working. Restored or disconnected entries are still open. Hiding the sidebar or filtering a row out of Needs attention does not close it. **New session** starts a persistent conversation. Selecting another session leaves background agents running and retains each conversation's draft, disclosures and scroll position.
 
 **⌘/Ctrl ⇧ P** opens the keyboard-only **Command palette**:
 
-- **Switch session…** lists all open sessions, including those hidden by the sidebar view.
-- **Resume session…** searches saved project history by name, preview or path, including closed sessions. Escape returns to commands; another Escape closes the palette and restores focus. Refresh retries history loading.
+- **Switch session…** lists every session retained in the sidebar, connected or disconnected, including temporary/offline-demo sessions and rows filtered out of Needs attention. It does not search closed history.
+- **Resume session…** searches saved top-level project history by name, preview or path, including both already-open and closed sessions. A separate **Open** badge means the session is already retained in the sidebar—even if disconnected or filtered out of Needs attention. Closed sessions have no badge. Selecting an open session reuses its existing sidebar entry; connected sessions keep their process, and inactive sessions resume normally. Unlike Switch, its scope is saved history, not sidebar membership. Pi files with a parent (persisted subagents and saved forks/branches) are excluded from this picker; **Open session file…** can still open them explicitly. Escape returns to commands; another Escape closes the palette and restores focus. Refresh retries history loading.
 - **New named session…** collects a single-line name with an inline Create button. Enter creates; Esc cancels. Naming alone does not save empty history. The Pi runtime must support its native `--name` option.
 - **New temporary session** and **New offline demo** are explicit alternatives. Temporary conversations are absent from saved history. Their drafts, recovered/uncertain submissions and pop-outs are runtime-only and are discarded on Close, window close, quit or reload; they are not available through draft recovery.
 - **Open session file…** handles files outside the normal discovery directory. Files must belong to this project's exact working directory; invalid files never fall back to new sessions.

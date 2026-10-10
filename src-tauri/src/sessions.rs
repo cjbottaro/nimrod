@@ -22,7 +22,17 @@ pub struct SessionFile {
     pub path: PathBuf,
     pub session_id: String,
     pub exists: bool,
+    pub parent_session: Option<String>,
     pub last_user_message_at: u64,
+}
+
+/// Pi uses this lineage for both persisted subagents and saved branches.
+pub fn parent_session(header: &Value) -> Result<Option<String>, String> {
+    match header.get("parentSession") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(parent)) if !parent.trim().is_empty() => Ok(Some(parent.clone())),
+        Some(_) => Err("Invalid parentSession in session header".into()),
+    }
 }
 
 /// Read-only historical recency, not a live prompt/composer acknowledgement.
@@ -113,6 +123,7 @@ pub fn inspect(path: &Path, cwd: &Path) -> Result<SessionFile, String> {
         path,
         session_id: header["id"].as_str().unwrap().into(),
         exists: true,
+        parent_session: parent_session(&header)?,
         last_user_message_at,
     })
 }
@@ -141,6 +152,7 @@ pub fn reported_file(path: &Path, cwd: &Path, id: &str) -> Result<SessionFile, S
                 path: parent.join(name),
                 session_id: id.into(),
                 exists: false,
+                parent_session: None,
                 last_user_message_at: 0,
             })
         }
@@ -347,6 +359,7 @@ mod tests {
             path: PathBuf::from("/sessions/a b.jsonl"),
             session_id: "id".into(),
             exists: true,
+            parent_session: None,
             last_user_message_at: 0,
         };
         for (mode, expected) in [

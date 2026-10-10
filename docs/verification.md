@@ -1,5 +1,11 @@
 # PoC verification
 
+## Resume picker roots and Open badges
+
+- Implemented in `.worktrees/resume-session-picker` on `fix/resume-session-picker`, retaining the terminology clarification from `.worktrees/session-terminology`. Resume now shows a separate Open badge for sidebar membership, independent of connection state or Needs attention visibility. Pi `parentSession` metadata excludes persisted subagents and saved forks/branches from Resume, while Switch and exact-file opening remain unchanged. Out-of-catalog open files are inspected read-only before inclusion.
+- `mise run check` passes **343 TypeScript/Node tests**, Rust formatting/Clippy and **77 default Rust tests** (two opt-in Pi smokes ignored). `mise run build` packages and verifies the signed worktree macOS bundle. Badge/search/activation, disconnected/inactive membership, Close, root/child filtering and exact-file lineage are covered by fixtures. `git diff --check` passes; the browser suite was not rerun.
+- No user app/window launch or interruption, live Pi/model request, user-session modification or installed-extension change occurred. The primary checkout/default app bundle was untouched. Native badge layout and picker acceptance, Linux and possible Windows verification remain for user validation.
+
 ## macOS Command-Option key normalization
 
 - A unit regression reproduces the matcher’s rejection of `key: Dead/˜/ñ, code: KeyN, metaKey: true, altKey: true` against New named session’s `primary+alt+n`. Matching and recording now share a narrow fallback to letter/digit codes for transformed macOS Command+Option events. Readable layout letters remain unchanged; plain Option typing, known non-macOS platforms, IME/229 and repeat guards are preserved. No defaults or saved overrides are rewritten.

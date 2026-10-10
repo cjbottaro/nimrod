@@ -18,6 +18,7 @@ interface ShellOptions {
   state?: () => JsonRecord;
   history?: JsonRecord[];
   fileTimes?: Record<string, number>;
+  fileParents?: Record<string, string>;
   clock?: () => number;
   timeRefresh?: (() => void)[];
   fileExists?: () => boolean;
@@ -133,7 +134,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         await startGate;
         return { cwd: '/project', session: activeConfig.mode === 'resume' ? { path: activeConfig.sessionFile, sessionId: options.selectedId || 'fixture-id', exists: true } : undefined };
       }
-      if (command === 'inspect_workspace_session') return { path: args.path, sessionId: options.selectedId || 'fixture-id', exists: true, lastUserMessageAt: options.fileTimes?.[String(args.path)] };
+      if (command === 'inspect_workspace_session') return { path: args.path, sessionId: options.selectedId || 'fixture-id', exists: true, parentSession: options.fileParents?.[String(args.path)], lastUserMessageAt: options.fileTimes?.[String(args.path)] };
       if (command === 'session_file_info') return { path: args.path, sessionId: args.sessionId, exists: options.fileExists?.() ?? true };
       if (command === 'write_pi') {
         const target = sessions.get(String(args.token)); assert.ok(target);
@@ -1715,6 +1716,54 @@ test('project opens without Pi, lists and searches sessions, and focuses an alre
     f.element<HTMLButtonElement>('toggle-sidebar').click(); assert.equal(f.element('session-sidebar').hidden, false);
     f.disconnect();
   } finally { f.dom.window.close(); }
+});
+
+test('Resume marks sidebar membership independently of connectivity and filters child sessions without changing Switch', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project',
+    appState: { 'nimrod.tabs.v1:/project': { tabs: [
+      { path: '/sessions/a.jsonl', sessionId: 'fixture-id', name: 'Selected root', lastUsed: 30 },
+      { path: '/sessions/b.jsonl', sessionId: 'fixture-id', name: 'Inactive root', lastUsed: 20 },
+      { path: '/custom/child.jsonl', sessionId: 'fixture-id', name: 'Open child', lastUsed: 10 },
+    ], active: '/sessions/a.jsonl' } },
+    fileParents: { '/custom/child.jsonl': '/sessions/a.jsonl' },
+    catalog: [
+      { path: '/sessions/a.jsonl', sessionId: 'fixture-id', name: 'Selected root', preview: 'long '.repeat(100), modified: 30 },
+      { path: '/sessions/b.jsonl', sessionId: 'fixture-id', name: 'Inactive root', preview: '', modified: 20 },
+      { path: '/sessions/closed.jsonl', sessionId: 'fixture-id', name: 'Closed root', preview: '', modified: 10 },
+      { path: '/sessions/agent.jsonl', sessionId: 'agent', name: 'Subagent', preview: '', modified: 50, parentSession: '/sessions/a.jsonl' },
+      { path: '/sessions/fork.jsonl', sessionId: 'fork', name: 'Saved branch', preview: '', modified: 40, parentSession: '/sessions/a.jsonl' },
+    ],
+  });
+  const key = (key: string) => f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key, metaKey: true, bubbles: true, cancelable: true }));
+  const escape = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  const pickerRows = () => [...f.element('palette-list').children] as HTMLElement[];
+  const badge = (row: HTMLElement) => row.querySelector('.palette-item-badge')?.textContent;
+  try {
+    await f.tick(); await f.tick();
+    assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1, 'only the selected restored entry connects');
+    f.element<HTMLButtonElement>('sidebar-attention').click();
+    key('k'); await f.tick(); await f.tick();
+    assert.deepEqual(pickerRows().map(row => row.querySelector('.palette-item-label')!.textContent), ['Selected root', 'Inactive root', 'Closed root']);
+    assert.deepEqual(pickerRows().map(badge), ['Open', 'Open', undefined]);
+    assert.ok(pickerRows()[0].querySelector('.palette-item-heading .palette-item-badge'), 'badge is separate from the truncatable preview');
+    assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1, 'listing does not connect inactive sessions');
+    escape(); escape();
+    key('t'); await f.tick();
+    assert.equal(pickerRows().length, 3, 'Switch includes the open child and disconnected root');
+    escape(); escape();
+    key('k'); await f.tick(); await f.tick();
+    pickerRows()[0].click(); await f.tick();
+    assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1, 'already-connected selection reuses its process');
+    assert.equal(f.rows().length, 3, 'selection reuses the sidebar entry');
+    f.disconnect(); await f.tick();
+    key('k'); await f.tick(); await f.tick();
+    assert.equal(badge(pickerRows()[0]), 'Open', 'disconnect does not close the session');
+    escape(); escape();
+    f.rows()[1].closest('.open-session')!.querySelector<HTMLButtonElement>('.session-close')!.click(); await f.tick(); await f.tick();
+    key('k'); await f.tick(); await f.tick();
+    assert.deepEqual(pickerRows().map(badge), ['Open', undefined, undefined], 'Close removes only the membership badge, not saved history');
+    assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
+  } finally { f.win.close(); }
 });
 
 test('live tabs isolate drafts, background acknowledgements and transports without stopping on selection', async () => {

@@ -36,6 +36,23 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }))
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
+test('session badges are separate, searchable text and do not change activation', async () => {
+  const chosen: string[] = [];
+  const f = fixture(async () => ({ items: [
+    { id: 'a', label: 'A very long title', badge: 'Open', detail: 'A very long preview', run: () => { chosen.push('a'); } },
+    { id: 'b', label: 'Closed session', run: () => { chosen.push('b'); } },
+  ] }));
+  try {
+    await f.palette.sessions();
+    assert.equal(f.list().querySelectorAll('.palette-item-badge').length, 1);
+    assert.equal(f.list().querySelector('.palette-item-heading .palette-item-badge')!.textContent, 'Open');
+    assert.equal(f.list().querySelector('small')!.textContent, 'A very long preview');
+    f.query('open'); assert.equal(f.list().children.length, 1);
+    f.key('Enter'); await tick(); assert.deepEqual(chosen, ['a']);
+    assert.equal(f.dialog.open, false);
+  } finally { f.dispose(); }
+});
+
 test('named-session step is single-line, compact and keyboard-submit waits for close', async () => {
   const f = fixture();
   try {

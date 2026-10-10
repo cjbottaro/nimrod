@@ -17,6 +17,7 @@ pub struct SessionSummary {
     pub name: Option<String>,
     pub preview: String,
     pub modified: u64,
+    pub parent_session: Option<String>,
     pub last_user_message_at: u64,
 }
 
@@ -124,6 +125,7 @@ fn summary(path: &Path, cwd: &Path) -> Result<Option<SessionSummary>, String> {
                 path: path.clone(),
                 session_id: id.into(),
                 name: None,
+                parent_session: crate::sessions::parent_session(&entry)?,
                 preview: String::new(),
                 last_user_message_at: 0,
                 modified: metadata
@@ -217,6 +219,53 @@ mod tests {
         );
         assert!(!base.join("absent").exists());
     }
+    #[test]
+    fn lineage_distinguishes_roots_from_children_without_blocking_exact_file_resume() {
+        let temporary = tempfile::tempdir().unwrap();
+        let cwd = temporary.path().canonicalize().unwrap();
+        let parent = cwd.join("root.jsonl").to_string_lossy().into_owned();
+        for (id, lineage) in [
+            ("root", None),
+            ("null-root", Some(Value::Null)),
+            ("subagent", Some(json!(parent))),
+            ("branch", Some(json!(parent))),
+            ("invalid", Some(json!(42))),
+            ("empty", Some(json!(""))),
+        ] {
+            let mut header = json!({"type":"session", "version":3, "id":id, "cwd":cwd});
+            if let Some(lineage) = lineage {
+                header["parentSession"] = lineage;
+            }
+            fs::write(cwd.join(format!("{id}.jsonl")), header.to_string()).unwrap();
+        }
+        let catalog = list(&cwd, &cwd).unwrap();
+        assert_eq!(catalog.sessions.len(), 4);
+        assert_eq!(catalog.warnings.len(), 2);
+        let mut roots: Vec<_> = catalog
+            .sessions
+            .iter()
+            .filter(|s| s.parent_session.is_none())
+            .map(|s| s.session_id.as_str())
+            .collect();
+        roots.sort_unstable();
+        assert_eq!(roots, ["null-root", "root"]);
+        for id in ["subagent", "branch"] {
+            let summary = catalog
+                .sessions
+                .iter()
+                .find(|s| s.session_id == id)
+                .unwrap();
+            assert_eq!(summary.parent_session.as_deref(), Some(parent.as_str()));
+            let inspected = crate::sessions::inspect(&summary.path, &cwd).unwrap();
+            assert_eq!(inspected.parent_session, summary.parent_session);
+            assert_eq!(inspected.session_id, id);
+            assert_eq!(
+                serde_json::to_value(summary).unwrap()["parentSession"],
+                parent
+            );
+        }
+    }
+
     #[test]
     fn follows_pi_directory_encoding() {
         assert_eq!(

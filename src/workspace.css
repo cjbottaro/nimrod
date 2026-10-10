@@ -92,7 +92,10 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor:col-resize !important; u
 #command-palette[data-mode=name] { width:min(460px,calc(100% - 32px)); }
 #palette-list { overflow:auto; min-height:0; position:relative; }
 #palette-list [role=option] { padding:9px 10px; border-radius:4px; cursor:pointer; display:grid; gap:4px; }
-#palette-list [role=option] > span, #palette-list small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#palette-list .palette-item-heading { display:flex; align-items:center; gap:8px; min-width:0; }
+#palette-list .palette-item-label, #palette-list small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#palette-list .palette-item-label { flex:1; min-width:0; }
+#palette-list .palette-item-badge { flex:none; border:1px solid var(--vscode-panel-border); border-radius:3px; padding:1px 5px; font-size:10px; color:var(--vscode-descriptionForeground); }
 #palette-list small { color:var(--vscode-descriptionForeground); font-size:11px; }
 #palette-list [aria-selected=true] { background:var(--vscode-list-activeSelectionBackground); color:var(--vscode-list-activeSelectionForeground); }
 #palette-status { margin:0; font-size:11px; color:var(--vscode-descriptionForeground); white-space:pre-wrap; }

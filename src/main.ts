@@ -92,9 +92,9 @@ function syncPopouts(): void {
     ? { path: tab.file.path, sessionId: tab.file.sessionId } : null })), presented?.id ?? null);
 }
 type LaunchMode = 'saved' | 'temporary' | 'resume';
-interface SessionFile { path: string; sessionId: string; exists: boolean; lastUserMessageAt?: number; }
+interface SessionFile { path: string; sessionId: string; exists: boolean; parentSession?: string | null; lastUserMessageAt?: number; }
 interface LaunchInfo { cwd: string; session?: SessionFile; }
-interface SessionSummary { path: string; sessionId: string; name?: string; preview: string; modified: number; lastUserMessageAt?: number; }
+interface SessionSummary { path: string; sessionId: string; name?: string; preview: string; modified: number; parentSession?: string | null; lastUserMessageAt?: number; }
 interface Tab {
   id: string; token?: string; title: string; lastUsed: number; mode: LaunchMode; demo: boolean; file?: SessionFile;
   root: HTMLElement; view: PiView; drafts: SessionDrafts; receive?: (message: HostMessage) => void;
@@ -452,12 +452,25 @@ async function paletteSessions(): Promise<PalettePage> {
   if (!workspace) return { items: [], notice: 'Open a project first.' };
   const result = await invoke<{ sessions: SessionSummary[]; warnings: string[] }>('list_workspace_sessions');
   const entries = new Map(result.sessions.filter(s => !deletion.removed(s.path)).map(s => [s.path, s]));
-  for (const tab of tabs) if (tab.file?.exists) entries.set(tab.file.path, { ...entries.get(tab.file.path), path: tab.file.path, sessionId: tab.file.sessionId, name: tab.title, preview: entries.get(tab.file.path)?.preview || '', modified: entries.get(tab.file.path)?.modified || Date.now(), lastUserMessageAt: entries.get(tab.file.path)?.lastUserMessageAt });
+  // Exact-file sessions can live outside discovery. Inspect missing entries so
+  // an open child is not accidentally reintroduced as a top-level session.
+  for (const tab of tabs) if (tab.file?.exists && !deletion.removed(tab.file.path)) {
+    let saved = entries.get(tab.file.path);
+    if (!saved) {
+      try {
+        const info = await invoke<SessionFile>('inspect_workspace_session', { path: tab.file.path });
+        if (info.sessionId !== tab.file.sessionId) throw new Error('The session file was replaced with a different session');
+        saved = { path: info.path, sessionId: info.sessionId, parentSession: info.parentSession, name: tab.title, preview: '', modified: 0, lastUserMessageAt: info.lastUserMessageAt };
+      } catch { result.warnings.push(tab.file.path); continue; }
+    }
+    entries.set(saved.path, { ...saved, name: tab.title });
+  }
   return {
     notice: result.warnings.length ? `${result.warnings.length} session file(s) could not be read. Use Refresh to retry.` : undefined,
-    items: [...entries.values()].sort((a, b) => b.modified - a.modified).map(s => ({
+    items: [...entries.values()].filter(s => !s.parentSession && !deletion.removed(s.path)).sort((a, b) => b.modified - a.modified).map(s => ({
       id: s.path, label: s.name || s.preview || 'Untitled session', keywords: `${s.path} ${s.preview}`,
-      detail: `${tabs.some(t => t.file?.path === s.path) ? 'Open · ' : ''}${new Date(s.modified).toLocaleDateString()}${s.preview ? ` · ${s.preview}` : ''}`,
+      badge: tabs.some(t => t.file?.path === s.path) ? 'Open' : undefined,
+      detail: `${s.modified ? new Date(s.modified).toLocaleDateString() : 'Saved session'}${s.preview ? ` · ${s.preview}` : ''}`,
       run: () => openSession(s),
     })),
   };
