@@ -64,6 +64,33 @@ test('sidebar sessions keep independent drafts and a background agent live witho
   } finally { await demo.close(); }
 });
 
+test('counted sidebar filters show working sessions and retain the selected response after settlement', async ({ page }) => {
+  const demo = await demoFixture(page);
+  try {
+    await expect(page.getByRole('tab', { name: 'All (1)', exact: true })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Unread (0)', exact: true })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Working (0)', exact: true })).toBeVisible();
+    await page.locator(visible('prompt')).fill('Work in the counted view');
+    await page.locator(visible('prompt')).press('Enter');
+    await expect(page.locator('#sidebar-working-count')).toHaveText('1');
+    await page.locator('#sidebar-working').click();
+    await expect(page.locator('#sidebar-working')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.open-session:not([hidden])')).toHaveCount(1);
+    await expect(page.locator('#conversation')).toBeVisible();
+    await expect(page.locator('#sidebar-working-count')).toHaveText('0');
+    await expect(page.locator('.open-session:not([hidden])')).toHaveCount(1);
+    await expect(page.locator(visible('send'))).toBeEnabled();
+    await expect(page.locator('#sidebar-unread-count')).toHaveText('0');
+    await page.locator('#sidebar-all').click(); await page.locator('#sidebar-working').click();
+    await expect(page.locator('#conversation')).toBeHidden();
+    await expect(page.locator('#sidebar-empty')).toHaveText('No sessions working.');
+    await page.locator('#sidebar-working').press('ArrowRight');
+    await expect(page.locator('#sidebar-all')).toBeFocused();
+    await expect(page.locator('#conversation')).toBeVisible();
+    expect(demo.children.size).toBe(1); expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
 test('temporary Close uses Escape to cancel and Enter to confirm without replaying the draft', async ({ page }) => {
   const demo = await demoFixture(page);
   try {
@@ -123,14 +150,14 @@ test('attention hides the entire conversation and restores mounted draft, disclo
     await pane.hover(); await page.mouse.wheel(0, -500);
     await expect.poll(async () => (await demo.metrics()).gap).toBeGreaterThan(80);
     const position = (await demo.metrics()).top;
-    await page.getByRole('tab', { name: /Needs attention/ }).click();
+    await page.getByRole('tab', { name: /Unread/ }).click();
     await expect(page.locator('#conversation')).toBeHidden();
     await expect(page.locator('#workspace-empty')).toBeHidden();
     await expect(page.locator('.session-view:not([hidden])')).toHaveCount(0);
     await expect(page.locator('#mode-badge')).toBeEmpty();
     await expect(page.locator('#restart-session')).toBeDisabled();
     await expect(page.locator('#delete-session')).toBeDisabled();
-    await page.getByRole('tab', { name: 'All', exact: true }).click();
+    await page.getByRole('tab', { name: /^All \(\d+\)$/ }).click();
     await expect(page.locator(`#${panel}`)).toBeVisible();
     await expect(page.locator(visible('prompt'))).toHaveValue('Preserved draft');
     await expect(tool).toHaveAttribute('open', '');
@@ -141,18 +168,18 @@ test('attention hides the entire conversation and restores mounted draft, disclo
   } finally { await demo.close(); }
 });
 
-test('empty Needs attention shows working status with a reduced-motion-aware pulse', async ({ page }) => {
+test('empty Unread shows working status with a reduced-motion-aware pulse', async ({ page }) => {
   const demo = await demoFixture(page);
   try {
     await page.locator(visible('prompt')).fill('Work while this session is hidden');
     await page.locator(visible('prompt')).press('Enter');
     await expect(page.locator(sessions)).toHaveAttribute('aria-label', /Working/);
-    await page.getByRole('tab', { name: /Needs attention/ }).click();
+    await page.getByRole('tab', { name: /Unread/ }).click();
     await expect(page.locator('#conversation')).toBeHidden();
     await expect(page.locator('#workspace-empty')).toBeHidden();
     await expect(page.locator('#sidebar-empty')).toBeVisible();
     await expect(page.locator('#sidebar-empty')).toHaveText('1 session working…');
-    await expect(page.locator('#sidebar-attention-count')).toHaveText('0');
+    await expect(page.locator('#sidebar-unread-count')).toHaveText('0');
     const dots = page.locator('#sidebar-empty-dots');
     await expect(dots).toBeVisible();
     await expect(dots).toHaveCSS('animation-name', 'sidebar-working-pulse');
@@ -161,21 +188,21 @@ test('empty Needs attention shows working status with a reduced-motion-aware pul
     await expect(page.locator('#sidebar-empty')).toHaveText('1 session working…');
     await expect(page.locator(sessions)).toHaveAttribute('aria-label', /Unread/);
     await expect(page.locator('#conversation')).toBeHidden();
-    await expect(page.locator('#sidebar-attention-count')).toHaveText('1');
+    await expect(page.locator('#sidebar-unread-count')).toHaveText('1');
     await page.locator(sessions).click();
     await expect(page.locator('#conversation')).toBeVisible();
-    await expect(page.locator('#sidebar-attention-count')).toHaveText('0');
-    await page.getByRole('tab', { name: 'All', exact: true }).click();
+    await expect(page.locator('#sidebar-unread-count')).toHaveText('0');
+    await page.getByRole('tab', { name: /^All \(\d+\)$/ }).click();
     await newOfflineDemo(page); // Leaving the resolved row removes it from the inbox.
-    await page.getByRole('tab', { name: /Needs attention/ }).click();
-    await expect(page.locator('#sidebar-empty')).toHaveText('No sessions need attention.');
+    await page.getByRole('tab', { name: /Unread/ }).click();
+    await expect(page.locator('#sidebar-empty')).toHaveText('No unread sessions.');
     await expect(page.locator('#conversation')).toBeHidden();
     await expect(dots).toBeHidden();
     expect(demo.children.size).toBe(2); expect(demo.errors).toEqual([]);
   } finally { await demo.close(); }
 });
 
-test('Needs attention updates in arrival order and retains a read selected session without changing open sessions', async ({ page }) => {
+test('Unread updates in arrival order and retains a read selected session without changing open sessions', async ({ page }) => {
   const demo = await demoFixture(page);
   try {
     const first = (await page.locator(sessions).getAttribute('id'))!;
@@ -185,41 +212,41 @@ test('Needs attention updates in arrival order and retains a read selected sessi
     await page.locator(visible('prompt')).press('Enter');
     await newOfflineDemo(page);
     const third = (await page.locator(`${sessions}[aria-current="true"]`).getAttribute('id'))!;
-    await page.getByRole('tab', { name: /Needs attention/ }).click();
+    await page.getByRole('tab', { name: /Unread/ }).click();
     await expect(page.locator(`#${second}`)).toHaveAttribute('aria-label', /Unread/);
     const visibleRows = page.locator('#open-sessions .open-session:not([hidden]) .session-row');
     await expect(visibleRows).toHaveCount(1);
-    await expect(page.locator('#sidebar-attention-count')).toHaveText('1');
+    await expect(page.locator('#sidebar-unread-count')).toHaveText('1');
     await page.keyboard.press('Meta+Shift+P');
     await page.locator('#palette-input').fill('switch session'); await page.locator('#palette-input').press('Enter');
     await expect(page.locator('#palette-list [role=option]')).toHaveCount(3);
     await page.locator('#palette-list [role=option]').nth(0).click();
-    await expect(page.getByRole('tab', { name: 'All', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: /^All \(\d+\)$/ })).toHaveAttribute('aria-selected', 'true');
     await page.locator(visible('prompt')).fill('First session finishes later');
     await page.locator(visible('prompt')).press('Enter');
     await page.keyboard.press('Meta+Shift+['); // First -> third, independent of filtering.
     await expect(page.locator(`#${third}`)).toHaveAttribute('aria-current', 'true');
-    await page.getByRole('tab', { name: /Needs attention/ }).click();
+    await page.getByRole('tab', { name: /Unread/ }).click();
     await expect(page.locator('#conversation')).toBeHidden();
     await expect(page.locator(`#${first}`)).toHaveAttribute('aria-label', /Unread/);
     await expect(visibleRows).toHaveCount(2);
     expect(await visibleRows.evaluateAll(nodes => nodes.map(node => node.id))).toEqual([second, first]);
     await page.locator(`#${second}`).click();
-    await expect(page.locator('#sidebar-attention-count')).toHaveText('1');
+    await expect(page.locator('#sidebar-unread-count')).toHaveText('1');
     await expect(page.locator(`#${second}`)).toBeVisible();
     expect(await visibleRows.evaluateAll(nodes => nodes.map(node => node.id))).toEqual([second, first]);
     await page.locator(`#${first}`).click();
     await expect(page.locator(`#${second}`)).toBeHidden();
-    await expect(page.locator('#sidebar-attention-count')).toHaveText('0');
+    await expect(page.locator('#sidebar-unread-count')).toHaveText('0');
     await expect(page.locator(`#${first}`)).toBeVisible();
     await page.keyboard.press('Meta+Shift+[');
-    await expect(page.getByRole('tab', { name: 'All', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: /^All \(\d+\)$/ })).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator(`#${third}`)).toHaveAttribute('aria-current', 'true');
-    await page.getByRole('tab', { name: /Needs attention/ }).click();
+    await page.getByRole('tab', { name: /Unread/ }).click();
     await expect(visibleRows).toHaveCount(0);
-    await expect(page.locator('#sidebar-empty')).toHaveText('No sessions need attention.');
+    await expect(page.locator('#sidebar-empty')).toHaveText('No unread sessions.');
     await expect(page.locator('#conversation')).toBeHidden();
-    await page.getByRole('tab', { name: 'All', exact: true }).click();
+    await page.getByRole('tab', { name: /^All \(\d+\)$/ }).click();
     expect(await visibleRows.evaluateAll(nodes => nodes.map(node => node.id))).toEqual([first, third, second]);
     expect(demo.children.size).toBe(3);
     expect(demo.calls.filter(c => c.command === 'stop_pi')).toHaveLength(1);

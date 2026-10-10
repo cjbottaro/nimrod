@@ -6,7 +6,7 @@ Nimrod sends native desktop alerts when a background session:
 - **Needs input:** an extension input, editor, selection, or confirmation dialog is ready.
 - **Fails:** its process/transport disconnects unexpectedly, or its run settles with an assistant error.
 
-Other sessions count as background even while you’re using Nimrod. The remembered session also counts as background when Needs attention hides its conversation. The selected session notifies when its project window is unfocused or Settings covers its conversation. Viewing the selected session in a focused project window suppresses alerts. Alerts do not focus/select another session, resume an agent, or submit prompts. First-time macOS authorization can display an OS permission dialog.
+Other sessions count as background even while you’re using Nimrod. The remembered session also counts as background when Unread hides its conversation. The selected session notifies when its project window is unfocused or Settings covers its conversation. Viewing the selected session in a focused project window suppresses alerts. Alerts do not focus/select another session, resume an agent, or submit prompts. First-time macOS authorization can display an OS permission dialog.
 
 Alerts are **on by default**. Change **Settings → Notifications → Background session alerts** to turn them off across windows. On macOS, Nimrod explicitly requests foreground presentation for eligible alerts—so session A can show a banner while you’re viewing session B. **System Settings → Notifications → Nimrod** must allow **Banners** or **Alerts**; Focus/Do Not Disturb and other OS settings still apply. Suppressed alerts are not replayed later.
 

@@ -14,12 +14,13 @@
   <aside id="session-sidebar" aria-label="Open sessions" hidden>
     <button id="sidebar-new" type="button">+ New session</button>
     <div id="sidebar-views" role="tablist" aria-label="Session sidebar view">
-      <button id="sidebar-all" type="button" role="tab" aria-selected="true" aria-controls="sidebar-session-panel">All</button>
-      <button id="sidebar-attention" type="button" role="tab" aria-selected="false" aria-controls="sidebar-session-panel" tabindex="-1">Needs attention <span id="sidebar-attention-count">0</span></button>
+      <button id="sidebar-all" type="button" role="tab" aria-selected="true" aria-controls="sidebar-session-panel">All <span class="sidebar-view-count">(<span id="sidebar-all-count">0</span>)</span></button>
+      <button id="sidebar-unread" type="button" role="tab" aria-selected="false" aria-controls="sidebar-session-panel" tabindex="-1">Unread <span class="sidebar-view-count">(<span id="sidebar-unread-count">0</span>)</span></button>
+      <button id="sidebar-working" type="button" role="tab" aria-selected="false" aria-controls="sidebar-session-panel" tabindex="-1">Working <span class="sidebar-view-count">(<span id="sidebar-working-count">0</span>)</span></button>
     </div>
     <div id="sidebar-session-panel" role="tabpanel" aria-labelledby="sidebar-all">
       <div id="open-sessions" aria-label="Open sessions"></div>
-      <p id="sidebar-empty" role="status" aria-atomic="true" hidden><span id="sidebar-empty-text">No sessions need attention.</span><span id="sidebar-empty-dots" aria-hidden="true" hidden></span></p>
+      <p id="sidebar-empty" role="status" aria-atomic="true" hidden><span id="sidebar-empty-text">No unread sessions.</span><span id="sidebar-empty-dots" aria-hidden="true" hidden></span></p>
     </div>
   </aside>
   <div id="sidebar-resizer" role="separator" aria-label="Resize session sidebar" aria-orientation="vertical" aria-controls="session-sidebar" tabindex="0" hidden></div>

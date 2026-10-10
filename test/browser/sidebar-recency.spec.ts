@@ -73,8 +73,8 @@ test('All reorders only on accepted sends, preserves its visible anchor at zoom 
     await page.locator(visible('prompt')).fill('Now actually use this session'); await page.locator(visible('prompt')).press('Enter');
     await expect(page.locator('.session-row').first()).toHaveAttribute('id', snapshot.id);
     expect(await sidebar.evaluate(node => node.scrollTop)).toBeGreaterThan(100);
-    await page.getByRole('tab', { name: /Needs attention/ }).click();
-    await page.getByRole('tab', { name: 'All', exact: true }).click();
+    await page.getByRole('tab', { name: /Unread/ }).click();
+    await page.getByRole('tab', { name: /^All \(\d+\)$/ }).click();
     const selectedBounds = await page.locator(`#${snapshot.id}`).boundingBox(), bounds = await sidebar.boundingBox();
     expect(selectedBounds!.y).toBeGreaterThanOrEqual(bounds!.y - 2);
     expect(selectedBounds!.y + selectedBounds!.height).toBeLessThanOrEqual(bounds!.y + bounds!.height + 2);
