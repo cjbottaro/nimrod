@@ -19,7 +19,7 @@ function fixture() {
   const prompt = win.document.querySelector<HTMLTextAreaElement>('#prompt')!;
   const draft = (text: string) => { prompt.value = text; prompt.dispatchEvent(new win.Event('input')); };
   const send = () => prompt.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-  return { dom, win, sent, receive, snapshot, prompt, draft, send };
+  return { dom, win, sent, receive, snapshot, prompt, draft, send, flush };
 }
 
 test('bundled native bridge preserves drafts through pending/unknown/late acknowledgements', () => {
@@ -238,4 +238,84 @@ test('pop-out rendering preserves raw code without interpreting Markdown or HTML
     assert.equal(dom.window.document.querySelectorAll('.code-copy').length, 1);
     assert.ok(dom.window.document.querySelector('code span'));
   } finally { dom.window.close(); }
+});
+
+test('steering appears before acknowledgement, remains after live output, and reconciles in place', () => {
+  const f = fixture();
+  try {
+    const assistant = { key: 'assistant', role: 'assistant', content: 'Working' };
+    f.snapshot({ busy: true, messages: [assistant] });
+    f.prompt.focus();
+    f.draft('Please **change direction**'); f.send(); f.flush();
+    const submission = f.sent.find(m => m.type === 'prompt')!;
+    const pending = f.win.document.querySelector<HTMLElement>('#messages .user')!;
+    assert.match(pending.textContent!, /Sending…/);
+    assert.equal(pending.querySelector('strong')?.textContent, 'change direction');
+    assert.equal(f.prompt.value, 'Please **change direction**');
+    assert.equal(f.win.document.activeElement, f.prompt);
+    f.snapshot({ busy: true, messages: [assistant], queue: { authoritative: true, steering: [submission.text], followUp: ['Later'] } });
+    assert.equal(f.win.document.querySelectorAll('#messages .user').length, 1);
+    assert.doesNotMatch(f.win.document.querySelector('#queue-activity')!.textContent!, /change direction/);
+    assert.match(f.win.document.querySelector('#queue-activity')!.textContent!, /1 pending.*Later/);
+    f.draft('new draft');
+    f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' }); f.flush();
+    assert.equal(f.prompt.value, 'new draft');
+    assert.match(pending.textContent!, /Pending steering/);
+    f.snapshot({ busy: true, messages: [assistant, { key: 'tool', role: 'tool', toolCallId: 't', toolName: 'bash', toolStatus: 'running' }], queue: { authoritative: true, steering: [], followUp: [] } });
+    assert.equal(f.win.document.querySelector('#messages')!.lastElementChild, pending);
+    f.snapshot({ busy: true, messages: [assistant, { key: 'user', role: 'user', content: [{ type: 'text', text: submission.text }] }] });
+    assert.equal(f.win.document.querySelector('#messages .user'), pending);
+    assert.equal(pending.querySelector('.steering-status'), null);
+    assert.equal(pending.getAttribute('aria-label'), 'User message');
+    assert.equal(f.win.document.querySelectorAll('#messages .user').length, 1);
+    assert.equal(f.win.document.activeElement, f.prompt);
+  } finally { f.dom.window.close(); }
+});
+
+test('coalesced queue removal and clear_queue recovery do not recreate pending steering', () => {
+  const f = fixture();
+  try {
+    f.snapshot({ busy: true, messages: [] });
+    f.draft('stop this steer'); f.send();
+    const submission = f.sent.find(m => m.type === 'prompt')!;
+    f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' });
+    f.receive({ type: 'snapshot', state: { busy: true, queue: { authoritative: true, steering: ['stop this steer'], followUp: [] } } });
+    f.receive({ type: 'snapshot', state: { busy: true, queue: { authoritative: true, steering: [], followUp: [] } } });
+    f.receive({ type: 'queueRecovery', steering: ['stop this steer'], followUp: [] }); f.flush();
+    assert.equal(f.win.document.querySelectorAll('#messages .user').length, 0);
+    assert.match(f.win.document.querySelector('#queue-activity')!.textContent!, /Recovered steering.*stop this steer.*Restore/);
+    f.win.document.querySelector<HTMLButtonElement>('[data-recovery-id]')!.click();
+    assert.equal(f.prompt.value, 'stop this steer');
+    assert.equal(f.sent.filter(m => m.type === 'prompt').length, 1);
+  } finally { f.dom.window.close(); }
+});
+
+for (const outcome of ['rejected', 'unknown'] as const) test(`steering ${outcome} stays visibly marked without clearing or replaying the draft`, () => {
+  const f = fixture();
+  try {
+    f.snapshot({ busy: true, messages: [] });
+    f.draft('uncertain steer'); f.send();
+    const submission = f.sent.find(m => m.type === 'prompt')!;
+    f.receive({ type: 'submissionReceipt', id: submission.id, outcome }); f.flush();
+    assert.match(f.win.document.querySelector('#messages .user')!.textContent!, outcome === 'unknown' ? /Acceptance unknown/ : /Not sent/);
+    assert.equal(f.prompt.value, 'uncertain steer');
+    assert.equal(f.sent.filter(m => m.type === 'prompt').length, 1);
+    f.receive({ type: 'sessionReset' }); f.flush();
+    assert.equal(f.win.document.querySelectorAll('#messages .user').length, 0);
+  } finally { f.dom.window.close(); }
+});
+
+test('follow-up delivery and slash controls do not acquire optimistic steering turns', () => {
+  const f = fixture();
+  try {
+    f.snapshot({ busy: true, messages: [] });
+    f.draft('Later');
+    f.prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true, cancelable: true })); f.flush();
+    const submission = f.sent.find(m => m.type === 'prompt')!;
+    assert.equal(submission.mode, 'followUp');
+    assert.equal(f.win.document.querySelectorAll('#messages .user').length, 0);
+    f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' });
+    f.draft('/name renamed'); f.send(); f.flush();
+    assert.equal(f.win.document.querySelectorAll('#messages .user').length, 0);
+  } finally { f.dom.window.close(); }
 });

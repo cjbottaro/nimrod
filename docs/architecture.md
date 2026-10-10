@@ -143,6 +143,14 @@ Native desktop alerts share product policy across platforms: live settled comple
 - Extension UI is only as capable as Pi RPC: status/widget text and basic dialogs work, TUI component factories do not. Rich subagent details are not inferred from status counts.
 - Unsupported GUI commands are removed from suggestions and rejected locally. Other discovered commands keep Pi's own dispatch semantics.
 
+### Steering messages
+
+While the main agent is working, ordinary Enter-to-steer messages appear immediately as user turns at the bottom of the transcript, after the live assistant/tool output. **Sending…** changes to **Pending steering** on Pi acknowledgement; it disappears when Pi emits the actual user message. The same turn is retained without a duplicate, and normal bottom-follow/history-reading behavior is preserved. Visible does not mean the agent has read the steer yet.
+
+The status area shows a compact steering count, not the steering text. Explicit follow-up queues and **Restore** controls for recovered messages remain there. Stop removes cleared steering previews and retains Pi's returned text for explicit restoration. Rejected/uncertain messages remain marked **Not sent** / **Acceptance unknown**; a disconnected accepted steer shows **Delivery unconfirmed**. None are automatically retried, and only Pi acknowledgement clears an unchanged composer draft.
+
+Slash commands keep their existing control/expansion behavior rather than receiving optimistic user turns; any steering text Pi actually queues still appears in the transcript. Pending-turn presentation is live-session-only, not saved conversation history. Reload/restart retains the existing composer recovery behavior and never replays steering.
+
 ## Rendering contract retained from Pi GUI
 
 - Tool generation, execution output, final result, and result processing are separate states.

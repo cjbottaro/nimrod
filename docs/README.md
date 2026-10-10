@@ -5,6 +5,7 @@
 - [Card plugins](card-plugins.md) — **planned** customizable cards, with built-in renderers using the same API as third-party plugins.
 
 - [Transcript cards](architecture.md#rendering-contract-retained-from-pi-gui) — consistent tool summaries, invocation identity and disclosure behavior.
+- [Steering messages](architecture.md#steering-messages) — immediate pending user turns, acknowledgement, consumption and recovery.
 
 - [Notifications](notifications.md) — background-session desktop alerts, click-to-session/bottom navigation, preferences and native limitations.
 

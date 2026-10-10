@@ -54,7 +54,7 @@ See [project/session implementation](../../../docs/workspace-sessions.md) for li
 | **Settings page** | Full-window preferences surface opened by the gear or ⌘/Ctrl comma; Appearance, Notifications, Keybindings and Runtime sections, with Back/Escape navigation. Covers the still-mounted project using native dialog modality. | `#settings-page` |
 | **Transcript** | Conversation history: user/assistant entries and their content. | `#messages` |
 | **Transcript pane** | The independently scrolling container around the transcript. | `#transcript-viewport` |
-| **Status area** | Agent activity, model/thinking controls, usage metrics, extension statuses, and queued/recoverable messages. | `#activity` |
+| **Status area** | Agent activity, model/thinking controls, usage metrics, extension statuses, steering counts, follow-up queues and recoverable messages. | `#activity` |
 | **Composer** | Message-writing surface, including the prompt field, Send/Stop button, and keyboard hints. | `#composer` |
 | **Interaction area** | Status area and composer together, including submission notices between them. | `#composer-area` |
 
@@ -84,7 +84,8 @@ A **card** does not imply a visible rectangular border. A **disclosure** is an e
 - **Activity indicator** — a spinner or dot, with accompanying status text where present. Specify main-agent, subagent, tool, or reasoning when ambiguous.
 - **Model picker / thinking-level picker** — searchable command-palette selection pages, opened through **Select model…** / **Select thinking level…** or the status-area model/thinking buttons. “Effort” is a search alias for thinking level. Current values are marked; Escape cancels and closes the whole command interaction, while the explicit Back arrow returns to commands. These use the same selection surface as Resume session, not the extension select dialog.
 - **Usage metrics** — harness-reported cost and context estimates in the status area.
-- **Queue entries** — authoritative queued/steering messages. **Recovered messages** are text retained for explicit restoration, not messages automatically resubmitted.
+- **Pending steering turn** — a user turn immediately visible in the transcript, after live output, labeled **Sending…** until acknowledgement and **Pending steering** until Pi emits its actual user message. Visibility does not imply consumption. Rejected/uncertain/interrupted delivery remains explicitly labeled; the status area shows only an authoritative steering count.
+- **Queue entries** — authoritative queued/steering messages; steering text appears in the transcript, follow-up text in the status area. **Recovered messages** are text retained in the status area for explicit restoration, not messages automatically resubmitted.
 - **Prompt field** — the editable text input inside the composer (`#prompt`).
 - **Send/Stop button** — the composer's primary action (`#send`).
 - **Keyboard hints** — the shortcut text beneath the prompt field.
