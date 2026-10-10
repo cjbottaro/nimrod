@@ -1,10 +1,15 @@
+#[cfg(target_os = "linux")]
+#[path = "linux_notifications.rs"]
+mod linux;
 #[cfg(target_os = "macos")]
 #[path = "macos_notifications.rs"]
 mod macos;
 
 use serde::{Deserialize, Serialize};
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+use tauri::Emitter;
 use tauri::Manager;
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 use tauri_plugin_notification::NotificationExt;
 
 use crate::{ExitState, preferences::Preferences, workspace_windows::WorkspaceWindows};
@@ -22,6 +27,87 @@ pub enum AttentionKind {
 pub enum NotificationDispatch {
     Submitted,
     Suppressed,
+}
+
+/// Runtime identities only: no names, paths, prompts or automatic history resume.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct NotificationTarget {
+    session: String,
+    token: String,
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux", test))]
+#[derive(Deserialize, Serialize)]
+struct ClickRoute {
+    event: String,
+    process: String,
+    window: String,
+    target: NotificationTarget,
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux", test))]
+fn process_identity() -> &'static str {
+    static ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    ID.get_or_init(|| uuid::Uuid::new_v4().to_string())
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux", test))]
+fn click_identifier(window: &str, target: NotificationTarget) -> String {
+    serde_json::to_string(&ClickRoute {
+        event: uuid::Uuid::new_v4().to_string(),
+        process: process_identity().into(),
+        window: window.into(),
+        target,
+    })
+    .expect("notification routing consists only of strings")
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux", test))]
+fn click_route(identifier: &str) -> Option<ClickRoute> {
+    let route: ClickRoute = serde_json::from_str(identifier).ok()?;
+    (route.process == process_identity()).then_some(route)
+}
+
+/// Do not focus here: the owning frontend must reject closed/restarted targets first.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn clicked(app: &tauri::AppHandle, identifier: &str) {
+    let Some(route) = click_route(identifier) else {
+        return;
+    };
+    if app
+        .state::<ExitState>()
+        .closing
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        return;
+    }
+    if let Some(window) = app.get_webview_window(&route.window) {
+        let _ = app.emit_to(
+            tauri::EventTarget::webview_window(window.label()),
+            "nimrod-notification-click",
+            route.target,
+        );
+    }
+}
+
+/// Called only after frontend runtime-identity validation; never starts a child.
+#[tauri::command]
+pub async fn focus_notification_window(
+    app: tauri::AppHandle,
+    window: tauri::Window,
+) -> Result<(), String> {
+    project(&app, &window)?;
+    if app
+        .state::<ExitState>()
+        .closing
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        return Ok(());
+    }
+    if let Some(window) = app.get_webview_window(window.label()) {
+        crate::workspace_windows::focus_window(&app, &window)?;
+    }
+    Ok(())
 }
 
 fn label(text: &str) -> String {
@@ -139,22 +225,24 @@ async fn dispatch(
     selected: bool,
     title: String,
     body: String,
+    target: Option<NotificationTarget>,
 ) -> Result<NotificationDispatch, String> {
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    let identifier = target.map(|target| click_identifier(window.label(), target));
     #[cfg(target_os = "macos")]
     {
-        macos::send(app, window, selected, title, body).await
+        macos::send(app, window, selected, title, body, identifier).await
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    {
+        linux::send(app, window, selected, title, body, identifier).await
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
         if suppressed(app, &window, selected)? {
             return Ok(NotificationDispatch::Suppressed);
         }
-        // Desktop Linux services may interpret body markup; keep response text literal.
-        #[cfg(target_os = "linux")]
-        let body = body
-            .replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;");
+        let _ = target; // Windows click routing remains unsupported.
         app.notification()
             .builder()
             .title(title)
@@ -180,11 +268,12 @@ pub async fn test_notification(
         false,
         title(&project, "Notification test"),
         "This is a test notification from Nimrod.".into(),
+        None,
     )
     .await
 }
 
-/// Project-scoped alerts, with assistant-text previews for completion only. No actions/launches.
+/// Project-scoped alerts, with response previews and exact runtime click targets.
 #[tauri::command]
 pub async fn notify_session(
     app: tauri::AppHandle,
@@ -193,6 +282,7 @@ pub async fn notify_session(
     session: String,
     selected: bool,
     preview: Option<String>,
+    target: NotificationTarget,
 ) -> Result<NotificationDispatch, String> {
     let project = project(&app, &window)?;
     if suppressed(&app, &window, selected)? {
@@ -205,6 +295,7 @@ pub async fn notify_session(
         selected,
         title(&project, &session),
         body(kind, preview.as_deref()),
+        Some(target),
     )
     .await
 }
@@ -212,6 +303,23 @@ pub async fn notify_session(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn click_routes_are_exact_unique_and_process_local() {
+        let target = NotificationTarget {
+            session: "runtime-session".into(),
+            token: "launch-token".into(),
+        };
+        let id = click_identifier("project-window", target.clone());
+        let route = click_route(&id).unwrap();
+        assert_eq!(route.window, "project-window");
+        assert_eq!(route.target, target);
+        assert_ne!(id, click_identifier("project-window", target));
+        assert!(click_route("test-notification-with-no-target").is_none());
+        let mut retired: serde_json::Value = serde_json::from_str(&id).unwrap();
+        retired["process"] = "previous-process".into();
+        assert!(click_route(&retired.to_string()).is_none());
+    }
 
     #[test]
     fn bounded_labels_and_fixed_bodies() {

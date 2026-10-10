@@ -219,5 +219,5 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     if (dialog.open) { event.preventDefault(); return; }
     if (open()) event.preventDefault();
   }, { signal });
-  return { open, sessions: () => sessions('resume'), openSessions: () => sessions('open'), namedSession, startSelection, dispose: () => { cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
+  return { open, close: () => { afterClose = undefined; cancelChoice(); generation++; if (dialog.open) dialog.close(); }, sessions: () => sessions('resume'), openSessions: () => sessions('open'), namedSession, startSelection, dispose: () => { cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
 }

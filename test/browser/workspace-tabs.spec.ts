@@ -64,6 +64,40 @@ test('sidebar sessions keep independent drafts and a background agent live witho
   } finally { await demo.close(); }
 });
 
+test('notification navigation overrides reading position but ordinary switching preserves it', async ({ page }) => {
+  const demo = await demoFixture(page);
+  try {
+    await demo.turn(1); await demo.turn(2);
+    const firstPanel = await page.locator('.session-view').getAttribute('id');
+    const firstRow = page.locator(`#open-sessions .session-row[aria-controls="${firstPanel}"]`);
+    const pane = page.locator(visible('transcript-viewport'));
+    await pane.hover(); await page.mouse.wheel(0, -10000);
+    await expect.poll(async () => (await demo.metrics()).gap).toBeGreaterThan(100);
+    const reading = (await demo.metrics()).top;
+    await newOfflineDemo(page);
+    await firstRow.click();
+    await expect.poll(async () => Math.abs((await demo.metrics()).top - reading)).toBeLessThanOrEqual(2);
+    // Complete in the background so the mocked notification carries the real target.
+    await page.locator(visible('prompt')).fill('Notification target response');
+    await page.locator(visible('prompt')).press('Enter');
+    await page.locator(`#open-sessions .session-row:not([aria-controls="${firstPanel}"])`).click();
+    await expect.poll(() => demo.calls.filter(c => c.command === 'notify_session').length).toBe(1);
+    const target = demo.calls.find(c => c.command === 'notify_session')!.args.target as { session: string; token: string };
+    await page.locator('#sidebar-working').click();
+    await expect(page.locator('#conversation')).toBeHidden();
+    await page.locator('#open-settings').click();
+    const starts = demo.calls.filter(c => c.command === 'start_pi').length;
+    await demo.notificationClick(target);
+    await expect(page.locator('#settings-page')).not.toBeVisible();
+    await expect(page.locator(`#${firstPanel}`)).toBeVisible();
+    await expect(page.locator('#sidebar-all')).toHaveAttribute('aria-selected', 'true');
+    await expect.poll(async () => (await demo.metrics()).gap).toBeLessThanOrEqual(2);
+    expect(demo.calls.filter(c => c.command === 'focus_notification_window')).toHaveLength(1);
+    expect(demo.calls.filter(c => c.command === 'start_pi')).toHaveLength(starts);
+    expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
 test('counted sidebar filters show working sessions and retain the selected response after settlement', async ({ page }) => {
   const demo = await demoFixture(page);
   try {

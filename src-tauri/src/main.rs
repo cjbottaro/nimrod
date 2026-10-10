@@ -451,6 +451,7 @@ fn main() {
             session_deletion::recover_deletion_session,
             notifications::prepare_notifications,
             notifications::notify_session,
+            notifications::focus_notification_window,
             notifications::test_notification,
             notifications::notification_diagnostics,
             popouts::open_code_popout,

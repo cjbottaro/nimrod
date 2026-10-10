@@ -6,7 +6,7 @@
 
 - [Transcript cards](architecture.md#rendering-contract-retained-from-pi-gui) — consistent tool summaries, invocation identity and disclosure behavior.
 
-- [Notifications](notifications.md) — background-session desktop alerts, preferences and native limitations.
+- [Notifications](notifications.md) — background-session desktop alerts, click-to-session/bottom navigation, preferences and native limitations.
 
 - [Pop-outs](pop-outs.md) — keep code/Markdown visible; session visibility and persistence.
 - [Projects and sessions](workspace-sessions.md) — native project menu and session management: opening, closing, [terminal launches and macOS window cycling](workspace-sessions.md#terminal-launches), [sidebar width](workspace-sessions.md#sidebar-width), [sidebar views, recency/time labels and blank attention surfaces](workspace-sessions.md#sidebar-views), [reload/restart](workspace-sessions.md#reload-restart-session), [delete session tree](workspace-sessions.md#delete-session-tree), saved sessions and drafts.

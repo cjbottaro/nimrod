@@ -134,7 +134,10 @@ pub fn route_workspace(
     })
 }
 
-fn focus_window(app: &tauri::AppHandle, window: &tauri::WebviewWindow) -> Result<(), String> {
+pub(crate) fn focus_window(
+    app: &tauri::AppHandle,
+    window: &tauri::WebviewWindow,
+) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     app.show().map_err(|e| e.to_string())?;
     #[cfg(not(target_os = "macos"))]

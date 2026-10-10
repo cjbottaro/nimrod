@@ -47,6 +47,34 @@ function fixture() {
   };
 }
 
+test("explicit bottom navigation overrides interruption, settles layout and remains cancellable", () => {
+  const f = fixture();
+  f.move(120); f.scroll.cancel();
+  assert.equal(f.scroll.capture(), false);
+  f.scroll.scrollToBottom();
+  assert.equal(f.viewport.scrollTop, 400);
+  f.height(1600); f.frame();
+  assert.equal(f.viewport.scrollTop, 1000);
+  assert.equal(f.scroll.capture(), true);
+  f.scroll.scrollToBottom();
+  f.viewport.dispatchEvent(new f.win.WheelEvent("wheel", { deltaY: -100 }));
+  f.move(200); f.frame();
+  assert.equal(f.viewport.scrollTop, 200);
+  assert.equal(f.scroll.capture(), false);
+  f.dispose();
+});
+
+test("explicit bottom navigation handles hidden panes and responses smaller than the viewport", () => {
+  const f = fixture();
+  f.scroll.cancel(); f.scroll.setActive(false);
+  f.scroll.scrollToBottom();
+  f.height(1500); f.scroll.setActive(true); f.frame();
+  assert.equal(f.viewport.scrollTop, 900);
+  f.height(600); f.scroll.scrollToBottom(); f.frame();
+  assert.equal(f.viewport.scrollTop, 0);
+  f.dispose();
+});
+
 test("follow intent survives layout growth and multiple requests coalesce", () => {
   const f = fixture();
   f.scroll.request(f.scroll.capture());

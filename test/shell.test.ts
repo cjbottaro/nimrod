@@ -28,6 +28,7 @@ interface ShellOptions {
   focused?: () => boolean;
   notificationError?: string;
   notificationDiagnosticsError?: string;
+  notificationFocusGate?: Promise<void>;
   startError?: string;
   stopGate?: Promise<void>;
   stopError?: () => string | undefined;
@@ -79,6 +80,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   Object.assign(preferences.value.state, options.appState);
   const callbacks = new Map<number, (event: unknown) => void>();
   let deletionEvent: ((event: DeletionEvent, target?: string) => void) | undefined;
+  let notificationClick: ((event: unknown, target?: string) => void) | undefined;
   Object.assign(win, { TextEncoder, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener() {} }, __TAURI_INTERNALS__: {
     metadata: { currentWindow: { label: options.windowLabel || 'main' }, currentWebview: { label: options.windowLabel || 'main' } },
     transformCallback: (callback: (event: unknown) => void) => { const id = callbacks.size + 1; callbacks.set(id, callback); return id; }, unregisterCallback: () => {},
@@ -91,12 +93,17 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
           // Tauri Any listeners receive even events emitted to a different label.
           if (!target || listenerTarget.kind === 'Any' || listenerTarget.label === target) callbacks.get(Number(args.handler))?.({ payload });
         };
+        if (args.event === 'nimrod-notification-click') notificationClick = (payload, target) => {
+          const listenerTarget = args.target as { kind: string; label?: string };
+          if (!target || listenerTarget.kind === 'Any' || listenerTarget.label === target) callbacks.get(Number(args.handler))?.({ payload });
+        };
         return 1;
       }
       if (command === 'plugin:event|unlisten') return 1;
       if (command.startsWith('preferences_')) return preferences.invoke(command, args);
       if (command === 'plugin:window|is_focused') return options.focused?.() ?? true;
       if (command === 'prepare_notifications') return;
+      if (command === 'focus_notification_window') { await options.notificationFocusGate; return; }
       if (command === 'notification_diagnostics') {
         if (options.notificationDiagnosticsError) throw new Error(options.notificationDiagnosticsError);
         return 'macOS: authorized; desktop alerts: enabled; style: temporary; Notification Center: enabled; app active: yes; foreground handler calls: 1 (requests Banner + List).';
@@ -173,6 +180,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     saved: () => JSON.parse(win.localStorage.getItem(`nimrod.sessions.v1:${workspace}`) || win.localStorage.getItem('nimrod.sessions.v1') || '{}'),
     sessions,
     deletionEvent: (event: DeletionEvent, target?: string) => deletionEvent?.(event, target),
+    notificationClick: (event: unknown, target?: string) => notificationClick?.(event, target),
     captureChannel: () => channel,
     emit: (event: JsonRecord) => channel.onmessage({ kind: 'rpc', value: event }),
     disconnect: () => channel.onmessage({ kind: 'disconnected', message: 'fixture closed' }),
@@ -1064,7 +1072,7 @@ test('notifications target background sessions, suppress selected foreground run
     assert.match(f.element('notification-status').textContent!, /Last completed alert: submitted to the OS/);
     assert.equal(f.calls.filter(c => c.command === 'prepare_notifications').length, 1);
     assert.equal(notices.length, 1);
-    assert.deepEqual({ ...notices[0].args }, { kind: 'completed', session: 'Session', selected: false, preview: 'Done. Tests passed.' });
+    assert.deepEqual(structuredClone(notices[0].args), { kind: 'completed', session: 'Session', target: { session: f.rows()[0].id.replace('session-', ''), token: [...f.sessions.keys()][0] }, selected: false, preview: 'Done. Tests passed.' });
     focused = false;
     f.emit({ type: 'agent_start' }); f.emit({ type: 'agent_settled' }); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'notify_session').length, 2);
@@ -1075,6 +1083,109 @@ test('notifications target background sessions, suppress selected foreground run
     f.win.document.querySelectorAll<HTMLButtonElement>('.session-close')[1].click(); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'notify_session').length, count);
   } finally { f.dom.window.close(); }
+});
+
+test('notification clicks select exact open sessions, reveal filtered rows, dismiss Settings and jump to bottom without launches', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', windowLabel: 'own-project' });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const first = f.captureChannel(), firstRow = f.rows()[0];
+    const root = f.win.document.getElementById(firstRow.getAttribute('aria-controls')!)!;
+    const pane = root.querySelector<HTMLElement>('[data-pi-id="transcript-viewport"]')!;
+    Object.defineProperties(pane, { scrollHeight: { get: () => 2400 }, clientHeight: { get: () => 600 } });
+    pane.scrollTop = 200; pane.dispatchEvent(new f.win.WheelEvent('wheel', { deltaY: -50 }));
+    const prompt = root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')!;
+    prompt.value = 'Unsent first draft'; prompt.dispatchEvent(new f.win.Event('input'));
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    first.onmessage({ kind: 'rpc', value: { type: 'agent_start' } });
+    first.onmessage({ kind: 'rpc', value: { type: 'agent_settled' } }); await f.tick();
+    const target = f.calls.find(c => c.command === 'notify_session')!.args.target;
+    const before = f.calls.filter(c => c.command === 'start_pi' || c.command === 'stop_pi' || c.command === 'write_pi').length;
+    f.element<HTMLButtonElement>('sidebar-working').click();
+    assert.equal(f.element('conversation').hidden, true);
+    f.openSettings();
+    // Other windows and retired launch tokens must not focus or navigate.
+    f.notificationClick(target, 'another-project'); f.notificationClick({ ...(target as object), token: 'retired-token' }); await f.tick();
+    assert.equal(f.calls.some(c => c.command === 'focus_notification_window'), false);
+    f.notificationClick(target, 'own-project'); await f.tick(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('settings-page').open, false);
+    assert.equal(f.element('sidebar-all').getAttribute('aria-selected'), 'true');
+    assert.equal(firstRow.getAttribute('aria-current'), 'true');
+    assert.equal(root.hidden, false); assert.equal(pane.scrollTop, 2400);
+    assert.equal(prompt.value, 'Unsent first draft');
+    assert.equal(f.calls.filter(c => c.command === 'focus_notification_window').length, 1);
+    assert.equal(f.calls.filter(c => c.command === 'start_pi' || c.command === 'stop_pi' || c.command === 'write_pi').length, before);
+    assert.doesNotMatch(firstRow.getAttribute('aria-label')!, /Unread/);
+    // A disconnected, still-open session can be read without silently resuming.
+    first.onmessage({ kind: 'disconnected', message: 'fixture ended' }); await f.tick();
+    f.rows()[1].click(); await f.tick();
+    const starts = f.calls.filter(c => c.command === 'start_pi').length;
+    f.notificationClick(target); await f.tick();
+    assert.equal(firstRow.getAttribute('aria-current'), 'true');
+    assert.equal(f.calls.filter(c => c.command === 'start_pi').length, starts);
+    // Once closed, even its retained OS notification has no navigation target.
+    firstRow.parentElement!.querySelector<HTMLButtonElement>('.session-close')!.click(); await f.tick(); await f.tick();
+    const focuses = f.calls.filter(c => c.command === 'focus_notification_window').length;
+    f.notificationClick(target); await f.tick();
+    assert.equal(f.calls.filter(c => c.command === 'focus_notification_window').length, focuses);
+  } finally { f.win.close(); }
+});
+
+test('notification focus awaits cannot override later navigation or revive a closed target', async () => {
+  let release!: () => void;
+  const options: ShellOptions = { windowWorkspace: '/project', focused: () => false };
+  const f = await fixture(undefined, options);
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    f.emit({ type: 'agent_start' }); f.emit({ type: 'agent_settled' }); await f.tick();
+    const target = f.calls.find(c => c.command === 'notify_session')!.args.target;
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    options.notificationFocusGate = new Promise<void>(resolve => { release = resolve; });
+    f.notificationClick(target); await f.tick();
+    f.rows()[1].click(); release(); await f.tick();
+    assert.equal(f.rows()[1].getAttribute('aria-current'), 'true');
+    options.notificationFocusGate = new Promise<void>(resolve => { release = resolve; });
+    f.notificationClick(target); await f.tick();
+    f.rows()[0].parentElement!.querySelector<HTMLButtonElement>('.session-close')!.click(); await f.tick(); await f.tick();
+    const starts = f.calls.filter(c => c.command === 'start_pi').length;
+    release(); await f.tick();
+    assert.equal(f.rows().length, 1);
+    assert.equal(f.calls.filter(c => c.command === 'start_pi').length, starts);
+  } finally { release?.(); f.win.close(); }
+});
+
+test('input-notification navigation leaves Pi input unanswered and focused', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const first = f.captureChannel();
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    first.onmessage({ kind: 'rpc', value: { type: 'extension_ui_request', method: 'input', id: 'ask', title: 'Question' } }); await f.tick();
+    const target = f.calls.find(c => c.command === 'notify_session')!.args.target;
+    const dialog = f.element<HTMLDialogElement>('host-dialog');
+    const input = f.element<HTMLTextAreaElement>('host-dialog-input'); input.value = 'Unsent answer';
+    f.notificationClick(target); await f.tick();
+    assert.equal(f.rows()[0].getAttribute('aria-current'), 'true');
+    assert.equal(dialog.open, true); assert.equal(input.value, 'Unsent answer');
+    assert.equal(f.win.document.activeElement, input);
+    assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'extension_ui_response'), false);
+    dialog.close('cancel'); await f.tick();
+  } finally { f.win.close(); }
+});
+
+test('notification clicks dismiss the command palette without running its selected action', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', focused: () => false });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    f.emit({ type: 'agent_start' }); f.emit({ type: 'agent_settled' }); await f.tick();
+    const target = f.calls.find(c => c.command === 'notify_session')!.args.target;
+    f.openPalette(); f.element<HTMLInputElement>('palette-input').value = 'New session';
+    f.element('palette-input').dispatchEvent(new f.win.Event('input'));
+    const starts = f.calls.filter(c => c.command === 'start_pi').length;
+    f.notificationClick(target); await f.tick(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+    assert.equal(f.calls.filter(c => c.command === 'start_pi').length, starts);
+  } finally { f.win.close(); }
 });
 
 test('Settings notification test uses only the native diagnostic and respects the On/Off policy', async () => {
@@ -1137,7 +1248,7 @@ test('notification settings save, synchronize and suppress alerts without interr
     f.preferences.external('{"notifications.enabled":true}');
     assert.equal(picker.value, 'on');
     f.emit({ type: 'extension_ui_request', method: 'confirm', id: 'ask', title: 'private request', message: 'private body' }); await f.tick();
-    assert.deepEqual({ ...f.calls.filter(c => c.command === 'notify_session').at(-1)?.args }, { kind: 'input', session: 'Session', selected: false });
+    assert.deepEqual(structuredClone(f.calls.filter(c => c.command === 'notify_session').at(-1)?.args), { kind: 'input', session: 'Session', target: { session: f.rows()[0].id.replace('session-', ''), token: [...f.sessions.keys()][0] }, selected: false });
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
     assert.equal(f.calls.filter(c => c.command === 'stop_pi').length, stopCount);
     f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
@@ -1321,7 +1432,7 @@ test('external settings edits synchronize Appearance and saved Runtime while pre
 test('shell boots without Pi and Settings holds application preferences, not session controls', async () => {
   const f = await fixture(); const { win, calls, element } = f;
   try {
-    assert.deepEqual(calls.map(c => c.command), ['plugin:event|listen', 'preferences_snapshot', 'preferences_migrate', 'plugin:event|listen', 'plugin:event|listen', 'plugin:webview|set_webview_zoom', 'stop_pi', 'runtime_defaults', 'window_workspace', 'deletion_snapshot']);
+    assert.deepEqual(calls.map(c => c.command), ['plugin:event|listen', 'preferences_snapshot', 'preferences_migrate', 'plugin:event|listen', 'plugin:event|listen', 'plugin:webview|set_webview_zoom', 'plugin:event|listen', 'stop_pi', 'runtime_defaults', 'window_workspace', 'deletion_snapshot']);
     assert.equal(calls.find(c => c.command === 'plugin:webview|set_webview_zoom')!.args.value, 1.25);
     assert.equal(element<HTMLSelectElement>('zoom-level').value, '125');
     const page = element<HTMLDialogElement>('settings-page');

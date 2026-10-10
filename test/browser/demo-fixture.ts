@@ -16,6 +16,7 @@ type TestWindow = Window & {
   __fixtureSettled: number;
   __fixturePreferenceReceive?: (snapshot: PreferencesSnapshot) => void;
   __fixtureDeletionReceive?: (event: DeletionEvent) => void;
+  __fixtureNotificationClick?: (event: { session: string; token: string }) => void;
 };
 export const visible = (id: string) => `.session-view:not([hidden]) [data-pi-id="${id}"]`;
 
@@ -69,7 +70,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'deletion_snapshot') return { pending: false, quarantine: [], files: [] };
     if (command === 'confirm_session_deletion' || command === 'acknowledge_deletion') return; // Recorded only, no native file deletion.
     if (command === 'plugin:window|is_focused') return true;
-    if (command === 'prepare_notifications') return;
+    if (command === 'prepare_notifications' || command === 'focus_notification_window') return;
     if (command === 'notification_diagnostics') return 'macOS: authorized; desktop alerts: enabled; style: temporary; Notification Center: enabled; app active: yes; foreground handler calls: 1 (requests Banner + List).';
     if (command === 'notify_session' || command === 'test_notification') return 'submitted'; // Recorded only: never emit real OS notifications.
     if (command === 'list_workspace_sessions') return { sessions: [], warnings: [] };
@@ -103,6 +104,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
       invoke: async (command: string, args: JsonRecord = {}) => {
         if (command === 'plugin:event|listen' && args.event === 'nimrod-preferences') state.__fixturePreferenceReceive = payload => callbacks.get(Number(args.handler))?.({ payload });
         if (command === 'plugin:event|listen' && args.event === 'nimrod-session-deletion') state.__fixtureDeletionReceive = payload => callbacks.get(Number(args.handler))?.({ payload });
+        if (command === 'plugin:event|listen' && args.event === 'nimrod-notification-click') state.__fixtureNotificationClick = payload => callbacks.get(Number(args.handler))?.({ payload });
         if (command === 'plugin:event|unlisten') state.__fixturePreferenceReceive = undefined;
         if (command === 'start_pi') {
           state.__fixtureChannels[String(args.token)] = args.onEvent as { onmessage(packet: Packet): void };
@@ -130,6 +132,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
   }));
   return {
     errors, metrics, calls, children,
+    async notificationClick(target: { session: string; token: string }) { await page.evaluate(payload => (window as unknown as TestWindow).__fixtureNotificationClick?.(payload), target); },
     state: () => structuredClone(preferences.value.state),
     async deletionEvent(event: DeletionEvent) { await page.evaluate(payload => (window as unknown as TestWindow).__fixtureDeletionReceive?.(payload), event); },
     async editPreferences(text: string) {

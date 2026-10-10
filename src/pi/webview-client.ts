@@ -18,7 +18,7 @@ import { transcriptRolePresentation } from "./transcript-presentation";
 import { renderSkillInvocation } from "./skill-invocation";
 import { renderParallelToolCard, type ParallelToolCluster } from "./tool-progress";
 
-export interface PiView { setActive(active: boolean): void; dispose(): void; }
+export interface PiView { setActive(active: boolean): void; scrollToBottom(): void; dispose(): void; }
 
 export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElement | Document = document): PiView {
   let active = true;
@@ -668,6 +668,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   post("ready");
   return {
     dispose,
+    scrollToBottom: () => { if (!disposed) transcriptScroll.scrollToBottom(); },
     setActive(value) {
       active = value;
       transcriptScroll.setActive(value);

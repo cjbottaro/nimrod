@@ -10,9 +10,9 @@ use objc2_app_kit::NSApplication;
 use objc2_foundation::{NSBundle, NSError, NSObject, NSObjectProtocol, NSString};
 use objc2_user_notifications::{
     UNAlertStyle, UNAuthorizationOptions, UNAuthorizationStatus, UNMutableNotificationContent,
-    UNNotification, UNNotificationPresentationOptions, UNNotificationRequest,
-    UNNotificationSetting, UNNotificationSettings, UNUserNotificationCenter,
-    UNUserNotificationCenterDelegate,
+    UNNotification, UNNotificationDefaultActionIdentifier, UNNotificationPresentationOptions,
+    UNNotificationRequest, UNNotificationResponse, UNNotificationSetting, UNNotificationSettings,
+    UNUserNotificationCenter, UNUserNotificationCenterDelegate,
 };
 use std::{
     cell::OnceCell,
@@ -28,6 +28,7 @@ use tokio::sync::oneshot;
 use super::NotificationDispatch;
 
 static FOREGROUND_CALLS: AtomicU64 = AtomicU64::new(0);
+static APP: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
 
 fn presentation_options() -> UNNotificationPresentationOptions {
     UNNotificationPresentationOptions::Banner | UNNotificationPresentationOptions::List
@@ -53,10 +54,27 @@ define_class!(
             FOREGROUND_CALLS.fetch_add(1, Ordering::Relaxed);
             completion.call((presentation_options(),));
         }
+
+        #[unsafe(method(userNotificationCenter:didReceiveNotificationResponse:withCompletionHandler:))]
+        fn respond(
+            &self,
+            _center: &UNUserNotificationCenter,
+            response: &UNNotificationResponse,
+            completion: &DynBlock<dyn Fn()>,
+        ) {
+            // SAFETY: Apple's immutable exported action identifier.
+            let open =
+                &*response.actionIdentifier() == unsafe { UNNotificationDefaultActionIdentifier };
+            let identifier = response.notification().request().identifier().to_string();
+            completion.call(());
+            if open && let Some(app) = APP.get() {
+                super::clicked(app, &identifier);
+            }
+        }
     }
 );
 
-// UNUserNotificationCenter.delegate is weak. Retain our stateless delegate for
+// UNUserNotificationCenter.delegate is weak. Retain our delegate for
 // the app lifetime, on the main thread where every center operation is scheduled.
 thread_local! {
     static DELEGATE: OnceCell<Retained<NotificationDelegate>> = const { OnceCell::new() };
@@ -93,6 +111,7 @@ fn center(identifier: &str) -> Result<Retained<UNUserNotificationCenter>, String
 /// Install before application launch finishes, not only after the first request.
 /// Unbundled dev executables remain usable; attempts still report the bundle requirement.
 pub fn initialize(app: &tauri::AppHandle) -> Result<(), String> {
+    let _ = APP.set(app.clone());
     let identifier = app.config().identifier.as_str();
     if NSBundle::mainBundle()
         .bundleIdentifier()
@@ -289,6 +308,7 @@ pub async fn send(
     selected: bool,
     title: String,
     body: String,
+    click_identifier: Option<String>,
 ) -> Result<NotificationDispatch, String> {
     // The router holds its registry while waiting for main-thread window creation.
     // Validate immutable window/project ownership here, never lock it on the main thread.
@@ -310,9 +330,11 @@ pub async fn send(
             let content = UNMutableNotificationContent::new();
             content.setTitle(&NSString::from_str(&title));
             content.setBody(&NSString::from_str(&body));
-            // No sound, badge, actions, userInfo, custom icon or delayed trigger.
+            // Routing lives in the opaque request identifier, never the banner body.
+            // A unique event ID allows multiple alerts for the same runtime session.
+            let identifier = click_identifier.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
             let request = UNNotificationRequest::requestWithIdentifier_content_trigger(
-                &NSString::from_str(&uuid::Uuid::new_v4().to_string()),
+                &NSString::from_str(&identifier),
                 &content,
                 None,
             );
@@ -347,6 +369,13 @@ mod tests {
                 )
                 .is_some()
         );
+    }
+
+    #[test]
+    fn delegate_registers_notification_click_callback() {
+        assert!(NotificationDelegate::class().instance_method(
+            sel!(userNotificationCenter:didReceiveNotificationResponse:withCompletionHandler:)
+        ).is_some());
     }
 
     #[test]

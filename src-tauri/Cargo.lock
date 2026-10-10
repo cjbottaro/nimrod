@@ -2179,6 +2179,7 @@ dependencies = [
  "chrono",
  "futures-util",
  "nix",
+ "notify-rust",
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
@@ -4045,6 +4046,7 @@ dependencies = [
  "signal-hook-registry",
  "socket2",
  "tokio-macros",
+ "tracing",
  "windows-sys 0.61.2",
 ]
 
@@ -5371,6 +5373,7 @@ dependencies = [
  "rustix",
  "serde",
  "serde_repr",
+ "tokio",
  "tracing",
  "uds_windows",
  "uuid",

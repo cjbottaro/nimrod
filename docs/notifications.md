@@ -6,7 +6,7 @@ Nimrod sends native desktop alerts when a background session:
 - **Needs input:** an extension input, editor, selection, or confirmation dialog is ready.
 - **Fails:** its process/transport disconnects unexpectedly, or its run settles with an assistant error.
 
-Other sessions count as background even while you’re using Nimrod. The remembered session also counts as background when Unread hides its conversation. The selected session notifies when its project window is unfocused or Settings covers its conversation. Viewing the selected session in a focused project window suppresses alerts. Alerts do not focus/select another session, resume an agent, or submit prompts. First-time macOS authorization can display an OS permission dialog.
+Other sessions count as background even while you’re using Nimrod. The remembered session also counts as background when Unread hides its conversation. The selected session notifies when its project window is unfocused or Settings covers its conversation. Viewing the selected session in a focused project window suppresses alerts. Delivery itself does not focus/select another session, resume an agent, or submit prompts. First-time macOS authorization can display an OS permission dialog.
 
 Alerts are **on by default**. Change **Settings → Notifications → Background session alerts** to turn them off across windows. On macOS, Nimrod explicitly requests foreground presentation for eligible alerts—so session A can show a banner while you’re viewing session B. **System Settings → Notifications → Nimrod** must allow **Banners** or **Alerts**; Focus/Do Not Disturb and other OS settings still apply. Suppressed alerts are not replayed later.
 
@@ -15,6 +15,16 @@ The banner title is **project · session**: the project directory’s final comp
 Previews never pull from user messages, reasoning, tool-result records, dialog content, or raw errors. Prompt-derived sidebar titles stay excluded. Response previews can also appear in Notification Center or on the lock screen according to your OS settings. No custom sound is requested. Ordinary Pi extension notices remain in-app rather than becoming desktop alerts.
 
 Intentional Stop/Close/Restart/quit and history restoration do not produce completion/failure alerts. Completion markers in the session sidebar come from live settled runs rather than routine state refreshes.
+
+## Click to open the session
+
+On macOS and supported Linux desktops, clicking a session notification brings its owning project window forward, selects that exact open session and **scrolls the transcript to the bottom**. This intentionally overrides that session's reading position and re-enables auto-follow. Ordinary session switching still preserves reading position.
+
+A session hidden by Unread or Working is revealed, switching to All when necessary. Settings or the command palette closes; pending Pi input dialogs remain unanswered. Clicking never sends a prompt or starts/resumes an agent—even if the session has disconnected.
+
+Routing applies only to the original session still open in the running app. Alerts for closed, deleted or restarted sessions, closed windows, or an earlier app run are ignored by Nimrod's session router. The OS may still activate the app. Test notifications have no session target.
+
+Linux requires a desktop notification service supporting the default action. Notification-click support varies by desktop, and compositor/Wayland focus policy may prevent bringing the window forward even when session selection succeeds. Windows session-click routing is not implemented.
 
 ## Test delivery and diagnose failures
 
@@ -34,9 +44,9 @@ The status line also records the latest session alert attempt: quiet (with its r
 
 ## First-pass limitations
 
-- **Click-to-session routing is not implemented.** Clicking behavior is OS/backend-defined.
+- Click routing has automated shell/WebKit coverage and a macOS build, but native macOS click acceptance and Linux build/delivery/action/focus acceptance remain unverified.
 - **macOS 27.0.1:** signed test notifications reached Notification Center, but **Temporary** desktop presentation remained inconsistent despite enabled settings and a working foreground handler. The user confirmed that switching to **Persistent** makes foreground test alerts visible. Use Persistent if Temporary fails on your Mac; the underlying OS presentation/cache cause is not established, and Nimrod does not override your chosen style.
-- Linux/Windows delivery remains unverified. Their current Tauri plugin path does not surface every asynchronous delivery failure or reliably report desktop permission state. Automated tests do not establish OS delivery.
+- Linux delivery remains unverified. Its direct `notify-rust` backend now awaits submission and listens for the default open action, but neither desktop permission nor visible delivery is inferred. Windows retains the Tauri plugin's asynchronous delivery-error/permission limitations. Automated tests do not establish OS delivery.
 - Use the packaged **Nimrod.app** on macOS. An unbundled development executable now reports an explicit error instead of borrowing Terminal/Finder’s notification identity. Linux needs a desktop notification service; Windows notification identity/delivery needs an installed application and remains a possible future platform.
 - There is no notification history, badge count, per-event/per-session policy, custom sound, or background daemon. Closing a project still stops its agents.
 

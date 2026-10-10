@@ -1,7 +1,7 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { notificationPreview, sessionNotifications, type NotificationDispatch } from './notifications';
+import { notificationPreview, sessionNotifications, type NotificationDispatch, type NotificationClick } from './notifications';
 import { SessionAttention } from './session-attention';
 import { installSidebarResize, sidebarWidthKey } from './sidebar-resize';
 import { lastUsed, recentSessions, nextLastUsed, captureSidebarScroll, revealSidebarRow, SessionRecency } from './session-recency';
@@ -205,7 +205,7 @@ const previewResponse = notificationPreview(window);
 const notifySession = sessionNotifications({
   focused: () => getCurrentWindow().isFocused(),
   prepare: () => invoke('prepare_notifications'),
-  send: (kind, target) => invoke<NotificationDispatch>('notify_session', { kind, session: target.session, selected: target.selected(), ...(target.preview ? { preview: target.preview } : {}) }),
+  send: (kind, target) => invoke<NotificationDispatch>('notify_session', { kind, session: target.session, target: target.target, selected: target.selected(), ...(target.preview ? { preview: target.preview } : {}) }),
 }, () => preferences.notificationsEnabled(), notificationError, notificationProgress);
 const deletion = new SessionDeletion({
   panels: () => tabs.filter(tab => tab.file?.exists && !tab.demo && tab.mode !== 'temporary').map(tab => ({
@@ -238,13 +238,31 @@ const deletion = new SessionDeletion({
   error: message => { error.textContent = message; },
 });
 // A global (Any-target) listener also receives emit_to events for OTHER windows.
+let notificationNavigation = 0;
+const unlistenNotificationClicks = await listen<NotificationClick>('nimrod-notification-click', event => {
+  const target = event.payload;
+  const tab = tabs.find(tab => tab.id === target?.session && tab.token === target?.token);
+  const valid = () => ready && !unloading && !!tab && tabs.includes(tab) && tab.token === target.token &&
+    !tab.starting && !tab.closing && !tab.restarting && !tab.deleting && !deletion.pending && !deletion.blocked(tab.file?.path);
+  if (!valid()) return;
+  const navigation = ++notificationNavigation;
+  void (async () => {
+    try { await invoke('focus_notification_window'); }
+    catch (error) { notificationError(`Could not focus notification window: ${String(error)}`); }
+    if (navigation !== notificationNavigation || !valid() || !tab) return;
+    // Dismiss shell navigation, never resolve/cancel Pi's pending input dialogs.
+    palette.close(); settings.close();
+    activate(tab, true, true, true, false);
+    tab.view.scrollToBottom();
+  })();
+}, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
 const unlistenDeletion = await listen<DeletionEvent>('nimrod-session-deletion', event => { void deletion.handle(event.payload); }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
 preferences.subscribe(() => { runtime.reload(); themes.reload(); void zoom.reload(); reloadNotifications(); keybindingEditor.reload(); refreshShortcutHints(); });
 const disposeTimeRefresh = installSessionTimeRefresh(window, () => { for (const tab of tabs) refreshTime(tab); });
 window.addEventListener('unload', () => {
   unloading = true;
   disposeTimeRefresh();
-  sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion();
+  sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
   for (const tab of tabs) { tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.session?.rpc.disconnect('Window closed'); }
   keybindingDispatch.dispose(); keybindingEditor.dispose();
   palette.dispose(); zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose();
@@ -325,6 +343,7 @@ function renderSidebar(moved?: HTMLElement): void {
   if (filteredFocus && !document.querySelector('dialog[open]')) required(`sidebar-${sidebarView}`).focus({ preventScroll: true });
 }
 function selectSidebarView(view: SidebarView): void {
+  notificationNavigation++;
   const returningToAll = view === 'all' && sidebarView !== 'all';
   sidebarView = view;
   if (workspace) save(`nimrod.sidebar.view:${workspace}`, view);
@@ -545,7 +564,7 @@ function createTab(mode: LaunchMode, demo: boolean, file?: SessionFile, title = 
   rowNode.append(row, deleteButton, closeButton); required('open-sessions').append(rowNode);
   const tab: Tab = { id, mode, demo, file, title, lastUsed: Math.max(lastUsed(used), file ? recency.get(file) : 0), root, notice, closeButton, deleteButton, row, rowLabel, rowIndicator, rowTime, rowNode,
     drafts: drafts.fork(), starting: false, closing: false, restarting: false, deleting: false, ended: false, inputCount: 0, unread: false, failed: deletion.blocked(file?.path),
-    view: { setActive() {}, dispose() {} } }; 
+    view: { setActive() {}, scrollToBottom() {}, dispose() {} } };
   root.addEventListener('focusin', event => { if (event.target instanceof HTMLElement) tab.focus = event.target; });
   tab.drafts.select(file ? `file:${file.path}` : mode === 'temporary' ? `${demo ? 'demo' : 'temporary'}:${workspace}:${id}` : `unassigned:${id}`);
   tab.view = mountPiView({
@@ -576,8 +595,9 @@ function createTab(mode: LaunchMode, demo: boolean, file?: SessionFile, title = 
   tab.view.setActive(false);
   tabs.push(tab); updateTab(tab); return tab;
 }
-function activate(tab: Tab, focus = true, reveal = true, scroll = true): void {
+function activate(tab: Tab, focus = true, reveal = true, scroll = true, connect = true): void {
   if (!ready || !tabs.includes(tab)) return;
+  notificationNavigation++;
   // Explicit navigation reaches every open session, but never leaves a shown
   // conversation without its selected row. Boot/close fallback must not change views.
   if (reveal && sidebarView !== 'all' && !sidebarTabs().includes(tab)) {
@@ -594,7 +614,7 @@ function activate(tab: Tab, focus = true, reveal = true, scroll = true): void {
   if (focus && presented === tab && !document.querySelector('dialog[open]')) (tab.focus?.isConnected ? tab.focus : tab.root.querySelector<HTMLElement>('[data-pi-id="prompt"]'))?.focus({ preventScroll: true });
   // An inactive persisted session becomes live as soon as it is selected; there
   // is no separate unavailable-session state for the user to resolve.
-  if (presented === tab && tab.file?.exists && !deletion.pending && !deletion.blocked(tab.file.path) && !tab.starting && !tab.closing && !tab.restarting && (!tab.session || tab.ended)) void launch(tab, undefined, true);
+  if (connect && presented === tab && tab.file?.exists && !deletion.pending && !deletion.blocked(tab.file.path) && !tab.starting && !tab.closing && !tab.restarting && (!tab.session || tab.ended)) void launch(tab, undefined, true);
 }
 function refreshTime(tab: Tab): void {
   const label = sessionTime(tab.lastUsed);
@@ -696,6 +716,7 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
         selected: () => presented === tab && !settings.isOpen,
         // Auto-generated sidebar titles are prompt excerpts, not notification-safe labels.
         session: tab.session?.state.sessionName || 'Session',
+        target: { session: tab.id, token },
         preview: kind === 'completed' ? previewResponse(response) : undefined,
       });
     },

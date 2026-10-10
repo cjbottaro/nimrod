@@ -31,8 +31,11 @@ uuid = { version = "1", features = ["v4"] }
 objc2 = "0.6"
 block2 = "0.6"
 objc2-foundation = { version = "0.3", default-features = false, features = ["NSBundle", "NSError", "NSObject", "NSString"] }
-objc2-user-notifications = { version = "0.3", default-features = false, features = ["block2", "UNNotification", "UNNotificationContent", "UNNotificationRequest", "UNNotificationSettings", "UNNotificationTrigger", "UNUserNotificationCenter"] }
+objc2-user-notifications = { version = "0.3", default-features = false, features = ["block2", "UNNotification", "UNNotificationContent", "UNNotificationRequest", "UNNotificationResponse", "UNNotificationSettings", "UNNotificationTrigger", "UNUserNotificationCenter"] }
 objc2-app-kit = { version = "0.3", default-features = false, features = ["NSWindow", "NSApplication"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+notify-rust = { version = "4.17", default-features = false, features = ["z-with-tokio"] }
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.30", features = ["signal", "process", "fs", "poll"] }

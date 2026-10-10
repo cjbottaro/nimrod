@@ -7,7 +7,9 @@ export interface NotificationTarget {
   selected(): boolean;
   session: string;
   preview?: string;
+  target?: NotificationClick;
 }
+export interface NotificationClick { session: string; token: string; }
 export type NotificationDispatch = 'submitted' | 'suppressed';
 export interface NotificationHost {
   focused(): Promise<boolean>;

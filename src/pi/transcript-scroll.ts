@@ -123,6 +123,16 @@ export class TranscriptScroll {
     this.lastMaxScroll = this.maxScroll();
   }
 
+  /** Explicit navigation overrides reading position and re-enables bottom-follow. */
+  scrollToBottom(): void {
+    this.interrupted = false;
+    if (this.suspended) this.suspendedFollow = true;
+    this.request(true);
+    this.flush();
+    // Reconcile once more after selection/composer layout has settled.
+    this.request(true);
+  }
+
   cancel(): void {
     this.interrupted = true;
     this.pending = false;
