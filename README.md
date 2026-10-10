@@ -108,6 +108,10 @@ Session discovery reads Pi's default cwd-scoped session directory (or its sessio
 
 Tool cards use the same summary treatment whether embedded in an assistant turn or temporarily standalone; assistant content and execution activity update one card per invocation. See [transcript rendering behavior](docs/architecture.md#rendering-contract-retained-from-pi-gui).
 
+## Planned features
+
+- [Card plugins](docs/card-plugins.md): customizable transcript cards, with default renderers shipped as bundled Nimrod plugins using the same supported API as third-party renderers. Not implemented yet.
+
 ## Not currently included
 
 - Background process continuity.
