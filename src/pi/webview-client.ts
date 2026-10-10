@@ -15,6 +15,7 @@ import { toolMessageBlock } from "./tool-call";
 import { TranscriptScroll } from "./transcript-scroll";
 import { renderReasoningCard, updateReasoningCard } from "./reasoning-card";
 import { transcriptRolePresentation } from "./transcript-presentation";
+import { SteeringTranscript, steeringStatusLabel, type SteeringStatus } from "./steering-transcript";
 import { renderSkillInvocation } from "./skill-invocation";
 import { renderParallelToolCard, type ParallelToolCluster } from "./tool-progress";
 
@@ -50,6 +51,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   let displayedState: State = {};
   let renderScheduled = false;
   const rendered = new Map<string, { node: HTMLElement; signature: string }>();
+  let steeringTranscript = new SteeringTranscript();
   const expanded = new Map<string, boolean>();
   const toolCards = new Map<string, HTMLDetailsElement>();
   const transcriptScroll = new TranscriptScroll(window, transcriptViewport);
@@ -212,6 +214,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       label.textContent = presentation.visibleLabel;
       article.append(label);
     }
+    renderSteeringStatus(article, message);
     if (message.isError) article.classList.add("error");
     if (message.role === "parallel" && message.parallelCluster) {
       article.append(renderParallelToolCard(document, message.parallelCluster));
@@ -241,10 +244,23 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     return article;
   }
 
+  function renderSteeringStatus(node: HTMLElement, message: DisplayMessage): void {
+    let label = node.querySelector<HTMLElement>(".steering-status");
+    if (!message.steeringStatus) { label?.remove(); return; }
+    if (!label) {
+      label = element("div", "steering-status");
+      node.prepend(label);
+    }
+    label.textContent = steeringStatusLabel(message.steeringStatus);
+    node.setAttribute("aria-label", `User message: ${label.textContent}`);
+  }
+
   /** Patches tool cards in their existing article so active spinner nodes never disconnect. */
   function patchMessage(node: HTMLElement, message: DisplayMessage): boolean {
     if (node.dataset.key !== safeText(message.key) || node.classList.contains(safeText(message.role)) === false) return false;
     node.classList.toggle("error", message.isError === true);
+    if (message.role === "user") node.setAttribute("aria-label", "User message");
+    renderSteeringStatus(node, message);
     if (message.role === "parallel" && message.parallelCluster) {
       const details = node.querySelector<HTMLDetailsElement>(".parallel-tool-card");
       if (!details) return false;
@@ -391,7 +407,8 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     queueActivity.replaceChildren();
     const queue = state.queue;
     if (queue?.authoritative) {
-      for (const text of queue.steering || []) queueActivity.append(activityRow("steering", text));
+      const count = queue.steering?.length || 0;
+      if (count) queueActivity.append(activityRow("steering", `${count} pending`));
       for (const text of queue.followUp || []) queueActivity.append(activityRow("queued", text));
     } else if (typeof queue?.pendingCount === "number" && queue.pendingCount > 0) {
       queueActivity.append(activityRow("Pi queue", `${queue.pendingCount} message${queue.pendingCount === 1 ? "" : "s"} pending; text unavailable until Pi sends a queue update.`));
@@ -457,7 +474,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
         // Recover from a broken incremental patch using the authoritative snapshot.
         rendered.clear();
         messages.replaceChildren();
-        const display = Array.isArray(snapshot.messages) ? snapshot.messages : [];
+        const display = steeringTranscript.project(Array.isArray(snapshot.messages) ? snapshot.messages : []);
         for (const [index, message] of display.entries()) {
           const key = safeText(message.key) || `message-${index}`;
           try {
@@ -486,7 +503,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     renderComposer();
 
     const nextKeys = new Set<string>();
-    const display = Array.isArray(state.messages) ? state.messages : [];
+    const display = steeringTranscript.project(Array.isArray(state.messages) ? state.messages : []);
     display.forEach((message, index) => {
       const key = safeText(message.key) || `message-${index}`;
       nextKeys.add(key);
@@ -534,6 +551,12 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     const id = `submission-${Date.now()}-${++nextSubmissionId}`;
     const next = beginSubmission(composer, id, mode);
     if (next === composer) return;
+    // Slash commands may be controls or expand into different content. Only plain
+    // busy sends get an optimistic turn; Pi's authoritative queue still displays all steers.
+    if (displayedState.busy && mode !== "followUp" && !text.startsWith("/")) {
+      steeringTranscript.begin(id, next.submission!.text);
+      queueRender(pendingState || displayedState);
+    }
     // Compaction is a control operation, not a user turn: consume its slash text immediately.
     updateComposer(compact ? { ...next, draft: "" } : next);
     if (compact) post("compact", { id, customInstructions: compact[1]?.trim() || undefined });
@@ -612,6 +635,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       toolCards.clear();
       expanded.clear();
       rendered.clear();
+      steeringTranscript = new SteeringTranscript();
       messages.replaceChildren();
       pendingState = undefined;
       displayedState = { sessionUnavailable: true };
@@ -620,8 +644,12 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       updateComposer(restoreComposerState(persistedState));
       queueRender(displayedState);
     }
-    if (data.type === "sessionDisconnected" && composer.submission?.status === "pending") {
-      updateComposer(settleSubmission(composer, composer.submission.id, "unknown", "Pi disconnected before confirming this submission. It will not be sent again automatically."));
+    if (data.type === "sessionDisconnected") {
+      steeringTranscript.disconnect();
+      if (composer.submission?.status === "pending") {
+        updateComposer(settleSubmission(composer, composer.submission.id, "unknown", "Pi disconnected before confirming this submission. It will not be sent again automatically."));
+      }
+      queueRender(pendingState || displayedState);
     }
     if (data.type === "deletionLock") {
       deletionLocked = data.locked === true;
@@ -637,13 +665,20 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
         persistComposer();
       }
       if (data.commands !== undefined) slashCompletion.setCommands(data.commands);
-      queueRender(data.state || {});
+      const state = data.state || {};
+      steeringTranscript.snapshot(state.messages || [], state.queue?.authoritative ? state.queue.steering || [] : undefined);
+      if (state.sessionUnavailable) steeringTranscript.disconnect();
+      queueRender(state);
     }
     if (data.type === "setEditorText") updateComposer(updateDraft(composer, safeText(data.text)));
     if (data.type === "submissionReceipt" && typeof data.id === "string" && (data.outcome === "accepted" || data.outcome === "rejected" || data.outcome === "cancelled" || data.outcome === "unknown")) {
+      steeringTranscript.receipt(data.id, data.outcome);
+      queueRender(pendingState || displayedState);
       updateComposer(settleSubmission(composer, data.id, data.outcome, safeText(data.error) || undefined));
     }
     if (data.type === "queueRecovery") {
+      steeringTranscript.recover(stringArray(data.steering));
+      queueRender(pendingState || displayedState);
       updateComposer(recoverClearedQueue(composer, stringArray(data.steering), stringArray(data.followUp)));
     }
     if (data.type === "copyResult") receiveCopyResult(data.id, data.success === true);
@@ -750,6 +785,7 @@ interface ContentBlock {
 }
 
 interface DisplayMessage {
+  steeringStatus?: SteeringStatus;
   uiPhase?: "thinking" | "stopped";
   key?: string;
   role?: string;
