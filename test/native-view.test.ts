@@ -225,6 +225,32 @@ test('code actions are icon-only; duplicate content sends the same pop-out paylo
   } finally { f.dom.window.close(); }
 });
 
+test('only unlabeled user code is detected across string, block and pending turns; pop-outs capture its language', () => {
+  const f = fixture();
+  try {
+    const source = 'def hello(name):\n    print("Hello", name)\n    return None\n';
+    const code = `\`\`\`\n${source}\`\`\``;
+    const messages = [
+      { key: 'user-string', role: 'user', content: code },
+      { key: 'user-block', role: 'user', content: [{ type: 'text', text: code }] },
+      { key: 'assistant', role: 'assistant', content: code },
+      { key: 'assistant-block', role: 'assistant', content: [{ type: 'text', text: code }, { type: 'thinking', thinking: code }] },
+      { key: 'user-explicit', role: 'user', content: `\`\`\`text\n${source}\`\`\`` },
+    ];
+    f.snapshot({ busy: true, messages });
+    assert.deepEqual(Array.from(f.win.document.querySelectorAll('.code-language'), node => node.textContent),
+      ['python (detected)', 'python (detected)', 'plain text', 'plain text', 'plain text', 'text']);
+    f.win.document.querySelector<HTMLButtonElement>('.user .code-popout')!.click();
+    const payload = f.sent.find(m => m.type === 'popOutCode')!;
+    assert.equal(payload.language, 'python');
+    assert.equal(payload.text, source);
+    f.draft(code); f.send(); f.flush();
+    assert.equal(f.win.document.querySelector('.user:last-child .code-language')!.textContent, 'python (detected)');
+    f.snapshot({ busy: true, messages: [{ ...messages[0], content: `\`\`\`plaintext\n${source}\`\`\`` }, ...messages.slice(1)] });
+    assert.equal(f.win.document.querySelector('.user .code-language')!.textContent, 'plaintext');
+  } finally { f.dom.window.close(); }
+});
+
 test('copy falls back to host clipboard and briefly swaps to a checkmark or failure icon', async () => {
   const f = fixture();
   try {

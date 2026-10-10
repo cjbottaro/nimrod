@@ -4,6 +4,7 @@
 
 - [Card plugins](card-plugins.md) — **planned** customizable cards, with built-in renderers using the same API as third-party plugins.
 
+- [Syntax highlighting](syntax-highlighting.md) — explicit language labels, conservative user-code detection, Elixir support and plain-text fallback.
 - [Transcript cards](architecture.md#rendering-contract-retained-from-pi-gui) — consistent tool summaries, invocation identity and disclosure behavior.
 - [Steering messages](architecture.md#steering-messages) — immediate pending user turns, acknowledgement, consumption and recovery.
 

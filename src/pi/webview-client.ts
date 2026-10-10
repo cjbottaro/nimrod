@@ -164,9 +164,9 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     submissionNotice.textContent = "";
   }
 
-  function renderMarkdown(value: unknown): HTMLElement {
+  function renderMarkdown(value: unknown, detectUnlabeledCode = false): HTMLElement {
     const root = element("div", "markdown");
-    root.innerHTML = markdown.render(safeText(value));
+    root.innerHTML = markdown.render(safeText(value), { detectUnlabeledCode });
     return root;
   }
 
@@ -189,7 +189,8 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   }
 
   function renderUserText(text: unknown, key: string, previous?: HTMLElement): HTMLElement {
-    return renderSkillInvocation(document, safeText(text), key, expanded, renderMarkdown, previous) ?? renderMarkdown(text);
+    const renderUserMarkdown = (value: string) => renderMarkdown(value, true);
+    return renderSkillInvocation(document, safeText(text), key, expanded, renderUserMarkdown, previous) ?? renderMarkdown(text, true);
   }
 
   function renderBlock(block: ContentBlock, messageKey: string, index: number, role?: string, previous?: HTMLElement): HTMLElement | undefined {

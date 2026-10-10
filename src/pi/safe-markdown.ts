@@ -1,14 +1,23 @@
 import createDOMPurify, { type WindowLike } from "dompurify";
 import hljs from "highlight.js/lib/common";
+import elixir from "highlight.js/lib/languages/elixir";
+import erlang from "highlight.js/lib/languages/erlang";
 import { marked } from "marked";
 import { setCodeIcon } from './code-actions';
 
 export interface SafeMarkdownRenderer {
-  render(markdown: string): string;
+  render(markdown: string, options?: { detectUnlabeledCode?: boolean }): string;
   renderCode(source: string, language?: string): string;
 }
 
-const AUTO_DETECT_MIN_RELEVANCE = 2;
+// The common bundle omits BEAM languages. Register these locally; no runtime fetches.
+hljs.registerLanguage('elixir', elixir);
+hljs.registerLanguage('erlang', erlang);
+
+// Relevance is a heuristic, not a probability. Reject weak and closely tied guesses.
+const AUTO_DETECT_MIN_RELEVANCE = 6;
+const AUTO_DETECT_MIN_LEAD = 2;
+const AUTO_DETECT_MIN_RATIO = 1.5;
 
 const SANITIZE_OPTIONS = {
   ALLOWED_TAGS: [
@@ -28,41 +37,46 @@ const SANITIZE_OPTIONS = {
 export function createSafeMarkdownRenderer(window: Window): SafeMarkdownRenderer {
   const purifier = createDOMPurify(window as unknown as WindowLike);
 
+  const highlightCode = (code: Element, source: string, language?: string): void => {
+    const normalized = language?.trim().toLowerCase();
+    if (!normalized || !hljs.getLanguage(normalized)) return;
+    const result = hljs.highlight(source, { language: normalized, ignoreIllegals: true });
+    code.innerHTML = purifier.sanitize(result.value, SANITIZE_OPTIONS);
+  };
+
   return {
     renderCode(source: string, language = ''): string {
       const root = window.document.createElement('div');
       const pre = window.document.createElement('pre');
       const code = window.document.createElement('code');
       code.textContent = source;
-      if (hljs.getLanguage(language)) {
-        code.innerHTML = purifier.sanitize(hljs.highlight(source, { language, ignoreIllegals: true }).value, SANITIZE_OPTIONS);
-      }
+      highlightCode(code, source, language);
       pre.append(code); root.append(pre);
-      decorateCodeBlock(window.document, code, language || 'plain text');
+      decorateCodeBlock(window.document, code, language.trim() || 'plain text');
       root.querySelector('.code-popout')?.remove();
       return root.innerHTML;
     },
-    render(markdown: string): string {
+    render(markdown: string, options = {}): string {
       const root = window.document.createElement("div");
       root.innerHTML = purifier.sanitize(marked.parse(markdown || "", { async: false, breaks: true, gfm: true }), SANITIZE_OPTIONS);
 
       for (const code of root.querySelectorAll("pre > code")) {
         const source = code.textContent || "";
         const explicitLanguage = languageFromClass(code.className);
-        const highlightLanguage = explicitLanguage?.toLowerCase();
         let label = explicitLanguage || "plain text";
-
-        if (highlightLanguage && hljs.getLanguage(highlightLanguage)) {
-          const result = hljs.highlight(source, { language: highlightLanguage, ignoreIllegals: true });
-          code.innerHTML = purifier.sanitize(result.value, SANITIZE_OPTIONS);
-        } else if (!explicitLanguage) {
+        if (explicitLanguage) {
+          // Any explicit label wins, including plain text and unsupported languages.
+          highlightCode(code, source, explicitLanguage);
+        } else if (options.detectUnlabeledCode) {
           const result = hljs.highlightAuto(source);
-          if (result.language && result.relevance >= AUTO_DETECT_MIN_RELEVANCE) {
+          const runnerUp = result.secondBest?.relevance ?? 0;
+          if (result.language && result.relevance >= AUTO_DETECT_MIN_RELEVANCE
+            && result.relevance - runnerUp >= AUTO_DETECT_MIN_LEAD
+            && result.relevance >= runnerUp * AUTO_DETECT_MIN_RATIO) {
             code.innerHTML = purifier.sanitize(result.value, SANITIZE_OPTIONS);
             label = `${result.language} (detected)`;
           }
         }
-
         decorateCodeBlock(window.document, code, label);
       }
 

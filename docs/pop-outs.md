@@ -6,7 +6,7 @@ icon, to the left of **Copy**. Copy briefly becomes a checkmark after success.
 ## What you get
 
 - A separate window containing the captured content. Later agent output does not update it.
-- Syntax highlighting for code; formatted rendering for Markdown.
+- [Syntax highlighting](syntax-highlighting.md) for labeled code, including Elixir, and languages detected from user code; formatted rendering for Markdown. Pop-outs preserve their captured language rather than guessing again.
 - **Copy** copies the original source. Markdown has a small upper-right Copy source
   icon; nested code blocks have their own Copy buttons.
 - A short content-based window title, without a redundant session/snapshot header.

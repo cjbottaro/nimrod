@@ -81,6 +81,11 @@ implementation, storage, invariants, platform workarounds or test coverage.
   Use the existing sanitized renderer, not an unsanitized Markdown/HTML sink.
 - Other languages use `renderCode`, inserting source as text and sanitized
   highlighting. Markdown-looking code in another language remains literal code.
+  Both rendering paths support explicit language labels, including Elixir aliases.
+  Only transcript user text opts into conservative detection; Pop out captures the
+  detected label via the existing header fallback. Snapshots never guess anew.
+  Unknown/unlabeled snapshots stay plain text. See [syntax highlighting](syntax-highlighting.md).
+  Existing snapshots retain their stored language; no fingerprint/storage migration.
 - Remove nested Pop out actions in this window. Nested code Copy still works.
 - There is no in-content session/“Read-only snapshot” header. Code keeps its
   language/Copy row; Markdown has a floating upper-right Copy source icon.
