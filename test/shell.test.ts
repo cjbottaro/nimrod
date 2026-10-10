@@ -300,7 +300,7 @@ test('session navigation and named-session defaults open their distinct pickers 
     assert.equal(f.element<HTMLDialogElement>('command-palette').open, false); assert.equal(f.calls.filter(call => call.command === 'start_pi').length, starts);
     assert.equal(key('p').defaultPrevented, false); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
     key('k'); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Resume session');
-    assert.match(f.element('palette-list').textContent!, /Closed history/); assert.match(f.element('palette-list').textContent!, /Open/);
+    assert.match(f.element('palette-list').textContent!, /Closed history/); assert.match(f.element('palette-list').innerHTML, /aria-label="[^"]* — Open"/);
     assert.equal(f.calls.filter(call => call.command === 'list_workspace_sessions').length, 1);
     key('t'); key('n', { altKey: true }); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Resume session');
     escape(); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
@@ -2203,15 +2203,16 @@ test('Resume marks sidebar membership independently of connectivity and filters 
   const key = (key: string) => f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key, metaKey: true, bubbles: true, cancelable: true }));
   const escape = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
   const pickerRows = () => [...f.element('palette-list').children] as HTMLElement[];
-  const badge = (row: HTMLElement) => row.querySelector('.session-row-badge')?.textContent;
+  const isOpen = (row: HTMLElement) => row.getAttribute('aria-label')!.endsWith(' — Open');
   try {
     await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1, 'only the selected restored entry connects');
     f.element<HTMLButtonElement>('sidebar-unread').click();
     key('k'); await f.tick(); await f.tick();
     assert.deepEqual(pickerRows().map(row => row.querySelector('.palette-item-label')!.textContent), ['Selected root', 'Inactive root', 'Closed root']);
-    assert.deepEqual(pickerRows().map(badge), ['Open', 'Open', undefined]);
-    assert.ok(pickerRows()[0].querySelector('.session-row-heading .session-row-badge'), 'badge is separate from the truncatable title');
+    assert.deepEqual(pickerRows().map(isOpen), [true, true, false]);
+    assert.equal(f.element('palette-list').querySelectorAll('.session-row-badge').length, 0);
+    assert.equal(f.element('palette-list').querySelectorAll('.palette-project-enter').length, 3);
     for (const [index, option] of pickerRows().slice(0, 2).entries()) {
       const sidebar = f.rows()[index];
       assert.equal(option.querySelector('.session-row-label')!.textContent, sidebar.querySelector('.session-row-label')!.textContent);
@@ -2222,7 +2223,8 @@ test('Resume marks sidebar membership independently of connectivity and filters 
       assert.equal(option.title, '');
     }
     assert.equal(pickerRows()[2].querySelector('time')!.getAttribute('datetime'), new Date(5).toISOString(), 'closed history uses user-message time, not mtime');
-    assert.equal(pickerRows()[2].querySelector('.session-indicator')!.getAttribute('data-state'), 'inactive');
+    assert.equal(pickerRows()[2].querySelector('.session-indicator')!.getAttribute('data-state'), 'closed');
+    assert.equal(pickerRows()[2].querySelector('.session-indicator')!.textContent, '—');
     assert.doesNotMatch(pickerRows()[2].textContent!, /Historical preview/);
     const search = f.element<HTMLInputElement>('palette-input');
     search.value = 'Historical preview closed.jsonl'; search.dispatchEvent(new f.win.Event('input'));
@@ -2250,11 +2252,12 @@ test('Resume marks sidebar membership independently of connectivity and filters 
     assert.equal(f.rows().length, 3, 'selection reuses the sidebar entry');
     f.disconnect(); await f.tick();
     key('k'); await f.tick(); await f.tick();
-    assert.equal(badge(pickerRows()[0]), 'Open', 'disconnect does not close the session');
+    assert.equal(isOpen(pickerRows()[0]), true, 'disconnect does not close the session');
     escape(); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
     f.rows()[1].closest('.open-session')!.querySelector<HTMLButtonElement>('.session-close')!.click(); await f.tick(); await f.tick();
     key('k'); await f.tick(); await f.tick();
-    assert.deepEqual(pickerRows().map(badge), ['Open', undefined, undefined], 'Close removes only the membership badge, not saved history');
+    assert.deepEqual(pickerRows().map(isOpen), [true, false, false], 'Close changes membership, not saved history');
+    assert.equal(pickerRows()[1].querySelector('.session-indicator')!.getAttribute('data-state'), 'closed');
     assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
   } finally { f.win.close(); }
 });

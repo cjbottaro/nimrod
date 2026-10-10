@@ -523,8 +523,8 @@ async function paletteSessions(): Promise<PalettePage> {
       return {
         id: s.path, label: s.name || s.preview || 'Untitled session', keywords: `${s.path} ${s.preview}`,
         sessionRow: {
-          ...(open ? sessionRow(open) : { timestamp: Math.max(recency.get(s), lastUsed(s.lastUserMessageAt)), indicator: sessionIndicator({ inactive: true }) }),
-          badge: open ? 'Open' : undefined,
+          ...(open ? sessionRow(open) : { timestamp: Math.max(recency.get(s), lastUsed(s.lastUserMessageAt)), indicator: { state: 'closed', label: 'Closed', mark: '—' } }),
+          open: !!open,
         },
         run: () => openSession(s),
       };

@@ -198,17 +198,25 @@ test('dismissal invalidates choices before the native close event is delivered',
   } finally { f.dispose(); }
 });
 
-test('session badges are separate, searchable text and do not change activation', async () => {
+test('session membership is searchable without badges and rows share selected Enter hints', async () => {
   const chosen: string[] = [];
   const f = fixture(async () => ({ items: [
-    { id: 'a', label: 'A very long title', sessionRow: { timestamp: 100, indicator: sessionIndicator({ busy: true }), badge: 'Open' }, keywords: 'A very long preview /sessions/a.jsonl', run: () => { chosen.push('a'); } },
-    { id: 'b', label: 'Closed session', sessionRow: { timestamp: undefined, indicator: sessionIndicator({ inactive: true }) }, run: () => { chosen.push('b'); } },
+    { id: 'a', label: 'A very long title', sessionRow: { timestamp: 100, indicator: sessionIndicator({ busy: true }), open: true }, keywords: 'A very long preview /sessions/a.jsonl', run: () => { chosen.push('a'); } },
+    { id: 'b', label: 'Historical session', sessionRow: { timestamp: undefined, indicator: { state: 'closed', label: 'Closed', mark: '—' } }, run: () => { chosen.push('b'); } },
   ] }));
   try {
     await f.palette.sessions();
     assert.equal(f.list().querySelectorAll('.session-row').length, 2);
-    assert.equal(f.list().querySelectorAll('.session-row-badge').length, 1);
-    assert.equal(f.list().querySelector('.session-row-heading .session-row-badge')!.textContent, 'Open');
+    assert.equal(f.list().querySelectorAll('.session-row-badge').length, 0);
+    assert.equal(f.list().querySelectorAll('.palette-project-enter').length, 2);
+    assert.equal(f.list().querySelector('.palette-project-enter')!.getAttribute('aria-hidden'), 'true');
+    assert.equal(f.list().querySelector('.palette-project-enter')!.getAttribute('focusable'), 'false');
+    assert.equal(f.list().children[0].getAttribute('aria-selected'), 'true');
+    f.key('ArrowDown');
+    assert.equal(f.list().children[1].getAttribute('aria-selected'), 'true');
+    assert.equal(f.list().children[1].querySelector('.session-indicator')!.textContent, '—');
+    f.query('closed'); assert.equal(f.list().children.length, 1);
+    f.query('');
     assert.equal(f.list().querySelector('small')!.textContent, sessionTime(100));
     assert.equal(f.list().children[0].getAttribute('aria-label'), 'A very long title — Working — Open');
     assert.equal(f.list().children[1].querySelector('small')!.textContent, 'No message time');

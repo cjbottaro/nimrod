@@ -48,23 +48,21 @@ test('state indicators have distinct idle/unread/input/error shapes and explicit
   for (const state of ['starting', 'restarting', 'closing', 'deleting'] as const) assert.equal(sessionIndicator({ [state]: true, failed: true }).state, state);
 });
 
-test('shared row updates preserve content nodes and add/remove a separately accessible badge', () => {
+test('shared row updates preserve content nodes and expose open membership without a badge', () => {
   const dom = new JSDOM('');
   try {
     const row = dom.window.document.createElement('div');
     const content = createSessionRowContent(row, 'row-time');
-    const presentation = { timestamp: 100, indicator: sessionIndicator({ busy: true }), badge: 'Open' };
+    const presentation = { timestamp: 100, indicator: sessionIndicator({ busy: true }), open: true };
     updateSessionRowContent(content, 'Long title', presentation);
-    const badge = row.querySelector('.session-row-badge');
     assert.equal(content.rowLabel.textContent, 'Long title');
-    assert.equal(badge?.textContent, 'Open');
+    assert.equal(row.querySelector('.session-row-badge'), null);
     assert.equal(row.getAttribute('aria-label'), 'Long title — Working — Open');
     assert.equal(row.getAttribute('aria-describedby'), content.rowTime.id);
     updateSessionRowContent(content, 'Renamed', presentation);
-    assert.equal(row.querySelector('.session-row-badge'), badge);
     assert.equal(row.querySelector('.session-indicator'), content.rowIndicator);
     assert.equal(row.querySelector('time'), content.rowTime);
-    updateSessionRowContent(content, 'Renamed', { ...presentation, badge: undefined });
+    updateSessionRowContent(content, 'Renamed', { ...presentation, open: undefined });
     assert.equal(row.querySelector('.session-row-badge'), null);
     assert.equal(row.getAttribute('aria-label'), 'Renamed — Working');
   } finally { dom.window.close(); }
