@@ -6,7 +6,7 @@ const sessions = '#open-sessions .session-row';
 async function newOfflineDemo(page: Parameters<typeof demoFixture>[0]): Promise<void> {
   const count = await page.locator(sessions).count();
   await page.keyboard.press('Meta+Shift+P');
-  await page.locator('#palette-input').fill('new offline demo');
+  await page.locator('#palette-input').fill('new temporary session');
   await page.locator('#palette-input').press('Enter');
   await expect(page.locator(sessions)).toHaveCount(count + 1);
   await expect(page.locator(visible('send'))).toBeEnabled();

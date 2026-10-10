@@ -48,7 +48,6 @@ struct LaunchConfig {
     cwd: PathBuf,
     pi: PathBuf,
     node: PathBuf,
-    demo: bool,
     mode: LaunchMode,
     session_file: Option<PathBuf>,
     session_id: Option<String>,
@@ -173,11 +172,7 @@ async fn start_pi(
     {
         return Err("Open this directory as a project before starting a session".into());
     }
-    if config.demo && config.mode != LaunchMode::Temporary {
-        return Err("Demo must be temporary".into());
-    }
-    let session_name =
-        sessions::validate_launch_name(config.mode, config.demo, config.session_name.as_deref())?;
+    let session_name = sessions::validate_launch_name(config.mode, config.session_name.as_deref())?;
     let selected = match (config.mode, config.session_file.as_deref()) {
         (LaunchMode::Resume, Some(path)) => {
             let path = path.to_owned();
@@ -208,32 +203,27 @@ async fn start_pi(
         _ => None,
     };
     let node = executable(&config.node)?;
-    let mut command = if config.demo {
+    let pi = executable(&config.pi)?;
+    let mut command = if pi
+        .extension()
+        .is_some_and(|e| e == "js" || e == "mjs" || e == "cjs")
+    {
         let mut command = Command::new(&node);
-        command.arg(resource(&app, "demo.mjs")?);
+        command.arg(pi);
         command
     } else {
-        let pi = executable(&config.pi)?;
-        let mut command = if pi
-            .extension()
-            .is_some_and(|e| e == "js" || e == "mjs" || e == "cjs")
-        {
-            let mut command = Command::new(&node);
-            command.arg(pi);
-            command
-        } else {
-            #[cfg(windows)]
-            if pi.extension().is_some_and(|e| e == "cmd" || e == "bat") {
-                return Err("For this PoC on Windows, select Pi's dist/cli.js rather than the npm .cmd wrapper.".into());
-            }
-            Command::new(pi)
-        };
-        command
-            .args(["--mode", "rpc", "--offline", "--extension"])
-            .arg(resource(&app, "pi-model-scope.ts")?);
-        sessions::launch_args(&mut command, config.mode, selected.as_ref(), session_name);
-        command
+        #[cfg(windows)]
+        if pi.extension().is_some_and(|e| e == "cmd" || e == "bat") {
+            return Err(
+                "On Windows, select Pi's dist/cli.js rather than the npm .cmd wrapper.".into(),
+            );
+        }
+        Command::new(pi)
     };
+    command
+        .args(["--mode", "rpc", "--offline", "--extension"])
+        .arg(resource(&app, "pi-model-scope.ts")?);
+    sessions::launch_args(&mut command, config.mode, selected.as_ref(), session_name);
     let mut paths = vec![node.parent().ok_or("Invalid Node path")?.to_path_buf()];
     paths.extend(std::env::split_paths(
         &std::env::var_os("PATH").unwrap_or_default(),

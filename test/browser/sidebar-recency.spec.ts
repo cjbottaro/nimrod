@@ -13,7 +13,7 @@ test('All reorders only on accepted sends, preserves its visible anchor at zoom 
   try {
     const first = (await page.locator('.session-row').getAttribute('id'))!;
     for (let i = 0; i < 14; i++) {
-      await page.keyboard.press('Meta+Shift+P'); await page.locator('#palette-input').fill('new offline demo'); await page.locator('#palette-input').press('Enter');
+      await page.keyboard.press('Meta+Shift+P'); await page.locator('#palette-input').fill('new temporary session'); await page.locator('#palette-input').press('Enter');
       await expect(page.locator('.session-row')).toHaveCount(i + 2);
       await expect(page.locator(visible('send'))).toBeEnabled();
     }
@@ -91,7 +91,7 @@ test('minute refresh preserves sidebar/transcript reading, draft, focus, order a
   try {
     const oldest = (await page.locator('.session-row').getAttribute('id'))!;
     for (let i = 0; i < 5; i++) {
-      await page.keyboard.press('Meta+Shift+P'); await page.locator('#palette-input').fill('new offline demo'); await page.locator('#palette-input').press('Enter');
+      await page.keyboard.press('Meta+Shift+P'); await page.locator('#palette-input').fill('new temporary session'); await page.locator('#palette-input').press('Enter');
       await expect(page.locator('.session-row')).toHaveCount(i + 2); await expect(page.locator(visible('send'))).toBeEnabled();
     }
     await page.locator(`#${oldest}`).click();

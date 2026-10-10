@@ -5,7 +5,7 @@ test('deletion review preserves the idle sidebar indicator; only confirmed shutd
   const file = '/fixture/saved.jsonl', project = process.cwd();
   const demo = await demoFixture(page, {
     [`nimrod.tabs.v1:${project}`]: { tabs: [{ path: file, sessionId: 'saved', name: 'Saved fixture', lastUsed: 100 }] },
-    // Keep restored history unpresented until New offline demo: never launch Pi.
+    // Keep restored history unpresented until New temporary session: never launch Pi.
     [`nimrod.sidebar.view:${project}`]: 'working',
   });
   try {

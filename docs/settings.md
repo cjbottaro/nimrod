@@ -72,7 +72,7 @@ Pi and Node executable paths now live here instead of the launch form.
 - Persistence/validation failures keep the previously committed paths available and show the error without changing sessions.
 - Existing `nimrod.runtime.v1` / old launch preferences are migration sources only. Runtime paths now live under `runtime.piPath` and `runtime.nodePath` in `settings.json`.
 
-Project-folder selection and explicit new saved / exact-file resume / temporary / demo actions stay on the launch screen. Resume last session restores its remembered file/project pair only on an explicit click, never automatically at startup. Pi owns conversation persistence; per-session drafts and the last-session pointer are separate from application preferences. Model and thinking-level controls stay in the session's status area: those are live session controls, not application preferences.
+Project-folder selection and explicit new saved / temporary actions stay on the launch screen; **Resume session…** searches saved project history through the command palette. There is no arbitrary session-file chooser or demo launch action. Resume last session restores its remembered file/project pair only on an explicit click, never automatically at startup. Pi owns conversation persistence; per-session drafts and the last-session pointer are separate from application preferences. Model and thinking-level controls stay in the session's status area: those are live session controls, not application preferences.
 
 ## Implementation and verification
 

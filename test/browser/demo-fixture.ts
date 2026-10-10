@@ -80,7 +80,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'list_workspace_sessions') return { sessions: catalog, warnings: [] };
     if (command === 'start_pi') {
       const token = String(args.token);
-      if ((args.config as JsonRecord)?.demo !== true || children.has(token)) throw new Error('Only independent offline fixture processes are allowed');
+      if ((args.config as JsonRecord)?.mode !== 'temporary' || children.has(token)) throw new Error('Only independent offline fixture processes are allowed');
       const child = spawn(process.execPath, ['src-tauri/resources/demo.mjs'], { cwd: process.cwd(), stdio: ['pipe', 'pipe', 'pipe'] });
       children.set(token, child);
       createInterface({ input: child.stdout }).on('line', line => send(token, { kind: 'rpc', value: JSON.parse(line) }));
@@ -123,7 +123,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
   try {
     await page.goto('https://nimrod.test/');
     await page.addScriptTag({ content: result.outputFiles![0].text });
-    await page.locator('#start-demo').click();
+    await page.locator('#start-temporary').click();
     await expect(page.locator(visible('send'))).toBeEnabled();
     await page.evaluate(() => {
       document.documentElement.style.zoom = '1.25';

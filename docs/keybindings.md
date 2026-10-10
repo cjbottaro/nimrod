@@ -30,13 +30,15 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 | Toggle session sidebar | Cmd/Ctrl+B |
 | Previous / next open session | Cmd/Ctrl+Shift+[ / ] |
 | Settings | Cmd/Ctrl+, |
+| Edit keybindings… | Cmd/Ctrl+Shift+, |
+| Restart session | Cmd/Ctrl+R |
 | Zoom in / out / reset to 100% | Cmd/Ctrl+Plus / Minus / 0 |
 
 **Switch session** searches only open sessions, including temporary sessions and sessions hidden by the sidebar view. **Resume session** searches saved project history, including closed sessions; choosing an already-open entry focuses it. **New named session** opens the name field first; type a name and press Enter to create it. Cmd/Ctrl+P has no Nimrod default binding.
 
 **Open recent project…** searches recently opened directories and is configurable like other palette commands. **Open project…** / Cmd/Ctrl+O remains the native directory-only chooser, outside this editor.
 
-Other listed actions can be assigned shortcuts even if they have no default. Plus and Equals both invoke Zoom in. Existing user overrides remain unchanged when defaults change; Reset the affected action to adopt its new defaults.
+Every current command-palette command has a default shortcut and can be rebound or unbound. **Restart session** restarts the selected saved session's Pi process, not the window; its existing eligibility and interruption-confirmation rules still apply. Offline demo and arbitrary session-file opening are no longer app commands. Plus and Equals both invoke Zoom in. Existing user overrides remain unchanged when defaults change; Reset the affected action to adopt its new defaults.
 
 **Delete opens the existing session-tree review; it does not immediately delete a session.** Its normal saved-session/idle eligibility rules still apply. Closing a saved session is not deletion. Temporary sessions use their existing Close/disposal flow.
 

@@ -12,16 +12,14 @@ export const ACTIONS = [
   { id: 'previous', label: 'Previous open session', scope: 'project', defaults: ['primary+shift+['] },
   { id: 'next', label: 'Next open session', scope: 'project', defaults: ['primary+shift+]'] },
   { id: 'settings', label: 'Settings', scope: 'app', defaults: ['primary+,'] },
-  { id: 'keybindings', label: 'Edit keybindings…', scope: 'project', defaults: [] },
+  { id: 'keybindings', label: 'Edit keybindings…', scope: 'project', defaults: ['primary+shift+,'] },
   { id: 'zoom-in', label: 'Zoom in', scope: 'app', defaults: ['primary+plus'] },
   { id: 'zoom-out', label: 'Zoom out', scope: 'app', defaults: ['primary+-'] },
   { id: 'zoom-reset', label: 'Reset zoom to 100%', scope: 'app', defaults: ['primary+0'] },
   { id: 'resume', label: 'Resume session…', scope: 'project', defaults: ['primary+k'] },
   { id: 'switch-session', label: 'Switch session…', scope: 'project', defaults: ['primary+t'] },
   { id: 'new-named', label: 'New named session…', scope: 'project', defaults: ['primary+alt+n'] },
-  { id: 'restart', label: 'Restart session', scope: 'project', defaults: [] },
-  { id: 'file', label: 'Open session file…', scope: 'project', defaults: [] },
-  { id: 'demo', label: 'New offline demo', scope: 'project', defaults: [] },
+  { id: 'restart', label: 'Restart session', scope: 'project', defaults: ['primary+r'] },
 ] as const;
 export type ActionId = typeof ACTIONS[number]['id'];
 export type KeyOverrides = Record<string, string[]>;

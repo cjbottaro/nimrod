@@ -25,6 +25,15 @@ test('defaults distinguish creation, named creation, open-session switching and 
   assert.deepEqual(bindingsFor('switch-session', {}), ['primary+t']);
   assert.equal(ACTIONS.some(action => action.defaults.some(binding => String(binding) === 'primary+p')), false);
   assert.deepEqual(bindingsFor('resume', {}), ['primary+k']);
+  assert.deepEqual(bindingsFor('restart', {}), ['primary+r']);
+  assert.deepEqual(bindingsFor('keybindings', {}), ['primary+shift+,']);
+  assert.ok(ACTIONS.every(action => action.defaults.length > 0));
+  assert.equal(ACTIONS.some(action => ['demo', 'file'].includes(action.id)), false);
+  for (const id of ['restart', 'keybindings'] as const) {
+    assert.deepEqual(bindingsFor(id, { [id]: [] }), []);
+    assert.deepEqual(bindingsFor(id, { [id]: ['primary+j'] }), ['primary+j']);
+  }
+  assert.deepEqual(readKeyOverrides({ demo: ['primary+d'], file: ['primary+f'] }), { demo: ['primary+d'], file: ['primary+f'] }, 'removed action overrides are retained but inert');
   assert.deepEqual(bindingsFor('open-recent-project', {}), ['primary+shift+o']);
   assert.equal(validateBinding('primary+shift+o'), 'primary+shift+o');
   for (const binding of ['primary+o', 'cmd+o', 'ctrl+o']) assert.throws(() => validateBinding(binding));
@@ -131,7 +140,7 @@ test('preferences save per-action JSONC patches against fresh snapshots, retain 
     assert.deepEqual(p.keybindings()['future-action'], ['primary+j']);
     // This change happens on disk without delivering a broadcast first.
     host.value.text = editSettings(host.value.text, { keybindings: { ...p.keybindings(), model: ['primary+u'] } }); host.value.revision++;
-    await p.saveKeybinding('thinking', ['primary+r'], false, true);
+    await p.saveKeybinding('thinking', ['primary+y'], false, true);
     assert.deepEqual(p.keybindings().model, ['primary+u']);
     await p.saveKeybinding('new', undefined, false, true); assert.equal(p.keybindings().new, undefined);
     await p.saveKeybinding('model', ['primary+n'], true, true); assert.deepEqual(p.keybindings().new, []);

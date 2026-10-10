@@ -202,6 +202,71 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   };
 }
 
+test('palette commands all have default shortcuts and removed actions stay absent and inert', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    assert.equal(f.win.document.querySelector('#start-demo, #resume-file'), null);
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    f.openPalette();
+    const rows = [...f.element('palette-list').querySelectorAll('[role=option]')];
+    assert.ok(rows.length > 0);
+    for (const row of rows) assert.ok(row.querySelector('kbd')?.textContent, row.textContent!);
+    assert.doesNotMatch(f.element('palette-list').textContent!, /offline demo|session file/i);
+    f.element<HTMLDialogElement>('command-palette').close(); await f.tick();
+    f.preferences.external('{"keybindings":{"demo":["primary+d"],"file":["primary+f"]}}'); await f.tick();
+    const calls = f.calls.length;
+    for (const key of ['d', 'f']) {
+      const event = new f.win.KeyboardEvent('keydown', { key, metaKey: true, bubbles: true, cancelable: true });
+      f.win.dispatchEvent(event); assert.equal(event.defaultPrevented, false);
+    }
+    await f.tick(); assert.equal(f.calls.length, calls);
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: ',', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+    await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('settings-page').open, true);
+    assert.equal(f.win.document.activeElement, f.element('keybinding-search'));
+    assert.equal(f.win.document.querySelector('.keybinding-row[data-action="demo"], .keybinding-row[data-action="file"]'), null);
+    f.back();
+    f.preferences.external('{"keybindings":{"keybindings":[]}}'); await f.tick();
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: ',', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+    assert.equal(f.element<HTMLDialogElement>('settings-page').open, false);
+    f.preferences.external('{"keybindings":{"keybindings":["primary+j"]}}'); await f.tick();
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'j', metaKey: true, bubbles: true, cancelable: true }));
+    assert.equal(f.win.document.activeElement, f.element('keybinding-search'));
+  } finally { f.win.close(); }
+});
+
+test('Cmd-R restarts the selected saved session, preserves its draft and honors modality, repeats and overrides', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  const key = (name = 'r', extra: KeyboardEventInit = {}) => {
+    const event = new f.win.KeyboardEvent('keydown', { key: name, metaKey: true, bubbles: true, cancelable: true, ...extra });
+    f.win.dispatchEvent(event); return event;
+  };
+  try {
+    key(); await f.tick(); assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 0);
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    key(); await f.tick(); assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const root = f.win.document.querySelector('.session-view:not([hidden])');
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Retained restart draft'; prompt.dispatchEvent(new f.win.Event('input'));
+    f.openPalette(); key(); await f.tick(); assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 2);
+    f.element<HTMLDialogElement>('command-palette').close(); await f.tick();
+    key('r', { repeat: true }); key('r', { isComposing: true }); key('r', { shiftKey: true });
+    await f.tick(); assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 2);
+    key(); await f.tick(); await f.tick();
+    assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 3);
+    const config = f.calls.filter(c => c.command === 'start_pi').at(-1)!.args.config as JsonRecord;
+    assert.equal(config.mode, 'resume'); assert.equal(config.sessionFile, '/sessions/new.jsonl');
+    assert.equal(f.win.document.querySelector('.session-view:not([hidden])'), root);
+    assert.equal(f.element('prompt'), prompt); assert.equal(prompt.value, 'Retained restart draft');
+    f.preferences.external('{"keybindings":{"restart":["primary+j"]}}'); await f.tick();
+    assert.equal(key().defaultPrevented, false);
+    key('j'); await f.tick(); await f.tick(); assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 4);
+    f.preferences.external('{"keybindings":{"restart":[]}}'); await f.tick();
+    assert.equal(key().defaultPrevented, false); assert.equal(key('j').defaultPrevented, false);
+    assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
+  } finally { f.win.close(); }
+});
+
 test('recent-project defaults and overrides use the keybinding registry without native shortcut interception', async () => {
   const f = await fixture(undefined, { projects: [{ cwd: '/work/project', open: false }] });
   const key = (key: string, shiftKey = false) => {
@@ -1683,7 +1748,7 @@ test('external settings edits synchronize Appearance and saved Runtime while pre
     assert.equal(pi.value, '/unsaved/pi');
     f.preferences.external('{"appearance.theme":"dracula","appearance.zoom":150,"runtime.piPath":"/external/pi","runtime.nodePath":"/external/node"}');
     assert.equal(f.element('preferences-error').hidden, true);
-    f.back(); f.element<HTMLButtonElement>('start-demo').click(); await f.tick(); await f.tick();
+    f.back(); f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
     const config = f.calls.find(c => c.command === 'start_pi')!.args.config as JsonRecord;
     assert.equal(config.pi, '/external/pi'); assert.equal(config.node, '/external/node');
     assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
@@ -1710,13 +1775,13 @@ test('shell boots without Pi and Settings holds application preferences, not ses
     assert.equal(win.document.documentElement.style.getPropertyValue('--vscode-editor-background'), '#282a36');
     assert.equal(JSON.parse(f.preferences.value.text.replace(/^\/\/[^\n]*\n/, ''))['appearance.theme'], 'dracula');
     // Even a synthetic launch request while Settings is open cannot start a process.
-    element<HTMLButtonElement>('start-demo').click();
+    element<HTMLButtonElement>('start-temporary').click();
     assert.equal(calls.filter(c => c.command === 'start_pi').length, 0);
     f.back();
-    const demo = element<HTMLButtonElement>('start-demo');
+    const demo = element<HTMLButtonElement>('start-temporary');
     assert.equal(demo.disabled, false); demo.click(); await f.tick(); await f.tick();
     assert.equal(element('welcome').hidden, true); assert.equal(element('conversation').hidden, false);
-    assert.equal((calls.find(c => c.command === 'start_pi')!.args.config as JsonRecord).demo, true);
+    assert.equal((calls.find(c => c.command === 'start_pi')!.args.config as JsonRecord).mode, 'temporary');
     const prompt = element<HTMLTextAreaElement>('prompt');
     prompt.value = 'hello'; prompt.dispatchEvent(new win.Event('input'));
     prompt.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
@@ -1729,7 +1794,7 @@ test('shell boots without Pi and Settings holds application preferences, not ses
 test('Settings preserves a live conversation and saving paths does not mutate its launch', async () => {
   const f = await fixture(); const { win, element, calls } = f;
   try {
-    element<HTMLButtonElement>('start-demo').click(); await f.tick(); await f.tick();
+    element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
     const original = JSON.stringify(calls.find(c => c.command === 'start_pi')!.args.config);
     f.emit({ type: 'agent_start' });
     f.emit({ type: 'message_start', message: { role: 'assistant', timestamp: 1, content: [{ type: 'toolCall', id: 'tool', name: 'bash', arguments: { command: 'fixture' } }] } });
@@ -1770,7 +1835,7 @@ test('startup completing behind Settings cannot steal settings focus', async () 
   let finish!: () => void;
   const f = await fixture(new Promise<void>(resolve => { finish = resolve; }));
   try {
-    f.element<HTMLButtonElement>('start-demo').click();
+    f.element<HTMLButtonElement>('start-temporary').click();
     await f.tick();
     f.openSettings();
     finish(); await f.tick(); await f.tick();
@@ -1787,7 +1852,7 @@ test('saved launch waits for a written Pi file before remembering exact resume i
   try {
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
     const config = f.calls.find(c => c.command === 'start_pi')!.args.config as JsonRecord;
-    assert.equal(config.mode, 'saved'); assert.equal(config.demo, false);
+    assert.equal(config.mode, 'saved'); assert.equal('demo' in config, false);
     assert.equal(f.element('mode-badge').textContent, 'Pi · awaiting first save');
     assert.equal(f.saved().last, undefined);
     assert.equal((f.calls.filter(c => c.command === 'sync_popout_sessions').at(-1)!.args.sessions as JsonRecord[])[0].pi, null);
@@ -1831,14 +1896,21 @@ test('resume last is explicit, restores exact-file history and scoped uncertain 
 });
 
 test('resume picker cancellation starts nothing and identity mismatch disables submission', async () => {
-  const canceled = await fixture(undefined, { filePath: null });
+  const catalog = [{ path: '/sessions/exact.jsonl', sessionId: 'fixture-id', name: 'Selected history', preview: '', modified: 1 }];
+  const canceled = await fixture(undefined, { windowWorkspace: '/project', catalog });
   try {
-    canceled.element<HTMLButtonElement>('resume-file').click(); await canceled.tick(); await canceled.tick();
+    canceled.win.dispatchEvent(new canceled.win.KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true, cancelable: true }));
+    await canceled.tick();
+    canceled.element<HTMLInputElement>('palette-input').dispatchEvent(new canceled.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await canceled.tick();
     assert.equal(canceled.calls.some(c => c.command === 'start_pi'), false);
   } finally { canceled.dom.window.close(); }
-  const f = await fixture(undefined, { state: () => ({ sessionFile: '/sessions/wrong.jsonl', sessionId: 'wrong-id' }) });
+  const f = await fixture(undefined, { windowWorkspace: '/project', catalog, state: () => ({ sessionFile: '/sessions/wrong.jsonl', sessionId: 'wrong-id' }) });
   try {
-    f.element<HTMLButtonElement>('resume-file').click(); await f.tick(); await f.tick();
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true, cancelable: true }));
+    await f.tick();
+    f.element<HTMLInputElement>('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
     assert.equal(f.element('welcome').hidden, true);
     assert.match(f.element('launch-error').textContent!, /exact selected session/);
     assert.equal(f.element<HTMLButtonElement>('send').disabled, true);
@@ -1860,8 +1932,8 @@ test('startup extension editor events apply only after the target draft is bound
   } finally { f.dom.window.close(); }
 });
 
-test('temporary/demo Close discards runtime state only after confirmation and successful owned shutdown', async () => {
-  for (const start of ['start-temporary', 'start-demo']) {
+test('temporary Close discards runtime state only after confirmation and successful owned shutdown', async () => {
+  for (const start of ['start-temporary']) {
     let failStop = false;
     const f = await fixture(undefined, { stopError: () => failStop ? 'fixture stop failure' : undefined });
     try {
@@ -1931,19 +2003,19 @@ test('invalid native resume does not fall back to a new session or overwrite rem
   } finally { f.dom.window.close(); }
 });
 
-test('legacy draft recovery is explicit and demo/temporary drafts never leak into saved sessions', async () => {
+test('legacy draft recovery is explicit and temporary drafts never leak into saved sessions', async () => {
   const f = await fixture(undefined, { storage: { 'nimrod.poc.composer': { draft: 'legacy text',
     submission: { id: 'legacy', text: 'legacy text', mode: 'steer', status: 'pending' } } } });
   try {
     assert.equal(f.element('recover-draft').hidden, false);
-    f.element<HTMLButtonElement>('start-demo').click(); await f.tick(); await f.tick();
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
     assert.equal(f.element<HTMLTextAreaElement>('prompt').value, '');
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'demo draft'; prompt.dispatchEvent(new f.win.Event('input'));
     f.win.document.querySelector<HTMLButtonElement>('.session-close')!.click(); await f.confirm();
     f.element<HTMLButtonElement>('recover-draft').click(); await f.confirm();
     assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'legacy text');
     assert.equal(f.element<HTMLButtonElement>('send').disabled, true);
-    assert.equal(Object.keys(f.saved().drafts).some(key => key.startsWith('demo:')), false, 'closed demo drafts are discarded, not recoverable');
+    assert.equal(Object.keys(f.saved().drafts).some(key => key.startsWith('temporary:')), false, 'closed temporary drafts are discarded, not recoverable');
     assert.equal(f.saved().drafts['file:/sessions/new.jsonl'].submission.status, 'unknown');
     assert.equal(f.calls.filter(c => (c.args.message as JsonRecord)?.type === 'prompt').length, 0);
     f.disconnect();
@@ -1976,7 +2048,7 @@ test('sibling launch can proceed during shutdown and late old receipts cannot cl
   } finally { release(); f.dom.window.close(); }
 });
 
-test('Project bar restart stays disabled for no session, temporary/demo sessions and an unverified first save', async () => {
+test('Project bar restart stays disabled for no session, temporary sessions and an unverified first save', async () => {
   let saved = false;
   const f = await fixture(undefined, { fileExists: () => saved });
   try {
@@ -1985,7 +2057,7 @@ test('Project bar restart stays disabled for no session, temporary/demo sessions
     assert.equal(restart.getAttribute('aria-label'), 'Restart session');
     assert.equal(restart.querySelector('svg')?.getAttribute('aria-hidden'), 'true');
     assert.equal(restart.textContent, '');
-    for (const id of ['start-temporary', 'start-demo']) {
+    for (const id of ['start-temporary']) {
       f.element<HTMLButtonElement>(id).click(); await f.tick(); await f.tick();
       assert.equal(restart.disabled, true); assert.match(restart.title, /temporary/);
       const count = f.calls.filter(c => c.command === 'start_pi').length;
@@ -2015,7 +2087,7 @@ test('restart reaps only the selected child and resumes the exact file in the sa
     f.element<HTMLButtonElement>('restart-session').click(); await f.tick(); await f.tick();
     const launches = f.calls.filter(c => c.command === 'start_pi');
     assert.equal(launches.length, 3);
-    assert.deepEqual({ ...(launches[2].args.config as JsonRecord) }, { cwd: '/project', pi: '/bin/pi', node: '/bin/node', demo: false, mode: 'resume', sessionName: undefined, sessionFile: '/sessions/new-1.jsonl', sessionId: 'fixture-id' });
+    assert.deepEqual({ ...(launches[2].args.config as JsonRecord) }, { cwd: '/project', pi: '/bin/pi', node: '/bin/node', mode: 'resume', sessionName: undefined, sessionFile: '/sessions/new-1.jsonl', sessionId: 'fixture-id' });
     assert.notEqual(launches[2].args.token, oldToken);
     assert.deepEqual(f.calls.filter(c => c.command === 'stop_pi' && c.args.token).map(c => c.args.token), [oldToken]);
     assert.ok(f.calls.findIndex(c => c.command === 'stop_pi' && c.args.token === oldToken) < f.calls.indexOf(launches[2]));
@@ -2322,15 +2394,15 @@ test('the selected restored tab loads automatically without replaying its scoped
 test('a background extension dialog is labeled and replies only to its originating session', async () => {
   const f = await fixture();
   try {
-    f.element<HTMLButtonElement>('start-demo').click(); await f.tick(); await f.tick();
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
     const first = [...f.sessions.entries()][0];
     f.openPalette();
-    const input = f.element<HTMLInputElement>('palette-input'); input.value = 'new offline demo'; input.dispatchEvent(new f.win.Event('input'));
+    const input = f.element<HTMLInputElement>('palette-input'); input.value = 'new temporary session'; input.dispatchEvent(new f.win.Event('input'));
     input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
     const secondPrompt = f.element('prompt');
     first[1].channel.onmessage({ kind: 'rpc', value: { type: 'extension_ui_request', method: 'input', id: 'question', title: 'Need input' } });
     await f.tick();
-    assert.match(f.element('host-dialog-title').textContent!, /Offline demo — Need input/);
+    assert.match(f.element('host-dialog-title').textContent!, /Temporary session — Need input/);
     assert.match(f.rows()[0].getAttribute('aria-label')!, /Input needed/);
     f.element<HTMLTextAreaElement>('host-dialog-input').value = 'answer'; await f.confirm();
     const response = f.calls.find(c => (c.args.message as JsonRecord)?.type === 'extension_ui_response');
@@ -2365,7 +2437,7 @@ test('Cmd-Shift-P resume flow filters history and opens only the selected exact 
 test('Pi dialogs retain focus priority above the palette without dismissing it', async () => {
   const f = await fixture();
   try {
-    f.element<HTMLButtonElement>('start-demo').click(); await f.tick(); await f.tick();
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.focus();
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'P', metaKey: true, shiftKey: true, cancelable: true }));
     f.emit({ type: 'extension_ui_request', method: 'input', id: 'above-palette', title: 'Pi question' }); await f.tick();

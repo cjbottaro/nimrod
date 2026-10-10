@@ -160,13 +160,9 @@ pub fn reported_file(path: &Path, cwd: &Path, id: &str) -> Result<SessionFile, S
     }
 }
 
-pub fn validate_launch_name(
-    mode: LaunchMode,
-    demo: bool,
-    name: Option<&str>,
-) -> Result<Option<&str>, String> {
+pub fn validate_launch_name(mode: LaunchMode, name: Option<&str>) -> Result<Option<&str>, String> {
     let Some(name) = name else { return Ok(None) };
-    if mode != LaunchMode::Saved || demo {
+    if mode != LaunchMode::Saved {
         return Err("Only new persistent sessions accept a launch name".into());
     }
     if name.trim().is_empty() || name.contains(['\r', '\n', '\0']) {
@@ -266,7 +262,7 @@ mod tests {
             "quotes \" ; $(echo nope)",
             "日本語",
         ] {
-            let name = validate_launch_name(LaunchMode::Saved, false, Some(name)).unwrap();
+            let name = validate_launch_name(LaunchMode::Saved, Some(name)).unwrap();
             let mut command = Command::new("pi");
             launch_args(&mut command, LaunchMode::Saved, None, name);
             assert_eq!(
@@ -275,19 +271,15 @@ mod tests {
             );
         }
         assert_eq!(
-            validate_launch_name(LaunchMode::Saved, false, Some("  Task  ")).unwrap(),
+            validate_launch_name(LaunchMode::Saved, Some("  Task  ")).unwrap(),
             Some("Task")
         );
         for name in ["", "   ", "two\nlines", "two\rlines", "null\0byte"] {
-            assert!(validate_launch_name(LaunchMode::Saved, false, Some(name)).is_err());
+            assert!(validate_launch_name(LaunchMode::Saved, Some(name)).is_err());
         }
-        for (mode, demo) in [
-            (LaunchMode::Resume, false),
-            (LaunchMode::Temporary, false),
-            (LaunchMode::Saved, true),
-        ] {
-            assert!(validate_launch_name(mode, demo, Some("Task")).is_err());
-            assert_eq!(validate_launch_name(mode, demo, None).unwrap(), None);
+        for mode in [LaunchMode::Resume, LaunchMode::Temporary] {
+            assert!(validate_launch_name(mode, Some("Task")).is_err());
+            assert_eq!(validate_launch_name(mode, None).unwrap(), None);
         }
     }
 

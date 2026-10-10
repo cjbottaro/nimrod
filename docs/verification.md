@@ -1,4 +1,10 @@
-# PoC verification
+# Verification
+
+## Palette command cleanup
+
+- Implemented locally on `feat/palette-command-cleanup` in `.worktrees/palette-command-cleanup`: removed offline-demo and arbitrary session-file opening from the app, including palette/keybinding entries and welcome controls. The product launcher no longer accepts demo mode or bundles its fixture. Existing exact-file validation for discovered/restored sessions remains. Offline tests intercept temporary-session launches and use the retained fixture directly.
+- Restart defaults to **Cmd/Ctrl+R**, Edit keybindings to **Cmd/Ctrl+Shift+Comma**. Every current palette command has a default; existing overrides/unbinding remain authoritative, and removed action overrides stay inert. Shell tests cover draft-preserving exact-session restart, modal/repeat/IME guards, rebinding/unbinding, absent controls/actions and no prompt replay. Offline WebKit checks palette shortcut coverage, keybinding focus and retained conversations.
+- `CARGO_NET_OFFLINE=true mise run check` passed **397 TS/Node tests**, formatting/Clippy and **97 Rust tests** (two opt-in real-Pi smokes ignored). All **43 offline WebKit tests** passed. `CARGO_NET_OFFLINE=true mise run build` packaged/ad-hoc-signed/verified `.worktrees/palette-command-cleanup/src-tauri/target/release/bundle/macos/Nimrod.app`; resource inspection confirms no bundled `demo.mjs`. No running user app, primary bundle, live Pi/models, user-session files or upstream extension was touched. Native Cmd+R/menu interception and visual/focus acceptance remain user validation; Linux and possible Windows are not platform-verified. No commit or push.
 
 ## Selected-session loading and connection
 

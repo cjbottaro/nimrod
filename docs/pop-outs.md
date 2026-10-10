@@ -31,7 +31,7 @@ On macOS, ⌘\` cycles project windows, skipping pop-outs. Click a pop-out to fo
 it; ⌘W still closes it. Automatic restoration leaves keyboard focus on the composer
 or active dialog.
 
-Temporary/demo pop-outs last only for the current run. New saved sessions gain
+Temporary-session pop-outs last only for the current run. New saved sessions gain
 persistent pop-outs after Pi's first verified save. Compaction does not remove
 captured content. Pop-outs do not provide editing or “Show in conversation.”
 

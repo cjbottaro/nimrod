@@ -20,7 +20,19 @@ test('session shortcut defaults open Switch, Resume and New named directly witho
     await expect(page.locator('#palette-input')).toBeFocused();
     await page.locator('#palette-input').fill('Do not launch this fixture'); await page.keyboard.press('Escape');
     await expect(page.locator('#command-palette')).not.toBeVisible(); await expect(prompt).toHaveValue('Keep this draft'); await expect(prompt).toBeFocused();
-    await page.locator('#open-settings').click();
+    await page.keyboard.press(primary + '+Shift+P');
+    const commands = page.locator('#palette-list [role=option]');
+    await expect(commands).not.toHaveCount(0);
+    expect(await commands.count()).toBe(await commands.locator('kbd').count());
+    await expect(page.locator('#palette-list')).not.toContainText('New offline demo');
+    await expect(page.locator('#palette-list')).not.toContainText('Open session file');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#start-demo, #resume-file')).toHaveCount(0);
+    await page.keyboard.press(primary + '+R'); // Temporary fixtures cannot restart.
+    expect(demo.calls.filter(call => call.command === 'start_pi')).toHaveLength(starts);
+    await page.keyboard.press(primary + '+Shift+,');
+    await expect(page.locator('#keybinding-search')).toBeFocused();
+    await expect(page.locator('.keybinding-row[data-action="demo"], .keybinding-row[data-action="file"]')).toHaveCount(0);
     await expect(page.locator('.keybinding-row[data-action="new"] button').filter({ hasText: /N$/ })).toHaveCount(1);
     await expect(page.locator('.keybinding-row[data-action="switch-session"] button').filter({ hasText: /T$/ })).toHaveCount(1);
     await expect(page.locator('.keybinding-row[data-action="switch-session"] button').filter({ hasText: /P$/ })).toHaveCount(0);

@@ -95,7 +95,7 @@ const popouts = installSessionPopouts({
 const unlistenPopoutErrors = await listen<string>('nimrod-popout-error', event => popoutError(event.payload));
 function syncPopouts(): void {
   if (!workspace) return;
-  popouts.sync(tabs.map(tab => ({ runtimeId: tab.id, pi: tab.file?.exists && !tab.demo && tab.mode !== 'temporary'
+  popouts.sync(tabs.map(tab => ({ runtimeId: tab.id, pi: tab.file?.exists && tab.mode !== 'temporary'
     ? { path: tab.file.path, sessionId: tab.file.sessionId } : null })), presented?.id ?? null);
 }
 type LaunchMode = 'saved' | 'temporary' | 'resume';
@@ -103,7 +103,7 @@ interface SessionFile { path: string; sessionId: string; exists: boolean; parent
 interface LaunchInfo { cwd: string; session?: SessionFile; }
 interface SessionSummary { path: string; sessionId: string; name?: string; preview: string; modified: number; parentSession?: string | null; lastUserMessageAt?: number; }
 interface Tab {
-  id: string; token?: string; title: string; lastUsed: number; mode: LaunchMode; demo: boolean; file?: SessionFile;
+  id: string; token?: string; title: string; lastUsed: number; mode: LaunchMode; file?: SessionFile;
   root: HTMLElement; view: PiView; drafts: SessionDrafts; receive?: (message: HostMessage) => void;
   session?: PiSession; starting: boolean; closing: boolean; restarting: boolean; deleting: boolean; deletionExecuting: boolean; ended: boolean; stopTask?: Promise<void>;
   inputCount: number; unread: boolean; failed: boolean; focus?: HTMLElement; notice: HTMLElement;
@@ -223,7 +223,7 @@ const selectedConnection = new SessionConnection<Tab>({
   failed: (tab, error) => { if (tabs.includes(tab)) showNotice(tab, `Could not connect Pi: ${error}`, true); },
 });
 const deletion = new SessionDeletion({
-  panels: () => tabs.filter(tab => tab.file?.exists && !tab.demo && tab.mode !== 'temporary').map(tab => ({
+  panels: () => tabs.filter(tab => tab.file?.exists && tab.mode !== 'temporary').map(tab => ({
     file: tab.file!.path,
     lock: locked => { tab.deleting = locked; if (!locked) tab.deletionExecuting = false; tab.receive?.({ type: 'deletionLock', locked }); updateTab(tab); },
     executionStarted: () => { tab.deletionExecuting = true; updateTab(tab); },
@@ -289,12 +289,12 @@ window.addEventListener('unload', () => {
 }, { once: true });
 
 function recoverableDrafts(): { key: string; label: string }[] {
-  return drafts.recoverable().filter(o => !tabs.some(t => o.key === `unassigned:${t.id}` || o.key === `${t.demo ? 'demo' : 'temporary'}:${workspace}:${t.id}`));
+  return drafts.recoverable().filter(o => !tabs.some(t => o.key === `unassigned:${t.id}` || o.key === `temporary:${workspace}:${t.id}`));
 }
 function controls(): void {
   welcome.hidden = !ready || !!workspace;
   required('workspace-empty').hidden = !workspace || !!active || sidebarView !== 'all';
-  for (const id of ['workspace-new', 'workspace-resume', 'start-pi', 'start-temporary', 'start-demo', 'resume-file', 'resume-last', 'recover-draft', 'browse', 'cwd', 'enter-workspace', 'sidebar-new']) {
+  for (const id of ['workspace-new', 'workspace-resume', 'start-pi', 'start-temporary', 'resume-last', 'recover-draft', 'browse', 'cwd', 'enter-workspace', 'sidebar-new']) {
     (required(id) as HTMLButtonElement | HTMLInputElement).disabled = !ready || deletion.pending;
   }
   cwd.readOnly = !!workspace;
@@ -391,7 +391,7 @@ function presentConversation(tab: Tab | undefined): void {
     item.row.setAttribute('aria-current', String(item === presented));
   }
   const badge = required('mode-badge');
-  badge.textContent = !tab ? '' : tab.demo ? 'Fixture · no model' : tab.mode === 'temporary' ? 'Pi · temporary' : tab.file?.exists ? 'Pi' : 'Pi · awaiting first save';
+  badge.textContent = !tab ? '' : tab.mode === 'temporary' ? 'Pi · temporary' : tab.file?.exists ? 'Pi' : 'Pi · awaiting first save';
   badge.title = tab?.file?.path || '';
   restartControl();
 }
@@ -405,7 +405,7 @@ function deletionBusy(tab: Tab): boolean {
   const state = tab.session?.state;
   return tab.starting || tab.closing || tab.restarting || !!tab.inputCount || submissionPending(tab) || !!(state && !tab.ended && (state.busy || state.compacting || state.modelControls.changing || state.sessionUnavailable || state.queue.pendingCount || state.queue.steering.length || state.queue.followUp.length || presentActivity(false, '', state.extensionStatuses).subagents));
 }
-function restartable(tab: Tab): boolean { return !!tab.file?.exists && !tab.demo && tab.mode !== 'temporary'; }
+function restartable(tab: Tab): boolean { return !!tab.file?.exists && tab.mode !== 'temporary'; }
 function deletable(tab: Tab | undefined): boolean {
   return ready && !deletion.pending && !!tab && tabs.includes(tab) && restartable(tab) &&
     !tab.deleting && !deletion.blocked(tab.file?.path) && !deletionBusy(tab);
@@ -416,8 +416,8 @@ function restartControl(): void {
   button.disabled = !ready || deletion.pending || !active || !restartable(active) || deletion.blocked(active.file?.path) || active.starting || active.closing || active.restarting;
   const remove = required<HTMLButtonElement>('delete-session');
   remove.disabled = !deletable(active);
-  remove.title = !active ? 'Delete session tree… — no open session' : deletion.pending ? 'Delete session tree… — deletion pending' : deletion.blocked(active.file?.path) ? 'Delete session tree… — recover through Resume session first' : active.demo || active.mode === 'temporary' ? 'Delete session tree… — unavailable for temporary sessions' : !restartable(active) ? 'Delete session tree… — unavailable until saved' : deletionBusy(active) ? 'Delete session tree… — wait for active work to finish' : 'Delete session tree…';
-  button.title = !active ? 'Restart session — no open session' : deletion.blocked(active.file?.path) ? 'Restart session — recover through Resume session first' : active.demo || active.mode === 'temporary'
+  remove.title = !active ? 'Delete session tree… — no open session' : deletion.pending ? 'Delete session tree… — deletion pending' : deletion.blocked(active.file?.path) ? 'Delete session tree… — recover through Resume session first' : active.mode === 'temporary' ? 'Delete session tree… — unavailable for temporary sessions' : !restartable(active) ? 'Delete session tree… — unavailable until saved' : deletionBusy(active) ? 'Delete session tree… — wait for active work to finish' : 'Delete session tree…';
+  button.title = !active ? 'Restart session — no open session' : deletion.blocked(active.file?.path) ? 'Restart session — recover through Resume session first' : active.mode === 'temporary'
     ? 'Restart session — unavailable for temporary sessions' : !active.file?.exists
     ? 'Restart session — available after the first save' : active.restarting ? 'Restarting session…' : 'Restart session';
 }
@@ -477,7 +477,7 @@ async function enterWorkspace(path: string): Promise<void> {
     }
     if (unloading) return;
     if (deletion.removed(t.path)) continue;
-    const tab = createTab('resume', false, { path: t.path, sessionId: t.sessionId, exists: true }, typeof t.name === 'string' ? t.name : 'Session', used);
+    const tab = createTab('resume', { path: t.path, sessionId: t.sessionId, exists: true }, typeof t.name === 'string' ? t.name : 'Session', used);
     tab.drafts.select(`file:${t.path}`);
     tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
   }
@@ -580,9 +580,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
       { id: 'restart', label: 'Restart session', detail: 'Restart Pi and retain this conversation', run: () => restartSession(active!) },
       { id: 'delete', label: 'Delete session tree…', detail: 'Review removal of this saved session and its descendants', run: () => deleteSession(active!) },
     ] : []),
-    { id: 'file', label: 'Open session file…', detail: 'Open an exact Pi session file in its original project', run: pickSession },
     { id: 'temporary', label: 'New temporary session', detail: 'Start a conversation without saved history', run: () => newSession('temporary') },
-    { id: 'demo', label: 'New offline demo', detail: 'Try a local fixture without launching Pi', run: () => newSession('temporary', true) },
     ...(active ? [{ id: 'close', label: 'Close session', detail: 'Stop its agent and remove it from the sidebar; saved history stays', run: () => closeTab(active!) }] : []),
     { id: 'sidebar', label: sidebarVisible ? 'Hide sidebar' : 'Show sidebar', detail: 'Toggle the open-session navigation pane', run: () => required<HTMLButtonElement>('toggle-sidebar').click() },
     { id: 'settings', label: 'Settings', detail: 'Change appearance, notifications, keybindings and runtime paths', run: () => required<HTMLButtonElement>('open-settings').click() },
@@ -598,7 +596,7 @@ const unlistenProjectPicker = await listen('nimrod-open-project', () => { void t
 function button(text: string, click: () => void): HTMLButtonElement {
   const node = document.createElement('button'); node.type = 'button'; node.textContent = text; node.addEventListener('click', click); return node;
 }
-function createTab(mode: LaunchMode, demo: boolean, file?: SessionFile, title = demo ? 'Offline demo' : mode === 'temporary' ? 'Temporary session' : 'Session', used = 0): Tab {
+function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'temporary' ? 'Temporary session' : 'Session', used = 0): Tab {
   const id = crypto.randomUUID();
   const root = document.createElement('section'); root.className = 'session-view'; root.id = `panel-${id}`; root.setAttribute('role', 'region'); root.hidden = true;
   root.innerHTML = transcript;
@@ -614,11 +612,11 @@ function createTab(mode: LaunchMode, demo: boolean, file?: SessionFile, title = 
   deleteButton.append(required('delete-session').querySelector('svg')!.cloneNode(true));
   const closeButton = button('×', () => { void closeTab(tab); }); closeButton.className = 'session-close';
   rowNode.append(row, deleteButton, closeButton); required('open-sessions').append(rowNode);
-  const tab: Tab = { id, mode, demo, file, title, lastUsed: Math.max(lastUsed(used), file ? recency.get(file) : 0), root, notice, closeButton, deleteButton, row, rowLabel, rowIndicator, rowTime, rowNode,
+  const tab: Tab = { id, mode, file, title, lastUsed: Math.max(lastUsed(used), file ? recency.get(file) : 0), root, notice, closeButton, deleteButton, row, rowLabel, rowIndicator, rowTime, rowNode,
     drafts: drafts.fork(), starting: false, closing: false, restarting: false, deleting: false, deletionExecuting: false, ended: false, inputCount: 0, unread: false, failed: deletion.blocked(file?.path),
     view: { setActive() {}, scrollToBottom() {}, dispose() {} } };
   root.addEventListener('focusin', event => { if (event.target instanceof HTMLElement) tab.focus = event.target; });
-  tab.drafts.select(file ? `file:${file.path}` : mode === 'temporary' ? `${demo ? 'demo' : 'temporary'}:${workspace}:${id}` : `unassigned:${id}`);
+  tab.drafts.select(file ? `file:${file.path}` : mode === 'temporary' ? `temporary:${workspace}:${id}` : `unassigned:${id}`);
   tab.view = mountPiView({
     getState: () => tab.drafts.read(),
     setState: value => {
@@ -743,7 +741,7 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
   const currentToken = () => tabs.includes(tab) && tab.token === token;
   const rpc = new PiTransport(message => invoke('write_pi', { token, message }));
   const mode = tab.file?.exists ? 'resume' : tab.mode;
-  const config = { cwd: workspace, ...runtime.current(), demo: tab.demo, mode, sessionName: initialName, sessionFile: mode === 'resume' ? tab.file?.path : undefined, sessionId: mode === 'resume' ? tab.file?.sessionId || undefined : undefined };
+  const config = { cwd: workspace, ...runtime.current(), mode, sessionName: initialName, sessionFile: mode === 'resume' ? tab.file?.path : undefined, sessionId: mode === 'resume' ? tab.file?.sessionId || undefined : undefined };
   let launchInfo: LaunchInfo;
   let identityGeneration = 0;
   let confirmedRaw: { path: string; sessionId: string } | undefined;
@@ -801,7 +799,7 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
         const first = state.messages.find(message => message.role === 'user');
         const content = first?.content;
         const preview = typeof content === 'string' ? content : Array.isArray(content) ? content.filter(block => block.type === 'text').map(block => String(block.text || '')).join(' ') : '';
-        tab.title = tab.demo ? 'Offline demo' : tab.mode === 'temporary' ? 'Temporary session' : preview.trim().replace(/\s+/g, ' ').slice(0, 70) || (tab.starting ? previousTitle : 'Session');
+        tab.title = tab.mode === 'temporary' ? 'Temporary session' : preview.trim().replace(/\s+/g, ' ').slice(0, 70) || (tab.starting ? previousTitle : 'Session');
       }
       updateTab(tab); persistTabs();
     },
@@ -837,11 +835,11 @@ function cycleTab(direction: 1 | -1): void {
 }
 function newNamedSession(): void {
   if (!ready || settings.isOpen) return;
-  palette.namedSession(name => newSession('saved', false, undefined, name));
+  palette.namedSession(name => newSession('saved', undefined, name));
 }
-async function newSession(mode: LaunchMode = 'saved', demo = false, copyDraft?: string, initialName?: string): Promise<void> {
+async function newSession(mode: LaunchMode = 'saved', copyDraft?: string, initialName?: string): Promise<void> {
   if (!ready || deletion.pending || settings.isOpen || !await ensureWorkspace()) return;
-  const tab = createTab(mode, demo, undefined, undefined, navigation.nextRecency()); activate(tab); await launch(tab, copyDraft, true, initialName);
+  const tab = createTab(mode, undefined, undefined, navigation.nextRecency()); activate(tab); await launch(tab, copyDraft, true, initialName);
 }
 async function openSession(info: Pick<SessionSummary, 'path' | 'sessionId' | 'name' | 'lastUserMessageAt'>): Promise<void> {
   if (!ready || deletion.pending || settings.isOpen || !await ensureWorkspace()) return;
@@ -863,7 +861,7 @@ async function openSession(info: Pick<SessionSummary, 'path' | 'sessionId' | 'na
   if (!ready || unloading || settings.isOpen || deletion.pending || deletion.removed(info.path) || deletion.blocked(info.path)) return;
   const concurrent = tabs.find(tab => tab.file?.path === info.path);
   if (concurrent) { activate(concurrent); return; }
-  const tab = createTab('resume', false, { path: info.path, sessionId: info.sessionId, exists: true }, info.name || 'Session', used);
+  const tab = createTab('resume', { path: info.path, sessionId: info.sessionId, exists: true }, info.name || 'Session', used);
   activate(tab); await launch(tab, undefined, true);
 }
 async function restartSession(tab: Tab): Promise<void> {
@@ -958,16 +956,6 @@ async function closeTab(tab: Tab): Promise<void> {
     detachTab(tab);
   } catch (e) { tab.closing = false; showNotice(tab, `Could not stop Pi: ${e}`); updateTab(tab); }
 }
-async function pickSession(): Promise<void> {
-  if (!ready || settings.isOpen || !await ensureWorkspace()) return;
-  try {
-    const path = await open({ multiple: false, title: 'Open exact Pi session file', filters: [{ name: 'Pi session', extensions: ['jsonl'] }] });
-    if (typeof path === 'string') {
-      const info = await invoke<SessionFile>('inspect_workspace_session', { path });
-      await openSession(info);
-    }
-  } catch (e) { error.textContent = String(e); }
-}
 async function pickWorkspace(): Promise<void> {
   if (!ready || settings.isOpen) return;
   try { const path = await open({ directory: true, multiple: false, title: 'Open project directory' }); if (typeof path === 'string') await openWorkspace(path); }
@@ -977,15 +965,13 @@ required('launch-form').addEventListener('submit', event => { event.preventDefau
 for (const id of ['sidebar-new', 'workspace-new']) required(id).addEventListener('click', () => void newSession());
 required('workspace-resume').addEventListener('click', () => { if (ready && !settings.isOpen) void palette.sessions(); });
 required('start-temporary').addEventListener('click', () => void newSession('temporary'));
-required('start-demo').addEventListener('click', () => void newSession('temporary', true));
-required('resume-file').addEventListener('click', () => void pickSession());
 required('browse').addEventListener('click', () => void pickWorkspace());
 required('enter-workspace').addEventListener('click', () => void openWorkspace(cwd.value.trim()));
 required('resume-last').addEventListener('click', () => { const last = lastSession(); if (last) void (async () => { if (workspace !== last.cwd && !await openWorkspace(last.cwd)) return; await openSession(last); })(); });
 required('recover-draft').addEventListener('click', () => {
   const options = recoverableDrafts();
   void dialogs.choose('Recover draft into a new session (never sent automatically)', options.map((o, i) => `${i + 1}. ${o.label}`)).then(choice => {
-    const index = choice ? Number.parseInt(choice, 10) - 1 : -1; if (options[index]) return newSession('saved', false, options[index].key);
+    const index = choice ? Number.parseInt(choice, 10) - 1 : -1; if (options[index]) return newSession('saved', options[index].key);
   });
 });
 required('restart-session').addEventListener('click', () => { if (presented) void restartSession(presented); });
@@ -1052,8 +1038,6 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'switch-session': return palette.openSessions();
       case 'new-named': return newNamedSession();
       case 'restart': return presented ? restartSession(presented) : undefined;
-      case 'file': return pickSession();
-      case 'demo': return newSession('temporary', true);
     }
   },
   error: message => { error.textContent = String(message); },

@@ -4,6 +4,8 @@
 
 Every command has a short muted description beneath its title. Effective shortcuts appear right-aligned on the title line; unbound commands leave that space empty. Descriptions are searchable. Session/model/project pickers retain their own row metadata rather than adopting command descriptions.
 
+Every current command has a default shortcut; customize or remove it in [Settings → Keybindings](keybindings.md). **Restart session** uses Cmd/Ctrl+R; **Edit keybindings…** uses Cmd/Ctrl+Shift+Comma. Offline demo and arbitrary session-file opening are not app commands; use **Resume session…** for saved project history.
+
 The palette and its pages use the [shared modal layout](modal-layout.md), including the named-session step.
 
 ## Ordering
