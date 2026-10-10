@@ -21,6 +21,7 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 | New named session… | Cmd+Option+N / Ctrl+Alt+N |
 | New temporary session | Cmd/Ctrl+Shift+N |
 | Delete session tree… | Cmd/Ctrl+Backspace |
+| Delete sessions… | Cmd/Ctrl+Shift+Backspace |
 | Select model… | Cmd/Ctrl+M |
 | Select thinking level… (“effort”) | Cmd/Ctrl+E |
 | Command palette | Cmd/Ctrl+Shift+P |
@@ -39,6 +40,8 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 **Open recent project…** searches recently opened directories and is configurable like other palette commands. **Open project…** / Cmd/Ctrl+O remains the native directory-only chooser, outside this editor.
 
 Every current command-palette command has a default shortcut and can be rebound or unbound. **Restart session** restarts the selected saved session's Pi process, not the window; its existing eligibility and interruption-confirmation rules still apply. Offline demo and arbitrary session-file opening are no longer app commands. Plus and Equals both invoke Zoom in. Existing user overrides remain unchanged when defaults change; Reset the affected action to adopt its new defaults.
+
+**Delete sessions…** opens a searchable saved-history picker for repeated deletion. Enter opens tree review; Cancel or completed deletion returns to the picker with its filter retained. Escape from the picker closes it. See [Delete sessions picker](workspace-sessions.md#delete-sessions-picker).
 
 **Delete opens the existing session-tree review; it does not immediately delete a session.** Its normal saved-session/idle eligibility rules still apply. Closing a saved session is not deletion. Temporary sessions use their existing Close/disposal flow.
 

@@ -388,6 +388,47 @@ test('session navigation and named-session defaults open their distinct pickers 
   } finally { f.win.close(); }
 });
 
+test('Delete sessions shortcut loops native review over closed history without launching or selecting targets', async () => {
+  let answer!: (value: boolean) => void;
+  const catalog = ['one', 'two'].map((id, i) => ({ path: `/sessions/${id}.jsonl`, sessionId: id, name: `Old ${id}`, preview: 'history', modified: 2 - i }));
+  const f = await fixture(undefined, { windowWorkspace: '/project', catalog,
+    confirmReview: args => answer(args.confirmed === true), deleteTree: async (emit, args) => {
+      const confirmed = new Promise<boolean>(resolve => { answer = resolve; });
+      emit({ id: String(args.root), phase: 'review', files: [String(args.root)], results: [], pending: true, tree: [{ file: String(args.root), title: 'Old session' }] });
+      return await confirmed ? [{ file: args.root, deleted: true }] : [];
+    },
+  });
+  const pickerKey = (key: string) => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  const shortcut = (extra: KeyboardEventInit = {}) => f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Backspace', metaKey: true, shiftKey: true, bubbles: true, cancelable: true, ...extra }));
+  try {
+    shortcut({ repeat: true }); shortcut({ isComposing: true }); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+    shortcut(); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Delete sessions');
+    const input = f.element<HTMLInputElement>('palette-input'); input.value = 'Old'; input.dispatchEvent(new f.win.Event('input'));
+    pickerKey('ArrowDown'); pickerKey('Enter'); pickerKey('Enter'); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('deletion-review').open, true); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+    f.element('deletion-cancel').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, true); assert.equal(input.value, 'Old');
+    assert.match(f.element('palette-list').querySelector('[aria-selected="true"]')!.textContent!, /Old two/);
+    pickerKey('Enter'); await f.tick(); f.element('deletion-confirm').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+    assert.equal(f.element('palette-list').children.length, 1); assert.match(f.element('palette-list').textContent!, /Old one/);
+    pickerKey('Enter'); await f.tick(); f.element('deletion-confirm').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
+    pickerKey('Enter'); await f.tick(); f.element('deletion-confirm').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, true); assert.equal(f.element('palette-list').children.length, 0);
+    pickerKey('Escape'); await f.tick();
+    assert.equal(f.rows().length, 0); assert.equal(f.calls.some(call => call.command === 'start_pi' || call.command === 'recover_deletion_session'), false);
+    assert.deepEqual(f.calls.filter(call => call.command === 'delete_session_tree').map(call => ({ root: call.args.root, sessionId: call.args.sessionId })), [
+      { root: '/sessions/two.jsonl', sessionId: 'two' }, { root: '/sessions/two.jsonl', sessionId: 'two' },
+      { root: '/sessions/one.jsonl', sessionId: 'one' }, { root: '/sessions/one.jsonl', sessionId: 'one' },
+    ]);
+    f.preferences.external('{"keybindings":{"delete-sessions":["primary+j"]}}');
+    shortcut(); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'j', metaKey: true, bubbles: true })); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Delete sessions');
+    pickerKey('Escape'); await f.tick(); f.preferences.external('{"keybindings":{"delete-sessions":[]}}');
+    shortcut(); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+  } finally { f.win.close(); }
+});
+
 test('Cmd-Backspace invokes the existing review and Cancel preserves the selected saved session', async () => {
   let answer!: (value: boolean) => void;
   const f = await fixture(undefined, { windowWorkspace: '/project', confirmReview: args => answer(args.confirmed === true), deleteTree: async emit => {

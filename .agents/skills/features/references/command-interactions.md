@@ -8,6 +8,8 @@ Human guide: [Command interactions](../../../../docs/workspace-sessions.md#comma
 
 Add a picker through `startSelection()` or the existing page lifecycle, not a feature-specific dialog key handler. `beginPage()` owns query reset, Back/Retry controls and request generation. Page content may differ; dismissal must not branch on page mode or entry point. There is no new generic harness or global modal framework.
 
+Repeated deletion uses the shared session page with a close/run/return boundary rather than stacked dialogs. Review cancellation returns to the refreshed deletion picker only after the native transaction settles; Escape from the picker still dismisses everything. API close while suspended and newer interactions invalidate return via generations; disposal blocks reopening. See [deletion picker](session-deletion.md#repeated-deletion-picker).
+
 Project navigation is another shared page, not a separate modal controller; see [recent-project picker](projects-and-sessions.md#recent-project-picker). Its recent-directory page uses inline project rows and has no OS folder-chooser action; native File Open / Cmd/Ctrl+O is separate.
 Command-list sorting and accepted-command history are independent of page lifecycle; see [Command ranking](command-ranking.md). Subordinate picker order is unchanged.
 

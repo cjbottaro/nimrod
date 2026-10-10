@@ -25,6 +25,14 @@ installed extension, runtime executable or chat command participates in deletion
 The former `delete_bridge.rs` subprocess integration and its fixture have been
 removed. Do not reintroduce extension discovery or `/pi-gui-delete` dispatch.
 
+## Repeated deletion picker
+
+`delete-sessions` is a project action with `primary+shift+backspace`, distinct from selected-tree `delete` / `primary+backspace`. `main.ts::paletteSessions('delete')` shares Resume's saved top-level catalog, warnings, ordering, search metadata and row presentation. `deleteSavedSession` revalidates shell availability, quarantine and any matching open row's ID/idle eligibility, then calls `SessionDeletion.run` on the saved file/ID. Closed targets never create tabs, activate or launch Pi; native identity/affected-owner checks remain authoritative.
+
+`command-palette.ts::sessions('delete')` supplies the page. Choosing a row closes the palette via the normal focus-restoring action boundary. The whole deletion transaction (including cancellation, loading and final snapshot cleanup) settles before a refreshed picker opens. It retains the query and original command query/opener; surviving targets retain selection, removed targets choose next/previous matching index. Empty lists stay open. Escape from review cancels that review and returns after settlement; Escape from picker dismisses the interaction. Explicit Back goes to commands. Generation and disposal checks prevent a pending return or discovery from replacing newer interactions or reopening after API cancellation. No accepted deletion is retried.
+
+Regression coverage: palette tests exercise retained query/selection/focus, empty lists, action failures, stale discovery and newer-interaction/API/disposal guards; shell tests exercise correlated Cancel/Enter/Escape and repeated closed-history deletion without launches, ID forwarding and default/rebound/unbound shortcuts. Offline WebKit tests exercise native HTML dialog focus/modality, row advancement and unchanged offline sibling draft. Fixture deletion never removes user session files. Actual Tauri/native shortcut and multi-window acceptance, Linux and possible Windows verification remain pending.
+
 ## Store, lineage and file identity
 
 The store is `PI_CODING_AGENT_SESSION_DIR`, or the agent directory's `sessions`

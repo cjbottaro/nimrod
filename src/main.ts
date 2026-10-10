@@ -521,7 +521,7 @@ function openSessionPicker(): PalettePage {
     })),
   };
 }
-async function paletteSessions(): Promise<PalettePage> {
+async function paletteSessions(kind: 'resume' | 'delete' = 'resume'): Promise<PalettePage> {
   if (!workspace) return { items: [], notice: 'Open a project first.' };
   const result = await invoke<{ sessions: SessionSummary[]; warnings: string[] }>('list_workspace_sessions');
   const entries = new Map(result.sessions.filter(s => !deletion.removed(s.path)).map(s => [s.path, s]));
@@ -548,7 +548,7 @@ async function paletteSessions(): Promise<PalettePage> {
           ...(open ? sessionRow(open) : { timestamp: Math.max(recency.get(s), lastUsed(s.lastUserMessageAt)), indicator: { state: 'closed', label: 'Closed', mark: '—' } }),
           open: !!open,
         },
-        run: () => openSession(s),
+        run: kind === 'delete' ? () => deleteSavedSession(s) : () => openSession(s),
       };
     }),
   };
@@ -583,7 +583,8 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
       });
     },
   },
-  sessions: paletteSessions,
+  sessions: () => paletteSessions(),
+  deleteSessions: () => paletteSessions('delete'),
   openSessions: openSessionPicker,
   projects: paletteProjects,
   commands: () => {
@@ -591,6 +592,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     return [
     { id: 'open-recent-project', label: 'Open recent project…', detail: 'Open or focus a previously opened project', next: true, run: () => palette.projects() },
     { id: 'resume', label: 'Resume session…', detail: 'Open a saved conversation in this project', next: true, run: () => palette.sessions() },
+    { id: 'delete-sessions', label: 'Delete sessions…', detail: 'Repeatedly review and delete saved session trees in this project', next: true, run: () => palette.deleteSessions() },
     { id: 'new', label: 'New session', detail: 'Start a new persistent conversation', run: () => newSession() },
     { id: 'new-named', label: 'New named session…', detail: 'Choose a name before starting', next: true, run: newNamedSession },
     ...(tabs.length ? [{ id: 'switch-session', label: 'Switch session…', detail: 'All open sessions, regardless of sidebar view', next: true, run: () => palette.openSessions() }] : []),
@@ -911,6 +913,15 @@ async function restartSession(tab: Tab): Promise<void> {
     if (resumed && presented === tab && !tab.ended && !document.querySelector('dialog[open]')) tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true });
   }
 }
+async function deleteSavedSession(saved: SessionSummary): Promise<void> {
+  if (unloading || settings.isOpen || !ready || deletion.pending) throw new Error('Session deletion is currently unavailable.');
+  if (deletion.blocked(saved.path)) throw new Error('Recover this session through Resume session before deleting it.');
+  const tab = tabs.find(tab => tab.file?.path === saved.path);
+  if (tab && (tab.file?.sessionId !== saved.sessionId || !deletable(tab))) throw new Error('This session cannot be deleted now. Wait for active work to finish.');
+  // Closed history goes directly to native identity/idle checks; never activate,
+  // create a sidebar entry or launch Pi merely to delete a saved file.
+  await deletion.run(saved.path, saved.sessionId);
+}
 async function deleteSession(tab: Tab): Promise<void> {
   if (settings.isOpen || !deletable(tab)) return;
   await deletion.run(tab.file!.path, tab.file!.sessionId);
@@ -1047,6 +1058,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'new': return newSession();
       case 'temporary': return newSession('temporary');
       case 'delete': return presented ? deleteSession(presented) : undefined;
+      case 'delete-sessions': return palette.deleteSessions();
       case 'model': return presented ? pickPreference(presented, 'model') : undefined;
       case 'thinking': return presented ? pickPreference(presented, 'thinking') : undefined;
       case 'palette': palette.open(); return;

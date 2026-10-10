@@ -19,7 +19,7 @@ function fixture() {
 }
 
 test('defaults distinguish creation, named creation, open-session switching and saved-history search', () => {
-  for (const [id, binding] of [['new', 'primary+n'], ['temporary', 'primary+shift+n'], ['delete', 'primary+backspace'], ['model', 'primary+m'], ['thinking', 'primary+e']] as const) assert.ok(bindingsFor(id, {}).includes(binding));
+  for (const [id, binding] of [['new', 'primary+n'], ['temporary', 'primary+shift+n'], ['delete', 'primary+backspace'], ['delete-sessions', 'primary+shift+backspace'], ['model', 'primary+m'], ['thinking', 'primary+e']] as const) assert.ok(bindingsFor(id, {}).includes(binding));
   assert.deepEqual(bindingsFor('new', {}), ['primary+n']);
   assert.deepEqual(bindingsFor('new-named', {}), ['primary+alt+n']);
   assert.deepEqual(bindingsFor('switch-session', {}), ['primary+t']);

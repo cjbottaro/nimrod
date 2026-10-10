@@ -44,7 +44,7 @@ Closing a session waits for its agent to stop before removing it from the sideba
 
 When Close or successful deletion removes the selected session, Nimrod prefers the **most recently used connected session** in the current sidebar view, then across **All** (switching views if needed). “Most recently used” follows creation/history time and acknowledged prompts, not clicks or connection time. If none are connected, it selects the next surviving row, or the previous row when none follow; an exhausted filter falls back to All. **Both actions load and connect an inactive saved replacement.** Deletion waits for its transaction to finish; failed/unknown deletion outcomes still require explicit recovery. Removing a background session leaves the surviving selection unchanged; removing the last session never creates one.
 
-Default shortcuts (customizable in [Settings → Keybindings](keybindings.md)): **⌘/Ctrl N** creates a session, **⌘ Option N / Ctrl Alt N** opens New named session, **⌘/Ctrl ⇧ N** creates a temporary session, **⌘/Ctrl T** searches open sessions, **⌘/Ctrl K** searches saved project history, **⌘/Ctrl Backspace** opens deletion review, **⌘/Ctrl M** selects a model, **⌘/Ctrl E** selects thinking level/effort, **⌘/Ctrl W** closes it, **⌘/Ctrl B** toggles the sidebar, and **⌘/Ctrl ⇧ [ / ]** switches to the previous/next open session in the sidebar's **All** order, wrapping at either end. Cycling still covers all open sessions when the sidebar is hidden or filtered; a filtered-out target switches the view to All.
+Default shortcuts (customizable in [Settings → Keybindings](keybindings.md)): **⌘/Ctrl N** creates a session, **⌘ Option N / Ctrl Alt N** opens New named session, **⌘/Ctrl ⇧ N** creates a temporary session, **⌘/Ctrl T** searches open sessions, **⌘/Ctrl K** searches saved project history, **⌘/Ctrl Backspace** opens selected-session deletion review, **⌘/Ctrl ⇧ Backspace** opens Delete sessions…, **⌘/Ctrl M** selects a model, **⌘/Ctrl E** selects thinking level/effort, **⌘/Ctrl W** closes it, **⌘/Ctrl B** toggles the sidebar, and **⌘/Ctrl ⇧ [ / ]** switches to the previous/next open session in the sidebar's **All** order, wrapping at either end. Cycling still covers all open sessions when the sidebar is hidden or filtered; a filtered-out target switches the view to All.
 
 ### Session navigation
 
@@ -95,6 +95,14 @@ The reload-style icon in the **Project bar** restarts the selected session's Pi 
 - Works after a process disconnects. Failed shutdown or resume leaves the session visible with an error; shutdown failure never launches a replacement process. Retry is explicit.
 
 The composer's **Stop** interrupts work without ending its process. Use Restart as the escape hatch for a stuck saved session; Close remains available for temporary or unsaved sessions.
+
+### Delete sessions picker
+
+Use **Delete sessions…** in the command palette or **⌘/Ctrl ⇧ Backspace** to clean up several saved conversations. It searches the same top-level project history as Resume session, including open and closed sessions, with the same row indicators and timestamps. Selecting a row with Enter or a click opens the existing session-tree confirmation without selecting or resuming that conversation.
+
+After Cancel, Escape in the confirmation, or completed deletion, the picker returns with your filter retained. Cancellation keeps the same row selected; deletion selects the next matching row, or the previous one at the end. The list refreshes after each attempt and stays open even when empty. **Escape from the picker closes it** and restores prior focus. Explicit Back returns to commands.
+
+Each confirmation still deletes that session **and its descendants**, not just the picker row. Existing idle, identity, quarantine and partial-failure rules apply. Busy/recovery-blocked targets remain undeleted; there is no automatic retry or recovery.
 
 ### Delete session tree
 

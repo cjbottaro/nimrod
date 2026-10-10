@@ -1,5 +1,11 @@
 # Verification
 
+## Repeated Delete sessions picker
+
+- Implemented locally on `feature/delete-sessions-picker` in `.worktrees/delete-sessions-picker`: **Delete sessions…** / Cmd/Ctrl+Shift+Backspace shares Resume's saved top-level project history. Enter/click opens the existing tree review without selecting/resuming the target. Cancel, confirmation Escape and completed deletion return to a refreshed picker with the filter retained, same/next/previous row selection and original focus restoration on final Escape. Empty lists remain open. Selected-tree Cmd/Ctrl+Backspace is unchanged.
+- `mise run check` passes **420 TS/Node tests**, formatting/Clippy and **97 Rust tests** (two opt-in Pi smokes ignored). All **51 offline WebKit tests** pass, including the new repeated-deletion/modal-focus regression. The first browser run exceeded its 180-second tool timeout after 40 passing tests; a complete rerun with enough time passed. The initial targeted shell assertion needed cross-realm object normalization; production behavior was unchanged.
+- `mise run build` packages/ad-hoc-signs/verifies `.worktrees/delete-sessions-picker/src-tauri/target/release/bundle/macos/Nimrod.app`. Native Tauri keyboard/focus/multi-window acceptance and Linux/possible Windows verification remain pending. No running user app/default bundle modification, live Pi/model calls, user-session deletion, upstream changes, commit or push.
+
 ## Plain modal button labels
 
 - Local change on `ui/modal-buttons-no-hints` in `.worktrees/modal-buttons-no-hints`: removed Enter icons and Esc text from shared modal action buttons and deleted their unused styling. Plain action labels, non-visual shortcut metadata, default focus and Enter/Escape handling remain; picker-row hints are unchanged.

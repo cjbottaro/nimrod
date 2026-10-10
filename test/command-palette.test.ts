@@ -27,7 +27,7 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }),
         assert.equal(dialog.open, false); assert.equal(win.document.activeElement, opener);
         calls.push(`named:${name}`);
       }) },
-    ], sessions: load, projects,
+    ], sessions: load, deleteSessions: load, projects,
     openSessions: () => ({ items: [{ id: 'open-demo', label: 'Offline demo', detail: 'Ready', run: () => { calls.push('open-demo'); } }] }),
   });
   const key = (key: string, init: KeyboardEventInit = {}) => input.dispatchEvent(new win.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
@@ -39,6 +39,59 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }),
   };
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+
+test('delete picker returns after each action with query, row selection and original focus retained', async () => {
+  let finish!: () => void;
+  const remaining = ['one', 'two', 'three'];
+  const f = fixture(async () => ({ items: remaining.map(id => ({ id, label: `Saved ${id}`, run: () => new Promise<void>(resolve => { finish = resolve; }) })) }));
+  try {
+    await f.palette.deleteSessions(); f.query('Saved'); f.key('ArrowDown');
+    f.key('Enter'); f.key('Enter'); await tick();
+    assert.equal(f.dialog.open, false); assert.equal(f.win.document.activeElement, f.opener);
+    finish(); await tick();
+    assert.equal(f.dialog.open, true); assert.equal(f.input.value, 'Saved');
+    assert.equal(f.list().querySelector('[aria-selected="true"]')!.textContent, 'Saved two');
+    f.key('Enter'); await tick(); remaining.splice(1, 1); finish(); await tick();
+    assert.equal(f.list().querySelector('[aria-selected="true"]')!.textContent, 'Saved three');
+    f.key('Enter'); await tick(); remaining.pop(); finish(); await tick();
+    assert.equal(f.list().querySelector('[aria-selected="true"]')!.textContent, 'Saved one');
+    f.key('Enter'); await tick(); remaining.pop(); finish(); await tick();
+    assert.equal(f.dialog.open, true); assert.equal(f.list().children.length, 0); assert.match(f.status()!, /No sessions yet/);
+    f.key('Escape'); await tick(); assert.equal(f.dialog.open, false); assert.equal(f.win.document.activeElement, f.opener);
+  } finally { f.dispose(); }
+});
+
+test('delete return cannot overwrite a newer interaction or reopen after explicit close/disposal', async () => {
+  for (const cancel of ['close', 'new', 'dispose'] as const) {
+    let finish!: () => void;
+    const f = fixture(async () => ({ items: [{ id: 'one', label: 'One', run: () => new Promise<void>(resolve => { finish = resolve; }) }] }));
+    try {
+      await f.palette.deleteSessions(); f.key('Enter'); await tick();
+      if (cancel === 'new') f.palette.open();
+      else if (cancel === 'close') f.palette.close();
+      else f.palette.dispose();
+      finish(); await tick();
+      assert.equal(f.dialog.open, cancel === 'new');
+      if (cancel === 'new') assert.equal(f.win.document.querySelector('#palette-title')!.textContent, 'Commands');
+    } finally { f.dispose(); }
+  }
+});
+
+test('delete action errors return to the picker without replay and stale discovery stays dismissed', async () => {
+  let attempts = 0;
+  const f = fixture(async () => ({ items: [{ id: 'one', label: 'One', run: () => { attempts++; throw new Error('Unavailable'); } }] }));
+  try {
+    await f.palette.deleteSessions(); f.key('Enter'); await tick();
+    assert.equal(f.dialog.open, true); assert.match(f.status()!, /Unavailable/); assert.equal(attempts, 1);
+    f.key('Escape'); await tick();
+  } finally { f.dispose(); }
+  let resolve!: (page: PalettePage) => void;
+  const late = fixture(() => new Promise(done => { resolve = done; }));
+  try {
+    const pending = late.palette.deleteSessions(); late.key('Escape'); resolve({ items: [] }); await pending;
+    assert.equal(late.dialog.open, false);
+  } finally { late.dispose(); }
+});
 
 test('commands have descriptions below titles and shortcuts in the title row only', () => {
   const f = fixture();

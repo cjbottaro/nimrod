@@ -20,6 +20,7 @@ export interface PaletteOptions {
   commands(): (PaletteItem & { detail: string })[];
   sessions(): Promise<PalettePage>;
   openSessions(): PalettePage;
+  deleteSessions?: () => Promise<PalettePage>;
   projects?: () => Promise<PalettePage>;
   canOpen(): boolean;
   shortcuts?: boolean;
@@ -63,13 +64,15 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   let createNamed: ((name: string) => void | Promise<void>) | undefined;
   let composing = false;
   let closing = false;
+  let disposed = false;
+  let sessionKind: 'resume' | 'open' | 'delete' = 'resume';
 
   function cancelChoice(): void { const resolve = resolveChoice; resolveChoice = undefined; resolve?.(undefined); }
   // Invalidate synchronously: native dialog close events are queued, and pending
   // metadata/choices must stop being actionable before focus restoration completes.
   // Omitting an action is cancellation, never navigation or command execution.
   function closeInteraction(action?: () => void | Promise<void>): void {
-    if (!dialog.open) return;
+    if (!dialog.open) { generation++; return; }
     afterClose = action;
     cancelChoice(); createNamed = undefined; retryAction = undefined; generation++;
     closing = true;
@@ -171,12 +174,13 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     const request = ++generation;
     draw(); input.focus(); return request;
   }
-  async function sessions(kind: 'resume' | 'open' = 'resume', refresh = false): Promise<void> {
-    const isResume = kind === 'resume';
-    const request = beginPage('sessions', isResume ? 'Resume session' : 'Switch session', isResume ? 'Type to filter project sessions…' : 'Type to filter open sessions…', () => { void sessions(kind, true); }, refresh);
+  async function sessions(kind: 'resume' | 'open' | 'delete' = 'resume', refresh = false): Promise<void> {
+    if (kind === 'delete' && !options.deleteSessions) return;
+    sessionKind = kind;
+    const request = beginPage('sessions', kind === 'delete' ? 'Delete sessions' : kind === 'resume' ? 'Resume session' : 'Switch session', kind === 'open' ? 'Type to filter open sessions…' : 'Type to filter project sessions…', () => { void sessions(kind, true); }, refresh);
     if (request === undefined) return;
     try {
-      const page = isResume ? await options.sessions() : options.openSessions();
+      const page = kind === 'delete' ? await options.deleteSessions!() : kind === 'resume' ? await options.sessions() : options.openSessions();
       if (!dialog.open || generation !== request) return;
       items = page.items; notice = page.notice || '';
     } catch (error) {
@@ -236,7 +240,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     closeInteraction(() => action(name));
   }
   function open(): boolean {
-    if (closing || !options.canOpen() || doc.querySelector('dialog[open]')) return false;
+    if (disposed || closing || !options.canOpen() || doc.querySelector('dialog[open]')) return false;
     opener = doc.activeElement instanceof realm.HTMLElement ? doc.activeElement : undefined;
     commandQuery = ''; afterClose = undefined;
     dialog.showModal(); commands(); return true;
@@ -246,6 +250,31 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     if (!dialog.open || !item || loading) return;
     if (mode === 'commands') options.ranking?.record(item.id);
     if (item.next) { void item.run(); return; }
+    if (mode === 'sessions' && sessionKind === 'delete') {
+      const query = input.value, index = selected, originalOpener = opener, originalCommandQuery = commandQuery;
+      // The native review owns modality while the picker is closed. Return only
+      // after the whole transaction settles, never replaying an accepted deletion.
+      closeInteraction(async () => {
+        const request = generation;
+        let failure = '';
+        try { await item.run(); } catch (error) { failure = String(error); }
+        if (disposed || generation !== request || !open()) return;
+        opener = originalOpener;
+        commandQuery = originalCommandQuery;
+        const returning = sessions('delete'), returnGeneration = generation;
+        input.value = query;
+        await returning;
+        if (!dialog.open || generation !== returnGeneration || mode !== 'sessions' || sessionKind !== 'delete') return;
+        // Cancellation keeps the same row; removal advances to the next row,
+        // falling back to the previous row when the last matching row was removed.
+        if (failure) notice = [failure, notice].filter(Boolean).join(' ');
+        draw();
+        const same = matches.findIndex(match => match.id === item.id);
+        selected = same >= 0 ? same : Math.max(0, Math.min(index, matches.length - 1));
+        selection(); input.focus();
+      });
+      return;
+    }
     // The action owns resolution after native focus restoration. Dismissal alone cancels.
     resolveChoice = undefined;
     closeInteraction(item.run);
@@ -288,5 +317,5 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     if (dialog.open) { event.preventDefault(); return; }
     if (open()) event.preventDefault();
   }, { signal });
-  return { open, projects, close: () => closeInteraction(), sessions: () => sessions('resume'), openSessions: () => sessions('open'), namedSession, startSelection, dispose: () => { cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
+  return { open, projects, close: () => closeInteraction(), sessions: () => sessions('resume'), openSessions: () => sessions('open'), deleteSessions: () => sessions('delete'), namedSession, startSelection, dispose: () => { disposed = true; cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
 }
