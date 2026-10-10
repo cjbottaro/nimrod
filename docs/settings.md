@@ -2,7 +2,7 @@
 
 Open **Settings** using the gear button in the project bar or **⌘/Ctrl ,**. Use **Back** or **Escape** to return. Opening Settings again while already there leaves the current control alone.
 
-Settings is a separate, full-window page. Internally it uses a full-viewport native HTML dialog: the project remains mounted and laid out underneath, while browser modality makes it non-interactive and removes it from the active accessibility surface. This avoids collapsing the transcript pane or resetting scroll/disclosure state.
+Settings is a separate, full-window page. Its content follows the window width with modest 20 CSS-pixel side gutters; the entire body, including those gutters, scrolls. The Back header stays visible. Internally it uses a full-viewport native HTML dialog: the project remains mounted and laid out underneath, while browser modality makes it non-interactive and removes it from the active accessibility surface. This avoids collapsing the transcript pane or resetting scroll/disclosure state.
 
 Pi keeps running and the transcript continues receiving events. Opening, closing, or saving preferences never starts/stops/restarts a session or submits a prompt. Returning restores the prior focus target when available. If startup hid that original control, focus falls back to the Settings button. Existing RPC dialogs retain priority; Settings won't open over or close underneath an active Pi dialog.
 

@@ -47,7 +47,7 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 #settings-page::backdrop { background:var(--vscode-editor-background); }
 .settings-header { display:flex; align-items:center; gap:18px; flex:none; min-height:48px; padding:0 20px; border-bottom:1px solid var(--vscode-panel-border); }
 #settings-title { margin:0; font-size:17px; letter-spacing:0; }
-.settings-content { box-sizing:border-box; width:100%; max-width:760px; min-height:0; margin:0 auto; padding:28px 24px 40px; overflow:auto; }
+.settings-content { box-sizing:border-box; flex:1; width:100%; min-width:0; min-height:0; padding:20px 20px 32px; overflow:auto; }
 .settings-content section + section { margin-top:28px; padding-top:20px; border-top:1px solid var(--vscode-panel-border); }
 .settings-content h2 { font-size:17px; margin:0 0 8px; }
 .settings-description, .settings-hint { color:var(--vscode-descriptionForeground); line-height:1.5; }
