@@ -138,15 +138,20 @@ test('dismissal invalidates choices before the native close event is delivered',
 test('session badges are separate, searchable text and do not change activation', async () => {
   const chosen: string[] = [];
   const f = fixture(async () => ({ items: [
-    { id: 'a', label: 'A very long title', badge: 'Open', detail: 'A very long preview', run: () => { chosen.push('a'); } },
-    { id: 'b', label: 'Closed session', run: () => { chosen.push('b'); } },
+    { id: 'a', label: 'A very long title', sessionRow: { timestamp: 100, indicator: sessionIndicator({ busy: true }), badge: 'Open' }, keywords: 'A very long preview /sessions/a.jsonl', run: () => { chosen.push('a'); } },
+    { id: 'b', label: 'Closed session', sessionRow: { timestamp: undefined, indicator: sessionIndicator({ inactive: true }) }, run: () => { chosen.push('b'); } },
   ] }));
   try {
     await f.palette.sessions();
-    assert.equal(f.list().querySelectorAll('.palette-item-badge').length, 1);
-    assert.equal(f.list().querySelector('.palette-item-heading .palette-item-badge')!.textContent, 'Open');
-    assert.equal(f.list().querySelector('small')!.textContent, 'A very long preview');
-    f.query('open'); assert.equal(f.list().children.length, 1);
+    assert.equal(f.list().querySelectorAll('.session-row').length, 2);
+    assert.equal(f.list().querySelectorAll('.session-row-badge').length, 1);
+    assert.equal(f.list().querySelector('.session-row-heading .session-row-badge')!.textContent, 'Open');
+    assert.equal(f.list().querySelector('small')!.textContent, sessionTime(100));
+    assert.equal(f.list().children[0].getAttribute('aria-label'), 'A very long title — Working — Open');
+    assert.equal(f.list().children[1].querySelector('small')!.textContent, 'No message time');
+    assert.equal(f.list().children[0].getAttribute('title'), null);
+    f.query('preview a.jsonl'); assert.equal(f.list().children.length, 1);
+    f.query('open working'); assert.equal(f.list().children.length, 1);
     f.key('Enter'); await tick(); assert.deepEqual(chosen, ['a']);
     assert.equal(f.dialog.open, false);
   } finally { f.dispose(); }

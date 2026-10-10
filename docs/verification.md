@@ -1,5 +1,12 @@
 # PoC verification
 
+## Shared sidebar, Resume and Switch session rows
+
+- Implemented on `refactor/shared-session-rows` in `.worktrees/shared-session-rows`. All three surfaces share row DOM/update helpers, heading/truncation, indicators, timestamp formatting and CSS. Resume adds a separate Open badge; already-open history reuses sidebar state/time, while closed history uses the inactive indicator and remembered/latest saved user-message time. Preview/path search, history ordering, discovery and open/resume lifecycle remain unchanged.
+- `mise run check` passes **360 TypeScript/Node tests**, Rust formatting/Clippy and **93 default Rust tests** (two opt-in Pi smokes ignored). The initial run failed the unchanged `single_instance::tests::lock_holder_without_listener_times_out_without_becoming_primary` fixture at an `Option::unwrap()`; the complete rerun passed without a Rust change. A shell order assertion was scoped to sidebar rows now that Resume also renders `.session-row` options.
+- All **35 offline WebKit tests** pass, including Resume/Switch geometry/typography parity, historical timestamp/search-only preview behavior, long-title ellipsis and existing focus/scroll regressions. Shell tests compare already-open Resume/sidebar state/time and membership badges across disconnection/filtering/Close; a renderer unit test verifies stable nodes and badge add/remove behavior.
+- `mise run build` packages/ad-hoc-signs/verifies **`.worktrees/shared-session-rows/src-tauri/target/release/bundle/macos/Nimrod.app`**. The primary checkout/default bundle and running app were untouched. No user app/window launch or interruption, live Pi/model request, real session mutation, upstream extension change, commit or push occurred. Native visual/badge/focus acceptance and Linux/possible Windows verification remain for user validation.
+
 ## Switch session row parity
 
 - Implemented on `fix/switch-session-rows` in `.worktrees/switch-session-rows`. Switch and the sidebar share DOM creation/update helpers, state indicators, accessible status labels, timestamp formatting and row CSS. Visible state is indicator-only; the second line is muted relative time/date. Resume previews/Open badges and session lifecycle remain unchanged.

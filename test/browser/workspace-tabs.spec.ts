@@ -264,6 +264,41 @@ test('Switch session shares sidebar indicator, muted timestamp and styling for f
   } finally { await demo.close(); }
 });
 
+test('Resume uses Switch row layout and typography while historical preview stays search-only', async ({ page }) => {
+  const demo = await demoFixture(page, {}, [{ path: '/fixture/history.jsonl', sessionId: 'closed', name: 'Closed history '.repeat(40), preview: 'Find this hidden preview', modified: 1, lastUserMessageAt: Date.now() - 120_000 }]);
+  try {
+    await page.keyboard.press('Meta+t');
+    const option = page.locator('#palette-list [role=option]');
+    const geometry = (node: Element) => {
+      const css = getComputedStyle(node);
+      return { display: css.display, padding: css.padding, gap: css.gap, height: node.getBoundingClientRect().height };
+    };
+    const typography = (node: Element) => {
+      const css = getComputedStyle(node);
+      return { color: css.color, fontSize: css.fontSize, lineHeight: css.lineHeight };
+    };
+    const switchGeometry = await option.evaluate(geometry);
+    const switchType = await option.locator('small').evaluate(typography);
+    await page.keyboard.press('Escape'); await page.keyboard.press('Meta+k');
+    await expect(page.locator('#palette-title')).toHaveText('Resume session');
+    await expect(option).toHaveCount(1);
+    expect(await option.evaluate(geometry)).toEqual(switchGeometry);
+    expect(await option.locator('small').evaluate(typography)).toEqual(switchType);
+    await expect(option.locator('.session-indicator')).toHaveAttribute('data-state', 'inactive');
+    await expect(option.locator('.session-row-badge')).toHaveCount(0);
+    await expect(option.locator('time')).toContainText('2 minutes ago');
+    await expect(option).not.toContainText('Find this hidden preview');
+    await expect(option).not.toHaveAttribute('title');
+    const label = option.locator('.session-row-label');
+    expect(await label.evaluate(node => getComputedStyle(node).textOverflow)).toBe('ellipsis');
+    expect(await label.evaluate(node => node.scrollWidth > node.clientWidth)).toBe(true);
+    await page.locator('#palette-input').fill('hidden preview history.jsonl');
+    await expect(option).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    expect(demo.children.size).toBe(1); expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
 test('Unread updates in arrival order and retains a read selected session without changing open sessions', async ({ page }) => {
   const demo = await demoFixture(page);
   try {

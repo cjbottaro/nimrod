@@ -87,7 +87,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     input.setAttribute('aria-controls', 'palette-list'); input.setAttribute('aria-autocomplete', 'list');
     const previous = matches[selected]?.id;
     const words = input.value.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
-    matches = items.filter(item => words.every(word => `${item.label} ${item.badge || ''} ${item.detail || ''} ${item.sessionRow?.indicator.label || ''} ${item.keywords || ''}`.toLocaleLowerCase().includes(word)));
+    matches = items.filter(item => words.every(word => `${item.label} ${item.badge || ''} ${item.detail || ''} ${item.sessionRow?.indicator.label || ''} ${item.sessionRow?.badge || ''} ${item.keywords || ''}`.toLocaleLowerCase().includes(word)));
     selected = Math.max(0, matches.findIndex(item => item.id === previous));
     list.replaceChildren(...matches.map((item, index) => {
       const row = doc.createElement('div'); row.id = `palette-option-${index}`; row.setAttribute('role', 'option'); row.dataset.index = String(index);

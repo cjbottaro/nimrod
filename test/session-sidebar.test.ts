@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
-import { sessionTime, sessionIndicator, installSessionTimeRefresh } from '../src/session-sidebar';
+import { sessionTime, sessionIndicator, installSessionTimeRefresh, createSessionRowContent, updateSessionRowContent } from '../src/session-sidebar';
 import { SessionRecency } from '../src/session-recency';
 
 test('recency retains closed identities, ignores malformed entries and never reuses a replaced file identity', () => {
@@ -46,6 +46,28 @@ test('state indicators have distinct idle/unread/input/error shapes and explicit
   assert.equal(sessionIndicator({ failed: true, inactive: true }).mark, '!');
   assert.equal(sessionIndicator({ blocked: true, failed: true }).state, 'recovery');
   for (const state of ['starting', 'restarting', 'closing', 'deleting'] as const) assert.equal(sessionIndicator({ [state]: true, failed: true }).state, state);
+});
+
+test('shared row updates preserve content nodes and add/remove a separately accessible badge', () => {
+  const dom = new JSDOM('');
+  try {
+    const row = dom.window.document.createElement('div');
+    const content = createSessionRowContent(row, 'row-time');
+    const presentation = { timestamp: 100, indicator: sessionIndicator({ busy: true }), badge: 'Open' };
+    updateSessionRowContent(content, 'Long title', presentation);
+    const badge = row.querySelector('.session-row-badge');
+    assert.equal(content.rowLabel.textContent, 'Long title');
+    assert.equal(badge?.textContent, 'Open');
+    assert.equal(row.getAttribute('aria-label'), 'Long title — Working — Open');
+    assert.equal(row.getAttribute('aria-describedby'), content.rowTime.id);
+    updateSessionRowContent(content, 'Renamed', presentation);
+    assert.equal(row.querySelector('.session-row-badge'), badge);
+    assert.equal(row.querySelector('.session-indicator'), content.rowIndicator);
+    assert.equal(row.querySelector('time'), content.rowTime);
+    updateSessionRowContent(content, 'Renamed', { ...presentation, badge: undefined });
+    assert.equal(row.querySelector('.session-row-badge'), null);
+    assert.equal(row.getAttribute('aria-label'), 'Renamed — Working');
+  } finally { dom.window.close(); }
 });
 
 test('relative-time refresh runs once per minute/foreground transition, pauses while hidden and disposes', () => {

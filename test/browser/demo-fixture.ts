@@ -21,7 +21,7 @@ type TestWindow = Window & {
 export const visible = (id: string) => `.session-view:not([hidden]) [data-pi-id="${id}"]`;
 
 /** Real app bundle and independent offline demo children. Never starts Pi. */
-export async function demoFixture(page: Page, appState: Record<string, unknown> = {}) {
+export async function demoFixture(page: Page, appState: Record<string, unknown> = {}, catalog: { path: string; sessionId: string; name: string; preview: string; modified: number; lastUserMessageAt?: number }[] = []) {
   const result = await build({ entryPoints: ['src/main.ts'], bundle: true, format: 'iife', platform: 'browser', write: false,
     loader: { '.css': 'empty' }, plugins: [{ name: 'raw', setup(builder) {
       builder.onResolve({ filter: /\.html\?raw$/ }, args => ({ path: path.resolve(args.resolveDir, args.path.replace('?raw', '')), namespace: 'raw' }));
@@ -73,7 +73,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'prepare_notifications' || command === 'focus_notification_window') return;
     if (command === 'notification_diagnostics') return 'macOS: authorized; desktop alerts: enabled; style: temporary; Notification Center: enabled; app active: yes; foreground handler calls: 1 (requests Banner + List).';
     if (command === 'notify_session' || command === 'test_notification') return 'submitted'; // Recorded only: never emit real OS notifications.
-    if (command === 'list_workspace_sessions') return { sessions: [], warnings: [] };
+    if (command === 'list_workspace_sessions') return { sessions: catalog, warnings: [] };
     if (command === 'start_pi') {
       const token = String(args.token);
       if ((args.config as JsonRecord)?.demo !== true || children.has(token)) throw new Error('Only independent offline fixture processes are allowed');

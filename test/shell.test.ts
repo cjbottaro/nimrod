@@ -345,7 +345,7 @@ test('history resume inserts at historical recency, Close/Resume retains it and 
   };
   try {
     await f.tick(); await resume();
-    const rows = f.rows(), order = () => [...f.win.document.querySelectorAll('.session-row')];
+    const rows = f.rows(), order = () => [...f.win.document.querySelectorAll('#open-sessions .session-row')];
     assert.deepEqual(order(), [rows[0], rows[2], rows[1]], 'resume neither appends nor bumps to now/mtime');
     assert.equal((f.preferences.value.state[cache] as JsonRecord)['/sessions/restored'] && ((f.preferences.value.state[cache] as JsonRecord)['/sessions/restored'] as JsonRecord).lastUsed, 700);
     rows[2].parentElement!.querySelector<HTMLButtonElement>('.session-close')!.click(); await f.tick(); await f.tick();
@@ -1989,7 +1989,7 @@ test('Resume marks sidebar membership independently of connectivity and filters 
     catalog: [
       { path: '/sessions/a.jsonl', sessionId: 'fixture-id', name: 'Selected root', preview: 'long '.repeat(100), modified: 30 },
       { path: '/sessions/b.jsonl', sessionId: 'fixture-id', name: 'Inactive root', preview: '', modified: 20 },
-      { path: '/sessions/closed.jsonl', sessionId: 'fixture-id', name: 'Closed root', preview: '', modified: 10 },
+      { path: '/sessions/closed.jsonl', sessionId: 'fixture-id', name: 'Closed root', preview: 'Historical preview', modified: 10, lastUserMessageAt: 5 },
       { path: '/sessions/agent.jsonl', sessionId: 'agent', name: 'Subagent', preview: '', modified: 50, parentSession: '/sessions/a.jsonl' },
       { path: '/sessions/fork.jsonl', sessionId: 'fork', name: 'Saved branch', preview: '', modified: 40, parentSession: '/sessions/a.jsonl' },
     ],
@@ -1997,7 +1997,7 @@ test('Resume marks sidebar membership independently of connectivity and filters 
   const key = (key: string) => f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key, metaKey: true, bubbles: true, cancelable: true }));
   const escape = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
   const pickerRows = () => [...f.element('palette-list').children] as HTMLElement[];
-  const badge = (row: HTMLElement) => row.querySelector('.palette-item-badge')?.textContent;
+  const badge = (row: HTMLElement) => row.querySelector('.session-row-badge')?.textContent;
   try {
     await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1, 'only the selected restored entry connects');
@@ -2005,7 +2005,23 @@ test('Resume marks sidebar membership independently of connectivity and filters 
     key('k'); await f.tick(); await f.tick();
     assert.deepEqual(pickerRows().map(row => row.querySelector('.palette-item-label')!.textContent), ['Selected root', 'Inactive root', 'Closed root']);
     assert.deepEqual(pickerRows().map(badge), ['Open', 'Open', undefined]);
-    assert.ok(pickerRows()[0].querySelector('.palette-item-heading .palette-item-badge'), 'badge is separate from the truncatable preview');
+    assert.ok(pickerRows()[0].querySelector('.session-row-heading .session-row-badge'), 'badge is separate from the truncatable title');
+    for (const [index, option] of pickerRows().slice(0, 2).entries()) {
+      const sidebar = f.rows()[index];
+      assert.equal(option.querySelector('.session-row-label')!.textContent, sidebar.querySelector('.session-row-label')!.textContent);
+      assert.equal(option.querySelector('small')!.innerHTML.replace(/id="[^"]*"/, ''), sidebar.querySelector('small')!.innerHTML.replace(/id="[^"]*"/, ''));
+      assert.equal(option.querySelector('.session-indicator')!.outerHTML, sidebar.querySelector('.session-indicator')!.outerHTML);
+      assert.equal(option.getAttribute('aria-label'), `${sidebar.getAttribute('aria-label')} — Open`);
+      assert.equal(option.getAttribute('aria-describedby'), option.querySelector('time')!.id);
+      assert.equal(option.title, '');
+    }
+    assert.equal(pickerRows()[2].querySelector('time')!.getAttribute('datetime'), new Date(5).toISOString(), 'closed history uses user-message time, not mtime');
+    assert.equal(pickerRows()[2].querySelector('.session-indicator')!.getAttribute('data-state'), 'inactive');
+    assert.doesNotMatch(pickerRows()[2].textContent!, /Historical preview/);
+    const search = f.element<HTMLInputElement>('palette-input');
+    search.value = 'Historical preview closed.jsonl'; search.dispatchEvent(new f.win.Event('input'));
+    assert.equal(pickerRows().length, 1, 'hidden preview and path remain searchable');
+    search.value = ''; search.dispatchEvent(new f.win.Event('input'));
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1, 'listing does not connect inactive sessions');
     escape(); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
     key('t'); await f.tick();

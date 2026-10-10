@@ -44,17 +44,20 @@ export interface SessionRowContent {
 export interface SessionRowPresentation {
   timestamp: unknown;
   indicator: ReturnType<typeof sessionIndicator>;
+  badge?: string;
 }
 
-/** Shared content and styling for sidebar buttons and Switch session options. */
+/** Shared content and styling for the sidebar and both session pickers. */
 export function createSessionRowContent(row: HTMLElement, timeId: string): SessionRowContent {
   const doc = row.ownerDocument;
   row.classList.add('session-row');
   const text = doc.createElement('span'); text.className = 'session-row-text';
-  const rowLabel = doc.createElement('span');
+  const heading = doc.createElement('span'); heading.className = 'session-row-heading';
+  const rowLabel = doc.createElement('span'); rowLabel.className = 'session-row-label';
+  heading.append(rowLabel);
   const secondary = doc.createElement('small'), rowTime = doc.createElement('time');
   rowTime.id = timeId; row.setAttribute('aria-describedby', timeId);
-  secondary.append(rowTime); text.append(rowLabel, secondary);
+  secondary.append(rowTime); text.append(heading, secondary);
   const rowIndicator = doc.createElement('span'); rowIndicator.className = 'session-indicator'; rowIndicator.setAttribute('aria-hidden', 'true');
   row.append(rowIndicator, text);
   return { row, rowLabel, rowIndicator, rowTime };
@@ -75,7 +78,13 @@ export function updateSessionRowContent(content: SessionRowContent, name: string
   updateSessionRowTime(rowTime, presentation.timestamp);
   if (rowIndicator.dataset.state !== status.state) rowIndicator.dataset.state = status.state;
   if (rowIndicator.textContent !== status.mark) rowIndicator.textContent = status.mark;
-  row.setAttribute('aria-label', `${name} — ${status.label}`);
+  const heading = rowLabel.parentElement!;
+  let badge = heading.querySelector<HTMLElement>('.session-row-badge');
+  if (presentation.badge) {
+    if (!badge) { badge = row.ownerDocument.createElement('span'); badge.className = 'session-row-badge'; heading.append(badge); }
+    if (badge.textContent !== presentation.badge) badge.textContent = presentation.badge;
+  } else badge?.remove();
+  row.setAttribute('aria-label', `${name} — ${status.label}${presentation.badge ? ` — ${presentation.badge}` : ''}`);
 }
 
 /** Text refresh only: callers must not sort, persist, navigate or request history. */

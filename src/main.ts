@@ -476,7 +476,7 @@ function openSessionPicker(): PalettePage {
     items: tabs.map(tab => ({
       id: tab.id,
       label: tab.title,
-      sessionRow: { timestamp: tab.lastUsed, indicator: indicator(tab) },
+      sessionRow: sessionRow(tab),
       keywords: tab === presented ? 'Current' : undefined,
       run: () => activate(tab),
     })),
@@ -501,12 +501,17 @@ async function paletteSessions(): Promise<PalettePage> {
   }
   return {
     notice: result.warnings.length ? `${result.warnings.length} session file(s) could not be read. Use Refresh to retry.` : undefined,
-    items: [...entries.values()].filter(s => !s.parentSession && !deletion.removed(s.path)).sort((a, b) => b.modified - a.modified).map(s => ({
-      id: s.path, label: s.name || s.preview || 'Untitled session', keywords: `${s.path} ${s.preview}`,
-      badge: tabs.some(t => t.file?.path === s.path) ? 'Open' : undefined,
-      detail: `${s.modified ? new Date(s.modified).toLocaleDateString() : 'Saved session'}${s.preview ? ` · ${s.preview}` : ''}`,
-      run: () => openSession(s),
-    })),
+    items: [...entries.values()].filter(s => !s.parentSession && !deletion.removed(s.path)).sort((a, b) => b.modified - a.modified).map(s => {
+      const open = tabs.find(t => t.file?.path === s.path);
+      return {
+        id: s.path, label: s.name || s.preview || 'Untitled session', keywords: `${s.path} ${s.preview}`,
+        sessionRow: {
+          ...(open ? sessionRow(open) : { timestamp: Math.max(recency.get(s), lastUsed(s.lastUserMessageAt)), indicator: sessionIndicator({ inactive: true }) }),
+          badge: open ? 'Open' : undefined,
+        },
+        run: () => openSession(s),
+      };
+    }),
   };
 }
 const palette = installCommandPalette(window, required<HTMLDialogElement>('command-palette'), {
@@ -622,11 +627,12 @@ function indicator(tab: Tab) {
     inactive: tab.ended || !state || state.sessionUnavailable, compacting: state?.compacting,
     busy: state?.busy || !!(state && presentActivity(false, '', state.extensionStatuses).subagents), pending: submissionPending(tab) });
 }
+function sessionRow(tab: Tab) { return { timestamp: tab.lastUsed, indicator: indicator(tab) }; }
 function updateTab(tab: Tab): void {
   tab.root.inert = tab.closing || tab.restarting || tab.deleting || tab !== presented;
-  const status = indicator(tab), name = tab.title;
+  const name = tab.title;
   tab.root.setAttribute('aria-busy', String(tab.session?.state.busy === true));
-  updateSessionRowContent(tab, name, { timestamp: tab.lastUsed, indicator: status });
+  updateSessionRowContent(tab, name, sessionRow(tab));
   tab.row.disabled = !ready;
   tab.row.setAttribute('aria-current', String(tab === presented)); tab.closeButton.setAttribute('aria-label', `Close ${name}`); tab.closeButton.disabled = !ready || deletion.pending || tab.closing || tab.starting || tab.restarting;
   tab.deleteButton.setAttribute('aria-label', `Delete session tree for ${name}`); tab.deleteButton.disabled = !deletable(tab);
