@@ -62,7 +62,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
   await page.exposeFunction('__fixtureHost', async (command: string, args: JsonRecord) => {
     calls.push({ command, args });
     if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 1;
-    if (command.startsWith('preferences_')) return preferences.invoke(command, args);
+    if (command.startsWith('preferences_') || command === 'record_command_usage') return preferences.invoke(command, args);
     if (command === 'runtime_defaults') return { cwd: process.cwd(), node: process.execPath, pi: 'fixture-only' };
     if (command === 'take_project_picker_request') return false;
     if (command === 'list_projects') return (preferences.value.state['nimrod.workspaces.v1'] as string[] || []).map(cwd => ({ cwd, open: cwd === process.cwd() }));

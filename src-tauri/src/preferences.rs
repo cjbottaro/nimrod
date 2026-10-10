@@ -349,6 +349,16 @@ impl Preferences {
         })
     }
 
+    pub fn record_command_usage(&self, id: &str) -> Result<Snapshot, String> {
+        self.change_state(|state| {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|error| error.to_string())?
+                .as_millis() as u64;
+            crate::command_usage::record(state, id, now)
+        })
+    }
+
     pub fn remove_state(&self, key: &str) -> Result<Snapshot, String> {
         self.change_state(|state| {
             state.remove(key);
@@ -413,6 +423,17 @@ pub fn preferences_settings(
     text: String,
 ) -> Result<Snapshot, String> {
     let result = preferences.update_settings(expected, text);
+    let _ = app.emit("nimrod-preferences", preferences.snapshot());
+    result
+}
+
+#[tauri::command]
+pub fn record_command_usage(
+    app: tauri::AppHandle,
+    preferences: tauri::State<'_, Preferences>,
+    id: String,
+) -> Result<Snapshot, String> {
+    let result = preferences.record_command_usage(&id);
     let _ = app.emit("nimrod-preferences", preferences.snapshot());
     result
 }
@@ -553,6 +574,35 @@ mod tests {
             "{\"appearance.zoom\":150}"
         );
     }
+    #[test]
+    fn command_usage_is_atomic_across_windows_and_restores_from_disk() {
+        let (_dir, p) = fixture();
+        std::thread::scope(|scope| {
+            for _ in 0..8 {
+                scope.spawn(|| {
+                    p.record_command_usage("resume").unwrap();
+                });
+            }
+        });
+        p.record_command_usage("new").unwrap();
+        let saved = p.snapshot();
+        let history = &saved.state[crate::command_usage::KEY]["entries"];
+        assert_eq!(history[0]["id"], "new");
+        assert_eq!(history[1]["useCount"], 8);
+        let restored = Preferences {
+            inner: Mutex::new(Snapshot {
+                state: Map::new(),
+                ..saved
+            }),
+        };
+        assert_eq!(
+            restored.snapshot().state[crate::command_usage::KEY]["entries"][1]["useCount"],
+            8
+        );
+        fs::write(restored.snapshot().state_path, "broken").unwrap();
+        assert!(restored.record_command_usage("new").is_err());
+    }
+
     #[test]
     fn state_updates_merge_instead_of_overwriting_other_windows() {
         let (_dir, p) = fixture();

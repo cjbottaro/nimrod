@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod cli;
+mod command_usage;
 mod keybindings;
 mod links;
 mod native_menu;
@@ -462,6 +463,7 @@ fn main() {
             preferences::preferences_snapshot,
             preferences::preferences_settings,
             preferences::preferences_state,
+            preferences::record_command_usage,
             preferences::preferences_migrate,
             open_workspace,
             workspace_windows::list_projects,

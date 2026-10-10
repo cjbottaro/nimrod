@@ -111,7 +111,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         return 1;
       }
       if (command === 'plugin:event|unlisten') return 1;
-      if (command.startsWith('preferences_')) return preferences.invoke(command, args);
+      if (command.startsWith('preferences_') || command === 'record_command_usage') return preferences.invoke(command, args);
       if (command === 'plugin:window|is_focused') return options.focused?.() ?? true;
       if (command === 'prepare_notifications') return;
       if (command === 'focus_notification_window') { await options.notificationFocusGate; return; }
@@ -2491,4 +2491,27 @@ test('restored session focuses its composer while pop-out sync is pending; late 
     assert.equal(f.win.document.activeElement, prompt);
     assert.equal(f.calls.some(c => (c.args.message as JsonRecord | undefined)?.type === 'prompt'), false);
   } finally { release(); f.win.close(); }
+});
+
+
+test('palette command history restores app-wide, persists acceptance and does not count direct shortcuts', async () => {
+  const key = 'nimrod.command-usage.v1';
+  const f = await fixture(undefined, { windowWorkspace: '/project', appState: {
+    [key]: { version: 1, entries: [{ id: 'resume', lastUsedAt: 1, useCount: 2 }] },
+  } });
+  try {
+    f.openPalette(); assert.match(f.element('palette-list').firstElementChild!.textContent!, /Resume session/);
+    const input = f.element<HTMLInputElement>('palette-input');
+    input.value = 'sidebar'; input.dispatchEvent(new f.win.Event('input'));
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    const usage = f.preferences.value.state[key] as { entries: { id: string }[] };
+    assert.deepEqual(usage.entries.map(e => e.id), ['sidebar', 'resume']);
+    f.openPalette(); assert.match(f.element('palette-list').firstElementChild!.textContent!, /Show sidebar/);
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await f.tick();
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true, cancelable: true }));
+    await f.tick();
+    assert.equal(f.calls.filter(c => c.command === 'record_command_usage').length, 1);
+    assert.equal(f.calls.some(c => c.command === 'start_pi'), false);
+  } finally { f.win.close(); }
 });

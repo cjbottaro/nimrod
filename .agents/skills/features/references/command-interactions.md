@@ -9,6 +9,7 @@ Human guide: [Command interactions](../../../../docs/workspace-sessions.md#comma
 Add a picker through `startSelection()` or the existing page lifecycle, not a feature-specific dialog key handler. `beginPage()` owns query reset, Back/Retry controls and request generation. Page content may differ; dismissal must not branch on page mode or entry point. There is no new generic harness or global modal framework.
 
 Project navigation is another shared page, not a separate modal controller; see [recent-project picker](projects-and-sessions.md#recent-project-picker). Its OS folder chooser temporarily disables picker actions and keeps the page mounted so chooser cancellation preserves the search.
+Command-list sorting and accepted-command history are independent of page lifecycle; see [Command ranking](command-ranking.md). Subordinate picker order is unchanged.
 
 ## Lifecycle contract
 

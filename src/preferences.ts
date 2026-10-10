@@ -16,6 +16,7 @@ export interface PreferencesHost {
   snapshot(): Promise<PreferencesSnapshot>;
   settings(expected: string, text: string): Promise<PreferencesSnapshot>;
   state(entries: Record<string, unknown>): Promise<PreferencesSnapshot>;
+  commandUsage(id: string): Promise<PreferencesSnapshot>;
   migrate(text: string, entries: Record<string, unknown>): Promise<PreferencesSnapshot>;
   listen(receive: (snapshot: PreferencesSnapshot) => void): Promise<() => void>;
 }
@@ -158,6 +159,9 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
     saveNotifications(enabled: boolean) { return patch({ 'notifications.enabled': enabled }); },
     zoom() { return settings['appearance.zoom'] ?? DEFAULT_ZOOM; },
     saveZoom(percent: number) { return patch({ 'appearance.zoom': percent }); },
+    recordCommandUsage(id: string) {
+      return enqueue(async () => { receive(await host.commandUsage(id)); });
+    },
     readState(key: string) { return snapshot?.state[key]; },
     saveState(key: string, value: unknown) {
       return enqueue(async () => { receive(await host.state({ [key]: value })); });
