@@ -93,7 +93,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     input.setAttribute('aria-controls', 'palette-list'); input.setAttribute('aria-autocomplete', 'list');
     const previous = matches[selected]?.id;
     const words = input.value.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
-    matches = items.filter(item => words.every(word => `${item.label} ${item.badge || ''} ${item.detail || ''} ${item.sessionRow?.indicator.label || ''} ${item.sessionRow?.badge || ''} ${item.projectOpen ? 'Open' : ''} ${item.keywords || ''}`.toLocaleLowerCase().includes(word)));
+    matches = items.filter(item => words.every(word => `${item.label} ${item.badge || ''} ${item.detail || ''} ${item.sessionRow?.indicator.label || ''} ${item.sessionRow?.open ? 'Open' : ''} ${item.projectOpen ? 'Open' : ''} ${item.keywords || ''}`.toLocaleLowerCase().includes(word)));
     if (mode === 'commands') matches = (options.ranking?.strategy ?? vscodeMruRanking).rank(matches, { query: input.value, usage: options.ranking?.usage() ?? [] });
     selected = Math.max(0, matches.findIndex(item => item.id === previous));
     list.replaceChildren(...matches.map((item, index) => {
@@ -102,6 +102,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
         const content = createSessionRowContent(row, `${row.id}-time`);
         content.rowLabel.classList.add('palette-item-label');
         updateSessionRowContent(content, item.label, item.sessionRow);
+        row.append(enterHint());
         return row;
       }
       const heading = doc.createElement('div'); heading.className = 'palette-item-heading';
@@ -117,13 +118,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       if (mode === 'projects') {
         row.className = 'palette-project-row';
         const parent = doc.createElement('small'); parent.className = 'palette-project-parent'; parent.textContent = item.projectParent || '';
-        const enter = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        enter.classList.add('palette-project-enter'); enter.setAttribute('viewBox', '0 0 24 24');
-        enter.setAttribute('fill', 'none'); enter.setAttribute('stroke', 'currentColor'); enter.setAttribute('stroke-width', '1.7');
-        enter.setAttribute('stroke-linecap', 'round'); enter.setAttribute('stroke-linejoin', 'round');
-        enter.setAttribute('aria-hidden', 'true'); enter.setAttribute('focusable', 'false');
-        const path = doc.createElementNS('http://www.w3.org/2000/svg', 'path'); path.setAttribute('d', 'M20 4v8a4 4 0 0 1-4 4H4m5-5-5 5 5 5');
-        enter.append(path); heading.append(parent, enter); row.append(heading);
+        heading.append(parent, enterHint()); row.append(heading);
         row.title = item.detail || item.id;
         row.setAttribute('aria-label', `${item.label} — ${item.detail || item.id}${item.projectOpen ? ' — Open project window' : ''} — Enter to open`);
         return row;
@@ -140,6 +135,15 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     status.textContent = loading ? `Loading ${noun}…` : notice || (matches.length ? `${matches.length} ${noun}` : items.length || mode === 'commands' ? `No matching ${noun}.` : mode === 'sessions' ? 'No sessions yet.' : mode === 'projects' ? 'No recent projects. Use File → Open project… to open a folder.' : 'No options available.');
     input.setAttribute('aria-busy', String(loading));
     selection();
+  }
+  function enterHint(): SVGSVGElement {
+    const enter = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    enter.classList.add('palette-project-enter'); enter.setAttribute('viewBox', '0 0 24 24');
+    enter.setAttribute('fill', 'none'); enter.setAttribute('stroke', 'currentColor'); enter.setAttribute('stroke-width', '1.7');
+    enter.setAttribute('stroke-linecap', 'round'); enter.setAttribute('stroke-linejoin', 'round');
+    enter.setAttribute('aria-hidden', 'true'); enter.setAttribute('focusable', 'false');
+    const path = doc.createElementNS('http://www.w3.org/2000/svg', 'path'); path.setAttribute('d', 'M20 4v8a4 4 0 0 1-4 4H4m5-5-5 5 5 5');
+    enter.append(path); return enter;
   }
   function selection(): void {
     for (const [index, row] of [...list.children].entries()) row.setAttribute('aria-selected', String(index === selected));

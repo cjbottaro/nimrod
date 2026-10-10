@@ -32,7 +32,6 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor:col-resize !important; u
 .session-row-text { display:grid; gap:4px; min-width:0; flex:1; }
 .session-row-heading { display:flex; align-items:center; gap:8px; min-width:0; }
 .session-row-label { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.session-row-badge { flex:none; border:1px solid var(--vscode-panel-border); border-radius:3px; padding:1px 5px; font-size:10px; color:var(--vscode-descriptionForeground); }
 .session-row-text small { font-size:11px; color:var(--vscode-descriptionForeground); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .session-indicator { display:inline-flex; align-items:center; justify-content:center; position:relative; box-sizing:border-box; width:14px; height:14px; flex:none; color:var(--vscode-descriptionForeground); font-size:14px; line-height:1; }
 .session-indicator[data-state=ready] { font-size:18px; }
@@ -96,7 +95,7 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor:col-resize !important; u
 #palette-list .palette-project-row .palette-item-label { flex:0 0 auto; max-width:55%; }
 #palette-list .palette-project-parent { flex:0 1 auto; min-width:0; }
 #palette-list .palette-project-enter { flex:0 0 16px; width:16px; height:16px; margin-left:auto; color:var(--vscode-descriptionForeground); visibility:hidden; }
-#palette-list .palette-project-row[aria-selected=true] .palette-project-enter { visibility:visible; }
+#palette-list [aria-selected=true] .palette-project-enter { visibility:visible; }
 #command-palette[data-mode=projects] #palette-list [role=option]:hover:not([aria-selected=true]) { background:var(--vscode-list-hoverBackground, var(--vscode-toolbar-hoverBackground)); }
 #palette-status { margin:0; font-size:11px; color:var(--vscode-descriptionForeground); white-space:pre-wrap; }
 @media (max-width:760px) { #session-sidebar { width:var(--session-sidebar-width,210px); } }

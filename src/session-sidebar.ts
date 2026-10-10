@@ -44,7 +44,7 @@ export interface SessionRowContent {
 export interface SessionRowPresentation {
   timestamp: unknown;
   indicator: ReturnType<typeof sessionIndicator>;
-  badge?: string;
+  open?: boolean;
 }
 
 /** Shared content and styling for the sidebar and both session pickers. */
@@ -78,13 +78,7 @@ export function updateSessionRowContent(content: SessionRowContent, name: string
   updateSessionRowTime(rowTime, presentation.timestamp);
   if (rowIndicator.dataset.state !== status.state) rowIndicator.dataset.state = status.state;
   if (rowIndicator.textContent !== status.mark) rowIndicator.textContent = status.mark;
-  const heading = rowLabel.parentElement!;
-  let badge = heading.querySelector<HTMLElement>('.session-row-badge');
-  if (presentation.badge) {
-    if (!badge) { badge = row.ownerDocument.createElement('span'); badge.className = 'session-row-badge'; heading.append(badge); }
-    if (badge.textContent !== presentation.badge) badge.textContent = presentation.badge;
-  } else badge?.remove();
-  row.setAttribute('aria-label', `${name} — ${status.label}${presentation.badge ? ` — ${presentation.badge}` : ''}`);
+  row.setAttribute('aria-label', `${name} — ${status.label}${presentation.open ? ' — Open' : ''}`);
 }
 
 /** Text refresh only: callers must not sort, persist, navigate or request history. */

@@ -321,7 +321,9 @@ test('Resume uses Switch row layout and typography while historical preview stay
     await expect(option).toHaveCount(1);
     expect(await option.evaluate(geometry)).toEqual(switchGeometry);
     expect(await option.locator('small').evaluate(typography)).toEqual(switchType);
-    await expect(option.locator('.session-indicator')).toHaveAttribute('data-state', 'inactive');
+    await expect(option.locator('.session-indicator')).toHaveAttribute('data-state', 'closed');
+    await expect(option.locator('.session-indicator')).toHaveText('—');
+    await expect(option.locator('.palette-project-enter')).toBeVisible();
     await expect(option.locator('.session-row-badge')).toHaveCount(0);
     await expect(option.locator('time')).toContainText('2 minutes ago');
     await expect(option).not.toContainText('Find this hidden preview');
@@ -331,6 +333,34 @@ test('Resume uses Switch row layout and typography while historical preview stay
     expect(await label.evaluate(node => node.scrollWidth > node.clientWidth)).toBe(true);
     await page.locator('#palette-input').fill('hidden preview history.jsonl');
     await expect(option).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    expect(demo.children.size).toBe(1); expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
+test('session Enter hints follow keyboard selection without shifting titles or timestamps', async ({ page }) => {
+  const demo = await demoFixture(page, {}, [
+    { path: '/fixture/one.jsonl', sessionId: 'one', name: 'First closed history', preview: '', modified: 2 },
+    { path: '/fixture/two.jsonl', sessionId: 'two', name: 'Second closed history', preview: '', modified: 1 },
+  ]);
+  try {
+    await page.keyboard.press('Meta+k');
+    const rows = page.locator('#palette-list [role=option]');
+    await expect(rows).toHaveCount(2);
+    const bounds = () => rows.evaluateAll(nodes => nodes.map(node => {
+      const title = node.querySelector('.session-row-label')!.getBoundingClientRect();
+      const time = node.querySelector('time')!.getBoundingClientRect();
+      return { titleX: title.x, titleWidth: title.width, timeX: time.x };
+    }));
+    const before = await bounds();
+    await expect(rows.nth(0).locator('.palette-project-enter')).toBeVisible();
+    await expect(rows.nth(1).locator('.palette-project-enter')).toBeHidden();
+    await page.keyboard.press('ArrowDown');
+    await expect(rows.nth(0).locator('.palette-project-enter')).toBeHidden();
+    await expect(rows.nth(1).locator('.palette-project-enter')).toBeVisible();
+    expect(await bounds()).toEqual(before);
+    await expect(rows.locator('.session-indicator')).toHaveText(['—', '—']);
+    await expect(rows.locator('.session-row-badge')).toHaveCount(0);
     await page.keyboard.press('Escape');
     expect(demo.children.size).toBe(1); expect(demo.errors).toEqual([]);
   } finally { await demo.close(); }
