@@ -387,7 +387,7 @@ test('All uses persisted user recency, preserves legacy ties and does not mark r
   let saved!: unknown;
   try {
     await f.tick(); await f.tick();
-    const rows = f.rows(), visible = () => [...f.win.document.querySelectorAll('.session-row')];
+    const rows = f.rows(), visible = () => [...f.win.document.querySelectorAll('#open-sessions .session-row')];
     assert.deepEqual(visible(), [rows[1], rows[2], rows[0], rows[3]]);
     assert.equal(rows[0].getAttribute('aria-current'), 'true');
     assert.deepEqual((f.preferences.value.state[key] as typeof layout).tabs.map(tab => tab.lastUsed), [50, 100, 75, 0]);
@@ -2010,6 +2010,17 @@ test('Resume marks sidebar membership independently of connectivity and filters 
     escape(); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
     key('t'); await f.tick();
     assert.equal(pickerRows().length, 3, 'Switch includes the open child and disconnected root');
+    for (const [index, option] of pickerRows().entries()) {
+      const sidebar = f.rows()[index];
+      assert.equal(option.querySelector('.session-row-text')!.textContent, sidebar.querySelector('.session-row-text')!.textContent);
+      assert.equal(option.querySelector('.session-row-text > span')!.textContent, sidebar.querySelector('.session-row-text > span')!.textContent);
+      assert.equal(option.querySelector('small > time')!.getAttribute('datetime'), sidebar.querySelector('small > time')!.getAttribute('datetime'));
+      assert.equal(option.querySelector('.session-indicator')!.outerHTML, sidebar.querySelector('.session-indicator')!.outerHTML);
+      assert.equal(option.getAttribute('aria-label'), sidebar.getAttribute('aria-label'));
+      assert.equal(option.getAttribute('aria-describedby'), option.querySelector('time')!.id);
+      assert.equal(option.title, '', 'shared session rows have no status tooltip');
+      assert.doesNotMatch(option.querySelector('small')!.textContent!, /Current|Ready|Inactive/);
+    }
     escape(); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
     key('k'); await f.tick(); await f.tick();
     pickerRows()[0].click(); await f.tick();

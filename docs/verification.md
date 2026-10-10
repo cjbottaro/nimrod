@@ -1,5 +1,12 @@
 # PoC verification
 
+## Switch session row parity
+
+- Implemented on `fix/switch-session-rows` in `.worktrees/switch-session-rows`. Switch and the sidebar share DOM creation/update helpers, state indicators, accessible status labels, timestamp formatting and row CSS. Visible state is indicator-only; the second line is muted relative time/date. Resume previews/Open badges and session lifecycle remain unchanged.
+- `mise run check` passes **359 TypeScript/Node tests**, Rust formatting/Clippy and **93 default Rust tests** (two opt-in Pi smokes ignored). All **34 offline WebKit tests** pass, including row content/theme styling parity, filtered-out navigation and process reuse. `mise run build` packages/ad-hoc-signs/verifies `.worktrees/switch-session-rows/src-tauri/target/release/bundle/macos/Nimrod.app`.
+- The initial WebKit run exposed a fixture search collision: the checkout directory `switch-session-rows` made Resume's directory detail also match “switch session”. The existing inbox test now explicitly chooses the Switch command rather than assuming it is the first search result; the complete rerun passes.
+- No user app/window launch or interruption, live Pi/model request, user-session mutation, upstream extension change, commit or push occurred. The primary checkout/default app bundle was untouched. Native visual/focus acceptance and Linux/possible Windows verification remain for user validation.
+
 ## One-step command-interaction dismissal
 
 - Implemented on `fix/palette-dismissal` in `.worktrees/palette-dismissal`. The shared command-palette controller owns Escape/native/API dismissal for all pages and entry points. Explicit Back alone returns to commands. Cancellation immediately invalidates pending metadata/choices and clears page callbacks; accepted actions still run after native close/focus restoration. New interactions wait for a queued native close to finish. Genuine nested Pi/Settings dialogs retain their own cancellation boundaries.

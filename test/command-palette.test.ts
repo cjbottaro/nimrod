@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
 import { installCommandPalette, type PalettePage } from '../src/command-palette';
 import { stubDialogs } from './dialog-fixture';
+import { sessionIndicator, sessionTime, type SidebarState } from '../src/session-sidebar';
 
 function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] })) {
   const dom = new JSDOM(readFileSync('index.html', 'utf8'), { pretendToBeVisual: true });
@@ -35,6 +36,35 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }))
   };
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+
+test('session row options share indicators and muted timestamps without visible status text', async () => {
+  const states: SidebarState[] = [{}, { inactive: true }, { busy: true }, { compacting: true }, { pending: true },
+    { unread: true }, { inputCount: 1 }, { failed: true }, { starting: true }, { restarting: true },
+    { closing: true }, { deleting: true }, { blocked: true }];
+  const timestamp = Date.now() - 120_000;
+  const f = fixture(async () => ({ items: states.map((state, index) => ({
+    id: `session-${index}`, label: `Conversation ${index}`, sessionRow: { timestamp, indicator: sessionIndicator(state) }, run() {},
+  })) }));
+  try {
+    await f.palette.sessions();
+    for (const [index, row] of [...f.list().children].entries()) {
+      const status = sessionIndicator(states[index]);
+      assert.ok(row.classList.contains('session-row'));
+      assert.equal(row.querySelector<HTMLElement>('.session-indicator')!.dataset.state, status.state);
+      assert.equal(row.querySelector('.session-indicator')!.textContent, status.mark);
+      assert.equal(row.querySelector('.session-indicator')!.getAttribute('aria-hidden'), 'true');
+      assert.equal(row.querySelector('.session-row-text > span')!.textContent, `Conversation ${index}`);
+      assert.equal(row.querySelector('small > time')!.textContent, sessionTime(timestamp));
+      assert.equal(row.querySelector('time')!.getAttribute('datetime'), new Date(timestamp).toISOString());
+      assert.equal(row.getAttribute('aria-label'), `Conversation ${index} — ${status.label}`);
+      assert.equal(row.getAttribute('aria-describedby'), row.querySelector('time')!.id);
+      assert.ok(!row.textContent!.includes(status.label));
+    }
+    f.query('working');
+    assert.equal(f.list().children.length, 1, 'status remains searchable without visible status text');
+    assert.equal(f.list().firstElementChild!.getAttribute('aria-selected'), 'true');
+  } finally { f.dispose(); }
+});
 
 test('every palette page shares one-step dismissal across entry points and cancellation paths', async () => {
   for (const page of ['commands', 'resume', 'switch', 'selection', 'name']) {

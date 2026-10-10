@@ -38,6 +38,12 @@ Read the [human guide](../../../../docs/workspace-sessions.md),
 
 ## Session management
 
+### Switch row presentation
+
+- Switch items carry `PaletteItem.sessionRow` with `tab.lastUsed` and the same shell `indicator(tab)` result used by the sidebar. `src/session-sidebar.ts` owns shared DOM creation, incremental updates, time formatting and accessible status labels; both surfaces use the same row/indicator CSS.
+- Visible content is an indicator, title and muted relative time/date only. Status and Current remain searchable, not visible text or hover tooltips. Resume previews/Open badges and other palette pages retain their existing renderer.
+- `test/command-palette.test.ts` covers every indicator state, timestamp semantics, accessible labels and status search; `test/shell.test.ts` compares Switch/sidebar content for connected/inactive entries hidden by a filter, preserving membership and process reuse.
+
 ### Resume picker
 
 - `session_catalog.rs` returns optional `parentSession` metadata from Pi's header; `sessions.rs` carries the same metadata through exact-file inspection/startup. Missing/null parent means root; a nonempty string means child. Malformed parent metadata is reported, not treated as a root.

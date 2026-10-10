@@ -35,6 +35,49 @@ export function sessionIndicator(state: SidebarState): { state: string; label: s
   return { state: 'ready', label: 'Ready', mark: '•' };
 }
 
+export interface SessionRowContent {
+  row: HTMLElement;
+  rowLabel: HTMLElement;
+  rowIndicator: HTMLElement;
+  rowTime: HTMLTimeElement;
+}
+export interface SessionRowPresentation {
+  timestamp: unknown;
+  indicator: ReturnType<typeof sessionIndicator>;
+}
+
+/** Shared content and styling for sidebar buttons and Switch session options. */
+export function createSessionRowContent(row: HTMLElement, timeId: string): SessionRowContent {
+  const doc = row.ownerDocument;
+  row.classList.add('session-row');
+  const text = doc.createElement('span'); text.className = 'session-row-text';
+  const rowLabel = doc.createElement('span');
+  const secondary = doc.createElement('small'), rowTime = doc.createElement('time');
+  rowTime.id = timeId; row.setAttribute('aria-describedby', timeId);
+  secondary.append(rowTime); text.append(rowLabel, secondary);
+  const rowIndicator = doc.createElement('span'); rowIndicator.className = 'session-indicator'; rowIndicator.setAttribute('aria-hidden', 'true');
+  row.append(rowIndicator, text);
+  return { row, rowLabel, rowIndicator, rowTime };
+}
+
+export function updateSessionRowTime(time: HTMLTimeElement, timestamp: unknown, now = Date.now()): void {
+  const label = sessionTime(timestamp, now), used = lastUsed(timestamp);
+  if (time.textContent !== label) time.textContent = label;
+  const datetime = used ? new Date(used).toISOString() : '';
+  if (datetime && time.getAttribute('datetime') !== datetime) time.setAttribute('datetime', datetime);
+  else if (!datetime) time.removeAttribute('datetime');
+}
+
+export function updateSessionRowContent(content: SessionRowContent, name: string, presentation: SessionRowPresentation): void {
+  const { row, rowLabel, rowIndicator, rowTime } = content;
+  const status = presentation.indicator;
+  if (rowLabel.textContent !== name) rowLabel.textContent = name;
+  updateSessionRowTime(rowTime, presentation.timestamp);
+  if (rowIndicator.dataset.state !== status.state) rowIndicator.dataset.state = status.state;
+  if (rowIndicator.textContent !== status.mark) rowIndicator.textContent = status.mark;
+  row.setAttribute('aria-label', `${name} — ${status.label}`);
+}
+
 /** Text refresh only: callers must not sort, persist, navigate or request history. */
 export function installSessionTimeRefresh(win: Window, refresh: () => void): () => void {
   const update = () => { if (win.document.visibilityState !== 'hidden') refresh(); };

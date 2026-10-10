@@ -236,6 +236,34 @@ test('empty Unread shows working status with a reduced-motion-aware pulse', asyn
   } finally { await demo.close(); }
 });
 
+test('Switch session shares sidebar indicator, muted timestamp and styling for filtered-out rows', async ({ page }) => {
+  const demo = await demoFixture(page);
+  try {
+    const firstId = (await page.locator(sessions).getAttribute('id'))!;
+    await newOfflineDemo(page);
+    await page.getByRole('tab', { name: /Working/ }).click();
+    await expect(page.locator('#conversation')).toBeHidden();
+    await page.keyboard.press('Meta+t');
+    await expect(page.locator('#palette-title')).toHaveText('Switch session');
+    const options = page.locator('#palette-list [role=option]');
+    await expect(options).toHaveCount(2);
+    const option = options.nth(0), sidebar = page.locator(`#${firstId}`);
+    await expect(option.locator('.session-row-text')).toHaveText((await sidebar.locator('.session-row-text').textContent())!);
+    await expect(option.locator('.session-indicator')).toHaveAttribute('data-state', 'ready');
+    await expect(option.locator('.session-indicator')).toHaveText('•');
+    await expect(option.locator('small')).not.toContainText(/Ready|Current/);
+    await expect(option).not.toHaveAttribute('title');
+    for (const selector of ['.session-indicator', 'small']) {
+      const properties = (node: Element) => { const css = getComputedStyle(node); return { color: css.color, fontSize: css.fontSize }; };
+      expect(await option.locator(selector).evaluate(properties)).toEqual(await sidebar.locator(selector).evaluate(properties));
+    }
+    await option.click();
+    await expect(page.locator(`#${firstId}`)).toHaveAttribute('aria-current', 'true');
+    await expect(page.getByRole('tab', { name: /^All \(\d+\)$/ })).toHaveAttribute('aria-selected', 'true');
+    expect(demo.children.size).toBe(2); expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
 test('Unread updates in arrival order and retains a read selected session without changing open sessions', async ({ page }) => {
   const demo = await demoFixture(page);
   try {
@@ -252,7 +280,9 @@ test('Unread updates in arrival order and retains a read selected session withou
     await expect(visibleRows).toHaveCount(1);
     await expect(page.locator('#sidebar-unread-count')).toHaveText('1');
     await page.keyboard.press('Meta+Shift+P');
-    await page.locator('#palette-input').fill('switch session'); await page.locator('#palette-input').press('Enter');
+    await page.locator('#palette-input').fill('switch session');
+    // Resume's directory detail can also match when the checkout is named switch-session-rows.
+    await page.locator('#palette-list [role=option]').filter({ has: page.getByText('Switch session…', { exact: true }) }).click();
     await expect(page.locator('#palette-list [role=option]')).toHaveCount(3);
     await page.locator('#palette-list [role=option]').nth(0).click();
     await expect(page.getByRole('tab', { name: /^All \(\d+\)$/ })).toHaveAttribute('aria-selected', 'true');

@@ -5,7 +5,7 @@ import { notificationPreview, sessionNotifications, type NotificationDispatch, t
 import { SessionAttention } from './session-attention';
 import { installSidebarResize, sidebarWidthKey } from './sidebar-resize';
 import { lastUsed, recentSessions, nextLastUsed, captureSidebarScroll, revealSidebarRow, SessionRecency } from './session-recency';
-import { sessionTime, sessionIndicator, installSessionTimeRefresh } from './session-sidebar';
+import { sessionIndicator, createSessionRowContent, updateSessionRowContent, updateSessionRowTime, installSessionTimeRefresh } from './session-sidebar';
 import { installDeletionReview } from './deletion-review';
 import { SessionDeletion, type DeletionEvent, type DeletionSnapshot } from './session-deletion';
 import { presentActivity } from './pi/activity-state';
@@ -476,7 +476,8 @@ function openSessionPicker(): PalettePage {
     items: tabs.map(tab => ({
       id: tab.id,
       label: tab.title,
-      detail: `${tab === presented ? 'Current · ' : ''}${indicator(tab).label} · ${sessionTime(tab.lastUsed)}`,
+      sessionRow: { timestamp: tab.lastUsed, indicator: indicator(tab) },
+      keywords: tab === presented ? 'Current' : undefined,
       run: () => activate(tab),
     })),
   };
@@ -552,13 +553,7 @@ function createTab(mode: LaunchMode, demo: boolean, file?: SessionFile, title = 
   const rowNode = document.createElement('div'); rowNode.className = 'open-session';
   const row = button('', () => activate(tab, true, true, false)); row.className = 'session-row'; row.id = `session-${id}`; row.setAttribute('aria-controls', root.id);
   root.setAttribute('aria-labelledby', row.id);
-  const text = document.createElement('span'); text.className = 'session-row-text';
-  const rowLabel = document.createElement('span');
-  const secondary = document.createElement('small'), rowTime = document.createElement('time');
-  rowTime.id = `session-time-${id}`; row.setAttribute('aria-describedby', rowTime.id);
-  secondary.append(rowTime); text.append(rowLabel, secondary);
-  const rowIndicator = document.createElement('span'); rowIndicator.className = 'session-indicator'; rowIndicator.setAttribute('aria-hidden', 'true');
-  row.append(rowIndicator, text);
+  const { rowLabel, rowIndicator, rowTime } = createSessionRowContent(row, `session-time-${id}`);
   const deleteButton = button('', () => { void deleteSession(tab); }); deleteButton.className = 'session-delete';
   deleteButton.append(required('delete-session').querySelector('svg')!.cloneNode(true));
   const closeButton = button('×', () => { void closeTab(tab); }); closeButton.className = 'session-close';
@@ -618,11 +613,7 @@ function activate(tab: Tab, focus = true, reveal = true, scroll = true, connect 
   if (connect && presented === tab && tab.file?.exists && !deletion.pending && !deletion.blocked(tab.file.path) && !tab.starting && !tab.closing && !tab.restarting && (!tab.session || tab.ended)) void launch(tab, undefined, true);
 }
 function refreshTime(tab: Tab): void {
-  const label = sessionTime(tab.lastUsed);
-  if (tab.rowTime.textContent !== label) tab.rowTime.textContent = label;
-  const datetime = tab.lastUsed ? new Date(tab.lastUsed).toISOString() : '';
-  if (datetime && tab.rowTime.getAttribute('datetime') !== datetime) tab.rowTime.setAttribute('datetime', datetime);
-  else if (!datetime) tab.rowTime.removeAttribute('datetime');
+  updateSessionRowTime(tab.rowTime, tab.lastUsed);
 }
 function indicator(tab: Tab) {
   const state = tab.session?.state;
@@ -635,11 +626,8 @@ function updateTab(tab: Tab): void {
   tab.root.inert = tab.closing || tab.restarting || tab.deleting || tab !== presented;
   const status = indicator(tab), name = tab.title;
   tab.root.setAttribute('aria-busy', String(tab.session?.state.busy === true));
-  tab.rowLabel.textContent = name; refreshTime(tab);
-  if (tab.rowIndicator.dataset.state !== status.state) tab.rowIndicator.dataset.state = status.state;
-  if (tab.rowIndicator.textContent !== status.mark) tab.rowIndicator.textContent = status.mark;
+  updateSessionRowContent(tab, name, { timestamp: tab.lastUsed, indicator: status });
   tab.row.disabled = !ready;
-  tab.row.setAttribute('aria-label', `${name} — ${status.label}`);
   tab.row.setAttribute('aria-current', String(tab === presented)); tab.closeButton.setAttribute('aria-label', `Close ${name}`); tab.closeButton.disabled = !ready || deletion.pending || tab.closing || tab.starting || tab.restarting;
   tab.deleteButton.setAttribute('aria-label', `Delete session tree for ${name}`); tab.deleteButton.disabled = !deletable(tab);
   if (presented === tab) presentConversation(tab);
