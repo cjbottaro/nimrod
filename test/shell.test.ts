@@ -2247,7 +2247,7 @@ test('brand-new unwritten session can select its first model and effort through 
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'P', metaKey: true, shiftKey: true, cancelable: true }));
     const input = f.element<HTMLInputElement>('palette-input'); input.value = 'effort'; input.dispatchEvent(new f.win.Event('input')); key('Enter'); await f.tick();
     assert.equal(f.element('palette-title').textContent, 'Select thinking level');
-    assert.match(f.element('palette-list').textContent!, /Current/);
+    assert.equal(f.element('palette-list').querySelector('[aria-current=true] .palette-selection-marker')!.textContent, '•');
     input.value = 'high'; input.dispatchEvent(new f.win.Event('input')); key('Enter'); await f.tick(); await f.tick();
     assert.equal(f.element('thinking').textContent, 'high');
     assert.equal(prompt.value, 'Unsent draft');

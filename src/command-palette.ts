@@ -5,6 +5,7 @@ export interface PaletteItem {
   label: string;
   detail?: string;
   badge?: string;
+  current?: boolean;
   sessionRow?: SessionRowPresentation;
   shortcut?: string;
   keywords?: string;
@@ -99,10 +100,17 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       }
       const heading = doc.createElement('div'); heading.className = 'palette-item-heading';
       const label = doc.createElement('span'); label.className = 'palette-item-label'; label.textContent = item.label;
+      if (mode === 'selection') {
+        const marker = doc.createElement('span'); marker.className = 'palette-selection-marker';
+        marker.setAttribute('aria-hidden', 'true'); marker.textContent = item.current ? '•' : '';
+        heading.append(marker);
+        if (item.current) row.setAttribute('aria-current', 'true');
+      }
       heading.append(label);
       if (item.badge) { const badge = doc.createElement('span'); badge.className = 'palette-item-badge'; badge.textContent = item.badge; heading.append(badge); }
       const detail = doc.createElement('small'); detail.textContent = item.detail || '';
-      row.append(heading, detail);
+      row.append(heading);
+      if (mode !== 'selection' || item.detail) row.append(detail);
       if (item.shortcut) { const shortcut = doc.createElement('kbd'); shortcut.textContent = item.shortcut; row.append(shortcut); }
       row.title = item.keywords || item.detail || item.label;
       return row;
@@ -161,7 +169,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
         if (!current()) return Promise.resolve(undefined);
         return new Promise(resolve => {
           cancelChoice(); resolveChoice = resolve;
-          items = values.map(value => ({ id: value, label: value, detail: value === selectedValue ? 'Current' : '', run: () => resolve(value) }));
+          items = values.map(value => ({ id: value, label: value, current: value === selectedValue, keywords: value === selectedValue ? 'Current' : undefined, run: () => resolve(value) }));
           matches = items; selected = Math.max(0, items.findIndex(item => item.id === selectedValue));
           loading = false; notice = ''; draw();
         });

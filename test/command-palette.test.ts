@@ -231,14 +231,24 @@ test('preference picker marks current option, dismisses on Escape and ignores st
     const old = f.palette.startSelection('Select model', () => {})!;
     const choice = old.choose(['one', 'two'], 'two');
     assert.equal(f.input.getAttribute('aria-activedescendant'), f.list().children[1].id);
-    assert.match(f.list().children[1].textContent!, /Current/);
+    assert.equal(f.list().children[1].getAttribute('aria-current'), 'true');
+    assert.deepEqual([...f.list().querySelectorAll('.palette-selection-marker')].map(marker => marker.textContent), ['', '•']);
+    assert.equal(f.list().querySelector('.session-indicator, small'), null);
+    f.key('ArrowUp');
+    assert.equal(f.list().children[0].getAttribute('aria-selected'), 'true');
+    assert.equal(f.list().children[1].getAttribute('aria-current'), 'true');
+    assert.equal(f.list().children[1].querySelector('.palette-selection-marker')!.textContent, '•');
     f.key('Escape'); assert.equal(await choice, undefined);
     assert.equal(f.dialog.open, false); assert.equal(f.win.document.activeElement, f.opener);
     assert.equal(await old.choose(['stale']), undefined);
     old.error('stale error'); assert.doesNotMatch(f.status()!, /stale/);
     const current = f.palette.startSelection('Select thinking level', () => {})!;
     const selected = current.choose(['low', 'high'], 'low');
-    f.query('high'); f.key('Enter'); await tick();
+    assert.deepEqual([...f.list().querySelectorAll('.palette-selection-marker')].map(marker => marker.textContent), ['•', '']);
+    f.query('high');
+    assert.equal(f.list().querySelector('.palette-selection-marker')!.textContent, '');
+    assert.equal(f.list().querySelector('[aria-current]'), null);
+    f.key('Enter'); await tick();
     assert.equal(await selected, 'high'); assert.equal(f.dialog.open, false);
   } finally { f.dispose(); }
 });

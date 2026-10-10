@@ -18,10 +18,15 @@ Add a picker through `startSelection()` or the existing page lifecycle, not a fe
 - Only the explicit Back button calls `commands()`. Back cancels pending choice/naming state, invalidates stale results and restores the command query while keeping the modal open. Naming retains its compact UI without a Back button.
 - IME/229 remains excluded from keyboard cancellation/activation. Native modality and the shell dispatcher preserve higher-priority Pi dialogs. Genuine nested dialogs (Pi extension above the palette, recorder inside Settings) retain their own cancellation; Escape is not a global close-all-dialogs command.
 
+## Model and thinking-level selection markers
+
+`SelectionRequest.choose()` maps Pi's acknowledged current value to `PaletteItem.current`, independently of the navigation index. Selection pages render an aria-hidden typographic `•` in a fixed 14px `.palette-selection-marker` slot for every row (empty for unselected values); `src/workspace.css` sizes it at 1.1em with the separator's muted foreground. No session-indicator primitive, circle background or Current subtitle is used. `aria-current=true` exposes the current value, while the existing `aria-selected`/`aria-activedescendant` contract continues to track keyboard navigation. Row highlights and hover remain separate from the bullet, including after filtering. Pi acknowledgement, cancellation and focus behavior are unchanged.
+
 ## Regression coverage
 
 - `test/command-palette.test.ts`: all current page kinds and a future-feature selection, direct/palette entry, keyboard/native/API dismissal, pending-choice cancellation, deferred native close, stale metadata, explicit Back/query retention, accepted action after focus restoration, IME/repeated Enter and refresh/error paths.
 - `test/shell.test.ts`: direct session/model/thinking shortcuts and status controls now assert one-Escape closure, with drafts, session lifecycle and prompt-free behavior retained; Pi dialog priority is unchanged.
+- `test/browser/preferences.spec.ts`: both picker bullet markers, blank-slot label alignment and separator-relative size, independent keyboard/hover highlights, and acknowledged effort changes without submitting the draft. On `fix/picker-selection-bullet`, `mise run check`, all 36 offline WebKit tests and the signed macOS worktree build pass; native visual acceptance and Linux/Windows verification remain pending.
 - `test/browser/keybindings.spec.ts`: direct shortcuts dismiss in one press and retain composer focus/draft.
 - `test/browser/workspace-tabs.spec.ts`: offline streaming continues under the palette; explicit Back retains the command query and one Escape from Resume restores the untouched composer. Naming cancellation retains the live session.
 

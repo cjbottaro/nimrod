@@ -98,6 +98,8 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor:col-resize !important; u
 #palette-list .palette-item-heading { display:flex; align-items:center; gap:8px; min-width:0; }
 #palette-list .palette-item-label, #palette-list small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #palette-list .palette-item-label { flex:1; min-width:0; }
+#palette-list .palette-selection-marker { flex:0 0 14px; text-align:center; font-size:1.1em; line-height:1; color:var(--vscode-descriptionForeground); user-select:none; }
+#command-palette[data-mode=selection] #palette-list [role=option]:hover:not([aria-selected=true]) { background:var(--vscode-list-hoverBackground, var(--vscode-toolbar-hoverBackground)); }
 #palette-list .palette-item-badge { flex:none; border:1px solid var(--vscode-panel-border); border-radius:3px; padding:1px 5px; font-size:10px; color:var(--vscode-descriptionForeground); }
 #palette-list small { color:var(--vscode-descriptionForeground); font-size:11px; }
 #palette-list [aria-selected=true] { background:var(--vscode-list-activeSelectionBackground); color:var(--vscode-list-activeSelectionForeground); }
