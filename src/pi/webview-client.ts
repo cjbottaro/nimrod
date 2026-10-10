@@ -376,7 +376,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     thinking.textContent = thinkingLevel;
     thinking.title = controls?.ready ? `Select thinking level: ${thinkingLevel}` : "Loading thinking level";
     thinking.setAttribute("aria-label", thinking.title);
-    const enabled = controls?.ready === true && controls.changing !== true && state.busy !== true && state.compacting !== true && state.sessionUnavailable !== true;
+    const enabled = controls?.ready === true && controls.changing !== true && state.sessionUnavailable !== true;
     model.disabled = !enabled;
     // Empty startup metadata is not a permanent capability decision. The picker
     // queries Pi again and explains missing-model/unsupported states explicitly.

@@ -19,8 +19,8 @@ export interface RpcTransport {
 }
 
 export interface ModelThinkingHost {
-  /** Main-agent activity only; extension background activity must not block configuration. */
-  isMainAgentBusy(): boolean;
+  /** Startup/disconnection or prompt acceptance in flight, not agent activity. */
+  isChangeBlocked(): boolean;
   onRpcState(data: JsonRecord): void;
   onState(state: ModelThinkingState): void;
   chooseModel(models: ModelIdentity[], current: ModelIdentity | null): Promise<ModelIdentity | undefined>;
@@ -44,14 +44,15 @@ export class ModelThinkingController {
   }
 
   async selectModel(ui: Pick<ModelThinkingHost, 'chooseModel' | 'showError'> = this.host): Promise<void> {
-    if (!this.beginChange()) { ui.showError(new Error('Pi is not ready to change models. Wait for startup or active work to finish.')); return; }
+    if (!this.beginChange()) { ui.showError(new Error('Pi is not ready to change models. Wait for startup or the pending operation to finish.')); return; }
     try {
       const response = await this.rpc.request("get_available_models");
       const models = modelArray(record(response.data).models);
       const selected = await ui.chooseModel(models, this.state.model);
       if (!selected) return;
 
-      if (!await this.revalidateIdle()) return;
+      if (!await this.revalidateAvailable()) return;
+      // Pi applies these selections to upcoming requests, not an in-flight response.
       // The selected value came from Pi's model list; never accept provider/model values from the webview.
       await this.rpc.request("set_model", { provider: selected.provider, modelId: selected.id });
       await this.refresh();
@@ -64,22 +65,22 @@ export class ModelThinkingController {
   }
 
   async selectThinkingLevel(ui: Pick<ModelThinkingHost, 'chooseThinkingLevel' | 'showError'> = this.host): Promise<void> {
-    if (!this.beginChange()) { ui.showError(new Error('Pi is not ready to change thinking level. Wait for startup or active work to finish.')); return; }
+    if (!this.beginChange()) { ui.showError(new Error('Pi is not ready to change thinking level. Wait for startup or the pending operation to finish.')); return; }
     try {
-      if (!await this.revalidateIdle()) return;
+      if (!await this.revalidateAvailable()) return;
       const levels = await this.getSupportedThinkingLevels();
       if (!this.state.model) throw new Error('Select a model before choosing a thinking level.');
       if (!levels.length) throw new Error('Pi did not report any supported thinking levels for this model.');
       const selected = await ui.chooseThinkingLevel(levels, this.state.thinkingLevel);
       if (!selected) return;
 
-      // Pi can start work or another model selection can change support while the picker is open.
-      if (!await this.revalidateIdle()) return;
+      // Pi extensions can change model support while the picker is open.
+      if (!await this.revalidateAvailable()) return;
       const currentLevels = await this.getSupportedThinkingLevels();
       if (!currentLevels.includes(selected)) {
         throw new Error("The selected thinking level is no longer supported by the current model.");
       }
-      if (this.disconnected || this.host.isMainAgentBusy()) return;
+      if (this.disconnected || this.host.isChangeBlocked()) return;
       await this.rpc.request("set_thinking_level", { level: selected });
       await this.refresh();
     } catch (error) {
@@ -91,15 +92,14 @@ export class ModelThinkingController {
   }
 
   private beginChange(): boolean {
-    if (this.disconnected || !this.state.ready || this.state.changing || this.host.isMainAgentBusy()) return false;
+    if (this.disconnected || !this.state.ready || this.state.changing || this.host.isChangeBlocked()) return false;
     this.patch({ changing: true });
     return true;
   }
 
-  private async revalidateIdle(): Promise<boolean> {
-    const state = await this.getRpcState();
-    await this.applyRpcState(state);
-    return !this.disconnected && !this.host.isMainAgentBusy() && state.isStreaming !== true && state.isCompacting !== true;
+  private async revalidateAvailable(): Promise<boolean> {
+    await this.refresh();
+    return !this.disconnected && !this.host.isChangeBlocked();
   }
 
   private async refresh(): Promise<void> {
