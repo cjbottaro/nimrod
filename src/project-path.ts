@@ -1,3 +1,13 @@
+/** Display-only home abbreviation; match directory boundaries, never sibling prefixes. */
+export function abbreviateHome(path: string, home?: string): string {
+  if (!home) return path;
+  const root = home.replace(/[\\\\/]+$/, '');
+  if (!root) return path;
+  if (path === root) return '~';
+  if (path.startsWith(root) && /^[\\\\/]/.test(path.slice(root.length))) return '~' + path.slice(root.length);
+  return path;
+}
+
 /** Display-only splitting of canonical paths. Never changes routing/search identity. */
 export function projectPathParts(path: string): { name: string; parent: string } {
   // Preserve filesystem roots instead of inventing a directory name or parent.

@@ -50,7 +50,7 @@ See [project/session implementation](../../../docs/workspace-sessions.md) for li
 
 | Term | Meaning | Current code anchor |
 | --- | --- | --- |
-| **Project bar** | Top strip containing the sidebar toggle, Nimrod wordmark, project directory, active-session mode badge, Restart session icon, Delete session tree icon, and Settings gear. Preferences themselves live on the Settings page. | `#workspace-bar` |
+| **Project bar** | Top strip containing the sidebar toggle, primary project directory name and muted parent path (home abbreviated to `~`, full absolute path on hover), active-session mode badge, Restart session icon, Delete session tree icon, and Settings gear. Preferences themselves live on the Settings page. | `#workspace-bar` |
 | **Settings page** | Full-window preferences surface opened by the gear or ⌘/Ctrl comma; Appearance, Notifications, Keybindings and Runtime categories, with a category sidebar, settings content pane and Back/Escape navigation. Covers the still-mounted project using native dialog modality. | `#settings-page` |
 | **Category sidebar** | Settings navigation for Appearance, Notifications, Keybindings and Runtime; resizable with its own app-wide saved width, independent of Session sidebar widths. | `#settings-sidebar` |
 | **Settings content pane** | The selected category's independently scrolling panel, with all category panels kept mounted to retain unsaved controls and reading positions. | `.settings-panel` |

@@ -23,7 +23,7 @@ import { SessionDrafts, purgeDeletedDrafts, SESSION_STORAGE_KEY, type LastSessio
 import { restoreComposerState } from './pi/webview-state';
 import { Dialogs } from './dialogs';
 import { COMMAND_USAGE_KEY, readCommandUsage } from './command-ranking';
-import { projectPathParts } from './project-path';
+import { abbreviateHome, projectPathParts } from './project-path';
 import { installCommandPalette, type PalettePage } from './command-palette';
 import { installSettings, installRuntimeSettings } from './settings';
 import { installSettingsNavigation } from './settings-navigation';
@@ -87,6 +87,7 @@ const localState = new Map<string, unknown>();
 let ready = false;
 let unloading = false;
 let workspace: string | undefined;
+let homeDirectory: string | undefined;
 let opening: Promise<boolean> | undefined;
 let sidebarVisible = stored('nimrod.sidebar.visible') !== false;
 let active: Tab | undefined;
@@ -479,8 +480,10 @@ async function enterWorkspace(path: string): Promise<void> {
   const savedView = stored(`nimrod.sidebar.view:${path}`);
   sidebarView = savedView === 'attention' || savedView === 'unread' ? 'unread' : savedView === 'working' ? 'working' : 'all';
   drafts = makeDrafts(`${SESSION_STORAGE_KEY}:${path}`);
-  required('workspace-label').textContent = path;
-  required('workspace-label').title = path;
+  const { name, parent } = projectPathParts(path);
+  required('project-name').textContent = name;
+  required('workspace-label').textContent = abbreviateHome(parent, homeDirectory);
+  required('project-identity').title = path;
   save(settingsKey, { cwd: path });
   save(recentKey, [path, ...recentWorkspaces().filter(p => p !== path)].slice(0, 30)); renderRecents();
   const layout = stored(layoutKey()) as { tabs?: unknown[]; active?: string } | null;
@@ -1070,7 +1073,8 @@ async function boot(): Promise<void> {
   try {
     await invoke('stop_pi'); // Window-scoped reload cleanup; never stop another workspace.
     await zoom.ready;
-    const defaults = await invoke<{ pi: string; node: string; cwd: string }>('runtime_defaults');
+    const defaults = await invoke<{ pi: string; node: string; cwd: string; home?: string }>('runtime_defaults');
+    homeDirectory = defaults.home;
     const saved = stored(settingsKey) as Partial<typeof defaults> | null;
     cwd.value = typeof saved?.cwd === 'string' ? saved.cwd : defaults.cwd;
     runtimeDefaults = defaults;

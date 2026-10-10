@@ -66,6 +66,7 @@ struct Defaults {
     pi: String,
     node: String,
     cwd: String,
+    home: Option<String>,
 }
 
 fn find_program(name: &str) -> Option<PathBuf> {
@@ -79,7 +80,7 @@ fn find_program(name: &str) -> Option<PathBuf> {
 }
 
 #[tauri::command]
-async fn runtime_defaults() -> Defaults {
+async fn runtime_defaults(app: tauri::AppHandle) -> Defaults {
     let node = if let Some(mise) = find_program("mise") {
         match tokio::time::timeout(
             std::time::Duration::from_secs(5),
@@ -101,6 +102,12 @@ async fn runtime_defaults() -> Defaults {
             .to_string_lossy()
             .into_owned(),
         node: node.to_string_lossy().into_owned(),
+        home: app.path().home_dir().ok().map(|home| {
+            std::fs::canonicalize(&home)
+                .unwrap_or(home)
+                .to_string_lossy()
+                .into_owned()
+        }),
         cwd: std::env::var("HOME")
             .or_else(|_| std::env::var("USERPROFILE"))
             .unwrap_or_default(),

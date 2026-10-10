@@ -37,7 +37,10 @@ input, select, #host-dialog-input { box-sizing:border-box; width:100%; border:1p
 input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 #workspace-bar { display:flex; align-items:center; gap:16px; padding:0 18px; border-bottom:1px solid var(--vscode-panel-border); min-width:0; }
 .wordmark { font-size:17px; font-weight:750; letter-spacing:-.5px; } .spark { color:var(--nimrod-brand-accent, #e8bc79); margin-left:5px; }
-#workspace-label { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--vscode-descriptionForeground); font-size:12px; }
+#project-identity { display:flex; align-items:baseline; gap:8px; flex:1; min-width:0; overflow:hidden; }
+#project-name { flex:0 0 auto; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:17px; font-weight:750; }
+#workspace-label { flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--vscode-descriptionForeground); font-size:12px; }
+#workspace-label:empty { display:none; }
 #mode-badge { margin-left:auto; flex:none; color:var(--vscode-descriptionForeground); font-size:11px; text-transform:uppercase; letter-spacing:1px; }
 #open-settings, #restart-session, #delete-session { flex:none; display:grid; place-items:center; width:30px; height:30px; padding:4px; color:var(--vscode-descriptionForeground); background:transparent; }
 #delete-session:not(:disabled):hover { color:var(--vscode-errorForeground); background:var(--vscode-toolbar-hoverBackground); }
@@ -69,7 +72,7 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 @media (max-width:640px) {
   #workspace-bar { gap:6px; padding:0 8px; }
   #mode-badge { display:none; }
-  .wordmark { font-size:14px; }
+  #project-name { font-size:14px; }
 }
 #zoom-level { display:block; width:140px; max-width:100%; }
 #zoom-error { padding:10px; color:var(--vscode-errorForeground); background:var(--vscode-editorWidget-background); border:1px solid var(--vscode-panel-border); border-radius:6px; }

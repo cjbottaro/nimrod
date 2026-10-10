@@ -25,6 +25,14 @@ Read the [human guide](../../../../docs/workspace-sessions.md),
 | `src-tauri/src/sessions.rs` | Read-only exact-file/cwd validation and Pi launch arguments |
 | `src-tauri/src/session_catalog.rs` | Read-only Pi-specific session discovery |
 
+## Project bar identity
+
+- `index.html`: `#project-identity` groups `#project-name` and the existing muted `#workspace-label`; wordmark/spark live only in the welcome copy.
+- `enterWorkspace` in `src/main.ts` derives name/parent from the native canonical cwd using `projectPathParts`, abbreviates only the parent with `abbreviateHome`, and gives the group a full-path hover title. No routing, recent-history, draft or session identity changes.
+- `runtime_defaults` supplies a separate optional canonical home path from Tauri's portable path resolver; do not infer home from a project/default cwd or hard-code `/Users`. Failed home resolution leaves the parent absolute. Windows separator syntax has unit coverage, not native acceptance; Linux/native layout acceptance also remains pending.
+- `src/theme.css`: identity flexes into remaining space; name retains intrinsic width up to the group's width, parent shrinks first, both ellipsize. The project name is never hidden by the 480px media rule; exceptionally long names can truncate after the parent has collapsed. Roots have no parent.
+- `test/project-path.test.ts`: POSIX/drive/UNC splitting and boundary-aware home abbreviation (no sibling-prefix matches). `test/shell.test.ts`: native-home fixture, identity/full-path title, root and welcome branding, no Pi launch. `test/browser/project-bar.spec.ts`: offline WebKit wide/narrow geometry, parent-first truncation and persistent name. Visual/native acceptance remains user-owned.
+
 ## Product and navigation invariants
 
 - Product cleanup: no offline-demo launch or arbitrary session-file chooser in the palette, Settings keybinding editor or welcome UI. `LaunchConfig` no longer accepts a demo flag; the app bundles only `pi-model-scope.ts`, not `demo.mjs`. Rust process smoke tests and offline WebKit keep the fixture source: the browser host intercepts only temporary-session launches and starts `demo.mjs` itself, never real Pi. Legacy `demo:` draft prefixes remain excluded from persistence/recovery for compatibility. Exact-file inspection/validation remains necessary for catalog selection and restored entries, not as a user-facing file chooser.
