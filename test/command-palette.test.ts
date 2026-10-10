@@ -6,7 +6,7 @@ import { installCommandPalette, type PalettePage } from '../src/command-palette'
 import { stubDialogs } from './dialog-fixture';
 import { sessionIndicator, sessionTime, type SidebarState } from '../src/session-sidebar';
 
-function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] })) {
+function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }), projects: () => Promise<PalettePage> = load, browseProject: () => Promise<boolean> = async () => false) {
   const dom = new JSDOM(readFileSync('index.html', 'utf8'), { pretendToBeVisual: true });
   const win = dom.window; stubDialogs(win);
   const dialog = win.document.querySelector<HTMLDialogElement>('#command-palette')!;
@@ -24,7 +24,7 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }))
         assert.equal(dialog.open, false); assert.equal(win.document.activeElement, opener);
         calls.push(`named:${name}`);
       }) },
-    ], sessions: load,
+    ], sessions: load, projects, browseProject,
     openSessions: () => ({ items: [{ id: 'open-demo', label: 'Offline demo', detail: 'Ready', run: () => { calls.push('open-demo'); } }] }),
   });
   const key = (key: string, init: KeyboardEventInit = {}) => input.dispatchEvent(new win.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
@@ -36,6 +36,43 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }))
   };
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+
+test('project picker searches names and paths, keeps Browse through empty results and chooser cancellation', async () => {
+  let resolveBrowse!: (opened: boolean) => void;
+  const f = fixture(undefined, async () => ({ items: [
+    { id: '/work/nimrod', label: 'nimrod', detail: '/work/nimrod', projectOpen: true, run: () => { f.calls.push('project'); } },
+  ] }), () => new Promise(resolve => { resolveBrowse = resolve; }));
+  try {
+    await f.palette.projects();
+    const browse = f.win.document.querySelector<HTMLButtonElement>('#palette-browse')!;
+    assert.equal(f.input.placeholder, 'Search recent projects…');
+    assert.equal(f.list().querySelector('.palette-item-badge'), null);
+    assert.equal(f.list().querySelector('.palette-selection-marker')!.textContent, '•');
+    assert.match(f.list().firstElementChild!.getAttribute('aria-label')!, /Open project window/);
+    assert.equal(f.list().firstElementChild!.hasAttribute('aria-current'), false);
+    f.query('open'); assert.equal(f.list().children.length, 1);
+    f.query('/work'); assert.equal(f.list().children.length, 1);
+    f.query('missing'); assert.equal(f.list().children.length, 0); assert.equal(browse.hidden, false);
+    browse.click(); assert.equal(f.dialog.open, true); assert.equal(browse.disabled, true);
+    f.key('Enter'); assert.deepEqual(f.calls, []);
+    resolveBrowse(false); await tick();
+    assert.equal(f.dialog.open, true); assert.equal(f.input.value, 'missing'); assert.equal(f.win.document.activeElement, f.input);
+    browse.click(); resolveBrowse(true); await tick(); assert.equal(f.dialog.open, false);
+  } finally { f.dispose(); }
+});
+
+test('late project discovery is discarded and Browse failures retain the query without retrying', async () => {
+  let resolveLoad!: (page: PalettePage) => void;
+  const f = fixture(undefined, () => new Promise(resolve => { resolveLoad = resolve; }), async () => { throw new Error('unavailable'); });
+  try {
+    const pending = f.palette.projects(); f.palette.close(); await tick();
+    resolveLoad({ items: [] }); await pending; assert.equal(f.dialog.open, false);
+    const next = f.palette.projects(); resolveLoad({ items: [] }); await next;
+    assert.match(f.status()!, /No recent projects/);
+    f.query('keep'); f.win.document.querySelector<HTMLButtonElement>('#palette-browse')!.click(); await tick();
+    assert.equal(f.input.value, 'keep'); assert.match(f.status()!, /unavailable/); assert.equal(f.dialog.open, true);
+  } finally { f.dispose(); }
+});
 
 test('session row options share indicators and muted timestamps without visible status text', async () => {
   const states: SidebarState[] = [{}, { inactive: true }, { busy: true }, { compacting: true }, { pending: true },
@@ -67,7 +104,7 @@ test('session row options share indicators and muted timestamps without visible 
 });
 
 test('every palette page shares one-step dismissal across entry points and cancellation paths', async () => {
-  for (const page of ['commands', 'resume', 'switch', 'selection', 'name']) {
+  for (const page of ['commands', 'resume', 'switch', 'projects', 'selection', 'name']) {
     for (const entry of ['direct', 'palette']) {
       for (const cancellation of ['keyboard', 'native', 'api']) {
         const f = fixture();
@@ -77,6 +114,7 @@ test('every palette page shares one-step dismissal across entry points and cance
           if (page === 'commands') { if (entry === 'direct') f.palette.open(); }
           else if (page === 'resume') await f.palette.sessions();
           else if (page === 'switch') await f.palette.openSessions();
+          else if (page === 'projects') await f.palette.projects();
           else if (page === 'name') { f.palette.namedSession(name => { f.calls.push(name); }); f.query('Discard me'); }
           else {
             // Any future selection feature gets the same lifecycle, without an

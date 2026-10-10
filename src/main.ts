@@ -265,7 +265,7 @@ window.addEventListener('unload', () => {
   sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
   for (const tab of tabs) { tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.session?.rpc.disconnect('Window closed'); }
   keybindingDispatch.dispose(); keybindingEditor.dispose();
-  palette.dispose(); zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose();
+  unlistenProjectPicker(); palette.dispose(); zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose();
 }, { once: true });
 
 function recoverableDrafts(): { key: string; label: string }[] {
@@ -511,14 +511,34 @@ async function paletteSessions(): Promise<PalettePage> {
     }),
   };
 }
+async function openProjectDirectory(path: string): Promise<void> {
+  const result = await invoke<{ cwd: string }>('open_project_directory', { cwd: path });
+  save(recentKey, [result.cwd, ...recentWorkspaces().filter(p => p !== result.cwd)].slice(0, 30));
+  renderRecents();
+}
+async function paletteProjects(): Promise<PalettePage> {
+  const projects = await invoke<{ cwd: string; open: boolean }[]>('list_projects');
+  return { items: projects.map(project => ({
+    id: project.cwd, label: project.cwd.split(/[\\/]/).filter(Boolean).at(-1) || project.cwd,
+    detail: project.cwd, projectOpen: project.open,
+    run: () => openProjectDirectory(project.cwd),
+  })) };
+}
 const palette = installCommandPalette(window, required<HTMLDialogElement>('command-palette'), {
   canOpen: () => ready && !settings.isOpen,
   shortcuts: false,
   sessions: paletteSessions,
   openSessions: openSessionPicker,
+  projects: paletteProjects,
+  browseProject: async () => {
+    const path = await open({ directory: true, multiple: false, title: 'Open project directory' });
+    if (typeof path !== 'string') return false;
+    await openProjectDirectory(path); return true;
+  },
   commands: () => {
     const active = presented;
     return [
+    { id: 'open-recent-project', label: 'Open recent project…', next: true, run: () => palette.projects() },
     { id: 'resume', label: 'Resume session…', detail: workspace || 'Open a project first', next: true, run: () => palette.sessions() },
     { id: 'new', label: 'New session', detail: 'Persistent by default', run: () => newSession() },
     { id: 'new-named', label: 'New named session…', detail: 'Choose a name before starting', next: true, run: newNamedSession },
@@ -541,6 +561,11 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     ].map(item => ({ ...item, shortcut: ACTIONS.some(action => action.id === item.id) ? shortcutHint(item.id as ActionId) : undefined }));
   },
 });
+async function takeProjectPickerRequest(): Promise<void> {
+  if (!ready || unloading) return;
+  if (await invoke<boolean>('take_project_picker_request')) await palette.projects();
+}
+const unlistenProjectPicker = await listen('nimrod-open-project', () => { void takeProjectPickerRequest(); }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
 function button(text: string, click: () => void): HTMLButtonElement {
   const node = document.createElement('button'); node.type = 'button'; node.textContent = text; node.addEventListener('click', click); return node;
 }
@@ -978,6 +1003,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
   },
   run: (id: ActionId) => {
     switch (id) {
+      case 'open-recent-project': return palette.projects();
       case 'new': return newSession();
       case 'temporary': return newSession('temporary');
       case 'delete': return presented ? deleteSession(presented) : undefined;
@@ -1019,6 +1045,7 @@ async function boot(): Promise<void> {
     ready = true;
     if (path) { await enterWorkspace(path); syncPopouts(); }
     controls();
+    await takeProjectPickerRequest();
   } catch (e) { error.textContent = `Could not initialize the native host: ${e}`; }
 }
 void boot();

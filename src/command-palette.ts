@@ -6,6 +6,7 @@ export interface PaletteItem {
   detail?: string;
   badge?: string;
   current?: boolean;
+  projectOpen?: boolean;
   sessionRow?: SessionRowPresentation;
   shortcut?: string;
   keywords?: string;
@@ -17,6 +18,8 @@ export interface PaletteOptions {
   commands(): PaletteItem[];
   sessions(): Promise<PalettePage>;
   openSessions(): PalettePage;
+  projects?: () => Promise<PalettePage>;
+  browseProject?: () => Promise<boolean>;
   canOpen(): boolean;
   shortcuts?: boolean;
 }
@@ -42,9 +45,10 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   const retry = dialog.querySelector<HTMLButtonElement>('#palette-refresh')!;
   const create = dialog.querySelector<HTMLButtonElement>('#palette-create')!;
   const hint = dialog.querySelector<HTMLElement>('#palette-hint')!;
+  const browse = dialog.querySelector<HTMLButtonElement>('#palette-browse')!;
   const controller = new realm.AbortController();
   const signal = controller.signal;
-  let mode: 'commands' | 'sessions' | 'selection' | 'name' = 'commands';
+  let mode: 'commands' | 'sessions' | 'projects' | 'selection' | 'name' = 'commands';
   let items: PaletteItem[] = [], matches: PaletteItem[] = [];
   let selected = 0;
   let generation = 0;
@@ -58,6 +62,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   let createNamed: ((name: string) => void | Promise<void>) | undefined;
   let composing = false;
   let closing = false;
+  let browsing = false;
 
   function cancelChoice(): void { const resolve = resolveChoice; resolveChoice = undefined; resolve?.(undefined); }
   // Invalidate synchronously: native dialog close events are queued, and pending
@@ -75,6 +80,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     const naming = mode === 'name';
     dialog.dataset.mode = mode;
     list.hidden = naming; create.hidden = !naming; hint.hidden = naming;
+    browse.hidden = mode !== 'projects'; browse.disabled = browsing;
     if (naming) {
       input.setAttribute('role', 'textbox');
       for (const attr of ['aria-expanded', 'aria-controls', 'aria-autocomplete', 'aria-activedescendant']) input.removeAttribute(attr);
@@ -88,7 +94,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     input.setAttribute('aria-controls', 'palette-list'); input.setAttribute('aria-autocomplete', 'list');
     const previous = matches[selected]?.id;
     const words = input.value.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
-    matches = items.filter(item => words.every(word => `${item.label} ${item.badge || ''} ${item.detail || ''} ${item.sessionRow?.indicator.label || ''} ${item.sessionRow?.badge || ''} ${item.keywords || ''}`.toLocaleLowerCase().includes(word)));
+    matches = items.filter(item => words.every(word => `${item.label} ${item.badge || ''} ${item.detail || ''} ${item.sessionRow?.indicator.label || ''} ${item.sessionRow?.badge || ''} ${item.projectOpen ? 'Open' : ''} ${item.keywords || ''}`.toLocaleLowerCase().includes(word)));
     selected = Math.max(0, matches.findIndex(item => item.id === previous));
     list.replaceChildren(...matches.map((item, index) => {
       const row = doc.createElement('div'); row.id = `palette-option-${index}`; row.setAttribute('role', 'option'); row.dataset.index = String(index);
@@ -100,11 +106,12 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       }
       const heading = doc.createElement('div'); heading.className = 'palette-item-heading';
       const label = doc.createElement('span'); label.className = 'palette-item-label'; label.textContent = item.label;
-      if (mode === 'selection') {
+      if (mode === 'selection' || mode === 'projects') {
         const marker = doc.createElement('span'); marker.className = 'palette-selection-marker';
-        marker.setAttribute('aria-hidden', 'true'); marker.textContent = item.current ? '•' : '';
+        marker.setAttribute('aria-hidden', 'true'); marker.textContent = (mode === 'projects' ? item.projectOpen : item.current) ? '•' : '';
         heading.append(marker);
-        if (item.current) row.setAttribute('aria-current', 'true');
+        if (mode === 'selection' && item.current) row.setAttribute('aria-current', 'true');
+        if (mode === 'projects') row.setAttribute('aria-label', `${item.label} — ${item.detail || item.id}${item.projectOpen ? ' — Open project window' : ''}`);
       }
       heading.append(label);
       if (item.badge) { const badge = doc.createElement('span'); badge.className = 'palette-item-badge'; badge.textContent = item.badge; heading.append(badge); }
@@ -115,8 +122,8 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       row.title = item.keywords || item.detail || item.label;
       return row;
     }));
-    const noun = mode === 'commands' ? 'commands' : mode === 'sessions' ? 'sessions' : 'options';
-    status.textContent = loading ? `Loading ${noun}…` : notice || (matches.length ? `${matches.length} ${noun}` : items.length || mode === 'commands' ? `No matching ${noun}.` : mode === 'sessions' ? 'No sessions yet.' : 'No options available.');
+    const noun = mode === 'commands' ? 'commands' : mode === 'sessions' ? 'sessions' : mode === 'projects' ? 'projects' : 'options';
+    status.textContent = loading ? `Loading ${noun}…` : notice || (matches.length ? `${matches.length} ${noun}` : items.length || mode === 'commands' ? `No matching ${noun}.` : mode === 'sessions' ? 'No sessions yet.' : mode === 'projects' ? 'No recent projects. Open a folder to get started.' : 'No options available.');
     input.setAttribute('aria-busy', String(loading));
     selection();
   }
@@ -134,7 +141,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     title.textContent = 'Commands'; input.placeholder = 'Type a command…'; input.setAttribute('aria-label', 'Search commands');
     input.value = commandQuery; back.hidden = true; retry.hidden = true; retryAction = undefined; draw(); input.focus();
   }
-  function beginPage(kind: 'sessions' | 'selection', heading: string, placeholder: string, onRetry: () => void, keepQuery = false): number | undefined {
+  function beginPage(kind: 'sessions' | 'projects' | 'selection', heading: string, placeholder: string, onRetry: () => void, keepQuery = false): number | undefined {
     if (!dialog.open && !open()) return;
     if (mode === 'commands') commandQuery = input.value;
     cancelChoice(); createNamed = undefined; mode = kind; title.textContent = heading; input.placeholder = placeholder;
@@ -159,6 +166,36 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       notice = `Could not load sessions: ${error}. Use Refresh to retry.`;
     }
     if (dialog.open && generation === request) { loading = false; draw(); }
+  }
+  async function projects(refresh = false): Promise<void> {
+    if (!options.projects || browsing || doc.querySelector('dialog[open]:not(#command-palette)')) return;
+    const request = beginPage('projects', 'Open recent project', 'Search recent projects…', () => { void projects(true); }, refresh);
+    if (request === undefined) return;
+    input.setAttribute('aria-label', 'Search recent projects'); retry.textContent = 'Refresh';
+    try {
+      const page = await options.projects();
+      if (!dialog.open || generation !== request) return;
+      items = page.items; notice = page.notice || '';
+    } catch (error) {
+      if (!dialog.open || generation !== request) return;
+      notice = `Could not load projects: ${error}. Use Refresh to retry.`;
+    }
+    if (dialog.open && generation === request) { loading = false; draw(); }
+  }
+  async function browseProject(): Promise<void> {
+    if (!dialog.open || mode !== 'projects' || browsing || !options.browseProject || doc.querySelector('dialog[open]:not(#command-palette)')) return;
+    const request = generation;
+    browsing = true; input.disabled = true; back.disabled = true; retry.disabled = true; draw();
+    try {
+      // Keep the picker mounted under the OS chooser: cancel retains query and focus.
+      const opened = await options.browseProject();
+      if (dialog.open && generation === request && opened) closeInteraction();
+    } catch (error) {
+      if (dialog.open && generation === request) { notice = `Could not open folder: ${error}`; draw(); }
+    } finally {
+      browsing = false; input.disabled = false; back.disabled = false; retry.disabled = false;
+      if (dialog.open && generation === request) { draw(); input.focus(); }
+    }
   }
   function startSelection(heading: string, onRetry: () => void): SelectionRequest | undefined {
     const request = beginPage('selection', heading, 'Type to filter…', onRetry);
@@ -196,14 +233,14 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     closeInteraction(() => action(name));
   }
   function open(): boolean {
-    if (closing || !options.canOpen() || doc.querySelector('dialog[open]')) return false;
+    if (closing || browsing || !options.canOpen() || doc.querySelector('dialog[open]')) return false;
     opener = doc.activeElement instanceof realm.HTMLElement ? doc.activeElement : undefined;
     commandQuery = ''; afterClose = undefined;
     dialog.showModal(); commands(); return true;
   }
   function choose(index = selected): void {
     const item = matches[index];
-    if (!dialog.open || !item || loading) return;
+    if (!dialog.open || !item || loading || browsing) return;
     if (item.next) { void item.run(); return; }
     // The action owns resolution after native focus restoration. Dismissal alone cancels.
     resolveChoice = undefined;
@@ -213,7 +250,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   input.addEventListener('compositionend', () => { composing = false; }, { signal });
   input.addEventListener('input', () => { matches = []; selected = 0; draw(); }, { signal });
   dialog.addEventListener('keydown', event => {
-    if (!dialog.open || event.isComposing || event.keyCode === 229) return;
+    if (!dialog.open || browsing || event.isComposing || event.keyCode === 229) return;
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeInteraction(); }
     else if (event.target === input && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -223,7 +260,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       event.preventDefault();
     }
   }, { signal });
-  dialog.addEventListener('cancel', event => { event.preventDefault(); closeInteraction(); }, { signal });
+  dialog.addEventListener('cancel', event => { event.preventDefault(); if (!browsing) closeInteraction(); }, { signal });
   dialog.addEventListener('close', () => {
     closing = false;
     cancelChoice(); createNamed = undefined; retryAction = undefined; generation++;
@@ -238,6 +275,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   list.addEventListener('click', event => {
     const row = (event.target as HTMLElement).closest<HTMLElement>('[data-index]'); if (row) choose(Number(row.dataset.index));
   }, { signal });
+  browse.addEventListener('click', () => { void browseProject(); }, { signal });
   create.addEventListener('click', submitName, { signal });
   back.addEventListener('click', commands, { signal });
   retry.addEventListener('click', () => retryAction?.(), { signal });
@@ -247,5 +285,5 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     if (dialog.open) { event.preventDefault(); return; }
     if (open()) event.preventDefault();
   }, { signal });
-  return { open, close: () => closeInteraction(), sessions: () => sessions('resume'), openSessions: () => sessions('open'), namedSession, startSelection, dispose: () => { cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
+  return { open, projects, close: () => closeInteraction(), sessions: () => sessions('resume'), openSessions: () => sessions('open'), namedSession, startSelection, dispose: () => { cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
 }

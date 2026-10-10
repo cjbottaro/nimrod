@@ -59,6 +59,13 @@ pub struct Popouts {
     operations: tokio::sync::Mutex<()>,
 }
 impl Popouts {
+    pub fn focused_owner(&self) -> Option<String> {
+        self.registry
+            .lock()
+            .unwrap()
+            .focused_owner()
+            .map(str::to_owned)
+    }
     pub fn retire(&self, owner: &str) {
         let mut registry = self.registry.lock().unwrap();
         registry.retired.insert(owner.into());

@@ -404,6 +404,7 @@ fn main() {
         .manage(window_state::WindowStates::default())
         .manage(ExitState::default())
         .manage(popouts::Popouts::default())
+        .manage(native_menu::ProjectPickerRequests::default())
         .manage(cli::CliRequests::default());
     // Keep the existing Linux/Windows integration. macOS elects/binds above,
     // rather than using the plugin's racy connect/unlink/asynchronous-bind path.
@@ -463,6 +464,9 @@ fn main() {
             preferences::preferences_state,
             preferences::preferences_migrate,
             open_workspace,
+            workspace_windows::list_projects,
+            workspace_windows::open_project_directory,
+            native_menu::take_project_picker_request,
             window_workspace,
             list_workspace_sessions,
             inspect_workspace_session,
@@ -477,6 +481,8 @@ fn main() {
                 request_exit(app);
             } else if native_menu::is_open_project(event.id().as_ref()) {
                 native_menu::open_project(app);
+            } else if event.id().as_ref() == native_menu::OPEN_RECENT_PROJECT_ID {
+                native_menu::open_recent_project(app);
             } else if event.id().as_ref() == native_menu::MINIMIZE_ID {
                 if let Some(window) = app
                     .webview_windows()

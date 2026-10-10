@@ -8,6 +8,8 @@ Human guide: [Command interactions](../../../../docs/workspace-sessions.md#comma
 
 Add a picker through `startSelection()` or the existing page lifecycle, not a feature-specific dialog key handler. `beginPage()` owns query reset, Back/Retry controls and request generation. Page content may differ; dismissal must not branch on page mode or entry point. There is no new generic harness or global modal framework.
 
+Project navigation is another shared page, not a separate modal controller; see [recent-project picker](projects-and-sessions.md#recent-project-picker). Its OS folder chooser temporarily disables picker actions and keeps the page mounted so chooser cancellation preserves the search.
+
 ## Lifecycle contract
 
 - Escape from any control and the native dialog `cancel` event call `closeInteraction()` with no action. Public `close()` and an active selection request's `cancel()` use the same path. All dismiss the entire interaction; none invoke commands or navigate backward.
@@ -20,7 +22,7 @@ Add a picker through `startSelection()` or the existing page lifecycle, not a fe
 
 ## Model and thinking-level selection markers
 
-`SelectionRequest.choose()` maps Pi's acknowledged current value to `PaletteItem.current`, independently of the navigation index. Selection pages render an aria-hidden typographic `•` in a fixed 14px `.palette-selection-marker` slot for every row (empty for unselected values); `src/workspace.css` sizes it at 1.1em with the separator's muted foreground. No session-indicator primitive, circle background or Current subtitle is used. `aria-current=true` exposes the current value, while the existing `aria-selected`/`aria-activedescendant` contract continues to track keyboard navigation. Row highlights and hover remain separate from the bullet, including after filtering. Pi acknowledgement, cancellation and focus behavior are unchanged.
+`SelectionRequest.choose()` maps Pi's acknowledged current value to `PaletteItem.current`, independently of the navigation index. Selection pages render an aria-hidden typographic `•` in a fixed 14px `.palette-selection-marker` slot for every row (empty for unselected values); `src/workspace.css` sizes it at 1.1em with the separator's muted foreground. No session-indicator primitive, circle background or Current subtitle is used. The Open recent project page reuses this marker/blank-slot presentation with `PaletteItem.projectOpen` rather than `current`: dots mean open project-window membership (potentially multiple rows), not the current project. It uses an accessible Open project window label rather than `aria-current`; Open remains a search alias. `aria-current=true` exposes the current value, while the existing `aria-selected`/`aria-activedescendant` contract continues to track keyboard navigation. Row highlights and hover remain separate from the bullet, including after filtering. Pi acknowledgement, cancellation and focus behavior are unchanged.
 
 ## Regression coverage
 

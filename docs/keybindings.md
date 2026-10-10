@@ -16,6 +16,7 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 
 | Action | Shortcut |
 | --- | --- |
+| Open recent project… | Cmd/Ctrl+Shift+O |
 | New session | Cmd/Ctrl+N |
 | New named session… | Cmd+Option+N / Ctrl+Alt+N |
 | New temporary session | Cmd/Ctrl+Shift+N |
@@ -32,6 +33,8 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 | Zoom in / out / reset to 100% | Cmd/Ctrl+Plus / Minus / 0 |
 
 **Switch session** searches only open sessions, including temporary sessions and sessions hidden by the sidebar view. **Resume session** searches saved project history, including closed sessions; choosing an already-open entry focuses it. **New named session** opens the name field first; type a name and press Enter to create it. Cmd/Ctrl+P has no Nimrod default binding.
+
+**Open recent project…** searches recently opened directories and is configurable like other palette commands. **Open project…** / Cmd/Ctrl+O remains the native directory-only chooser, outside this editor.
 
 Other listed actions can be assigned shortcuts even if they have no default. Plus and Equals both invoke Zoom in. Existing user overrides remain unchanged when defaults change; Reset the affected action to adopt its new defaults.
 
@@ -64,6 +67,6 @@ Valid external edits apply automatically. Conflicting file-authored shortcuts ex
 
 This editor covers Nimrod’s project-shell actions and zoom, not Pi’s internal keymap, composer Send/Queue/Newline behavior, native text editing, or pop-out window shortcuts. Multi-step chords, macros, arbitrary context expressions, and per-project overrides are not included.
 
-Native menu/text-editing keys such as Cmd/Ctrl+O, Q, H, A, C, V, X, Z and Tab combinations are reserved. On macOS, **Minimize** remains in the Window menu without Cmd+M, freeing that shortcut for Select model. **Close Window** remains available in the native menu without Cmd/Ctrl+W, which belongs to Close session. OS-reserved shortcuts can still be intercepted before Nimrod receives them.
+Unshifted Cmd/Ctrl+O remains reserved for the native directory chooser; Shift+O is configurable. Other native menu/text-editing keys such as Q, H, A, C, V, X, Z and Tab combinations are reserved. On macOS, **Minimize** remains in the Window menu without Cmd+M, freeing that shortcut for Select model. **Close Window** remains available in the native menu without Cmd/Ctrl+W, which belongs to Close session. OS-reserved shortcuts can still be intercepted before Nimrod receives them.
 
 Automated offline WebKit and fixture tests cover editing and focus/draft/disclosure preservation. Native menu delivery and keyboard-layout behavior still need macOS user validation; Linux support is intended but not platform-verified, and Windows remains a possible future target.

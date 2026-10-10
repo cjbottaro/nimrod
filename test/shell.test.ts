@@ -36,6 +36,9 @@ interface ShellOptions {
   catalog?: JsonRecord[];
   windowLabel?: string;
   windowWorkspace?: string;
+  projectPickerPending?: boolean;
+  projects?: { cwd: string; open: boolean }[];
+  projectOpenError?: string;
   windowWorkspaceGate?: Promise<void>;
   windowWorkspaceError?: string;
   modelFixture?: boolean;
@@ -81,12 +84,20 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   const callbacks = new Map<number, (event: unknown) => void>();
   let deletionEvent: ((event: DeletionEvent, target?: string) => void) | undefined;
   let notificationClick: ((event: unknown, target?: string) => void) | undefined;
+  let projectPicker: ((target?: string) => void) | undefined;
+  let projectPickerPending = options.projectPickerPending || false;
   Object.assign(win, { TextEncoder, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener() {} }, __TAURI_INTERNALS__: {
     metadata: { currentWindow: { label: options.windowLabel || 'main' }, currentWebview: { label: options.windowLabel || 'main' } },
     transformCallback: (callback: (event: unknown) => void) => { const id = callbacks.size + 1; callbacks.set(id, callback); return id; }, unregisterCallback: () => {},
     invoke: async (command: string, args: JsonRecord = {}) => {
       calls.push({ command, args });
       if (command === 'plugin:event|listen') {
+        if (args.event === 'nimrod-open-project') projectPicker = target => {
+          const listenerTarget = args.target as { kind: string; label?: string };
+          if (!target || listenerTarget.kind === 'Any' || listenerTarget.label === target) {
+            projectPickerPending = true; callbacks.get(Number(args.handler))?.({ payload: null });
+          }
+        };
         if (args.event === 'nimrod-preferences') preferences.receive = payload => callbacks.get(Number(args.handler))?.({ payload });
         if (args.event === 'nimrod-session-deletion') deletionEvent = (payload, target) => {
           const listenerTarget = args.target as { kind: string; label?: string };
@@ -124,6 +135,9 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         if (options.windowWorkspaceError) throw new Error(options.windowWorkspaceError);
         return workspace || null;
       }
+      if (command === 'take_project_picker_request') { const pending = projectPickerPending; projectPickerPending = false; return pending; }
+      if (command === 'list_projects') return options.projects || [];
+      if (command === 'open_project_directory') { if (options.projectOpenError) throw new Error(options.projectOpenError); return { cwd: args.cwd, current: false }; }
       if (command === 'open_workspace') { workspace = String(args.cwd); return { cwd: workspace, current: true }; }
       if (command === 'list_workspace_sessions') return { sessions: options.catalog || [], warnings: [] };
       if (command === 'plugin:dialog|open') return options.filePath === null ? null : options.filePath || '/sessions/exact.jsonl';
@@ -180,12 +194,61 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     saved: () => JSON.parse(win.localStorage.getItem(`nimrod.sessions.v1:${workspace}`) || win.localStorage.getItem('nimrod.sessions.v1') || '{}'),
     sessions,
     deletionEvent: (event: DeletionEvent, target?: string) => deletionEvent?.(event, target),
+    projectPicker: (target?: string) => projectPicker?.(target),
     notificationClick: (event: unknown, target?: string) => notificationClick?.(event, target),
     captureChannel: () => channel,
     emit: (event: JsonRecord) => channel.onmessage({ kind: 'rpc', value: event }),
     disconnect: () => channel.onmessage({ kind: 'disconnected', message: 'fixture closed' }),
   };
 }
+
+test('recent-project defaults and overrides use the keybinding registry without native shortcut interception', async () => {
+  const f = await fixture(undefined, { projects: [{ cwd: '/work/project', open: false }] });
+  const key = (key: string, shiftKey = false) => {
+    const event = new f.win.KeyboardEvent('keydown', { key, metaKey: true, shiftKey, bubbles: true, cancelable: true });
+    f.win.dispatchEvent(event); return event;
+  };
+  const close = async () => { f.element<HTMLDialogElement>('command-palette').close(); await f.tick(); };
+  try {
+    assert.equal(key('o').defaultPrevented, false, 'Cmd-O remains native');
+    key('O', true); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Open recent project');
+    await close();
+    f.preferences.external('{"keybindings":{"open-recent-project":["primary+j"]}}'); await f.tick();
+    assert.equal(key('O', true).defaultPrevented, false, 'old default is removed');
+    key('j'); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Open recent project');
+    await close(); f.openPalette();
+    const input = f.element<HTMLInputElement>('palette-input'); input.value = 'Open recent project'; input.dispatchEvent(new f.win.Event('input'));
+    assert.equal(f.element('palette-list').querySelector('kbd')!.textContent, 'Ctrl+J');
+    await close();
+    f.preferences.external('{"keybindings":{"open-recent-project":[]}}'); await f.tick();
+    assert.equal(key('j').defaultPrevented, false);
+    assert.equal(key('O', true).defaultPrevented, false);
+    f.openPalette(); input.value = 'Open recent project'; input.dispatchEvent(new f.win.Event('input'));
+    assert.equal(f.element('palette-list').querySelector('kbd'), null);
+    assert.equal(f.calls.some(c => c.command === 'start_pi'), false);
+  } finally { f.win.close(); }
+});
+
+test('native project requests are window-scoped, survive boot and never start sessions', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', windowLabel: 'workspace-1', projectPickerPending: true,
+    projects: [{ cwd: '/work/nimrod', open: true }, { cwd: '/work/other', open: false }], filePath: null });
+  try {
+    await f.tick(); assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
+    assert.equal(f.element('palette-title').textContent, 'Open recent project');
+    const input = f.element<HTMLInputElement>('palette-input');
+    input.value = '/work/nimrod'; input.dispatchEvent(new f.win.Event('input'));
+    f.element<HTMLButtonElement>('palette-browse').click(); await f.tick();
+    assert.equal(input.value, '/work/nimrod');
+    const chooser = f.calls.find(c => c.command === 'plugin:dialog|open')!;
+    assert.equal((chooser.args.options as JsonRecord).directory, true);
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await f.tick(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+    assert.equal(f.calls.filter(c => c.command === 'open_project_directory').length, 1);
+    assert.equal(f.calls.some(c => c.command === 'start_pi'), false);
+    f.projectPicker('workspace-2'); await f.tick(); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+    f.projectPicker('workspace-1'); await f.tick(); assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
+  } finally { f.win.close(); }
+});
 
 test('customizable requested shortcuts use normal session/model/effort actions without submitting drafts', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project', modelFixture: true, fileExists: () => false });
@@ -1568,7 +1631,7 @@ test('external settings edits synchronize Appearance and saved Runtime while pre
 test('shell boots without Pi and Settings holds application preferences, not session controls', async () => {
   const f = await fixture(); const { win, calls, element } = f;
   try {
-    assert.deepEqual(calls.map(c => c.command), ['plugin:event|listen', 'preferences_snapshot', 'preferences_migrate', 'plugin:event|listen', 'plugin:event|listen', 'plugin:webview|set_webview_zoom', 'plugin:event|listen', 'stop_pi', 'runtime_defaults', 'window_workspace', 'deletion_snapshot']);
+    assert.deepEqual(calls.map(c => c.command), ['plugin:event|listen', 'preferences_snapshot', 'preferences_migrate', 'plugin:event|listen', 'plugin:event|listen', 'plugin:webview|set_webview_zoom', 'plugin:event|listen', 'plugin:event|listen', 'stop_pi', 'runtime_defaults', 'window_workspace', 'deletion_snapshot', 'take_project_picker_request']);
     assert.equal(calls.find(c => c.command === 'plugin:webview|set_webview_zoom')!.args.value, 1.25);
     assert.equal(element<HTMLSelectElement>('zoom-level').value, '125');
     const page = element<HTMLDialogElement>('settings-page');
@@ -2029,8 +2092,8 @@ test('project opens without Pi, lists and searches sessions, and focuses an alre
     assert.equal(f.win.document.querySelector('#all-sessions, #session-tabs'), null);
     f.openPalette();
     const search = f.element<HTMLInputElement>('palette-input');
-    search.value = 'open project'; search.dispatchEvent(new f.win.Event('input'));
-    assert.equal(f.element('palette-list').children.length, 0);
+    search.value = 'open recent project'; search.dispatchEvent(new f.win.Event('input'));
+    assert.equal(f.element('palette-list').children.length, 1);
     search.value = 'resume'; search.dispatchEvent(new f.win.Event('input'));
     search.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
     assert.equal(f.element('palette-list').children.length, 2);

@@ -35,6 +35,61 @@ pub async fn window_workspace(
         .cloned())
 }
 
+/// Read app-managed history and native window membership without launching agents.
+#[tauri::command]
+pub async fn list_projects(app: tauri::AppHandle) -> Vec<ProjectEntry> {
+    let snapshot = app.state::<crate::preferences::Preferences>().snapshot();
+    let open: Vec<_> = app
+        .state::<WorkspaceWindows>()
+        .directories
+        .lock()
+        .unwrap()
+        .values()
+        .cloned()
+        .collect();
+    project_entries(snapshot.state.get("nimrod.workspaces.v1"), &open)
+}
+
+#[derive(serde::Serialize)]
+pub struct ProjectEntry {
+    cwd: String,
+    open: bool,
+}
+
+fn project_entries(recent: Option<&serde_json::Value>, open: &[PathBuf]) -> Vec<ProjectEntry> {
+    let mut paths: Vec<String> = recent
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_str)
+        .map(str::to_owned)
+        .collect();
+    let mut extra: Vec<_> = open
+        .iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
+    extra.sort();
+    paths.extend(extra);
+    let mut seen = std::collections::HashSet::new();
+    paths
+        .into_iter()
+        .filter(|p| seen.insert(p.clone()))
+        .map(|cwd| ProjectEntry {
+            open: open.iter().any(|p| p == std::path::Path::new(&cwd)),
+            cwd,
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub async fn open_project_directory(
+    app: tauri::AppHandle,
+    cwd: PathBuf,
+) -> Result<WorkspaceOpened, String> {
+    // App navigation never rebinds a welcome window, unlike its launch form.
+    route_workspace(&app, None, cwd)
+}
+
 #[tauri::command]
 pub async fn open_workspace(
     app: tauri::AppHandle,
@@ -236,6 +291,23 @@ pub async fn list_workspace_sessions(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn projects_keep_recent_order_dedupe_and_use_native_membership() {
+        let recent = serde_json::json!(["/b", 42, "/a", "/b"]);
+        let open = vec![
+            std::path::PathBuf::from("/a"),
+            std::path::PathBuf::from("/c"),
+        ];
+        let entries = super::project_entries(Some(&recent), &open);
+        assert_eq!(
+            entries
+                .iter()
+                .map(|p| (p.cwd.as_str(), p.open))
+                .collect::<Vec<_>>(),
+            vec![("/b", false), ("/a", true), ("/c", true)]
+        );
+        assert_eq!(super::project_entries(None, &open).len(), 2);
+    }
     #[test]
     fn startup_windows_are_created_only_by_explicit_routing() {
         let config: tauri::Config =

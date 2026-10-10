@@ -4,8 +4,9 @@
 
 A project is a directory—no Git repository, manifest or registration required. One canonical directory belongs to each project window and is the working directory of its sessions. Its path stays visible in the **Project bar**.
 
-- Use **File → Open project…** (**⌘/Ctrl O**), select a directory on the welcome screen, or run `nimrod /path/to/project` after installing the [terminal launcher](../README.md#terminal-launcher).
+- Use **File → Open project…** (**⌘/Ctrl O**) for the native directory-only chooser. **Open recent project…** (**⌘/Ctrl ⇧ O**, configurable in Settings → Keybindings) opens the searchable recent-project picker and is also available in the command palette and File menu. Rows show the directory name and full path, with the same muted **•** marker as the model/thinking pickers beside each existing project window. Other rows reserve a blank marker slot so names align. Recents retain their most-recently-opened order; typing matches both names and paths. The persistent **Open folder…** button opens the OS directory-only chooser, even with no matching or recent projects. Canceling that chooser retains the picker query; Escape dismisses the picker. Missing/moved directories fail without starting a session or substituting another project. You can also select a directory on the welcome screen, or run `nimrod /path/to/project` after installing the [terminal launcher](../README.md#terminal-launcher).
 - Opening a project never starts Pi. An already-open directory focuses its existing window; another directory opens another project window. The native menu works even when a reference window is focused, and opens a project window rather than rebinding the welcome screen.
+- The recent-project list remembers opened directories, not just directories with sessions. Your home directory can appear if it was opened as a project. The **•** marker means that project already has a window, not that it is the current project or has saved sessions. A project with no remembered open sessions opens an empty window; use **Resume session…** to look for closed history or **New session** to start one. There is currently no UI action to remove a directory from recents.
 - Gitignored worktree subdirectories can live inside a project. Sessions launched in those directories currently require separate project windows; nesting alone does not group them under the parent project.
 
 ### Terminal launches
@@ -33,7 +34,7 @@ The **Session sidebar** shows a flat list of open conversations, activity and pe
 
 ### Command interactions
 
-**Escape cancels and closes the entire command interaction in one press**, whether you are searching commands, switching/resuming a session, naming a new session, or selecting a model/thinking level. This is the same from the command palette, a direct keybinding, or a status-area button. Prior focus is restored without changing your draft or stopping background agents.
+**Escape cancels and closes the entire command interaction in one press**, whether you are searching commands, opening a project, switching/resuming a session, naming a new session, or selecting a model/thinking level. This is the same from the command palette, a direct keybinding, or a status-area button. Prior focus is restored without changing your draft or stopping background agents.
 
 The **model** and **thinking-level (effort)** pickers mark the current value with a typographic **•** beside its label. Unselected options reserve the same blank space so labels align. The bullet is slightly larger than the status-area separator, not a session status indicator; keyboard navigation and hover highlight rows independently without changing the current value.
 

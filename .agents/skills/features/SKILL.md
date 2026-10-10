@@ -19,6 +19,7 @@ items relevant to the task. Follow repository `AGENTS.md` and
 | **Planned:** card plugins, bundled renderer API parity, core/presentation boundaries, fallback and incremental implementation | [Card plugins](references/card-plugins.md) | [Card plugins (planned)](../../../docs/card-plugins.md) |
 | Transcript tool/reasoning cards, call-ID keyed updates/placement, tooltip-free summaries and accessible status labels | [Transcript cards](references/transcript-cards.md) | [Rendering behavior](../../../docs/architecture.md#rendering-contract-retained-from-pi-gui) |
 | Customizable project/app keybindings, recorder UI, conflict reassignment, JSONC overrides and action/all reset | [Keybindings](references/keybindings.md) | [Keybindings](../../../docs/keybindings.md) |
+| Recent-project picker: configurable Cmd/Ctrl+Shift+O and palette entry (Cmd/Ctrl+O stays a native directory chooser), searchable names/paths, native-window bullet markers shared with model/thinking pickers, persistent directory-only chooser and cancellation; known recents-removal/empty-project UX gaps | [Projects and sessions](references/projects-and-sessions.md#recent-project-picker) | [Open project](../../../docs/workspace-sessions.md#projects) |
 | Command interactions: shared one-step Escape dismissal, explicit Back, pending-choice cancellation, stale-result guards and focus restoration | [Command interactions](references/command-interactions.md) | [Command interactions](../../../docs/workspace-sessions.md#command-interactions) |
 | Composer keyboard hints, working-only follow-up queueing and delivery fallback | [Composer](references/composer.md) | [Pi-specific behavior](../../../docs/architecture.md#pi-specific-behavior) |
 | Resizable session sidebar, per-project app-state width, zoom-aware drag/keyboard controls and responsive clamping | [Sidebar resizing](references/sidebar-resize.md) | [Sidebar width](../../../docs/workspace-sessions.md#sidebar-width) |
@@ -32,6 +33,10 @@ items relevant to the task. Follow repository `AGENTS.md` and
 
 Features without a reference yet: consult their existing docs and source; add a
 reference when doing substantive feature work rather than inventing details.
+
+## Command palette and keybinding rule
+
+Every Nimrod command-palette command must have a matching action in `src/keybindings.ts`, appear in Settings → Keybindings, and use the shared dispatcher. Shortcut hints must come from effective bindings, never hard-coded labels. Assign a default where agreed; an empty default list is allowed but the command must still be bindable. Document defaults and test overrides/unbinding. Native-only menu actions (such as Open project / Cmd/Ctrl+O) remain explicit exceptions outside the palette. See [keybinding invariants](references/keybindings.md#invariants).
 
 ## Keeping documentation useful
 

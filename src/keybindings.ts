@@ -1,5 +1,6 @@
 export const KEYBINDINGS_SETTING = 'keybindings';
 export const ACTIONS = [
+  { id: 'open-recent-project', label: 'Open recent project…', scope: 'project', defaults: ['primary+shift+o'] },
   { id: 'new', label: 'New session', scope: 'project', defaults: ['primary+n'] },
   { id: 'temporary', label: 'New temporary session', scope: 'project', defaults: ['primary+shift+n'] },
   { id: 'delete', label: 'Delete session tree…', scope: 'project', defaults: ['primary+backspace'] },
@@ -27,7 +28,7 @@ export type KeyOverrides = Record<string, string[]>;
 export type KeyChanges = Record<string, string[] | undefined>;
 const modifiers = ['primary', 'cmd', 'ctrl', 'alt', 'shift'];
 const named = ['backspace', 'delete', 'enter', 'tab', 'space', 'escape', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'home', 'end', 'pageup', 'pagedown', 'plus', '-'];
-const reserved = new Set(['o', 'q', 'h', 'a', 'c', 'v', 'x', 'z', 'tab']);
+const reserved = new Set(['q', 'h', 'a', 'c', 'v', 'x', 'z', 'tab']);
 
 /** Stable, layout-aware single keystrokes. Chords and native editing/menu bindings are not editable. */
 export function validateBinding(binding: unknown): string {
@@ -38,7 +39,7 @@ export function validateBinding(binding: unknown): string {
   if (parts.includes('primary') && (parts.includes('cmd') || parts.includes('ctrl'))) throw new Error('Use primary or explicit cmd/ctrl, not both.');
   if (!parts.some(part => ['primary', 'cmd', 'ctrl'].includes(part)) && !/^f\d+$/.test(key)) throw new Error('Use Cmd/Ctrl for application shortcuts; plain typing and Option/Alt text entry are reserved.');
   if (key === '=' || key === 'plus' && parts.includes('shift')) throw new Error('Use plus without Shift for the + / = key.');
-  if (reserved.has(key)) throw new Error('This key is reserved for native menus or text editing.');
+  if (reserved.has(key) || key === 'o' && !parts.includes('shift')) throw new Error('This key is reserved for native menus or text editing.');
   return binding;
 }
 export function readKeyOverrides(value: unknown): KeyOverrides {

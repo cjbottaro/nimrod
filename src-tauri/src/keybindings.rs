@@ -55,7 +55,8 @@ fn shortcut(binding: &str) -> bool {
                 .any(|m| ["primary", "cmd", "ctrl"].contains(m)))
         && key != "="
         && !(key == "plus" && modifiers.contains(&"shift"))
-        && !["o", "q", "h", "a", "c", "v", "x", "z", "tab"].contains(&key)
+        && !["q", "h", "a", "c", "v", "x", "z", "tab"].contains(&key)
+        && (key != "o" || modifiers.contains(&"shift"))
 }
 
 pub fn validate(value: &Value) -> Result<(), String> {
@@ -97,6 +98,9 @@ mod tests {
     fn overrides_accept_unbinding_and_preserve_future_actions() {
         validate(&serde_json::json!({ "new": [], "future-action": ["primary+shift+n"] })).unwrap();
         for key in [
+            "primary+shift+o",
+            "cmd+shift+o",
+            "ctrl+shift+o",
             "primary+n",
             "primary+shift+n",
             "primary+backspace",
@@ -117,6 +121,9 @@ mod tests {
         for key in [
             "n",
             "alt+n",
+            "primary+o",
+            "cmd+o",
+            "ctrl+o",
             "primary+q",
             "primary+v",
             "primary+=",

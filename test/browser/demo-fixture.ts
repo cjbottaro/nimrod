@@ -64,6 +64,10 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 1;
     if (command.startsWith('preferences_')) return preferences.invoke(command, args);
     if (command === 'runtime_defaults') return { cwd: process.cwd(), node: process.execPath, pi: 'fixture-only' };
+    if (command === 'take_project_picker_request') return false;
+    if (command === 'list_projects') return (preferences.value.state['nimrod.workspaces.v1'] as string[] || []).map(cwd => ({ cwd, open: cwd === process.cwd() }));
+    if (command === 'open_project_directory') return { cwd: args.cwd, current: false };
+    if (command === 'plugin:dialog|open') return null; // Canceled chooser fixture only.
     if (command === 'window_workspace') return null;
     if (command === 'open_workspace') return { cwd: process.cwd(), current: true };
     if (command === 'sync_popout_sessions') return { warnings: [] };

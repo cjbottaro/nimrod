@@ -25,6 +25,9 @@ test('defaults distinguish creation, named creation, open-session switching and 
   assert.deepEqual(bindingsFor('switch-session', {}), ['primary+t']);
   assert.equal(ACTIONS.some(action => action.defaults.some(binding => String(binding) === 'primary+p')), false);
   assert.deepEqual(bindingsFor('resume', {}), ['primary+k']);
+  assert.deepEqual(bindingsFor('open-recent-project', {}), ['primary+shift+o']);
+  assert.equal(validateBinding('primary+shift+o'), 'primary+shift+o');
+  for (const binding of ['primary+o', 'cmd+o', 'ctrl+o']) assert.throws(() => validateBinding(binding));
   assert.deepEqual(bindingsFor('new', { new: ['primary+t'] }), ['primary+t'], 'explicit overrides are not migrated');
   for (const action of ACTIONS) assert.deepEqual(changeBinding({}, action.id, undefined, false, true), { [action.id]: undefined }, 'defaults are conflict-free');
   assert.deepEqual(bindingsFor('new', { new: [] }), []);
