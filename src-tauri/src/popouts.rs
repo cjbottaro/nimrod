@@ -153,7 +153,7 @@ fn same_session(entry: &PopoutEntry, owner: &str, binding: &SessionBinding) -> b
         }
 }
 
-fn create_window(app: &tauri::AppHandle, id: &str, entry: PopoutEntry) -> Result<(), String> {
+async fn create_window(app: &tauri::AppHandle, id: &str, entry: PopoutEntry) -> Result<(), String> {
     let geometry = entry.saved.as_ref().and_then(|s| s.geometry.clone());
     app.state::<Popouts>()
         .registry
@@ -184,6 +184,18 @@ fn create_window(app: &tauri::AppHandle, id: &str, entry: PopoutEntry) -> Result
             return Err(e.to_string());
         }
     };
+    if let Err(error) = crate::popout_windows::configure_reference(&window).await {
+        app.state::<Popouts>()
+            .registry
+            .lock()
+            .unwrap()
+            .entries
+            .remove(id);
+        window_state::forget(&window.as_ref().window());
+        let _ = window.destroy();
+        // Keep any saved snapshot/reference so a later restore can retry.
+        return Err(error);
+    }
     if let Some(geometry) = geometry {
         window_state::restore_geometry(&window, geometry, (320.0, 220.0));
     }
@@ -473,7 +485,7 @@ pub async fn sync_popout_sessions(
                                 fingerprint: saved.fingerprint.clone(),
                                 saved: Some(saved),
                             };
-                            if let Err(e) = create_window(&app, &id, entry) {
+                            if let Err(e) = create_window(&app, &id, entry).await {
                                 result
                                     .warnings
                                     .push(format!("Could not restore pop-out {id}: {e}"));
@@ -565,7 +577,8 @@ pub async fn open_code_popout(
                     fingerprint: hash.clone(),
                     saved: Some(saved),
                 },
-            )?;
+            )
+            .await?;
             existing = Some(id);
         }
     }
@@ -592,7 +605,7 @@ pub async fn open_code_popout(
             saved,
         };
         // If native creation fails, the durable snapshot remains referenced for retry.
-        create_window(&app, &id, entry)?;
+        create_window(&app, &id, entry).await?;
         id
     };
     if state.visible(window.label(), &binding.runtime_id)

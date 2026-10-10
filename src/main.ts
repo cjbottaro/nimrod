@@ -101,7 +101,7 @@ interface SessionSummary { path: string; sessionId: string; name?: string; previ
 interface Tab {
   id: string; token?: string; title: string; lastUsed: number; mode: LaunchMode; demo: boolean; file?: SessionFile;
   root: HTMLElement; view: PiView; drafts: SessionDrafts; receive?: (message: HostMessage) => void;
-  session?: PiSession; starting: boolean; closing: boolean; restarting: boolean; deleting: boolean; ended: boolean; stopTask?: Promise<void>;
+  session?: PiSession; starting: boolean; closing: boolean; restarting: boolean; deleting: boolean; deletionExecuting: boolean; ended: boolean; stopTask?: Promise<void>;
   inputCount: number; unread: boolean; failed: boolean; focus?: HTMLElement; notice: HTMLElement;
   cancelPreference?: () => void;
   preferenceTask?: Promise<void>;
@@ -210,7 +210,8 @@ const notifySession = sessionNotifications({
 const deletion = new SessionDeletion({
   panels: () => tabs.filter(tab => tab.file?.exists && !tab.demo && tab.mode !== 'temporary').map(tab => ({
     file: tab.file!.path,
-    lock: locked => { tab.deleting = locked; tab.receive?.({ type: 'deletionLock', locked }); updateTab(tab); },
+    lock: locked => { tab.deleting = locked; if (!locked) tab.deletionExecuting = false; tab.receive?.({ type: 'deletionLock', locked }); updateTab(tab); },
+    executionStarted: () => { tab.deletionExecuting = true; updateTab(tab); },
     refresh: async () => { if (tab.session && !tab.ended) await tab.session.refreshDeletionState(); },
     report: () => {
       const composer = restoreComposerState(tab.drafts.read());
@@ -563,7 +564,7 @@ function createTab(mode: LaunchMode, demo: boolean, file?: SessionFile, title = 
   const closeButton = button('×', () => { void closeTab(tab); }); closeButton.className = 'session-close';
   rowNode.append(row, deleteButton, closeButton); required('open-sessions').append(rowNode);
   const tab: Tab = { id, mode, demo, file, title, lastUsed: Math.max(lastUsed(used), file ? recency.get(file) : 0), root, notice, closeButton, deleteButton, row, rowLabel, rowIndicator, rowTime, rowNode,
-    drafts: drafts.fork(), starting: false, closing: false, restarting: false, deleting: false, ended: false, inputCount: 0, unread: false, failed: deletion.blocked(file?.path),
+    drafts: drafts.fork(), starting: false, closing: false, restarting: false, deleting: false, deletionExecuting: false, ended: false, inputCount: 0, unread: false, failed: deletion.blocked(file?.path),
     view: { setActive() {}, scrollToBottom() {}, dispose() {} } };
   root.addEventListener('focusin', event => { if (event.target instanceof HTMLElement) tab.focus = event.target; });
   tab.drafts.select(file ? `file:${file.path}` : mode === 'temporary' ? `${demo ? 'demo' : 'temporary'}:${workspace}:${id}` : `unassigned:${id}`);
@@ -625,7 +626,8 @@ function refreshTime(tab: Tab): void {
 }
 function indicator(tab: Tab) {
   const state = tab.session?.state;
-  return sessionIndicator({ ...tab, blocked: deletion.blocked(tab.file?.path),
+  // A preview lock is not activity; show Deleting only after confirmation.
+  return sessionIndicator({ ...tab, deleting: tab.deletionExecuting, blocked: deletion.blocked(tab.file?.path),
     inactive: tab.ended || !state || state.sessionUnavailable, compacting: state?.compacting,
     busy: state?.busy || !!(state && presentActivity(false, '', state.extensionStatuses).subagents), pending: submissionPending(tab) });
 }

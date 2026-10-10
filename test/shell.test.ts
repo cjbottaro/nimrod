@@ -743,6 +743,61 @@ test('delete review uses a custom nested modal, Cancel is non-destructive and la
   }
 });
 
+test('deletion review keeps idle row indicators unchanged until confirmed execution and never counts as agent work', async () => {
+  for (const outcome of ['cancelled', 'deleted', 'failed']) {
+    const file = '/sessions/new.jsonl';
+    let answer!: (confirmed: boolean) => void, finishExecution!: () => void;
+    const execution = new Promise<void>(resolve => { finishExecution = resolve; });
+    const options: ShellOptions = {
+      windowWorkspace: '/project',
+      appState: { 'nimrod.tabs.v1:/project': { tabs: [{ path: '/sessions/other.jsonl', sessionId: 'fixture-id', name: 'Other' }] } },
+      confirmReview: args => answer(args.confirmed === true),
+      deleteTree: async emit => {
+        const event = (phase: DeletionEvent['phase'], pending = true): DeletionEvent => ({ id: phase, phase, files: [file], results: [], pending });
+        emit(event('lock')); await f.tick();
+        const confirmed = new Promise<boolean>(resolve => { answer = resolve; });
+        emit({ ...event('review'), tree: [{ file, title: 'Root' }] });
+        if (!await confirmed) { emit(event('release', false)); return []; }
+        emit(event('check')); await f.tick(); emit(event('quarantine'));
+        await execution;
+        const results = [{ file, deleted: outcome === 'deleted', error: outcome === 'failed' ? 'Fixture removal failed' : undefined }];
+        options.deletionSnapshot = { pending: false, quarantine: [file], files: [], deleted: outcome === 'deleted' ? [file] : [] };
+        emit({ ...event('complete', false), results }); return results;
+      },
+    };
+    const f = await fixture(undefined, options);
+    try {
+      f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+      const rows = f.rows(), target = rows[1], unrelated = rows[0];
+      const indicator = target.parentElement!.querySelector<HTMLElement>('.session-indicator')!;
+      const unrelatedState = unrelated.parentElement!.querySelector<HTMLElement>('.session-indicator')!.dataset.state;
+      const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Keep my draft'; prompt.dispatchEvent(new f.win.Event('input'));
+      assert.equal(indicator.dataset.state, 'ready');
+      const starts = f.calls.filter(c => c.command === 'start_pi').length;
+      f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
+      assert.equal(f.element<HTMLDialogElement>('deletion-review').open, true);
+      assert.equal(indicator.dataset.state, 'ready'); assert.match(target.getAttribute('aria-label')!, /— Ready$/);
+      assert.equal(f.element('sidebar-working-count').textContent, '0');
+      assert.equal(prompt.closest('.session-view')!.getAttribute('aria-busy'), 'false');
+      assert.equal(unrelated.parentElement!.querySelector<HTMLElement>('.session-indicator')!.dataset.state, unrelatedState);
+      assert.equal(prompt.closest<HTMLElement>('.session-view')!.inert, true, 'review still locks the affected composer');
+      f.element<HTMLDialogElement>('deletion-review').close(outcome === 'cancelled' ? 'cancel' : 'delete'); await f.tick(); await f.tick();
+      if (outcome === 'cancelled') {
+        assert.equal(indicator.dataset.state, 'ready'); assert.equal(prompt.closest<HTMLElement>('.session-view')!.inert, false);
+        assert.equal(prompt.value, 'Keep my draft');
+      } else {
+        assert.equal(indicator.dataset.state, 'deleting'); assert.match(target.getAttribute('aria-label')!, /— Deleting$/);
+        assert.equal(f.element('sidebar-working-count').textContent, '0');
+        finishExecution(); await f.tick(); await f.tick(); await f.tick();
+        if (outcome === 'failed') { assert.equal(indicator.dataset.state, 'recovery'); assert.equal(prompt.value, 'Keep my draft'); }
+        else assert.equal(target.isConnected, false);
+      }
+      assert.equal(f.calls.filter(c => c.command === 'start_pi').length, starts);
+      assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
+    } finally { f.dom.window.close(); }
+  }
+});
+
 test('confirmed snapshot tombstones clean stale restored layouts and closed drafts instead of retaining a ghost row', async () => {
   const file = '/sessions/deleted.jsonl';
   const f = await fixture(undefined, { windowWorkspace: '/project', deletionSnapshot: { pending: false, quarantine: [file], deleted: [file], files: [] }, appState: {

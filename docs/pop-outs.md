@@ -27,8 +27,9 @@ Focusing a pop-out itself keeps its project's references visible.
 | Close a pop-out, or press ⌘W / Ctrl+W in it | Remove that pop-out, without affecting the session |
 | Successfully delete the source session tree | Remove references belonging to the deleted sessions, including saved snapshots |
 
-On macOS, automatic restoration leaves keyboard focus on the composer or active
-dialog. Explicitly clicking Pop out focuses the reference window.
+On macOS, ⌘\` cycles project windows, skipping pop-outs. Click a pop-out to focus
+it; ⌘W still closes it. Automatic restoration leaves keyboard focus on the composer
+or active dialog.
 
 Temporary/demo pop-outs last only for the current run. New saved sessions gain
 persistent pop-outs after Pi's first verified save. Compaction does not remove

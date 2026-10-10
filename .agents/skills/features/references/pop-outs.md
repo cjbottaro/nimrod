@@ -27,8 +27,10 @@ implementation, storage, invariants, platform workarounds or test coverage.
   saved-session snapshots promote after verified Pi persistence, even in background.
 - No original message ID, block ordinal, transcript key or backlink is tracked.
   **Show in conversation is intentionally dropped, not a deferred requirement.**
-- Native title bars/window controls remain. Frameless/custom chrome was discussed
-  and deferred; do not implement it as part of unrelated maintenance.
+- Native title bars/window controls remain. On macOS, pop-outs opt out of native
+  window cycling while remaining focusable by click; ⌘W still closes the reference.
+  Frameless/custom chrome was discussed and deferred; do not implement it as part
+  of unrelated maintenance.
 - Nimrod owns snapshots and window state. Pi owns conversations/session files.
   Pi is the only implemented harness; do not invent a generic harness protocol.
 
@@ -232,6 +234,28 @@ The welcome window has no selected references, so focusing it hides project pop-
 - This reacts to native window focus, not a hard-coded ⌘\` handler. Preserve OS
   window cycling and Linux/possible future Windows activation conventions.
 
+## Native window cycling on macOS
+
+Pop-outs remain ordinary focusable windows, not `NSPanel` instances. They are auxiliary
+references for navigation: ⌘\` / Cycle Through Windows should skip them, including
+when initiated from a focused reference. Do not replace native cycling with an app
+keybinding or make references permanently non-focusable.
+
+- `create_window` is asynchronous and awaits `popout_windows::configure_reference`
+  immediately after building the hidden window, before geometry restoration/show.
+  All first-open and restored-window creation paths use this helper.
+- The macOS helper resolves the retained window's `NSWindow` on the main thread,
+  removes `NSWindowCollectionBehavior::ParticipatesInCycle` and adds `IgnoresCycle`.
+  Preserve all unrelated collection flags, including Spaces/full-screen behavior.
+  Await the callback rather than racing configuration against presentation.
+- Configuration failure removes the runtime entry and destroys that hidden window;
+  any saved snapshot/reference remains available for a later retry.
+- Project windows are not configured by this helper. Pop-out type, level, title bar,
+  focusability, explicit-click focus, Close/⌘W and persistence are unchanged.
+- Other platforms use a no-op configuration hook; do not claim macOS window-cycling
+  behavior on Linux or a possible future Windows implementation. Native acceptance
+  remains necessary, not inferred from flag-transform/source-guard unit tests.
+
 ## Native focus: keep the two paths separate
 
 **Automatic restore/switch:** `popout_windows::show_restored`.
@@ -278,23 +302,28 @@ Relevant tests:
   runtime-independent matching, project focus round-trips, selected-session filtering,
   same-owner pop-out focus, blur/welcome/closed-window handling, latest-scope guards
   while operations are busy, minimization guards and automatic/explicit path separation.
+  Cycle tests cover flag preservation, conflicting cycle-flag removal, idempotence,
+  and awaited configuration of hidden new/restored references without disabling focus.
 
 Run `mise run check` and `mise run build`. Rendering/scrolling changes also warrant
 `npm run test:browser`; these are offline fixtures, not the user's app. Never launch
 or interrupt that app, run live compaction/model work, or modify user session/state
 files to test persistence without explicit authorization.
 
-Last runtime-change evidence: 258 TS tests, 64 default Rust tests (two opt-in real-Pi
-smokes ignored), packaged macOS build. These current-checkout totals include other
-feature work. Five new native registry tests cover project visibility/focus policy;
-compiler/unit evidence does not establish native window cycling acceptance.
+Native-cycle change evidence in `.worktrees/popout-window-cycle`, branch
+`fix/popout-window-cycle`: 347 TS tests, 80 default Rust tests (two opt-in real-Pi
+smokes ignored), packaged macOS build and bundle-signature verification. Three new
+regressions cover flag preservation/conflicts, idempotence and hidden creation setup.
+These are flag/source-boundary tests, not native window-cycling acceptance. Targets
+and the app bundle are worktree-local; the primary checkout's bundle is untouched.
 Fourteen offline WebKit tests passed for the earlier content-first UI; they were not
 rerun for the later native-only focus/project-visibility changes.
 See [verification](../../../../docs/verification.md) for the latest recorded evidence.
 
 Do not infer native acceptance from compiler/source-guard/jsdom/browser tests.
 Ask the user to verify saved-session quit/relaunch focus, reference visibility on
-session and project-window switching (including ⌘\`), own-pop-out focus without hiding
-its references, close-versus-quit persistence, explicit-click focus, minimization, geometry
+session and project-window switching (including ⌘\` / ⇧⌘\` starting from both a project
+and a reference), exclusion of new/restored pop-outs from native cycling, own-pop-out
+click focus and ⌘W without hiding its siblings, close-versus-quit persistence, minimization, geometry
 and multi-display behavior. Offline demos cannot verify restart persistence because
 those sessions deliberately have runtime-only pop-outs.

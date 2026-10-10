@@ -8,6 +8,17 @@
 - No running app/window launch or interruption, live Pi/model request, user-session/state mutation, installed launcher change or upstream extension/plugin edit occurred. Only owned test-binary children and generated temporary endpoints were used; the primary checkout/default app bundle was untouched. No UI/scrolling changes; browser tests were not rerun because they do not exercise native instance election.
 - Native Launch Services forwarding, actual Command–backtick project-window cycling and pop-out visibility still require user acceptance. Quit the old build before testing the worktree artifact through `NIMROD_APP`; otherwise it forwards to that old process rather than exercising the fix. Linux/Windows have not been verified for this change.
 
+Single-instance integration with `main`: fast-forwarded the fix at `019c3bb`. The integrated `CARGO_NET_OFFLINE=true mise run check` passes **347 TypeScript/Node tests**, formatting/Clippy and **88 default Rust tests** (two opt-in Pi smokes ignored). `CARGO_NET_OFFLINE=true mise run build` rebuilt and verified **`src-tauri/target/release/bundle/macos/Nimrod.app`** in the primary checkout. The installed launcher now uses that default artifact; the running app was not launched or restarted. The earlier worktree artifact path is historical; native window-cycling acceptance remains outstanding.
+
+## Deletion review preserves idle sidebar indicators
+
+- In `.worktrees/deletion-sidebar-status` (`fix/deletion-sidebar-status`), preview/confirmation keeps the `Tab.deleting` safety lock but no longer uses it as activity presentation. A separate transient `Tab.deletionExecuting` flag begins only on the native post-confirmation quarantine event and resets on unlock. Review preserves Ready/Inactive/Unread indicators; only confirmed shutdown/removal shows Deleting. Working counts remain zero for the deletion transaction. Native writer/idle checks, composer locks, acknowledgement, recency and persistence behavior are unchanged.
+- A new shell regression failed before the fix (`deleting` rather than `ready` during review), then passed. It covers cancellation, execution, deletion/failure/recovery, unrelated rows, unchanged drafts, inertness and no agent work/start. Coordinator tests cover affected-only execution callbacks and snapshot unlock. Offline WebKit restores a fake saved inactive row without starting Pi and injects phases to verify no CSS spinner during review, execution-only Deleting and the unchanged offline sibling/draft; no real session files are deleted.
+- `mise run check` passes **349 TypeScript/Node tests**, formatting/Clippy and **77 default Rust tests** (two opt-in Pi smokes ignored). `mise run build` packages/ad-hoc-signs/verifies the worktree macOS app. All **32 offline WebKit tests** pass with isolated `/tmp/nimrod-deletion-sidebar-full-webkit` artifacts; the focused deletion suite also passed.
+- The verified worktree app replaces the main checkout's default bundle with the previous bundle backed up alongside it; executable comparison and strict/deep signature verification pass. The `nimrod` helper remains unchanged. No running app was launched/restarted/interrupted, no user session was deleted, no live Pi/model request or installed-extension change occurred. Source development was isolated in the dedicated worktree. Native visual acceptance and Linux/Windows verification remain for user validation after an explicit app restart.
+
+Final deletion-sidebar integration onto current main (including the single-instance startup fix): `mise run check` passes **349 TypeScript/Node tests**, formatting/Clippy and **88 default Rust tests** (two opt-in Pi smokes ignored). `mise run build` packages/signs/verifies the integrated worktree app; all **32 offline WebKit tests** pass at `/tmp/nimrod-deletion-sidebar-merge-webkit`. Only overlapping verification notes needed rebase conflict resolution, and both histories were retained. No user app/process interruption, live Pi/model requests or real session deletion occurred during integration.
+
 ## Resume picker roots and Open badges
 
 - Implemented in `.worktrees/resume-session-picker` on `fix/resume-session-picker`, retaining the terminology clarification from `.worktrees/session-terminology`. Resume now shows a separate Open badge for sidebar membership, independent of connection state or Needs attention visibility. Pi `parentSession` metadata excludes persisted subagents and saved forks/branches from Resume, while Switch and exact-file opening remain unchanged. Out-of-catalog open files are inspected read-only before inclusion.
@@ -241,13 +252,16 @@ See [notifications](notifications.md) and the [implementation reference](../.age
 - Project-window focus now hides the outgoing project's references and passively
   shows the incoming project's selected-session references. Focusing an owned
   pop-out retains the same scope; stale restore callbacks cannot reveal background projects.
-- Current-checkout verification: **258 TypeScript tests**, Rust formatting/Clippy,
-  **64 default Rust tests** (two opt-in Pi tests ignored), and a packaged macOS build.
-  Includes five new project-focus policy tests and other concurrent feature work.
+- macOS pop-outs now opt out of native window cycling while remaining clickable/
+  focusable; ⌘W is unchanged. New and restored references are configured before showing.
+- Task-worktree verification: **347 TypeScript tests**, Rust formatting/Clippy,
+  **80 default Rust tests** (two opt-in Pi tests ignored), packaged macOS build and
+  bundle-signature verification. Three new regressions cover cycle flags and setup ordering.
 - **14 offline WebKit tests** passed for the earlier pop-out rendering/layout work;
   they were not rerun for native-only focus changes. Filesystem tests use disposable directories.
-- Remaining native checks: ⌘\` project switching and own-pop-out focus, saved-session
-  quit/relaunch, composer/dialog focus, Close versus Quit, minimization and multi-display geometry.
+- Remaining native checks: ⌘\` / ⇧⌘\` from both project and pop-out windows skip
+  references, including after restoration; click focus and ⌘W still work. Quit/relaunch,
+  composer/dialog focus, minimization and multi-display geometry also need native acceptance.
   Windows/Linux behavior is not accepted from macOS builds or mocked IPC tests.
 - No user app was launched/interrupted, model request made, or user-session/state file modified.
 

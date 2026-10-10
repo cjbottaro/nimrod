@@ -7,6 +7,7 @@ export interface SessionDeletionReport { file: string; token?: string; title: st
 export interface DeletionPanel {
   file: string;
   lock(locked: boolean): void;
+  executionStarted?(): void;
   refresh(): Promise<void>;
   report(): SessionDeletionReport;
   deleted(): void;
@@ -74,6 +75,7 @@ export class SessionDeletion {
         if (!this.disposed) await this.deps.confirm?.(event.id, confirmed);
       } else if (event.phase === 'quarantine') {
         event.files.forEach(file => this.quarantine.add(file));
+        for (const panel of panels) panel.executionStarted?.();
       } else if (event.phase === 'complete' || event.phase === 'release') {
         this.pending = event.pending;
         if (event.phase === 'complete') {

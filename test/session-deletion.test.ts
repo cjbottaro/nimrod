@@ -9,9 +9,10 @@ function fixture() {
   let results: DeleteResult[] = [];
   const batches: string[][] = [];
   const panels = ['root', 'child', 'unrelated'].map(name => {
-    const panel: DeletionPanel & { locked: boolean; removed: boolean; busy: boolean; hasDraft: boolean; failing: boolean } = {
-      file: `/store/${name}.jsonl`, locked: false, removed: false, busy: false, hasDraft: name === 'child', failing: false,
-      lock(locked) { this.locked = locked; calls.push(`${name}:lock:${locked}`); },
+    const panel: DeletionPanel & { locked: boolean; executing: boolean; removed: boolean; busy: boolean; hasDraft: boolean; failing: boolean } = {
+      file: `/store/${name}.jsonl`, locked: false, executing: false, removed: false, busy: false, hasDraft: name === 'child', failing: false,
+      lock(locked) { this.locked = locked; if (!locked) this.executing = false; calls.push(`${name}:lock:${locked}`); },
+      executionStarted() { this.executing = true; calls.push(`${name}:execution`); },
       async refresh() { calls.push(`${name}:refresh`); if (this.failing) throw new Error('Unresponsive session'); },
       report() { return { file: this.file, token: name, title: name, busy: this.busy, hasDraft: this.hasDraft }; },
       deleted() { this.removed = true; calls.push(`${name}:deleted`); },
@@ -95,6 +96,18 @@ test('busy or unresponsive descendants report busy and cannot silently disappear
   f.panels[1].failing = false; f.panels[1].busy = true;
   await f.controller.handle(f.event('check', { id: 'check' }));
   assert.equal(f.acknowledgements[1][1].busy, true);
+});
+
+test('preview and confirmation lock affected panels without execution activity; quarantine starts execution only for affected files', async () => {
+  const f = fixture();
+  await f.controller.handle(f.event('lock'));
+  await f.controller.handle(f.event('review', { tree: [{ file: f.panels[0].file, title: 'Root' }] }));
+  await f.controller.handle(f.event('check'));
+  assert.equal(f.panels[0].locked, true); assert.equal(f.panels.some(panel => panel.executing), false);
+  await f.controller.handle(f.event('quarantine'));
+  assert.equal(f.panels[0].executing, true); assert.equal(f.panels[1].executing, true); assert.equal(f.panels[2].executing, false);
+  f.controller.load({ pending: false, quarantine: f.panels.slice(0, 2).map(panel => panel.file), files: [] });
+  assert.equal(f.panels.some(panel => panel.executing || panel.locked), false);
 });
 
 test('known partial results remove only successful files and quarantine failed inactive sessions without replay', async () => {
