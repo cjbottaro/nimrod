@@ -3,8 +3,7 @@
 <body>
   <header id="workspace-bar">
     <button id="toggle-sidebar" type="button" class="secondary" aria-label="Toggle session sidebar" aria-expanded="true" aria-controls="session-sidebar" title="Toggle sidebar · ⌘/Ctrl B">☰</button>
-    <span class="wordmark">nimrod<span class="spark">✦</span></span>
-    <span id="workspace-label">Your coding project</span><span id="mode-badge">PoC</span>
+    <div id="project-identity"><span id="project-name">Choose a project</span><span id="workspace-label"></span></div><span id="mode-badge">PoC</span>
     <button id="restart-session" type="button" class="secondary" aria-label="Restart session" title="Restart session — available after the first save" disabled><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M20 12a8 8 0 1 0-2.3 5.7M20 7v5"/></svg></button>
     <button id="delete-session" type="button" aria-label="Delete session tree" title="Delete session tree… — available after the first save" disabled><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button>
     <button id="open-settings" type="button" aria-label="Open Settings" aria-haspopup="dialog" aria-controls="settings-page" title="Settings · ⌘/Ctrl ,"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-1 3-3 1-2 3 2 2-1 3 3 2 3-1 2 3 3-1 1-3 3-1 2-3-2-2 1-3-3-2-3 1-2-3Z"/><circle cx="12" cy="11" r="3"/></svg></button>
@@ -27,7 +26,7 @@
   <div id="workspace-content" class="layout-content">
   <p id="launch-error" role="alert"></p>
   <main id="welcome" hidden>
-    <div class="welcome-copy"><span class="eyebrow">A place for the work around the code.</span><h1>Give your agents<br>a room of their own.</h1><p>Pi first. Bespoke integrations, not a lowest-common-denominator chat box.</p></div>
+    <div class="welcome-copy"><span class="wordmark">nimrod<span class="spark">✦</span></span><br><span class="eyebrow">A place for the work around the code.</span><h1>Give your agents<br>a room of their own.</h1><p>Pi first. Bespoke integrations, not a lowest-common-denominator chat box.</p></div>
     <form id="launch-form">
       <label for="cwd">Project folder</label><div class="path-row"><input id="cwd" required autocomplete="off" spellcheck="false"><button id="browse" type="button">Choose…</button><button id="enter-workspace" type="button">Open</button></div>
       <div class="launch-actions"><button id="start-pi" type="submit" disabled>New session</button><button id="resume-last" type="button" class="secondary" disabled hidden>Resume last session</button></div>

@@ -1,6 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { projectPathParts } from '../src/project-path';
+import { abbreviateHome, projectPathParts } from '../src/project-path';
+
+test('home abbreviation is display-only, boundary-aware and preserves separators', () => {
+  for (const [path, home, expected] of [
+    ['/Users/me/Projects', '/Users/me', '~/Projects'],
+    ['/Users/me', '/Users/me/', '~'],
+    ['/Users/me-other/Projects', '/Users/me', '/Users/me-other/Projects'],
+    ['/elsewhere', '/Users/me', '/elsewhere'],
+    ['C:\\Users\\me\\Projects', 'C:\\Users\\me', '~\\Projects'],
+    ['/work', '', '/work'],
+    ['/work', undefined, '/work'],
+    ['/', '/', '/'],
+  ]) assert.equal(abbreviateHome(path!, home), expected);
+});
 
 test('project display splits names and parents without changing roots or platform separators', () => {
   for (const [path, name, parent] of [

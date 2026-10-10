@@ -36,6 +36,7 @@ interface ShellOptions {
   catalog?: JsonRecord[];
   windowLabel?: string;
   windowWorkspace?: string;
+  homeDirectory?: string;
   projectPickerPending?: boolean;
   projects?: { cwd: string; open: boolean }[];
   projectOpenError?: string;
@@ -129,7 +130,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       if (command === 'acknowledge_deletion' || command === 'recover_deletion_session') return;
       if (command === 'confirm_session_deletion') { options.confirmReview?.(args); return; }
       if (command === 'delete_session_tree') return options.deleteTree ? options.deleteTree(event => deletionEvent?.(event), args) : [];
-      if (command === 'runtime_defaults') return { cwd: '/project', pi: '/bin/pi', node: '/bin/node' };
+      if (command === 'runtime_defaults') return { cwd: '/project', pi: '/bin/pi', node: '/bin/node', home: options.homeDirectory };
       if (command === 'window_workspace') {
         await options.windowWorkspaceGate;
         if (options.windowWorkspaceError) throw new Error(options.windowWorkspaceError);
@@ -1725,8 +1726,31 @@ test('welcome stays hidden until startup resolves and appears only without a wor
       assert.equal(f.element('welcome').hidden, !!windowWorkspace);
       assert.equal(f.element('workspace-empty').hidden, !windowWorkspace);
       assert.equal(f.calls.some(c => c.command === 'start_pi'), false);
-      if (windowWorkspace) assert.equal(f.element('workspace-label').textContent, windowWorkspace);
+      if (windowWorkspace) {
+        assert.equal(f.element('project-name').textContent, 'project');
+        assert.equal(f.element('workspace-label').textContent, '/');
+        assert.equal(f.element('project-identity').title, windowWorkspace);
+      }
     } finally { release(); f.dom.window.close(); }
+  }
+});
+
+test('project bar identifies the directory, abbreviates home and keeps branding on welcome', async () => {
+  for (const [windowWorkspace, name, parent] of [
+    ['/Users/fixture/Projects/nimrod', 'nimrod', '~/Projects'],
+    ['/Users/fixture/project', 'project', '~'],
+    ['/Users/fixture-other/project', 'project', '/Users/fixture-other'],
+    ['/', '/', ''],
+  ]) {
+    const f = await fixture(undefined, { windowWorkspace, homeDirectory: '/Users/fixture' });
+    try {
+      assert.equal(f.element('project-name').textContent, name);
+      assert.equal(f.element('workspace-label').textContent, parent);
+      assert.equal(f.element('project-identity').title, windowWorkspace);
+      assert.equal(f.element('workspace-bar').querySelector('.wordmark'), null);
+      assert.match(f.element('welcome').querySelector('.wordmark')!.textContent!, /nimrod/);
+      assert.equal(f.calls.some(c => c.command === 'start_pi'), false);
+    } finally { f.dom.window.close(); }
   }
 });
 

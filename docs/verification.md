@@ -6,6 +6,13 @@
 - `mise run check` passes **403 TS/Node tests**, formatting/Clippy and **97 Rust tests** (two opt-in Pi smokes ignored). The initial check hit the previously recorded unchanged single-instance lock-holder timeout fixture; the full rerun passed without Rust changes. All **49 offline WebKit tests** pass. The first browser run used Shift+Tab, which macOS WebKit skips for buttons; regression tests now use native Option+Shift+Tab and verify Cancel focus followed by Enter cancellation.
 - `mise run build` packaged/ad-hoc-signed/verified `.worktrees/dialog-action-language/src-tauri/target/release/bundle/macos/Nimrod.app`. No user-app/window launch or interruption, primary bundle change, live Pi/model request, real user-session deletion, upstream extension modification, commit or push. Native visual/focus and Linux verification remain user acceptance; Windows remains a possible future target.
 
+## Project bar identity
+
+- Implemented locally on `ui/project-bar-title` in `.worktrees/project-bar-title`: primary project directory name, muted parent path with boundary-aware home abbreviation to `~`, full-path hover, parent-first truncation and welcome-only Nimrod branding. Native home lookup uses Tauri's portable path resolver and canonicalizes to match project routing identity.
+- `mise run check` passed **405 TS/Node tests**, formatting/Clippy and **97 Rust tests** (two opt-in real-Pi smokes ignored). All **50 offline WebKit tests** passed, including wide/560/360px Project bar geometry, short-name preservation and exceptionally long-name truncation. The first targeted geometry test incorrectly expected the long task-worktree name never to truncate at 360px; coverage now distinguishes typical short names from exceptionally long ones.
+- `mise run build` packaged/ad-hoc-signed/verified `.worktrees/project-bar-title/src-tauri/target/release/bundle/macos/Nimrod.app`. Primary checkout/default bundle and running user app remain untouched. No live Pi/model requests, user-session mutation, upstream changes, commit or push. Native visual acceptance and Linux/possible Windows behavior remain unverified.
+
+
 ## Palette command cleanup
 
 - Final integration also includes working-session model/thinking changes (`ccb7fe0`): `mise run check` passes 401 TS/Node tests, formatting/Clippy and 97 Rust tests (two ignored); the affected keybinding, model-preference and workspace WebKit suites pass all 21 tests, and the signed macOS build passes again. The 44-test full browser run below preceded that final integration.
