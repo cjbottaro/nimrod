@@ -2,6 +2,7 @@
 
 ## Palette command cleanup
 
+- Final integration also includes working-session model/thinking changes (`ccb7fe0`): `mise run check` passes 401 TS/Node tests, formatting/Clippy and 97 Rust tests (two ignored); the affected keybinding, model-preference and workspace WebKit suites pass all 21 tests, and the signed macOS build passes again. The 44-test full browser run below preceded that final integration.
 - Integration with Resume indicator/Enter-hint changes (`b1898a4`): revalidated the combined tree with 397 TS/Node tests, 97 Rust tests (two ignored), all 44 offline WebKit tests, formatting/Clippy and the signed macOS build. Documentation conflict resolutions retain both the revised indicators and removed demo/file commands.
 
 - Implemented locally on `feat/palette-command-cleanup` in `.worktrees/palette-command-cleanup`: removed offline-demo and arbitrary session-file opening from the app, including palette/keybinding entries and welcome controls. The product launcher no longer accepts demo mode or bundles its fixture. Existing exact-file validation for discovered/restored sessions remains. Offline tests intercept temporary-session launches and use the retained fixture directly.

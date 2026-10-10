@@ -52,7 +52,7 @@ export class PiSession {
     this.state.temporary = temporary;
     rpc.onEvent = event => this.event(event);
     this.model = new ModelThinkingController(rpc, {
-      isMainAgentBusy: () => this.state.busy || !!this.state.compacting || !!this.state.sessionUnavailable || !!this.submission || this.compactionRequest,
+      isChangeBlocked: () => !!this.state.sessionUnavailable || !!this.submission,
       onRpcState: data => this.applyState(data),
       onState: modelControls => { this.state = { ...this.state, modelControls }; this.publish(); },
       chooseModel: (models, current) => this.chooseModel(models, current, (title, options) => ui.choose(title, options)),

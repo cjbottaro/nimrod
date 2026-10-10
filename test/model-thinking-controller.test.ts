@@ -8,6 +8,7 @@ class FakeTransport implements RpcTransport {
   model: ModelIdentity | null;
   thinkingLevel = "medium";
   busy = false;
+  compacting = false;
   models: ModelIdentity[];
   levels: string[];
   failSetModel = false;
@@ -20,7 +21,7 @@ class FakeTransport implements RpcTransport {
 
   async request(type: string, fields?: JsonRecord): Promise<JsonRecord> {
     this.calls.push({ type, fields });
-    if (type === "get_state") return { data: { model: this.model, thinkingLevel: this.thinkingLevel, isStreaming: this.busy, isCompacting: false } };
+    if (type === "get_state") return { data: { model: this.model, thinkingLevel: this.thinkingLevel, isStreaming: this.busy, isCompacting: this.compacting } };
     if (type === "get_available_models") return { data: { models: this.models } };
     if (type === "get_available_thinking_levels") return { data: { levels: this.levels } };
     if (type === "set_model") {
@@ -38,6 +39,7 @@ class FakeTransport implements RpcTransport {
 
 class FakeHost implements ModelThinkingHost {
   busy = false;
+  blocked = false;
   states: ModelThinkingState[] = [];
   errors: unknown[] = [];
   modelChoice: ModelIdentity | undefined;
@@ -45,7 +47,7 @@ class FakeHost implements ModelThinkingHost {
   seenModels: ModelIdentity[] = [];
   seenLevels: string[] = [];
 
-  isMainAgentBusy(): boolean { return this.busy; }
+  isChangeBlocked(): boolean { return this.blocked; }
   onRpcState(data: JsonRecord): void { this.busy = data.isStreaming === true || data.isCompacting === true; }
   onState(state: ModelThinkingState): void { this.states.push(state); }
   async chooseModel(models: ModelIdentity[]): Promise<ModelIdentity | undefined> { this.seenModels = models; return this.modelChoice; }
@@ -129,7 +131,7 @@ test("disconnect while the model picker is open cannot reactivate controls or mu
   assert.equal(rpc.calls.some(call => call.type === "set_model"), false);
 });
 
-test("work starting during the final thinking-level lookup prevents mutation", async () => {
+test("work starting during the final thinking-level lookup permits mutation", async () => {
   const rpc = new FakeTransport(first, [first], ["off", "high"]);
   const host = new FakeHost();
   const controller = new ModelThinkingController(rpc, host);
@@ -139,26 +141,89 @@ test("work starting during the final thinking-level lookup prevents mutation", a
   const request = rpc.request.bind(rpc);
   rpc.request = async (type, fields) => {
     const response = await request(type, fields);
-    if (picked && type === "get_available_thinking_levels") host.busy = true;
+    if (picked && type === "get_available_thinking_levels") { host.busy = true; rpc.busy = true; }
     return response;
   };
   await controller.selectThinkingLevel();
-  assert.equal(rpc.calls.some(call => call.type === "set_thinking_level"), false);
+  assert.equal(rpc.calls.some(call => call.type === "set_thinking_level"), true);
+  assert.equal(current(host).thinkingLevel, "high");
 });
 
-test("busy state blocks changes before opening a picker and after a picker race", async () => {
+test("startup, concurrent changes and host blocking still prevent preference mutations", async () => {
+  const rpc = new FakeTransport(first, [first], ["off", "high"]);
+  const host = new FakeHost();
+  const controller = new ModelThinkingController(rpc, host);
+  await controller.selectModel();
+  assert.equal(rpc.calls.length, 0);
+  await controller.initialize({ model: first });
+  host.blocked = true;
+  const calls = rpc.calls.length;
+  await controller.selectThinkingLevel();
+  assert.equal(rpc.calls.length, calls);
+  host.blocked = false;
+  host.chooseModel = async () => {
+    const calls = rpc.calls.length;
+    await controller.selectThinkingLevel();
+    assert.equal(rpc.calls.length, calls, "another picker cannot race an active change");
+    return first;
+  };
+  await controller.selectModel();
+  assert.equal(rpc.calls.filter(call => call.type === "set_model").length, 1);
+});
+
+test("compaction permits model and thinking changes without clearing activity", async () => {
+  const rpc = new FakeTransport(first, [first, sameIdOtherProvider], ["off", "high"]);
+  rpc.compacting = true;
+  const host = new FakeHost();
+  host.busy = true;
+  host.modelChoice = sameIdOtherProvider;
+  host.thinkingChoice = "high";
+  const controller = new ModelThinkingController(rpc, host);
+  await controller.initialize({ model: first });
+  await controller.selectModel();
+  await controller.selectThinkingLevel();
+  assert.deepEqual(current(host).model, sameIdOtherProvider);
+  assert.equal(current(host).thinkingLevel, "high");
+  assert.equal(host.busy, true);
+});
+
+test("disconnect or changed capabilities during the final level lookup prevent mutation", async () => {
+  for (const disconnect of [true, false]) {
+    const rpc = new FakeTransport(first, [first], ["off", "high"]);
+    const host = new FakeHost();
+    const controller = new ModelThinkingController(rpc, host);
+    await controller.initialize({ model: first });
+    let picked = false;
+    host.chooseThinkingLevel = async () => { picked = true; return "high"; };
+    const request = rpc.request.bind(rpc);
+    rpc.request = async (type, fields) => {
+      if (picked && type === "get_available_thinking_levels") {
+        if (disconnect) controller.disconnect();
+        else rpc.levels = ["off"];
+      }
+      return request(type, fields);
+    };
+    await controller.selectThinkingLevel();
+    assert.equal(rpc.calls.some(call => call.type === "set_thinking_level"), false);
+    if (disconnect) assert.equal(current(host).ready, false);
+    else assert.match(String(host.errors[0]), /no longer supported/);
+  }
+});
+
+test("busy state permits changes before opening a picker and after a picker race", async () => {
   const rpc = new FakeTransport(first, [first, sameIdOtherProvider], ["off", "medium"]);
   const host = new FakeHost();
   const controller = new ModelThinkingController(rpc, host);
   await controller.initialize({ model: first });
 
-  host.busy = true;
-  const callCount = rpc.calls.length;
-  await controller.selectModel();
-  assert.equal(rpc.calls.length, callCount, "busy gate should not fetch models or mutate");
-
-  host.busy = false;
+  host.busy = rpc.busy = true;
   host.modelChoice = sameIdOtherProvider;
+  await controller.selectModel();
+  assert.deepEqual(current(host).model, sameIdOtherProvider);
+  assert.equal(host.busy, true, "preference refresh must preserve active work");
+
+  rpc.busy = host.busy = false;
+  host.modelChoice = first;
   const originalChoose = host.chooseModel.bind(host);
   host.chooseModel = async (models) => {
     const choice = await originalChoose(models);
@@ -167,5 +232,7 @@ test("busy state blocks changes before opening a picker and after a picker race"
   };
   await controller.selectModel();
 
-  assert.equal(rpc.calls.some((call) => call.type === "set_model"), false, "post-picker state revalidation blocks mutation");
+  assert.equal(rpc.calls.filter((call) => call.type === "set_model").length, 2);
+  assert.deepEqual(current(host).model, first);
+  assert.equal(host.busy, true);
 });

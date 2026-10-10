@@ -41,6 +41,35 @@ test('bundled native bridge preserves drafts through pending/unknown/late acknow
   } finally { f.dom.window.close(); }
 });
 
+test('model and thinking controls stay available during work but respect readiness and lifecycle', () => {
+  const f = fixture();
+  try {
+    const controls = { ready: true, changing: false, model: { provider: 'fixture', id: 'demo' }, thinkingLevel: 'high', thinkingLevels: ['off', 'high'] };
+    const model = f.win.document.querySelector<HTMLButtonElement>('#model')!;
+    const thinking = f.win.document.querySelector<HTMLButtonElement>('#thinking')!;
+    f.draft('unsent draft');
+    for (const compacting of [false, true]) {
+      f.snapshot({ busy: true, compacting, sessionUnavailable: false, modelControls: controls });
+      assert.equal(model.disabled, false);
+      assert.equal(thinking.disabled, false);
+      model.click(); thinking.click();
+      assert.equal(f.prompt.value, 'unsent draft');
+    }
+    assert.deepEqual(f.sent.filter(m => m.type === 'selectModel' || m.type === 'selectThinking').map(m => m.type),
+      ['selectModel', 'selectThinking', 'selectModel', 'selectThinking']);
+    for (const state of [
+      { modelControls: { ...controls, ready: false } },
+      { modelControls: { ...controls, changing: true } },
+      { modelControls: controls, sessionUnavailable: true },
+    ]) {
+      f.snapshot({ busy: true, sessionUnavailable: false, ...state });
+      assert.equal(model.disabled, true);
+      assert.equal(thinking.disabled, true);
+    }
+    assert.equal(f.sent.some(m => m.type === 'prompt' || m.type === 'stop'), false);
+  } finally { f.dom.window.close(); }
+});
+
 test('file and HTTP links route once through native host; unsafe schemes stay inert', () => {
   const f = fixture();
   try {
