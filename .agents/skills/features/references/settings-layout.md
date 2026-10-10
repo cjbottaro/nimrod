@@ -17,6 +17,7 @@ Successful release saves once; keyboard/reset saves immediately via the existing
 
 ## Invariants
 
+- Category hover styles apply only to unselected tabs (`:hover:not([aria-selected=true])`); hover must never override the selected background/foreground. `test/browser/settings-hover.spec.ts` checks selected hover stability and unselected hover feedback before and after switching categories.
 - Keep all panels mounted. Category switches preserve unsaved Runtime fields, Keybindings queries and per-panel offsets; reopen preserves the last category in that window. Restart loses transient navigation/editing state.
 - Session and Settings widths are independent. Never share session membership, recency/filter controllers, project-local caches or native process semantics merely to share layout.
 - Allow resize interaction within Settings only while that exact owner dialog is open. Nested Pi/Keybindings dialogs block navigation/resizing; opening one, closing Settings, blur or viewport changes cancel an unfinished drag without saving. Closed/hidden handles cannot mutate state.

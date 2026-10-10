@@ -52,7 +52,7 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 #preferences-error { flex:none; margin:0; padding:12px 20px; color:var(--vscode-errorForeground); overflow-wrap:anywhere; }
 #settings-categories { display:grid; gap:3px; }
 #settings-categories [role=tab] { width:100%; padding:10px 8px; text-align:left; border-radius:5px; background:transparent; color:var(--vscode-foreground); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-#settings-categories [role=tab]:hover { background:var(--vscode-toolbar-hoverBackground); }
+#settings-categories [role=tab]:hover:not([aria-selected=true]) { background:var(--vscode-toolbar-hoverBackground); }
 #settings-categories [aria-selected=true] { background:var(--vscode-list-activeSelectionBackground); color:var(--vscode-list-activeSelectionForeground); }
 .settings-content h2 { font-size:17px; margin:0 0 8px; }
 .settings-description, .settings-hint { color:var(--vscode-descriptionForeground); line-height:1.5; }
