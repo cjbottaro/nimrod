@@ -193,6 +193,7 @@ test('Settings test notification is recorded without running another agent and O
     const starts = demo.calls.filter(c => c.command === 'start_pi').length;
     const stops = demo.calls.filter(c => c.command === 'stop_pi').length;
     await page.locator('#open-settings').click();
+    await page.locator('#settings-category-notifications').click();
     await page.getByRole('button', { name: 'Send test notification', exact: true }).click();
     await expect(page.locator('#notification-status')).toHaveText(/Test notification submitted to the OS/);
     expect(demo.calls.filter(c => c.command === 'test_notification')).toHaveLength(1);

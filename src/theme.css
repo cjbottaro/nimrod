@@ -47,8 +47,13 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 #settings-page::backdrop { background:var(--vscode-editor-background); }
 .settings-header { display:flex; align-items:center; gap:18px; flex:none; min-height:48px; padding:0 20px; border-bottom:1px solid var(--vscode-panel-border); }
 #settings-title { margin:0; font-size:17px; letter-spacing:0; }
-.settings-content { box-sizing:border-box; flex:1; width:100%; min-width:0; min-height:0; padding:20px 20px 32px; overflow:auto; }
-.settings-content section + section { margin-top:28px; padding-top:20px; border-top:1px solid var(--vscode-panel-border); }
+.settings-content { overflow:hidden; }
+.settings-panel { box-sizing:border-box; flex:1; min-width:0; min-height:0; padding:20px 20px 32px; overflow:auto; }
+#preferences-error { flex:none; margin:0; padding:12px 20px; color:var(--vscode-errorForeground); overflow-wrap:anywhere; }
+#settings-categories { display:grid; gap:3px; }
+#settings-categories [role=tab] { width:100%; padding:10px 8px; text-align:left; border-radius:5px; background:transparent; color:var(--vscode-foreground); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#settings-categories [role=tab]:hover { background:var(--vscode-toolbar-hoverBackground); }
+#settings-categories [aria-selected=true] { background:var(--vscode-list-activeSelectionBackground); color:var(--vscode-list-activeSelectionForeground); }
 .settings-content h2 { font-size:17px; margin:0 0 8px; }
 .settings-description, .settings-hint { color:var(--vscode-descriptionForeground); line-height:1.5; }
 .settings-description { margin:0 0 18px; }

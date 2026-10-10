@@ -14,7 +14,7 @@
 - [Model and thinking preferences](model-thinking.md) — change selections during work; upcoming-request behavior and acknowledged state.
 - [Command palette](command-palette.md) — descriptive rows, right-aligned shortcuts, recent-first commands and shared history.
 - [Modal layout](modal-layout.md) — shared dialog shell, content boundaries and full-window Settings exception.
-- [Settings](settings.md) — appearance, runtime paths and configuration files.
+- [Settings](settings.md) — category navigation, shared sidebar resizing with independent app-wide width, appearance, notifications, keybindings, runtime paths and configuration files.
 - [Keybindings](keybindings.md) — searchable shortcut editor, conflict reassignment and reset to defaults.
 - [Themes](themes.md) — built-in themes and importing color schemes.
 

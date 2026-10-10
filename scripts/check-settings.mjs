@@ -8,11 +8,11 @@ import { buildSync } from 'esbuild';
 if (!process.env.CHROMIUM) throw new Error('Set CHROMIUM to a local chrome-headless-shell executable');
 const dir = mkdtempSync(join(tmpdir(), 'nimrod-settings-check-'));
 try {
-  const css = readFileSync('src/pi/transcript.css', 'utf8') + readFileSync('src/theme.css', 'utf8');
+  const css = ['src/pi/transcript.css', 'src/theme.css', 'src/workspace.css'].map(path => readFileSync(path, 'utf8')).join('\n');
   const transcript = readFileSync('src/pi/transcript.html', 'utf8');
   const html = readFileSync('index.html', 'utf8').replace('<script type="module" src="/src/main.ts"></script>', '<script src="fixture.js"></script>')
     .replace('</head>', `<style>${css}</style></head>`);
-  const bundle = buildSync({ stdin: { contents: "export {installSettings,installRuntimeSettings} from './src/settings'; export {mountPiView} from './src/pi/webview-client'; export {installThemes} from './src/themes/picker';", resolveDir: process.cwd() }, bundle: true, format: 'iife', globalName: 'Fixture', write: false }).outputFiles[0].text;
+  const bundle = buildSync({ stdin: { contents: "export {installSettings,installRuntimeSettings} from './src/settings'; export {installSettingsNavigation} from './src/settings-navigation'; export {mountPiView} from './src/pi/webview-client'; export {installThemes} from './src/themes/picker';", resolveDir: process.cwd() }, bundle: true, format: 'iife', globalName: 'Fixture', write: false }).outputFiles[0].text;
   const script = `
 (async () => {
   const result = document.createElement('pre'); result.id = 'settings-result'; result.style.display='none'; document.body.append(result);
@@ -34,6 +34,7 @@ try {
     const snapshot = block => receive({type:'snapshot',state:{busy:true,messages:[...history,{key:'live',role:'assistant',content:[block]}]}});
     snapshot(tool); await frame();
     const settings = Fixture.installSettings(window,get('settings-page'),get('open-settings'),get('settings-back'));
+    const navigation = Fixture.installSettingsNavigation(get('settings-page'));
     const runtime = Fixture.installRuntimeSettings({form:get('runtime-settings'),fields:get('runtime-fields'),pi:get('pi-path'),node:get('node-path'),status:get('runtime-status')},{read:()=>null,save:()=>{}});
     runtime.initialize({pi:'/fixture/pi',node:'/fixture/node'}); const launch = runtime.current();
     Fixture.installThemes({root:document.documentElement,select:get('theme-picker'),file:get('theme-file'),notice:get('theme-notice'),noticeText:get('theme-notice-text'),dismiss:get('theme-notice-dismiss')},{read:()=>null,save:()=>{},newId:()=> 'import-fixture'});
@@ -54,9 +55,11 @@ try {
     assert(pane.scrollTop===before.scroll,'Older-history position retained during stream');
     assert(document.querySelector('.tool-card')===details && details.open && spinner.isConnected,'Live nodes and disclosure retained');
     assert(spinner.getAnimations()[0]===animation,'Spinner animation identity retained');
+    navigation.select('runtime');
     get('pi-path').value='/next/pi';get('node-path').value='/next/node';get('pi-path').focus();
     get('runtime-settings').requestSubmit();
     assert(runtime.current().pi==='/next/pi' && launch.pi==='/fixture/pi','Save affects next launch only');
+    navigation.select('appearance');
     const picker=get('theme-picker');picker.value='dracula';picker.dispatchEvent(new Event('change'));
     assert(getComputedStyle(document.documentElement).backgroundColor==='rgb(40, 42, 54)','Appearance applies from Settings');
     const host=get('host-dialog');host.showModal();settings.close();assert(settings.isOpen,'Nested Pi dialog owns dismissal');host.close();

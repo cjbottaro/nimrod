@@ -7,6 +7,7 @@ test('file settings synchronize behind Settings without replacing the offline co
     await fixture.turn(1);
     await page.locator(visible('prompt')).fill('Keep this unsent draft');
     await page.locator('#open-settings').click();
+    await page.locator('#settings-category-runtime').click();
     await page.locator('#pi-path').fill('/unsaved/pi');
     const retained = await page.locator(visible('transcript-viewport')).evaluate(pane => {
       (window as unknown as { retainedPane: Element }).retainedPane = pane;

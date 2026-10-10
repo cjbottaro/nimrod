@@ -51,7 +51,9 @@ See [project/session implementation](../../../docs/workspace-sessions.md) for li
 | Term | Meaning | Current code anchor |
 | --- | --- | --- |
 | **Project bar** | Top strip containing the sidebar toggle, Nimrod wordmark, project directory, active-session mode badge, Restart session icon, Delete session tree icon, and Settings gear. Preferences themselves live on the Settings page. | `#workspace-bar` |
-| **Settings page** | Full-window preferences surface opened by the gear or ⌘/Ctrl comma; Appearance, Notifications, Keybindings and Runtime sections, with Back/Escape navigation. Covers the still-mounted project using native dialog modality. | `#settings-page` |
+| **Settings page** | Full-window preferences surface opened by the gear or ⌘/Ctrl comma; Appearance, Notifications, Keybindings and Runtime categories, with a category sidebar, settings content pane and Back/Escape navigation. Covers the still-mounted project using native dialog modality. | `#settings-page` |
+| **Category sidebar** | Settings navigation for Appearance, Notifications, Keybindings and Runtime; resizable with its own app-wide saved width, independent of Session sidebar widths. | `#settings-sidebar` |
+| **Settings content pane** | The selected category's independently scrolling panel, with all category panels kept mounted to retain unsaved controls and reading positions. | `.settings-panel` |
 | **Transcript** | Conversation history: user/assistant entries and their content. | `#messages` |
 | **Transcript pane** | The independently scrolling container around the transcript. | `#transcript-viewport` |
 | **Status area** | Agent activity, model/thinking controls, usage metrics, extension statuses, steering counts, follow-up queues and recoverable messages. | `#activity` |
@@ -111,7 +113,7 @@ A **card** does not imply a visible rectangular border. A **disclosure** is an e
 
 ## Layout and scrolling
 
-- **Sidebar resize handle** — the draggable right edge of the Session sidebar; a focusable vertical separator with keyboard width controls. Width is remembered per project in app state, independently of sidebar visibility and view.
+- **Sidebar resize handle** — a sidebar's draggable right edge; a focusable vertical separator with keyboard width controls. Session sidebar width is remembered per project; category sidebar width is app-wide. Both use shared resize mechanics with independent state and layout bounds.
 - **Separator** — a horizontal dividing line, such as either status-area border.
 - **Accent line** — the colored vertical line beside a turn.
 - **Expanded-content guide** — the thin vertical line beneath a disclosure arrow alongside expanded details; distinct from a turn's accent line.

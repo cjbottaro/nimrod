@@ -427,6 +427,35 @@ test('sidebar resizing restores and persists per-project app state without harne
   }
 });
 
+test('Settings sidebar width synchronizes app-wide independently of project width and category selection', async () => {
+  const key = 'nimrod.settings.sidebar.width';
+  const f = await fixture(undefined, { windowWorkspace: '/project', appState: { [key]: 230, 'nimrod.sidebar.width:/project': 340 } });
+  const other = await fixture(undefined, { windowWorkspace: '/other', appState: { [key]: 230, 'nimrod.sidebar.width:/other': 410 } });
+  try {
+    f.openSettings(); other.openSettings(); await f.tick(); await other.tick();
+    const handle = f.element('settings-resizer'), otherHandle = other.element('settings-resizer');
+    f.element<HTMLButtonElement>('settings-category-runtime').click();
+    assert.equal(f.element('settings-panel-runtime').hidden, false);
+    handle.focus(); handle.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true })); await f.tick();
+    assert.equal(f.preferences.value.state[key], 240);
+    // Model a native state broadcast to a separately mounted project window.
+    await other.preferences.state({ [key]: f.preferences.value.state[key] }); await other.tick();
+    assert.equal(otherHandle.getAttribute('aria-valuenow'), '240');
+    assert.equal(other.element('settings-panel-appearance').hidden, false, 'categories remain window-local');
+    assert.equal(f.element('settings-panel-runtime').hidden, false);
+    assert.equal(f.element('sidebar-resizer').getAttribute('aria-valuenow'), '340');
+    assert.equal(other.element('sidebar-resizer').getAttribute('aria-valuenow'), '410');
+    assert.equal(f.calls.some(call => call.command === 'start_pi' || call.command === 'write_pi' || call.command === 'preferences_settings'), false);
+    const nested = f.element<HTMLDialogElement>('host-dialog'); nested.showModal();
+    handle.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+    f.element<HTMLButtonElement>('settings-category-appearance').click(); await f.tick();
+    assert.equal(f.preferences.value.state[key], 240); assert.equal(f.element('settings-panel-runtime').hidden, false);
+    nested.close(); f.back(); await f.tick();
+    handle.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+    assert.equal(f.preferences.value.state[key], 240);
+  } finally { f.win.close(); other.win.close(); }
+});
+
 test('new sessions use creation time, update only after prompt acknowledgement and timer refresh is text-only', async () => {
   let now = new Date(2026, 6, 17, 12).getTime();
   const refresh: (() => void)[] = [];

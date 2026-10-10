@@ -2,9 +2,17 @@
 
 Open **Settings** using the gear button in the project bar or **⌘/Ctrl ,**. Use **Back** or **Escape** to return. Opening Settings again while already there leaves the current control alone.
 
-Settings is a separate, full-window page. Its content follows the window width with modest 20 CSS-pixel side gutters; the entire body, including those gutters, scrolls. The Back header stays visible. Internally it uses a full-viewport native HTML dialog: the project remains mounted and laid out underneath, while browser modality makes it non-interactive and removes it from the active accessibility surface. This avoids collapsing the transcript pane or resetting scroll/disclosure state.
+Settings is a separate, full-window page with a **category sidebar** and a **settings content pane**. Choose Appearance, Notifications, Keybindings or Runtime to show that category. The pane follows the available width with 20 CSS-pixel gutters; its entire surface, including the gutters, scrolls. The sidebar and Back header stay visible. Internally it uses a full-viewport native HTML dialog: the project remains mounted and laid out underneath, while browser modality makes it non-interactive and removes it from the active accessibility surface. This avoids collapsing the transcript pane or resetting scroll/disclosure state.
 
 Pi keeps running and the transcript continues receiving events. Opening, closing, or saving preferences never starts/stops/restarts a session or submits a prompt. Returning restores the prior focus target when available. If startup hid that original control, focus falls back to the Settings button. Existing RPC dialogs retain priority; Settings won't open over or close underneath an active Pi dialog.
+
+## Categories and sidebar width
+
+Category selection, unsaved Runtime edits, Keybindings search and each category's reading position are retained when switching categories or leaving/reopening Settings in that window. These transient values do not survive app restart. **Open keybindings…** / **⌘/Ctrl ⇧ ,** selects Keybindings and focuses its search. In the category sidebar, Up/Down cycle categories and Home/End select the first/last; Tab moves into the selected pane's controls.
+
+Drag the sidebar's right edge to resize it. With the separator focused, Left/Right adjust by 10 CSS pixels (Shift: 50), Home/End choose its current limits, and double-click restores the 220px default. Its preferred width is saved app-wide and synchronizes across windows, independently of each project's Session sidebar width. Settings normally allows 160–360px; smaller windows clamp the visible sidebar to leave at least 240px for content without overwriting its saved width. Unlike the Session sidebar, it stays alongside the pane rather than becoming an overlay.
+
+Escape during a drag cancels resizing without closing Settings; the next Escape returns to the project. Closing Settings, opening a higher-priority dialog, changing the viewport or losing window focus cancels an unfinished drag. Preference file paths appear under Runtime; configuration errors remain visible above any selected category.
 
 ## Files and synchronization
 
@@ -76,13 +84,15 @@ Project-folder selection and explicit new saved / temporary actions stay on the 
 
 ## Implementation and verification
 
-- `index.html` / `src/theme.css`: full-page Settings surface, grouped Appearance/Notifications/Runtime controls, minimal project-bar gear.
+- `index.html` / `src/theme.css` / `src/workspace.css`: category sidebar, mounted category panes and shared sidebar/content geometry.
+- `src/settings-navigation.ts` / `src/sidebar-resize.ts`: category navigation and shared zoom-aware resizing with independent persistence scopes.
 - `src/settings.ts`: navigation/shortcut handling and the explicit runtime Save boundary.
 - `src/preferences.ts`: JSONC edits, legacy migration, revision-ordered synchronization, and native persistence bridge.
 - `src-tauri/src/preferences.rs`: XDG paths, serialized/atomic writes, file polling, last-valid snapshots, and conflict checks.
 - `src-tauri/src/window_state.rs`: project-scoped native geometry capture/restoration.
 - `src/main.ts`: preference initialization, next-launch snapshot, and startup focus guard.
 - `test/preferences.test.ts`, native preferences tests, `test/settings.test.ts` / `test/shell.test.ts`: JSONC preservation, migration, external edits, stale revisions, conflicts/failures, dirty-field retention, startup focus, and renderer updates behind Settings. Native geometry tests check scope/validation, not actual window placement.
+- `test/browser/settings-layout.spec.ts`: offline WebKit category switching, retained edits/search/scroll, narrow/wide pane geometry, gutter scrolling, shared resizing at 125% fixture zoom, reset, modal priority and width restoration. `test/shell.test.ts` also checks width broadcasts to another project window. These are fixture results, not native macOS/Linux/Windows acceptance.
 - `scripts/check-settings.mjs`: optional local Chromium dialog/layout check, including background focus containment, focus restoration, retained geometry/scroll/draft/disclosure/spinner identity, nested dialogs, and saved runtime snapshots. Uses controlled animation-frame scheduling; does not establish native animation timing or WebKit acceptance.
 
 ```sh

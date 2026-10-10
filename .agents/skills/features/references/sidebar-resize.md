@@ -1,4 +1,6 @@
-# Resizable session sidebar
+# Shared sidebar resizing
+
+The project and Settings share the layout/resize primitives with independent state. See [Settings categories and width](settings-layout.md) for that page's owner-dialog policy, app-wide broadcasts, bounds and non-overlay narrow layout. The contracts below describe Session sidebar defaults.
 
 Read the [human guide](../../../../docs/workspace-sessions.md#sidebar-width),
 [architecture](../../../../docs/architecture.md) and
@@ -6,9 +8,9 @@ Read the [human guide](../../../../docs/workspace-sessions.md#sidebar-width),
 
 ## Code map
 
-- `src/sidebar-resize.ts`: validated preferred width, pointer/keyboard interaction, responsive caps, zoom normalization, cancellation and teardown.
+- `src/sidebar-resize.ts`: validated preferred width, configurable bounds/default/width property/available cap/active predicate/owner dialog, shared pointer/keyboard interaction, zoom normalization, cancellation and teardown. Omitted options retain the existing Session sidebar defaults.
 - `index.html`: `#sidebar-resizer`, a focusable vertical ARIA separator controlling `#session-sidebar`; it is a sibling of the independently scrolling sidebar.
-- `src/workspace.css`: width via `--session-sidebar-width`, overlay layout, 8px hit area with a themed hover/focus/drag line. The handle is absolutely positioned on the sidebar edge, so it takes no conversation space and does not scroll with the session list.
+- `src/workspace.css`: shared sidebar/content/edge-handle classes; Session sidebar width via `--session-sidebar-width`, overlay layout, 8px hit area with a themed hover/focus/drag line. The handle is absolutely positioned on the sidebar edge, so it takes no conversation space and does not scroll with the session list.
 - `src/main.ts`: installs once, reloads at canonical-project entry, refreshes visibility in `controls`, disposes on unload and saves via the existing app-state writer/error surface.
 
 ## Storage and sizing
@@ -22,6 +24,7 @@ Rects are divided by the layout rect/offset-width scale to convert pointer displ
 ## Interaction invariants
 
 - Left/primary pointer drag uses capture plus window move/up/cancel listeners. Writes are deferred until successful release, once per changed drag; not every movement. Pointerdown prevents default to retain composer focus. Other pointers/buttons are ignored.
+- Native dialog `open` attribute changes are observed to cancel immediately if modality intervenes. Settings may explicitly allow its owner dialog; Session resizing allows none. Escape during a drag stops propagation so a Settings drag cancel does not also dismiss its page.
 - Escape, pointercancel/lost capture, blur, viewport resize, sidebar hiding or a modal intervening before move/release cancel and restore the prior preference without writing. Dispose/reload also cancel. A no-op drag does not replace a larger preference temporarily constrained by the viewport.
 - Focused separator: Left/Right change by 10px, Shift changes by 50px, Home/End choose current bounds. Keyboard writes persist immediately; modified/IME keys and modal/hidden interactions are ignored. Double-click resets the responsive default.
 - ARIA min/max/current/value text reflect rendered layout pixels. Hiding a keyboard-focused separator returns focus to the toggle with preventScroll, unless a modal owns focus. Pointer resizing never selects a session or focuses its composer.

@@ -1,16 +1,19 @@
-#workspace-layout { display:flex; min-width:0; min-height:0; position:relative; }
-#workspace-content { display:flex; flex-direction:column; flex:1; min-width:0; min-height:0; }
+.sidebar-layout { display:flex; min-width:0; min-height:0; position:relative; }
+.layout-content { display:flex; flex-direction:column; flex:1; min-width:0; min-height:0; }
+.layout-sidebar { box-sizing:border-box; width:var(--sidebar-width,260px); flex:none; min-height:0; overflow:auto; border-right:1px solid var(--vscode-panel-border); padding:14px 10px; background:var(--vscode-editorWidget-background); }
+#workspace-layout { --sidebar-width:var(--session-sidebar-width,260px); }
+#settings-layout { --sidebar-width:var(--settings-sidebar-width,220px); flex:1; }
 #conversation { flex:1; }
 #workspace-empty { box-sizing:border-box; width:min(650px,100%); padding:32px; margin:auto; }
 #workspace-empty h1 { font-size:24px; letter-spacing:0; }
 #workspace-empty p { color:var(--vscode-descriptionForeground); line-height:1.6; }
 #launch-error { flex:none; margin:0; padding:10px 20px; background:var(--vscode-editorWidget-background); }
 #launch-error:empty { display:none; }
-#session-sidebar { box-sizing:border-box; width:var(--session-sidebar-width,260px); flex:none; min-height:0; overflow:auto; overflow-anchor:none; border-right:1px solid var(--vscode-panel-border); padding:14px 10px; background:var(--vscode-editorWidget-background); }
-#sidebar-resizer { position:absolute; top:0; bottom:0; left:var(--session-sidebar-width,260px); margin-left:-4px; width:8px; z-index:11; cursor:col-resize; touch-action:none; }
-#sidebar-resizer::after { content:""; position:absolute; top:0; bottom:0; left:3px; width:2px; background:transparent; }
-#sidebar-resizer:hover::after, #sidebar-resizer:focus-visible::after, .resizing-sidebar #sidebar-resizer::after { background:var(--vscode-focusBorder); }
-#sidebar-resizer:focus-visible { outline:1px solid var(--vscode-focusBorder); outline-offset:-1px; }
+#session-sidebar { overflow-anchor:none; }
+.sidebar-resizer { position:absolute; top:0; bottom:0; left:var(--sidebar-width,260px); margin-left:-4px; width:8px; z-index:11; cursor:col-resize; touch-action:none; }
+.sidebar-resizer::after { content:""; position:absolute; top:0; bottom:0; left:3px; width:2px; background:transparent; }
+.sidebar-resizer:hover::after, .sidebar-resizer:focus-visible::after, .sidebar-layout.resizing-sidebar .sidebar-resizer::after { background:var(--vscode-focusBorder); }
+.sidebar-resizer:focus-visible { outline:1px solid var(--vscode-focusBorder); outline-offset:-1px; }
 body.resizing-sidebar, body.resizing-sidebar * { cursor:col-resize !important; user-select:none !important; }
 #sidebar-new { width:100%; margin-bottom:12px; }
 #sidebar-views { display:flex; align-items:stretch; gap:3px; margin-bottom:10px; border-bottom:1px solid var(--vscode-panel-border); }

@@ -26,6 +26,7 @@ import { COMMAND_USAGE_KEY, readCommandUsage } from './command-ranking';
 import { projectPathParts } from './project-path';
 import { installCommandPalette, type PalettePage } from './command-palette';
 import { installSettings, installRuntimeSettings } from './settings';
+import { installSettingsNavigation } from './settings-navigation';
 import { ACTIONS, bindingsFor, installKeybindingDispatch, isMac, shortcutLabel, type ActionId } from './keybindings';
 import { installKeybindingEditor } from './keybinding-editor';
 import { installSessionPopouts } from './session-popouts';
@@ -64,6 +65,20 @@ const keybindingEditor = installKeybindingEditor(window, required('settings-page
   read: () => preferences.keybindings(),
   save: (id, bindings, reassign) => preferences.saveKeybinding(id, bindings, reassign, isMac(window)),
   resetAll: () => preferences.resetKeybindings(),
+});
+const settingsNavigation = installSettingsNavigation(required<HTMLDialogElement>('settings-page'));
+const settingsSidebarWidthKey = 'nimrod.settings.sidebar.width';
+let settingsSidebarWidth = preferences.readState(settingsSidebarWidthKey);
+const settingsSidebarResize = installSidebarResize(window, {
+  layout: required('settings-layout'), sidebar: required('settings-sidebar'),
+  handle: required('settings-resizer'), toggle: required('settings-back'),
+}, {
+  read: () => preferences.readState(settingsSidebarWidthKey),
+  save: width => { void preferences.saveState(settingsSidebarWidthKey, width).catch(persistenceError); },
+}, {
+  widthProperty: '--settings-sidebar-width', minWidth: 160, maxWidth: 360,
+  defaultWidth: () => 220, maxAvailableWidth: available => Math.min(available * .45, Math.max(0, available - 240)),
+  active: () => settings.isOpen, allowedDialog: required<HTMLDialogElement>('settings-page'),
 });
 const settingsKey = 'nimrod.poc.launch';
 const recentKey = 'nimrod.workspaces.v1';
@@ -277,14 +292,18 @@ const unlistenNotificationClicks = await listen<NotificationClick>('nimrod-notif
   })();
 }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
 const unlistenDeletion = await listen<DeletionEvent>('nimrod-session-deletion', event => { void deletion.handle(event.payload); }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
-preferences.subscribe(() => { runtime.reload(); themes.reload(); void zoom.reload(); reloadNotifications(); keybindingEditor.reload(); refreshShortcutHints(); });
+preferences.subscribe(() => {
+  const width = preferences.readState(settingsSidebarWidthKey);
+  if (!Object.is(width, settingsSidebarWidth)) { settingsSidebarWidth = width; settingsSidebarResize.reload(); }
+  runtime.reload(); themes.reload(); void zoom.reload(); reloadNotifications(); keybindingEditor.reload(); refreshShortcutHints();
+});
 const disposeTimeRefresh = installSessionTimeRefresh(window, () => { for (const tab of tabs) refreshTime(tab); });
 window.addEventListener('unload', () => {
   unloading = true;
   disposeTimeRefresh();
   sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
   for (const tab of tabs) { tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.session?.rpc.disconnect('Window closed'); }
-  keybindingDispatch.dispose(); keybindingEditor.dispose();
+  keybindingDispatch.dispose(); keybindingEditor.dispose(); settingsNavigation.dispose(); settingsSidebarResize.dispose();
   unlistenProjectPicker(); palette.dispose(); zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose();
 }, { once: true });
 
@@ -1006,7 +1025,10 @@ function refreshShortcutHints(): void {
   const zoomHint = required('zoom-level').nextElementSibling;
   if (zoomHint) zoomHint.textContent = `Zoom in: ${shortcutHint('zoom-in') || 'unbound'} · Zoom out: ${shortcutHint('zoom-out') || 'unbound'} · Reset to 100%: ${shortcutHint('zoom-reset') || 'unbound'}. Shortcuts pause in other dialogs.`;
 }
-function openKeybindings(): void { settings.open(); if (settings.isOpen) keybindingEditor.focus(); }
+function openKeybindings(): void {
+  settings.open();
+  if (settings.isOpen && settingsNavigation.select('keybindings')) keybindingEditor.focus();
+}
 const keybindingDispatch = installKeybindingDispatch(window, {
   read: () => preferences.keybindings(),
   enabled: id => {

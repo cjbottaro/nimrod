@@ -62,6 +62,7 @@ test('native-shaped Command-Option-N dead-key events open and record New named w
       await expect(prompt).toHaveValue('Keep this Option-key draft'); await expect(prompt).toBeFocused();
     }
     await page.locator('#open-settings').click();
+    await page.locator('#settings-category-keybindings').click();
     await page.locator('.keybinding-row[data-action="new-named"]').getByRole('button', { name: /^Change/ }).click();
     await page.locator('#keybinding-record').evaluate(node => node.dispatchEvent(new KeyboardEvent('keydown', { key: 'Dead', code: 'KeyN', metaKey: true, altKey: true, bubbles: true, cancelable: true })));
     await expect(page.locator('#keybinding-record')).toHaveValue('⌘+Option+N');
@@ -85,6 +86,7 @@ test('keybinding recording, reassignment, unbinding and reset preserve the offli
     const panel = await page.locator('.session-view').getAttribute('id');
     const starts = demo.calls.filter(call => call.command === 'start_pi').length;
     await page.locator('#open-settings').click();
+    await page.locator('#settings-category-keybindings').click();
     await page.locator('#keybinding-search').fill('effort');
     await expect(page.locator('#keybinding-list .keybinding-row')).toHaveCount(1);
     await expect(page.locator('#keybinding-list')).toContainText('Select thinking level');
