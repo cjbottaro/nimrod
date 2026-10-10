@@ -192,7 +192,7 @@ The review and palette share `.workspace-modal`: themed background/foreground,
 panel border, radius, shadow, padding, backdrop and top placement. Content sizing
 is separate. The capture-phase document `close` listener must ignore the review's
 own close: re-showing there resets returnValue and can turn Delete into Cancel.
-Populated reviews initially focus Delete; loading reviews focus Cancel and retain that focus when populated. Shared `dialog-actions.ts` provides the Enter icon, Esc hint and focus-aware shortcuts: Enter on Cancel cancels, otherwise Enter confirms only enabled Delete. Escape always cancels. Repeated/composing/keyCode-229 Enter cannot activate either action. Enter on Cancel during loading latches cancellation just like Escape.
+Populated reviews initially focus Delete; loading reviews focus Cancel and retain that focus when populated. Shared `dialog-actions.ts` provides plain labels, non-visual shortcut metadata and focus-aware shortcuts: Enter on Cancel cancels, otherwise Enter confirms only enabled Delete. Escape always cancels. Repeated/composing/keyCode-229 Enter cannot activate either action. Enter on Cancel during loading latches cancellation just like Escape.
 Native HTML focus restoration stays authoritative; replacement activation does
 not focus through another modal.
 

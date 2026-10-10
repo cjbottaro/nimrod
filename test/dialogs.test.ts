@@ -24,8 +24,10 @@ test('confirmation focus, labels and Enter agree; Cancel focus and Escape cancel
     assert.equal(document.activeElement, confirm);
     assert.equal(confirm.textContent, 'Close temporary session');
     assert.equal(confirm.getAttribute('aria-keyshortcuts'), 'Enter');
-    assert.equal(confirm.querySelector('svg')?.getAttribute('aria-hidden'), 'true');
-    assert.equal(cancel.querySelector('kbd')?.textContent, 'Esc');
+    assert.equal(confirm.childElementCount, 0);
+    assert.equal(cancel.textContent, 'Cancel');
+    assert.equal(cancel.childElementCount, 0);
+    assert.equal(cancel.getAttribute('aria-keyshortcuts'), 'Escape');
     for (const extra of [{ repeat: true }, { isComposing: true }, { keyCode: 229 }]) {
       assert.equal(key('Enter', extra).defaultPrevented, true);
       assert.equal(dialog.open, true);
@@ -41,7 +43,8 @@ test('confirmation focus, labels and Enter agree; Cancel focus and Escape cancel
     // Closing a confirmation removes its listener before the next queued input.
     const input = dialogs.input('Extension input', 'Keep multiline behavior');
     await Promise.resolve();
-    assert.equal(dialog.querySelector('.modal-action-hint'), null);
+    assert.equal(dialog.querySelector('button[value="ok"]')!.getAttribute('aria-keyshortcuts'), null);
+    assert.equal(cancel.getAttribute('aria-keyshortcuts'), null);
     assert.equal(dialog.querySelector('button[value="ok"]')!.textContent, 'Confirm');
     const enter = new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
     document.querySelector('#host-dialog-input')!.dispatchEvent(enter);

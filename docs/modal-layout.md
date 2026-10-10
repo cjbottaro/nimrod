@@ -4,7 +4,7 @@ Nimrod's ordinary dialogs share the command palette's width, upper-window placem
 
 Headers, content spacing and action footers share common styling. Content still fits its purpose: command rows have descriptions and shortcuts, session rows have timestamps and indicators, and deletion review has a scrollable tree. Sharing the shell does not make these content layouts identical.
 
-Confirmation dialogs focus their action on opening: **Close temporary session**, **Close session**, **Restart session**, **Delete N sessions**, or **Reset**. The action carries an Enter icon; Cancel carries an Esc hint. Enter activates the action unless you move focus to Cancel, where Enter cancels. Escape always cancels. Pi extension confirmations retain the generic Confirm label; input/select and shortcut-recording dialogs retain their editing behavior.
+Confirmation dialogs focus their action on opening: **Close temporary session**, **Close session**, **Restart session**, **Delete N sessions**, or **Reset**. Buttons show only their action labels, without Enter/Esc hints. Enter activates the action unless you move focus to Cancel, where Enter cancels. Escape always cancels. Pi extension confirmations retain the generic Confirm label; input/select and shortcut-recording dialogs retain their editing behavior.
 
 Deletion previews initially focus Cancel while loading, with Delete disabled. If loading is already visible when the tree arrives, focus stays where you left it; Enter on Cancel still cancels. Tab to Delete or click it to proceed.
 

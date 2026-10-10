@@ -12,13 +12,13 @@
 
 ## Confirmation actions
 
-`src/dialog-actions.ts` shares action labels, decorative Enter SVG (same path as picker hints), Esc text and `aria-keyshortcuts`. Hints are aria-hidden and never independent controls. `src/modal.css` owns their inline layout. `Dialogs.confirm` accepts an optional action label after owner; shell Close/Restart provide explicit labels, Pi retains Confirm. Input/select calls clear hints and reset the generic label.
+`src/dialog-actions.ts` shares plain action labels and non-visual `aria-keyshortcuts`. Buttons contain label text only; no Enter SVG, Esc text or hint-specific styling. Picker-row hints are unchanged. `Dialogs.confirm` accepts an optional action label after owner; shell Close/Restart provide explicit labels, Pi retains Confirm. Input/select calls clear shortcut metadata and reset the generic label.
 
-Host confirmations, populated deletion reviews and eligible keybinding resets focus the confirmation action. Enter honors Cancel focus (including descendant hint nodes), otherwise activates the enabled confirmation; Escape cancels. Repeated/composing/keyCode-229 Enter is consumed without activation. Native form return values/request correlation and close-time focus restoration remain unchanged. Key recording still captures shortcuts rather than treating Enter as Save. During async reset saving the existing click guards prevent duplicate save/cancel.
+Host confirmations, populated deletion reviews and eligible keybinding resets focus the confirmation action. Enter honors Cancel focus (including descendant nodes), otherwise activates the enabled confirmation; Escape cancels. Repeated/composing/keyCode-229 Enter is consumed without activation. Native form return values/request correlation and close-time focus restoration remain unchanged. Key recording still captures shortcuts rather than treating Enter as Save. During async reset saving the existing click guards prevent duplicate save/cancel.
 
-Deletion loading disables Delete, removes its Enter hint and focuses Cancel. A visible loading-to-review transition preserves focus rather than moving it after the user has begun interacting; Enter on Cancel cancels both loading and populated review. Fresh ready-only reviews focus Delete. See session-deletion reference.
+Deletion loading disables Delete, clears its Enter shortcut metadata and focuses Cancel. A visible loading-to-review transition preserves focus rather than moving it after the user has begun interacting; Enter on Cancel cancels both loading and populated review. Fresh ready-only reviews focus Delete. See session-deletion reference.
 
-Unit tests cover default/Cancel focus, labels/hints, IME/repeats and cleanup before input; offline WebKit tests cover actual Shift+Tab/Enter, default focus, visible hints, close restoration and retained drafts. Native visual acceptance and Linux verification remain pending.
+Unit tests cover default/Cancel focus, plain labels/shortcut metadata, IME/repeats and cleanup before input; offline WebKit tests cover actual Shift+Tab/Enter, default focus, absence of button hints, close restoration and retained drafts. Native visual acceptance and Linux verification remain pending.
 
 ## Command rows
 

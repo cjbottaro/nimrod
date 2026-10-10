@@ -1,5 +1,11 @@
 # Verification
 
+## Plain modal button labels
+
+- Local change on `ui/modal-buttons-no-hints` in `.worktrees/modal-buttons-no-hints`: removed Enter icons and Esc text from shared modal action buttons and deleted their unused styling. Plain action labels, non-visual shortcut metadata, default focus and Enter/Escape handling remain; picker-row hints are unchanged.
+- `mise run check` and `mise run build` pass, including macOS bundle-signature verification. All 22 targeted offline WebKit tests in workspace, keybinding and modal-layout suites pass, covering hint-free buttons, default/Cancel focus, Enter/Escape behavior and retained drafts.
+- Native visual acceptance remains user validation; Linux/possible Windows were not verified. Primary checkout/default bundle and running app remain untouched. No live model requests, user-session changes, commit or push.
+
 ## Project bar vertical alignment
 
 - Local change on `ui/project-bar-alignment` in `.worktrees/project-bar-alignment`: `#project-identity` now uses `align-items:center` rather than baseline alignment. Font sizes, weights, spacing and truncation are unchanged.
