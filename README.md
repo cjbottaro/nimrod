@@ -51,7 +51,7 @@ Without installation, use `./bin/nimrod .`. To install into a different director
 
 The default app is this checkout's packaged build. Set `NIMROD_APP=/Applications/Nimrod.app` to use another macOS copy. The Bash launcher supports macOS and Linux; Linux defaults to `src-tauri/target/release/nimrod` and accepts an executable override. A Windows terminal wrapper is not included.
 
-**Restart the new build once before trying the CLI against a running app.** Older builds cannot receive forwarded CLI requests. On macOS the wrapper uses `open -n -a … --args …`; Tauri's single-instance plugin forwards the transient second launch to the running app. Plain `open --args` would not deliver arguments to an already-running app. The launcher returns on OS launch acceptance, not a window-focus acknowledgement; subsequent routing errors are shown in the app.
+**Quit the old build once before testing a new build.** A running older build receives forwarded requests but does not gain the new startup fix. On macOS the wrapper uses `open -n -a … --args …`; Nimrod elects one app instance before creating its UI and forwards subsequent launches to it, including overlapping cold launches. Plain `open --args` would not deliver arguments to an already-running app. The launcher returns on OS launch acceptance, not a window-focus acknowledgement; subsequent routing errors are shown in the app. macOS window cycling remains native **⌘ + backtick**, not a customizable Nimrod shortcut. [Terminal launches and verification limits →](docs/workspace-sessions.md#terminal-launches)
 
 ### First try
 

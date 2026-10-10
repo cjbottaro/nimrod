@@ -36,7 +36,7 @@ case $(uname -s) in
     [[ -d $app && -x $app/Contents/MacOS/nimrod ]] || fail "Build not found at $app. Run mise run build or set NIMROD_APP."
     app=$(CDPATH= cd -P -- "$app" && pwd -P)
     # --args alone is ignored for an already-running app. The transient second
-    # launch forwards to the existing instance through Tauri, then exits.
+    # launch forwards through Nimrod's pre-runtime instance gate, then exits.
     exec /usr/bin/open -n -a "$app" --args --workspace "$workspace"
     ;;
   Linux)

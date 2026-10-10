@@ -18,6 +18,7 @@ Read the [human guide](../../../../docs/workspace-sessions.md),
 | `src-tauri/src/native_menu.rs` | Native File → Open project; preserve editing/window menus and app-owned macOS Quit |
 | `src-tauri/src/main.rs` | Native menu dispatch, launch validation, close/quit serialization |
 | `src-tauri/src/cli.rs` | Startup-gated ordered directory requests; menu/CLI reuse the same queue |
+| `src-tauri/src/single_instance.rs` | macOS pre-runtime election, synchronous listener binding and owner-only cleanup; see [startup reference](single-instance.md) |
 | `src-tauri/src/workspace_windows.rs` | Canonical cwd → native window routing, exact-file inspection and catalog IPC |
 | `src-tauri/src/workspaces.rs` | Window/token-scoped children and canonical session-file reservations |
 | `src-tauri/src/process.rs` | Child IO, framing, observed exit, escalation |

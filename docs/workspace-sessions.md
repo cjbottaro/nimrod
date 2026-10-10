@@ -8,6 +8,14 @@ A project is a directory—no Git repository, manifest or registration required.
 - Opening a project never starts Pi. An already-open directory focuses its existing window; another directory opens another project window. The native menu works even when a reference window is focused, and opens a project window rather than rebinding the welcome screen.
 - Gitignored worktree subdirectories can live inside a project. Sessions launched in those directories currently require separate project windows; nesting alone does not group them under the parent project.
 
+### Terminal launches
+
+Rapid commands such as `nimrod .; nimrod /another/project` should open/focus project windows in one app instance on macOS, even from a cold start. **⌘ + backtick** remains macOS's native window cycling; it is separate from session switching and the Settings keybinding editor. Opening a project never starts or resumes an agent.
+
+When testing a new build, quit the old Nimrod first: launching a different app bundle while Nimrod is running forwards to that existing build. The terminal command returns when macOS accepts the launch, not when window routing or focus completes.
+
+The startup fix has isolated process/socket regression coverage. Native Launch Services forwarding and window cycling still require user validation; Linux/Windows keep their existing single-instance integration and have not been verified for this change.
+
 ## Session management
 
 ### Open sessions

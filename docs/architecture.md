@@ -40,6 +40,7 @@ Rust
   src-tauri/src/window_state.rs project-scoped native window geometry
   src-tauri/src/native_menu.rs native Open project + app-owned macOS Quit
   src-tauri/src/cli.rs     argument validation + ordered forwarded project requests
+  src-tauri/src/single_instance.rs macOS pre-runtime ownership + synchronous forwarding listener
   src-tauri/src/workspace_windows.rs canonical directory/window routing
   src-tauri/src/session_catalog.rs read-only Pi session discovery
   src-tauri/src/session_deletion.rs app-wide deletion/affected-project idle checks + quarantine
@@ -58,11 +59,11 @@ Rust's `LaunchConfig` and `Packet` have corresponding small TypeScript shapes. T
 
 ## Terminal entry point
 
-`bin/nimrod` is a Bash launcher for macOS/Linux. It canonicalizes the requested directory relative to the terminal cwd and starts the existing app with `--workspace <absolute path>`. On macOS it uses Launch Services (`open -n -a`); Tauri's single-instance plugin forwards a transient second launch's arguments/cwd to the primary app and exits before creating its UI. No separate CLI binary, Node backend, or harness protocol is involved. The plugin uses the app identifier for its instance endpoint; pre-CLI builds do not participate.
+`bin/nimrod` is a Bash launcher for macOS/Linux. It canonicalizes the requested directory relative to the terminal cwd and starts the existing app with `--workspace <absolute path>`. On macOS it uses Launch Services (`open -n -a`); Nimrod performs atomic instance election and synchronous listener binding before constructing Tauri's runtime. A lifetime file lock protects ownership, stale-socket replacement and owner-only exit cleanup. Secondary launches forward arguments/cwd and return without creating native UI; connected write failures never retry or create a duplicate instance. The socket/wire format remains compatible with the previous single-instance plugin so an older running build receives requests, but must be quit to exercise the fix. Linux/Windows retain Tauri's single-instance plugin. No separate CLI binary, Node backend, or harness protocol is involved. See the [startup implementation reference](../.agents/skills/features/references/single-instance.md).
 
 Configured windows have automatic creation disabled. Setup explicitly creates exactly one initial window: a registered project window for a cold CLI launch, or the `main` welcome window for a normal app launch. The project directory is registered before its frontend mounts and reads `window_workspace`. The welcome screen starts hidden in HTML and is revealed only after initialization confirms no project. Project windows show their restored conversation or, in All, a separate empty-project view after the last session closes; Unread and Working instead leave the conversation area blank without a selected matching row. They never show the welcome screen. Forwarded requests wait until setup is complete and are handled in received order on a worker. Both CLI and GUI calls use `route_workspace`: canonical-directory matches are shown, unminimized and focused, otherwise a window is created. A forwarded request does not rebind an already-mounted welcome window. Registry-reading IPC is asynchronous so it cannot block the UI thread while a route is creating/focusing a native window.
 
-CLI navigation never invokes `start_pi`, sends prompts, or resumes sessions. The Bash wrapper validates paths/build availability and reports launch failures, but OS launch success is not an application-level focus acknowledgement. Post-forwarding routing errors are shown in the app. Native focus/forwarding acceptance and simultaneous cold-start behavior are not established by fixture tests.
+CLI navigation never invokes `start_pi`, sends prompts, or resumes sessions. The Bash wrapper validates paths/build availability and reports launch failures, but OS launch success is not an application-level focus acknowledgement. Post-forwarding routing errors are shown in the app. Isolated macOS subprocess/socket tests establish singleton election under overlapping launches, not native Launch Services delivery or Command–backtick window cycling. Those remain user acceptance; Linux/Windows have not been verified for this change.
 
 ## Ownership and recovery
 

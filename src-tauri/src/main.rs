@@ -15,6 +15,8 @@ mod session_files;
 #[cfg(test)]
 mod session_smoke;
 mod sessions;
+#[cfg(any(target_os = "macos", all(test, unix)))]
+mod single_instance;
 mod window_state;
 mod workspace_windows;
 mod workspaces;
@@ -386,23 +388,40 @@ fn main() {
             std::process::exit(2);
         }
     };
-    tauri::Builder::default()
+    let context = tauri::generate_context!();
+    #[cfg(target_os = "macos")]
+    let primary = match single_instance::start(&context.config().identifier) {
+        Ok(Some(primary)) => Arc::new(primary),
+        Ok(None) => return, // Forwarded before creating any native runtime/UI.
+        Err(error) => {
+            eprintln!("nimrod: Cannot establish single-instance ownership: {error}");
+            std::process::exit(2);
+        }
+    };
+    let builder = tauri::Builder::default()
         .manage(WorkspaceHost::default())
         .manage(WorkspaceWindows::default())
         .manage(window_state::WindowStates::default())
         .manage(ExitState::default())
         .manage(popouts::Popouts::default())
-        .manage(cli::CliRequests::default())
-        // Register first: a second launch forwards its arguments and exits before creating UI.
-        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
-            let request = cli::parse(args.into_iter().skip(1).map(Into::into), Path::new(&cwd))
-                .unwrap_or_else(cli::Request::Error);
-            app.state::<cli::CliRequests>().enqueue(app, request);
-        }))
+        .manage(cli::CliRequests::default());
+    // Keep the existing Linux/Windows integration. macOS elects/binds above,
+    // rather than using the plugin's racy connect/unlink/asynchronous-bind path.
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+        let request = cli::parse(args.into_iter().skip(1).map(Into::into), Path::new(&cwd))
+            .unwrap_or_else(cli::Request::Error);
+        app.state::<cli::CliRequests>().enqueue(app, request);
+    }));
+    #[cfg(target_os = "macos")]
+    let launch_listener = primary.clone();
+    builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(move |app| {
+            #[cfg(target_os = "macos")]
+            launch_listener.listen(app.handle())?;
             if let Err(error) = notifications::initialize(app.handle()) {
                 // Notification integration must not prevent normal app startup;
                 // subsequent prepare/diagnostics commands report the same failure.
@@ -554,19 +573,25 @@ fn main() {
                 });
             }
         })
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("Could not start Nimrod")
-        .run(|app, event| match event {
-            tauri::RunEvent::ExitRequested { api, .. } => {
-                if !app.state::<ExitState>().ready.load(Ordering::SeqCst) {
-                    api.prevent_exit();
-                    request_exit(app);
+        .run(move |app, event| {
+            #[cfg(target_os = "macos")]
+            if matches!(event, tauri::RunEvent::Exit) {
+                primary.shutdown();
+            }
+            match event {
+                tauri::RunEvent::ExitRequested { api, .. } => {
+                    if !app.state::<ExitState>().ready.load(Ordering::SeqCst) {
+                        api.prevent_exit();
+                        request_exit(app);
+                    }
                 }
+                tauri::RunEvent::Exit if !app.state::<ExitState>().ready.load(Ordering::SeqCst) => {
+                    window_state::save_cached(app);
+                    popouts::save_cached(app);
+                }
+                _ => {}
             }
-            tauri::RunEvent::Exit if !app.state::<ExitState>().ready.load(Ordering::SeqCst) => {
-                window_state::save_cached(app);
-                popouts::save_cached(app);
-            }
-            _ => {}
         });
 }
