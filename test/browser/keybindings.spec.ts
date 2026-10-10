@@ -118,7 +118,16 @@ test('keybinding recording, reassignment, unbinding and reset preserve the offli
     await page.keyboard.press('Escape');
     await expect(sidebar).toContainText('Unbound');
     await page.locator('#keybinding-reset-all').click();
-    await page.locator('#keybinding-save').click();
+    await expect(page.getByRole('button', { name: 'Reset all keybindings', exact: true })).toBeFocused();
+    await expect(page.locator('#keybinding-save svg.modal-action-hint')).toBeVisible();
+    // WebKit on macOS needs Option+Tab to include buttons in native tab order.
+    await page.keyboard.press('Alt+Shift+Tab');
+    await expect(page.locator('#keybinding-cancel')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#keybinding-recorder')).not.toBeVisible();
+    await expect(sidebar).toContainText('Unbound');
+    await page.locator('#keybinding-reset-all').click();
+    await page.keyboard.press('Enter');
     await expect(page.locator('#keybinding-recorder')).not.toBeVisible();
     await expect(sidebar).not.toContainText('Modified');
     await page.locator('#settings-back').click();

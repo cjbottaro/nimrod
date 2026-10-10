@@ -37,5 +37,8 @@ dialog.modal-stack:not([open]) { display:none; }
 .modal-description { margin:0; color:var(--vscode-descriptionForeground); font-size:12px; line-height:1.5; }
 .modal-body { min-height:0; overflow:auto; }
 .modal-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:8px; margin:0; padding-top:var(--modal-gap); border-top:1px solid var(--vscode-panel-border); }
+.modal-action { display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+.modal-action-hint { flex:none; width:16px; height:16px; opacity:.75; }
+kbd.modal-action-hint { width:auto; height:auto; font:inherit; font-size:11px; }
 .modal-overlay { position:fixed; inset:0; display:none; z-index:4; }
 .modal-overlay.open { display:block; }

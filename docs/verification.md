@@ -1,5 +1,11 @@
 # Verification
 
+## Confirmation action language
+
+- Implemented locally on `dialog-action-language` in `.worktrees/dialog-action-language`. Host confirmations, fresh populated deletion reviews and eligible keybinding resets focus the confirmation action, display decorative Enter/Esc hints and use specific shell action labels. Enter on Cancel cancels instead of overriding focus; Escape cancels. Visible deletion loading retains Cancel focus as the tree arrives. Pi confirmation labels and input/select/shortcut-recording behavior remain distinct.
+- `mise run check` passes **403 TS/Node tests**, formatting/Clippy and **97 Rust tests** (two opt-in Pi smokes ignored). The initial check hit the previously recorded unchanged single-instance lock-holder timeout fixture; the full rerun passed without Rust changes. All **49 offline WebKit tests** pass. The first browser run used Shift+Tab, which macOS WebKit skips for buttons; regression tests now use native Option+Shift+Tab and verify Cancel focus followed by Enter cancellation.
+- `mise run build` packaged/ad-hoc-signed/verified `.worktrees/dialog-action-language/src-tauri/target/release/bundle/macos/Nimrod.app`. No user-app/window launch or interruption, primary bundle change, live Pi/model request, real user-session deletion, upstream extension modification, commit or push. Native visual/focus and Linux verification remain user acceptance; Windows remains a possible future target.
+
 ## Palette command cleanup
 
 - Final integration also includes working-session model/thinking changes (`ccb7fe0`): `mise run check` passes 401 TS/Node tests, formatting/Clippy and 97 Rust tests (two ignored); the affected keybinding, model-preference and workspace WebKit suites pass all 21 tests, and the signed macOS build passes again. The 44-test full browser run below preceded that final integration.

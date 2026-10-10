@@ -10,6 +10,16 @@
 - Override the native dialog UA `max-width` cap in the shared shell; otherwise native dialogs and overlay cards differ by a few pixels at zoom/narrow widths.
 - Scrollable bodies shrink within stack/form height limits; footer actions stay outside content scrolling. Shell overflow remains available for unusually long non-body content.
 
+## Confirmation actions
+
+`src/dialog-actions.ts` shares action labels, decorative Enter SVG (same path as picker hints), Esc text and `aria-keyshortcuts`. Hints are aria-hidden and never independent controls. `src/modal.css` owns their inline layout. `Dialogs.confirm` accepts an optional action label after owner; shell Close/Restart provide explicit labels, Pi retains Confirm. Input/select calls clear hints and reset the generic label.
+
+Host confirmations, populated deletion reviews and eligible keybinding resets focus the confirmation action. Enter honors Cancel focus (including descendant hint nodes), otherwise activates the enabled confirmation; Escape cancels. Repeated/composing/keyCode-229 Enter is consumed without activation. Native form return values/request correlation and close-time focus restoration remain unchanged. Key recording still captures shortcuts rather than treating Enter as Save. During async reset saving the existing click guards prevent duplicate save/cancel.
+
+Deletion loading disables Delete, removes its Enter hint and focuses Cancel. A visible loading-to-review transition preserves focus rather than moving it after the user has begun interacting; Enter on Cancel cancels both loading and populated review. Fresh ready-only reviews focus Delete. See session-deletion reference.
+
+Unit tests cover default/Cancel focus, labels/hints, IME/repeats and cleanup before input; offline WebKit tests cover actual Shift+Tab/Enter, default focus, visible hints, close restoration and retained drafts. Native visual acceptance and Linux verification remain pending.
+
 ## Command rows
 
 `PaletteOptions.commands()` requires a `detail` string; picker items retain optional metadata. Every shell command supplies a short explanatory description in `src/main.ts`, rather than a project path/current value/session title. `src/command-palette.ts` appends the effective-binding `<kbd>` inside `.palette-item-heading`, after the flexible title, and the `.palette-item-description` below it. Unbound commands have no shortcut placeholder. Both fields stay visually secondary on selected rows. Picker-specific rows/order and MRU behavior remain unchanged. Descriptions participate in existing text filtering.

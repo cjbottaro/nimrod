@@ -60,7 +60,7 @@ test('deletion tree has compact even rows, aligned session icons, guide lines an
     const rows = page.locator('.deletion-tree-row');
     await expect(rows).toHaveCount(4);
     await expect(page.locator('.deletion-tree-icon[aria-hidden="true"][focusable="false"]')).toHaveCount(4);
-    await expect(page.locator('#deletion-cancel')).toBeFocused();
+    await expect(page.locator('#deletion-confirm')).toBeFocused();
     const bounds = await rows.evaluateAll(nodes => nodes.map(node => {
       const row = node.getBoundingClientRect(), name = node.querySelector('.deletion-tree-name')!.getBoundingClientRect();
       const icon = node.querySelector('svg')!.getBoundingClientRect();
@@ -95,7 +95,7 @@ test('deletion tree has compact even rows, aligned session icons, guide lines an
     expect(alignment.every(Boolean)).toBe(true);
     expect(await page.locator('#deletion-tree').evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
     await expect(page.locator('#deletion-confirm')).toBeVisible();
-    await expect(page.locator('#deletion-cancel')).toBeFocused();
+    await expect(page.locator('#deletion-confirm')).toBeFocused();
     await page.keyboard.press('Escape');
     expect(demo.calls.some(call => call.command === 'delete_session_tree')).toBe(false);
     expect(demo.errors).toEqual([]);
@@ -117,7 +117,7 @@ test('session-tree confirmation is scrollable app UI with safe default focus, ca
     };
     expect(await dialog.evaluate(modalStyle)).toEqual(await page.locator('#command-palette').evaluate(modalStyle));
     await expect(page.locator('#deletion-title')).toHaveCSS('font-size', await page.locator('#palette-title').evaluate(node => getComputedStyle(node).fontSize));
-    await expect(page.locator('#deletion-cancel')).toBeFocused();
+    await expect(page.locator('#deletion-confirm')).toBeFocused();
     await expect(page.locator('#deletion-tree li')).toHaveCount(101);
     await expect(page.locator('#deletion-confirm')).toHaveText('Delete 101 sessions');
     expect(await page.locator('#deletion-tree').evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
@@ -129,7 +129,7 @@ test('session-tree confirmation is scrollable app UI with safe default focus, ca
     // without changing modal focus or performing native file deletion.
     await demo.editPreferences('{"appearance.theme":"dracula"}');
     expect(await dialog.evaluate(modalStyle)).toEqual(await page.locator('#command-palette').evaluate(modalStyle));
-    await expect(page.locator('#deletion-cancel')).toBeFocused();
+    await expect(page.locator('#deletion-confirm')).toBeFocused();
     await page.emulateMedia({ colorScheme: 'light' }); await demo.editPreferences('{}');
     expect(await dialog.evaluate(modalStyle)).toEqual(await page.locator('#command-palette').evaluate(modalStyle));
     await page.keyboard.press('Escape');
@@ -138,7 +138,7 @@ test('session-tree confirmation is scrollable app UI with safe default focus, ca
     expect(demo.calls.find(c => c.command === 'confirm_session_deletion')?.args).toMatchObject({ id: 'cancel-review', confirmed: false });
     await demo.deletionEvent({ id: '', phase: 'release', files: [], results: [], pending: false });
     await demo.deletionEvent(review('accept-review'));
-    await expect(page.locator('#deletion-cancel')).toBeFocused();
+    await expect(page.locator('#deletion-confirm')).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(dialog).not.toBeVisible();
     await expect.poll(() => demo.calls.filter(c => c.command === 'confirm_session_deletion')).toHaveLength(2);

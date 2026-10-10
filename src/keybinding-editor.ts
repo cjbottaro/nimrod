@@ -1,3 +1,4 @@
+import { confirmationKey, labelDialogAction } from './dialog-actions';
 import { ACTIONS, bindingsFor, bindingConflicts, isMac, recordBinding, shortcutLabel, type ActionId, type KeyOverrides } from './keybindings';
 
 /** Settings-only editor. Host commits against a fresh snapshot, not this UI's stale copy. */
@@ -86,8 +87,10 @@ export function installKeybindingEditor(window: Window, content: HTMLElement, ho
     get('keybinding-recorder-title').textContent = action ? `${action.reset ? 'Reset' : 'Edit'} ${ACTIONS.find(item => item.id === action.id)!.label}` : 'Reset all keybindings?';
     get('keybinding-recorder-help').textContent = resetAll ? 'Remove every user override, including disabled bindings, and restore built-in defaults.' : action?.reset ? 'Restore all built-in shortcuts for this action.' : 'Press a shortcut, then Save. Escape cancels. Native editing and menu shortcuts are reserved.';
     input.hidden = resetAll || !!action?.reset; input.value = '';
-    save.textContent = resetAll || action?.reset ? 'Reset' : 'Save'; save.disabled = !!action && !action.reset;
-    recorder.showModal(); updateRecorder(); (input.hidden ? get('keybinding-cancel') : input).focus({ preventScroll: true });
+    labelDialogAction(get<HTMLButtonElement>('keybinding-cancel'), 'Cancel', 'Escape');
+    labelDialogAction(save, resetAll ? 'Reset all keybindings' : action?.reset ? 'Reset shortcuts' : 'Save', input.hidden ? 'Enter' : undefined);
+    save.disabled = !!action && !action.reset;
+    recorder.showModal(); updateRecorder(); (input.hidden && !save.disabled ? save : input.hidden ? get('keybinding-cancel') : input).focus({ preventScroll: true });
   }
   async function commit(operation: () => Promise<void>, close = false) {
     if (saving) return;
@@ -104,6 +107,10 @@ export function installKeybindingEditor(window: Window, content: HTMLElement, ho
     } finally { saving = false; if (!disposed) { render(); updateRecorder(); } }
   }
   const record = (event: KeyboardEvent) => {
+    if (input.hidden) {
+      confirmationKey(event, recorder, get<HTMLButtonElement>('keybinding-cancel'), save);
+      return;
+    }
     if (event.isComposing || event.keyCode === 229) return;
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (!saving) recorder.close(); return; }
     if (event.target !== input) return;

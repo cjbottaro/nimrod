@@ -5,7 +5,7 @@ import { JSDOM } from 'jsdom';
 import { Dialogs } from '../src/dialogs';
 import { stubDialogs } from './dialog-fixture';
 
-test('confirmation Enter confirms from Cancel focus; Escape cancels; unsafe Enter is ignored', async () => {
+test('confirmation focus, labels and Enter agree; Cancel focus and Escape cancel; unsafe Enter is ignored', async () => {
   const dom = new JSDOM(readFileSync('index.html', 'utf8'), { pretendToBeVisual: true });
   stubDialogs(dom.window);
   const previous = globalThis.document;
@@ -14,12 +14,18 @@ test('confirmation Enter confirms from Cancel focus; Escape cancels; unsafe Ente
   const cancel = dialog.querySelector<HTMLButtonElement>('button[value="cancel"]')!;
   const key = (key: string, extra: KeyboardEventInit = {}) => {
     const event = new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extra });
-    cancel.dispatchEvent(event); return event;
+    document.activeElement!.dispatchEvent(event); return event;
   };
   try {
     const dialogs = new Dialogs();
-    const answer = dialogs.confirm('Close temporary session?', 'Discard temporary state.');
-    await Promise.resolve(); cancel.focus();
+    const answer = dialogs.confirm('Close temporary session?', 'Discard temporary state.', undefined, 'Close temporary session');
+    await Promise.resolve();
+    const confirm = dialog.querySelector<HTMLButtonElement>('button[value="ok"]')!;
+    assert.equal(document.activeElement, confirm);
+    assert.equal(confirm.textContent, 'Close temporary session');
+    assert.equal(confirm.getAttribute('aria-keyshortcuts'), 'Enter');
+    assert.equal(confirm.querySelector('svg')?.getAttribute('aria-hidden'), 'true');
+    assert.equal(cancel.querySelector('kbd')?.textContent, 'Esc');
     for (const extra of [{ repeat: true }, { isComposing: true }, { keyCode: 229 }]) {
       assert.equal(key('Enter', extra).defaultPrevented, true);
       assert.equal(dialog.open, true);
@@ -27,11 +33,16 @@ test('confirmation Enter confirms from Cancel focus; Escape cancels; unsafe Ente
     assert.equal(key('Enter').defaultPrevented, true);
     assert.equal(await answer, true);
     const next = dialogs.confirm('Close temporary session?', 'Discard temporary state.');
-    await Promise.resolve(); cancel.focus(); key('Escape');
+    await Promise.resolve(); key('Escape');
     assert.equal(await next, false);
+    const cancelled = dialogs.confirm('Close?', 'Discard?');
+    await Promise.resolve(); cancel.focus(); key('Enter');
+    assert.equal(await cancelled, false);
     // Closing a confirmation removes its listener before the next queued input.
     const input = dialogs.input('Extension input', 'Keep multiline behavior');
     await Promise.resolve();
+    assert.equal(dialog.querySelector('.modal-action-hint'), null);
+    assert.equal(dialog.querySelector('button[value="ok"]')!.textContent, 'Confirm');
     const enter = new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
     document.querySelector('#host-dialog-input')!.dispatchEvent(enter);
     assert.equal(enter.defaultPrevented, false); assert.equal(dialog.open, true);

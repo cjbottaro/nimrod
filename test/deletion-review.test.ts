@@ -98,12 +98,12 @@ test('preview failure or disposal before the loading delay never opens a late mo
   } finally { f.dispose(); }
 });
 
-test('custom deletion review displays nested safe text, concise copy and defaults to Cancel', async () => {
+test('custom deletion review displays nested safe text, concise copy and defaults to Delete', async () => {
   const f = fixture();
   try {
     const answer = f.controller.review({ id: 'review', sessions });
     assert.equal(f.dialog.open, true);
-    assert.equal(f.doc.activeElement?.id, 'deletion-cancel');
+    assert.equal(f.doc.activeElement?.id, 'deletion-confirm');
     assert.equal(f.doc.querySelector('#deletion-description')!.textContent, 'Deletes these sessions and their saved drafts and references.');
     assert.equal(f.doc.querySelector('#deletion-confirm')!.textContent, 'Delete 3 sessions');
     assert.equal(f.doc.querySelectorAll('#deletion-tree ul ul ul').length, 1);
@@ -152,11 +152,11 @@ test('review waits behind an existing modal and rejects disconnected/cyclic tree
   } finally { f.dispose(); }
 });
 
-test('Enter confirms from Cancel focus and Escape cancels from Delete focus', async () => {
+test('Enter confirms from Delete focus; Cancel focus and Escape cancel', async () => {
   const f = fixture();
   try {
     const answer = f.controller.review({ id: 'enter', sessions });
-    assert.equal(f.doc.activeElement?.id, 'deletion-cancel');
+    assert.equal(f.doc.activeElement?.id, 'deletion-confirm');
     const enter = new f.dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
     f.doc.activeElement!.dispatchEvent(enter);
     assert.equal(enter.defaultPrevented, true); assert.equal(await answer, true);
@@ -164,9 +164,13 @@ test('Enter confirms from Cancel focus and Escape cancels from Delete focus', as
     f.doc.querySelector<HTMLButtonElement>('#deletion-confirm')!.focus();
     f.doc.activeElement!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     assert.equal(await next, false);
+    const cancelled = f.controller.review({ id: 'cancel-enter', sessions });
+    f.doc.querySelector<HTMLButtonElement>('#deletion-cancel')!.focus();
+    f.doc.activeElement!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    assert.equal(await cancelled, false);
     f.controller.loading(); f.advance(150);
     f.doc.activeElement!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-    assert.equal(f.dialog.open, true, 'Enter cannot confirm or cancel a loading preview');
+    assert.equal(f.dialog.open, false, 'Enter on focused Cancel cancels a loading preview');
     f.doc.activeElement!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     assert.equal(await f.controller.review({ id: 'late', sessions }), false);
   } finally { f.dispose(); }

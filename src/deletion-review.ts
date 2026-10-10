@@ -1,3 +1,5 @@
+import { confirmationKey, labelDialogAction } from './dialog-actions';
+
 export interface DeletionTreeSession { file: string; title: string; parent?: string | null; cwd?: string; }
 export interface DeletionReviewData { id: string; sessions: DeletionTreeSession[]; }
 
@@ -20,6 +22,8 @@ export function installDeletionReview(dialog: HTMLDialogElement) {
   const tree = dialog.querySelector<HTMLElement>('#deletion-tree')!;
   const cancel = dialog.querySelector<HTMLButtonElement>('#deletion-cancel')!;
   const confirm = dialog.querySelector<HTMLButtonElement>('#deletion-confirm')!;
+  labelDialogAction(cancel, 'Cancel', 'Escape');
+  labelDialogAction(confirm, 'Delete sessions', 'Enter');
   let pending: { resolve(answer: boolean): void } | undefined;
   let disposed = false;
   let preview: 'idle' | 'loading' | 'cancelled' = 'idle';
@@ -32,7 +36,7 @@ export function installDeletionReview(dialog: HTMLDialogElement) {
   function tryShow(): void {
     if (loadingTimer !== undefined || (!pending && preview !== 'loading') || disposed || dialog.open || doc.querySelector('dialog[open]')) return;
     dialog.returnValue = '';
-    dialog.showModal(); cancel.focus();
+    dialog.showModal(); (confirm.disabled ? cancel : confirm).focus();
   }
   function onOtherClose(event: Event): void { if (event.target !== dialog) tryShow(); }
   function finish(answer = false): void {
@@ -50,11 +54,7 @@ export function installDeletionReview(dialog: HTMLDialogElement) {
     finish(!confirm.disabled && dialog.returnValue === 'delete');
   };
   const onKey = (event: KeyboardEvent) => {
-    if (!dialog.open || !['Enter', 'Escape'].includes(event.key)) return;
-    event.preventDefault(); event.stopPropagation();
-    if (event.isComposing || event.keyCode === 229 || (event.key === 'Enter' && event.repeat)) return;
-    if (event.key === 'Escape') dialog.close('cancel');
-    else if (pending && !confirm.disabled) dialog.close('delete');
+    confirmationKey(event, dialog, cancel, confirm);
   };
   dialog.addEventListener('close', onClose);
   dialog.addEventListener('keydown', onKey);
@@ -62,7 +62,7 @@ export function installDeletionReview(dialog: HTMLDialogElement) {
     loading(): void {
       if (disposed || pending || preview === 'loading') return;
       preview = 'loading';
-      confirm.disabled = true; confirm.textContent = 'Delete sessions';
+      confirm.disabled = true; labelDialogAction(confirm, 'Delete sessions');
       tree.setAttribute('aria-busy', 'true');
       const status = doc.createElement('div'); status.className = 'deletion-loading'; status.setAttribute('role', 'status');
       const spinner = doc.createElement('span'); spinner.className = 'deletion-spinner'; spinner.setAttribute('aria-hidden', 'true');
@@ -113,7 +113,9 @@ export function installDeletionReview(dialog: HTMLDialogElement) {
       if (seen.size !== files.size) { close(); return Promise.resolve(false); }
       preview = 'idle'; confirm.disabled = false; tree.setAttribute('aria-busy', 'false');
       tree.replaceChildren(list); tree.scrollTop = 0;
-      confirm.textContent = `Delete ${data.sessions.length} ${data.sessions.length === 1 ? 'session' : 'sessions'}`;
+      labelDialogAction(confirm, `Delete ${data.sessions.length} ${data.sessions.length === 1 ? 'session' : 'sessions'}`, 'Enter');
+      // A visible loading dialog keeps its user's focus when review arrives.
+      // Fresh populated reviews focus Delete in tryShow().
       return new Promise(resolve => {
         pending = { resolve }; doc.addEventListener('close', onOtherClose, true); tryShow();
       });

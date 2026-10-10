@@ -1,3 +1,5 @@
+import { confirmationKey, labelDialogAction } from './dialog-actions';
+
 export class Dialogs {
   private queue = Promise.resolve();
   private generation = 0;
@@ -13,7 +15,7 @@ export class Dialogs {
     if (this.dialog.open && (!owner || this.activeOwner === owner)) this.dialog.close('cancel');
   }
 
-  private show(title: string, options?: string[], prefill?: string, message?: string, owner?: string): Promise<string | undefined> {
+  private show(title: string, options?: string[], prefill?: string, message?: string, owner?: string, action = 'Confirm'): Promise<string | undefined> {
     const generation = this.generation;
     const ownerGeneration = owner ? this.owners.get(owner) : undefined;
     const result = this.queue.then(() => new Promise<string | undefined>(resolve => {
@@ -27,13 +29,13 @@ export class Dialogs {
       if (this.select.options.length) this.select.selectedIndex = 0;
       this.inputNode.value = prefill || '';
       this.dialog.returnValue = '';
+      const cancel = this.dialog.querySelector<HTMLButtonElement>('button[value="cancel"]')!;
+      const confirm = this.dialog.querySelector<HTMLButtonElement>('button[value="ok"]')!;
+      labelDialogAction(cancel, 'Cancel', message !== undefined ? 'Escape' : undefined);
+      labelDialogAction(confirm, action, message !== undefined ? 'Enter' : undefined);
       const onKey = (event: KeyboardEvent) => {
-        // Confirmation shortcuts must not inherit the focused Cancel button's
-        // native Enter activation. Input/select dialogs retain their own behavior.
-        if (message === undefined || !this.dialog.open || !['Enter', 'Escape'].includes(event.key)) return;
-        event.preventDefault(); event.stopPropagation();
-        if (event.isComposing || event.keyCode === 229 || (event.key === 'Enter' && event.repeat)) return;
-        this.dialog.close(event.key === 'Enter' ? 'ok' : 'cancel');
+        // Input/select dialogs retain their existing editing/selection behavior.
+        if (message !== undefined) confirmationKey(event, this.dialog, cancel, confirm);
       };
       this.dialog.addEventListener('keydown', onKey);
       this.dialog.addEventListener('close', () => {
@@ -41,12 +43,12 @@ export class Dialogs {
         resolve(this.dialog.returnValue !== 'ok' ? undefined : options ? this.select.value : message !== undefined ? 'confirmed' : this.inputNode.value);
       }, { once: true });
       this.dialog.showModal();
-      if (options) this.select.focus(); else if (message === undefined) this.inputNode.focus();
+      if (options) this.select.focus(); else if (message === undefined) this.inputNode.focus(); else confirm.focus();
     }));
     this.queue = result.then(() => {}, () => {});
     return result;
   }
   choose(title: string, options: string[], owner?: string): Promise<string | undefined> { return this.show(title, options, undefined, undefined, owner); }
   input(title: string, prefill?: string, owner?: string): Promise<string | undefined> { return this.show(title, undefined, prefill, undefined, owner); }
-  async confirm(title: string, message: string, owner?: string): Promise<boolean> { return (await this.show(title, undefined, undefined, message, owner)) !== undefined; }
+  async confirm(title: string, message: string, owner?: string, action = 'Confirm'): Promise<boolean> { return (await this.show(title, undefined, undefined, message, owner, action)) !== undefined; }
 }

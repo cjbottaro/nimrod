@@ -221,7 +221,15 @@ test('editor searches, records without dispatch, requires explicit reassignment,
     click('Add shortcut for New session'); f.get('keybinding-record').dispatchEvent(f.event('j', { metaKey: true }));
     fail = true; f.get<HTMLButtonElement>('keybinding-save').click(); await tick(); assert.deepEqual(overrides.new, []); assert.equal(f.get<HTMLDialogElement>('keybinding-recorder').open, true); assert.match(f.get('keybinding-status').textContent!, /disk conflict/); assert.match(f.get('keybinding-conflicts').textContent!, /disk conflict/);
     fail = false; f.get('keybinding-record').dispatchEvent(f.event('Escape')); assert.equal(f.get<HTMLDialogElement>('keybinding-recorder').open, false);
-    f.get<HTMLButtonElement>('keybinding-reset-all').click(); f.get<HTMLButtonElement>('keybinding-cancel').click(); assert.deepEqual(overrides.new, []);
-    f.get<HTMLButtonElement>('keybinding-reset-all').click(); f.get<HTMLButtonElement>('keybinding-save').click(); await tick(); assert.deepEqual(overrides, {});
+    f.get<HTMLButtonElement>('keybinding-reset-all').click();
+    assert.equal(f.doc.activeElement, f.get('keybinding-save'));
+    assert.equal(f.get('keybinding-save').getAttribute('aria-keyshortcuts'), 'Enter');
+    for (const extra of [{ repeat: true }, { isComposing: true }, { keyCode: 229 }]) {
+      f.get('keybinding-save').dispatchEvent(f.event('Enter', extra));
+      assert.equal(f.get<HTMLDialogElement>('keybinding-recorder').open, true);
+    }
+    f.get<HTMLButtonElement>('keybinding-cancel').focus(); f.get('keybinding-cancel').dispatchEvent(f.event('Enter')); assert.deepEqual(overrides.new, []);
+    assert.equal(f.get<HTMLDialogElement>('keybinding-recorder').open, false);
+    f.get<HTMLButtonElement>('keybinding-reset-all').click(); f.get('keybinding-save').dispatchEvent(f.event('Enter')); await tick(); assert.deepEqual(overrides, {});
   } finally { dispatch.dispose(); editor.dispose(); f.dom.window.close(); }
 });

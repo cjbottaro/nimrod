@@ -1027,7 +1027,7 @@ test('delete review uses a custom nested modal, Cancel is non-destructive and la
       assert.equal(f.element<HTMLButtonElement>('deletion-confirm').disabled, false);
       assert.equal(f.element<HTMLDialogElement>('host-dialog').open, false);
       assert.equal(f.element('deletion-tree').textContent, 'Root');
-      assert.equal(f.win.document.activeElement, f.element('deletion-cancel'));
+      assert.equal(f.win.document.activeElement, f.element('deletion-confirm'));
       f.element<HTMLDialogElement>('deletion-review').close(confirmed ? 'delete' : 'cancel'); await f.tick(); await f.tick(); await f.tick();
       assert.equal(f.win.document.querySelectorAll('.session-row').length, confirmed ? 0 : 1);
       if (confirmed) {
@@ -1145,7 +1145,7 @@ test('sidebar trash targets a background row without selecting/resuming it and p
       assert.equal(f.element<HTMLButtonElement>('deletion-confirm').disabled, true);
       for (const button of f.win.document.querySelectorAll<HTMLButtonElement>('.session-delete')) assert.equal(button.disabled, true);
       release(); await f.tick(); await f.tick();
-      assert.equal(f.win.document.activeElement, f.element('deletion-cancel'));
+      assert.equal(f.win.document.activeElement, f.element('deletion-confirm'));
       assert.equal(rows[2].getAttribute('aria-current'), 'true'); assert.equal(rows[0].getAttribute('aria-current'), 'false');
       f.element<HTMLDialogElement>('deletion-review').close(outcome === 'cancelled' ? 'cancel' : 'delete');
       await f.tick(); await f.tick(); await f.tick();

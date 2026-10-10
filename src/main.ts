@@ -890,7 +890,7 @@ async function restartSession(tab: Tab): Promise<void> {
   tab.restarting = true; updateTab(tab);
   let resumed = false;
   try {
-    if (needsConfirmation && !await dialogs.confirm(`Restart ${tab.title}?`, 'This interrupts this session’s agent and resumes its saved history. Your draft stays; queued and in-flight work will not continue. Nothing is sent again automatically.')) return;
+    if (needsConfirmation && !await dialogs.confirm(`Restart ${tab.title}?`, 'This interrupts this session’s agent and resumes its saved history. Your draft stays; queued and in-flight work will not continue. Nothing is sent again automatically.', undefined, 'Restart session')) return;
     if (!tabs.includes(tab)) return;
     // Stop is a native lifecycle operation, not an RPC request to a stuck agent.
     await stopOwned(tab);
@@ -965,7 +965,7 @@ async function closeTab(tab: Tab): Promise<void> {
   if (deletion.pending || tab.closing || tab.starting || tab.restarting || settings.isOpen) return;
   const composer = restoreComposerState(tab.drafts.read());
   const running = tab.session && !tab.ended;
-  if ((tab.mode === 'temporary' || (running && (tab.session!.state.busy || composer.submission || tab.inputCount || tab.session!.state.queue?.pendingCount))) && !await dialogs.confirm(`Close ${tab.title}?`, tab.mode === 'temporary' ? 'This stops its agent and discards this temporary session, including its draft, queued messages and pop-outs.' : 'This stops only this session’s agent. Written history and your draft remain; queued and in-flight work will not continue.')) return;
+  if ((tab.mode === 'temporary' || (running && (tab.session!.state.busy || composer.submission || tab.inputCount || tab.session!.state.queue?.pendingCount))) && !await dialogs.confirm(`Close ${tab.title}?`, tab.mode === 'temporary' ? 'This stops its agent and discards this temporary session, including its draft, queued messages and pop-outs.' : 'This stops only this session’s agent. Written history and your draft remain; queued and in-flight work will not continue.', undefined, tab.mode === 'temporary' ? 'Close temporary session' : 'Close session')) return;
   if (tab.closing || !tabs.includes(tab)) return;
   tab.closing = true; updateTab(tab);
   try {

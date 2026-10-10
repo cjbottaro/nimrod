@@ -6,7 +6,7 @@ Search by action name, shortcut, or “modified.” Click a shortcut to change i
 
 - **×** removes that shortcut. Removing every shortcut leaves the action unbound, not reset.
 - **Reset** restores an action’s complete built-in shortcut list.
-- **Reset all…** asks for confirmation, then clears all customizations and restores defaults.
+- **Reset all…** asks for confirmation, then clears all customizations and restores defaults. Enabled reset confirmations focus the Reset action with an Enter icon; Cancel shows Esc. Enter on Cancel cancels instead. Recording a shortcut still requires explicit Save.
 - Conflicts name the competing actions. **Reassign** explicitly removes those competing shortcuts before saving. Resetting one action can also require reassignment if another action has borrowed its defaults.
 - A failed save retains the current bindings. External edits that introduce new conflicts during a save require review rather than silently stealing another shortcut.
 

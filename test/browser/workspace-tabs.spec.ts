@@ -176,8 +176,20 @@ test('temporary Close uses Escape to cancel and Enter to confirm without replayi
     await expect(prompt).toHaveValue('Keep until confirmed');
     expect(demo.calls.filter(c => c.command === 'stop_pi')).toHaveLength(stops);
     await page.locator('.session-close').click();
-    // Enter must confirm even with the Cancel button focused.
-    await page.locator('#host-dialog button[value="cancel"]').focus();
+    const confirm = page.getByRole('button', { name: 'Close temporary session', exact: true });
+    await expect(confirm).toBeFocused();
+    await expect(confirm.locator('svg.modal-action-hint')).toBeVisible();
+    await expect(page.locator('#host-dialog button[value="cancel"] kbd')).toHaveText('Esc');
+    // WebKit on macOS needs Option+Tab to include buttons in native tab order.
+    await page.keyboard.press('Alt+Shift+Tab');
+    await expect(page.locator('#host-dialog button[value="cancel"]')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#host-dialog')).not.toBeVisible();
+    await expect(page.locator(sessions)).toHaveCount(1);
+    await expect(prompt).toHaveValue('Keep until confirmed');
+    expect(demo.calls.filter(c => c.command === 'stop_pi')).toHaveLength(stops);
+    await page.locator('.session-close').click();
+    await expect(confirm).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page.locator('#host-dialog')).not.toBeVisible();
     await expect(page.locator(sessions)).toHaveCount(0);
