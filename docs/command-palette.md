@@ -1,4 +1,12 @@
-# Command palette ordering
+# Command palette
+
+## Row layout
+
+Every command has a short muted description beneath its title. Effective shortcuts appear right-aligned on the title line; unbound commands leave that space empty. Descriptions are searchable. Session/model/project pickers retain their own row metadata rather than adopting command descriptions.
+
+The palette and its pages use the [shared modal layout](modal-layout.md), including the named-session step.
+
+## Ordering
 
 Open the command palette with **⌘/Ctrl ⇧ P**. Commands accepted through the palette appear first next time, most recently used first. Commands without retained history follow alphabetically.
 

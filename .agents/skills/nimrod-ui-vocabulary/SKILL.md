@@ -99,6 +99,7 @@ A **card** does not imply a visible rectangular border. A **disclosure** is an e
 - **Runtime paths** — saved Pi/Node executable preferences under Settings → Runtime. **Save runtime paths** commits them for the next session, not the current process.
 - **Zoom picker** — the percentage selector in Settings → Appearance; it adjusts native webview page zoom.
 - **Dialog** — an overlay requiring an explicit choice or dismissal, unlike an inline card/disclosure.
+- **Modal shell** — the shared outer layout of ordinary dialogs: width, placement, viewport limits, padding, surface, border, radius, shadow and backdrop. Content rows remain surface-specific; Settings is the explicit full-window exception. See [shared modal layout](../../../docs/modal-layout.md).
 
 ## Theme
 

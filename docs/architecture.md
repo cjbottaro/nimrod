@@ -17,6 +17,7 @@ Tauri window
   src/session-navigation.ts shared membership/order, views, selection intents + cleanup policy
   src/session-recency.ts   sorted insertion, identity-bound closed-session recency + viewport anchoring
   src/session-sidebar.ts   relative/date labels, state indicators + minute/foreground text refresh
+  src/modal.css            shared ordinary-modal shell + structural spacing
   src/command-palette.ts   modal command navigation + asynchronous session picker
   src/command-ranking.ts   replaceable command-only MRU strategy + usage schema
   src/popout.ts            read-only code snapshot window, clipboard + appearance

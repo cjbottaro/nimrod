@@ -17,7 +17,7 @@ export interface PaletteItem {
 }
 export interface PalettePage { items: PaletteItem[]; notice?: string; }
 export interface PaletteOptions {
-  commands(): PaletteItem[];
+  commands(): (PaletteItem & { detail: string })[];
   sessions(): Promise<PalettePage>;
   openSessions(): PalettePage;
   projects?: () => Promise<PalettePage>;
@@ -128,11 +128,11 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
         row.setAttribute('aria-label', `${item.label} — ${item.detail || item.id}${item.projectOpen ? ' — Open project window' : ''} — Enter to open`);
         return row;
       }
+      if (item.shortcut) { const shortcut = doc.createElement('kbd'); shortcut.className = 'palette-item-shortcut'; shortcut.textContent = item.shortcut; heading.append(shortcut); }
       if (item.badge) { const badge = doc.createElement('span'); badge.className = 'palette-item-badge'; badge.textContent = item.badge; heading.append(badge); }
-      const detail = doc.createElement('small'); detail.textContent = item.detail || '';
+      const detail = doc.createElement('small'); detail.className = 'palette-item-description'; detail.textContent = item.detail || '';
       row.append(heading);
       if (mode !== 'selection' || item.detail) row.append(detail);
-      if (item.shortcut) { const shortcut = doc.createElement('kbd'); shortcut.textContent = item.shortcut; row.append(shortcut); }
       row.title = item.keywords || item.detail || item.label;
       return row;
     }));

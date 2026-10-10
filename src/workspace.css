@@ -54,16 +54,6 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor:col-resize !important; u
 #recent-workspaces { display:grid; gap:6px; margin-top:20px; }
 #recent-workspaces button { text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #storage-error:not([hidden]) { position:fixed; bottom:0; z-index:20; background:var(--vscode-editorWidget-background); max-width:100%; }
-.workspace-modal { box-sizing:border-box; position:fixed; inset:12vh 0 auto; margin:0 auto; width:min(620px,calc(100% - 32px)); max-height:76vh; padding:12px; border:1px solid var(--vscode-panel-border); border-radius:10px; background:var(--vscode-editorWidget-background); color:var(--vscode-foreground); box-shadow:0 12px 48px var(--vscode-widget-shadow); }
-.workspace-modal::backdrop { background:#0005; }
-#deletion-review { width:min(520px,calc(100% - 32px)); overflow:hidden; }
-#deletion-review[open] { display:flex; flex-direction:column; }
-#deletion-review form { display:flex; flex-direction:column; flex:1; gap:10px; min-height:0; max-height:calc(76vh - 26px); }
-#deletion-review form > :not(#deletion-tree) { flex:none; }
-#deletion-review .dialog-actions { margin:0; padding-top:10px; border-top:1px solid var(--vscode-panel-border); }
-#deletion-title, #deletion-description { margin:0; }
-#deletion-title { font-size:13px; }
-#deletion-description { color:var(--vscode-descriptionForeground); font-size:12px; }
 #deletion-tree { flex:1; min-height:0; max-height:45vh; overflow:auto; padding:6px; border:1px solid var(--vscode-panel-border); border-radius:6px; background:var(--vscode-editor-background); }
 #deletion-tree ul { list-style:none; margin:0; padding:0; }
 #deletion-tree li { position:relative; margin:0; padding:0; }
@@ -83,21 +73,19 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor:col-resize !important; u
 .deletion-spinner { width:16px; height:16px; flex:none; border:2px solid var(--vscode-panel-border); border-top-color:var(--vscode-descriptionForeground); border-radius:50%; animation:deletion-spin .8s linear infinite; }
 @keyframes deletion-spin { to { transform:rotate(360deg); } }
 @media (prefers-reduced-motion:reduce) { .deletion-spinner { animation:none; } }
-#command-palette[open] { display:flex; flex-direction:column; gap:10px; }
-.palette-heading { display:flex; align-items:center; gap:10px; min-height:28px; }
 .palette-heading > span { margin-left:auto; color:var(--vscode-descriptionForeground); font-size:11px; }
-#palette-title { font-size:13px; }
 #palette-back, #palette-refresh { padding:3px 7px; font-size:11px; }
 .palette-input-row { display:flex; align-items:center; gap:8px; }
 #palette-input { flex:1; min-width:0; }
 #palette-create { flex:none; }
-#command-palette[data-mode=name] { width:min(460px,calc(100% - 32px)); }
 #palette-list { overflow:auto; min-height:0; position:relative; }
 #palette-list [role=option] { padding:9px 10px; border-radius:4px; cursor:pointer; display:grid; gap:4px; }
 #palette-list [role=option].session-row { display:flex; gap:8px; padding:10px 6px; }
 #palette-list .palette-item-heading { display:flex; align-items:center; gap:8px; min-width:0; }
 #palette-list .palette-item-label, #palette-list small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #palette-list .palette-item-label { flex:1; min-width:0; }
+#palette-list .palette-item-shortcut { flex:none; margin-left:auto; color:var(--vscode-descriptionForeground); font:11px var(--vscode-font-family); white-space:nowrap; }
+#command-palette[data-mode=commands] #palette-list [aria-selected=true] :is(.palette-item-description, .palette-item-shortcut) { color:color-mix(in srgb, var(--vscode-list-activeSelectionForeground) 75%, var(--vscode-list-activeSelectionBackground)); }
 #palette-list .palette-selection-marker { flex:0 0 14px; text-align:center; font-size:1.1em; line-height:1; color:var(--vscode-descriptionForeground); user-select:none; }
 #command-palette[data-mode=selection] #palette-list [role=option]:hover:not([aria-selected=true]) { background:var(--vscode-list-hoverBackground, var(--vscode-toolbar-hoverBackground)); }
 #palette-list .palette-item-badge { flex:none; border:1px solid var(--vscode-panel-border); border-radius:3px; padding:1px 5px; font-size:10px; color:var(--vscode-descriptionForeground); }

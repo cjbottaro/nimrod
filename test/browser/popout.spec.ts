@@ -13,7 +13,7 @@ async function popoutFixture(page: Page, text: string, language: string) {
       builder.onLoad({ filter: /.*/, namespace: 'raw' }, args => ({ contents: readFileSync(args.path, 'utf8'), loader: 'text' }));
     } }],
   });
-  const css = ['src/pi/transcript.css', 'src/theme.css', 'src/workspace.css', 'src/popout.css'].map(file => readFileSync(file, 'utf8')).join('\n');
+  const css = ['src/pi/transcript.css', 'src/theme.css', 'src/workspace.css', 'src/modal.css', 'src/popout.css'].map(file => readFileSync(file, 'utf8')).join('\n');
   const html = readFileSync('index.html', 'utf8').replace('<script type="module" src="/src/main.ts"></script>', '').replace('</head>', `<style>${css}</style></head>`);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(String(error)));

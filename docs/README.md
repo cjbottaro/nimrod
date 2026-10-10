@@ -10,7 +10,8 @@
 
 - [Pop-outs](pop-outs.md) — keep code/Markdown visible; session visibility and persistence.
 - [Projects and sessions](workspace-sessions.md) — [searchable recent-project picker and native folder chooser](workspace-sessions.md#projects), plus session management: opening, closing, [consistent sidebar/Switch/shortcut navigation](workspace-sessions.md#session-navigation), connected-first cleanup selection without automatic reconnect, [terminal launches and macOS window cycling](workspace-sessions.md#terminal-launches), [command cancellation and Back](workspace-sessions.md#command-interactions), [sidebar width](workspace-sessions.md#sidebar-width), [sidebar views, recency/time labels and blank attention surfaces](workspace-sessions.md#sidebar-views), [reload/restart](workspace-sessions.md#reload-restart-session), [delete session tree](workspace-sessions.md#delete-session-tree), saved sessions and drafts.
-- [Command palette ordering](command-palette.md) — recent-first commands, shared history and picker boundaries.
+- [Command palette](command-palette.md) — descriptive rows, right-aligned shortcuts, recent-first commands and shared history.
+- [Modal layout](modal-layout.md) — shared dialog shell, content boundaries and full-window Settings exception.
 - [Settings](settings.md) — appearance, runtime paths and configuration files.
 - [Keybindings](keybindings.md) — searchable shortcut editor, conflict reassignment and reset to defaults.
 - [Themes](themes.md) — built-in themes and importing color schemes.

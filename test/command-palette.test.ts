@@ -20,10 +20,10 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }),
     canOpen: () => allowed,
     ranking,
     commands: () => [
-      { id: 'resume', label: 'Resume session…', next: true, run: () => palette.sessions() },
-      { id: 'switch', label: 'Switch session…', next: true, run: () => palette.openSessions() },
-      { id: 'new', label: 'New session', run: () => { calls.push('new'); } },
-      { id: 'named', label: 'New named session…', next: true, run: () => palette.namedSession(name => {
+      { id: 'resume', label: 'Resume session…', detail: 'Open a saved conversation', next: true, run: () => palette.sessions() },
+      { id: 'switch', label: 'Switch session…', detail: 'Choose an open conversation', next: true, run: () => palette.openSessions() },
+      { id: 'new', label: 'New session', detail: 'Start a persistent conversation', shortcut: '⌘+N', run: () => { calls.push('new'); } },
+      { id: 'named', label: 'New named session…', detail: 'Choose a name before starting', next: true, run: () => palette.namedSession(name => {
         assert.equal(dialog.open, false); assert.equal(win.document.activeElement, opener);
         calls.push(`named:${name}`);
       }) },
@@ -39,6 +39,24 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }),
   };
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+
+test('commands have descriptions below titles and shortcuts in the title row only', () => {
+  const f = fixture();
+  try {
+    f.palette.open();
+    for (const row of f.list().children) {
+      assert.equal(row.children.length, 2);
+      assert.ok(row.lastElementChild!.classList.contains('palette-item-description'));
+      assert.ok(row.lastElementChild!.textContent?.trim());
+    }
+    f.query('persistent');
+    const heading = f.list().firstElementChild!.firstElementChild!;
+    assert.equal(heading.querySelector('kbd')!.textContent, '⌘+N');
+    assert.equal(heading.lastElementChild!.tagName, 'KBD');
+    f.query('Resume'); assert.equal(f.list().querySelector('kbd'), null);
+    f.query('persistent'); assert.equal(f.list().children.length, 1);
+  } finally { f.dispose(); }
+});
 
 test('project rows are inline dot/name/parent/Enter hints, searchable without a folder action', async () => {
   const f = fixture(undefined, async () => ({ items: [

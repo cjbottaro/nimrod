@@ -87,19 +87,19 @@
     </div>
   </dialog>
 
-  <dialog id="deletion-review" class="workspace-modal" aria-labelledby="deletion-title" aria-describedby="deletion-description">
-    <form method="dialog">
-      <h2 id="deletion-title">Delete session tree</h2>
-      <p id="deletion-description">Deletes these sessions and their saved drafts and references.</p>
-      <div id="deletion-tree" tabindex="0" aria-label="Sessions to delete"></div>
-      <div class="dialog-actions"><button id="deletion-cancel" value="cancel" class="secondary">Cancel</button><button id="deletion-confirm" value="delete">Delete sessions</button></div>
+  <dialog id="deletion-review" class="nimrod-modal" aria-labelledby="deletion-title" aria-describedby="deletion-description">
+    <form method="dialog" class="modal-stack">
+      <h2 id="deletion-title" class="modal-title">Delete session tree</h2>
+      <p id="deletion-description" class="modal-description">Deletes these sessions and their saved drafts and references.</p>
+      <div id="deletion-tree" class="modal-body" tabindex="0" aria-label="Sessions to delete"></div>
+      <div class="modal-actions"><button id="deletion-cancel" value="cancel" class="secondary">Cancel</button><button id="deletion-confirm" value="delete">Delete sessions</button></div>
     </form>
   </dialog>
-  <dialog id="host-dialog"><form method="dialog"><h2 id="host-dialog-title"></h2><p id="host-dialog-description"></p><select id="host-dialog-select" size="8" aria-label="Choose an option"></select><textarea id="host-dialog-input" rows="5" aria-label="Enter text"></textarea><div class="dialog-actions"><button value="cancel" class="secondary">Cancel</button><button value="ok">Confirm</button></div></form></dialog>
-  <dialog id="command-palette" class="workspace-modal" aria-labelledby="palette-title">
-    <header class="palette-heading"><button id="palette-back" type="button" class="secondary" aria-label="Back to commands" hidden>←</button><strong id="palette-title">Commands</strong><button id="palette-refresh" type="button" class="secondary" hidden>Refresh</button><span id="palette-hint">Esc to close</span></header>
+  <dialog id="host-dialog" class="nimrod-modal" aria-labelledby="host-dialog-title"><form method="dialog" class="modal-stack"><h2 id="host-dialog-title" class="modal-title"></h2><p id="host-dialog-description" class="modal-description modal-body"></p><select id="host-dialog-select" class="modal-body" size="8" aria-label="Choose an option"></select><textarea id="host-dialog-input" class="modal-body" rows="5" aria-label="Enter text"></textarea><div class="modal-actions"><button value="cancel" class="secondary">Cancel</button><button value="ok">Confirm</button></div></form></dialog>
+  <dialog id="command-palette" class="nimrod-modal modal-stack" aria-labelledby="palette-title">
+    <header class="palette-heading modal-header"><button id="palette-back" type="button" class="secondary" aria-label="Back to commands" hidden>←</button><strong id="palette-title" class="modal-title">Commands</strong><button id="palette-refresh" type="button" class="secondary" hidden>Refresh</button><span id="palette-hint">Esc to close</span></header>
     <div class="palette-input-row"><input id="palette-input" type="text" role="combobox" aria-expanded="true" aria-controls="palette-list" aria-autocomplete="list" aria-describedby="palette-status" aria-label="Search commands" autocomplete="off" spellcheck="false"><button id="palette-create" type="button" hidden disabled>Create</button></div>
-    <div id="palette-list" role="listbox" aria-label="Navigation results"></div>
+    <div id="palette-list" class="modal-body" role="listbox" aria-label="Navigation results"></div>
     <p id="palette-status" role="status"></p>
   </dialog>
   <script type="module" src="/src/main.ts"></script>

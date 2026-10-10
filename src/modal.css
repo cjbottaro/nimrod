@@ -1,0 +1,41 @@
+/* Shared shell for every ordinary modal, including Pi's editor overlay.
+ * Content selectors must not redefine shell geometry or surface styling.
+ * Settings is the explicit full-window exception (in theme.css).
+ */
+:root {
+  --modal-width:620px;
+  --modal-top:12vh;
+  --modal-max-height:76vh;
+  --modal-padding:12px;
+  --modal-gap:10px;
+  --modal-radius:10px;
+  --modal-backdrop:#0005;
+}
+.nimrod-modal {
+  box-sizing:border-box;
+  position:fixed;
+  inset:var(--modal-top) 0 auto;
+  margin:0 auto;
+  width:min(var(--modal-width),calc(100% - 32px));
+  max-width:none; /* Override the native dialog UA width cap, also shared by overlay cards. */
+  max-height:var(--modal-max-height);
+  padding:var(--modal-padding);
+  border:1px solid var(--vscode-panel-border);
+  border-radius:var(--modal-radius);
+  background:var(--vscode-editorWidget-background);
+  color:var(--vscode-foreground);
+  box-shadow:0 12px 48px var(--vscode-widget-shadow);
+  overflow:auto;
+}
+.nimrod-modal::backdrop, .modal-overlay { background:var(--modal-backdrop); }
+.modal-stack { display:flex; flex-direction:column; gap:var(--modal-gap); min-height:0; }
+dialog.modal-stack:not([open]) { display:none; }
+.nimrod-modal > .modal-stack { max-height:calc(var(--modal-max-height) - 2 * var(--modal-padding) - 2px); }
+.modal-stack > :not(.modal-body) { flex:none; }
+.modal-header { display:flex; align-items:center; gap:var(--modal-gap); min-height:28px; }
+.modal-title { margin:0; font-size:13px; }
+.modal-description { margin:0; color:var(--vscode-descriptionForeground); font-size:12px; line-height:1.5; }
+.modal-body { min-height:0; overflow:auto; }
+.modal-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:8px; margin:0; padding-top:var(--modal-gap); border-top:1px solid var(--vscode-panel-border); }
+.modal-overlay { position:fixed; inset:0; display:none; z-index:4; }
+.modal-overlay.open { display:block; }

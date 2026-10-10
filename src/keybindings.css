@@ -5,8 +5,6 @@
 .keybinding-description strong, .keybinding-description small { display:block; }
 .keybinding-description small { color:var(--vscode-descriptionForeground); margin-top:4px; }
 .keybinding-buttons { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
-#keybinding-recorder[open] { display:flex; flex-direction:column; gap:12px; }
-#keybinding-recorder h2, #keybinding-recorder p { margin:0; }
 #keybinding-record { width:100%; }
 #keybinding-reassign-label { display:flex; gap:8px; align-items:baseline; }
 #keybinding-reassign { width:auto; }

@@ -86,9 +86,7 @@ h1 { font-size:clamp(28px,4vw,42px); line-height:1.12; letter-spacing:-1.4px; ma
 /* Conversation surfaces follow the window width, with only a shared side gutter. */
 :is(#app, [data-pi-id="app"]), :is(#activity, [data-pi-id="activity"]), :is(#submission-notice, [data-pi-id="submission-notice"]), :is(#composer, [data-pi-id="composer"]) { box-sizing:border-box; width:100%; max-width:none; margin:0; padding-left:20px; padding-right:20px; }
 :is(#composer-area, [data-pi-id="composer-area"]):focus-within { --interaction-edge:var(--vscode-focusBorder); }
-#host-dialog { width:min(540px,calc(100vw - 64px)); color:var(--vscode-foreground); background:var(--vscode-editorWidget-background); border:1px solid var(--vscode-panel-border); border-radius:10px; padding:22px; }
-#host-dialog::backdrop { background:#0008; } #host-dialog h2 { font-size:17px; margin:0 0 14px; }
-#host-dialog-description { white-space:pre-wrap; line-height:1.5; } .dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
+#host-dialog-description { white-space:pre-wrap; }
 #host-dialog-input { resize:vertical; }
 @media (prefers-color-scheme:light) {
   :root { color-scheme:light; --vscode-foreground:#23343d; --vscode-editor-background:#f7f9f8; --vscode-descriptionForeground:#586d76; --vscode-panel-border:#ccd8d8; --vscode-input-border:#b8caca; --vscode-input-foreground:#23343d; --vscode-input-background:#fff; --vscode-editorWidget-background:#eef3f1; --vscode-textCodeBlock-background:#eaf0ee; --vscode-textBlockQuote-background:#edf4f2; --vscode-textLink-foreground:#156c83; --vscode-textLink-activeForeground:#084858; --vscode-focusBorder:#287c69; --vscode-progressBar-background:#287c69; --vscode-button-secondaryBackground:#e2ebe7; --vscode-button-secondaryForeground:#23343d; --vscode-list-focusBackground:#d3e8e1; --vscode-list-focusForeground:#23343d; --vscode-errorForeground:#a32d38; --vscode-editorWarning-foreground:#805316; --vscode-widget-shadow:#0002; }

@@ -33,6 +33,7 @@ import './pi/transcript.css';
 import './theme.css';
 import './workspace.css';
 import './keybindings.css';
+import './modal.css';
 
 const required = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 async function main(): Promise<void> {
@@ -550,26 +551,26 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
   commands: () => {
     const active = presented;
     return [
-    { id: 'open-recent-project', label: 'Open recent project…', next: true, run: () => palette.projects() },
-    { id: 'resume', label: 'Resume session…', detail: workspace || 'Open a project first', next: true, run: () => palette.sessions() },
-    { id: 'new', label: 'New session', detail: 'Persistent by default', run: () => newSession() },
+    { id: 'open-recent-project', label: 'Open recent project…', detail: 'Open or focus a previously opened project', next: true, run: () => palette.projects() },
+    { id: 'resume', label: 'Resume session…', detail: 'Open a saved conversation in this project', next: true, run: () => palette.sessions() },
+    { id: 'new', label: 'New session', detail: 'Start a new persistent conversation', run: () => newSession() },
     { id: 'new-named', label: 'New named session…', detail: 'Choose a name before starting', next: true, run: newNamedSession },
     ...(tabs.length ? [{ id: 'switch-session', label: 'Switch session…', detail: 'All open sessions, regardless of sidebar view', next: true, run: () => palette.openSessions() }] : []),
     ...(active ? [
-      { id: 'model', label: 'Select model…', detail: active.session?.state.modelControls.model?.id || 'Choose a model for this session', next: true, run: () => pickPreference(active!, 'model') },
-      { id: 'thinking', label: 'Select thinking level…', keywords: 'effort reasoning', detail: active.session?.state.modelControls.thinkingLevel || 'Choose reasoning effort', next: true, run: () => pickPreference(active!, 'thinking') },
+      { id: 'model', label: 'Select model…', detail: 'Choose the model for this session', next: true, run: () => pickPreference(active!, 'model') },
+      { id: 'thinking', label: 'Select thinking level…', keywords: 'effort reasoning', detail: 'Choose reasoning effort for this session', next: true, run: () => pickPreference(active!, 'thinking') },
     ] : []),
     ...(active && restartable(active) ? [
-      { id: 'restart', label: 'Restart session', detail: active.title, run: () => restartSession(active!) },
-      { id: 'delete', label: 'Delete session tree…', detail: active.title, run: () => deleteSession(active!) },
+      { id: 'restart', label: 'Restart session', detail: 'Restart Pi and retain this conversation', run: () => restartSession(active!) },
+      { id: 'delete', label: 'Delete session tree…', detail: 'Review removal of this saved session and its descendants', run: () => deleteSession(active!) },
     ] : []),
-    { id: 'file', label: 'Open session file…', run: pickSession },
-    { id: 'temporary', label: 'New temporary session', run: () => newSession('temporary') },
-    { id: 'demo', label: 'New offline demo', run: () => newSession('temporary', true) },
-    ...(active ? [{ id: 'close', label: 'Close session', detail: active.title, run: () => closeTab(active!) }] : []),
-    { id: 'sidebar', label: sidebarVisible ? 'Hide sidebar' : 'Show sidebar', run: () => required<HTMLButtonElement>('toggle-sidebar').click() },
-    { id: 'settings', label: 'Settings', run: () => required<HTMLButtonElement>('open-settings').click() },
-    { id: 'keybindings', label: 'Edit keybindings…', run: openKeybindings },
+    { id: 'file', label: 'Open session file…', detail: 'Open an exact Pi session file in its original project', run: pickSession },
+    { id: 'temporary', label: 'New temporary session', detail: 'Start a conversation without saved history', run: () => newSession('temporary') },
+    { id: 'demo', label: 'New offline demo', detail: 'Try a local fixture without launching Pi', run: () => newSession('temporary', true) },
+    ...(active ? [{ id: 'close', label: 'Close session', detail: 'Stop its agent and remove it from the sidebar; saved history stays', run: () => closeTab(active!) }] : []),
+    { id: 'sidebar', label: sidebarVisible ? 'Hide sidebar' : 'Show sidebar', detail: 'Toggle the open-session navigation pane', run: () => required<HTMLButtonElement>('toggle-sidebar').click() },
+    { id: 'settings', label: 'Settings', detail: 'Change appearance, notifications, keybindings and runtime paths', run: () => required<HTMLButtonElement>('open-settings').click() },
+    { id: 'keybindings', label: 'Edit keybindings…', detail: 'Customize shortcuts for Nimrod commands', run: openKeybindings },
     ].map(item => ({ ...item, shortcut: ACTIONS.some(action => action.id === item.id) ? shortcutHint(item.id as ActionId) : undefined }));
   },
 });
