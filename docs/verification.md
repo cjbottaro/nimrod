@@ -1,5 +1,11 @@
 # PoC verification
 
+## Single-line recent-project rows
+
+- Implemented in `.worktrees/recent-project-rows` on `feat/recent-project-rows`. Recent-project entries are one inline row: fixed open-dot slot, directory name, muted parent directory, right-aligned Enter SVG hint. Name/parent truncation preserves the icon, full canonical paths remain searchable/accessibly labeled, and Enter/click reuse the existing post-close navigation. The folder-chooser footer and browsing callback/state are removed. Native File → Open project / Cmd/Ctrl+O is unchanged; configurable Cmd/Ctrl+Shift+O and palette/menu entry retain their picker behavior.
+- `mise run check` passes **377 TS/Node tests**, formatting/Clippy and **97 Rust tests** (two opt-in Pi smokes ignored). All **39 offline WebKit tests** pass, including inline row geometry, muted parent text, icon alignment, long-parent truncation at 1100/560px widths and fractional zoom, filtering/no-match behavior, absent folder action and navigation without another child/dialog. The geometry assertion allows one layout pixel of WebKit integer scroll-width rounding at fractional zoom. Path-display tests include POSIX, drive and UNC shapes; these do not establish Windows native acceptance.
+- `CARGO_NET_OFFLINE=true mise run build` packages/ad-hoc-signs/verifies `.worktrees/recent-project-rows/src-tauri/target/release/bundle/macos/Nimrod.app`. Primary checkout/default bundle and running app remain untouched; no live Pi/models, user-session mutation, upstream change, commit or push. Native visual/focus and Linux/possible Windows acceptance remain user validation. This layout supersedes the original two-line rows and in-picker Open folder footer documented in the historical implementation record below.
+
 ## Recent-project picker
 
 - Merge verification against command-palette ranking on `main`: resolved shared palette/docs/test conflicts retaining command-only MRU ranking and project discovery/chooser guards. `mise run check` passes **376 TS/Node tests** and **97 Rust tests** (two opt-in smokes ignored); all **39 offline WebKit tests** and signed macOS build pass. Two full checks hit the previously documented single-instance lock-holder timeout fixture's `Option::unwrap()` failure; its focused run and subsequent complete check passed without changing Rust. No native user-app acceptance is inferred.

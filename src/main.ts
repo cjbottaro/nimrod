@@ -22,6 +22,7 @@ import { SessionDrafts, purgeDeletedDrafts, SESSION_STORAGE_KEY, type LastSessio
 import { restoreComposerState } from './pi/webview-state';
 import { Dialogs } from './dialogs';
 import { COMMAND_USAGE_KEY, readCommandUsage } from './command-ranking';
+import { projectPathParts } from './project-path';
 import { installCommandPalette, type PalettePage } from './command-palette';
 import { installSettings, installRuntimeSettings } from './settings';
 import { ACTIONS, bindingsFor, installKeybindingDispatch, isMac, shortcutLabel, type ActionId } from './keybindings';
@@ -520,11 +521,14 @@ async function openProjectDirectory(path: string): Promise<void> {
 }
 async function paletteProjects(): Promise<PalettePage> {
   const projects = await invoke<{ cwd: string; open: boolean }[]>('list_projects');
-  return { items: projects.map(project => ({
-    id: project.cwd, label: project.cwd.split(/[\\/]/).filter(Boolean).at(-1) || project.cwd,
-    detail: project.cwd, projectOpen: project.open,
-    run: () => openProjectDirectory(project.cwd),
-  })) };
+  return { items: projects.map(project => {
+    const { name, parent } = projectPathParts(project.cwd);
+    return {
+      id: project.cwd, label: name, projectParent: parent,
+      detail: project.cwd, projectOpen: project.open,
+      run: () => openProjectDirectory(project.cwd),
+    };
+  }) };
 }
 const palette = installCommandPalette(window, required<HTMLDialogElement>('command-palette'), {
   canOpen: () => ready && !settings.isOpen,
@@ -543,11 +547,6 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
   sessions: paletteSessions,
   openSessions: openSessionPicker,
   projects: paletteProjects,
-  browseProject: async () => {
-    const path = await open({ directory: true, multiple: false, title: 'Open project directory' });
-    if (typeof path !== 'string') return false;
-    await openProjectDirectory(path); return true;
-  },
   commands: () => {
     const active = presented;
     return [

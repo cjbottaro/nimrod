@@ -7,7 +7,7 @@ import { vscodeMruRanking, type CommandRanking } from '../src/command-ranking';
 import { stubDialogs } from './dialog-fixture';
 import { sessionIndicator, sessionTime, type SidebarState } from '../src/session-sidebar';
 
-function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }), projects: (() => Promise<PalettePage>) | CommandRanking = load, browseProject: () => Promise<boolean> = async () => false, ranking?: CommandRanking) {
+function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }), projects: (() => Promise<PalettePage>) | CommandRanking = load, ranking?: CommandRanking) {
   if (typeof projects !== 'function') { ranking = projects; projects = load; }
   const dom = new JSDOM(readFileSync('index.html', 'utf8'), { pretendToBeVisual: true });
   const win = dom.window; stubDialogs(win);
@@ -27,7 +27,7 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }),
         assert.equal(dialog.open, false); assert.equal(win.document.activeElement, opener);
         calls.push(`named:${name}`);
       }) },
-    ], sessions: load, projects, browseProject,
+    ], sessions: load, projects,
     openSessions: () => ({ items: [{ id: 'open-demo', label: 'Offline demo', detail: 'Ready', run: () => { calls.push('open-demo'); } }] }),
   });
   const key = (key: string, init: KeyboardEventInit = {}) => input.dispatchEvent(new win.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
@@ -40,40 +40,44 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }),
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
-test('project picker searches names and paths, keeps Browse through empty results and chooser cancellation', async () => {
-  let resolveBrowse!: (opened: boolean) => void;
+test('project rows are inline dot/name/parent/Enter hints, searchable without a folder action', async () => {
   const f = fixture(undefined, async () => ({ items: [
-    { id: '/work/nimrod', label: 'nimrod', detail: '/work/nimrod', projectOpen: true, run: () => { f.calls.push('project'); } },
-  ] }), () => new Promise(resolve => { resolveBrowse = resolve; }));
+    { id: '/work/nimrod', label: 'nimrod', detail: '/work/nimrod', projectParent: '/work', projectOpen: true, run: () => { f.calls.push('project'); } },
+    { id: '/other/nimrod', label: 'nimrod', detail: '/other/nimrod', projectParent: '/other', projectOpen: false, run() {} },
+  ] }));
   try {
     await f.palette.projects();
-    const browse = f.win.document.querySelector<HTMLButtonElement>('#palette-browse')!;
     assert.equal(f.input.placeholder, 'Search recent projects…');
+    assert.equal(f.win.document.querySelector('#palette-browse, #palette-project-footer'), null);
     assert.equal(f.list().querySelector('.palette-item-badge'), null);
-    assert.equal(f.list().querySelector('.palette-selection-marker')!.textContent, '•');
-    assert.match(f.list().firstElementChild!.getAttribute('aria-label')!, /Open project window/);
-    assert.equal(f.list().firstElementChild!.hasAttribute('aria-current'), false);
+    assert.deepEqual([...f.list().querySelectorAll('.palette-selection-marker')].map(node => node.textContent), ['•', '']);
+    for (const row of f.list().children) {
+      assert.equal(row.children.length, 1, 'one inline heading, no subtitle');
+      const heading = row.firstElementChild!;
+      assert.deepEqual([...heading.children].map(node => node.classList[0]), ['palette-selection-marker', 'palette-item-label', 'palette-project-parent', 'palette-project-enter']);
+      assert.equal(heading.querySelector('svg')!.getAttribute('aria-hidden'), 'true');
+      assert.match(row.getAttribute('aria-label')!, /Enter to open/);
+      assert.equal(row.hasAttribute('aria-current'), false);
+    }
     f.query('open'); assert.equal(f.list().children.length, 1);
-    f.query('/work'); assert.equal(f.list().children.length, 1);
-    f.query('missing'); assert.equal(f.list().children.length, 0); assert.equal(browse.hidden, false);
-    browse.click(); assert.equal(f.dialog.open, true); assert.equal(browse.disabled, true);
+    f.query('/work/nimrod'); assert.equal(f.list().children.length, 1, 'full canonical path remains searchable');
+    assert.equal(f.list().querySelector('small')!.textContent, '/work');
+    f.query('missing'); assert.equal(f.list().children.length, 0);
     f.key('Enter'); assert.deepEqual(f.calls, []);
-    resolveBrowse(false); await tick();
-    assert.equal(f.dialog.open, true); assert.equal(f.input.value, 'missing'); assert.equal(f.win.document.activeElement, f.input);
-    browse.click(); resolveBrowse(true); await tick(); assert.equal(f.dialog.open, false);
+    f.query('/work'); f.key('Enter'); await tick();
+    assert.equal(f.dialog.open, false); assert.deepEqual(f.calls, ['project']);
   } finally { f.dispose(); }
 });
 
-test('late project discovery is discarded and Browse failures retain the query without retrying', async () => {
+test('late project discovery is discarded and empty picker directs users to native File Open', async () => {
   let resolveLoad!: (page: PalettePage) => void;
-  const f = fixture(undefined, () => new Promise(resolve => { resolveLoad = resolve; }), async () => { throw new Error('unavailable'); });
+  const f = fixture(undefined, () => new Promise(resolve => { resolveLoad = resolve; }));
   try {
     const pending = f.palette.projects(); f.palette.close(); await tick();
     resolveLoad({ items: [] }); await pending; assert.equal(f.dialog.open, false);
     const next = f.palette.projects(); resolveLoad({ items: [] }); await next;
-    assert.match(f.status()!, /No recent projects/);
-    f.query('keep'); f.win.document.querySelector<HTMLButtonElement>('#palette-browse')!.click(); await tick();
-    assert.equal(f.input.value, 'keep'); assert.match(f.status()!, /unavailable/); assert.equal(f.dialog.open, true);
+    assert.match(f.status()!, /No recent projects.*File → Open project/);
+    assert.equal(f.win.document.querySelector('#palette-browse'), null);
   } finally { f.dispose(); }
 });
 

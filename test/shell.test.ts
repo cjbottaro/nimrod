@@ -237,10 +237,10 @@ test('native project requests are window-scoped, survive boot and never start se
     assert.equal(f.element('palette-title').textContent, 'Open recent project');
     const input = f.element<HTMLInputElement>('palette-input');
     input.value = '/work/nimrod'; input.dispatchEvent(new f.win.Event('input'));
-    f.element<HTMLButtonElement>('palette-browse').click(); await f.tick();
-    assert.equal(input.value, '/work/nimrod');
-    const chooser = f.calls.find(c => c.command === 'plugin:dialog|open')!;
-    assert.equal((chooser.args.options as JsonRecord).directory, true);
+    assert.equal(f.win.document.querySelector('#palette-browse, #palette-project-footer'), null);
+    assert.equal(f.element('palette-list').querySelector('.palette-item-label')!.textContent, 'nimrod');
+    assert.equal(f.element('palette-list').querySelector('.palette-project-parent')!.textContent, '/work');
+    assert.equal(f.calls.some(c => c.command === 'plugin:dialog|open'), false);
     input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await f.tick(); await f.tick();
     assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
     assert.equal(f.calls.filter(c => c.command === 'open_project_directory').length, 1);
