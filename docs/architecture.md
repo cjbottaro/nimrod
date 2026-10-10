@@ -18,6 +18,7 @@ Tauri window
   src/session-recency.ts   sorted insertion, identity-bound closed-session recency + viewport anchoring
   src/session-sidebar.ts   relative/date labels, state indicators + minute/foreground text refresh
   src/command-palette.ts   modal command navigation + asynchronous session picker
+  src/command-ranking.ts   replaceable command-only MRU strategy + usage schema
   src/popout.ts            read-only code snapshot window, clipboard + appearance
   src/session-popouts.ts   coalesced session visibility/identity + pop-out dispatch
   src/session-deletion.ts  app-wide lock acknowledgements + quarantine reconciliation

@@ -8,6 +8,8 @@ Human guide: [Command interactions](../../../../docs/workspace-sessions.md#comma
 
 Add a picker through `startSelection()` or the existing page lifecycle, not a feature-specific dialog key handler. `beginPage()` owns query reset, Back/Retry controls and request generation. Page content may differ; dismissal must not branch on page mode or entry point. There is no new generic harness or global modal framework.
 
+Command-list sorting and accepted-command history are independent of page lifecycle; see [Command ranking](command-ranking.md). Subordinate picker order is unchanged.
+
 ## Lifecycle contract
 
 - Escape from any control and the native dialog `cancel` event call `closeInteraction()` with no action. Public `close()` and an active selection request's `cancel()` use the same path. All dismiss the entire interaction; none invoke commands or navigate backward.

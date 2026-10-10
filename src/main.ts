@@ -21,6 +21,7 @@ import { PiSession } from './pi/session';
 import { SessionDrafts, purgeDeletedDrafts, SESSION_STORAGE_KEY, type LastSession } from './pi/session-drafts';
 import { restoreComposerState } from './pi/webview-state';
 import { Dialogs } from './dialogs';
+import { COMMAND_USAGE_KEY, readCommandUsage } from './command-ranking';
 import { installCommandPalette, type PalettePage } from './command-palette';
 import { installSettings, installRuntimeSettings } from './settings';
 import { ACTIONS, bindingsFor, installKeybindingDispatch, isMac, shortcutLabel, type ActionId } from './keybindings';
@@ -38,6 +39,7 @@ const preferences = await installPreferences({
   snapshot: () => invoke<PreferencesSnapshot>('preferences_snapshot'),
   settings: (expected, text) => invoke<PreferencesSnapshot>('preferences_settings', { expected, text }),
   state: entries => invoke<PreferencesSnapshot>('preferences_state', { entries }),
+  commandUsage: id => invoke<PreferencesSnapshot>('record_command_usage', { id }),
   migrate: (text, entries) => invoke<PreferencesSnapshot>('preferences_migrate', { text, entries }),
   listen: receive => listen<PreferencesSnapshot>('nimrod-preferences', event => receive(event.payload)),
 }, localStorage, message => {
@@ -514,6 +516,17 @@ async function paletteSessions(): Promise<PalettePage> {
 const palette = installCommandPalette(window, required<HTMLDialogElement>('command-palette'), {
   canOpen: () => ready && !settings.isOpen,
   shortcuts: false,
+  ranking: {
+    usage: () => readCommandUsage(preferences.readState(COMMAND_USAGE_KEY)),
+    record: id => {
+      // Native read-modify-write serializes acceptance across project windows.
+      // Failure reports independently; never blocks or replays the command.
+      void preferences.recordCommandUsage(id).catch(error => {
+        required('storage-error').hidden = false;
+        required('storage-error').textContent = `Could not save command history: ${error}`;
+      });
+    },
+  },
   sessions: paletteSessions,
   openSessions: openSessionPicker,
   commands: () => {

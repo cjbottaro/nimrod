@@ -1,3 +1,4 @@
+import { vscodeMruRanking, type CommandRanking } from './command-ranking';
 import { createSessionRowContent, updateSessionRowContent, type SessionRowPresentation } from './session-sidebar';
 
 export interface PaletteItem {
@@ -19,6 +20,7 @@ export interface PaletteOptions {
   openSessions(): PalettePage;
   canOpen(): boolean;
   shortcuts?: boolean;
+  ranking?: CommandRanking;
 }
 export interface SelectionRequest {
   choose(options: string[], current?: string): Promise<string | undefined>;
@@ -89,6 +91,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     const previous = matches[selected]?.id;
     const words = input.value.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
     matches = items.filter(item => words.every(word => `${item.label} ${item.badge || ''} ${item.detail || ''} ${item.sessionRow?.indicator.label || ''} ${item.sessionRow?.badge || ''} ${item.keywords || ''}`.toLocaleLowerCase().includes(word)));
+    if (mode === 'commands') matches = (options.ranking?.strategy ?? vscodeMruRanking).rank(matches, { query: input.value, usage: options.ranking?.usage() ?? [] });
     selected = Math.max(0, matches.findIndex(item => item.id === previous));
     list.replaceChildren(...matches.map((item, index) => {
       const row = doc.createElement('div'); row.id = `palette-option-${index}`; row.setAttribute('role', 'option'); row.dataset.index = String(index);
@@ -204,6 +207,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   function choose(index = selected): void {
     const item = matches[index];
     if (!dialog.open || !item || loading) return;
+    if (mode === 'commands') options.ranking?.record(item.id);
     if (item.next) { void item.run(); return; }
     // The action owns resolution after native focus restoration. Dismissal alone cancels.
     resolveChoice = undefined;

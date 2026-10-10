@@ -3,10 +3,11 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
 import { installCommandPalette, type PalettePage } from '../src/command-palette';
+import { vscodeMruRanking, type CommandRanking } from '../src/command-ranking';
 import { stubDialogs } from './dialog-fixture';
 import { sessionIndicator, sessionTime, type SidebarState } from '../src/session-sidebar';
 
-function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] })) {
+function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }), ranking?: CommandRanking) {
   const dom = new JSDOM(readFileSync('index.html', 'utf8'), { pretendToBeVisual: true });
   const win = dom.window; stubDialogs(win);
   const dialog = win.document.querySelector<HTMLDialogElement>('#command-palette')!;
@@ -16,6 +17,7 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }))
   let allowed = true;
   const palette = installCommandPalette(win as unknown as Window, dialog, {
     canOpen: () => allowed,
+    ranking,
     commands: () => [
       { id: 'resume', label: 'Resume session…', next: true, run: () => palette.sessions() },
       { id: 'switch', label: 'Switch session…', next: true, run: () => palette.openSessions() },
@@ -330,7 +332,7 @@ test('shortcut respects existing dialogs, readiness and IME composition', async 
     const host = f.win.document.querySelector<HTMLDialogElement>('#host-dialog')!;
     host.showModal(); shortcut(); assert.equal(f.dialog.open, false); host.close();
     shortcut(); assert.equal(f.dialog.open, true);
-    f.query('new'); f.key('Enter', { isComposing: true }); await tick(); assert.deepEqual(f.calls, []);
+    f.query('new session'); f.key('ArrowDown'); f.key('Enter', { isComposing: true }); await tick(); assert.deepEqual(f.calls, []);
     f.key('Enter', { repeat: true }); await tick(); assert.deepEqual(f.calls, []);
     f.key('Enter'); await tick(); assert.deepEqual(f.calls, ['new']);
   } finally { f.dispose(); }
@@ -342,7 +344,54 @@ test('keyboard arrows wrap selection and pointer choice uses the same action pat
     f.palette.open(); f.key('ArrowUp');
     assert.equal(f.input.getAttribute('aria-activedescendant'), f.list().children[3].id);
     f.key('ArrowDown'); assert.equal(f.input.getAttribute('aria-activedescendant'), f.list().children[0].id);
-    (f.list().children[2] as HTMLElement).click(); await tick();
+    (f.list().children[1] as HTMLElement).click(); await tick();
     assert.deepEqual(f.calls, ['new']); assert.equal(f.dialog.open, false);
+  } finally { f.dispose(); }
+});
+
+
+test('command MRU records acceptance only, keeps filtering and picker order independent', async () => {
+  const usage: { id: string; lastUsedAt: number; useCount: number }[] = [];
+  const accepted: string[] = [];
+  const f = fixture(async () => ({ items: [] }), {
+    usage: () => usage,
+    record: id => { accepted.push(id); usage.unshift({ id, lastUsedAt: 1, useCount: 1 }); },
+  });
+  try {
+    f.palette.open(); f.key('ArrowDown'); f.key('Escape'); await tick();
+    assert.deepEqual(accepted, []);
+    f.palette.open(); f.query('switch'); f.key('Enter'); await tick();
+    assert.deepEqual(accepted, ['switch']);
+    f.key('Escape'); await tick(); f.palette.open();
+    assert.match(f.list().firstElementChild!.textContent!, /Switch session/);
+    f.query('new session'); assert.equal(f.list().children.length, 2);
+    f.key('ArrowDown');
+    assert.match(f.list().querySelector('[aria-selected=true]')!.textContent!, /New session/);
+    f.key('Enter'); f.key('Enter'); await tick();
+    assert.deepEqual(accepted, ['switch', 'new']);
+    await f.palette.openSessions(); f.key('Enter'); await tick();
+    assert.deepEqual(accepted, ['switch', 'new'], 'picker choices are not commands');
+    const request = f.palette.startSelection('Custom picker', () => {})!;
+    const choice = request.choose(['Zulu', 'Alpha']);
+    assert.equal(f.list().firstElementChild!.textContent, 'Zulu');
+    f.key('Escape'); assert.equal(await choice, undefined);
+  } finally { f.dispose(); }
+});
+
+test('ranking strategy is injectable and receives filtered commands, query and usage', () => {
+  let invocations = 0;
+  const f = fixture(undefined, {
+    usage: () => [], record() {},
+    strategy: { id: 'reverse', rank(commands, context) {
+      invocations++; assert.deepEqual(context.usage, []);
+      if (context.query) assert.ok(commands.every(c => c.label.includes('New')));
+      return [...vscodeMruRanking.rank(commands, context)].reverse();
+    } },
+  });
+  try {
+    f.palette.open(); assert.match(f.list().firstElementChild!.textContent!, /Switch/);
+    f.query('New'); assert.equal(f.list().children.length, 2);
+    assert.match(f.list().firstElementChild!.textContent!, /New session/);
+    assert.equal(invocations, 2);
   } finally { f.dispose(); }
 });
