@@ -600,7 +600,7 @@ function activate(tab: Tab, focus = true, reveal = true, scroll = true, connect 
   if (!ready || !tabs.includes(tab)) return;
   notificationNavigation++;
   // Explicit navigation reaches every open session, but never leaves a shown
-  // conversation without its selected row. Boot/close fallback must not change views.
+  // conversation without its selected row. Cleanup chooses any view change itself.
   if (reveal && sidebarView !== 'all' && !sidebarTabs().includes(tab)) {
     sidebarView = 'all';
     if (workspace) save(`nimrod.sidebar.view:${workspace}`, sidebarView);
@@ -613,8 +613,8 @@ function activate(tab: Tab, focus = true, reveal = true, scroll = true, connect 
   persistTabs(); controls(); syncPopouts();
   if (reveal && scroll && presented === tab) revealSidebarRow(required('session-sidebar'), tab.rowNode);
   if (focus && presented === tab && !document.querySelector('dialog[open]')) (tab.focus?.isConnected ? tab.focus : tab.root.querySelector<HTMLElement>('[data-pi-id="prompt"]'))?.focus({ preventScroll: true });
-  // An inactive persisted session becomes live as soon as it is selected; there
-  // is no separate unavailable-session state for the user to resolve.
+  // Explicit selection resumes inactive persisted sessions. Automatic cleanup
+  // replacement passes connect=false so navigation alone never starts a process.
   if (connect && presented === tab && tab.file?.exists && !deletion.pending && !deletion.blocked(tab.file.path) && !tab.starting && !tab.closing && !tab.restarting && (!tab.session || tab.ended)) void launch(tab, undefined, true);
 }
 function refreshTime(tab: Tab): void {
@@ -857,19 +857,30 @@ function removeDeletedSessions(files: string[]): void {
     if ((stored(lastKey) as LastSession | null)?.path === file) save(lastKey, null);
   }
   try { purgeDeletedDrafts(localStorage, files); } catch (e) { persistenceError(e); }
-  if (selected && removed.includes(selected)) {
+  if (selected && removed.includes(selected)) selectCleanupReplacement(selected, shown, before);
+  controls(); persistTabs(); syncPopouts();
+}
+function selectCleanupReplacement(selected: Tab, shown: Tab[], before: Tab[]): void {
+  const connected = (tab: Tab) => !!tab.session && !tab.ended && !tab.session.state.sessionUnavailable &&
+    !tab.starting && !tab.closing && !tab.restarting && !tab.deleting && !deletion.blocked(tab.file?.path);
+  const visible = sidebarTabs(), all = recentSessions(tabs), membership = new Set(visible);
+  // Inbox order is arrival-based; preference uses All recency and stable open-order ties.
+  let next = all.find(tab => membership.has(tab) && connected(tab));
+  if (!next) {
+    next = all.find(connected);
+    if (next && sidebarView !== 'all') selectSidebarView('all');
+  }
+  if (!next) {
     const nextIn = (order: Tab[], candidates: Tab[]) => {
       const index = order.indexOf(selected), allowed = new Set(candidates);
       return order.slice(index + 1).find(tab => allowed.has(tab)) || order.slice(0, Math.max(0, index)).reverse().find(tab => allowed.has(tab)) || candidates[0];
     };
-    let next = nextIn(shown, sidebarTabs());
-    // Tree deletion intentionally differs from ordinary Close: the agreed
-    // deletion flow falls back to All when the current filter is exhausted.
-    if (!next && sidebarView !== 'all') { selectSidebarView('all'); next = nextIn(before, recentSessions(tabs)); }
-    if (next) activate(next, true, false);
-    else { conversation.hidden = true; required('mode-badge').textContent = ''; }
+    next = nextIn(shown, visible);
+    if (!next && sidebarView !== 'all') { selectSidebarView('all'); next = nextIn(before, all); }
   }
-  controls(); persistTabs(); syncPopouts();
+  // Cleanup never reconnects an inactive fallback, marks use or reveals the row.
+  if (next) activate(next, true, false, false, false);
+  else { conversation.hidden = true; required('mode-badge').textContent = ''; }
 }
 function disposeTab(tab: Tab): void {
   if (!tabs.includes(tab)) return;
@@ -888,16 +899,14 @@ function detachTab(tab: Tab): void {
   tab.closing = true;
   if (tab.token) dialogs.cancel(tab.token);
   tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' }); tab.session?.rpc.disconnect('Session closed');
-  const shown = sidebarTabs(), index = shown.indexOf(tab);
+  const shown = [...sidebarTabs()], before = recentSessions(tabs);
   tabs.splice(tabs.indexOf(tab), 1); tab.view.dispose();
   try { tab.drafts.discardTemporary(); } catch (e) { persistenceError(e); }
   tab.root.remove(); tab.rowNode.remove();
   if (presented === tab) presentConversation(undefined);
   if (active === tab) {
     active = undefined;
-    const candidates = sidebarTabs();
-    const next = candidates[Math.max(0, Math.min(index, candidates.length - 1))] || recentSessions(tabs)[0];
-    if (next) activate(next, true, false);
+    selectCleanupReplacement(tab, shown, before);
   }
   for (const item of tabs) updateTab(item);
   controls(); persistTabs(); syncPopouts();

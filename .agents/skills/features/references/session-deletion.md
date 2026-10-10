@@ -204,7 +204,7 @@ an event arrives before the command result. Batch confirmed files once, dispose
 mounted views/receivers first, then choose replacement once. Never ordinary Close,
 reconfirm, stop unrelated tokens or resume a soon-to-be-deleted descendant.
 Removing a background subtree leaves a surviving selection unchanged. Selection
-uses existing next/previous sidebar behavior; do not create a replacement session.
+uses the shared [connected-first cleanup policy](projects-and-sessions.md#selection-after-close-or-successful-deletion): most-recently-used connected in the current view, then across All, then next/previous inactive fallback. Automatic replacement never reconnects or creates a session; explicit selection is required to resume an inactive fallback.
 
 Success clears corresponding `nimrod.tabs.v1:<cwd>` layouts, `nimrod.recency.v1:<cwd>`
 identity-bound timestamp entries (including closed projects), matching last-session

@@ -395,6 +395,42 @@ test('sidebar hover spans the entire session row without splitting at Close', as
   } finally { await demo.close(); }
 });
 
+test('Close reuses the latest connected session across filters with its draft and reading position intact', async ({ page }) => {
+  const demo = await demoFixture(page);
+  try {
+    const firstPanel = await page.locator('.session-view').getAttribute('id');
+    const firstRow = page.locator(`${sessions}[aria-controls="${firstPanel}"]`);
+    await newOfflineDemo(page);
+    const secondPanel = await page.locator('.session-view:not([hidden])').getAttribute('id');
+    const secondRow = page.locator(`${sessions}[aria-controls="${secondPanel}"]`);
+    await newOfflineDemo(page);
+    await firstRow.click();
+    await demo.turn(1); await demo.turn(2);
+    await page.locator(visible('transcript-viewport')).hover(); await page.mouse.wheel(0, -10000);
+    await expect.poll(async () => (await demo.metrics()).gap).toBeGreaterThan(100);
+    const reading = (await demo.metrics()).top;
+    await page.locator(visible('prompt')).fill('Keep replacement draft');
+    await secondRow.click();
+    await page.locator(visible('prompt')).fill('Settle selected Working row');
+    await page.locator(visible('prompt')).press('Enter');
+    await expect(page.locator('#sidebar-working-count')).toHaveText('1');
+    await page.locator('#sidebar-working').click();
+    await expect(page.locator('#sidebar-working-count')).toHaveText('0');
+    await expect(page.locator('#conversation')).toBeVisible();
+    const starts = demo.calls.filter(c => c.command === 'start_pi').length;
+    await secondRow.locator('..').locator('.session-close').click();
+    await expect(page.locator('#host-dialog')).toBeVisible(); await page.keyboard.press('Enter');
+    await expect(page.locator(sessions)).toHaveCount(2);
+    await expect(page.locator('#sidebar-all')).toHaveAttribute('aria-selected', 'true');
+    await expect(firstRow).toHaveAttribute('aria-current', 'true');
+    await expect(page.locator(visible('prompt'))).toHaveValue('Keep replacement draft');
+    await expect(page.locator(visible('prompt'))).toBeFocused();
+    await expect.poll(async () => Math.abs((await demo.metrics()).top - reading)).toBeLessThanOrEqual(2);
+    expect(demo.calls.filter(c => c.command === 'start_pi')).toHaveLength(starts);
+    expect(demo.children.size).toBe(2); expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
 test('older-history reading position survives hiding a session during background streaming', async ({ page }) => {
   const demo = await demoFixture(page);
   try {

@@ -640,7 +640,7 @@ test('attention blanks filtered conversations, preserves mounted state and treat
   } finally { f.dom.window.close(); }
 });
 
-test('restored attention view stays blank and closing its last visible row never selects a hidden session', async () => {
+test('restored attention view stays blank and closing its last visible row selects a connected session in All', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project', appState: {
     'nimrod.sidebar.view:/project': 'attention',
     'nimrod.tabs.v1:/project': { tabs: [{ path: '/sessions/old.jsonl', sessionId: 'fixture-id', name: 'Old' }] },
@@ -664,9 +664,9 @@ test('restored attention view stays blank and closing its last visible row never
     assert.ok(row); row.click();
     f.win.document.querySelector<HTMLButtonElement>('.open-session:not([hidden]) .session-close')!.click();
     await f.tick(); await f.tick();
-    assert.equal(f.element('sidebar-unread').getAttribute('aria-selected'), 'true');
-    assert.equal(f.element('conversation').hidden, true);
-    assert.equal(roots[1].hidden, true);
+    assert.equal(f.element('sidebar-all').getAttribute('aria-selected'), 'true');
+    assert.equal(f.element('conversation').hidden, false);
+    assert.equal(roots[1].hidden, false);
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 2);
   } finally { f.dom.window.close(); }
 });
@@ -691,7 +691,7 @@ test('returned deletion results remove a whole subtree once and select according
       const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Deleted draft'; prompt.dispatchEvent(new f.win.Event('input'));
       f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick(); await f.tick();
       assert.equal(f.win.document.querySelectorAll('.session-row').length, 2);
-      const expected = view === 'all-last' ? rows[1] : rows[0];
+      const expected = view === 'all-last' ? rows[1] : view === 'attention' ? rows[0] : rows[3];
       assert.equal(expected.getAttribute('aria-current'), 'true', `${view}: ${rows.map(row => `${row.id}:${row.getAttribute('aria-current')}`).join(', ')}`);
       assert.equal(f.element('sidebar-unread').getAttribute('aria-selected'), String(view === 'attention'));
       assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 4, 'no deleted or intermediate replacement launches');
@@ -699,6 +699,58 @@ test('returned deletion results remove a whole subtree once and select according
       const closed = JSON.parse(f.win.localStorage.getItem('nimrod.sessions.v1:/closed')!);
       assert.equal(closed.drafts[`file:${root}`], undefined); assert.equal(closed.last, undefined); assert.equal(closed.drafts['file:/keep'].draft, 'Keep');
       assert.deepEqual((f.preferences.value.state['nimrod.tabs.v1:/project'] as { tabs: { path: string }[] }).tabs.map(tab => tab.path), ['/sessions/new.jsonl', view === 'all-last' ? '/sessions/new-1.jsonl' : '/sessions/new-3.jsonl']);
+    } finally { f.dom.window.close(); }
+  }
+});
+
+test('Close and Delete share connected-first cleanup selection without implicit launches', async () => {
+  for (const action of ['close', 'delete']) for (const scenario of ['all', 'unread-visible', 'unread-hidden', 'working-hidden', 'inactive-next', 'inactive-previous', 'background']) {
+    let now = 1_700_000_000_000;
+    const selectedIndex = scenario === 'inactive-previous' ? 0 : 1;
+    const file = selectedIndex ? '/sessions/new-1.jsonl' : '/sessions/new.jsonl';
+    const f = await fixture(undefined, { windowWorkspace: '/project', clock: () => now,
+      deleteTree: async () => [{ file, deleted: true }] });
+    try {
+      for (let i = 0; i < 4; i++) { now += 1000; f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick(); }
+      const rows = f.rows(), channels = [...f.sessions.values()].map(s => s.channel);
+      const emit = (i: number, event: JsonRecord) => channels[i].onmessage({ kind: 'rpc', value: event });
+      const complete = (i: number) => { emit(i, { type: 'agent_start' }); emit(i, { type: 'agent_settled' }); };
+      const disconnect = (i: number) => channels[i].onmessage({ kind: 'disconnected', message: 'Fixture inactive' });
+      let expected = 3, view = 'all';
+      if (scenario === 'all') {
+        // An acknowledged prompt, not connection time or selection, makes the oldest entry latest-used.
+        rows[0].click(); now += 1000;
+        const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Fixture acknowledged prompt'; prompt.dispatchEvent(new f.win.Event('input'));
+        f.element<HTMLButtonElement>('send').click(); await f.tick(); await f.tick();
+        disconnect(2); expected = 0;
+      } else if (scenario.startsWith('unread')) {
+        for (const i of scenario === 'unread-visible' ? [1, 2, 0] : [1, 2]) complete(i);
+        disconnect(2);
+        f.element<HTMLButtonElement>('sidebar-unread').click();
+        if (scenario === 'unread-visible') { expected = 0; view = 'unread'; }
+      } else if (scenario === 'working-hidden') {
+        rows[1].click(); emit(1, { type: 'agent_start' });
+        f.element<HTMLButtonElement>('sidebar-working').click(); emit(1, { type: 'agent_settled' });
+        // Selected settled row stays readable, but the connected fallback is outside Working.
+      } else if (scenario.startsWith('inactive')) {
+        for (const i of [0, 1, 2, 3]) if (i !== selectedIndex) disconnect(i);
+        expected = selectedIndex ? 0 : 1;
+      } else if (scenario === 'background') expected = 3;
+      rows[scenario === 'background' ? 3 : selectedIndex].click(); await f.tick();
+      const before = f.calls.filter(c => c.command === 'start_pi').length;
+      const recency = rows.map(row => row.querySelector('time')!.getAttribute('datetime'));
+      const target = rows[selectedIndex].parentElement!;
+      target.querySelector<HTMLButtonElement>(action === 'close' ? '.session-close' : '.session-delete')!.click();
+      await f.tick(); await f.tick(); await f.tick();
+      assert.equal(rows[expected].getAttribute('aria-current'), 'true', `${action}/${scenario}`);
+      assert.equal(f.element(`sidebar-${view}`).getAttribute('aria-selected'), 'true', `${action}/${scenario} view`);
+      assert.equal(f.calls.filter(c => c.command === 'start_pi').length, before, `${action}/${scenario}: cleanup must not launch`);
+      for (const i of [0, 1, 2, 3]) if (i !== selectedIndex) assert.equal(rows[i].querySelector('time')!.getAttribute('datetime'), recency[i], 'cleanup must not mark use');
+      if (scenario.startsWith('inactive')) {
+        assert.equal(rows[expected].querySelector('.session-indicator')!.getAttribute('data-state'), 'failed');
+        rows[expected].click(); await f.tick(); await f.tick();
+        assert.equal(f.calls.filter(c => c.command === 'start_pi').length, before + 1, 'explicit selection resumes the inactive fallback');
+      }
     } finally { f.dom.window.close(); }
   }
 });

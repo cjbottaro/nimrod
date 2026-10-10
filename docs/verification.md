@@ -1,5 +1,12 @@
 # PoC verification
 
+## Connected-first selection after Close or deletion
+
+- Implemented on `fix/connected-session-fallback` in `.worktrees/connected-session-fallback`. Both cleanup paths keep a surviving selection; otherwise prefer the latest-used eligible connected session in the current view, then across All. With none connected, select the next/previous surviving row (falling back to All when the filter is exhausted) without starting Pi. Explicit selection remains the reconnect boundary. Recency means existing creation/history/acknowledged-prompt order, not clicks or connection time; stable ties use All's open order.
+- `mise run check` passes **361 TypeScript/Node tests**, Rust formatting/Clippy and **93 default Rust tests** (two opt-in Pi smokes ignored). The shared shell matrix covers both actions, acknowledged-prompt versus positional/connection ordering, current-filter preference versus newer hidden connections, Unread/Working-to-All fallback, inactive next/previous selection without launch, explicit reconnect, unchanged recency and background selection. Existing subtree fixtures verify batched disposal before a single replacement.
+- All **36 offline WebKit tests** pass, including a new Close regression reusing the latest surviving connected offline child from a settled Working selection, restoring its draft, composer focus and older-history reading position without a new process. `CARGO_NET_OFFLINE=true mise run build` packages/ad-hoc-signs/verifies `.worktrees/connected-session-fallback/src-tauri/target/release/bundle/macos/Nimrod.app`.
+- No primary-checkout/default bundle change, user app/window launch or interruption, live Pi/model request, real user-session deletion, upstream extension change, commit or push occurred. Browser tests use isolated offline fixtures; native Tauri visual/focus and Linux/possible Windows acceptance remain for user validation.
+
 ## Shared sidebar, Resume and Switch session rows
 
 - Implemented on `refactor/shared-session-rows` in `.worktrees/shared-session-rows`. All three surfaces share row DOM/update helpers, heading/truncation, indicators, timestamp formatting and CSS. Resume adds a separate Open badge; already-open history reuses sidebar state/time, while closed history uses the inactive indicator and remembered/latest saved user-message time. Preview/path search, history ordering, discovery and open/resume lifecycle remain unchanged.
