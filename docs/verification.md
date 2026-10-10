@@ -1,5 +1,11 @@
 # Verification
 
+## Project bar vertical alignment
+
+- Local change on `ui/project-bar-alignment` in `.worktrees/project-bar-alignment`: `#project-identity` now uses `align-items:center` rather than baseline alignment. Font sizes, weights, spacing and truncation are unchanged.
+- `mise run check` and `mise run build` pass, including macOS bundle-signature verification. The targeted offline WebKit Project bar test passes, asserting name/parent line-box centers differ by less than one pixel at 1100/560/360px widths and 125% fixture zoom, alongside existing truncation checks.
+- Native visual acceptance remains user validation; Linux/possible Windows were not verified. Primary checkout/default bundle and running app remain untouched. No live Pi/models, user-session changes, commit or push.
+
 ## Confirmation action language
 
 - Implemented locally on `dialog-action-language` in `.worktrees/dialog-action-language`. Host confirmations, fresh populated deletion reviews and eligible keybinding resets focus the confirmation action, display decorative Enter/Esc hints and use specific shell action labels. Enter on Cancel cancels instead of overriding focus; Escape cancels. Visible deletion loading retains Cancel focus as the tree arrives. Pi confirmation labels and input/select/shortcut-recording behavior remain distinct.

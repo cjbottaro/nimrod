@@ -27,8 +27,11 @@ test('project identity preserves its name while the parent truncates, including 
           barOverflow: bar.scrollWidth > bar.clientWidth + 1,
           nameRight: name.getBoundingClientRect().right,
           identityRight: identity.getBoundingClientRect().right,
+          centerDelta: Math.abs((name.getBoundingClientRect().top + name.getBoundingClientRect().height / 2)
+            - (parent.getBoundingClientRect().top + parent.getBoundingClientRect().height / 2)),
         };
       });
+      expect(layout.centerDelta).toBeLessThan(1);
       expect(layout.nameTruncated).toBe(false);
       expect(layout.barOverflow).toBe(false);
       expect(layout.nameRight).toBeLessThanOrEqual(layout.identityRight + 1);
