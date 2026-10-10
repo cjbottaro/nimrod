@@ -1,5 +1,11 @@
 # PoC verification
 
+## Recent-project indicator refinement
+
+- Implemented on `fix/recent-project-indicators` in `.worktrees/recent-project-indicators`. Project-only CSS reduces the dot slot to 8px plus a 4px name gap, retaining alignment for unopened rows and the existing 8px name/parent gap. The Enter hint is visible only on the selected row; `visibility:hidden` on other rows reserves its 16px slot. Hover alone does not reveal it. Model/thinking marker spacing, keyboard dispatch, native chooser and routing remain unchanged.
+- `mise run check` passes **377 TS/Node tests**, formatting/Clippy and **97 Rust tests** (two opt-in smokes ignored). All **39 offline WebKit tests** pass. Project coverage checks initial/ArrowDown/ArrowUp/filtered Enter visibility, hidden hints on hover, identical text/icon geometry across selection, exact marker/name and name/parent gaps at fractional zoom and both 1100/560px widths. Existing model/thinking geometry coverage passes unchanged.
+- `CARGO_NET_OFFLINE=true mise run build` packages/ad-hoc-signs/verifies `.worktrees/recent-project-indicators/src-tauri/target/release/bundle/macos/Nimrod.app`. Primary checkout/default bundle and running app are untouched. No live Pi/models, user-session changes, upstream modifications, commit or push. Native visual/focus and Linux/possible Windows acceptance remain user validation.
+
 ## Single-line recent-project rows
 
 - Implemented in `.worktrees/recent-project-rows` on `feat/recent-project-rows`. Recent-project entries are one inline row: fixed open-dot slot, directory name, muted parent directory, right-aligned Enter SVG hint. Name/parent truncation preserves the icon, full canonical paths remain searchable/accessibly labeled, and Enter/click reuse the existing post-close navigation. The folder-chooser footer and browsing callback/state are removed. Native File → Open project / Cmd/Ctrl+O is unchanged; configurable Cmd/Ctrl+Shift+O and palette/menu entry retain their picker behavior.

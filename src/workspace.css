@@ -104,9 +104,11 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor:col-resize !important; u
 #palette-list small { color:var(--vscode-descriptionForeground); font-size:11px; }
 #palette-list [aria-selected=true] { background:var(--vscode-list-activeSelectionBackground); color:var(--vscode-list-activeSelectionForeground); }
 #palette-list .palette-project-row .palette-item-heading { width:100%; }
+#palette-list .palette-project-row .palette-selection-marker { flex-basis:8px; margin-right:-4px; }
 #palette-list .palette-project-row .palette-item-label { flex:0 0 auto; max-width:55%; }
 #palette-list .palette-project-parent { flex:0 1 auto; min-width:0; }
-#palette-list .palette-project-enter { flex:0 0 16px; width:16px; height:16px; margin-left:auto; color:var(--vscode-descriptionForeground); }
+#palette-list .palette-project-enter { flex:0 0 16px; width:16px; height:16px; margin-left:auto; color:var(--vscode-descriptionForeground); visibility:hidden; }
+#palette-list .palette-project-row[aria-selected=true] .palette-project-enter { visibility:visible; }
 #command-palette[data-mode=projects] #palette-list [role=option]:hover:not([aria-selected=true]) { background:var(--vscode-list-hoverBackground, var(--vscode-toolbar-hoverBackground)); }
 #palette-status { margin:0; font-size:11px; color:var(--vscode-descriptionForeground); white-space:pre-wrap; }
 @media (max-width:760px) { #session-sidebar { width:var(--session-sidebar-width,210px); } }

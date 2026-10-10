@@ -14,7 +14,11 @@ test('recent-project rows show dot/name/muted parent/Enter inline without a fold
     await expect(markers).toHaveCount(3);
     expect(await markers.allTextContents()).toEqual(['•', '', '']);
     await expect(page.locator('#palette-list .palette-item-badge, #palette-browse, #palette-project-footer')).toHaveCount(0);
-    await expect(page.locator('#palette-list .palette-project-enter')).toHaveCount(3);
+    const enterHints = page.locator('#palette-list .palette-project-enter');
+    await expect(enterHints).toHaveCount(3);
+    await expect(enterHints.nth(0)).toBeVisible();
+    await expect(enterHints.nth(1)).toBeHidden();
+    await expect(enterHints.nth(2)).toBeHidden();
     const rows = page.locator('#palette-list .palette-project-row');
     const geometry = () => rows.evaluateAll(nodes => nodes.map(row => {
       const marker = row.querySelector('.palette-selection-marker')!;
@@ -22,7 +26,7 @@ test('recent-project rows show dot/name/muted parent/Enter inline without a fold
       const parent = row.querySelector('.palette-project-parent')!;
       const enter = row.querySelector('.palette-project-enter')!;
       const rect = (node: Element) => { const r = node.getBoundingClientRect(); return { left: r.left, right: r.right, mid: r.top + r.height / 2 }; };
-      return { row: rect(row), marker: rect(marker), label: rect(label), parent: rect(parent), enter: rect(enter), muted: getComputedStyle(parent).color,
+      return { row: rect(row), marker: rect(marker), markerBasis: getComputedStyle(marker).flexBasis, label: rect(label), parent: rect(parent), enter: rect(enter), muted: getComputedStyle(parent).color,
         description: getComputedStyle(document.querySelector('#palette-status')!).color, overflow: row.scrollWidth > row.clientWidth + 1,
         parentTruncated: parent.scrollWidth > parent.clientWidth };
     }));
@@ -30,7 +34,10 @@ test('recent-project rows show dot/name/muted parent/Enter inline without a fold
       await page.setViewportSize({ width, height: 800 });
       const layout = await geometry();
       for (const row of layout) {
-        expect(row.marker.right).toBeLessThanOrEqual(row.label.left);
+        expect(row.markerBasis).toBe('8px');
+        const zoom = (row.marker.right - row.marker.left) / 8;
+        expect((row.label.left - row.marker.right) / zoom).toBeCloseTo(4, 1);
+        expect((row.parent.left - row.label.right) / zoom).toBeCloseTo(8, 1);
         expect(row.label.right).toBeLessThanOrEqual(row.parent.left);
         expect(row.parent.right).toBeLessThanOrEqual(row.enter.left);
         expect(Math.abs(row.label.mid - row.parent.mid)).toBeLessThan(2);
@@ -40,6 +47,17 @@ test('recent-project rows show dot/name/muted parent/Enter inline without a fold
         expect(row.overflow, JSON.stringify(row)).toBe(false);
       }
       expect(layout[2].parentTruncated).toBe(true);
+      await page.locator('#palette-input').press('ArrowDown');
+      await expect(enterHints.nth(0)).toBeHidden();
+      await expect(enterHints.nth(1)).toBeVisible();
+      await expect(enterHints.nth(2)).toBeHidden();
+      const selectedLayout = await geometry();
+      expect(selectedLayout.map(row => [row.label.left, row.label.right, row.parent.left, row.parent.right, row.enter.left, row.enter.right]))
+        .toEqual(layout.map(row => [row.label.left, row.label.right, row.parent.left, row.parent.right, row.enter.left, row.enter.right]));
+      await rows.nth(2).hover(); await expect(enterHints.nth(2)).toBeHidden();
+      await page.locator('#palette-input').press('ArrowUp');
+      await expect(enterHints.nth(0)).toBeVisible();
+      await expect(enterHints.nth(1)).toBeHidden();
     }
     await page.keyboard.press('Escape');
     await page.keyboard.press('Meta+Shift+O');
@@ -47,6 +65,7 @@ test('recent-project rows show dot/name/muted parent/Enter inline without a fold
     await page.locator('#palette-input').fill('/other');
     await expect(page.locator('#palette-list [role=option]')).toHaveCount(1);
     await expect(page.locator('#palette-list small')).toHaveText(longParent);
+    await expect(page.locator('#palette-list .palette-project-enter')).toBeVisible();
     await page.locator('#palette-input').fill('no match');
     await expect(page.locator('#palette-list [role=option]')).toHaveCount(0);
     await expect(page.locator('#palette-browse')).toHaveCount(0);
