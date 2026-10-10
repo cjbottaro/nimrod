@@ -43,9 +43,15 @@ Closing a session waits for its agent to stop before removing it from the sideba
 
 When Close or successful deletion removes the selected session, Nimrod prefers the **most recently used connected session** in the current sidebar view, then across **All** (switching views if needed). “Most recently used” follows creation/history time and acknowledged prompts, not clicks or connection time. If none are connected, it selects the next surviving row, or the previous row when none follow; an exhausted filter falls back to All. **That automatic selection never starts Pi.** Explicitly select the inactive row or use Switch/Resume to reconnect it. Removing a background session leaves the surviving selection unchanged; removing the last session never creates one.
 
-Default shortcuts (customizable in [Settings → Keybindings](keybindings.md)): **⌘/Ctrl N** creates a session, **⌘ Option N / Ctrl Alt N** opens New named session, **⌘/Ctrl ⇧ N** creates a temporary session, **⌘/Ctrl T** searches open sessions, **⌘/Ctrl K** searches saved project history, **⌘/Ctrl Backspace** opens deletion review, **⌘/Ctrl M** selects a model, **⌘/Ctrl E** selects thinking level/effort, **⌘/Ctrl W** closes it, **⌘/Ctrl B** toggles the sidebar, and **⌘/Ctrl ⇧ [ / ]** switches open sessions.
+Default shortcuts (customizable in [Settings → Keybindings](keybindings.md)): **⌘/Ctrl N** creates a session, **⌘ Option N / Ctrl Alt N** opens New named session, **⌘/Ctrl ⇧ N** creates a temporary session, **⌘/Ctrl T** searches open sessions, **⌘/Ctrl K** searches saved project history, **⌘/Ctrl Backspace** opens deletion review, **⌘/Ctrl M** selects a model, **⌘/Ctrl E** selects thinking level/effort, **⌘/Ctrl W** closes it, **⌘/Ctrl B** toggles the sidebar, and **⌘/Ctrl ⇧ [ / ]** switches to the previous/next open session in the sidebar's **All** order, wrapping at either end. Cycling still covers all open sessions when the sidebar is hidden or filtered; a filtered-out target switches the view to All.
 
-### Sidebar width
+### Session navigation
+
+The sidebar's **All** view, **Switch session** picker and previous/next shortcuts share the same most-recently-used order. Switching does not change that order; only creation, historical resume seeds and Pi-acknowledged prompts establish recency. Previous/next wraps at either end and reaches all open sessions even when the sidebar is hidden or filtered.
+
+**Unread** intentionally uses arrival order; **Working** filters All's order. Sidebar arrow-key focus follows the rows currently displayed. Switch or cycling to a filtered-out session returns to All. Filtering alone never starts an agent; automatic Close/deletion replacement never reconnects an inactive session. **Resume session** remains a separate saved-history picker, not an open-session projection.
+
+## Sidebar width
 
 Drag the sidebar's right edge to resize it. Width is remembered per project in app state, independently of All/Unread/Working and whether the sidebar is hidden. A narrower window temporarily caps the width; your preferred size returns when space is available. Narrow windows retain the existing overlay sidebar.
 

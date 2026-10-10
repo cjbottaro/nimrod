@@ -2,9 +2,9 @@ import { Channel, invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { notificationPreview, sessionNotifications, type NotificationDispatch, type NotificationClick } from './notifications';
-import { SessionAttention } from './session-attention';
+import { SessionNavigation, SESSION_VIEWS, type SessionView, type SelectionIntent, type NavigationSnapshot } from './session-navigation';
 import { installSidebarResize, sidebarWidthKey } from './sidebar-resize';
-import { lastUsed, recentSessions, nextLastUsed, captureSidebarScroll, revealSidebarRow, SessionRecency } from './session-recency';
+import { lastUsed, captureSidebarScroll, revealSidebarRow, SessionRecency } from './session-recency';
 import { sessionIndicator, createSessionRowContent, updateSessionRowContent, updateSessionRowTime, installSessionTimeRefresh } from './session-sidebar';
 import { installDeletionReview } from './deletion-review';
 import { SessionDeletion, type DeletionEvent, type DeletionSnapshot } from './session-deletion';
@@ -72,13 +72,12 @@ let sidebarVisible = stored('nimrod.sidebar.visible') !== false;
 let active: Tab | undefined;
 // Remember navigation separately from the conversation actually shown by the filter.
 let presented: Tab | undefined;
-const tabs: Tab[] = [];
+const navigation = new SessionNavigation<Tab>({ needsAttention, isWorking, isConnected });
+// Read-only lifecycle/storage membership; UI order comes only from navigation projections.
+const tabs = navigation.open();
 let recency = new SessionRecency(undefined);
-const sessionAttention = new SessionAttention();
-const sidebarViews = ['all', 'unread', 'working'] as const;
-type SidebarView = typeof sidebarViews[number];
-const sessionWorking = new SessionAttention();
-let sidebarView: SidebarView = 'all';
+const sidebarViews = SESSION_VIEWS;
+let sidebarView: SessionView = 'all';
 function popoutError(message: string): void {
   const notice = required('storage-error');
   notice.hidden = false; notice.textContent = `Pop-outs: ${message}`;
@@ -253,7 +252,7 @@ const unlistenNotificationClicks = await listen<NotificationClick>('nimrod-notif
     if (navigation !== notificationNavigation || !valid() || !tab) return;
     // Dismiss shell navigation, never resolve/cancel Pi's pending input dialogs.
     palette.close(); settings.close();
-    activate(tab, true, true, true, false);
+    activate(tab, 'notification');
     tab.view.scrollToBottom();
   })();
 }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
@@ -292,16 +291,14 @@ function isWorking(tab: Tab): boolean {
   return !tab.starting && !tab.closing && !tab.restarting && !tab.deleting && !tab.ended && !tab.inputCount &&
     !!state && !state.sessionUnavailable && (state.busy || !!presentActivity(false, '', state.extensionStatuses).subagents);
 }
-function sidebarTabs(): Tab[] {
-  const order = sessionAttention.reconcile(tabs.map(tab => ({ id: tab.id, needsAttention: needsAttention(tab) })), presented?.id);
-  // Reuse selected-row retention so a run settling doesn't hide the response being read.
-  const working = new Set(sessionWorking.reconcile(tabs.map(tab => ({ id: tab.id, needsAttention: isWorking(tab) })), sidebarView === 'working' ? presented?.id : undefined));
-  const byId = new Map(tabs.map(tab => [tab.id, tab]));
-  return sidebarView === 'unread' ? order.map(id => byId.get(id)!) :
-    recentSessions(tabs).filter(tab => sidebarView === 'all' || working.has(tab.id));
+function isConnected(tab: Tab): boolean {
+  return !!tab.session && !tab.ended && !tab.session.state.sessionUnavailable &&
+    !tab.starting && !tab.closing && !tab.restarting && !tab.deleting && !deletion.blocked(tab.file?.path);
 }
+function navigationSnapshot(): NavigationSnapshot<Tab> { return navigation.snapshot(sidebarView, presented, active); }
+function sidebarTabs(): readonly Tab[] { return navigationSnapshot().visible; }
 function touchTab(tab: Tab): void {
-  tab.lastUsed = nextLastUsed(tabs);
+  tab.lastUsed = navigation.nextRecency();
   refreshTime(tab);
   renderSidebar(tab.rowNode);
   persistTabs();
@@ -323,7 +320,7 @@ function renderSidebar(moved?: HTMLElement): void {
     if (tab.rowNode === anchor) anchor = anchor.nextElementSibling;
     else list.insertBefore(tab.rowNode, anchor);
   }
-  const counts = { all: tabs.length, unread: tabs.filter(needsAttention).length, working: tabs.filter(isWorking).length };
+  const counts = navigation.counts();
   for (const view of sidebarViews) {
     const control = required<HTMLButtonElement>(`sidebar-${view}`);
     control.setAttribute('aria-selected', String(sidebarView === view)); control.tabIndex = sidebarView === view ? 0 : -1;
@@ -343,12 +340,12 @@ function renderSidebar(moved?: HTMLElement): void {
   if (!filteredFocus && focused instanceof HTMLElement && focused.isConnected && document.activeElement !== focused) focused.focus({ preventScroll: true });
   if (filteredFocus && !document.querySelector('dialog[open]')) required(`sidebar-${sidebarView}`).focus({ preventScroll: true });
 }
-function selectSidebarView(view: SidebarView): void {
+function selectSidebarView(view: SessionView): void {
   notificationNavigation++;
   const returningToAll = view === 'all' && sidebarView !== 'all';
   sidebarView = view;
   if (workspace) save(`nimrod.sidebar.view:${workspace}`, view);
-  const target = active && sidebarTabs().includes(active) ? active : undefined;
+  const target = navigation.presented(navigationSnapshot());
   presentConversation(target);
   if (target) { target.unread = false; updateTab(target); }
   controls();
@@ -465,15 +462,15 @@ async function enterWorkspace(path: string): Promise<void> {
     tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
   }
   ready = true;
-  const selected = tabs.find(t => t.file?.path === layout?.active) || recentSessions(tabs)[0];
-  if (selected) activate(selected, false, false);
+  const selected = tabs.find(t => t.file?.path === layout?.active) || navigation.all()[0];
+  if (selected) activate(selected, 'restore');
   controls();
 }
 async function ensureWorkspace(): Promise<boolean> { return !!workspace || await openWorkspace(cwd.value.trim()); }
 function openSessionPicker(): PalettePage {
   return {
     notice: tabs.length ? undefined : 'No open sessions.',
-    items: tabs.map(tab => ({
+    items: navigation.all().map(tab => ({
       id: tab.id,
       label: tab.title,
       sessionRow: sessionRow(tab),
@@ -556,7 +553,7 @@ function createTab(mode: LaunchMode, demo: boolean, file?: SessionFile, title = 
   const notice = document.createElement('div'); notice.className = 'tab-notice'; notice.hidden = true; root.append(notice);
   conversation.append(root);
   const rowNode = document.createElement('div'); rowNode.className = 'open-session';
-  const row = button('', () => activate(tab, true, true, false)); row.className = 'session-row'; row.id = `session-${id}`; row.setAttribute('aria-controls', root.id);
+  const row = button('', () => activate(tab, 'row')); row.className = 'session-row'; row.id = `session-${id}`; row.setAttribute('aria-controls', root.id);
   root.setAttribute('aria-labelledby', row.id);
   const { rowLabel, rowIndicator, rowTime } = createSessionRowContent(row, `session-time-${id}`);
   const deleteButton = button('', () => { void deleteSession(tab); }); deleteButton.className = 'session-delete';
@@ -594,28 +591,26 @@ function createTab(mode: LaunchMode, demo: boolean, file?: SessionFile, title = 
   }, root);
   tab.receive?.({ type: 'snapshot', state: { sessionUnavailable: true } });
   tab.view.setActive(false);
-  tabs.push(tab); updateTab(tab); return tab;
+  navigation.add(tab); updateTab(tab); return tab;
 }
-function activate(tab: Tab, focus = true, reveal = true, scroll = true, connect = true): void {
-  if (!ready || !tabs.includes(tab)) return;
+function activate(tab: Tab, intent: SelectionIntent = 'explicit'): void {
+  if (!ready) return;
+  const plan = navigation.selection(tab, navigationSnapshot(), intent);
+  if (!plan) return;
   notificationNavigation++;
-  // Explicit navigation reaches every open session, but never leaves a shown
-  // conversation without its selected row. Cleanup chooses any view change itself.
-  if (reveal && sidebarView !== 'all' && !sidebarTabs().includes(tab)) {
-    sidebarView = 'all';
+  if (plan.view !== sidebarView) {
+    sidebarView = plan.view;
     if (workspace) save(`nimrod.sidebar.view:${workspace}`, sidebarView);
   }
-  active = tab;
-  presentConversation(sidebarTabs().includes(tab) ? tab : undefined);
+  active = plan.target;
+  presentConversation(navigation.presented(navigationSnapshot()));
   if (presented === tab) tab.unread = false;
-  // Navigation only selects/reveals. Recency changes exclusively on Pi's send acknowledgement.
+  // Effects live at this one boundary; the model never touches Pi or drafts.
   for (const item of tabs) updateTab(item);
   persistTabs(); controls(); syncPopouts();
-  if (reveal && scroll && presented === tab) revealSidebarRow(required('session-sidebar'), tab.rowNode);
-  if (focus && presented === tab && !document.querySelector('dialog[open]')) (tab.focus?.isConnected ? tab.focus : tab.root.querySelector<HTMLElement>('[data-pi-id="prompt"]'))?.focus({ preventScroll: true });
-  // Explicit selection resumes inactive persisted sessions. Automatic cleanup
-  // replacement passes connect=false so navigation alone never starts a process.
-  if (connect && presented === tab && tab.file?.exists && !deletion.pending && !deletion.blocked(tab.file.path) && !tab.starting && !tab.closing && !tab.restarting && (!tab.session || tab.ended)) void launch(tab, undefined, true);
+  if (plan.reveal && presented === tab) revealSidebarRow(required('session-sidebar'), tab.rowNode);
+  if (plan.focus && presented === tab && !document.querySelector('dialog[open]')) (tab.focus?.isConnected ? tab.focus : tab.root.querySelector<HTMLElement>('[data-pi-id="prompt"]'))?.focus({ preventScroll: true });
+  if (plan.connect && presented === tab && tab.file?.exists && !deletion.pending && !deletion.blocked(tab.file.path) && !tab.starting && !tab.closing && !tab.restarting && (!tab.session || tab.ended)) void launch(tab, undefined, true);
 }
 function refreshTime(tab: Tab): void {
   updateSessionRowTime(tab.rowTime, tab.lastUsed);
@@ -783,8 +778,8 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
 }
 function cycleTab(direction: 1 | -1): void {
   if (!active || !tabs.length || (tabs.length < 2 && presented)) return;
-  const index = tabs.indexOf(active);
-  activate(tabs[(index + direction + tabs.length) % tabs.length]);
+  const next = navigation.adjacent(active, direction);
+  if (next) activate(next);
 }
 function newNamedSession(): void {
   if (!ready || settings.isOpen) return;
@@ -792,7 +787,7 @@ function newNamedSession(): void {
 }
 async function newSession(mode: LaunchMode = 'saved', demo = false, copyDraft?: string, initialName?: string): Promise<void> {
   if (!ready || deletion.pending || settings.isOpen || !await ensureWorkspace()) return;
-  const tab = createTab(mode, demo, undefined, undefined, nextLastUsed(tabs)); activate(tab); await launch(tab, copyDraft, true, initialName);
+  const tab = createTab(mode, demo, undefined, undefined, navigation.nextRecency()); activate(tab); await launch(tab, copyDraft, true, initialName);
 }
 async function openSession(info: Pick<SessionSummary, 'path' | 'sessionId' | 'name' | 'lastUserMessageAt'>): Promise<void> {
   if (!ready || deletion.pending || settings.isOpen || !await ensureWorkspace()) return;
@@ -847,7 +842,7 @@ async function deleteSession(tab: Tab): Promise<void> {
   await deletion.run(tab.file!.path, tab.file!.sessionId);
 }
 function removeDeletedSessions(files: string[]): void {
-  const deleted = new Set(files), before = recentSessions(tabs), shown = [...sidebarTabs()], selected = active;
+  const deleted = new Set(files), before = navigationSnapshot(), selected = active;
   if (recency.delete(files) && workspace) save(recencyKey(), recency.dump());
   const removed = tabs.filter(tab => tab.file && deleted.has(tab.file.path));
   // Dispose the entire subtree before selecting or persisting a replacement.
@@ -857,35 +852,19 @@ function removeDeletedSessions(files: string[]): void {
     if ((stored(lastKey) as LastSession | null)?.path === file) save(lastKey, null);
   }
   try { purgeDeletedDrafts(localStorage, files); } catch (e) { persistenceError(e); }
-  if (selected && removed.includes(selected)) selectCleanupReplacement(selected, shown, before);
+  if (selected && removed.includes(selected)) selectCleanupReplacement(before);
   controls(); persistTabs(); syncPopouts();
 }
-function selectCleanupReplacement(selected: Tab, shown: Tab[], before: Tab[]): void {
-  const connected = (tab: Tab) => !!tab.session && !tab.ended && !tab.session.state.sessionUnavailable &&
-    !tab.starting && !tab.closing && !tab.restarting && !tab.deleting && !deletion.blocked(tab.file?.path);
-  const visible = sidebarTabs(), all = recentSessions(tabs), membership = new Set(visible);
-  // Inbox order is arrival-based; preference uses All recency and stable open-order ties.
-  let next = all.find(tab => membership.has(tab) && connected(tab));
-  if (!next) {
-    next = all.find(connected);
-    if (next && sidebarView !== 'all') selectSidebarView('all');
-  }
-  if (!next) {
-    const nextIn = (order: Tab[], candidates: Tab[]) => {
-      const index = order.indexOf(selected), allowed = new Set(candidates);
-      return order.slice(index + 1).find(tab => allowed.has(tab)) || order.slice(0, Math.max(0, index)).reverse().find(tab => allowed.has(tab)) || candidates[0];
-    };
-    next = nextIn(shown, visible);
-    if (!next && sidebarView !== 'all') { selectSidebarView('all'); next = nextIn(before, all); }
-  }
-  // Cleanup never reconnects an inactive fallback, marks use or reveals the row.
-  if (next) activate(next, true, false, false, false);
+function selectCleanupReplacement(before: NavigationSnapshot<Tab>): void {
+  const replacement = navigation.replacement(before, navigationSnapshot());
+  if (replacement.view !== sidebarView) selectSidebarView(replacement.view);
+  if (replacement.target) activate(replacement.target, 'cleanup');
   else { conversation.hidden = true; required('mode-badge').textContent = ''; }
 }
 function disposeTab(tab: Tab): void {
   if (!tabs.includes(tab)) return;
   tab.closing = true;
-  tabs.splice(tabs.indexOf(tab), 1);
+  navigation.remove(tab);
   if (active === tab) active = undefined;
   if (presented === tab) { tab.view.setActive(false); presented = undefined; conversation.hidden = true; }
   if (tab.token) dialogs.cancel(tab.token);
@@ -899,14 +878,14 @@ function detachTab(tab: Tab): void {
   tab.closing = true;
   if (tab.token) dialogs.cancel(tab.token);
   tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' }); tab.session?.rpc.disconnect('Session closed');
-  const shown = [...sidebarTabs()], before = recentSessions(tabs);
-  tabs.splice(tabs.indexOf(tab), 1); tab.view.dispose();
+  const before = navigationSnapshot();
+  navigation.remove(tab); tab.view.dispose();
   try { tab.drafts.discardTemporary(); } catch (e) { persistenceError(e); }
   tab.root.remove(); tab.rowNode.remove();
   if (presented === tab) presentConversation(undefined);
   if (active === tab) {
     active = undefined;
-    selectCleanupReplacement(tab, shown, before);
+    selectCleanupReplacement(before);
   }
   for (const item of tabs) updateTab(item);
   controls(); persistTabs(); syncPopouts();
@@ -973,7 +952,7 @@ required('open-sessions').addEventListener('keydown', event => {
   const visible = sidebarTabs();
   const index = visible.findIndex(t => t.row === event.target);
   if (index < 0 || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) return;
-  const next = event.key === 'Home' ? visible[0] : event.key === 'End' ? visible[visible.length - 1] : event.key === 'ArrowDown' ? visible[(index + 1) % visible.length] : event.key === 'ArrowUp' ? visible[(index - 1 + visible.length) % visible.length] : undefined;
+  const next = event.key === 'Home' ? visible[0] : event.key === 'End' ? visible[visible.length - 1] : event.key === 'ArrowDown' ? navigation.adjacent(visible[index], 1, visible) : event.key === 'ArrowUp' ? navigation.adjacent(visible[index], -1, visible) : undefined;
   if (next) { event.preventDefault(); next.row.focus(); }
 });
 function shortcutHint(id: ActionId): string {

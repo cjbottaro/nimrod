@@ -64,6 +64,43 @@ test('sidebar sessions keep independent drafts and a background agent live witho
   } finally { await demo.close(); }
 });
 
+test('All, Switch and next/previous share one order through creation and acknowledged prompts', async ({ page }) => {
+  const demo = await demoFixture(page);
+  try {
+    await newOfflineDemo(page); await newOfflineDemo(page);
+    const order = () => page.locator(sessions).evaluateAll(nodes => nodes.map(node => node.getAttribute('aria-controls')!));
+    const checkConsumers = async () => {
+      const displayed = await order();
+      const titles = await page.locator(`${sessions} .session-row-label`).allTextContents();
+      const times = await page.locator(`${sessions} time`).evaluateAll(nodes => nodes.map(node => node.getAttribute('datetime')));
+      await page.keyboard.press('Meta+t');
+      const options = page.locator('#palette-list [role=option]');
+      expect(await options.locator('.palette-item-label').allTextContents()).toEqual(titles);
+      expect(await options.locator('time').evaluateAll(nodes => nodes.map(node => node.getAttribute('datetime')))).toEqual(times);
+      await page.keyboard.press('Escape');
+      await page.locator(`${sessions}[aria-controls="${displayed[0]}"]`).click();
+      for (const shortcut of ['Meta+Shift+]', 'Meta+Shift+[']) {
+        const step = shortcut.endsWith(']') ? 1 : -1;
+        for (let i = 1; i <= displayed.length; i++) {
+          await page.keyboard.press(shortcut);
+          await expect(page.locator(`${sessions}[aria-current="true"]`)).toHaveAttribute('aria-controls', displayed[(i * step + displayed.length) % displayed.length]);
+        }
+      }
+      expect(await order()).toEqual(displayed);
+    };
+    await checkConsumers();
+    const before = await order();
+    await page.locator(`${sessions}[aria-controls="${before[2]}"]`).click();
+    await page.locator(visible('prompt')).fill('Acknowledged recency changes every navigation consumer');
+    await page.locator(visible('prompt')).press('Enter');
+    await expect(page.locator(sessions).first()).toHaveAttribute('aria-controls', before[2]);
+    await expect(page.locator(visible('send'))).toHaveAttribute('title', /Send/);
+    await checkConsumers();
+    expect(demo.children.size).toBe(3);
+    expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
 test('notification navigation overrides reading position but ordinary switching preserves it', async ({ page }) => {
   const demo = await demoFixture(page);
   try {
@@ -247,7 +284,7 @@ test('Switch session shares sidebar indicator, muted timestamp and styling for f
     await expect(page.locator('#palette-title')).toHaveText('Switch session');
     const options = page.locator('#palette-list [role=option]');
     await expect(options).toHaveCount(2);
-    const option = options.nth(0), sidebar = page.locator(`#${firstId}`);
+    const option = options.nth(1), sidebar = page.locator(`#${firstId}`);
     await expect(option.locator('.session-row-text')).toHaveText((await sidebar.locator('.session-row-text').textContent())!);
     await expect(option.locator('.session-indicator')).toHaveAttribute('data-state', 'ready');
     await expect(option.locator('.session-indicator')).toHaveText('•');
@@ -319,11 +356,11 @@ test('Unread updates in arrival order and retains a read selected session withou
     // Resume's directory detail can also match when the checkout is named switch-session-rows.
     await page.locator('#palette-list [role=option]').filter({ has: page.getByText('Switch session…', { exact: true }) }).click();
     await expect(page.locator('#palette-list [role=option]')).toHaveCount(3);
-    await page.locator('#palette-list [role=option]').nth(0).click();
+    await page.locator('#palette-list [role=option]').nth(2).click(); // Oldest open session is last in All/Switch.
     await expect(page.getByRole('tab', { name: /^All \(\d+\)$/ })).toHaveAttribute('aria-selected', 'true');
     await page.locator(visible('prompt')).fill('First session finishes later');
     await page.locator(visible('prompt')).press('Enter');
-    await page.keyboard.press('Meta+Shift+['); // First -> third, independent of filtering.
+    await page.keyboard.press('Meta+Shift+]'); // First -> third in All's recency order, independent of filtering.
     await expect(page.locator(`#${third}`)).toHaveAttribute('aria-current', 'true');
     await page.getByRole('tab', { name: /Unread/ }).click();
     await expect(page.locator('#conversation')).toBeHidden();
@@ -338,7 +375,7 @@ test('Unread updates in arrival order and retains a read selected session withou
     await expect(page.locator(`#${second}`)).toBeHidden();
     await expect(page.locator('#sidebar-unread-count')).toHaveText('0');
     await expect(page.locator(`#${first}`)).toBeVisible();
-    await page.keyboard.press('Meta+Shift+[');
+    await page.keyboard.press('Meta+Shift+]');
     await expect(page.getByRole('tab', { name: /^All \(\d+\)$/ })).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator(`#${third}`)).toHaveAttribute('aria-current', 'true');
     await page.getByRole('tab', { name: /Unread/ }).click();

@@ -1,5 +1,11 @@
 # PoC verification
 
+## Shared session-navigation policy
+
+- Shared navigation verification (`.worktrees/session-navigation`, branch `refactor/session-navigation`): `mise run check` passes 366 TS/Node tests, formatting/Clippy and 93 Rust tests (two opt-in Pi smokes ignored); the signed macOS build verifies and all 37 offline WebKit tests pass. The first full check hit the existing single-instance lock-holder timeout fixture's `Option::unwrap()` failure; its focused retry and complete check rerun passed without any Rust change. The new WebKit invariant compares All/Switch and both wrapped traversal directions through creation and acknowledged-message recency. No primary bundle/user app, live Pi/models, real session deletion, upstream extension, commit or push was touched. Native focus/shortcut and Linux/possible Windows acceptance remain separate.
+- `src/session-navigation.ts` owns private membership, canonical All/Switch/cycling order, filtered projections/counts, named selection intents, presentation eligibility and connected/positional batch replacement. The shell retains Pi-derived eligibility, mounted views, modal focus, storage and native lifecycle effects; Resume history order remains intentionally distinct.
+- Pure invariants enumerate small recency/tie layouts through insertion, acknowledged-use-style timestamp updates and removal. Shell/WebKit tests compare consumers directly and preserve the existing cleanup no-reconnect, filtered/blank, draft, focus and reading-position coverage. Both internal navigation contracts and user navigation guides are updated.
+
 ## Connected-first selection after Close or deletion
 
 - Implemented on `fix/connected-session-fallback` in `.worktrees/connected-session-fallback`. Both cleanup paths keep a surviving selection; otherwise prefer the latest-used eligible connected session in the current view, then across All. With none connected, select the next/previous surviving row (falling back to All when the filter is exhausted) without starting Pi. Explicit selection remains the reconnect boundary. Recency means existing creation/history/acknowledged-prompt order, not clicks or connection time; stable ties use All's open order.

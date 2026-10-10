@@ -40,22 +40,22 @@ Read the [human guide](../../../../docs/workspace-sessions.md),
 
 ### Selection after Close or successful deletion
 
-`src/main.ts::selectCleanupReplacement` is shared by Close and batched definitive deletion successes. Keep the current selection when it survives (including background-row cleanup). Otherwise:
+`SessionNavigation.replacement` is shared by Close and batched definitive deletion successes; `src/main.ts::selectCleanupReplacement` applies its target/view plan. See [shared navigation contracts](session-navigation.md). Keep the current selection when it survives (including background-row cleanup). Otherwise:
 
-1. Pick the most recently used eligible connected session in the current sidebar view, using `recentSessions` even in arrival-ordered Unread.
+1. Pick the most recently used eligible connected session in the current sidebar view, using the canonical All projection even in arrival-ordered Unread.
 2. If none, pick the most recently used eligible connected session across All and switch to All—even if inactive rows remain in the current filter.
 3. If none are connected, use the first surviving row below the removed selection in the pre-removal displayed order, then the nearest above, then the first current candidate. If the filter has no candidates, switch to All and repeat using All's pre-removal order.
 4. With no surviving entries, leave no selected conversation; never create a replacement.
 
 Latest means existing `lastUsed` (creation/historical seed or latest Pi-acknowledged prompt), not selection time or process connection time. Connected candidates require a live available session, not ended, starting, closing, restarting, deletion-locked or quarantined; idle/working, temporary and offline-demo connections are eligible. Deletion disposes the whole confirmed subtree before choosing once, never an intermediate descendant.
 
-Automatic replacement uses `activate(next, true, false, false, false)`: preserve recency, mounted renderer, reading position and sidebar viewport, respect modal focus, synchronize pop-outs, and **never launch/reconnect Pi**. If only inactive entries remain, show the mounted inactive fallback; explicit row/Switch/Resume selection or Retry/Restart remains the launch boundary. Returning to All is not explicit session selection and must not launch it. This avoids spending process/history-restoration resources as a side effect of cleanup. Close still waits for successful owned shutdown and retains saved history/drafts; deletion still removes only definitive successes.
+Automatic replacement uses `activate(next, 'cleanup')`: preserve recency, mounted renderer, reading position and sidebar viewport, respect modal focus, synchronize pop-outs, and **never launch/reconnect Pi**. If only inactive entries remain, show the mounted inactive fallback; explicit row/Switch/Resume selection or Retry/Restart remains the launch boundary. Returning to All is not explicit session selection and must not launch it. This avoids spending process/history-restoration resources as a side effect of cleanup. Close still waits for successful owned shutdown and retains saved history/drafts; deletion still removes only definitive successes.
 
 Shell fixtures cover both actions, recency versus positional/connection order, Unread-local preference versus newer hidden connections, All fallback from Unread/Working, inactive next/previous fallback without launch, explicit reconnect, unchanged recency and background selection. Native focus/platform acceptance remains separate.
 
 ### Shared session row presentation
 
-- Both pickers carry `PaletteItem.sessionRow`. The sidebar, Switch and already-open Resume entries use the same shell `sessionRow(tab)` result (`tab.lastUsed` and `indicator(tab)`). `src/session-sidebar.ts` owns shared DOM creation, incremental updates, time formatting, optional badges and accessible status labels; all three surfaces use the same row/indicator/heading CSS.
+- Switch uses the navigation model's canonical All order independently of filters; Resume retains history catalog order. Both pickers carry `PaletteItem.sessionRow`. The sidebar, Switch and already-open Resume entries use the same shell `sessionRow(tab)` result (`tab.lastUsed` and `indicator(tab)`). `src/session-sidebar.ts` owns shared DOM creation, incremental updates, time formatting, optional badges and accessible status labels; all three surfaces use the same row/indicator/heading CSS.
 - Visible content is an indicator, title and muted relative time/date; Resume alone adds an Open badge. Closed history uses the inactive indicator and the maximum identity-bound remembered recency/latest saved user-message timestamp, never mtime. Missing time shows No message time. Resume catalog ordering remains unchanged (descending modified time); this change unifies presentation, not discovery or ordering.
 - Status, Current, history previews and paths remain searchable, without separate visible status/preview lines or hover tooltips. Other palette pages retain their existing renderer.
 - `test/command-palette.test.ts` covers every indicator state, timestamp semantics, accessible labels and status search; `test/shell.test.ts` compares Switch/sidebar content for connected/inactive entries hidden by a filter, preserving membership and process reuse.

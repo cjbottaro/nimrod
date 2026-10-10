@@ -394,12 +394,33 @@ test('All uses persisted user recency, preserves legacy ties and does not mark r
     rows[2].click(); await f.tick(); await f.tick();
     assert.deepEqual(visible(), [rows[1], rows[2], rows[0], rows[3]], 'selection must not reorder All');
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: ']', code: 'BracketRight', metaKey: true, shiftKey: true, cancelable: true })); await f.tick(); await f.tick();
-    assert.equal(rows[3].getAttribute('aria-current'), 'true');
+    assert.equal(rows[0].getAttribute('aria-current'), 'true', 'next follows sidebar recency, not open order');
+    const cycle = async (key: '[' | ']') => {
+      f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key, code: key === '[' ? 'BracketLeft' : 'BracketRight', metaKey: true, shiftKey: true, cancelable: true }));
+      await f.tick(); await f.tick();
+    };
+    for (const row of [rows[3], rows[1], rows[2]]) {
+      await cycle(']'); assert.equal(row.getAttribute('aria-current'), 'true', 'next wraps in displayed All order');
+    }
+    for (const row of [rows[1], rows[3], rows[0], rows[2]]) {
+      await cycle('['); assert.equal(row.getAttribute('aria-current'), 'true', 'previous wraps in displayed All order');
+    }
+    f.element<HTMLButtonElement>('sidebar-working').click();
+    assert.equal(f.element('conversation').hidden, true);
+    await cycle(']');
+    assert.equal(rows[0].getAttribute('aria-current'), 'true', 'blank filtered views still cycle all open sessions in All order');
+    assert.equal(f.element('sidebar-all').getAttribute('aria-selected'), 'true');
+    f.element<HTMLButtonElement>('toggle-sidebar').click();
+    await cycle('[');
+    assert.equal(rows[2].getAttribute('aria-current'), 'true', 'collapsed sidebar keeps the same order');
+    f.element<HTMLButtonElement>('toggle-sidebar').click();
     assert.deepEqual(visible(), [rows[1], rows[2], rows[0], rows[3]], 'cycling must not reorder All');
     f.openPalette(); const query = f.element<HTMLInputElement>('palette-input');
     query.value = 'switch session'; query.dispatchEvent(new f.win.Event('input'));
     query.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
-    f.win.document.querySelectorAll<HTMLElement>('#palette-list [role=option]')[2].click(); await f.tick(); await f.tick();
+    const switchChoices = [...f.win.document.querySelectorAll<HTMLElement>('#palette-list [role=option]')];
+    assert.deepEqual(switchChoices.map(choice => choice.querySelector('.palette-item-label')!.textContent), visible().map(row => row.querySelector('.session-row-label')!.textContent), 'Switch and All share exactly the same order');
+    switchChoices[1].click(); await f.tick(); await f.tick();
     assert.equal(rows[2].getAttribute('aria-current'), 'true');
     assert.deepEqual(visible(), [rows[1], rows[2], rows[0], rows[3]], 'palette switching must not reorder All');
     assert.deepEqual((f.preferences.value.state[key] as typeof layout).tabs.map(tab => tab.lastUsed), [50, 100, 75, 0]);
@@ -414,6 +435,10 @@ test('All uses persisted user recency, preserves legacy ties and does not mark r
     prompt.value = 'Use C by sending'; prompt.dispatchEvent(new f.win.Event('input'));
     prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
     assert.deepEqual(visible(), [rows[2], rows[1], rows[0], rows[3]], 'acknowledged send moves C to the top');
+    await cycle(']');
+    assert.equal(rows[1].getAttribute('aria-current'), 'true', 'cycling uses the latest acknowledged-message order');
+    await cycle('[');
+    assert.equal(rows[2].getAttribute('aria-current'), 'true');
     saved = JSON.parse(JSON.stringify(f.preferences.value.state[key]));
     assert.equal(f.calls.filter(call => (call.args.message as JsonRecord)?.type === 'prompt').length, 1);
   } finally { f.win.close(); }
@@ -1059,6 +1084,7 @@ test('attention view is a stable inbox, retains the selected read row, and leave
     const complete = (i: number) => { emit(i, { type: 'agent_start' }); emit(i, { type: 'agent_settled' }); };
     const visible = () => [...f.win.document.querySelectorAll<HTMLButtonElement>('.open-session:not([hidden]) .session-row')];
     const stops = f.calls.filter(c => c.command === 'stop_pi').length;
+    const allOrder = visible();
     f.element<HTMLButtonElement>('sidebar-unread').click();
     assert.equal(f.element('sidebar-empty').hidden, false);
     assert.equal(f.element('sidebar-unread').getAttribute('aria-selected'), 'true');
@@ -1080,15 +1106,17 @@ test('attention view is a stable inbox, retains the selected read row, and leave
     query.value = 'switch session'; query.dispatchEvent(new f.win.Event('input'));
     query.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
     const choices = f.win.document.querySelectorAll<HTMLElement>('#palette-list [role=option]');
-    assert.equal(choices.length, 3); choices[2].click(); await f.tick();
-    assert.deepEqual(visible(), rows);
+    assert.equal(choices.length, 3);
+    assert.deepEqual([...choices].map(choice => choice.querySelector('time')!.dateTime), allOrder.map(row => row.querySelector('time')!.dateTime), 'Switch uses All order even while Unread shows arrival order');
+    choices[0].click(); await f.tick();
+    assert.deepEqual(visible(), allOrder);
     assert.equal(f.element('sidebar-all').getAttribute('aria-selected'), 'true');
     assert.equal(rows[2].getAttribute('aria-current'), 'true');
     assert.equal(f.element('conversation').hidden, false);
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 3);
     assert.equal(f.calls.filter(c => c.command === 'stop_pi').length, stops);
     assert.equal(f.calls.some(c => c.command === 'list_workspace_sessions'), false);
-    f.element<HTMLButtonElement>('sidebar-all').click(); assert.deepEqual(visible(), rows); await f.tick();
+    f.element<HTMLButtonElement>('sidebar-all').click(); assert.deepEqual(visible(), allOrder); await f.tick();
     assert.equal(f.preferences.value.state['nimrod.sidebar.view:/project'], 'all');
   } finally { f.dom.window.close(); }
 });
