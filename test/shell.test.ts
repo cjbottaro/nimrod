@@ -448,6 +448,99 @@ test('only explicit prompt acknowledgement updates background session recency, n
   }
 });
 
+test('All, Unread and Working counts overlap and working selection survives settlement without changing ownership', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    for (let i = 0; i < 2; i++) { f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick(); }
+    const rows = f.rows(), channels = [...f.sessions.values()].map(s => s.channel);
+    const emit = (i: number, event: JsonRecord) => channels[i].onmessage({ kind: 'rpc', value: event });
+    const count = (view: string) => f.element(`sidebar-${view}-count`).textContent;
+    const visible = () => rows.filter(row => !row.parentElement!.hidden);
+    const starts = f.calls.filter(c => c.command === 'start_pi').length, stops = f.calls.filter(c => c.command === 'stop_pi').length;
+    assert.equal(count('all'), '2'); assert.equal(count('unread'), '0'); assert.equal(count('working'), '0');
+    f.element<HTMLButtonElement>('sidebar-working').click();
+    assert.deepEqual(visible(), []); assert.equal(f.element('conversation').hidden, true);
+    assert.equal(f.element('sidebar-empty-text').textContent, 'No sessions working.');
+    emit(0, { type: 'agent_start' });
+    assert.equal(count('working'), '1'); assert.deepEqual(visible(), [rows[0]]);
+    assert.equal(f.element('conversation').hidden, true, 'new working rows never open themselves');
+    rows[0].click();
+    emit(1, { type: 'agent_start' }); emit(1, { type: 'agent_settled' });
+    assert.equal(count('working'), '1'); assert.equal(count('unread'), '1');
+    emit(0, { type: 'agent_end' }); assert.equal(count('working'), '1');
+    emit(0, { type: 'agent_settled' });
+    assert.equal(count('working'), '0'); assert.deepEqual(visible(), [rows[0]], 'retain the selected response, not a fake busy count');
+    assert.equal(f.element('conversation').hidden, false);
+    f.element<HTMLButtonElement>('sidebar-all').click(); f.element<HTMLButtonElement>('sidebar-working').click();
+    assert.deepEqual(visible(), []); assert.equal(f.element('conversation').hidden, true);
+    emit(1, { type: 'compaction_start' }); assert.equal(count('working'), '1'); assert.equal(count('unread'), '1');
+    emit(1, { type: 'compaction_end' }); assert.equal(count('working'), '1');
+    emit(1, { type: 'agent_settled' }); assert.equal(count('working'), '0');
+    // Explicit navigation still reaches a hidden idle session and switches to All.
+    rows[0].click(); assert.equal(f.element('sidebar-all').getAttribute('aria-selected'), 'true');
+    assert.equal(f.calls.filter(c => c.command === 'start_pi').length, starts);
+    assert.equal(f.calls.filter(c => c.command === 'stop_pi').length, stops);
+    await f.tick();
+    assert.equal(f.preferences.value.state['nimrod.sidebar.view:/project'], 'all');
+  } finally { f.win.close(); }
+});
+
+test('Working tracks reported subagents but excludes input-waiting and unavailable sessions', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    f.element<HTMLButtonElement>('sidebar-working').click();
+    const status = (statusText: string) => f.emit({ type: 'extension_ui_request', method: 'setStatus', id: 'agents', statusKey: 'subagents', statusText });
+    status('1 running agent'); assert.equal(f.element('sidebar-working-count').textContent, '1');
+    assert.equal(f.rows()[0].parentElement!.hidden, false);
+    f.emit({ type: 'extension_ui_request', method: 'input', id: 'question', title: 'Need input' }); await f.tick();
+    assert.equal(f.element('sidebar-working-count').textContent, '0');
+    assert.equal(f.element('sidebar-unread-count').textContent, '1');
+    assert.equal(f.rows()[0].parentElement!.hidden, true);
+    f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
+    assert.equal(f.element('sidebar-working-count').textContent, '1');
+    status('0 running agents'); assert.equal(f.element('sidebar-working-count').textContent, '0');
+    status('Working on something'); assert.equal(f.element('sidebar-working-count').textContent, '0', 'free-form statuses do not imply work');
+    status('2 queued agents'); assert.equal(f.element('sidebar-working-count').textContent, '1');
+    f.captureChannel().onmessage({ kind: 'disconnected', message: 'Fixture ended' }); await f.tick();
+    assert.equal(f.element('sidebar-working-count').textContent, '0');
+    assert.equal(f.rows()[0].parentElement!.hidden, true);
+  } finally { f.win.close(); }
+});
+
+test('sidebar filter keyboard navigation wraps across three counted views', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    for (const [key, view] of [['ArrowRight', 'unread'], ['ArrowRight', 'working'], ['ArrowRight', 'all'], ['ArrowLeft', 'working'], ['Home', 'all'], ['End', 'working']]) {
+      f.element('sidebar-views').dispatchEvent(new f.win.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      assert.equal(f.win.document.activeElement, f.element(`sidebar-${view}`));
+      assert.equal(f.element(`sidebar-${view}`).getAttribute('aria-selected'), 'true');
+      assert.equal(f.element('sidebar-session-panel').getAttribute('aria-labelledby'), `sidebar-${view}`);
+      for (const item of ['all', 'unread', 'working']) {
+        assert.equal(f.element(`sidebar-${item}-count`).textContent, '0');
+        assert.equal(f.element<HTMLButtonElement>(`sidebar-${item}`).tabIndex, item === view ? 0 : -1);
+      }
+    }
+  } finally { f.win.close(); }
+});
+
+test('restored Working and Unread views stay blank without launching historical sessions', async () => {
+  for (const view of ['working', 'unread']) {
+    const f = await fixture(undefined, { windowWorkspace: '/project', appState: {
+      'nimrod.sidebar.view:/project': view,
+      'nimrod.tabs.v1:/project': { tabs: [{ path: '/sessions/old.jsonl', sessionId: 'fixture-id', name: 'Old' }] },
+    } });
+    try {
+      assert.equal(f.element(`sidebar-${view}`).getAttribute('aria-selected'), 'true');
+      assert.equal(f.element('sidebar-all-count').textContent, '1');
+      assert.equal(f.element(`sidebar-${view}-count`).textContent, '0');
+      assert.equal(f.element('conversation').hidden, true);
+      assert.equal(f.element('workspace-empty').hidden, true);
+      assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 0);
+    } finally { f.win.close(); }
+  }
+});
+
 test('empty attention view reports live working counts without restarting dots or altering membership', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   try {
@@ -455,9 +548,9 @@ test('empty attention view reports live working counts without restarting dots o
     const rows = f.rows();
     const channels = [...f.sessions.values()].map(s => s.channel);
     const emit = (i: number, event: JsonRecord) => channels[i].onmessage({ kind: 'rpc', value: event });
-    f.element<HTMLButtonElement>('sidebar-attention').click();
+    f.element<HTMLButtonElement>('sidebar-unread').click();
     const empty = f.element('sidebar-empty'), text = f.element('sidebar-empty-text'), dots = f.element('sidebar-empty-dots');
-    assert.equal(empty.textContent, 'No sessions need attention.');
+    assert.equal(empty.textContent, 'No unread sessions.');
     assert.equal(dots.hidden, true);
     emit(0, { type: 'agent_start' });
     assert.equal(empty.textContent, '1 session working…'); assert.equal(empty.hidden, false);
@@ -467,25 +560,25 @@ test('empty attention view reports live working counts without restarting dots o
     emit(0, { type: 'extension_ui_request', method: 'notify', id: 'notice', message: 'Still working' });
     assert.equal(f.element('sidebar-empty-dots'), dots);
     assert.equal(text.firstChild, textNode); assert.equal(dots.firstChild, dotText);
-    assert.equal(f.element('sidebar-attention-count').textContent, '0');
+    assert.equal(f.element('sidebar-unread-count').textContent, '0');
     emit(0, { type: 'agent_end' }); assert.equal(empty.textContent, '2 sessions working…');
     emit(0, { type: 'agent_settled' }); assert.equal(empty.hidden, true);
     rows[0].click(); assert.equal(empty.hidden, true); // Read row remains while selected.
     // Explicitly selecting a filtered-out working session reveals it in All.
     rows[1].click();
     assert.equal(f.element('sidebar-all').getAttribute('aria-selected'), 'true');
-    f.element<HTMLButtonElement>('sidebar-attention').click();
+    f.element<HTMLButtonElement>('sidebar-unread').click();
     assert.equal(empty.hidden, false); assert.equal(empty.textContent, '1 session working…');
     emit(1, { type: 'agent_settled' });
-    assert.equal(f.element('sidebar-attention-count').textContent, '1');
+    assert.equal(f.element('sidebar-unread-count').textContent, '1');
     rows[1].click(); // Visit and retain the completed row, then leave via All.
     f.element<HTMLButtonElement>('sidebar-all').click(); rows[0].click();
-    f.element<HTMLButtonElement>('sidebar-attention').click();
-    assert.equal(empty.textContent, 'No sessions need attention.');
+    f.element<HTMLButtonElement>('sidebar-unread').click();
+    assert.equal(empty.textContent, 'No unread sessions.');
     assert.equal(dots.hidden, true);
     emit(1, { type: 'compaction_start' }); assert.equal(empty.textContent, '1 session working…');
     emit(1, { type: 'compaction_end' }); assert.equal(empty.textContent, '1 session working…');
-    emit(1, { type: 'agent_settled' }); assert.equal(empty.textContent, 'No sessions need attention.');
+    emit(1, { type: 'agent_settled' }); assert.equal(empty.textContent, 'No unread sessions.');
     f.element<HTMLButtonElement>('sidebar-all').click(); assert.equal(empty.hidden, true);
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 2);
     assert.equal(f.calls.filter(c => c.command === 'stop_pi').length, 1);
@@ -505,14 +598,14 @@ test('attention blanks filtered conversations, preserves mounted state and treat
     pane.scrollTop = 42; pane.dispatchEvent(new f.win.Event('scroll')); await f.tick();
     const starts = f.calls.filter(c => c.command === 'start_pi').length;
     const stops = f.calls.filter(c => c.command === 'stop_pi').length;
-    f.element<HTMLButtonElement>('sidebar-attention').click();
+    f.element<HTMLButtonElement>('sidebar-unread').click();
     assert.equal(root.hidden, true); assert.equal(root.inert, true);
     assert.equal(f.element('conversation').hidden, true);
     assert.equal(f.element('workspace-empty').hidden, true);
     assert.equal(f.element('mode-badge').textContent, '');
     assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, true);
     assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, true);
-    assert.equal(f.win.document.activeElement, f.element('sidebar-attention'));
+    assert.equal(f.win.document.activeElement, f.element('sidebar-unread'));
     // Session commands must not act on the remembered but hidden selection.
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'w', metaKey: true, bubbles: true }));
     f.openPalette();
@@ -524,14 +617,14 @@ test('attention blanks filtered conversations, preserves mounted state and treat
     assert.equal(f.element<HTMLTextAreaElement>('prompt'), prompt);
     assert.equal(prompt.value, 'Keep this draft'); assert.equal(pane.scrollTop, 42);
     assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, false);
-    f.element<HTMLButtonElement>('sidebar-attention').click();
+    f.element<HTMLButtonElement>('sidebar-unread').click();
     f.emit({ type: 'agent_start' }); f.emit({ type: 'agent_settled' }); await f.tick();
-    assert.equal(f.element('sidebar-attention-count').textContent, '1');
+    assert.equal(f.element('sidebar-unread-count').textContent, '1');
     assert.equal(root.hidden, true); // A new arrival never opens itself or steals focus.
-    assert.equal(f.win.document.activeElement, f.element('sidebar-attention'));
+    assert.equal(f.win.document.activeElement, f.element('sidebar-unread'));
     assert.equal(f.calls.filter(c => c.command === 'notify_session').at(-1)?.args.selected, false);
     f.win.document.querySelector<HTMLButtonElement>('.session-row')!.click();
-    assert.equal(root.hidden, false); assert.equal(f.element('sidebar-attention-count').textContent, '0');
+    assert.equal(root.hidden, false); assert.equal(f.element('sidebar-unread-count').textContent, '0');
     assert.equal(f.element('sidebar-empty').hidden, true); // Read selected row is retained.
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, starts);
     assert.equal(f.calls.filter(c => c.command === 'stop_pi').length, stops);
@@ -555,14 +648,14 @@ test('restored attention view stays blank and closing its last visible row never
     f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
     const roots = [...f.win.document.querySelectorAll<HTMLElement>('.session-view')];
     const first = [...f.sessions.values()][0].channel;
-    f.element<HTMLButtonElement>('sidebar-attention').click();
+    f.element<HTMLButtonElement>('sidebar-unread').click();
     for (const event of [{ type: 'agent_start' }, { type: 'message_end', message: { role: 'assistant', content: [], stopReason: 'error', timestamp: 1 } }, { type: 'agent_settled' }]) first.onmessage({ kind: 'rpc', value: event });
     await f.tick();
     const row = f.win.document.querySelector<HTMLButtonElement>('.open-session:not([hidden]) .session-row')!;
     assert.ok(row); row.click();
     f.win.document.querySelector<HTMLButtonElement>('.open-session:not([hidden]) .session-close')!.click();
     await f.tick(); await f.tick();
-    assert.equal(f.element('sidebar-attention').getAttribute('aria-selected'), 'true');
+    assert.equal(f.element('sidebar-unread').getAttribute('aria-selected'), 'true');
     assert.equal(f.element('conversation').hidden, true);
     assert.equal(roots[1].hidden, true);
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 2);
@@ -583,7 +676,7 @@ test('returned deletion results remove a whole subtree once and select according
         for (const i of view === 'attention' ? [1, 2, 0] : [1, 2]) {
           channels[i].onmessage({ kind: 'rpc', value: { type: 'agent_start' } }); channels[i].onmessage({ kind: 'rpc', value: { type: 'agent_settled' } });
         }
-        f.element<HTMLButtonElement>('sidebar-attention').click();
+        f.element<HTMLButtonElement>('sidebar-unread').click();
       }
       rows[view === 'all-last' ? 3 : 1].click();
       const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Deleted draft'; prompt.dispatchEvent(new f.win.Event('input'));
@@ -591,7 +684,7 @@ test('returned deletion results remove a whole subtree once and select according
       assert.equal(f.win.document.querySelectorAll('.session-row').length, 2);
       const expected = view === 'all-last' ? rows[1] : rows[0];
       assert.equal(expected.getAttribute('aria-current'), 'true', `${view}: ${rows.map(row => `${row.id}:${row.getAttribute('aria-current')}`).join(', ')}`);
-      assert.equal(f.element('sidebar-attention').getAttribute('aria-selected'), String(view === 'attention'));
+      assert.equal(f.element('sidebar-unread').getAttribute('aria-selected'), String(view === 'attention'));
       assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 4, 'no deleted or intermediate replacement launches');
       assert.equal(f.saved().drafts[`file:${root}`], undefined);
       const closed = JSON.parse(f.win.localStorage.getItem('nimrod.sessions.v1:/closed')!);
@@ -618,7 +711,7 @@ test('delete review uses a custom nested modal, Cancel is non-destructive and la
       f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
       const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Draft'; prompt.dispatchEvent(new f.win.Event('input'));
       // A visible completed row puts the root in attention before deleting it.
-      f.element<HTMLButtonElement>('sidebar-attention').click(); f.emit({ type: 'agent_start' }); f.emit({ type: 'agent_settled' });
+      f.element<HTMLButtonElement>('sidebar-unread').click(); f.emit({ type: 'agent_start' }); f.emit({ type: 'agent_settled' });
       f.win.document.querySelector<HTMLButtonElement>('.session-row')!.click();
       f.element<HTMLButtonElement>('delete-session').click();
       assert.equal(f.element<HTMLDialogElement>('deletion-review').open, false, 'fast preview does not flash loading');
@@ -850,21 +943,21 @@ test('attention view is a stable inbox, retains the selected read row, and leave
     const complete = (i: number) => { emit(i, { type: 'agent_start' }); emit(i, { type: 'agent_settled' }); };
     const visible = () => [...f.win.document.querySelectorAll<HTMLButtonElement>('.open-session:not([hidden]) .session-row')];
     const stops = f.calls.filter(c => c.command === 'stop_pi').length;
-    f.element<HTMLButtonElement>('sidebar-attention').click();
+    f.element<HTMLButtonElement>('sidebar-unread').click();
     assert.equal(f.element('sidebar-empty').hidden, false);
-    assert.equal(f.element('sidebar-attention').getAttribute('aria-selected'), 'true');
+    assert.equal(f.element('sidebar-unread').getAttribute('aria-selected'), 'true');
     complete(1); complete(0); await f.tick();
     assert.deepEqual(visible(), [rows[1], rows[0]]);
-    assert.equal(f.element('sidebar-attention-count').textContent, '2');
+    assert.equal(f.element('sidebar-unread-count').textContent, '2');
     emit(1, { type: 'agent_settled' }); emit(1, { type: 'extension_ui_request', method: 'notify', id: 'notice', message: 'ordinary update' });
     assert.deepEqual(visible(), [rows[1], rows[0]]);
     rows[1].click(); await f.tick();
-    assert.equal(f.element('sidebar-attention-count').textContent, '1');
+    assert.equal(f.element('sidebar-unread-count').textContent, '1');
     assert.deepEqual(visible(), [rows[1], rows[0]]);
     assert.equal(rows[1].getAttribute('aria-current'), 'true');
     rows[0].click(); await f.tick();
     assert.deepEqual(visible(), [rows[0]]);
-    assert.equal(f.element('sidebar-attention-count').textContent, '0');
+    assert.equal(f.element('sidebar-unread-count').textContent, '0');
     // The palette still includes the hidden third session, with no discovery or launch.
     f.openPalette();
     const query = f.element<HTMLInputElement>('palette-input');
@@ -891,32 +984,32 @@ test('input and failures remain in attention after visiting; resolved input stay
     const rows = f.rows();
     const first = [...f.sessions.values()][0].channel;
     const emit = (event: JsonRecord) => first.onmessage({ kind: 'rpc', value: event });
-    f.element<HTMLButtonElement>('sidebar-attention').click();
+    f.element<HTMLButtonElement>('sidebar-unread').click();
     emit({ type: 'extension_ui_request', method: 'input', id: 'question', title: 'Need input' }); await f.tick();
     assert.equal(rows[0].parentElement!.hidden, false);
-    assert.equal(f.element('sidebar-attention-count').textContent, '1');
+    assert.equal(f.element('sidebar-unread-count').textContent, '1');
     // Selection does not answer the outstanding Pi request.
-    rows[0].click(); assert.equal(f.element('sidebar-attention-count').textContent, '1');
+    rows[0].click(); assert.equal(f.element('sidebar-unread-count').textContent, '1');
     f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
-    assert.equal(f.element('sidebar-attention-count').textContent, '0');
+    assert.equal(f.element('sidebar-unread-count').textContent, '0');
     assert.equal(rows[0].parentElement!.hidden, false);
     rows[1].click();
     assert.equal(f.element('sidebar-all').getAttribute('aria-selected'), 'true');
-    f.element<HTMLButtonElement>('sidebar-attention').click();
+    f.element<HTMLButtonElement>('sidebar-unread').click();
     assert.equal(rows[0].parentElement!.hidden, true);
     emit({ type: 'agent_start' });
     emit({ type: 'message_end', message: { role: 'assistant', content: [], stopReason: 'error', timestamp: 1 } });
     emit({ type: 'agent_settled' }); await f.tick();
     assert.equal(rows[0].parentElement!.hidden, false); assert.match(rows[0].getAttribute('aria-label')!, /Failed/);
-    rows[0].click(); assert.equal(f.element('sidebar-attention-count').textContent, '1');
-    rows[1].click(); f.element<HTMLButtonElement>('sidebar-attention').click();
+    rows[0].click(); assert.equal(f.element('sidebar-unread-count').textContent, '1');
+    rows[1].click(); f.element<HTMLButtonElement>('sidebar-unread').click();
     assert.equal(rows[0].parentElement!.hidden, false);
     emit({ type: 'agent_start' }); assert.equal(rows[0].parentElement!.hidden, true);
     emit({ type: 'agent_settled' }); await f.tick();
-    assert.equal(f.element('sidebar-attention-count').textContent, '1');
+    assert.equal(f.element('sidebar-unread-count').textContent, '1');
     first.onmessage({ kind: 'disconnected', message: 'unexpected exit' }); await f.tick();
     assert.match(rows[0].getAttribute('aria-label')!, /Failed/);
-    assert.equal(f.element('sidebar-attention-count').textContent, '1');
+    assert.equal(f.element('sidebar-unread-count').textContent, '1');
   } finally { f.dom.window.close(); }
 });
 
@@ -926,21 +1019,21 @@ test('sidebar view restores per project without attention inferred from history;
   }, history: [{ role: 'assistant', content: 'Old response', timestamp: 1 }] });
   try {
     await f.tick(); await f.tick();
-    assert.equal(f.element('sidebar-attention').getAttribute('aria-selected'), 'true');
-    assert.equal(f.element('sidebar-attention-count').textContent, '0');
+    assert.equal(f.element('sidebar-unread').getAttribute('aria-selected'), 'true');
+    assert.equal(f.element('sidebar-unread-count').textContent, '0');
     assert.equal(f.element('sidebar-empty').hidden, false);
     f.element<HTMLButtonElement>('sidebar-all').click();
     f.win.document.querySelector<HTMLButtonElement>('.session-row')!.click(); await f.tick(); await f.tick();
     for (let i = 0; i < 2; i++) { f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick(); }
     const rows = f.rows();
     const channels = [...f.sessions.values()].map(s => s.channel);
-    f.element<HTMLButtonElement>('sidebar-attention').click();
+    f.element<HTMLButtonElement>('sidebar-unread').click();
     for (const i of [1, 0]) { channels[i].onmessage({ kind: 'rpc', value: { type: 'agent_start' } }); channels[i].onmessage({ kind: 'rpc', value: { type: 'agent_settled' } }); }
     rows[1].focus(); rows[1].dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
     assert.equal(f.win.document.activeElement, rows[0]);
     rows[0].dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
     assert.equal(f.win.document.activeElement, rows[0]);
-    f.element('sidebar-attention').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true }));
+    f.element('sidebar-unread').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true }));
     assert.equal(f.element('sidebar-all').getAttribute('aria-selected'), 'true');
     assert.equal(f.win.document.activeElement, f.element('sidebar-all'));
   } finally { f.dom.window.close(); }
@@ -1741,7 +1834,7 @@ test('Resume marks sidebar membership independently of connectivity and filters 
   try {
     await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1, 'only the selected restored entry connects');
-    f.element<HTMLButtonElement>('sidebar-attention').click();
+    f.element<HTMLButtonElement>('sidebar-unread').click();
     key('k'); await f.tick(); await f.tick();
     assert.deepEqual(pickerRows().map(row => row.querySelector('.palette-item-label')!.textContent), ['Selected root', 'Inactive root', 'Closed root']);
     assert.deepEqual(pickerRows().map(badge), ['Open', 'Open', undefined]);

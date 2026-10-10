@@ -37,7 +37,7 @@ Other listed actions can be assigned shortcuts even if they have no default. Plu
 
 **Delete opens the existing session-tree review; it does not immediately delete a session.** Its normal saved-session/idle eligibility rules still apply. Closing a saved session is not deletion. Temporary sessions use their existing Close/disposal flow.
 
-Project actions pause while Settings, the command palette, a key recorder, or an extension dialog is open. Settings and zoom shortcuts remain available on the Settings page, but not through another dialog. Repeated keydowns and IME composition never execute these actions. Shortcuts target the visible session, not a session hidden by Needs attention.
+Project actions pause while Settings, the command palette, a key recorder, or an extension dialog is open. Settings and zoom shortcuts remain available on the Settings page, but not through another dialog. Repeated keydowns and IME composition never execute these actions. Shortcuts target the visible session, not a session hidden by Unread.
 
 ## Configuration file
 

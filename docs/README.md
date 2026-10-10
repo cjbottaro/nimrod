@@ -2,6 +2,8 @@
 
 ## Feature guides
 
+- [Card plugins](card-plugins.md) — **planned** customizable cards, with built-in renderers using the same API as third-party plugins.
+
 - [Transcript cards](architecture.md#rendering-contract-retained-from-pi-gui) — consistent tool summaries, invocation identity and disclosure behavior.
 
 - [Notifications](notifications.md) — background-session desktop alerts, preferences and native limitations.
@@ -16,6 +18,7 @@
 
 - [Architecture](architecture.md) — boundaries and behavior contracts.
 - [Verification](verification.md) — tested behavior and remaining native/platform checks.
+- [Build cache](build-cache.md) — mise-managed Rust compiler caching shared across main and worktrees, with separate app artifacts.
 - [Theme catalog plan](theme-catalog-plan.md) — proposed work, not shipped behavior.
 
 Detailed implementation references are indexed by the repository's

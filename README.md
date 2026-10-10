@@ -6,7 +6,7 @@ A dedicated cross-platform app for directory-backed coding projects and agent ha
 
 ## Run
 
-Rust and Node are pinned in `mise.toml`. Rust was installed through **mise**, not Homebrew or a standalone manual installer.
+Rust, Node and sccache are pinned in `mise.toml`. Rust was installed through **mise**, not Homebrew or a standalone manual installer.
 
 ```sh
 cd ~/Projects/nimrod
@@ -68,8 +68,8 @@ Runtime paths are discovered from PATH/common install locations; Node lookup als
 ## Included
 
 - Tauri 2 shell and Rust-owned subprocess, no additional Node backend (Pi itself uses Node).
-- One project directory per window and a collapsible, resizable session sidebar with activity indicators. Drag its right edge; width is remembered per project in app state, with keyboard resizing and a double-click default reset. [Sidebar width →](docs/workspace-sessions.md#sidebar-width) The sidebar has **All** and **Needs attention** views: a most-recently-used open-session list or a stable inbox for input requests, unread completions and failures. New sessions start at the top with their creation time; resumed sessions insert using remembered recency or their last saved user-message timestamp. Thereafter only Pi-acknowledged messages update recency; selecting or renaming a session leaves its position unchanged. Each row shows relative time and a date, with its state encoded by the left indicator. Background output does not reshuffle All, and reordering preserves the sidebar reading position. Needs attention leaves the conversation area blank without a selected inbox row; agents keep running, and explicit navigation to a filtered-out session switches to All. It does not repeat the project directory or duplicate history actions. [Sidebar views →](docs/workspace-sessions.md#sidebar-views) Opening a directory already open in Nimrod focuses its window.
-- **⌘/Ctrl ⇧ P** command palette: choose **Resume session…**, then type to filter this project's history by name, preview or file path. **Switch session…** lists sessions retained in the sidebar, connected or disconnected (including rows filtered out of Needs attention); **Resume session…** lists saved top-level project history, including already-open and closed sessions, with a separate **Open** badge for sidebar membership. Child sessions (persisted subagents and saved forks/branches) are excluded; exact-file opening remains available. The palette also contains the less-common session actions.
+- One project directory per window and a collapsible, resizable session sidebar with activity indicators. Drag its right edge; width is remembered per project in app state, with keyboard resizing and a double-click default reset. [Sidebar width →](docs/workspace-sessions.md#sidebar-width) The sidebar has **All / Unread / Working** views with live session counts (including zero): a most-recently-used open-session list, a stable inbox for input requests, unread completions and failures, or a filtered list of currently working sessions. Counts can overlap; a selected response remains readable after completion without inflating the Working count. New sessions start at the top with their creation time; resumed sessions insert using remembered recency or their last saved user-message timestamp. Thereafter only Pi-acknowledged messages update recency; selecting or renaming a session leaves its position unchanged. Each row shows relative time and a date, with its state encoded by the left indicator. Background output does not reshuffle All, and reordering preserves the sidebar reading position. Unread leaves the conversation area blank without a selected inbox row; agents keep running, and explicit navigation to a filtered-out session switches to All. It does not repeat the project directory or duplicate history actions. [Sidebar views →](docs/workspace-sessions.md#sidebar-views) Opening a directory already open in Nimrod focuses its window.
+- **⌘/Ctrl ⇧ P** command palette: choose **Resume session…**, then type to filter this project's history by name, preview or file path. **Switch session…** lists sessions retained in the sidebar, connected or disconnected (including rows filtered out by a sidebar view); **Resume session…** lists saved top-level project history, including already-open and closed sessions, with a separate **Open** badge for sidebar membership. Child sessions (persisted subagents and saved forks/branches) are excluded; exact-file opening remains available. The palette also contains the less-common session actions.
 - **New session** is persistent by default; **New named session…** is a compact palette step with a single-line field and inline Create button (Enter creates; Esc cancels), then starts Pi with its native `--name` option (requires a Pi runtime supporting that option). Temporary sessions and offline demos are explicit alternatives. Open historical sessions from the palette or an exact file. Closing a saved session does not delete history. Temporary/offline-demo sessions keep no persisted conversation state; Close discards their drafts and pop-outs.
 - Existing transcript, Markdown/code highlighting, reasoning/tool cards, disclosure timers, queue recovery, and bottom-follow behavior.
 - **Pop-outs:** keep code or rendered Markdown visible in separate windows for the active project's selected session. Saved-session references survive restart; Copy briefly shows a checkmark. [Pop-out guide →](docs/pop-outs.md)
@@ -108,6 +108,10 @@ Session discovery reads Pi's default cwd-scoped session directory (or its sessio
 
 Tool cards use the same summary treatment whether embedded in an assistant turn or temporarily standalone; assistant content and execution activity update one card per invocation. See [transcript rendering behavior](docs/architecture.md#rendering-contract-retained-from-pi-gui).
 
+## Planned features
+
+- [Card plugins](docs/card-plugins.md): customizable transcript cards, with default renderers shipped as bundled Nimrod plugins using the same supported API as third-party renderers. Not implemented yet.
+
 ## Not currently included
 
 - Background process continuity.
@@ -129,6 +133,11 @@ Drafts, recovered text, and uncertain submissions are scoped by canonical sessio
 The pre-persistence development conversation was temporary; this build does not retroactively save it.
 
 ## Build and verify
+
+Mise enables a shared, machine-local **sccache compiler cache** for Rust builds.
+`main` and worktrees with this configuration reuse compatible dependency compilations
+in both directions, while each checkout keeps its own `target/` and app bundle.
+Run `mise install` after updating an existing checkout. [Build cache details →](docs/build-cache.md)
 
 ```sh
 mise run check  # TS + UI tests; Rust fmt, clippy, process tests

@@ -6,6 +6,13 @@
 - `mise run check` passes **343 TypeScript/Node tests**, Rust formatting/Clippy and **77 default Rust tests** (two opt-in Pi smokes ignored). `mise run build` packages and verifies the signed worktree macOS bundle. Badge/search/activation, disconnected/inactive membership, Close, root/child filtering and exact-file lineage are covered by fixtures. `git diff --check` passes; the browser suite was not rerun.
 - No user app/window launch or interruption, live Pi/model request, user-session modification or installed-extension change occurred. The primary checkout/default app bundle was untouched. Native badge layout and picker acceptance, Linux and possible Windows verification remain for user validation.
 
+## Counted All / Unread / Working sidebar filters
+
+- Implemented on `feat/sidebar-filters` in `.worktrees/sidebar-filters`. All three views show live session counts including zero; counts overlap. Unread retains input/failure semantics and stable arrival order. Working uses recency order, busy/compaction/reported-subagent membership, excludes input-waiting/unavailable/lifecycle transitions, and retains a selected settled response without counting it as working. Legacy `attention` view state restores as Unread.
+- `mise run check` passes **345 TypeScript/Node tests**, formatting/Clippy and **76 default Rust tests** (two opt-in Pi smokes ignored). All **31 offline WebKit tests** pass, including counted accessible tab names, Working settlement/blank re-entry, keyboard navigation, sidebar recency/viewport anchoring, resizing, focus and transcript scrolling. An initial browser run exposed stale exact `All` locators after adding counts; those fixtures now match counted names and the full rerun passes.
+- `mise run build` packages and verifies the signed worktree artifact at `.worktrees/sidebar-filters/src-tauri/target/release/bundle/macos/Nimrod.app`. The primary checkout/default bundle and running app were untouched. No live Pi/model requests, real OS notifications, user-session deletion or upstream extension changes.
+- Native visual/focus acceptance and Linux/possible Windows verification remain unperformed. Please validate the three filters and narrow-sidebar count wrapping in the packaged app.
+
 ## macOS Command-Option key normalization
 
 - A unit regression reproduces the matcher’s rejection of `key: Dead/˜/ñ, code: KeyN, metaKey: true, altKey: true` against New named session’s `primary+alt+n`. Matching and recording now share a narrow fallback to letter/digit codes for transformed macOS Command+Option events. Readable layout letters remain unchanged; plain Option typing, known non-macOS platforms, IME/229 and repeat guards are preserved. No defaults or saved overrides are rewritten.

@@ -21,7 +21,7 @@ test('sidebar trash is left of Close, shares row hover and remains disabled for 
     await close.hover(); expect(await row.evaluate(node => getComputedStyle(node).backgroundColor)).toBe(color);
     await trash.click({ force: true }); expect(demo.calls.some(call => call.command === 'delete_session_tree')).toBe(false);
     await page.locator(visible('prompt')).fill('Finish in the background'); await page.locator(visible('prompt')).press('Enter');
-    await page.getByRole('tab', { name: /Needs attention/ }).click();
+    await page.getByRole('tab', { name: /Unread/ }).click();
     await expect(row.locator('.session-row')).toHaveAttribute('aria-label', /Unread/);
     await expect(trash).toBeVisible(); await expect(trash).toBeDisabled();
     expect(demo.calls.some(call => call.command === 'delete_session_tree')).toBe(false);

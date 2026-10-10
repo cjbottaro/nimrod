@@ -1,6 +1,12 @@
 [tools]
 rust = "1.98.1"
 node = "25.9.0"
+"aqua:mozilla/sccache" = "0.18.0"
+
+[env]
+# Use sccache's shared machine-local disk cache; keep target/ checkout-local.
+RUSTC_WRAPPER = "sccache"
+CARGO_INCREMENTAL = "0"
 
 [tasks.dev]
 run = "npm run tauri dev"
