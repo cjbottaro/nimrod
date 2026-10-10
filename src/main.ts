@@ -75,7 +75,10 @@ let presented: Tab | undefined;
 const tabs: Tab[] = [];
 let recency = new SessionRecency(undefined);
 const sessionAttention = new SessionAttention();
-let sidebarView: 'all' | 'attention' = 'all';
+const sidebarViews = ['all', 'unread', 'working'] as const;
+type SidebarView = typeof sidebarViews[number];
+const sessionWorking = new SessionAttention();
+let sidebarView: SidebarView = 'all';
 function popoutError(message: string): void {
   const notice = required('storage-error');
   notice.hidden = false; notice.textContent = `Pop-outs: ${message}`;
@@ -252,7 +255,7 @@ function recoverableDrafts(): { key: string; label: string }[] {
 }
 function controls(): void {
   welcome.hidden = !ready || !!workspace;
-  required('workspace-empty').hidden = !workspace || !!active || sidebarView === 'attention';
+  required('workspace-empty').hidden = !workspace || !!active || sidebarView !== 'all';
   for (const id of ['workspace-new', 'workspace-resume', 'start-pi', 'start-temporary', 'start-demo', 'resume-file', 'resume-last', 'recover-draft', 'browse', 'cwd', 'enter-workspace', 'sidebar-new']) {
     (required(id) as HTMLButtonElement | HTMLInputElement).disabled = !ready || deletion.pending;
   }
@@ -265,10 +268,18 @@ function controls(): void {
   renderSidebar(); restartControl();
 }
 function needsAttention(tab: Tab): boolean { return !!tab.inputCount || tab.unread || tab.failed; }
+function isWorking(tab: Tab): boolean {
+  const state = tab.session?.state;
+  return !tab.starting && !tab.closing && !tab.restarting && !tab.deleting && !tab.ended && !tab.inputCount &&
+    !!state && !state.sessionUnavailable && (state.busy || !!presentActivity(false, '', state.extensionStatuses).subagents);
+}
 function sidebarTabs(): Tab[] {
   const order = sessionAttention.reconcile(tabs.map(tab => ({ id: tab.id, needsAttention: needsAttention(tab) })), presented?.id);
+  // Reuse selected-row retention so a run settling doesn't hide the response being read.
+  const working = new Set(sessionWorking.reconcile(tabs.map(tab => ({ id: tab.id, needsAttention: isWorking(tab) })), sidebarView === 'working' ? presented?.id : undefined));
   const byId = new Map(tabs.map(tab => [tab.id, tab]));
-  return sidebarView === 'all' ? recentSessions(tabs) : order.map(id => byId.get(id)!);
+  return sidebarView === 'unread' ? order.map(id => byId.get(id)!) :
+    recentSessions(tabs).filter(tab => sidebarView === 'all' || working.has(tab.id));
 }
 function touchTab(tab: Tab): void {
   tab.lastUsed = nextLastUsed(tabs);
@@ -293,16 +304,17 @@ function renderSidebar(moved?: HTMLElement): void {
     if (tab.rowNode === anchor) anchor = anchor.nextElementSibling;
     else list.insertBefore(tab.rowNode, anchor);
   }
-  const all = required<HTMLButtonElement>('sidebar-all'), attention = required<HTMLButtonElement>('sidebar-attention');
-  all.setAttribute('aria-selected', String(sidebarView === 'all')); all.tabIndex = sidebarView === 'all' ? 0 : -1;
-  attention.setAttribute('aria-selected', String(sidebarView === 'attention')); attention.tabIndex = sidebarView === 'attention' ? 0 : -1;
-  required('sidebar-attention-count').textContent = String(tabs.filter(needsAttention).length);
-  required('sidebar-session-panel').setAttribute('aria-labelledby', sidebarView === 'all' ? all.id : attention.id);
-  const working = sidebarView === 'attention' && !visible.length ? tabs.filter(tab =>
-    !tab.starting && !tab.closing && !tab.restarting && !tab.ended && !tab.inputCount &&
-    tab.session?.state.busy === true && !tab.session.state.sessionUnavailable).length : 0;
+  const counts = { all: tabs.length, unread: tabs.filter(needsAttention).length, working: tabs.filter(isWorking).length };
+  for (const view of sidebarViews) {
+    const control = required<HTMLButtonElement>(`sidebar-${view}`);
+    control.setAttribute('aria-selected', String(sidebarView === view)); control.tabIndex = sidebarView === view ? 0 : -1;
+    const count = required(`sidebar-${view}-count`), text = String(counts[view]);
+    if (count.textContent !== text) count.textContent = text;
+  }
+  required('sidebar-session-panel').setAttribute('aria-labelledby', `sidebar-${sidebarView}`);
+  const working = sidebarView === 'unread' && !visible.length ? counts.working : 0;
   const emptyText = required('sidebar-empty-text'), dots = required('sidebar-empty-dots');
-  const label = working ? `${working} ${working === 1 ? 'session' : 'sessions'} working` : sidebarView === 'attention' ? 'No sessions need attention.' : 'No open sessions.';
+  const label = working ? `${working} ${working === 1 ? 'session' : 'sessions'} working` : sidebarView === 'unread' ? 'No unread sessions.' : sidebarView === 'working' ? 'No sessions working.' : 'No open sessions.';
   // Keep the animated node and unchanged status text intact during streaming.
   if (emptyText.textContent !== label) emptyText.textContent = label;
   if (dots.textContent !== (working ? '…' : '')) dots.textContent = working ? '…' : '';
@@ -310,9 +322,9 @@ function renderSidebar(moved?: HTMLElement): void {
   required('sidebar-empty').hidden = !!visible.length;
   restoreScroll();
   if (!filteredFocus && focused instanceof HTMLElement && focused.isConnected && document.activeElement !== focused) focused.focus({ preventScroll: true });
-  if (filteredFocus && !document.querySelector('dialog[open]')) (sidebarView === 'all' ? all : attention).focus({ preventScroll: true });
+  if (filteredFocus && !document.querySelector('dialog[open]')) required(`sidebar-${sidebarView}`).focus({ preventScroll: true });
 }
-function selectSidebarView(view: 'all' | 'attention'): void {
+function selectSidebarView(view: SidebarView): void {
   const returningToAll = view === 'all' && sidebarView !== 'all';
   sidebarView = view;
   if (workspace) save(`nimrod.sidebar.view:${workspace}`, view);
@@ -328,7 +340,7 @@ function presentConversation(tab: Tab | undefined): void {
       const focused = document.activeElement;
       if (focused instanceof HTMLElement && presented.root.contains(focused)) {
         presented.focus = focused;
-        if (!tab && !document.querySelector('dialog[open]')) required(sidebarView === 'all' ? 'sidebar-all' : 'sidebar-attention').focus({ preventScroll: true });
+        if (!tab && !document.querySelector('dialog[open]')) required(`sidebar-${sidebarView}`).focus({ preventScroll: true });
       }
       presented.view.setActive(false); presented.root.hidden = true; presented.root.inert = true;
     }
@@ -408,7 +420,8 @@ async function enterWorkspace(path: string): Promise<void> {
   if (recency.delete(Object.keys(recency.dump()).filter(file => deletion.removed(file)))) save(recencyKey(), recency.dump());
   ready = false; controls();
   sidebarResize.reload();
-  sidebarView = stored(`nimrod.sidebar.view:${path}`) === 'attention' ? 'attention' : 'all';
+  const savedView = stored(`nimrod.sidebar.view:${path}`);
+  sidebarView = savedView === 'attention' || savedView === 'unread' ? 'unread' : savedView === 'working' ? 'working' : 'all';
   drafts = makeDrafts(`${SESSION_STORAGE_KEY}:${path}`);
   required('workspace-label').textContent = path;
   required('workspace-label').title = path;
@@ -554,7 +567,7 @@ function activate(tab: Tab, focus = true, reveal = true, scroll = true): void {
   if (!ready || !tabs.includes(tab)) return;
   // Explicit navigation reaches every open session, but never leaves a shown
   // conversation without its selected row. Boot/close fallback must not change views.
-  if (reveal && sidebarView === 'attention' && !sidebarTabs().includes(tab)) {
+  if (reveal && sidebarView !== 'all' && !sidebarTabs().includes(tab)) {
     sidebarView = 'all';
     if (workspace) save(`nimrod.sidebar.view:${workspace}`, sidebarView);
   }
@@ -821,8 +834,8 @@ function removeDeletedSessions(files: string[]): void {
     };
     let next = nextIn(shown, sidebarTabs());
     // Tree deletion intentionally differs from ordinary Close: the agreed
-    // deletion flow falls back to All when the attention inbox is exhausted.
-    if (!next && sidebarView === 'attention') { selectSidebarView('all'); next = nextIn(before, recentSessions(tabs)); }
+    // deletion flow falls back to All when the current filter is exhausted.
+    if (!next && sidebarView !== 'all') { selectSidebarView('all'); next = nextIn(before, recentSessions(tabs)); }
     if (next) activate(next, true, false);
     else { conversation.hidden = true; required('mode-badge').textContent = ''; }
   }
@@ -906,14 +919,16 @@ required('recover-draft').addEventListener('click', () => {
 required('restart-session').addEventListener('click', () => { if (presented) void restartSession(presented); });
 required('delete-session').addEventListener('click', () => { if (presented) void deleteSession(presented); });
 required('toggle-sidebar').addEventListener('click', () => { sidebarVisible = !sidebarVisible; save('nimrod.sidebar.visible', sidebarVisible); controls(); });
-required('sidebar-all').addEventListener('click', () => selectSidebarView('all'));
-required('sidebar-attention').addEventListener('click', () => selectSidebarView('attention'));
+for (const view of sidebarViews) required(`sidebar-${view}`).addEventListener('click', () => selectSidebarView(view));
 required('sidebar-views').addEventListener('keydown', event => {
   if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing || event.repeat) return;
-  const view = event.key === 'Home' ? 'all' : event.key === 'End' ? 'attention' : event.key === 'ArrowLeft' || event.key === 'ArrowRight' ? sidebarView === 'all' ? 'attention' : 'all' : undefined;
+  const index = sidebarViews.indexOf(sidebarView);
+  const view = event.key === 'Home' ? 'all' : event.key === 'End' ? 'working' :
+    event.key === 'ArrowLeft' ? sidebarViews[(index + sidebarViews.length - 1) % sidebarViews.length] :
+    event.key === 'ArrowRight' ? sidebarViews[(index + 1) % sidebarViews.length] : undefined;
   if (!view) return;
   event.preventDefault(); selectSidebarView(view);
-  required(view === 'all' ? 'sidebar-all' : 'sidebar-attention').focus({ preventScroll: true });
+  required(`sidebar-${view}`).focus({ preventScroll: true });
 });
 required('open-sessions').addEventListener('keydown', event => {
   const visible = sidebarTabs();
