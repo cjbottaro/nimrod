@@ -252,13 +252,16 @@ See [notifications](notifications.md) and the [implementation reference](../.age
 - Project-window focus now hides the outgoing project's references and passively
   shows the incoming project's selected-session references. Focusing an owned
   pop-out retains the same scope; stale restore callbacks cannot reveal background projects.
-- Current-checkout verification: **258 TypeScript tests**, Rust formatting/Clippy,
-  **64 default Rust tests** (two opt-in Pi tests ignored), and a packaged macOS build.
-  Includes five new project-focus policy tests and other concurrent feature work.
+- macOS pop-outs now opt out of native window cycling while remaining clickable/
+  focusable; ⌘W is unchanged. New and restored references are configured before showing.
+- Task-worktree verification: **347 TypeScript tests**, Rust formatting/Clippy,
+  **80 default Rust tests** (two opt-in Pi tests ignored), packaged macOS build and
+  bundle-signature verification. Three new regressions cover cycle flags and setup ordering.
 - **14 offline WebKit tests** passed for the earlier pop-out rendering/layout work;
   they were not rerun for native-only focus changes. Filesystem tests use disposable directories.
-- Remaining native checks: ⌘\` project switching and own-pop-out focus, saved-session
-  quit/relaunch, composer/dialog focus, Close versus Quit, minimization and multi-display geometry.
+- Remaining native checks: ⌘\` / ⇧⌘\` from both project and pop-out windows skip
+  references, including after restoration; click focus and ⌘W still work. Quit/relaunch,
+  composer/dialog focus, minimization and multi-display geometry also need native acceptance.
   Windows/Linux behavior is not accepted from macOS builds or mocked IPC tests.
 - No user app was launched/interrupted, model request made, or user-session/state file modified.
 

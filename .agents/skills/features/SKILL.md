@@ -26,7 +26,7 @@ items relevant to the task. Follow repository `AGENTS.md` and
 | Session management: row-targeted sidebar trash/Delete session tree, Rust-native file preview/removal, window-scoped icon/guide-line tree review with delayed loading and idle sidebar indicators, affected-project locks, batch cleanup, partial outcomes and quarantined recovery | [Session deletion](references/session-deletion.md) | [Delete session tree](../../../docs/workspace-sessions.md#delete-session-tree) |
 | Session management: open vs connected terminology, top-level Resume picker and Open badges, temporary-session disposal, reload/Restart session, lifecycle ownership, exact-file resume, draft preservation, Project bar and native Open project menu | [Projects and sessions](references/projects-and-sessions.md#session-management) | [Projects and sessions](../../../docs/workspace-sessions.md#session-management) |
 | Terminal forwarding, atomic macOS cold-start ownership, listener publication, stale-socket recovery and native window cycling boundaries | [Single-instance startup](references/single-instance.md) | [Terminal launches](../../../docs/workspace-sessions.md#terminal-launches) |
-| Pop-outs, code Copy actions, content hashing, snapshot persistence, project/session visibility, reference-window focus and geometry | [Pop-outs](references/pop-outs.md) | [Pop-outs](../../../docs/pop-outs.md) |
+| Pop-outs, code Copy actions, content hashing, snapshot persistence, project/session visibility, reference-window focus, native window cycling and geometry | [Pop-outs](references/pop-outs.md) | [Pop-outs](../../../docs/pop-outs.md) |
 
 Features without a reference yet: consult their existing docs and source; add a
 reference when doing substantive feature work rather than inventing details.
