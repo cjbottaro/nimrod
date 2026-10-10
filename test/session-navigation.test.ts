@@ -58,7 +58,7 @@ test('projections isolate inbox arrival, Working recency, selected retention and
   assert.deepEqual(ids(navigation.snapshot('unread', b).visible), [], 'closed selection never stays retained');
 });
 
-test('selection intents explicitly govern reveal, focus, filter escape and reconnect without mutating recency', () => {
+test('selection intents govern presentation, not connection policy, without mutating recency', () => {
   const navigation = model(), a = session('a', 2), b = session('b', 1);
   navigation.add(a); navigation.add(b); b.attention = true;
   for (const view of SESSION_VIEWS) for (const intent of ['explicit', 'row', 'restore', 'cleanup', 'notification'] as SelectionIntent[]) {
@@ -69,7 +69,7 @@ test('selection intents explicitly govern reveal, focus, filter escape and recon
     assert.equal(plan.view, view === 'all' || explicit ? 'all' : view);
     assert.equal(plan.focus, intent !== 'restore');
     assert.equal(plan.reveal, intent === 'explicit' || intent === 'notification');
-    assert.equal(plan.connect, intent !== 'cleanup' && intent !== 'notification');
+    assert.equal('connect' in plan, false, 'navigation intents cannot opt out of selected-session connection');
     assert.deepEqual(navigation.open().map(s => s.lastUsed), [2, 1]);
   }
   assert.equal(navigation.selection(session('closed'), navigation.snapshot('all'), 'explicit'), undefined);
@@ -108,6 +108,6 @@ test('batch cleanup preserves a surviving selection and removes the entire subtr
   const selected = navigation.snapshot('all', surviving, surviving);
   navigation.remove(parent); navigation.remove(child);
   assert.deepEqual(navigation.replacement(selected, navigation.snapshot('all')), { target: surviving, view: 'all' });
-  assert.equal(navigation.selection(surviving, navigation.snapshot('all'), 'cleanup')!.connect, false);
+  assert.equal(navigation.selection(surviving, navigation.snapshot('all'), 'cleanup')!.target, surviving);
   assert.deepEqual(ids(navigation.all()), ['surviving']);
 });

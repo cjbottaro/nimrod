@@ -791,7 +791,7 @@ test('returned deletion results remove a whole subtree once and select according
   }
 });
 
-test('Close and Delete share connected-first cleanup selection without implicit launches', async () => {
+test('Close and Delete share connected-first selection and reconnect an inactive replacement', async () => {
   for (const action of ['close', 'delete']) for (const scenario of ['all', 'unread-visible', 'unread-hidden', 'working-hidden', 'inactive-next', 'inactive-previous', 'background']) {
     let now = 1_700_000_000_000;
     const selectedIndex = scenario === 'inactive-previous' ? 0 : 1;
@@ -832,14 +832,77 @@ test('Close and Delete share connected-first cleanup selection without implicit 
       await f.tick(); await f.tick(); await f.tick();
       assert.equal(rows[expected].getAttribute('aria-current'), 'true', `${action}/${scenario}`);
       assert.equal(f.element(`sidebar-${view}`).getAttribute('aria-selected'), 'true', `${action}/${scenario} view`);
-      assert.equal(f.calls.filter(c => c.command === 'start_pi').length, before, `${action}/${scenario}: cleanup must not launch`);
+      const reconnect = scenario.startsWith('inactive');
+      assert.equal(f.calls.filter(c => c.command === 'start_pi').length, before + Number(reconnect), `${action}/${scenario}: both actions reconnect inactive replacements`);
       for (const i of [0, 1, 2, 3]) if (i !== selectedIndex) assert.equal(rows[i].querySelector('time')!.getAttribute('datetime'), recency[i], 'cleanup must not mark use');
-      if (scenario.startsWith('inactive')) {
-        assert.equal(rows[expected].querySelector('.session-indicator')!.getAttribute('data-state'), 'failed');
-        rows[expected].click(); await f.tick(); await f.tick();
-        assert.equal(f.calls.filter(c => c.command === 'start_pi').length, before + 1, 'explicit selection resumes the inactive fallback');
+      if (reconnect) {
+        const config = f.calls.filter(c => c.command === 'start_pi').at(-1)!.args.config as JsonRecord;
+        assert.equal(config.mode, 'resume');
+        assert.equal(config.sessionFile, expected ? '/sessions/new-1.jsonl' : '/sessions/new.jsonl');
+        assert.equal(rows[expected].querySelector('.session-indicator')!.getAttribute('data-state'), 'ready');
+        assert.equal(f.calls.some(c => c.command === 'write_pi' && (c.args.message as JsonRecord).type === 'prompt'), false);
       }
     } finally { f.dom.window.close(); }
+  }
+});
+
+test('returning to All loads and connects its selected restored session without sending a prompt', async () => {
+  const file = '/sessions/restored.jsonl';
+  const f = await fixture(undefined, { windowWorkspace: '/project', history: [{ role: 'user', content: [{ type: 'text', text: 'Restored conversation' }] }],
+    appState: { 'nimrod.sidebar.view:/project': 'unread', 'nimrod.tabs.v1:/project': { active: file, tabs: [{ path: file, sessionId: 'fixture-id', name: 'Restored' }] } } });
+  try {
+    assert.equal(f.element('conversation').hidden, true, 'no selected matching row in Unread');
+    assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 0);
+    f.element<HTMLButtonElement>('sidebar-all').click(); await f.tick(); await f.tick();
+    assert.equal(f.rows()[0].getAttribute('aria-current'), 'true');
+    assert.equal(f.rows()[0].querySelector('.session-indicator')!.getAttribute('data-state'), 'ready');
+    assert.match(f.element('messages').textContent!, /Restored conversation/);
+    assert.equal((f.calls.find(c => c.command === 'start_pi')!.args.config as JsonRecord).sessionFile, file);
+    f.element<HTMLButtonElement>('sidebar-all').click(); await f.tick();
+    assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
+    assert.equal(f.calls.some(c => c.command === 'write_pi' && (c.args.message as JsonRecord).type === 'prompt'), false);
+  } finally { f.win.close(); }
+});
+
+test('deletion reconnect waits for barrier release, ignores duplicates and respects changed selection/quarantine', async () => {
+  for (const scenario of ['event', 'returned-pending', 'changed-selection', 'quarantine']) {
+    const root = '/sessions/new-1.jsonl', child = '/sessions/new-2.jsonl', fallback = '/sessions/new.jsonl';
+    const results = [{ file: root, deleted: true }, { file: child, deleted: true }];
+    const options: ShellOptions = { windowWorkspace: '/project', deleteTree: async () => results };
+    const f = await fixture(undefined, options);
+    try {
+      for (let i = 0; i < 4; i++) { f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick(); }
+      const rows = f.rows(), channels = [...f.sessions.values()].map(s => s.channel);
+      rows[1].click();
+      for (const i of [0, 2, 3]) channels[i].onmessage({ kind: 'disconnected', message: 'Fixture inactive' });
+      await f.tick();
+      const event: DeletionEvent = { id: 'fixture-delete', phase: 'complete', files: [root, child], results, pending: true };
+      if (scenario === 'quarantine') {
+        event.files.push(fallback); event.results = [...results, { file: fallback, deleted: false }];
+      }
+      if (scenario === 'returned-pending') {
+        options.deletionSnapshot = { pending: true, quarantine: [root, child], files: [root, child] };
+        f.element<HTMLButtonElement>('delete-session').click();
+      } else f.deletionEvent(event);
+      await f.tick(); await f.tick(); await f.tick();
+      assert.equal(rows[0].getAttribute('aria-current'), 'true', 'whole subtree removed before replacement selection');
+      assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 4, 'no resume while native launch barrier remains');
+      if (scenario === 'changed-selection') { rows[3].click(); await f.tick(); }
+      const release: DeletionEvent = { ...event, phase: 'release', pending: false };
+      f.deletionEvent(release); await f.tick(); await f.tick();
+      const resumes = scenario !== 'quarantine';
+      assert.equal(f.calls.filter(c => c.command === 'start_pi').length, resumes ? 5 : 4);
+      if (resumes) {
+        const selected = scenario === 'changed-selection' ? 3 : 0;
+        assert.equal((f.calls.filter(c => c.command === 'start_pi').at(-1)!.args.config as JsonRecord).sessionFile, selected ? '/sessions/new-3.jsonl' : fallback);
+        assert.equal(rows[selected].querySelector('.session-indicator')!.getAttribute('data-state'), 'ready');
+      }
+      if (scenario === 'changed-selection') assert.equal(rows[3].getAttribute('aria-current'), 'true');
+      f.deletionEvent({ ...event, pending: false }); f.deletionEvent(release);
+      await f.tick(); await f.tick();
+      assert.equal(f.calls.filter(c => c.command === 'start_pi').length, resumes ? 5 : 4, 'duplicate reconciliation never reconnects twice');
+      assert.equal(f.calls.some(c => c.command === 'write_pi' && (c.args.message as JsonRecord).type === 'prompt'), false);
+    } finally { f.win.close(); }
   }
 });
 
@@ -1284,7 +1347,7 @@ test('notifications target background sessions, suppress selected foreground run
   } finally { f.dom.window.close(); }
 });
 
-test('notification clicks select exact open sessions, reveal filtered rows, dismiss Settings and jump to bottom without launches', async () => {
+test('notification clicks select exact open sessions, reveal filtered rows and reconnect disconnected history', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project', windowLabel: 'own-project' });
   try {
     f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
@@ -1315,13 +1378,13 @@ test('notification clicks select exact open sessions, reveal filtered rows, dism
     assert.equal(f.calls.filter(c => c.command === 'focus_notification_window').length, 1);
     assert.equal(f.calls.filter(c => c.command === 'start_pi' || c.command === 'stop_pi' || c.command === 'write_pi').length, before);
     assert.doesNotMatch(firstRow.getAttribute('aria-label')!, /Unread/);
-    // A disconnected, still-open session can be read without silently resuming.
+    // Selection via a valid notification reconnects the exact still-open saved session.
     first.onmessage({ kind: 'disconnected', message: 'fixture ended' }); await f.tick();
     f.rows()[1].click(); await f.tick();
     const starts = f.calls.filter(c => c.command === 'start_pi').length;
     f.notificationClick(target); await f.tick();
     assert.equal(firstRow.getAttribute('aria-current'), 'true');
-    assert.equal(f.calls.filter(c => c.command === 'start_pi').length, starts);
+    assert.equal(f.calls.filter(c => c.command === 'start_pi').length, starts + 1);
     // Once closed, even its retained OS notification has no navigation target.
     firstRow.parentElement!.querySelector<HTMLButtonElement>('.session-close')!.click(); await f.tick(); await f.tick();
     const focuses = f.calls.filter(c => c.command === 'focus_notification_window').length;

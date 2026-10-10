@@ -5,7 +5,7 @@ Read the [human guide](../../../../docs/notifications.md) and [architecture](../
 ## Code map
 
 - `src/pi/session.ts`: Pi-specific attention callback (`completed`, `input`, `failed`), live-run/outcome/latest-finalized-assistant-text tracking, input-dialog queue, disconnect deduplication.
-- `src/main.ts`: captures originating tab/token; lifecycle eligibility; notification-safe explicit name; Settings toggle; completion unread marker; window-targeted click listener with runtime ID/token revalidation and explicit no-connect navigation.
+- `src/main.ts`: captures originating tab/token; lifecycle eligibility; notification-safe explicit name; Settings toggle; completion unread marker; window-targeted click listener with runtime ID/token revalidation and shared selected-session loading/reconnect.
 - `src/notifications.ts`: testable policy; initial native focus filter, optional permission preparation, final focus/lifecycle/preference/selection revalidation, latest-attempt status; bounded Markdown-to-plain-text response previews using marked/DOMPurify with all but line-break tags stripped.
 - `src/preferences.ts`, `src-tauri/src/preferences.rs`: validated boolean `notifications.enabled`, default true, existing JSONC/CAS writer and cross-window synchronization.
 - `index.html`: Settings → Notifications, On/Off selector, Send test notification and Refresh notification diagnostics buttons plus last-attempt/native-policy status. Errors also use the existing project error area.
@@ -32,7 +32,7 @@ Read the [human guide](../../../../docs/notifications.md) and [architecture](../
 
 - **Click → owning project window → exact open session → transcript bottom.** Do not implement response-start anchors or a fit-in-viewport heuristic. Always bottom; re-enable auto-follow using the existing scroll owner. Normal session switching keeps its saved reading position.
 - Delivery remains passive. Navigation is an explicit user click, not completion-driven selection.
-- Scope is sessions still open in this app run, including temporary/offline demos and disconnected sessions with retained transcript. Never reopen closed/deleted sessions, silently resume/start a disconnected child, replay prompts, or route to an arbitrary active/latest/named session.
+- Scope is sessions still open in this app run, including temporary/offline demos and disconnected sessions with retained transcript. Never reopen closed/deleted sessions, replay prompts, or route to an arbitrary active/latest/named session. A valid click explicitly selects its still-open target and loads/reconnects saved history if disconnected, subject to lifecycle/deletion guards.
 - Runtime session ID plus launch token selects the target, not display name or session-file discovery. A restart retires the old token. Previous-process notifications are ignored even if the OS launches/activates Nimrod.
 - Explicit navigation reveals filtered targets (switching to All only when required), clears unread through existing selection semantics, and does not update last-used recency. Dismiss shell Settings/palette where modality permits; never answer/cancel Pi dialogs.
 - Same policy on macOS and Linux, narrow native callbacks per platform. Windows remains possible future support, not a parity promise. Linux service action/compositor focus support is variable; tests/build on macOS are not native Linux acceptance.
@@ -47,7 +47,7 @@ Linux bypasses the Tauri notification plugin for send/test. Direct `notify-rust`
 
 Native callbacks emit `nimrod-notification-click` only to the named WebviewWindow and do not focus it themselves. The frontend listener must also be WebviewWindow-targeted (Any listeners receive other windows' targeted emissions). Validate open membership/token/lifecycle/deletion before calling `focus_notification_window`, then revalidate after its await. A newer notification click or explicit session/sidebar-view navigation wins over an older delayed focus result. Focus failures are reported but do not prevent exact-session selection.
 
-Notification selection uses `activate(..., connect=false)`, preserving normal auto-resume behavior for ordinary user session switching while forbidding it on this path. `PiView.scrollToBottom` delegates to `TranscriptScroll`, clears interrupted follow intent, jumps immediately after presentation and requests a layout-settled frame through the existing scheduler. Reader wheel/touch/key intent can still cancel that frame.
+Notification selection uses `activate(..., 'notification')`, sharing normal saved-session loading/reconnect while retaining reveal/focus semantics. Retired launch tokens remain invalid; a reconnect retires the notification's old token. `PiView.scrollToBottom` delegates to `TranscriptScroll`, clears interrupted follow intent, jumps immediately after presentation and requests a layout-settled frame through the existing scheduler. Reader wheel/touch/key intent can still cancel that frame.
 
 Test alerts have no target and cannot select a session. Native OS activation may still occur for stale/test alerts, outside Nimrod's router.
 

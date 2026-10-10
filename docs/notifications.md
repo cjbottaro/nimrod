@@ -20,7 +20,7 @@ Intentional Stop/Close/Restart/quit and history restoration do not produce compl
 
 On macOS and supported Linux desktops, clicking a session notification brings its owning project window forward, selects that exact open session and **scrolls the transcript to the bottom**. This intentionally overrides that session's reading position and re-enables auto-follow. Ordinary session switching still preserves reading position.
 
-A session hidden by Unread or Working is revealed, switching to All when necessary. Settings or the command palette closes; pending Pi input dialogs remain unanswered. Clicking never sends a prompt or starts/resumes an agent—even if the session has disconnected.
+A session hidden by Unread or Working is revealed, switching to All when necessary. Settings or the command palette closes; pending Pi input dialogs remain unanswered. Clicking never sends a prompt. A valid click on a still-open disconnected saved session loads its history and reconnects Pi, like any other session selection; stale alerts never reopen closed or retired sessions.
 
 Routing applies only to the original session still open in the running app. Alerts for closed, deleted or restarted sessions, closed windows, or an earlier app run are ignored by Nimrod's session router. The OS may still activate the app. Test notifications have no session target.
 

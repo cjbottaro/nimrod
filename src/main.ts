@@ -3,6 +3,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { notificationPreview, sessionNotifications, type NotificationDispatch, type NotificationClick } from './notifications';
 import { SessionNavigation, SESSION_VIEWS, type SessionView, type SelectionIntent, type NavigationSnapshot } from './session-navigation';
+import { SessionConnection } from './session-connection';
 import { installSidebarResize, sidebarWidthKey } from './sidebar-resize';
 import { lastUsed, captureSidebarScroll, revealSidebarRow, SessionRecency } from './session-recency';
 import { sessionIndicator, createSessionRowContent, updateSessionRowContent, updateSessionRowTime, installSessionTimeRefresh } from './session-sidebar';
@@ -210,6 +211,17 @@ const notifySession = sessionNotifications({
   prepare: () => invoke('prepare_notifications'),
   send: (kind, target) => invoke<NotificationDispatch>('notify_session', { kind, session: target.session, target: target.target, selected: target.selected(), ...(target.preview ? { preview: target.preview } : {}) }),
 }, () => preferences.notificationsEnabled(), notificationError, notificationProgress);
+const selectedConnection = new SessionConnection<Tab>({
+  selected: () => presented,
+  eligibility: tab => {
+    if (!ready || unloading || !workspace || !tabs.includes(tab) || !tab.file?.exists || deletion.blocked(tab.file.path) || tab.closing || tab.restarting) return 'unavailable';
+    if (tab.starting || (tab.session && !tab.ended)) return 'connected';
+    if (deletion.pending || tab.deleting) return 'blocked';
+    return 'connectable';
+  },
+  connect: tab => launch(tab, undefined, true),
+  failed: (tab, error) => { if (tabs.includes(tab)) showNotice(tab, `Could not connect Pi: ${error}`, true); },
+});
 const deletion = new SessionDeletion({
   panels: () => tabs.filter(tab => tab.file?.exists && !tab.demo && tab.mode !== 'temporary').map(tab => ({
     file: tab.file!.path,
@@ -233,7 +245,11 @@ const deletion = new SessionDeletion({
   snapshot: () => invoke<DeletionSnapshot>('deletion_snapshot'),
   run: (root, sessionId) => invoke('delete_session_tree', { root, sessionId }),
   recover: (path, sessionId) => invoke('recover_deletion_session', { path, sessionId }),
-  changed: () => { for (const tab of tabs) updateTab(tab); controls(); },
+  changed: () => {
+    for (const tab of tabs) updateTab(tab);
+    controls();
+    selectedConnection.barriersChanged();
+  },
   deleted: removeDeletedSessions,
   loadingReview: deletionReview.loading,
   review: (id, sessions) => deletionReview.review({ id, sessions }),
@@ -350,8 +366,8 @@ function selectSidebarView(view: SessionView): void {
   sidebarView = view;
   if (workspace) save(`nimrod.sidebar.view:${workspace}`, view);
   const target = navigation.presented(navigationSnapshot());
-  presentConversation(target);
-  if (target) { target.unread = false; updateTab(target); }
+  if (target) activate(target, 'restore');
+  else presentConversation(undefined);
   controls();
   if (returningToAll && target) revealSidebarRow(required('session-sidebar'), target.rowNode);
 }
@@ -648,7 +664,7 @@ function activate(tab: Tab, intent: SelectionIntent = 'explicit'): void {
   persistTabs(); controls(); syncPopouts();
   if (plan.reveal && presented === tab) revealSidebarRow(required('session-sidebar'), tab.rowNode);
   if (plan.focus && presented === tab && !document.querySelector('dialog[open]')) (tab.focus?.isConnected ? tab.focus : tab.root.querySelector<HTMLElement>('[data-pi-id="prompt"]'))?.focus({ preventScroll: true });
-  if (plan.connect && presented === tab && tab.file?.exists && !deletion.pending && !deletion.blocked(tab.file.path) && !tab.starting && !tab.closing && !tab.restarting && (!tab.session || tab.ended)) void launch(tab, undefined, true);
+  selectedConnection.request();
 }
 function refreshTime(tab: Tab): void {
   updateSessionRowTime(tab.rowTime, tab.lastUsed);

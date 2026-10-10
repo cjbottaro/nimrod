@@ -21,7 +21,6 @@ export interface SelectionPlan<T> {
   view: SessionView;
   focus: boolean;
   reveal: boolean;
-  connect: boolean;
 }
 
 /** Project-local navigation policy. No DOM, harness requests, persistence or focus effects.
@@ -75,7 +74,6 @@ export class SessionNavigation<T extends NavigationSession> {
     return {
       target, view: explicit && !snapshot.visible.includes(target) ? 'all' : snapshot.view,
       focus: intent !== 'restore', reveal: intent === 'explicit' || intent === 'notification',
-      connect: intent !== 'cleanup' && intent !== 'notification',
     };
   }
   /** Capture before removal; resolve once after the whole batch is removed. */
