@@ -87,7 +87,7 @@ The Project bar's trash icon, per-row sidebar trash and palette action use Nimro
 ## Rendering, focus and related features
 
 - Each mounted session owns its controller, transport, renderer and draft selection. Preserve DOM when switching; suspend hidden geometry observations and restore reader intent when selecting.
-- Modal palettes/dialogs own focus during background streaming. Esc picker → commands → close preserves query and restores prior focus. Lifecycle actions run after native HTML dialog close. Guard IME/repeated Enter.
+- Modal palettes/dialogs own focus during background streaming. Escape cancels/closes the entire command interaction and restores prior focus; explicit Back returns to commands with the prior query. The [command-interaction reference](command-interactions.md) owns the shared lifecycle contract. Lifecycle actions run after native HTML dialog close. Guard IME/repeated Enter.
 - Restart uses an explicit launch boundary, so do not infer ordinary snapshot preservation of disclosures. No document/window reload and no geometry reset for other sessions.
 - Pop-out sync is at selection, identity promotion, close and boot boundaries. Restart keeps runtime owner identity; see [pop-outs](pop-outs.md) before changing source-session retirement/focus behavior.
 - Native menu, folder chooser, AppKit focus, menu shortcuts and Windows/Linux behavior require native acceptance. Source guards/jsdom/offline WebKit are not proof of native execution.

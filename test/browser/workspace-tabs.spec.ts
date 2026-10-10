@@ -402,9 +402,11 @@ test('palette stays modal during streaming and Escape restores the untouched com
     await expect(page.locator('#palette-status')).toHaveText('No sessions yet.');
     await expect(page.locator(sessions)).toHaveAttribute('aria-label', /Ready/);
     await expect(page.locator('#palette-input')).toBeFocused();
-    await page.keyboard.press('Escape');
+    await page.locator('#palette-back').click();
     await expect(page.locator('#palette-title')).toHaveText('Commands');
     await expect(page.locator('#palette-input')).toHaveValue('resume');
+    await page.locator('#palette-input').press('Enter');
+    await expect(page.locator('#palette-title')).toHaveText('Resume session');
     await page.keyboard.press('Escape');
     await expect(page.locator('#command-palette')).not.toBeVisible();
     await expect(page.locator(visible('prompt'))).toBeFocused();

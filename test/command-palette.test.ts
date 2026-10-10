@@ -36,6 +36,75 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }))
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
+test('every palette page shares one-step dismissal across entry points and cancellation paths', async () => {
+  for (const page of ['commands', 'resume', 'switch', 'selection', 'name']) {
+    for (const entry of ['direct', 'palette']) {
+      for (const cancellation of ['keyboard', 'native', 'api']) {
+        const f = fixture();
+        try {
+          if (entry === 'palette') { f.palette.open(); f.query('remember me'); }
+          let choice: Promise<string | undefined> | undefined;
+          if (page === 'commands') { if (entry === 'direct') f.palette.open(); }
+          else if (page === 'resume') await f.palette.sessions();
+          else if (page === 'switch') await f.palette.openSessions();
+          else if (page === 'name') { f.palette.namedSession(name => { f.calls.push(name); }); f.query('Discard me'); }
+          else {
+            // Any future selection feature gets the same lifecycle, without an
+            // Escape handler or knowledge of how the user reached it.
+            const request = f.palette.startSelection('Future feature', () => { f.calls.push('retry'); })!;
+            choice = request.choose(['First', 'Second']);
+          }
+          assert.equal(f.dialog.open, true);
+          if (cancellation === 'keyboard') {
+            const target = f.win.document.querySelector<HTMLButtonElement>('#palette-refresh')!;
+            target.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+          } else if (cancellation === 'native') {
+            const event = new f.win.Event('cancel', { cancelable: true });
+            f.dialog.dispatchEvent(event); assert.equal(event.defaultPrevented, true);
+          } else f.palette.close();
+          assert.equal(f.dialog.open, false, `${page}/${entry}/${cancellation}`);
+          if (choice) assert.equal(await choice, undefined);
+          await tick(); assert.deepEqual(f.calls, []);
+          assert.equal(f.win.document.activeElement, f.opener);
+          f.palette.open(); assert.equal(f.input.value, '');
+        } finally { f.dispose(); }
+      }
+    }
+  }
+});
+
+test('selection Back cancels pending choices but retains the interaction and command query', async () => {
+  const f = fixture();
+  try {
+    f.palette.open(); f.query('remember');
+    const request = f.palette.startSelection('Select model', () => {})!;
+    const choice = request.choose(['one']);
+    f.win.document.querySelector<HTMLButtonElement>('#palette-back')!.click();
+    assert.equal(await choice, undefined);
+    assert.equal(f.dialog.open, true); assert.equal(f.input.value, 'remember');
+    assert.equal(await request.choose(['stale']), undefined);
+    request.cancel(); assert.equal(f.dialog.open, true, 'old page cannot dismiss commands');
+  } finally { f.dispose(); }
+});
+
+test('dismissal invalidates choices before the native close event is delivered', async () => {
+  const f = fixture();
+  try {
+    const request = f.palette.startSelection('Select model', () => {})!;
+    const choice = request.choose(['one']);
+    f.dialog.close = () => { f.dialog.removeAttribute('open'); };
+    request.cancel();
+    assert.equal(await choice, undefined);
+    assert.equal(await request.choose(['stale']), undefined);
+    request.error('stale'); assert.doesNotMatch(f.status()!, /stale/);
+    assert.equal(f.palette.open(), false, 'wait for native close before a new interaction');
+    assert.equal(f.palette.startSelection('New picker', () => {}), undefined);
+    f.dialog.dispatchEvent(new f.win.Event('close'));
+    assert.equal(f.win.document.activeElement, f.opener);
+    assert.equal(f.palette.open(), true);
+  } finally { f.dispose(); }
+});
+
 test('session badges are separate, searchable text and do not change activation', async () => {
   const chosen: string[] = [];
   const f = fixture(async () => ({ items: [
@@ -121,7 +190,7 @@ test('late history cannot overwrite naming and leaving the step clears its actio
   } finally { f.dispose(); }
 });
 
-test('preference picker marks current option, cancels on back and ignores stale loads', async () => {
+test('preference picker marks current option, dismisses on Escape and ignores stale loads', async () => {
   const f = fixture();
   try {
     const old = f.palette.startSelection('Select model', () => {})!;
@@ -129,6 +198,7 @@ test('preference picker marks current option, cancels on back and ignores stale 
     assert.equal(f.input.getAttribute('aria-activedescendant'), f.list().children[1].id);
     assert.match(f.list().children[1].textContent!, /Current/);
     f.key('Escape'); assert.equal(await choice, undefined);
+    assert.equal(f.dialog.open, false); assert.equal(f.win.document.activeElement, f.opener);
     assert.equal(await old.choose(['stale']), undefined);
     old.error('stale error'); assert.doesNotMatch(f.status()!, /stale/);
     const current = f.palette.startSelection('Select thinking level', () => {})!;
@@ -167,12 +237,13 @@ test('switch-session picker includes only open sessions without loading resume h
   } finally { f.dispose(); }
 });
 
-test('Escape returns to command query before closing and restoring focus', async () => {
+test('explicit Back returns to the command query; Escape closes and restores focus', async () => {
   const f = fixture();
   try {
     f.palette.open(); f.query('res'); f.key('Enter'); await tick();
     f.query('missing'); f.key('Enter'); assert.equal(f.dialog.open, true);
-    f.key('Escape'); assert.equal(f.input.value, 'res'); assert.equal(f.dialog.open, true);
+    f.win.document.querySelector<HTMLButtonElement>('#palette-back')!.click();
+    assert.equal(f.input.value, 'res'); assert.equal(f.dialog.open, true);
     f.key('Escape'); assert.equal(f.dialog.open, false); assert.equal(f.win.document.activeElement, f.opener);
     assert.deepEqual(f.calls, []);
   } finally { f.dispose(); }
@@ -182,11 +253,11 @@ test('late session results cannot overwrite commands or a newer picker request',
   const finish: ((page: PalettePage) => void)[] = [];
   const f = fixture(() => new Promise(resolve => finish.push(resolve)));
   try {
-    void f.palette.sessions(); f.key('Escape');
+    void f.palette.sessions(); f.win.document.querySelector<HTMLButtonElement>('#palette-back')!.click();
     finish[0]({ items: [{ id: 'old', label: 'Obsolete session', run() {} }] }); await tick();
     assert.equal(f.win.document.querySelector('#palette-title')!.textContent, 'Commands');
     assert.doesNotMatch(f.list().textContent!, /Obsolete/);
-    void f.palette.sessions(); f.key('Escape'); f.key('Escape');
+    void f.palette.sessions(); f.key('Escape'); assert.equal(f.dialog.open, false);
     void f.palette.sessions();
     finish[2]({ items: [{ id: 'new', label: 'Current result', run() {} }] }); await tick();
     finish[1]({ items: [{ id: 'old', label: 'Obsolete result', run() {} }] }); await tick();

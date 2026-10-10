@@ -197,7 +197,8 @@ test('customizable requested shortcuts use normal session/model/effort actions w
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Retain this draft'; prompt.dispatchEvent(new f.win.Event('input'));
     key('m'); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Select model');
     f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
-    key('e'); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Select thinking level'); escape(); escape();
+    key('e'); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Select thinking level'); escape();
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
     const before = f.calls.filter(call => call.command === 'start_pi').length;
     key('n', { repeat: true }); key('n', { isComposing: true }); await f.tick(); assert.equal(f.calls.filter(call => call.command === 'start_pi').length, before);
     key('N', { shiftKey: true }); await f.tick(); await f.tick();
@@ -239,7 +240,7 @@ test('session navigation and named-session defaults open their distinct pickers 
     assert.match(f.element('palette-list').textContent!, /Closed history/); assert.match(f.element('palette-list').textContent!, /Open/);
     assert.equal(f.calls.filter(call => call.command === 'list_workspace_sessions').length, 1);
     key('t'); key('n', { altKey: true }); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Resume session');
-    escape(); escape();
+    escape(); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
     key('n', { altKey: true }); await f.tick(); assert.equal(f.element('palette-title').textContent, 'New named session');
     assert.equal(f.calls.filter(call => call.command === 'start_pi').length, starts);
     escape(); await f.tick(); assert.equal(prompt.value, 'Navigation must retain this draft'); assert.equal(f.win.document.activeElement, prompt);
@@ -2006,10 +2007,10 @@ test('Resume marks sidebar membership independently of connectivity and filters 
     assert.deepEqual(pickerRows().map(badge), ['Open', 'Open', undefined]);
     assert.ok(pickerRows()[0].querySelector('.palette-item-heading .palette-item-badge'), 'badge is separate from the truncatable preview');
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1, 'listing does not connect inactive sessions');
-    escape(); escape();
+    escape(); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
     key('t'); await f.tick();
     assert.equal(pickerRows().length, 3, 'Switch includes the open child and disconnected root');
-    escape(); escape();
+    escape(); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
     key('k'); await f.tick(); await f.tick();
     pickerRows()[0].click(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1, 'already-connected selection reuses its process');
@@ -2017,7 +2018,7 @@ test('Resume marks sidebar membership independently of connectivity and filters 
     f.disconnect(); await f.tick();
     key('k'); await f.tick(); await f.tick();
     assert.equal(badge(pickerRows()[0]), 'Open', 'disconnect does not close the session');
-    escape(); escape();
+    escape(); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
     f.rows()[1].closest('.open-session')!.querySelector<HTMLButtonElement>('.session-close')!.click(); await f.tick(); await f.tick();
     key('k'); await f.tick(); await f.tick();
     assert.deepEqual(pickerRows().map(badge), ['Open', undefined, undefined], 'Close removes only the membership badge, not saved history');
@@ -2156,7 +2157,7 @@ test('brand-new unwritten session can select its first model and effort through 
     assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
     assert.match(f.element('palette-status').textContent!, /Select a model/);
     const key = (key: string) => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
-    key('Escape'); key('Escape');
+    key('Escape'); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
     f.element<HTMLButtonElement>('model').click(); await f.tick();
     assert.equal(f.element('palette-title').textContent, 'Select model');
     assert.match(f.element('palette-list').textContent!, /fixture\/reasoner/);

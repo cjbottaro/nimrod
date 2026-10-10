@@ -14,7 +14,8 @@ test('session shortcut defaults open Switch, Resume and New named directly witho
     await expect(prompt).toHaveValue('Keep this draft'); await expect(prompt).toBeFocused();
     await page.keyboard.press(primary + '+K'); await expect(page.locator('#palette-title')).toHaveText('Resume session');
     await expect.poll(() => demo.calls.filter(call => call.command === 'list_workspace_sessions').length).toBe(1);
-    await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#command-palette')).not.toBeVisible();
     await page.keyboard.press(primary + '+Alt+N'); await expect(page.locator('#palette-title')).toHaveText('New named session');
     await expect(page.locator('#palette-input')).toBeFocused();
     await page.locator('#palette-input').fill('Do not launch this fixture'); await page.keyboard.press('Escape');

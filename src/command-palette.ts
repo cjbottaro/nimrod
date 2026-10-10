@@ -23,7 +23,10 @@ export interface SelectionRequest {
   cancel(): void;
 }
 
-/** Window-local navigation UI, not a harness command dispatcher. */
+/** Window-local command interaction, not a harness command dispatcher.
+ * Pages own their content; this controller owns dismissal, cancellation and focus.
+ * Escape always dismisses the interaction. Only explicit Back navigates to commands.
+ */
 export function installCommandPalette(win: Window, dialog: HTMLDialogElement, options: PaletteOptions) {
   const realm = win as Window & typeof globalThis;
   const doc = dialog.ownerDocument;
@@ -50,8 +53,19 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   let retryAction: (() => void) | undefined;
   let createNamed: ((name: string) => void | Promise<void>) | undefined;
   let composing = false;
+  let closing = false;
 
   function cancelChoice(): void { const resolve = resolveChoice; resolveChoice = undefined; resolve?.(undefined); }
+  // Invalidate synchronously: native dialog close events are queued, and pending
+  // metadata/choices must stop being actionable before focus restoration completes.
+  // Omitting an action is cancellation, never navigation or command execution.
+  function closeInteraction(action?: () => void | Promise<void>): void {
+    if (!dialog.open) return;
+    afterClose = action;
+    cancelChoice(); createNamed = undefined; retryAction = undefined; generation++;
+    closing = true;
+    dialog.close();
+  }
   function validName(): boolean { return !!input.value.trim() && !/[\r\n\0]/.test(input.value); }
   function draw(): void {
     const naming = mode === 'name';
@@ -145,7 +159,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       },
       error(message) { if (current()) { loading = false; notice = message; draw(); } },
       finish() { if (current() && loading) { loading = false; notice = 'Pi did not provide choices. Retry when the session is ready.'; draw(); } },
-      cancel() { if (current()) { cancelChoice(); dialog.close(); } },
+      cancel() { if (current()) closeInteraction(); },
     };
   }
   function namedSession(onCreate: (name: string) => void | Promise<void>): void {
@@ -161,33 +175,29 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   function submitName(): void {
     if (!dialog.open || mode !== 'name' || !createNamed || composing || !validName() || doc.querySelector('dialog[open]:not(#command-palette)')) return;
     const action = createNamed, name = input.value.trim();
-    createNamed = undefined;
-    // Use the same post-close action boundary as navigation, not a prompt.
-    afterClose = () => action(name);
-    dialog.close();
+    // Use the same post-close action boundary as selection, not a prompt.
+    closeInteraction(() => action(name));
   }
   function open(): boolean {
-    if (!options.canOpen() || doc.querySelector('dialog[open]')) return false;
+    if (closing || !options.canOpen() || doc.querySelector('dialog[open]')) return false;
     opener = doc.activeElement instanceof realm.HTMLElement ? doc.activeElement : undefined;
     commandQuery = ''; afterClose = undefined;
     dialog.showModal(); commands(); return true;
   }
   function choose(index = selected): void {
     const item = matches[index];
-    if (!item || loading) return;
+    if (!dialog.open || !item || loading) return;
     if (item.next) { void item.run(); return; }
     // The action owns resolution after native focus restoration. Dismissal alone cancels.
     resolveChoice = undefined;
-    afterClose = item.run;
-    dialog.close();
+    closeInteraction(item.run);
   }
-  function escape(): void { if (mode !== 'commands' && mode !== 'name') commands(); else dialog.close(); }
   input.addEventListener('compositionstart', () => { composing = true; }, { signal });
   input.addEventListener('compositionend', () => { composing = false; }, { signal });
   input.addEventListener('input', () => { matches = []; selected = 0; draw(); }, { signal });
   dialog.addEventListener('keydown', event => {
-    if (event.isComposing || event.keyCode === 229) return;
-    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); escape(); }
+    if (!dialog.open || event.isComposing || event.keyCode === 229) return;
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeInteraction(); }
     else if (event.target === input && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault(); if (matches.length) selected = (selected + (event.key === 'ArrowDown' ? 1 : -1) + matches.length) % matches.length; selection();
@@ -196,9 +206,10 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       event.preventDefault();
     }
   }, { signal });
-  dialog.addEventListener('cancel', event => { event.preventDefault(); escape(); }, { signal });
+  dialog.addEventListener('cancel', event => { event.preventDefault(); closeInteraction(); }, { signal });
   dialog.addEventListener('close', () => {
-    cancelChoice(); createNamed = undefined; generation++;
+    closing = false;
+    cancelChoice(); createNamed = undefined; retryAction = undefined; generation++;
     const action = afterClose; afterClose = undefined;
     if (!doc.querySelector('dialog[open]') && opener?.isConnected && !opener.closest('[hidden], [inert]')) opener.focus({ preventScroll: true });
     if (action) void Promise.resolve().then(action).catch(error => {
@@ -219,5 +230,5 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     if (dialog.open) { event.preventDefault(); return; }
     if (open()) event.preventDefault();
   }, { signal });
-  return { open, close: () => { afterClose = undefined; cancelChoice(); generation++; if (dialog.open) dialog.close(); }, sessions: () => sessions('resume'), openSessions: () => sessions('open'), namedSession, startSelection, dispose: () => { cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
+  return { open, close: () => closeInteraction(), sessions: () => sessions('resume'), openSessions: () => sessions('open'), namedSession, startSelection, dispose: () => { cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
 }
