@@ -102,6 +102,28 @@ One native transaction per app process:
    flag and publish completion atomically under the start/finish transition mutex.
    A new begin cannot overtake the old completion. Round IDs reject stale reports.
 
+### Preview locks versus execution activity
+
+`Tab.deleting` remains the safety lock for preview, confirmation, shutdown and
+removal: it makes affected composers inert and gates actions/launches, but it must
+not drive the sidebar activity indicator. `Tab.deletionExecuting` is a separate,
+transient presentation flag. `SessionDeletion` calls a panel's optional
+`executionStarted()` only on the native `quarantine` event, after confirmation
+and before writer shutdown. Until then `indicator(tab)` uses the underlying idle,
+inactive or unread state; it must not show a work/deletion spinner merely because
+the confirmation is open. Unlock resets the execution flag on cancellation,
+completion, failure or an authoritative non-pending snapshot. Working membership
+and counts continue to exclude deletion-locked sessions. No agent busy state,
+recency, acknowledgement, native ownership or persistence semantics change.
+
+Shell regressions cover connected Ready rows during lock/review, cancellation,
+confirmed execution, success/failure/recovery, unaffected rows, draft/inertness
+and a zero Working count. Coordinator tests cover affected-only execution hooks
+and snapshot unlock. Offline WebKit restores an inactive fake saved row without
+launching Pi, then injects lock/review/quarantine/completion: it verifies no CSS
+spinner during review, Deleting only during execution, and the unchanged offline
+sibling/draft. No native files are removed by these browser/shell fixtures.
+
 Native owner checks remain authoritative if a frontend receives locks late.
 A panic/failed task join has an uncertain outcome: quarantined entries are not
 implicitly resumed or retried. There is no external worker left running after

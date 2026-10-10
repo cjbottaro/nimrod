@@ -1,6 +1,51 @@
 import { expect, test } from '@playwright/test';
 import { demoFixture, visible } from './demo-fixture';
 
+test('deletion review preserves the idle sidebar indicator; only confirmed shutdown/removal shows Deleting', async ({ page }) => {
+  const file = '/fixture/saved.jsonl', project = process.cwd();
+  const demo = await demoFixture(page, {
+    [`nimrod.tabs.v1:${project}`]: { tabs: [{ path: file, sessionId: 'saved', name: 'Saved fixture', lastUsed: 100 }] },
+    // Keep restored history unpresented until New offline demo: never launch Pi.
+    [`nimrod.sidebar.view:${project}`]: 'working',
+  });
+  try {
+    const prompt = page.locator(visible('prompt')); await prompt.fill('Keep the offline draft');
+    const row = page.locator('.open-session').filter({ hasText: 'Saved fixture' });
+    const indicator = row.locator('.session-indicator');
+    await expect(indicator).toHaveAttribute('data-state', 'inactive');
+    const phase = (id: string, value: 'lock' | 'check' | 'review' | 'quarantine' | 'release') => ({
+      id, phase: value, files: [file], results: [], pending: value !== 'release',
+      ...(value === 'review' ? { tree: [{ file, title: 'Saved fixture' }] } : {}),
+    });
+    for (const id of ['cancel', 'confirm']) {
+      await demo.deletionEvent(phase(`${id}-lock`, 'lock'));
+      await expect.poll(() => demo.calls.filter(call => call.command === 'acknowledge_deletion').length).toBe(id === 'cancel' ? 1 : 2);
+      await demo.deletionEvent(phase(id, 'review'));
+      await expect(page.locator('#deletion-review')).toBeVisible();
+      await expect(indicator).toHaveAttribute('data-state', 'inactive');
+      expect(await indicator.evaluate(node => getComputedStyle(node, '::before').content)).toBe('none');
+      await expect(row.locator('.session-row')).toHaveAttribute('aria-label', 'Saved fixture — Inactive');
+      await expect(page.locator('#sidebar-working-count')).toHaveText('0');
+      await page.keyboard.press(id === 'cancel' ? 'Escape' : 'Enter');
+      await expect(page.locator('#deletion-review')).not.toBeVisible();
+      if (id === 'cancel') {
+        await demo.deletionEvent(phase(id, 'release'));
+        await expect(indicator).toHaveAttribute('data-state', 'inactive');
+      }
+    }
+    await demo.deletionEvent(phase('check', 'check'));
+    await demo.deletionEvent(phase('execute', 'quarantine'));
+    await expect(indicator).toHaveAttribute('data-state', 'deleting');
+    await expect(row.locator('.session-row')).toHaveAttribute('aria-label', 'Saved fixture — Deleting');
+    expect(await indicator.evaluate(node => getComputedStyle(node, '::before').animationName)).toBe('sidebar-indicator-spin');
+    await expect(page.locator('#sidebar-working-count')).toHaveText('0');
+    await demo.deletionEvent({ id: 'complete', phase: 'complete', files: [file], results: [{ file, deleted: true }], pending: false });
+    await expect(row).toHaveCount(0); await expect(prompt).toHaveValue('Keep the offline draft');
+    expect(demo.children.size).toBe(1); expect(demo.calls.some(call => call.command === 'delete_session_tree')).toBe(false);
+    expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
 test('deletion tree has compact even rows, aligned session icons, guide lines and wrapped secondary details', async ({ page }) => {
   const demo = await demoFixture(page);
   try {
