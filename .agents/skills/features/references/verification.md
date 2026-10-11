@@ -26,6 +26,7 @@ Detailed provenance is retained in [history](history/verification.md#evidence-bo
 | Area | User/platform checks still needed |
 | --- | --- |
 | Projects/startup | Finder runtime discovery, rapid cold/warm CLI forwarding, minimized-window focus, native window cycling and pop-out ownership |
+| Drafts | Native typing feel, Close/Quit flush and crash/reload limits; [storage specification](native-drafts.md) |
 | Sessions | Real first-save/exact-file resume, Close/Restart cancellation and failure, independent multi-window shutdown, no replay |
 | Deletion | Native multi-window review/idle locks, recovery after partial filesystem failure, external mutation limits |
 | Transcript/sidebar | Native zoom/trackpad/keyboard, follow/pause, disclosure animation, narrow/ultrawide geometry and view selection |

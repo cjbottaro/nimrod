@@ -48,6 +48,7 @@ Resolved paths appear under Runtime. Defaults are:
 ```text
 ~/.config/nimrod/settings.json     # User-editable JSONC preferences
 ~/.local/state/nimrod/state.json   # App-managed bookkeeping
+~/.local/state/nimrod/drafts/      # Native per-session draft records
 ~/.local/state/nimrod/popouts/     # Saved reference snapshots
 ```
 
@@ -65,7 +66,7 @@ Absolute `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the roots. Empty/relati
 }
 ```
 
-Omitted keys use defaults or runtime discovery. Imported themes live in `appearance.importedThemes`; [keybinding overrides](keybindings.md#configuration-file) live in `keybindings`. Pi's settings remain Pi-owned. Drafts are separate from these files.
+Omitted keys use defaults or runtime discovery. Imported themes live in `appearance.importedThemes`; [keybinding overrides](keybindings.md#configuration-file) live in `keybindings`. Pi's settings remain Pi-owned. [Drafts](drafts.md) use separate Rust-managed per-session files with debounced asynchronous saves; legacy webview drafts are ignored without migration.
 
 Valid external edits update open windows. Invalid files keep the last valid values and show an error; correcting the file clears it. UI saves preserve comments and unrelated keys, refuse malformed files and report detected conflicts rather than silently retrying. External editors aren't locked.
 

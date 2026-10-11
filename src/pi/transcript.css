@@ -69,3 +69,7 @@ summary { cursor:pointer; color:var(--vscode-descriptionForeground); } :is(.tool
 :is(#composer-area, [data-pi-id="composer-area"]):focus-within { --interaction-edge:var(--vscode-panel-border, var(--vscode-focusBorder)); }
 @media (prefers-reduced-motion: reduce) { :is(#composer-area, [data-pi-id="composer-area"]), :is(#activity, [data-pi-id="activity"]) { transition:none; } } :is(#send, [data-pi-id="send"]) { position:absolute; right:7px; bottom:6px; width:28px; height:28px; display:grid; place-items:center; padding:0; color:var(--vscode-button-foreground); } :is(#send, [data-pi-id="send"]) svg { display:block; } :is(#composer-meta, [data-pi-id="composer-meta"]) { min-height:22px; display:flex; align-items:center; gap:8px; padding:5px 2px 0; } :is(#keyboard-hint, [data-pi-id="keyboard-hint"]) { color:var(--vscode-descriptionForeground); font-size:.78em; }
 :is(#dialog-text, [data-pi-id="dialog-text"]) { width:100%; min-height:min(180px,30vh); box-sizing:border-box; margin:0; resize:vertical; }
+
+@supports (field-sizing: content) {
+  :is(#prompt, [data-pi-id="prompt"]) { field-sizing:content; height:auto; overflow-y:auto; }
+}

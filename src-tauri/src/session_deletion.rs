@@ -514,6 +514,18 @@ pub async fn delete_session_tree(
         .lock()
         .unwrap()
         .extend(successful.iter().cloned());
+    let draft_store = app.state::<crate::drafts::Drafts>().inner().clone();
+    let draft_files = successful.clone();
+    if let Err(e) =
+        tauri::async_runtime::spawn_blocking(move || draft_store.delete_files(&draft_files))
+            .await
+            .unwrap_or_else(|e| Err(e.to_string()))
+    {
+        error = Some(format!(
+            "{}Draft cleanup failed: {e}",
+            error.map(|e| format!("{e}; ")).unwrap_or_default()
+        ));
+    }
     if let Err(e) = crate::popouts::delete_sessions(&app, &successful).await {
         error = Some(format!(
             "{}Reference cleanup failed: {e}",

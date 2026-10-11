@@ -29,15 +29,18 @@ export function keyboardHint(mainBusy: boolean): string {
 /** Keep the primary composer affordance stable while its main-agent action changes. */
 export function renderPrimaryAction(button: HTMLButtonElement, state: PrimaryActionState): void {
   const stopping = state.mainBusy;
-  button.dataset.action = stopping ? "stop" : "send";
+  const action = stopping ? "stop" : "send";
+  const changed = button.dataset.action !== action;
+  button.dataset.action = action;
   button.disabled = stopping ? false : state.submissionPending || state.sessionUnavailable;
   button.setAttribute("aria-label", stopping ? "Stop Pi" : "Send message");
   button.title = stopping ? "Stop Pi" : "Send message";
-  button.replaceChildren(icon(button.ownerDocument, stopping ? "stop" : "send"));
+  if (changed) button.replaceChildren(icon(button.ownerDocument, action));
 }
 
 /** Size the draft field to its contents without allowing it to take over the editor. */
 export function resizeComposer(textarea: HTMLTextAreaElement, minHeight = 40, maxHeight = 160): void {
+  if (textarea.ownerDocument.defaultView?.CSS?.supports('field-sizing', 'content')) return;
   // Measuring the content forces layout. Hold the shell at its current
   // height so that measurement cannot briefly enlarge the transcript pane and
   // clamp its scrollTop (even when the final composer height is unchanged).

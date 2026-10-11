@@ -399,8 +399,13 @@ test('paste uses event images once, preserves newer attachments on ack, and neve
     assert.equal(f.paste().defaultPrevented, true); await tickImages();
     assert.equal(f.clipboardReads(), 0);
     assert.equal(f.win.document.querySelectorAll('.composer-attachments img').length, 1);
-    f.send(); await tickImages();
-    const submission = f.sent.find(message => message.type === 'prompt')!;
+    f.send();
+    // FileReader completion is asynchronous and may exceed a fixed 30ms while
+    // the full suite/build is running. Wait for the actual fixture submission.
+    const deadline = Date.now() + 2000;
+    while (!f.sent.some(message => message.type === 'prompt') && Date.now() < deadline) await tickImages();
+    const submission = f.sent.find(message => message.type === 'prompt');
+    assert.ok(submission, 'image preparation should produce a prompt');
     assert.deepEqual(JSON.parse(JSON.stringify(submission.images)), [{ type: 'image', mimeType: 'image/png', data: 'YWJj' }]);
     f.draft('newer'); f.paste(); await tickImages();
     f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' });

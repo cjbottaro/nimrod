@@ -20,6 +20,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Deletion preview, transactions, reconciliation and recovery | [Session deletion](references/session-deletion.md) | [Deletion](../../../docs/sessions.md#delete-session-tree) |
 | CLI forwarding and native instance ownership | [Single instance](references/single-instance.md) | [Terminal launches](../../../docs/projects.md#terminal-launches) |
 | Pi framing, response order and acknowledgement | [Pi transport](references/pi-transport.md) | [Writing messages](../../../docs/writing-messages.md) |
+| Native per-session drafts, debounced saves and submission durability | [Native drafts](references/native-drafts.md) | [Drafts](../../../docs/drafts.md) |
 | Send/steer/queue, pending turns and recovery | [Composer](references/composer.md) | [Writing messages](../../../docs/writing-messages.md) |
 | Image paste, draft bytes and image recovery | [Image paste](references/image-paste.md) | [Paste images](../../../docs/image-paste.md) |
 | Tool/reasoning identity, lifecycle and disclosures | [Transcript cards](references/transcript-cards.md) | [Reading conversations](../../../docs/reading-conversations.md) |

@@ -42,6 +42,7 @@ Without installation, use `./bin/nimrod .`. The launcher opens or focuses a proj
 - [Projects](docs/projects.md) — directory-backed windows and recent-project navigation.
 - [Sessions](docs/sessions.md) — persistent and temporary conversations, resume, restart, close and deletion.
 - [Session sidebar](docs/session-sidebar.md) — All, Unread and Working views, activity indicators and resizing.
+- [Drafts](docs/drafts.md) — native per-session storage, debounced saves and recovery.
 - [Writing messages](docs/writing-messages.md) — send, steer, queue, Stop, slash commands and recovery.
 - [Reading conversations](docs/reading-conversations.md) — tool/reasoning cards, code actions, links and auto-follow.
 - [Paste images](docs/image-paste.md) — image attachments and image-send recovery.

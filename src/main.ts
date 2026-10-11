@@ -23,7 +23,8 @@ import type { ColorTheme } from './themes/theme';
 import { mountPiView, type HostMessage, type PiView } from './pi/webview-client';
 import { PiTransport, type Packet } from './pi/transport';
 import { PiSession } from './pi/session';
-import { SessionDrafts, purgeDeletedDrafts, SESSION_STORAGE_KEY, type LastSession } from './pi/session-drafts';
+import { SessionDrafts, type LastSession } from './pi/session-drafts';
+import { NativeDrafts } from './native-drafts';
 import { restoreComposerState } from './pi/webview-state';
 import { Dialogs } from './dialogs';
 import { COMMAND_USAGE_KEY, readCommandUsage } from './command-ranking';
@@ -137,8 +138,7 @@ interface Tab {
   row: HTMLButtonElement; rowLabel: HTMLElement; rowIndicator: HTMLElement; rowTime: HTMLTimeElement; rowNode: HTMLElement;
 }
 function stored(key: string): unknown {
-  if (!key.startsWith('nimrod.sessions.') && key !== 'nimrod.poc.composer') return localState.has(key) ? localState.get(key) : preferences.readState(key);
-  try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; }
+  return localState.has(key) ? localState.get(key) : preferences.readState(key);
 }
 function persistenceError(e: unknown): void {
   required('storage-error').hidden = false;
@@ -148,8 +148,9 @@ function save(key: string, value: unknown): void {
   localState.set(key, value);
   void preferences.saveState(key, value).catch(persistenceError);
 }
-function makeDrafts(key = SESSION_STORAGE_KEY): SessionDrafts {
-  return new SessionDrafts(stored(key) || stored(SESSION_STORAGE_KEY), stored('nimrod.poc.composer'), value => localStorage.setItem(key, JSON.stringify(value)));
+let nativeDrafts: NativeDrafts | undefined;
+function makeDrafts(values: Record<string, unknown> = {}): SessionDrafts {
+  return new SessionDrafts({ drafts: values }, undefined, () => {}, (key, value) => nativeDrafts?.change(key, value));
 }
 const sidebarResize = installSidebarResize(window, {
   layout: required('workspace-layout'), sidebar: required('session-sidebar'),
@@ -306,10 +307,16 @@ preferences.subscribe(() => {
   if (!Object.is(width, settingsSidebarWidth)) { settingsSidebarWidth = width; settingsSidebarResize.reload(); }
   runtime.reload(); themes.reload(); void zoom.reload(); reloadNotifications(); keybindingEditor.reload(); refreshShortcutHints();
 });
+const unlistenDraftErrors = await listen<string>('nimrod-draft-error', event => persistenceError(event.payload));
+const unlistenDraftClose = await getCurrentWindow().onCloseRequested(() => {
+  // Rust owns child shutdown/window destruction and flushes staged drafts.
+  void nativeDrafts?.flush().catch(persistenceError);
+});
+window.addEventListener('pagehide', () => { void nativeDrafts?.flush().catch(persistenceError); });
 const disposeTimeRefresh = installSessionTimeRefresh(window, () => { for (const tab of tabs) refreshTime(tab); });
 window.addEventListener('unload', () => {
   unloading = true;
-  disposeTimeRefresh();
+  disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
   sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
   for (const tab of tabs) { tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.session?.rpc.disconnect('Window closed'); }
   keybindingDispatch.dispose(); keybindingEditor.dispose(); settingsNavigation.dispose(); settingsSidebarResize.dispose();
@@ -487,7 +494,9 @@ async function enterWorkspace(path: string): Promise<void> {
   sidebarResize.reload();
   const savedView = stored(`nimrod.sidebar.view:${path}`);
   sidebarView = savedView === 'attention' || savedView === 'unread' ? 'unread' : savedView === 'working' ? 'working' : 'all';
-  drafts = makeDrafts(`${SESSION_STORAGE_KEY}:${path}`);
+  nativeDrafts = new NativeDrafts(path, persistenceError);
+  try { drafts = makeDrafts(await nativeDrafts.load()); }
+  catch (failure) { persistenceError(failure); throw failure; }
   const { name, parent } = projectPathParts(path);
   required('project-name').textContent = name;
   required('workspace-label').textContent = abbreviateHome(parent, homeDirectory);
@@ -686,6 +695,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
   tab.drafts.select(file ? `file:${file.path}` : mode === 'temporary' ? `temporary:${workspace}:${id}` : `unassigned:${id}`);
   const ephemeralImages = new Set<string>();
   let imagesDisposed = false;
+  let pendingNativeSubmission: string | undefined;
   root.addEventListener('nimrod-dispose-images', () => { imagesDisposed = true; for (const id of ephemeralImages) temporaryImages.delete(id); });
   tab.view = mountPiView({
     attachments: {
@@ -709,7 +719,10 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
     getState: () => tab.drafts.read(),
     setState: value => {
       const pending = submissionPending(tab);
+      const previous = tab.drafts.read() as { submission?: unknown; recovered?: unknown; imageRecovery?: unknown; attachments?: unknown } | undefined;
       try { tab.drafts.write(value); } catch (e) { persistenceError(e); }
+      const next = value as typeof previous;
+      if (tab.mode !== 'temporary' && (previous?.submission !== next?.submission || previous?.recovered !== next?.recovered || previous?.imageRecovery !== next?.imageRecovery || previous?.attachments !== next?.attachments)) void nativeDrafts?.flush().catch(persistenceError);
       // A receipt can be pending before Pi publishes any state/activity event.
       if (pending !== submissionPending(tab)) updateTab(tab);
     },
@@ -725,8 +738,30 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
         return;
       }
       if (!tab.session || tab.closing || tab.restarting) return;
+      if (message.type === 'stop' && pendingNativeSubmission) {
+        const id = pendingNativeSubmission; pendingNativeSubmission = undefined;
+        tab.receive?.({ type: 'submissionReceipt', id, outcome: 'rejected', error: 'Submission cancelled by Stop before persistence completed. Nothing was sent.' });
+      }
       if (message.type === 'selectModel' || message.type === 'selectThinking') void pickPreference(tab, message.type === 'selectModel' ? 'model' : 'thinking');
-      else void tab.session.handle(message);
+      else if (message.type === 'prompt' && tab.mode !== 'temporary') {
+        // Submission state is staged synchronously by the renderer before this
+        // callback. Require durable recovery before handing the prompt to Pi.
+        const session = tab.session, token = tab.token;
+        pendingNativeSubmission = String(message.id);
+        const currentSubmission = () => (tab.drafts.read() as { submission?: { id?: string; status?: string } })?.submission;
+        const current = () => tab.session === session && tab.token === token && !tab.closing && !tab.restarting && !tab.deleting && !tab.ended
+          && currentSubmission()?.id === message.id && currentSubmission()?.status === 'pending';
+        void nativeDrafts!.flush().then(() => {
+          if (current()) { pendingNativeSubmission = undefined; return session.handle(message); }
+          // Stop/restart/disconnect may already have settled or replaced this
+          // draft. Never deliver or apply an old receipt to a new generation.
+          if (tab.session === session && tab.token === token && currentSubmission()?.id === message.id) tab.receive?.({ type: 'submissionReceipt', id: String(message.id), outcome: 'rejected', error: 'Session changed before submission. Nothing was sent.' });
+        }).catch(failure => {
+          pendingNativeSubmission = undefined;
+          persistenceError(failure);
+          if (current()) tab.receive?.({ type: 'submissionReceipt', id: String(message.id), outcome: 'rejected', error: 'Could not save submission recovery. Nothing was sent.' });
+        });
+      } else void tab.session.handle(message);
     },
   }, root);
   tab.receive?.({ type: 'snapshot', state: { sessionUnavailable: true } });
@@ -1000,7 +1035,7 @@ function removeDeletedSessions(files: string[]): void {
     try { drafts.deleteFile(file); } catch (e) { persistenceError(e); }
     if ((stored(lastKey) as LastSession | null)?.path === file) save(lastKey, null);
   }
-  try { purgeDeletedDrafts(localStorage, files); } catch (e) { persistenceError(e); }
+  void nativeDrafts?.flush().catch(persistenceError);
   if (selected && removed.includes(selected)) selectCleanupReplacement(before);
   controls(); persistTabs(); syncPopouts();
 }
@@ -1048,8 +1083,10 @@ async function closeTab(tab: Tab): Promise<void> {
   if (tab.closing || !tabs.includes(tab)) return;
   tab.closing = true; updateTab(tab);
   try {
+    await nativeDrafts?.flush();
     await stopOwned(tab);
     tab.receive?.({ type: 'sessionDisconnected' }); tab.session?.rpc.disconnect('Disconnected');
+    await nativeDrafts?.flush();
     if (tab.token) dialogs.cancel(tab.token);
     detachTab(tab);
   } catch (e) { tab.closing = false; showNotice(tab, `Could not stop Pi: ${e}`); updateTab(tab); }

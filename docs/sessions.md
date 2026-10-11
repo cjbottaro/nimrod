@@ -71,8 +71,8 @@ Each deletion includes descendants, not just the listed row.
 
 ## Drafts and recovery
 
-Saved-session drafts are local Nimrod state, separate from Pi history. Only Pi acknowledgement clears an unchanged submitted draft; newer edits survive. Rejected/uncertain submissions remain available for explicit recovery and are never automatically resent.
+[Saved-session drafts](drafts.md) are Rust-managed Nimrod state, separate from Pi history. Legacy webview drafts are ignored without migration. Only Pi acknowledgement clears an unchanged submitted draft; newer edits survive. Rejected/uncertain submissions remain available for explicit recovery and are never automatically resent.
 
-**Recover unattached draft…** copies a legacy or unfinished draft into a new session without submitting it or consuming the source. Temporary drafts are not recoverable after disposal. Storage failures are reported; abrupt termination is not a durable-draft guarantee.
+**Recover unattached draft…** copies a newly created unfinished draft into a new session without submitting it or consuming the source. Temporary drafts are not recoverable after disposal. Storage failures are reported; abrupt termination is not a durable-draft guarantee.
 
 See [Writing messages](writing-messages.md), [Paste images](image-paste.md) and [Pop-outs](pop-outs.md). Native multi-window lifecycle, deletion failure/recovery and platform focus edge cases remain incompletely verified.

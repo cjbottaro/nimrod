@@ -37,6 +37,14 @@ Image attachment behavior and its text-only queue recovery boundary are covered 
 - Reconciliation is intentionally conservative: Pi's user messages and queues have no submission IDs. Expanded/rewritten user content cannot safely be matched by identity, and externally cleared queues without Nimrod's recovery response cannot prove delivery. Do not infer either from counts/idle state.
 - Rendering uses the existing TranscriptScroll capture/request path. No forced scroll/focus on send; no transcript render for ordinary draft keystrokes. Pending-label changes preserve assistant/tool nodes and disclosure state.
 
+## Typing hot path
+
+Draft-only edits retain status/control DOM and update the in-memory draft immediately. Native CSS content sizing is used where supported, otherwise one coalesced pre-paint measurement uses the latest text. Hide/dispose cancels pending sizing; selection sizes the latest draft. The fallback retains the shell-height hold/floor measurement so it cannot clamp transcript reading during measurement. Send/Stop retains its SVG unless the action changes.
+
+Draft persistence, debounce, submission durability, ignored legacy drafts, image references and the performance fixture are documented in [Native drafts](native-drafts.md). The original baseline performed 160 input-handler geometry reads and 800 status/button mutations for 80 characters; the current supported-WebKit fixture performs neither, and no localStorage writes. Timings remain diagnostic, not native input-to-paint acceptance.
+
+User guide: [Drafts](../../../../docs/drafts.md).
+
 ## Verification
 
 `test/composer-dom.test.ts` covers idle/busy mapping, exact hint order, newline and IME guards. `test/session.test.ts` covers prompt RPC delivery and acknowledgement, including explicit follow-up requests arriving while idle. DOM/unit coverage is not native keyboard acceptance on macOS or Linux.

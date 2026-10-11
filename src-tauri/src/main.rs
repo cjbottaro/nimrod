@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod cli;
 mod command_usage;
+mod drafts;
 mod keybindings;
 mod links;
 mod native_menu;
@@ -362,6 +363,13 @@ fn request_exit(app: &tauri::AppHandle) {
             .shutdown()
             .await;
         popouts::flush(&app).await;
+        let store = app.state::<drafts::Drafts>().inner().clone();
+        if let Err(error) = tauri::async_runtime::spawn_blocking(move || store.flush(None, false))
+            .await
+            .unwrap_or_else(|error| Err(error.to_string()))
+        {
+            eprintln!("Draft shutdown flush: {error}");
+        }
         let result = app.state::<WorkspaceHost>().shutdown().await;
         if let Err(error) = result {
             eprintln!("Nimrod shutdown: {error}");
@@ -430,7 +438,16 @@ fn main() {
             let home = app.path().home_dir()?;
             let preferences = preferences::Preferences::new(&home);
             app.manage(session_deletion::SessionDeletion::new(&preferences));
+            app.manage(drafts::Drafts::new(
+                preferences
+                    .snapshot()
+                    .state_path
+                    .parent()
+                    .unwrap()
+                    .join("drafts"),
+            ));
             app.manage(preferences);
+            drafts::watch(app.handle());
             preferences::watch(app.handle());
             let workspace = match &initial {
                 cli::Request::Workspace(path) => Some(path.clone()),
@@ -442,6 +459,10 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            drafts::drafts_load,
+            drafts::drafts_stage,
+            drafts::drafts_flush,
+            drafts::drafts_references,
             runtime_defaults,
             session_deletion::delete_session_tree,
             session_deletion::deletion_snapshot,
@@ -562,12 +583,28 @@ fn main() {
                 tauri::async_runtime::spawn(async move {
                     let app = window.app_handle();
                     popouts::close_project(app, window.label()).await;
+                    let store = app.state::<drafts::Drafts>().inner().clone();
+                    if let Err(error) =
+                        tauri::async_runtime::spawn_blocking(move || store.flush(None, false))
+                            .await
+                            .unwrap_or_else(|error| Err(error.to_string()))
+                    {
+                        eprintln!("Draft window flush: {error}");
+                    }
                     if let Err(error) = app
                         .state::<WorkspaceHost>()
                         .close_window(window.label())
                         .await
                     {
                         eprintln!("Nimrod window shutdown: {error}");
+                    }
+                    let store = app.state::<drafts::Drafts>().inner().clone();
+                    if let Err(error) =
+                        tauri::async_runtime::spawn_blocking(move || store.flush(None, false))
+                            .await
+                            .unwrap_or_else(|error| Err(error.to_string()))
+                    {
+                        eprintln!("Final draft window flush: {error}");
                     }
                     app.state::<WorkspaceWindows>()
                         .directories
