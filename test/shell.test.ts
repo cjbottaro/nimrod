@@ -388,6 +388,28 @@ test('session navigation and named-session defaults open their distinct pickers 
   } finally { f.win.close(); }
 });
 
+test('Resume and Delete sessions use the same native catalog and presentation without starting Pi', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', catalog: [
+    { path: '/sessions/shared.jsonl', sessionId: 'shared', name: 'Shared name', preview: 'Searchable preview', modified: 1, lastUserMessageAt: 1748781000123 },
+  ] });
+  const escape = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  try {
+    const runtimeLookups = f.calls.filter(call => call.command === 'runtime_defaults').length;
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true })); await f.tick();
+    const resumeRows = f.element('palette-list').innerHTML;
+    escape(); await f.tick();
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Backspace', metaKey: true, shiftKey: true, bubbles: true })); await f.tick();
+    assert.equal(f.element('palette-list').innerHTML, resumeRows);
+    const input = f.element<HTMLInputElement>('palette-input');
+    input.value = 'Searchable preview'; input.dispatchEvent(new f.win.Event('input'));
+    assert.match(f.element('palette-list').textContent!, /Shared name/);
+    assert.equal(f.calls.filter(call => call.command === 'list_workspace_sessions').length, 2);
+    assert.equal(f.calls.some(call => ['start_pi', 'write_pi'].includes(call.command)), false);
+    assert.equal(f.calls.filter(call => call.command === 'runtime_defaults').length, runtimeLookups);
+    escape();
+  } finally { f.win.close(); }
+});
+
 test('Delete sessions shortcut loops native review over closed history without launching or selecting targets', async () => {
   let answer!: (value: boolean) => void;
   const catalog = ['one', 'two'].map((id, i) => ({ path: `/sessions/${id}.jsonl`, sessionId: id, name: `Old ${id}`, preview: 'history', modified: 2 - i }));
