@@ -255,13 +255,23 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     return root;
   }
 
+  function cardDomHost(): import('./dom-card-renderer').CardDomHost {
+    return {
+      markdown: renderMarkdown,
+      beforeChange: () => transcriptScroll.request(transcriptScroll.capture()),
+      afterChange: () => transcriptScroll.resize(),
+      canInteract: () => active && !disposed && !document.querySelector('dialog[open]'),
+      report: reportRenderError,
+    };
+  }
+
   function renderToolCard(block: ContentBlock, detailKey: string): HTMLDetailsElement {
     // Identity belongs to the invocation, not its current message/placement.
     const key = safeText(block.id) ? `tool:${safeText(block.id)}` : detailKey;
     let details = toolCards.get(key);
     if (details) updateToolCard(document, details, block);
     else {
-      details = renderToolCardDom(document, block, toolDetail(key), host.cardRenderer?.(block), reportRenderError);
+      details = renderToolCardDom(document, block, toolDetail(key), host.cardRenderer?.(block), reportRenderError, cardDomHost());
       toolCards.set(key, details);
     }
     applyToolDetailsLifecycle(details, block);
@@ -281,7 +291,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   function renderBlock(block: ContentBlock, messageKey: string, index: number, role?: string, previous?: HTMLElement): HTMLElement | undefined {
     const type = safeText(block.type);
     const node = type === 'image' ? renderImage(block, previous) : type === "text" ? (role === "user" ? renderUserText(block.text, `${messageKey}:skill:${index}`, previous) : renderMarkdown(block.text))
-      : type === "thinking" ? renderReasoningCard(document, expanded, `${messageKey}:thinking:${index}`, block.thinking, renderMarkdown, block.thinkingComplete === false)
+      : type === "thinking" ? renderReasoningCard(document, expanded, `${messageKey}:thinking:${index}`, block.thinking, renderMarkdown, block.thinkingComplete === false, cardDomHost())
         : type === "toolCall" ? renderToolCard(block, `${messageKey}:tool:${safeText(block.id) || index}`)
           : renderMarkdown(`[${type}]`);
     if (!node) return undefined;
@@ -313,7 +323,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     renderSteeringStatus(article, message);
     if (message.isError) article.classList.add("error");
     if (message.role === "parallel" && message.parallelCluster) {
-      article.append(renderParallelToolCard(document, message.parallelCluster));
+      article.append(renderParallelToolCard(document, message.parallelCluster, undefined, cardDomHost()));
       return article;
     }
     if (message.role === "tool") {

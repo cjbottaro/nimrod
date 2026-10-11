@@ -1,4 +1,6 @@
 import type { CardRenderer } from '../card-renderer';
+import type { ToolCardRenderer } from '../tool-card';
+import { defaultToolRenderer } from './tool';
 import type { ToolCardBlock } from '../tool-card';
 import { rawToolPresentation } from './tool';
 import { bundledToolRenderer } from './registry';
@@ -23,13 +25,13 @@ export class CardPluginCatalog {
     this.config = config; this.packages = packages;
     report(errors.join('\n'));
   }
-  select(data: Readonly<ToolCardBlock>): CardRenderer<ToolCardBlock> {
+  select(data: Readonly<ToolCardBlock>): ToolCardRenderer {
     const name = typeof data.name === 'string' ? data.name.trim().toLowerCase().split(/[.:/]/).pop() || '' : '';
     const override = Object.hasOwn(this.config.overrides, name) ? this.config.overrides[name] : undefined;
     if (override === 'nimrod.raw') return { id: 'nimrod.raw', supports: () => true, mount: () => ({ update: rawToolPresentation, dispose() {} }) };
     const bundled = bundledToolRenderer(data);
     if (override === bundled.id || override === 'nimrod.tool') {
-      return override === 'nimrod.tool' ? bundledToolRenderer({ ...data, name: '' }) : bundled;
+      return override === 'nimrod.tool' ? defaultToolRenderer : bundled;
     }
     const entry = override ? this.packages.get(override) : [...this.packages.values()].find(entry => entry.package.tools.includes(name));
     if (entry && entry.package.tools.includes(name)) {
@@ -37,7 +39,7 @@ export class CardPluginCatalog {
       // Always retain raw result sections as recovery, including historical content.
       return { ...renderer, mount() {
         const instance = renderer.mount();
-        return { update(value) { const presentation = instance.update(value); return { ...presentation, sections: [...presentation.sections, ...rawToolPresentation(value).sections] }; }, dispose: () => instance.dispose() };
+        return { update(value: Readonly<ToolCardBlock>) { const presentation = instance.update(value); return { ...presentation, sections: [...presentation.sections, ...rawToolPresentation(value).sections] }; }, dispose: () => instance.dispose() };
       } };
     }
     if (override) return { id: override, supports: () => false, mount() { throw new Error('Missing or incompatible renderer'); } };
