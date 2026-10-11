@@ -1,3 +1,4 @@
+import type { ImageAttachment } from './image-attachments';
 export type SubmissionMode = "normal" | "steer" | "followUp";
 export type SubmissionStatus = "pending" | "unknown";
 export type SubmissionOutcome = "accepted" | "rejected" | "cancelled" | "unknown";
@@ -5,6 +6,7 @@ export type SubmissionOutcome = "accepted" | "rejected" | "cancelled" | "unknown
 export interface Submission {
   id: string;
   text: string;
+  attachments?: ImageAttachment[];
   mode: SubmissionMode;
   status: SubmissionStatus;
   error?: string;
@@ -23,10 +25,14 @@ export interface RecoveredQueueItem {
   id: string;
   text: string;
   kind: "steering" | "followUp" | "unsent";
+  attachments?: ImageAttachment[];
 }
 
 export interface ComposerState {
   draft: string;
+  attachments?: ImageAttachment[];
+  /** Accepted images retained conservatively because Pi queue recovery is text-only. */
+  imageRecovery?: RecoveredQueueItem[];
   submission?: Submission;
   lastError?: string;
   queue: QueueState;
@@ -57,11 +63,11 @@ export function markPendingSubmissionUnknownAfterReload(state: ComposerState): C
 
 /** Returns the same state when a prior prompt has not reached a definitive outcome. */
 export function beginSubmission(state: ComposerState, id: string, mode: SubmissionMode): ComposerState {
-  if (state.submission || !state.draft.trim()) return state;
+  if (state.submission || (!state.draft.trim() && !state.attachments?.length)) return state;
   return {
     ...state,
     lastError: undefined,
-    submission: { id, text: state.draft, mode, status: "pending" },
+    submission: { id, text: state.draft, attachments: state.attachments?.length ? [...state.attachments] : undefined, mode, status: "pending" },
   };
 }
 
@@ -76,6 +82,8 @@ export function settleSubmission(state: ComposerState, id: string, outcome: Subm
     return {
       ...state,
       draft: state.draft === submitted.text ? "" : state.draft,
+      attachments: state.attachments?.filter(image => !submitted.attachments?.some(sent => sent.id === image.id)),
+      imageRecovery: submitted.attachments?.length ? [...(state.imageRecovery ?? []), { id: `images-${submitted.id}`, text: submitted.text, attachments: submitted.attachments, kind: submitted.mode === 'followUp' ? 'followUp' : 'steering' }] : state.imageRecovery,
       submission: undefined,
       lastError: undefined,
     };
@@ -90,8 +98,8 @@ export function settleSubmission(state: ComposerState, id: string, outcome: Subm
   return {
     ...state,
     submission: undefined,
-    recovered: state.draft !== submitted.text
-      ? [...state.recovered, { id: `unsent-${submitted.id}`, text: submitted.text, kind: "unsent" }]
+    recovered: state.draft !== submitted.text || submitted.attachments?.some(image => !state.attachments?.some(current => current.id === image.id))
+      ? [...state.recovered, { id: `unsent-${submitted.id}`, text: submitted.text, attachments: submitted.attachments, kind: "unsent" }]
       : state.recovered,
     lastError: error || (outcome === "cancelled" ? "Session rename cancelled." : "Pi rejected this message."),
   };
@@ -100,7 +108,11 @@ export function settleSubmission(state: ComposerState, id: string, outcome: Subm
 /** An explicit user action is required before another message can be sent after an unknown outcome. */
 export function dismissUnknownSubmission(state: ComposerState): ComposerState {
   if (state.submission?.status !== "unknown") return state;
-  return { ...state, submission: undefined };
+  const submitted = state.submission;
+  const missingImages = submitted.attachments?.some(image => !state.attachments?.some(current => current.id === image.id));
+  return { ...state, submission: undefined, recovered: missingImages
+    ? [...state.recovered, { id: `unknown-${submitted.id}`, text: submitted.text, attachments: submitted.attachments, kind: 'unsent' }]
+    : state.recovered };
 }
 
 /** queue_update is authoritative; local prompt acknowledgements never alter this list. */
@@ -137,6 +149,7 @@ export function restoreRecoveredQueueItem(state: ComposerState, id: string): Com
   return {
     ...state,
     draft: state.draft ? `${state.draft}\n${item.text}` : item.text,
+    attachments: [...(state.attachments ?? []), ...(item.attachments ?? []).filter(image => !state.attachments?.some(current => current.id === image.id))],
     recovered: state.recovered.filter((candidate) => candidate.id !== id),
   };
 }

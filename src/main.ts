@@ -13,6 +13,8 @@ import { presentActivity } from './pi/activity-state';
 import { listen } from '@tauri-apps/api/event';
 import { installPreferences, type PreferencesSnapshot } from './preferences';
 import { open } from '@tauri-apps/plugin-dialog';
+import { AttachmentStore } from './attachment-store';
+import { readClipboardImage } from './clipboard-image';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { installZoom } from './zoom';
 import { installThemes } from './themes/picker';
@@ -88,6 +90,8 @@ const settingsKey = 'nimrod.poc.launch';
 const recentKey = 'nimrod.workspaces.v1';
 const lastKey = 'nimrod.last-session.v1';
 const localState = new Map<string, unknown>();
+const attachmentStore = new AttachmentStore();
+const temporaryImages = new Map<string, Blob>();
 let ready = false;
 let unloading = false;
 let workspace: string | undefined;
@@ -250,7 +254,7 @@ const deletion = new SessionDeletion({
     refresh: async () => { if (tab.session && !tab.ended) await tab.session.refreshDeletionState(); },
     report: () => {
       const composer = restoreComposerState(tab.drafts.read());
-      return { file: tab.file!.path, token: tab.token, title: tab.title, busy: deletionBusy(tab), hasDraft: !!(composer.draft.trim() || composer.submission || composer.recovered.length) };
+      return { file: tab.file!.path, token: tab.token, title: tab.title, busy: deletionBusy(tab), hasDraft: !!(composer.draft.trim() || composer.attachments?.length || composer.imageRecovery?.length || composer.submission || composer.recovered.length) };
     },
     deleted: () => removeDeletedSessions([tab.file!.path]),
     failed: message => {
@@ -680,7 +684,28 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
     view: { setActive() {}, scrollToBottom() {}, dispose() {} } };
   root.addEventListener('focusin', event => { if (event.target instanceof HTMLElement) tab.focus = event.target; });
   tab.drafts.select(file ? `file:${file.path}` : mode === 'temporary' ? `temporary:${workspace}:${id}` : `unassigned:${id}`);
+  const ephemeralImages = new Set<string>();
+  let imagesDisposed = false;
+  root.addEventListener('nimrod-dispose-images', () => { imagesDisposed = true; for (const id of ephemeralImages) temporaryImages.delete(id); });
   tab.view = mountPiView({
+    attachments: {
+      readClipboard: readClipboardImage,
+      put: async (blob, name) => {
+        if (mode !== 'temporary') return attachmentStore.put(blob, name);
+        const { validateImageDimensions } = await import('./pi/image-attachments');
+        await validateImageDimensions(blob);
+        if (imagesDisposed) throw new Error('Temporary session closed while preparing image.');
+        const image = { id: crypto.randomUUID(), name: name.slice(0, 200), mimeType: blob.type, size: blob.size };
+        if ([...temporaryImages.values()].reduce((sum, item) => sum + item.size, 0) + blob.size > 128 * 1024 * 1024) throw new Error('Temporary image storage is full (128 MiB). Close unused temporary sessions.');
+        temporaryImages.set(image.id, blob); ephemeralImages.add(image.id); return image;
+      },
+      get: async image => {
+        if (mode !== 'temporary') return attachmentStore.get(image);
+        const blob = temporaryImages.get(image.id);
+        if (!blob) throw new Error('Temporary image draft is missing.');
+        return blob;
+      },
+    },
     getState: () => tab.drafts.read(),
     setState: value => {
       const pending = submissionPending(tab);
@@ -988,6 +1013,7 @@ function selectCleanupReplacement(before: NavigationSnapshot<Tab>): void {
 function disposeTab(tab: Tab): void {
   if (!tabs.includes(tab)) return;
   tab.closing = true;
+  tab.root.dispatchEvent(new Event('nimrod-dispose-images'));
   navigation.remove(tab);
   if (active === tab) active = undefined;
   if (presented === tab) { tab.view.setActive(false); presented = undefined; conversation.hidden = true; }

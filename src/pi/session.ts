@@ -1,3 +1,4 @@
+import { validateImageContents } from './image-attachments';
 import { PiTransport, RpcResponseError } from './transport';
 import { initialConversationState, messagesToDisplay, reduceRpcEvent, sanitizeExtensionUiText, setExtensionStatus, setExtensionWidget } from './reducer';
 import { ModelThinkingController, type ModelIdentity } from './model-thinking-controller';
@@ -235,7 +236,10 @@ export class PiSession {
     const id = typeof message.id === 'string' ? message.id : '';
     const text = typeof message.text === 'string' ? message.text : '';
     const receipt = (outcome: 'accepted' | 'rejected' | 'cancelled' | 'unknown', error?: string) => this.ui.publish({ type: 'submissionReceipt', id, outcome, error });
-    if (!id || !text.trim() || text.length > 1_000_000 || this.submission || this.state.sessionUnavailable || this.state.compacting || this.state.modelControls.changing) {
+    let images;
+    try { images = validateImageContents(message.images); } catch (error) { receipt('rejected', String(error)); return; }
+    if (images.length && text.trim().startsWith('/')) { receipt('rejected', 'Image attachments cannot be sent with slash commands.'); return; }
+    if (!id || (!text.trim() && !images.length) || text.length > 1_000_000 || this.submission || this.state.sessionUnavailable || this.state.compacting || this.state.modelControls.changing) {
       receipt('rejected', 'Pi is not ready for this submission. Your draft was kept.'); return;
     }
     if (/^\/(?:resume|delete|new|fork|clone|tree|reload|quit)(?:\s|$)/.test(text.trim())) {
@@ -255,7 +259,7 @@ export class PiSession {
       }
       // Queue only during main-agent work; all other sends retain fallback steering.
       const streamingBehavior = message.mode === 'followUp' && this.state.busy ? 'followUp' : 'steer';
-      await this.rpc.request('prompt', { message: text, streamingBehavior });
+      await this.rpc.request('prompt', { message: text, ...(images.length ? { images } : {}), streamingBehavior });
       receipt('accepted');
       this.ui.promptAccepted?.();
     } catch (error) { receipt(error instanceof RpcResponseError ? 'rejected' : 'unknown', errorText(error)); }
