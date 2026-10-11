@@ -1,6 +1,6 @@
 # Card plugins
 
-**Status: planned; no plugin API or loading implementation exists yet.**
+**Status: internal tool-renderer contract implemented; bundled extraction and external plugins pending.**
 
 User-facing feature description: [Card plugins](../../../../docs/card-plugins.md).
 This reference records accepted architectural decisions and the living implementation plan. Keep API details provisional until renderer extraction provides evidence.
@@ -44,7 +44,18 @@ Milestone 1 audited these anchors and their regression suites at baseline `9607a
 | `src/pi/reasoning-card.ts` | Harness-provided reasoning disclosure and preview |
 | `src/pi/transcript-presentation.ts` | Transcript presentation including standalone tool envelopes |
 
+## Internal tool-renderer contract (milestone 2)
+
+- `src/pi/card-renderer.ts` owns the presentation-only instance contract: `supports`, `mount`, incremental `update`, idempotent host disposal. Output is validated title/preview and keyed text sections; no DOM, transport, composer, action or filesystem capabilities are passed to a renderer. This is internal, not yet a public API.
+- `src/pi/tool-presentation.ts` contains the unchanged default tool preview/output presentation and minimal raw fallback. Both consume the same retained Pi tool-data shape. Unknown tools remain supported; fallback omits inferred previews but preserves raw inputs and execution/result text.
+- `src/pi/tool-card.ts` retains the mounted shell, status/ARIA, raw inputs, keyed section nodes and output caps. All existing creation and patch paths use its per-shell renderer controller. Presentation changes do not replace the disclosure or healthy sibling shells.
+- `src/pi/card-shell.ts` owns disclosure helpers/constants and existing live-output capture/restore (compatibility exports remain in `tool-card.ts`). `ToolDisclosureController.remove` releases pruned-card timers; view pruning/reset/disposal explicitly disposes renderer instances.
+- Unsupported content, mount/update/validation failures latch that card to current raw fallback until its shell is removed/reset. Disposal and diagnostic errors are contained. `test/card-renderer.test.ts` covers failures, current fallback data, stable healthy siblings and exactly-once instance disposal.
+- API refinement for richer sections, reasoning and parallel presentation remains milestone 3/4 work. No external code loading, renderer selection UI or behavior change to normal tool cards.
+
 ## Rendering-boundary audit (milestone 1)
+
+This section records the pre-extraction baseline; current implementation changes are recorded above and in later milestone sections.
 
 ### Data and placement path — retain in core
 
@@ -122,12 +133,12 @@ Other card-shaped presentations are reasoning and the parallel-tools overview. S
 
 ## Incremental implementation plan
 
-Milestone 1 is complete; milestones 2–5 remain pending. Treat each as independently mergeable work in a dedicated task worktree. Dependencies are sequential unless noted; external loading must not gate bundled extraction.
+Milestones 1–2 are complete; milestones 3–5 remain pending. Treat each as independently mergeable work in a dedicated task worktree. Dependencies are sequential unless noted; external loading must not gate bundled extraction.
 
 | Milestone | Dependency | Acceptance criteria |
 | --- | --- | --- |
 | 1. Audit current rendering boundaries — complete | None | Boundary map, concrete renderer inventory, data/recovery limitations, regression additions and next extraction order recorded above. No runtime extraction or native/plugin acceptance. |
-| 2. Introduce the internal renderer contract | 1 | Existing tool cards render through the boundary without visible behavior changes. Core still owns the shell and policies; unsupported content and renderer failure have tested raw fallback behavior. |
+| 2. Introduce the internal renderer contract — complete | 1 | Existing tool cards render through the boundary without visible behavior changes. Core still owns the shell and policies; unsupported content and renderer failure have tested raw fallback behavior. |
 | 3. Extract bundled renderers | 2 | Default tool-card presentations use the supported contract without privileged access. Record the concrete built-in inventory and reasoning-card scope; remaining default card renderers must be tracked explicitly, not silently exempted. |
 | 4. Prove extensibility with a richer renderer | 3 | Choose a concrete card with available structured fixture data. Implement it using only the contract and host-supported capabilities, without tool-specific presentation branches in core. Refine the API from evidence. |
 | 5. Support external plugins | 4 | Resolve packaging, compatibility, isolation, matching/overrides and action permissions before loading external code. Test missing/incompatible/failing plugins and historical fallback; document actual installation and selection behavior. |
@@ -138,7 +149,7 @@ For each milestone, update this reference with changes, remaining questions and 
 
 ## Verification
 
-The boundary audit and baseline regression additions are complete. No renderer-contract implementation, external loading or native/plugin acceptance has been established.
+The boundary audit and internal tool-renderer contract are complete. No external loading or native/plugin acceptance has been established. Milestone 2: `mise run check` passes **462 TS/Node tests** and **111 Rust tests** (two opt-in smokes ignored); `npm run test:browser` passes **64 offline WebKit tests**. `git diff --check` passes. No app build/launch or native acceptance; audit evidence below remains baseline.
 
 - `mise run check` passes: offline documentation checks (53 Markdown files), TypeScript checking and **457 Node/TypeScript tests**, Rust formatting/Clippy and **111 Rust tests** (two opt-in Pi smokes ignored).
 - Four added regressions pass: distinct/final output and raw-input disclosure retention; literal unknown-tool data; integrated reasoning shell/indicator/disclosure/focus; invocation-ID isolation across separate mounted-view fixtures. The latter fixtures use separate jsdom documents, not native multi-window acceptance.

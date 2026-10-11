@@ -1,4 +1,4 @@
-import { setToolDetailsAutoOpen, TOOL_AUTO_DISCLOSURE_MS } from "./tool-card";
+import { setToolDetailsAutoOpen, TOOL_AUTO_DISCLOSURE_MS } from "./card-shell";
 
 interface ToolDisclosureState {
   details: HTMLDetailsElement;
@@ -76,6 +76,12 @@ export class ToolDisclosureController {
     const state = this.states.get(key);
     if (!state) return;
     this.clear(state);
+  }
+
+  remove(key: string): void {
+    const state = this.states.get(key);
+    if (state) this.clear(state);
+    this.states.delete(key);
   }
 
   dispose(): void {

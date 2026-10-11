@@ -9,7 +9,7 @@ import { keyboardHint, keyboardSubmissionMode, renderPrimaryAction, resizeCompos
 import { codeBlockSource, createSafeMarkdownRenderer } from "./safe-markdown";
 import { showCopyResult } from './code-actions';
 import { persistWebviewState, restoreComposerState } from "./webview-state";
-import { captureStreamingOutput, createToolDetails, renderToolCard as renderToolCardDom, restoreStreamingOutput, updateToolCard, toolCardIsBusy } from "./tool-card";
+import { captureStreamingOutput, createToolDetails, renderToolCard as renderToolCardDom, restoreStreamingOutput, updateToolCard, toolCardIsBusy, disposeToolCard } from "./tool-card";
 import { ToolDisclosureController } from "./tool-disclosure";
 import { toolMessageBlock } from "./tool-call";
 import { TranscriptScroll } from "./transcript-scroll";
@@ -80,6 +80,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     attachmentUrls.clear();
     listeners.abort();
     toolDisclosure.dispose();
+    for (const card of toolCards.values()) disposeToolCard(card);
     toolCards.clear();
     transcriptScroll.dispose();
     transcriptResizeObserver?.disconnect();
@@ -258,7 +259,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     let details = toolCards.get(key);
     if (details) updateToolCard(document, details, block);
     else {
-      details = renderToolCardDom(document, block, toolDetail(key));
+      details = renderToolCardDom(document, block, toolDetail(key), undefined, reportRenderError);
       toolCards.set(key, details);
     }
     applyToolDetailsLifecycle(details, block);
@@ -622,7 +623,11 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       }
     }
     for (const [key, card] of toolCards) {
-      if (!card.isConnected) toolCards.delete(key);
+      if (!card.isConnected) {
+        disposeToolCard(card);
+        toolDisclosure.remove(key);
+        toolCards.delete(key);
+      }
       else requestAnimationFrame(() => {
         if (!disposed && card.isConnected) restoreStreamingOutput(card, outputPositions.get(key));
       });
@@ -782,6 +787,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       composerGeneration++; preparing = 0; preparingSubmission = undefined; attachmentSignature = '';
       // An explicit launch boundary only; ordinary snapshots retain all live UI state.
       toolDisclosure.dispose();
+      for (const card of toolCards.values()) disposeToolCard(card);
       toolCards.clear();
       expanded.clear();
       rendered.clear();

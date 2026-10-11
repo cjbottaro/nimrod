@@ -1,4 +1,8 @@
-export const TOOL_AUTO_DISCLOSURE_MS = 500;
+import { CardRendererController, type CardRenderer, type CardPresentation } from './card-renderer';
+import { defaultToolRenderer, rawToolPresentation } from './tool-presentation';
+export { toolInputPreview } from './tool-presentation';
+export { TOOL_AUTO_DISCLOSURE_MS, createToolDetails, setToolDetailsAutoOpen, captureStreamingOutput, restoreStreamingOutput } from './card-shell';
+export type { ToolOutputScrollState } from './card-shell';
 
 export interface ToolCardBlock {
   name?: unknown;
@@ -10,9 +14,11 @@ export interface ToolCardBlock {
   toolStatus?: "running" | "finished" | "result";
 }
 
-export interface ToolOutputScrollState {
-  top: number;
-  atBottom: boolean;
+const renderers = new WeakMap<HTMLDetailsElement, CardRendererController<ToolCardBlock>>();
+
+export function disposeToolCard(details: HTMLDetailsElement): void {
+  renderers.get(details)?.dispose();
+  renderers.delete(details);
 }
 
 export function toolCardIsBusy(block: ToolCardBlock): boolean {
@@ -20,11 +26,9 @@ export function toolCardIsBusy(block: ToolCardBlock): boolean {
   return status === "running" || status === "thinking";
 }
 
-export function toolInputPreview(name: string, args: unknown): string | undefined {
-  return inputPresentation(name, args, true)?.value;
-}
-
-export function renderToolCard(document: Document, block: ToolCardBlock, details: HTMLDetailsElement): HTMLDetailsElement {
+export function renderToolCard(document: Document, block: ToolCardBlock, details: HTMLDetailsElement, renderer: CardRenderer<ToolCardBlock> = defaultToolRenderer, report?: (error: unknown) => void): HTMLDetailsElement {
+  disposeToolCard(details);
+  renderers.set(details, new CardRendererController(renderer, rawToolPresentation, report));
   details.classList.add("tool-card");
   const summary = document.createElement("summary");
   const summaryContent = document.createElement("span");
@@ -65,19 +69,19 @@ export function updateToolCard(document: Document, details: HTMLDetailsElement, 
     title.className = "tool-card-title";
     summaryContent.append(title);
   }
-  title.textContent = name;
+  let renderer = renderers.get(details);
+  if (!renderer) { renderer = new CardRendererController(defaultToolRenderer, rawToolPresentation); renderers.set(details, renderer); }
+  const presentation = renderer.update(block);
+  title.textContent = presentation.title;
 
-  const presentation = inputPresentation(name, block.arguments, block.toolStatus !== undefined);
-  const preview = summaryContent.querySelector<HTMLElement>(".tool-card-preview");
-  if (presentation) {
-    if (preview) {
-      preview.textContent = presentation.value;
-    } else {
-      summaryContent.append(inputPreview(document, presentation));
+  const preview = summaryContent.querySelector<HTMLElement>('.tool-card-preview');
+  if (presentation.preview !== undefined) {
+    if (preview) preview.textContent = presentation.preview;
+    else {
+      const next = document.createElement('span'); next.className = 'tool-card-preview';
+      next.textContent = presentation.preview; summaryContent.append(next);
     }
-  } else {
-    preview?.remove();
-  }
+  } else preview?.remove();
 
   let phase = directChild<HTMLElement>(details, ".tool-phase");
   if (status === "stopped") {
@@ -89,63 +93,7 @@ export function updateToolCard(document: Document, details: HTMLDetailsElement, 
     phase.textContent = "Execution was interrupted before completion was reported.";
   } else phase?.remove();
   updateInputs(document, details, block.arguments);
-  updateOutputs(document, details, block);
-}
-
-/**
- * Keeps the automatic lifecycle default separate from explicit user toggles.
- * Browser details elements emit a deferred toggle event for their initial `open`
- * value, which must not make a running card stay open after it completes.
- */
-export function createToolDetails(document: Document, expanded: Map<string, boolean>, key: string, defaultOpen = false, onManualToggle?: (key: string) => void): HTMLDetailsElement {
-  const node = document.createElement("details");
-  node.dataset.detailKey = key;
-  const initialOpen = expanded.get(key) ?? defaultOpen;
-  node.open = initialOpen;
-  let ignoreInitialToggle = initialOpen;
-  node.addEventListener("toggle", () => {
-    if (node.dataset.automaticOpenChange === "true") {
-      delete node.dataset.automaticOpenChange;
-      ignoreInitialToggle = false;
-      return;
-    }
-    if (ignoreInitialToggle && node.open === initialOpen) {
-      ignoreInitialToggle = false;
-      return;
-    }
-    ignoreInitialToggle = false;
-    expanded.set(key, node.open);
-    onManualToggle?.(key);
-  });
-  return node;
-}
-
-/** Changes the automatic running-state disclosure without recording a user toggle. */
-export function setToolDetailsAutoOpen(node: HTMLDetailsElement, open: boolean): void {
-  if (node.open === open) return;
-  node.dataset.automaticOpenChange = "true";
-  node.open = open;
-}
-
-/** Captures only the live-output viewport, never the page transcript scroll position. */
-export function captureStreamingOutput(root: ParentNode): ToolOutputScrollState | undefined {
-  const output = root.querySelector<HTMLElement>(".tool-output-streaming");
-  if (!output) return undefined;
-  return {
-    top: output.scrollTop,
-    atBottom: output.scrollTop + output.clientHeight >= output.scrollHeight - 2,
-  };
-}
-
-/** Restores inspection position, or follows new live output when the viewport was at its bottom. */
-export function restoreStreamingOutput(root: ParentNode, previous?: ToolOutputScrollState): void {
-  const output = root.querySelector<HTMLElement>(".tool-output-streaming");
-  if (!output) return;
-  output.scrollTop = previous && !previous.atBottom ? previous.top : output.scrollHeight;
-}
-
-interface InputPresentation {
-  value: string;
+  updateOutputs(document, details, block, presentation);
 }
 
 function updateInputs(document: Document, root: HTMLDetailsElement, argumentsValue: unknown): void {
@@ -164,8 +112,8 @@ function updateInputs(document: Document, root: HTMLDetailsElement, argumentsVal
   root.insertBefore(inputs, firstOutput || null);
 }
 
-function updateOutputs(document: Document, root: HTMLDetailsElement, block: ToolCardBlock): void {
-  const desired = outputParts(block);
+function updateOutputs(document: Document, root: HTMLDetailsElement, block: ToolCardBlock, presentation: CardPresentation): void {
+  const desired = presentation.sections.map(section => ({ kind: section.key, label: section.label, value: section.text, streaming: toolCardIsBusy(block) }));
   const sections = (): HTMLElement[] => (Array.from(root.children) as HTMLElement[]).filter((child) => child.classList.contains("tool-section"));
   const existing = new Map(sections().map((section) => [section.dataset.outputKind || "", section]));
 
@@ -184,63 +132,6 @@ function updateOutputs(document: Document, root: HTMLDetailsElement, block: Tool
     if (current !== section) root.insertBefore(section, current || null);
   });
   for (const section of existing.values()) section.remove();
-}
-
-function outputParts(block: ToolCardBlock): Array<{ kind: string; label: string; value: string; streaming: boolean }> {
-  const active = toolCardIsBusy(block);
-  const parts: Array<{ kind: string; label: string; value: string; streaming: boolean }> = [];
-  if (block.executionOutput && block.resultOutput && block.executionOutput !== block.resultOutput) {
-    parts.push({ kind: "execution", label: "Live output", value: block.executionOutput, streaming: active });
-  }
-  const output = block.resultOutput || block.executionOutput;
-  if (output) parts.push({ kind: "result", label: block.toolStatus === "running" && !block.resultOutput ? "Live output" : "Result", value: output, streaming: active });
-  return parts;
-}
-
-/** A concise header preview. Expanded cards keep raw inputs and output only. */
-function inputPresentation(toolName: string, argumentsValue: unknown, complete: boolean): InputPresentation | undefined {
-  if (argumentsValue === undefined || argumentsValue === "") return undefined;
-  const argumentsRecord = record(argumentsValue);
-  if (!argumentsRecord && !complete) return undefined;
-  const normalizedName = normalizedToolName(toolName);
-  const path = firstString(argumentsRecord, ["path", "file_path", "filePath", "filename", "file", "target_path", "targetPath"]);
-
-  if (isAgentTool(normalizedName)) {
-    const description = firstString(argumentsRecord, ["description"]);
-    return description ? { value: description } : complete ? { value: "No description provided" } : undefined;
-  }
-  if (isSteerSubagentTool(normalizedName)) {
-    const message = firstString(argumentsRecord, ["message"]);
-    return message ? { value: message } : complete ? { value: "No message provided" } : undefined;
-  }
-  if (isFileTool(normalizedName) && path) return { value: path };
-  if (isBashTool(normalizedName)) {
-    const command = firstString(argumentsRecord, ["command", "cmd", "script"]);
-    if (command) return { value: command };
-  }
-  if (normalizedName === "web_search" || normalizedName === "web-search") {
-    const value = namedStrings(argumentsRecord, "query", "queries");
-    return value ? { value } : complete ? { value: "Search inputs" } : undefined;
-  }
-  if (normalizedName === "fetch_content" || normalizedName === "fetch-content") {
-    const value = namedStrings(argumentsRecord, "url", "urls");
-    return value ? { value } : complete ? { value: "Fetch inputs" } : undefined;
-  }
-  if (isSearchTool(normalizedName)) {
-    const pattern = firstString(argumentsRecord, ["pattern", "query", "search", "glob", "regex"]);
-    const value = pattern && path ? `${pattern} in ${path}` : pattern || path;
-    return value ? { value } : complete ? { value: "Search inputs" } : undefined;
-  }
-  if (!complete) return undefined;
-  const count = argumentsRecord ? Object.keys(argumentsRecord).length : 0;
-  return { value: count === 1 ? "1 field" : `${count} fields` };
-}
-
-function inputPreview(document: Document, presentation: InputPresentation): HTMLElement {
-  const preview = document.createElement("span");
-  preview.className = "tool-card-preview";
-  preview.textContent = presentation.value;
-  return preview;
 }
 
 function rawInputs(document: Document, value: unknown): HTMLDetailsElement {
@@ -268,132 +159,6 @@ function outputSection(document: Document, label: string, value: string, streami
   pre.textContent = value;
   root.append(heading, pre);
   return root;
-}
-
-function normalizedToolName(name: string): string {
-  return name.trim().toLowerCase().split(/[.:/]/).pop() || "";
-}
-
-function isAgentTool(name: string): boolean {
-  return ["agent", "subagent", "sub-agent", "sub_agent"].includes(name);
-}
-
-function isSteerSubagentTool(name: string): boolean {
-  return name === "steer_subagent";
-}
-
-function isFileTool(name: string): boolean {
-  return ["read", "write", "edit"].includes(name);
-}
-
-function isBashTool(name: string): boolean {
-  return name === "bash" || name === "shell" || name === "terminal";
-}
-
-function isSearchTool(name: string): boolean {
-  return ["search", "grep", "find", "glob", "web_search", "web-search"].includes(name);
-}
-
-function record(value: unknown): Record<string, unknown> | undefined {
-  if (typeof value === "string") {
-    try { return record(JSON.parse(value)); } catch { return partialTopLevelStrings(value); }
-  }
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
-}
-
-/**
- * Tool-call arguments stream as JSON fragments. Preserve only complete,
- * top-level string fields; incomplete escapes and nested fields are ignored.
- */
-function partialTopLevelStrings(text: string): Record<string, unknown> | undefined {
-  const fields: Record<string, unknown> = {};
-  let index = skipWhitespace(text, 0);
-  if (text[index] !== "{") return undefined;
-  index++;
-  while (index < text.length) {
-    index = skipWhitespace(text, index);
-    if (text[index] === "}") return fields;
-    const key = jsonStringAt(text, index);
-    if (!key) return fields;
-    index = skipWhitespace(text, key.end);
-    if (text[index] !== ":") return fields;
-    index = skipWhitespace(text, index + 1);
-    const value = jsonStringAt(text, index);
-    if (value) {
-      fields[key.value] = value.value;
-      index = value.end;
-    } else {
-      const end = skipJsonValue(text, index);
-      if (end === undefined) return fields;
-      index = end;
-    }
-    index = skipWhitespace(text, index);
-    if (text[index] === ",") { index++; continue; }
-    if (text[index] === "}") return fields;
-    return fields;
-  }
-  return fields;
-}
-
-function jsonStringAt(text: string, start: number): { value: string; end: number } | undefined {
-  if (text[start] !== "\"") return undefined;
-  let index = start + 1;
-  while (index < text.length) {
-    if (text[index] === "\\") { index += 2; continue; }
-    if (text[index] === "\"") {
-      try { return { value: JSON.parse(text.slice(start, index + 1)) as string, end: index + 1 }; } catch { return undefined; }
-    }
-    index++;
-  }
-  return undefined;
-}
-
-function skipJsonValue(text: string, start: number): number | undefined {
-  if (text[start] === "\"") return jsonStringAt(text, start)?.end;
-  if (text[start] !== "{" && text[start] !== "[") {
-    let index = start;
-    while (index < text.length && !/[\s,}\]]/.test(text[index])) index++;
-    return index > start ? index : undefined;
-  }
-  const closing = text[start] === "{" ? "}" : "]";
-  let depth = 0;
-  let index = start;
-  while (index < text.length) {
-    if (text[index] === "\"") {
-      const string = jsonStringAt(text, index);
-      if (!string) return undefined;
-      index = string.end;
-      continue;
-    }
-    if (text[index] === "{" || text[index] === "[") depth++;
-    if (text[index] === "}" || text[index] === "]") {
-      depth--;
-      if (depth === 0) return text[index] === closing ? index + 1 : undefined;
-    }
-    index++;
-  }
-  return undefined;
-}
-
-function skipWhitespace(text: string, index: number): number {
-  while (index < text.length && /\s/.test(text[index])) index++;
-  return index;
-}
-
-function namedStrings(value: Record<string, unknown> | undefined, singular: string, plural: string): string | undefined {
-  if (!value) return undefined;
-  const parts: string[] = [];
-  if (typeof value[singular] === "string" && value[singular]) parts.push(value[singular] as string);
-  if (Array.isArray(value[plural])) parts.push(...value[plural].filter((entry): entry is string => typeof entry === "string" && entry.length > 0));
-  return parts.join(" · ") || undefined;
-}
-
-function firstString(value: Record<string, unknown> | undefined, keys: string[]): string | undefined {
-  if (!value) return undefined;
-  for (const key of keys) {
-    if (typeof value[key] === "string" && value[key]) return value[key] as string;
-  }
-  return undefined;
 }
 
 function toolStatus(block: ToolCardBlock): "running" | "thinking" | "stopped" | "failed" | "succeeded" | "pending" {
