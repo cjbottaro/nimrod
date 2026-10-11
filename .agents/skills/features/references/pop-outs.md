@@ -310,7 +310,7 @@ Relevant tests:
   Cycle tests cover flag preservation, conflicting cycle-flag removal, idempotence,
   and awaited configuration of hidden new/restored references without disabling focus.
 
-Run `mise run check` and `mise run build`. Rendering/scrolling changes also warrant
+Run `mise run check`. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow). Rendering/scrolling changes also warrant
 `npm run test:browser`; these are offline fixtures, not the user's app. Never launch
 or interrupt that app, run live compaction/model work, or modify user session/state
 files to test persistence without explicit authorization.

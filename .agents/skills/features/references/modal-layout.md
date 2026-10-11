@@ -29,7 +29,7 @@ Unit tests cover default/Cancel focus, plain labels/shortcut metadata, IME/repea
 - `test/command-palette.test.ts`: two-line command structure, heading shortcuts, unbound absence and description search.
 - `test/browser/modal-layout.spec.ts`: actual WebKit right alignment/secondary descriptions; all six ordinary shells share computed geometry/surfaces at desktop and narrow sizes; changing shared width/padding tokens updates all consumers.
 - Existing browser deletion/keybinding/ranking tests cover footer reachability, tree scrolling, focus, cancellation and retained drafts.
-- Run `mise run check`, `mise run build` and `npm run test:browser` locally with offline fixtures only.
+- Run `mise run check` and `npm run test:browser` locally with offline fixtures only. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow).
 - Native visual acceptance and Linux/Windows verification remain pending; fixture success is not platform acceptance.
 
 User guide: [Modal layout](../../../../docs/modal-layout.md), [Command palette](../../../../docs/command-palette.md).

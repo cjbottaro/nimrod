@@ -39,4 +39,4 @@ Rects are divided by the layout rect/offset-width scale to convert pointer displ
 
 Latest verification: `mise run check` passed 312 TypeScript/Node tests, formatting/Clippy and 71 default Rust tests (two opt-in Pi smokes ignored); `mise run build` packaged and verified the macOS bundle; all 23 offline WebKit tests passed. Native visual/pointer/zoom acceptance remains outstanding.
 
-Run `mise run check`, `mise run build` and offline `npm run test:browser`. No running user app, actual session files or real notification is used. Fixture WebKit does not establish native Tauri zoom/pointer, Linux or Windows acceptance; ask the user to validate dragging the packaged app's sidebar.
+Run `mise run check` and offline `npm run test:browser`. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow). No running user app, actual session files or real notification is used. Fixture WebKit does not establish native Tauri zoom/pointer, Linux or Windows acceptance; ask the user to validate dragging the packaged app's sidebar.

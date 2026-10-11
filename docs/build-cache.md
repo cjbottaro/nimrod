@@ -6,7 +6,6 @@ Rust, Node and sccache are pinned in `mise.toml`. Install them in an updated che
 mise trust
 mise install
 mise run check
-mise run build
 ```
 
 Mise sets `RUSTC_WRAPPER=sccache` and `CARGO_INCREMENTAL=0`. Builds in `main`
@@ -23,9 +22,34 @@ repository directory need the updated configuration in their own branch.
   in a worktree and later reused by main (or the reverse).
 - Cargo's registry/download cache and npm's download cache, already shared by default.
 
-Each checkout still owns `src-tauri/target/`, `dist/`, `node_modules/` and its
-packaged app. Worktree builds do not replace main's app bundle. Leave
-`CARGO_TARGET_DIR` unset to retain that isolation.
+Each checkout owns `src-tauri/target/`, `dist/`, `node_modules/` and its initial
+packaged output. Leave `CARGO_TARGET_DIR` unset to keep compilation isolated.
+Publishing a finished app is separate from sharing compiler targets.
+
+## Requested app builds
+
+Agents run checks and relevant offline tests, but do not automatically build/package
+the app—even at task completion or after a merge. Ask explicitly when you want a
+build; this keeps concurrent worktrees from saturating the CPU.
+
+A request to **build the app** means build the requested worktree's source before
+merge, or `main` after merge, and publish the finished artifact to the primary
+checkout on `main` so the installed `nimrod` CLI picks it up. The request authorizes
+replacing that artifact; manually requested builds can overwrite each other's output.
+It does not authorize a merge or app launch/restart.
+
+`mise run build` itself only packages/verifies the current checkout. For a worktree
+build, the agent must additionally copy the complete verified macOS bundle to the
+primary checkout's `src-tauri/target/release/bundle/macos/Nimrod.app` (or publish the
+Linux executable to `src-tauri/target/release/nimrod`). Keep the CLI installed from
+the primary checkout; do not repoint it to a temporary worktree. An explicit alternate
+destination or isolated-build request overrides this default.
+
+A running app keeps its old code until you quit and relaunch it. Agents do not do
+that as part of building. Linux publication is intended behavior, not locally
+verified acceptance; no Windows CLI wrapper is currently provided.
+
+## Cache boundaries
 
 Cache hits require compatible compiler versions, flags, features and source inputs.
 Debug and release compilations have different keys. Checkout-local Rust sources can

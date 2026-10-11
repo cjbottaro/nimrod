@@ -76,4 +76,4 @@ No implementation or plugin acceptance has been established by this planning doc
 
 Relevant existing regression suites include `test/tool-call.test.ts`, `test/tool-input-lifecycle.test.ts`, `test/native-view.test.ts`, `test/transcript-presentation.test.ts`, `test/tool-card.test.ts` and `test/reasoning-card.test.ts`. Add contract and fallback tests as the boundary is implemented.
 
-Implementation requires `mise run check` and `mise run build`; scrolling changes also require the offline `npm run test:browser` suite. Keep tests fixture-based, with no paid requests or live session mutation. Request user validation for packaged-app visual behavior; record per-platform verification separately.
+Implementation requires `mise run check`; scrolling changes also require the offline `npm run test:browser` suite. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow). Keep tests fixture-based, with no paid requests or live session mutation. Request user validation for packaged-app visual behavior; record per-platform verification separately.

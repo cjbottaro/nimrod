@@ -24,7 +24,7 @@
 
 - [Architecture](architecture.md) — boundaries and behavior contracts.
 - [Verification](verification.md) — tested behavior and remaining native/platform checks.
-- [Build cache](build-cache.md) — mise-managed Rust compiler caching shared across main and worktrees, with separate app artifacts.
+- [Build cache](build-cache.md) — explicit-only app builds, publication to main for the CLI, and mise-managed Rust compiler caching across isolated worktree targets.
 - [Theme catalog direction](theme-catalog-plan.md) — explicit Open VSX discovery/Rust catalog maintenance, pinned sources and fast offline development builds.
 
 Detailed implementation references are indexed by the repository's

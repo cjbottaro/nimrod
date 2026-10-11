@@ -269,7 +269,7 @@ Snapshots reconcile locks and missed completion as well as guards.
   alignment/no horizontal overflow at a narrow viewport. Browser fixtures do not
   execute native deletion.
 
-Run `mise run check`, `mise run build` and affected offline WebKit regressions.
+Run `mise run check` and affected offline WebKit regressions. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow).
 No real user session deletion, live Pi/model request, installed extension change
 or app launch is used for verification. Native multiple-window dialog/idle/close
 acceptance, real filesystem failure modes and Linux/Windows remain unverified;

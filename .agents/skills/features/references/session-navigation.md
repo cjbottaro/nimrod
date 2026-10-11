@@ -42,4 +42,4 @@ Shared navigation verification (`.worktrees/session-navigation`, branch `refacto
 
 No schema/key migration: `nimrod.tabs.v1:<cwd>`, recency cache, sidebar view, drafts and Pi file ownership remain unchanged. Existing legacy `attention` migration stays in project restoration. No Rust/native integration changes.
 
-Run `mise run check`, `mise run build`, and `npm run test:browser`. Unit/jsdom/offline WebKit tests do not establish native focus/shortcut or Linux acceptance. Never launch/interrupt the user's app, mutate user sessions or request live models for this refactor.
+Run `mise run check` and `npm run test:browser`. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow). Unit/jsdom/offline WebKit tests do not establish native focus/shortcut or Linux acceptance. Never launch/interrupt the user's app, mutate user sessions or request live models for this refactor.

@@ -56,7 +56,7 @@ source preservation, HTML safety and actions. `test/native-view.test.ts` verifie
 user vs assistant/reasoning policy across strings and blocks, pending steering,
 incremental label changes and detected-language snapshot payloads.
 
-Run `mise run check`, `mise run build` and offline `npm run test:browser`.
+Run `mise run check` and offline `npm run test:browser`. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow).
 Current user-only inference revision on `fix/syntax-highlighting` passes full
 `mise run check` (97 Rust tests, two opt-in tests ignored, plus the TypeScript
 suite), `mise run build` with macOS signature verification, and all 50 offline

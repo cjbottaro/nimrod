@@ -88,13 +88,14 @@ lock-holder-without-listener timeout without unlinking; stale-socket recovery; k
 fixture-owner recovery; idempotent explicit Exit cleanup with retained ownership;
 connected write failure without retry/fallback; deadlines and malformed/oversized IO.
 
-Run `mise run check` and `mise run build` in the task worktree. Native Launch Services
+Run `mise run check` in the task worktree. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow). Native Launch Services
 forwarding, actual project-window focus/cycling, pop-out visibility and Linux/Windows
 acceptance are **not** established by these fixtures. No UI/scrolling code changed;
 offline browser tests are not the native startup oracle.
 
-Manual acceptance (user only): quit the old build, select the separately built app
-with `NIMROD_APP`, issue two rapid launcher commands from a cold start for distinct
+Manual acceptance (user only): after an explicitly requested build is published,
+quit the old build and use the default `nimrod` launcher (or `NIMROD_APP` for an
+explicitly isolated artifact); issue two rapid commands from a cold start for distinct
 projects, and check Command–backtick/Window-menu membership. Repeat warm launches, reopen an
 already-open directory, quit/relaunch, and verify normal pop-out project visibility.
 See [verification](../../../../docs/verification.md) for executed results/artifact.

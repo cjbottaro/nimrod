@@ -140,17 +140,24 @@ The pre-persistence development conversation was temporary; this build does not 
 
 Mise enables a shared, machine-local **sccache compiler cache** for Rust builds.
 `main` and worktrees with this configuration reuse compatible dependency compilations
-in both directions, while each checkout keeps its own `target/` and app bundle.
+in both directions, while each checkout keeps its own compilation `target/`.
 Run `mise install` after updating an existing checkout. [Build cache details →](docs/build-cache.md)
 
 ```sh
 mise run check  # TS + UI tests; Rust fmt, clippy, process tests
-mise run build  # macOS .app (local ad-hoc signing + signature verification)
+mise run build  # Explicit app build only; packages/verifies the current checkout
 
 # Real WebKit scrolling regression (offline demo only)
 npx playwright install webkit  # one-time browser installation
 npm run test:browser
 ```
+
+Agents do not automatically build/package the app during validation or after a
+merge. Ask explicitly: **build the app** includes publishing the requested worktree's
+finished artifact (before merge) or main's build (after merge) to the primary
+checkout's default app location so the installed `nimrod` CLI uses it. Requested
+builds may overwrite one another; the user coordinates them. This does not authorize
+merging or launching/restarting the app. [Build/publication workflow →](docs/build-cache.md#requested-app-builds)
 
 Local macOS bundles are ad-hoc signed as a whole application and verified by `mise run build`; this needs no certificate or Apple Developer account. UserNotifications rejects a linker-only executable signature even when macOS notification settings are enabled. Ad-hoc identity may require permission to be granted again after rebuilding; Developer ID signing/notarization remains deferred. [Notification setup →](docs/notifications.md)
 

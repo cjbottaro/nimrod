@@ -32,4 +32,4 @@ To add an algorithm, implement `CommandRankingStrategy` and inject it through `P
 
 Verified on `feat/command-palette-ranking`: `mise run check` passes 372 JS tests and 96 Rust tests (two opt-in Pi smokes ignored); `mise run build` passes with verified ad-hoc macOS bundle signature; all 38 offline WebKit tests pass. An initial check hit the existing single-instance timeout fixture's `Option::unwrap()` race; subsequent full runs passed without modifying it.
 
-Validate `mise run check` and `mise run build`. Offline DOM/unit evidence is not native Tauri visual acceptance or Linux/Windows parity. No app launch or live Pi calls are needed.
+Validate `mise run check`. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow). Offline DOM/unit evidence is not native Tauri visual acceptance or Linux/Windows parity. No app launch or live Pi calls are needed.

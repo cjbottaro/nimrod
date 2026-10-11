@@ -39,4 +39,4 @@ Command-list sorting and accepted-command history are independent of page lifecy
 
 Verification on `fix/palette-dismissal`: `mise run check` passes 358 TypeScript/Node tests, formatting/Clippy and 93 default Rust tests (two opt-in Pi smokes ignored); all 33 offline WebKit tests and the signed macOS worktree build pass. See [verification](../../../../docs/verification.md#one-step-command-interaction-dismissal).
 
-Run `mise run check`, `mise run build` and offline `npm run test:browser`. Fixture/WebKit coverage does not establish native Tauri focus acceptance or Linux/Windows parity. Do not launch or interrupt the user's app for validation.
+Run `mise run check` and offline `npm run test:browser`. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow). Fixture/WebKit coverage does not establish native Tauri focus acceptance or Linux/Windows parity. Do not launch or interrupt the user's app for validation.

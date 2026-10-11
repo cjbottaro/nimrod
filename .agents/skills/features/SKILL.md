@@ -11,11 +11,24 @@ items relevant to the task. Follow repository `AGENTS.md` and
 [architecture](../../../docs/architecture.md). For UI work, also load the
 [shared UI vocabulary](../nimrod-ui-vocabulary/SKILL.md).
 
+## Worktrees, validation and builds
+
+Use a dedicated task worktree under `.worktrees/` as required by `AGENTS.md`.
+Run checks and relevant offline tests, but **never automatically build/package the app**,
+including at task completion or after merging. Wait for an explicit user build request;
+the user coordinates expensive builds across concurrent agents.
+“Build the app” means build the requested source (task worktree before merge, `main`
+after merge) and publish the verified artifact into the primary `main` checkout's
+default app location so the installed `nimrod` CLI uses it. It does not authorize
+merging, launching or restarting the app. Worktree targets stay isolated; only the
+finished app is published. Requested builds may overwrite each other's published
+artifact by design. See [build workflow and paths](references/build-cache.md).
+
 ## Feature index
 
 | Feature / work area | Implementation reference | Human guide |
 | --- | --- | --- |
-| Mise-managed Rust compiler cache shared across main/worktrees, checkout-local targets and build artifacts | [Build cache](references/build-cache.md) | [Build cache](../../../docs/build-cache.md) |
+| Explicit-only app builds, publication to main for the CLI, and shared Rust compiler caching with checkout-local targets | [Build cache](references/build-cache.md) | [Build cache](../../../docs/build-cache.md) |
 | **Planned:** card plugins, bundled renderer API parity, core/presentation boundaries, fallback and incremental implementation | [Card plugins](references/card-plugins.md) | [Card plugins (planned)](../../../docs/card-plugins.md) |
 | Select theme command-palette picker, live hover/arrow preview and cancellation rollback, offline bundled VS Code/Open VSX catalog, explicit Rust discovery/locked-package maintenance tool, built-in/local themes, JSONC validation, cross-window/pop-out synchronization and CSS-only state preservation | [Color themes](references/themes.md) | [Themes](../../../docs/themes.md) |
 | Syntax highlighting: explicit-label precedence, user-only conservative detection, Elixir/Erlang registration, aliases and safe plain-text fallback | [Syntax highlighting](references/syntax-highlighting.md) | [Syntax highlighting](../../../docs/syntax-highlighting.md) |

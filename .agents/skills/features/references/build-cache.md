@@ -8,14 +8,48 @@
 - No `CARGO_TARGET_DIR`, `SCCACHE_DIR`, remote backend, global Cargo config,
   global mise config or shell startup edits. Use sccache's normal machine-local
   disk cache and preserve personal overrides. Default size is 10 GiB.
-- Targets, frontend output and app bundles remain checkout-local. Never point
-  worktree builds at the primary checkout's default target or running app bundle.
+- Compilation targets and frontend output remain checkout-local. Never redirect
+  a worktree's `CARGO_TARGET_DIR` into the primary checkout. App publication is a
+  separate, explicitly requested step described below.
 - Mise merges ancestor configs: once main has this configuration, existing and new
   worktrees nested under `.worktrees/` inherit the wrapper, incremental setting and
   tool pin without changing their tracked files. Explicit child overrides can
   supersede them. External worktrees need the configuration in their own branch.
   Tool installation alone does not enable the wrapper outside this config hierarchy.
 - User guide: `docs/build-cache.md`, linked from README and documentation index.
+
+## Explicit build and publication workflow
+
+- Never automatically run `mise run build`, Tauri packaging, or an equivalent app
+  build for validation, task completion or merge/cleanup. Run `mise run check` and
+  relevant offline tests; report app build as not run unless explicitly requested.
+  The user schedules builds across concurrent worktrees/agents to avoid CPU contention.
+- “Build the app” includes publication to the primary checkout on `main` so the
+  installed `nimrod` CLI uses the result. Before merge, compile the requested task
+  worktree's source with its own target; after merge, build from `main` when asked.
+  Do not merge/change source branches merely to build or publish.
+- Locate the primary checkout using `git worktree list` (not `git rev-parse
+  --show-toplevel`, which returns the task worktree). The installed launcher symlink
+  resolves to that checkout; do not reinstall/repoint it to a disposable worktree.
+- `mise run build` currently packages and verifies only the current checkout's
+  artifact; it does **not** publish automatically. For a requested worktree build,
+  stage the finished artifact beside the primary destination and replace the old
+  artifact as a unit; do not patch/sign individual files in a running bundle.
+  macOS: copy the complete `Nimrod.app` from the worktree's
+  `src-tauri/target/release/bundle/macos/` into the same relative location in main,
+  preserving bundle metadata/resources (for example with `ditto` into staging).
+  Linux: publish the executable to main's `src-tauri/target/release/nimrod`, preserving
+  executable permissions. Honor an explicit alternate artifact destination instead.
+- Verify the published artifact matches the build; on macOS run
+  `npm run verify:bundle -- /absolute/path/to/main/src-tauri/target/release/bundle/macos/Nimrod.app`.
+  Report the source branch and published path. Never claim a worktree-only package
+  is complete fulfillment of “build the app” unless the user requested isolation.
+- The explicit build request authorizes replacing the default artifact, even before
+  merge; the user accepts that requested builds can overwrite each other's output.
+  No extra publication approval is needed. It does not authorize launching, quitting
+  or restarting the app. An older running process keeps its old code until the user
+  restarts it. Linux publication is intended behavior, not locally verified acceptance;
+  Windows remains a possible future target with no current CLI wrapper.
 
 ## Cache boundaries / pitfalls
 
