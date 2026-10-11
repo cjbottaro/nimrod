@@ -99,4 +99,4 @@ Project-folder selection and explicit new saved / temporary actions stay on the 
 CHROMIUM=/path/to/chrome-headless-shell node scripts/check-settings.mjs
 ```
 
-This replaces the earlier project-bar theme/zoom pickers and launch-form runtime fields. It does not implement the [deferred theme catalog](theme-catalog-plan.md).
+This replaces the earlier project-bar theme/zoom pickers and launch-form runtime fields. Theme discovery and live previews are available through the command-palette [Select theme… picker](themes.md#select-and-preview-themes); Settings retains its existing selection/import/removal controls.

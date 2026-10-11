@@ -1,5 +1,36 @@
 # Color themes
 
+## Select and preview themes
+
+Run **Select theme…** from the command palette (**⌘/Ctrl ⇧ P**). It opens a
+searchable picker containing built-in themes, saved imports, and a curated,
+**bundled VS Code theme catalog**.
+
+- Type to filter by name, light/dark appearance, source or author. A muted dot
+  after the title marks the saved theme, independently of the preview highlight.
+- Use **↑/↓** or hover a row to preview its colors in the current project window.
+  The conversation remains visible behind the compact picker.
+- Press **Enter** or click a row to save and apply it across project windows and
+  pop-outs.
+- **Escape**, closing the picker, or **Back** restores the latest saved theme.
+  Preview never writes theme preferences or changes other windows.
+
+All catalog colors are included in the app: first launch, search and live previews
+work offline, with no downloads or Refresh step. Catalog additions and updates
+arrive with app releases. Imported themes remain your own saved copies and are
+never overwritten by catalog updates.
+
+The catalog currently includes **267 variants**, including official Dracula,
+Catppuccin, One Dark Pro, Gruvbox, Ayu, Rosé Pine, Cobalt2, Tokyo Night and Nord.
+Most are collected from Open VSX packages; the original eight source snapshots
+remain available with their existing IDs.
+Our hand-tuned Dracula and Omarchy adaptations remain available separately.
+Bundled catalog themes do not count toward the 50-import limit and cannot be
+removed through the imported-theme removal action. Previously saved Gogh themes
+remain usable; the old Gogh discovery/download feature is no longer present.
+
+**Select theme…** is configurable in Settings → Keybindings, with no default shortcut.
+
 ## Built-in themes
 
 Open **Settings** using the project-bar gear or **⌘/Ctrl ,**, then use the **theme picker** under **Appearance**:
@@ -26,7 +57,7 @@ To remove an imported theme, select it, then choose **Remove current imported th
 
 There is no universal theme-file format. Terminal palettes usually contain just foreground/background and 16 ANSI colors; application themes also describe inputs, buttons, lists, editor surfaces, and syntax colors. Nimrod currently imports the **VS Code format**, not iTerm/Windows Terminal/Alacritty theme files.
 
-Browse themes at [VS Code Themes](https://vscodethemes.com/) or their authors' repositories. Look for a theme `.json` file, often in a `themes/` directory. Download the **raw file**, not the GitHub HTML page, extension `package.json`, or a `.vsix` package. Nimrod doesn't install extensions or download themes itself.
+Browse themes at [VS Code Themes](https://vscodethemes.com/) or their authors' repositories. Look for a theme `.json` file, often in a `themes/` directory. Download the **raw file**, not the GitHub HTML page, extension `package.json`, or a `.vsix` package. Manual import doesn't install extensions. The command-palette picker uses already-bundled data and never installs or downloads extensions.
 
 The most reliable route for a theme already installed in VS Code:
 
@@ -49,15 +80,23 @@ This is also the workaround for themes whose source files use `include` or an ex
 - Up to **50 imported themes**. Theme selection and imported colors/names are stored in `appearance.theme` and `appearance.importedThemes` in Nimrod's JSONC settings file, separately from drafts and app-managed state. Legacy webview theme storage is migrated once. Valid external edits synchronize across windows; see [settings.md](settings.md). The original file is not needed after import. There is no cloud sync.
 - Invalid files, canceled file picking, and persistence failures leave the active theme unchanged and show a dismissible notice. If saved settings are corrupt, startup falls back to Nimrod with a notice. A successful change is persisted before being applied.
 
-## Deferred: in-app theme catalog
+## Catalog limits and verification
 
-A searchable, offline-friendly catalog backed by public palette collections is recorded in [theme-catalog-plan.md](theme-catalog-plan.md). The user explicitly deferred implementation; keep the existing picker/importer unchanged until requested. The Nimrod scheme remains the default and the user's preferred theme.
+The catalog is a curated selection, not the complete VS Code Marketplace.
+Source snapshots and full licenses are in [THEME_CATALOG_NOTICES.md](../THEME_CATALOG_NOTICES.md).
+Maintainers update it explicitly using the [Rust bundle tool](theme-catalog-plan.md).
+Normal development builds never run that tool.
+
+Automated tests use offline fixtures. Native visual/focus acceptance on macOS and
+Linux remains user validation; possible Windows behavior is unverified.
 
 ## Implementation
 
 - `src/theme.css`: Nimrod palette and application layout; internal `--vscode-*` compatibility tokens remain.
 - `src/themes/theme.ts`: JSONC parsing, allowlisted hex colors, palette fallbacks, broad syntax mapping, saved-state validation, and CSS-variable-only application.
-- `src/themes/builtins.ts`: shared built-in registry and selected-palette lookup for project windows and pop-outs.
+- `src/themes/catalog.json`: checked-in resolved VS Code theme catalog.
+- `tools/theme-bundler/`: explicit Rust release-maintenance tool and pinned source manifest.
+- `src/themes/builtins.ts`: shared built-in/catalog registry and selected-palette lookup for project windows and pop-outs.
 - `src/themes/dracula.json`, `tokyo-night.json`, `osaka-jade.json`: importable built-in adaptations.
 - `src/themes/picker.ts`: selection, local file import/removal, notices, persistence, and stale-import protection.
 - `test/themes.test.ts`: parser, lifecycle, persistence, and DOM-state regressions.

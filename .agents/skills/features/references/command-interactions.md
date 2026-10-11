@@ -6,6 +6,8 @@ Human guide: [Command interactions](../../../../docs/workspace-sessions.md#comma
 
 `src/command-palette.ts` owns the window-local command interaction. Commands, session pickers, model/thinking selections and naming are pages within that interaction—not a stack of parent dialogs. `src/main.ts` supplies commands and session-bound preference operations; `src/keybindings.ts` supplies entry-point dispatch. `index.html` supplies the shared modal and Escape hint.
 
+Color-theme preview uses `startPreviewSelection()` with lifecycle-owned rollback; see [themes](themes.md#bundled-catalog-and-command-palette-picker). Its hover handling is preview-only and leaves other picker behavior unchanged.
+
 Add a picker through `startSelection()` or the existing page lifecycle, not a feature-specific dialog key handler. `beginPage()` owns query reset, Back/Retry controls and request generation. Page content may differ; dismissal must not branch on page mode or entry point. There is no new generic harness or global modal framework.
 
 Repeated deletion is the deliberate nested-dialog exception: the shared deletion session page stays mounted and visible while its tree review owns focus and Escape. Only that executing page authorizes review coverage; all other dialogs retain priority. Cancel leaves the picker unchanged; successful tombstones prune cached rows in place after settlement without rediscovery or rebuilding survivors. Escape from the picker dismisses the interaction. Generation/disposal guards reject stale completions after API closure or newer pages; no automatic reopening. See [deletion picker](session-deletion.md#repeated-deletion-picker).

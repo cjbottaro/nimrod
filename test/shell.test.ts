@@ -9,6 +9,7 @@ import type { JsonRecord } from '../src/pi/types';
 import { stubDialogs } from './dialog-fixture';
 import { MemoryPreferences } from './preferences-fixture';
 import { parseSettings } from '../src/preferences';
+import { CATALOG_THEMES } from '../src/themes/builtins';
 import type { DeletionEvent, DeletionSnapshot } from '../src/session-deletion';
 
 // Real shell/renderer/controller bundle, mocked native boundary—not native WebKit acceptance.
@@ -203,7 +204,76 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   };
 }
 
-test('palette commands all have default shortcuts and removed actions stay absent and inert', async () => {
+test('bundled picker previews locally, restores on cancellation, commits offline and honors bind/unbind', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  const input = f.element<HTMLInputElement>('palette-input'), root = f.win.document.documentElement;
+  const query = (text: string) => { input.value = text; input.dispatchEvent(new f.win.Event('input')); };
+  const key = (key: string) => input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  const open = async () => { f.openPalette(); query('Select theme'); key('Enter'); await f.tick(); await f.tick(); };
+  try {
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Keep theme draft'; prompt.dispatchEvent(new f.win.Event('input')); prompt.focus();
+    const conversation = f.win.document.querySelector('.session-view'), baseline = f.preferences.value.text;
+    assert.equal(f.calls.some(c => c.command === 'fetch_gogh_catalog'), false);
+    await open(); query('Nord');
+    assert.equal(root.dataset.themeMode, 'dark'); assert.equal(root.style.getPropertyValue('--vscode-editor-background').toLowerCase(), '#2e3440');
+    assert.equal(f.preferences.value.text, baseline);
+    assert.equal(f.element<HTMLButtonElement>('palette-refresh').hidden, true);
+    key('Escape'); await f.tick(); assert.equal(root.dataset.theme, 'nimrod'); assert.equal(f.win.document.activeElement, prompt);
+    await open(); query('Dracula'); key('Enter'); await f.tick(); await f.tick();
+    assert.equal(parseSettings(f.preferences.value.text)['appearance.theme'], 'dracula');
+    await open(); query('Nord'); key('Enter'); key('Enter'); await f.tick(); await f.tick();
+    const selected = String(parseSettings(f.preferences.value.text)['appearance.theme']);
+    assert.match(selected, /^catalog-/); assert.equal(root.dataset.theme, selected);
+    assert.equal((parseSettings(f.preferences.value.text)['appearance.importedThemes'] as unknown[]).length, 0);
+    assert.equal(f.calls.filter(c => c.command === 'fetch_gogh_catalog').length, 0);
+    await open(); query('Nimrod'); assert.equal(root.dataset.theme, 'nimrod');
+    f.preferences.external(f.preferences.value.text.replace(selected, 'dracula')); await f.tick();
+    key('Escape'); await f.tick(); assert.equal(root.dataset.theme, 'dracula', 'cancel restores latest committed selection');
+    assert.equal(f.win.document.querySelector('.session-view'), conversation); assert.equal(prompt.value, 'Keep theme draft');
+    f.preferences.external('{"keybindings":{"select-theme":["primary+j"]}}'); await f.tick();
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'j', metaKey: true, bubbles: true, cancelable: true }));
+    assert.equal(f.element('palette-title').textContent, 'Select theme'); key('Escape'); await f.tick();
+    f.preferences.external('{"keybindings":{"select-theme":[]}}'); await f.tick();
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'j', metaKey: true, bubbles: true, cancelable: true }));
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+    assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
+  } finally { f.win.close(); }
+});
+
+test('theme persistence failure restores committed colors without replaying acceptance', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  const input = f.element<HTMLInputElement>('palette-input');
+  const query = (value: string) => { input.value = value; input.dispatchEvent(new f.win.Event('input')); };
+  const key = (key: string) => input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  try {
+    let saves = 0;
+    f.preferences.settings = async () => { saves++; throw new Error('fixture disk full'); };
+    f.openPalette(); query('Select theme'); key('Enter'); await f.tick(); await f.tick();
+    query('Nord'); assert.equal(f.win.document.documentElement.dataset.themeMode, 'dark');
+    key('Enter'); await f.tick(); await f.tick();
+    assert.equal(f.win.document.documentElement.dataset.theme, 'nimrod');
+    assert.equal(saves, 1); assert.match(f.element('palette-status').textContent!, /disk full/);
+    assert.equal(f.calls.some(c => c.command === 'start_pi'), false);
+  } finally { f.win.close(); }
+});
+
+test('old saved Gogh themes remain usable and catalog choices never require downloads', async () => {
+  const legacy = { id: 'import-gogh-fixture', name: 'Saved Gogh', mode: 'dark', colors: { 'editor.background': '#102030' }, syntax: {}, source: { provider: 'gogh', author: 'Author' } };
+  const f = await fixture(undefined, { windowWorkspace: '/project', storage: { 'nimrod.themes.v1': { version: 1, selected: legacy.id, imports: [legacy] } } });
+  try {
+    assert.equal(f.win.document.documentElement.dataset.theme, legacy.id);
+    f.openPalette(); const field = f.element<HTMLInputElement>('palette-input');
+    field.value = 'Select theme'; field.dispatchEvent(new f.win.Event('input'));
+    field.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    assert.equal(f.element('palette-list').children.length, 5 + CATALOG_THEMES.length);
+    assert.equal(f.calls.some(c => c.command === 'fetch_gogh_catalog'), false);
+    field.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(f.win.document.documentElement.dataset.theme, legacy.id);
+  } finally { f.win.close(); }
+});
+
+test('palette commands have registered shortcuts (theme intentionally unbound) and removed actions stay absent and inert', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   try {
     assert.equal(f.win.document.querySelector('#start-demo, #resume-file'), null);
@@ -211,7 +281,7 @@ test('palette commands all have default shortcuts and removed actions stay absen
     f.openPalette();
     const rows = [...f.element('palette-list').querySelectorAll('[role=option]')];
     assert.ok(rows.length > 0);
-    for (const row of rows) assert.ok(row.querySelector('kbd')?.textContent, row.textContent!);
+    for (const row of rows) if (!row.textContent?.includes('Select theme')) assert.ok(row.querySelector('kbd')?.textContent, row.textContent!);
     assert.doesNotMatch(f.element('palette-list').textContent!, /offline demo|session file/i);
     f.element<HTMLDialogElement>('command-palette').close(); await f.tick();
     f.preferences.external('{"keybindings":{"demo":["primary+d"],"file":["primary+f"]}}'); await f.tick();

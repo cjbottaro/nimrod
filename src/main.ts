@@ -16,6 +16,8 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { installZoom } from './zoom';
 import { installThemes } from './themes/picker';
+import { BUILTIN_THEMES, CATALOG_THEMES } from './themes/builtins';
+import type { ColorTheme } from './themes/theme';
 import { mountPiView, type HostMessage, type PiView } from './pi/webview-client';
 import { PiTransport, type Packet } from './pi/transport';
 import { PiSession } from './pi/session';
@@ -594,6 +596,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     const active = presented;
     return [
     { id: 'open-recent-project', label: 'Open recent project…', detail: 'Open or focus a previously opened project', next: true, run: () => palette.projects() },
+    { id: 'select-theme', label: 'Select theme…', detail: 'Preview bundled VS Code themes and saved imports', next: true, run: () => pickTheme() },
     { id: 'resume', label: 'Resume session…', detail: 'Open a saved conversation in this project', next: true, run: () => palette.sessions() },
     { id: 'delete-sessions', label: 'Delete sessions…', detail: 'Repeatedly review and delete saved session trees in this project', next: true, run: () => palette.deleteSessions() },
     { id: 'new', label: 'New session', detail: 'Start a new persistent conversation', run: () => newSession() },
@@ -615,6 +618,39 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     ].map(item => ({ ...item, shortcut: ACTIONS.some(action => action.id === item.id) ? shortcutHint(item.id as ActionId) : undefined }));
   },
 });
+let themePreviewGeneration = 0;
+function pickTheme(): void {
+  const request = palette.startPreviewSelection('Select theme', undefined, item => {
+    const theme = choices.get(item?.id || '');
+    if (item) themes.preview(theme);
+    else themes.restore();
+  }, () => themes.restore());
+  if (!request) return;
+  const previewGeneration = ++themePreviewGeneration;
+  const choices = new Map<string, ColorTheme | undefined>();
+  function show(): void {
+    const library = preferences.theme();
+    choices.clear(); choices.set('nimrod', undefined);
+    const items: PalettePage['items'] = [];
+    function add(id: string, label: string, detail: string, theme?: ColorTheme) {
+      if (items.some(item => item.id === id)) return;
+      choices.set(id, theme);
+      items.push({ id, label, detail, current: id === library.selected,
+        keywords: id === library.selected ? 'Current' : undefined,
+        run: async () => {
+          try { await preferences.selectTheme(id, id.startsWith('import-') ? theme : undefined); }
+          finally { if (themePreviewGeneration === previewGeneration) themes.restore(); }
+        },
+      });
+    }
+    add('nimrod', 'Nimrod (system)', 'Built-in · follows system appearance');
+    for (const theme of BUILTIN_THEMES) add(theme.id, theme.name, `Built-in · ${theme.mode}`, theme);
+    for (const theme of library.imports) add(theme.id, theme.name, `${theme.source?.provider === 'gogh' ? 'Saved Gogh' : 'Imported'} · ${theme.mode}${theme.source?.author ? ` · ${theme.source.author}` : ''}`, theme);
+    for (const entry of CATALOG_THEMES) add(entry.theme.id, entry.theme.name, `VS Code · ${entry.theme.mode} · ${entry.author}`, entry.theme);
+    request!.show({ items, notice: 'Arrow keys or hover to preview · Enter to apply · Esc to restore' }, library.selected);
+  }
+  show();
+}
 async function takeProjectPickerRequest(): Promise<void> {
   if (!ready || unloading) return;
   if (await invoke<boolean>('take_project_picker_request')) await palette.projects();
@@ -1062,6 +1098,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'temporary': return newSession('temporary');
       case 'delete': return presented ? deleteSession(presented) : undefined;
       case 'delete-sessions': return palette.deleteSessions();
+      case 'select-theme': return pickTheme();
       case 'model': return presented ? pickPreference(presented, 'model') : undefined;
       case 'thinking': return presented ? pickPreference(presented, 'thinking') : undefined;
       case 'palette': palette.open(); return;

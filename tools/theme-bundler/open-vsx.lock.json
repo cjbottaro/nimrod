@@ -1,0 +1,2451 @@
+{
+  "version": 1,
+  "packages": [
+    {
+      "namespace": "AdamCaviness",
+      "name": "theme-monokai-dark-soda",
+      "version": "1.2.0",
+      "download": "https://open-vsx.org/api/AdamCaviness/theme-monokai-dark-soda/1.2.0/file/AdamCaviness.theme-monokai-dark-soda-1.2.0.vsix",
+      "sha256": "d459753604dd4a39bcdc1e5f39a9d3bcc2fed3812ab4094a7bd37614fbaf6d8d",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "AdamCaviness",
+      "themes": [
+        {
+          "id": "themes-monokai-dark-soda-color-theme-j-aa8e770a",
+          "name": "Monokai Dark Soda",
+          "path": "themes/monokai-dark-soda-color-theme.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "Anan",
+      "name": "jetbrains-darcula-theme",
+      "version": "1.3.6",
+      "download": "https://open-vsx.org/api/Anan/jetbrains-darcula-theme/1.3.6/file/Anan.jetbrains-darcula-theme-1.3.6.vsix",
+      "sha256": "d0442ccd24bdecc3028215f7be3e5cfc505a87b714f0f0cdc89974678a629149",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "Anan",
+      "themes": [
+        {
+          "id": "themes-jetbrains-darcula-theme-color-t-bb4d552b",
+          "name": "JetBrains Darcula Theme",
+          "path": "themes/JetBrains Darcula Theme-color-theme.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "Catppuccin",
+      "name": "catppuccin-vsc",
+      "version": "3.19.0",
+      "download": "https://open-vsx.org/api/Catppuccin/catppuccin-vsc/3.19.0/file/Catppuccin.catppuccin-vsc-3.19.0.vsix",
+      "sha256": "ebf347664837edbe91c9920ff3d14c96d4a28beeec0b95137c76058326329780",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "Catppuccin",
+      "themes": [
+        {
+          "id": "themes-mocha-json-8712928f",
+          "name": "Catppuccin Mocha",
+          "path": "themes/mocha.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-macchiato-json-2e57e9a3",
+          "name": "Catppuccin Macchiato",
+          "path": "themes/macchiato.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-frappe-json-035a6b43",
+          "name": "Catppuccin Frappé",
+          "path": "themes/frappe.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-latte-json-c04218d0",
+          "name": "Catppuccin Latte",
+          "path": "themes/latte.json",
+          "mode": "light"
+        }
+      ]
+    },
+    {
+      "namespace": "Codemos",
+      "name": "codemos-modern",
+      "version": "3.1.2",
+      "download": "https://open-vsx.org/api/Codemos/codemos-modern/3.1.2/file/Codemos.codemos-modern-3.1.2.vsix",
+      "sha256": "9e8d80dfcd6302bb08dfeb3226eebb1ae9e42d2b67e8bbd3d4ed71cec36c3e61",
+      "license": "MIT",
+      "licensePath": "LICENSE.md",
+      "author": "Codemos",
+      "themes": [
+        {
+          "id": "themes-vscode-codemos-modern-dark-colo-35826423",
+          "name": "Codemos Modern (Dark)",
+          "path": "themes/vscode/Codemos Modern (Dark)-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-vscode-codemos-modern-light-col-0be6c827",
+          "name": "Codemos Modern (Light)",
+          "path": "themes/vscode/Codemos Modern (Light)-color-theme.json",
+          "mode": "light"
+        }
+      ]
+    },
+    {
+      "namespace": "Dracula-2",
+      "name": "dracula-2",
+      "version": "0.3.8",
+      "download": "https://open-vsx.org/api/Dracula-2/dracula-2/0.3.8/file/Dracula-2.dracula-2-0.3.8.vsix",
+      "sha256": "c1cf2f50f673a7bc19645b0f724b8baed0f8fe82bcef30460c9984ff7b3d5fd0",
+      "license": "MIT",
+      "licensePath": "LICENSE.md",
+      "author": "Dracula-2",
+      "themes": [
+        {
+          "id": "themes-dracula-normal-json-ed79dd50",
+          "name": "Darcula",
+          "path": "themes/Dracula-normal.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "GulajavaMinistudio",
+      "name": "mayukaithemevsc",
+      "version": "3.3.0",
+      "download": "https://open-vsx.org/api/GulajavaMinistudio/mayukaithemevsc/3.3.0/file/GulajavaMinistudio.mayukaithemevsc-3.3.0.vsix",
+      "sha256": "b7e4fbe7620eb6becd6177a0075be285658cec8a1ee1af1389c5929f1f265f22",
+      "license": "MIT",
+      "licensePath": "LICENSE.md",
+      "author": "GulajavaMinistudio",
+      "themes": [
+        {
+          "id": "themes-mayukai-mirage-darker-color-the-97fb6506",
+          "name": "Mayukai Mirage",
+          "path": "themes/Mayukai-mirage-darker-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-mayukai-mirage-color-theme-sema-0f86e8fb",
+          "name": "Mayukai Semantic Mirage",
+          "path": "themes/Mayukai-mirage-color-theme-semantic.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-mayukai-mirage-gruvbox-color-th-5f21d070",
+          "name": "Mayukai Mirage Gruvbox Darktooth",
+          "path": "themes/Mayukai-mirage-gruvbox-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-mayukai-darker-color-theme-json-4b1b9e74",
+          "name": "Mayukai Dark",
+          "path": "themes/Mayukai-darker-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-mayukai-mono-color-theme-json-d14d9f2b",
+          "name": "Mayukai Mono",
+          "path": "themes/Mayukai-mono-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-mayukai-alucard-color-theme-jso-85a90181",
+          "name": "Mayukai Alucard",
+          "path": "themes/Mayukai-alucard-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-mayukai-sunset-color-theme-json-50896898",
+          "name": "Mayukai Sunset",
+          "path": "themes/Mayukai-sunset-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-mayukai-reversal-color-theme-js-f1adf9f7",
+          "name": "Mayukai Reversal",
+          "path": "themes/Mayukai-reversal-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-mayukai-midnight-json-7638cff3",
+          "name": "Mayukai Midnight",
+          "path": "themes/Mayukai-midnight.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "JuanLias",
+      "name": "ultra-instinct-theme",
+      "version": "1.0.1",
+      "download": "https://open-vsx.org/api/JuanLias/ultra-instinct-theme/1.0.1/file/JuanLias.ultra-instinct-theme-1.0.1.vsix",
+      "sha256": "9522e937696cff41e82c2175403432b3483a0aa8036e6d6d5e433d98886f0db8",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "Ultra Instinct Theme",
+      "themes": [
+        {
+          "id": "themes-ultra-instinct-color-theme-json-b7b038e9",
+          "name": "Ultra Instinct Sign",
+          "path": "themes/ultra-instinct-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-ultra-instinct-dark-mastered-co-d897c864",
+          "name": "Ultra Instinct Mastered",
+          "path": "themes/ultra-instinct-dark-mastered-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-ultra-instinct-light-color-them-041cf04e",
+          "name": "Ultra Instinct Mastered (Light)",
+          "path": "themes/ultra-instinct-light-color-theme.json",
+          "mode": "light"
+        }
+      ]
+    },
+    {
+      "namespace": "MateuszDrewniak",
+      "name": "theme-dracula-dark-plus",
+      "version": "2.24.4",
+      "download": "https://open-vsx.org/api/MateuszDrewniak/theme-dracula-dark-plus/2.24.4/file/MateuszDrewniak.theme-dracula-dark-plus-2.24.4.vsix",
+      "sha256": "1f9ac2c6ef9a0360f0b29ee86958ff5084031ff3aaa340441a1f930a1e88d1ca",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "MateuszDrewniak",
+      "themes": [
+        {
+          "id": "theme-dracula-json-0958b151",
+          "name": "Dracula Dark+",
+          "path": "theme/dracula.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "PROxZIMA",
+      "name": "sweetdracula",
+      "version": "1.0.9",
+      "download": "https://open-vsx.org/api/PROxZIMA/sweetdracula/1.0.9/file/PROxZIMA.sweetdracula-1.0.9.vsix",
+      "sha256": "b1f21a3bd6067c16e1e9e758965af63c9282d07c8c4b121f754c4112d2edb1dc",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "PROxZIMA",
+      "themes": [
+        {
+          "id": "theme-sweetdracula-color-theme-json-e4b58042",
+          "name": "Sweet Dracula",
+          "path": "theme/sweetdracula-color-theme.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "RaymondThurman",
+      "name": "ravenwood",
+      "version": "1.2.32",
+      "download": "https://open-vsx.org/api/RaymondThurman/ravenwood/1.2.32/file/RaymondThurman.ravenwood-1.2.32.vsix",
+      "sha256": "90191648ac4cbc5d430950722c1b1a8125754ad32c4c9a9d8fa68ce9aba59814",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "RaymondThurman",
+      "themes": [
+        {
+          "id": "themes-ravenwood-dark-json-f3540285",
+          "name": "Ravenwood Dark",
+          "path": "themes/ravenwood-dark.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-ravenwood-light-json-a4215683",
+          "name": "Ravenwood Light",
+          "path": "themes/ravenwood-light.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-ravenwood-asgard-json-464bc775",
+          "name": "Ravenwood Asgard",
+          "path": "themes/ravenwood-asgard.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-ravenwood-vanaheim-json-a5af2a75",
+          "name": "Ravenwood Vanaheim",
+          "path": "themes/ravenwood-vanaheim.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-ravenwood-alfheim-json-b0df953d",
+          "name": "Ravenwood Alfheim",
+          "path": "themes/ravenwood-alfheim.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-ravenwood-svartalfheim-json-a6d1af3c",
+          "name": "Ravenwood Svartalfheim",
+          "path": "themes/ravenwood-svartalfheim.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-ravenwood-nidavellir-json-a3dfe3fe",
+          "name": "Ravenwood Nidavellir",
+          "path": "themes/ravenwood-nidavellir.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-ravenwood-jotunheim-json-2c48c19c",
+          "name": "Ravenwood Jotunheim",
+          "path": "themes/ravenwood-jotunheim.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-ravenwood-muspelheim-json-491ffc37",
+          "name": "Ravenwood Muspelheim",
+          "path": "themes/ravenwood-muspelheim.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-ravenwood-helheim-json-7705f132",
+          "name": "Ravenwood Helheim",
+          "path": "themes/ravenwood-helheim.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "SeptWong",
+      "name": "vscode-webstorm-theme",
+      "version": "1.0.6",
+      "download": "https://open-vsx.org/api/SeptWong/vscode-webstorm-theme/1.0.6/file/SeptWong.vscode-webstorm-theme-1.0.6.vsix",
+      "sha256": "886b0c89239abca6f671e234d035817ed09c5d3909f199b830f1f8cef697c92b",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "SeptWong",
+      "themes": [
+        {
+          "id": "themes-ws-darker-color-theme-json-700993cd",
+          "name": "WebStorm Darker",
+          "path": "themes/ws-darker-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-webstorm-darcula-color-theme-js-cc87229e",
+          "name": "WebStorm Darcula",
+          "path": "themes/webstorm-darcula-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-webstorm-dark-color-theme-json-1594350c",
+          "name": "WebStorm Dark",
+          "path": "themes/webstorm-dark-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-new-dark-json-f2ec7ef6",
+          "name": "WebStorm New Dark",
+          "path": "themes/new_dark.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-new-darcula-json-8d85f018",
+          "name": "WebStorm New Darcula",
+          "path": "themes/new_darcula.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-ws-light-color-theme-json-7f944bf9",
+          "name": "WebStorm Light",
+          "path": "themes/ws-light-color-theme.json",
+          "mode": "light"
+        }
+      ]
+    },
+    {
+      "namespace": "a5hk",
+      "name": "night-coder",
+      "version": "6.0.1",
+      "download": "https://open-vsx.org/api/a5hk/night-coder/6.0.1/file/a5hk.night-coder-6.0.1.vsix",
+      "sha256": "a5262a608eccb686b32c53b6ac69fd6216716b87414cf416946b182472150c87",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "a5hk",
+      "themes": [
+        {
+          "id": "themes-night-coder-ember-color-theme-j-b72c27d0",
+          "name": "Night Coder Ember",
+          "path": "themes/night-coder-ember-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-night-coder-ember-contrast-colo-51aff56c",
+          "name": "Night Coder Ember Contrast",
+          "path": "themes/night-coder-ember-contrast-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-night-coder-flame-color-theme-j-7c4eba99",
+          "name": "Night Coder Flame",
+          "path": "themes/night-coder-flame-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-night-coder-flame-contrast-colo-ddf0bb9b",
+          "name": "Night Coder Flame Contrast",
+          "path": "themes/night-coder-flame-contrast-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-night-coder-ash-color-theme-jso-78f87131",
+          "name": "Night Coder Ash",
+          "path": "themes/night-coder-ash-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-night-coder-ash-contrast-color--e9fdfaa0",
+          "name": "Night Coder Ash Contrast",
+          "path": "themes/night-coder-ash-contrast-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-night-coder-charcoal-color-them-e9bf5bef",
+          "name": "Night Coder Charcoal",
+          "path": "themes/night-coder-charcoal-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-night-coder-charcoal-contrast-c-c0e7ebfb",
+          "name": "Night Coder Charcoal Contrast",
+          "path": "themes/night-coder-charcoal-contrast-color-theme.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "a5hk",
+      "name": "paper",
+      "version": "3.0.2",
+      "download": "https://open-vsx.org/api/a5hk/paper/3.0.2/file/a5hk.paper-3.0.2.vsix",
+      "sha256": "e3062e29a237ee7c30b7ccb3bbdef9b92a6b51d2424f3a669f99e2d03a859568",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "a5hk",
+      "themes": [
+        {
+          "id": "themes-paper-color-theme-json-f1eb3c7f",
+          "name": "Paper",
+          "path": "themes/paper-color-theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-paper-contrast-color-theme-json-1631fd5d",
+          "name": "Paper Contrast",
+          "path": "themes/paper-contrast-color-theme.json",
+          "mode": "light"
+        }
+      ]
+    },
+    {
+      "namespace": "ahmadawais",
+      "name": "shades-of-purple",
+      "version": "7.3.6",
+      "download": "https://open-vsx.org/api/ahmadawais/shades-of-purple/7.3.6/file/ahmadawais.shades-of-purple-7.3.6.vsix",
+      "sha256": "dd3238066e1dc9d7cc1cd2f7f5e37d2bc944788c33f13c08584002f83558ec9c",
+      "license": "MIT",
+      "licensePath": "LICENSE.md",
+      "author": "ahmadawais",
+      "themes": [
+        {
+          "id": "themes-shades-of-purple-color-theme-js-214ff57a",
+          "name": "Shades of Purple",
+          "path": "themes/shades-of-purple-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-shades-of-purple-color-theme-su-7481d4e4",
+          "name": "Shades of Purple (Super Dark)",
+          "path": "themes/shades-of-purple-color-theme-super-dark.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "akamud",
+      "name": "vscode-theme-onedark",
+      "version": "2.3.0",
+      "download": "https://open-vsx.org/api/akamud/vscode-theme-onedark/2.3.0/file/akamud.vscode-theme-onedark-2.3.0.vsix",
+      "sha256": "46b7471523cc2c0fcf526ed63b87b502e4102f3c3cde68d9f2eae9c9887a2e85",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "akamud",
+      "themes": [
+        {
+          "id": "themes-onedark-json-70bdddbb",
+          "name": "Atom One Dark",
+          "path": "themes/OneDark.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "akamud",
+      "name": "vscode-theme-onelight",
+      "version": "2.3.0",
+      "download": "https://open-vsx.org/api/akamud/vscode-theme-onelight/2.3.0/file/akamud.vscode-theme-onelight-2.3.0.vsix",
+      "sha256": "63175d5437ec48531898b26017162ae243d03bae21f747f5a7523b953b5a9e11",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "akamud",
+      "themes": [
+        {
+          "id": "themes-onelight-json-eb62d2e2",
+          "name": "Atom One Light",
+          "path": "themes/OneLight.json",
+          "mode": "light"
+        }
+      ]
+    },
+    {
+      "namespace": "aleksa-codes",
+      "name": "one-dark-modern-pro",
+      "version": "1.2.0",
+      "download": "https://open-vsx.org/api/aleksa-codes/one-dark-modern-pro/1.2.0/file/aleksa-codes.one-dark-modern-pro-1.2.0.vsix",
+      "sha256": "4aa00af38d7ae4bba7e9acc0ea82d6bde2e6b38e82b892339c768ba4c62d1af8",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "aleksa-codes",
+      "themes": [
+        {
+          "id": "themes-one-dark-modern-pro-json-fb1fb517",
+          "name": "One Dark Modern Pro",
+          "path": "themes/One-Dark-Modern-Pro.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-one-dark-2026-pro-json-872de7c2",
+          "name": "One Dark 2026 Pro",
+          "path": "themes/One-Dark-2026-Pro.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "arcticicestudio",
+      "name": "nord-visual-studio-code",
+      "version": "0.19.0",
+      "download": "https://open-vsx.org/api/arcticicestudio/nord-visual-studio-code/0.19.0/file/arcticicestudio.nord-visual-studio-code-0.19.0.vsix",
+      "sha256": "7f0b03922471232b07b14e0b46dcfa6f8c67dfd4293b167e4ccec608cc6fbe1d",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "arcticicestudio",
+      "themes": [
+        {
+          "id": "themes-nord-color-theme-json-15001332",
+          "name": "Nord",
+          "path": "themes/nord-color-theme.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "artlaman",
+      "name": "chalice-color-theme",
+      "version": "1.0.2",
+      "download": "https://open-vsx.org/api/artlaman/chalice-color-theme/1.0.2/file/artlaman.chalice-color-theme-1.0.2.vsix",
+      "sha256": "638b35d4c09d4569e05f4b7c27126c5ff8b16226ed5695f0ce4b9f8eea2eee41",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "artlaman",
+      "themes": [
+        {
+          "id": "theme-chalice-color-theme-light-json-caebedc2",
+          "name": "Light (Chalice)",
+          "path": "theme/chalice-color-theme-light.json",
+          "mode": "light"
+        },
+        {
+          "id": "theme-chalice-color-theme-light-mono-j-8c531445",
+          "name": "Light Mono (Chalice)",
+          "path": "theme/chalice-color-theme-light-mono.json",
+          "mode": "light"
+        },
+        {
+          "id": "theme-chalice-color-theme-dark-json-9be2b8e1",
+          "name": "Dark (Chalice)",
+          "path": "theme/chalice-color-theme-dark.json",
+          "mode": "dark"
+        },
+        {
+          "id": "theme-chalice-color-theme-dark-mono-js-e5ba9023",
+          "name": "Dark Mono (Chalice)",
+          "path": "theme/chalice-color-theme-dark-mono.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "aurora-them-creator",
+      "name": "theme-aurora-nocturne",
+      "version": "1.0.3",
+      "download": "https://open-vsx.org/api/aurora-them-creator/theme-aurora-nocturne/1.0.3/file/aurora-them-creator.theme-aurora-nocturne-1.0.3.vsix",
+      "sha256": "dc421c775daefac3cdadc17d93ef2135883107b2692aa4e6d9135435994d8542",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "aurora-them-creator",
+      "themes": [
+        {
+          "id": "theme-aurora-nocturne-json-9a597b60",
+          "name": "Aurora Nocturne",
+          "path": "theme/aurora-nocturne.json",
+          "mode": "dark"
+        },
+        {
+          "id": "theme-aurora-nocturne-soft-json-243cda99",
+          "name": "Aurora Nocturne Soft",
+          "path": "theme/aurora-nocturne-soft.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "bceskavich",
+      "name": "theme-dracula-at-night",
+      "version": "2.6.0",
+      "download": "https://open-vsx.org/api/bceskavich/theme-dracula-at-night/2.6.0/file/bceskavich.theme-dracula-at-night-2.6.0.vsix",
+      "sha256": "c92873a5c30dabe6e581e43b64744181821f205c3f22d604a4adedaddf8f9f41",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "bceskavich",
+      "themes": [
+        {
+          "id": "theme-dracula-at-night-json-2b69c510",
+          "name": "Dracula At Night",
+          "path": "theme/dracula-at-night.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "beem",
+      "name": "monochromator",
+      "version": "0.35.0",
+      "download": "https://open-vsx.org/api/beem/monochromator/0.35.0/file/beem.monochromator-0.35.0.vsix",
+      "sha256": "92864071b4709d50431a64bde6e1b92721fc0c7530217c134162a11ba93b871f",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "beem",
+      "themes": [
+        {
+          "id": "themes-dark-default-json-b2f98fef",
+          "name": "Monochromator Dark",
+          "path": "themes/dark/default.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-dark-amber-json-318e974e",
+          "name": "Monochromator Dark Amber",
+          "path": "themes/dark/amber.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-dark-amethyst-json-1b7a8e45",
+          "name": "Monochromator Dark Amethyst",
+          "path": "themes/dark/amethyst.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-dark-aquamarine-json-dd676ac6",
+          "name": "Monochromator Dark Aquamarine",
+          "path": "themes/dark/aquamarine.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-dark-emerald-json-1f7f1ddf",
+          "name": "Monochromator Dark Emerald",
+          "path": "themes/dark/emerald.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-dark-plain-json-062159a0",
+          "name": "Monochromator Dark Plain",
+          "path": "themes/dark/plain.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-dark-ruby-json-68b1ff76",
+          "name": "Monochromator Dark Ruby",
+          "path": "themes/dark/ruby.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-dark-sulfur-json-168aad86",
+          "name": "Monochromator Dark Sulfur",
+          "path": "themes/dark/sulfur.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-light-default-json-41b23fb3",
+          "name": "Monochromator Light",
+          "path": "themes/light/default.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-light-amber-json-8b65cabe",
+          "name": "Monochromator Light Amber",
+          "path": "themes/light/amber.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-light-amethyst-json-58bb8d18",
+          "name": "Monochromator Light Amethyst",
+          "path": "themes/light/amethyst.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-light-aquamarine-json-a1c43983",
+          "name": "Monochromator Light Aquamarine",
+          "path": "themes/light/aquamarine.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-light-emerald-json-23376e5e",
+          "name": "Monochromator Light Emerald",
+          "path": "themes/light/emerald.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-light-plain-json-8c12012c",
+          "name": "Monochromator Light Plain",
+          "path": "themes/light/plain.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-light-ruby-json-73c0dc18",
+          "name": "Monochromator Light Ruby",
+          "path": "themes/light/ruby.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-light-sulfur-json-b007eebf",
+          "name": "Monochromator Light Sulfur",
+          "path": "themes/light/sulfur.json",
+          "mode": "light"
+        }
+      ]
+    },
+    {
+      "namespace": "bpat86",
+      "name": "nightcall",
+      "version": "2.2.3",
+      "download": "https://open-vsx.org/api/bpat86/nightcall/2.2.3/file/bpat86.nightcall-2.2.3.vsix",
+      "sha256": "c2dcb1dd917a384c324b2ae793b2e690b3120e54407ceabb6ae97e56aaa3102e",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "bpat86",
+      "themes": [
+        {
+          "id": "themes-nightcall-color-theme-json-781ec699",
+          "name": "Nightcall",
+          "path": "themes/Nightcall-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-nightcall-color-theme-no-italic-a941835c",
+          "name": "Nightcall (No Italics)",
+          "path": "themes/Nightcall-color-theme-no-italics.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-nightcall-color-theme-borderles-f1cc911b",
+          "name": "Nightcall (Borderless)",
+          "path": "themes/Nightcall-color-theme-borderless.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-nightcall-color-theme-muted-jso-35c32f28",
+          "name": "Nightcall Muted",
+          "path": "themes/Nightcall-color-theme-muted.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-nightcall-color-theme-muted-no--d67a562e",
+          "name": "Nightcall Muted (No Italics)",
+          "path": "themes/Nightcall-color-theme-muted-no-italics.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-nightcall-color-theme-muted-bor-aa4d28ea",
+          "name": "Nightcall Muted (Borderless)",
+          "path": "themes/Nightcall-color-theme-muted-borderless.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-nightcall-color-theme-classic-j-a7a82459",
+          "name": "Nightcall Classic",
+          "path": "themes/Nightcall-color-theme-classic.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-nightcall-color-theme-classic-n-a6224c6e",
+          "name": "Nightcall Classic (No Italics)",
+          "path": "themes/Nightcall-color-theme-classic-no-italics.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "daniel-duc",
+      "name": "daniel-material-palenight-theme",
+      "version": "1.3.0",
+      "download": "https://open-vsx.org/api/daniel-duc/daniel-material-palenight-theme/1.3.0/file/daniel-duc.daniel-material-palenight-theme-1.3.0.vsix",
+      "sha256": "0a0c34bff2b4664b6f8bb60b0a9c7cde10491e52001550bb68e17654ed8ff407",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "daniel-duc",
+      "themes": [
+        {
+          "id": "themes-daniel-material-palenight-theme-9077786d",
+          "name": "Material Palenight Theme",
+          "path": "themes/daniel-material-palenight-theme-color-theme.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "deadraid",
+      "name": "genesis-vscode",
+      "version": "0.6.19",
+      "download": "https://open-vsx.org/api/deadraid/genesis-vscode/0.6.19/file/deadraid.genesis-vscode-0.6.19.vsix",
+      "sha256": "528e5084062287a23b16bdc32f4cbac84f1b2c6f2fc77e9f1c2f3459a70bde68",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "deadraid",
+      "themes": [
+        {
+          "id": "themes-genesis-dark-json-a6de7e70",
+          "name": "Genesis Dark",
+          "path": "themes/genesis-dark.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-genesis-light-json-bd949da8",
+          "name": "Genesis Light",
+          "path": "themes/genesis-light.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-monikai-dark-json-c8c08170",
+          "name": "Monikai Dark",
+          "path": "themes/monikai-dark.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-monikai-light-json-7211c8d4",
+          "name": "Monikai Light",
+          "path": "themes/monikai-light.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-tokyonight-dark-json-db0dbdce",
+          "name": "Tokyo Night Dark",
+          "path": "themes/tokyonight-dark.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-tokyonight-light-json-ac9777ae",
+          "name": "Tokyo Night Light",
+          "path": "themes/tokyonight-light.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-nord-dark-json-633c72fa",
+          "name": "Nord Dark",
+          "path": "themes/nord-dark.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-nord-light-json-5cc887f4",
+          "name": "Nord Light",
+          "path": "themes/nord-light.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-solarized-dark-json-f12361c0",
+          "name": "Solarized Dark",
+          "path": "themes/solarized-dark.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-solarized-light-json-6da22656",
+          "name": "Solarized Light",
+          "path": "themes/solarized-light.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-vesper-dark-json-cf888054",
+          "name": "Vesper Dark",
+          "path": "themes/vesper-dark.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-vesper-light-json-ddd62a55",
+          "name": "Vesper Light",
+          "path": "themes/vesper-light.json",
+          "mode": "light"
+        }
+      ]
+    },
+    {
+      "namespace": "dracula-theme",
+      "name": "theme-dracula",
+      "version": "2.25.1",
+      "download": "https://open-vsx.org/api/dracula-theme/theme-dracula/2.25.1/file/dracula-theme.theme-dracula-2.25.1.vsix",
+      "sha256": "f4d8c28fc64874b1b959cc90dbd39c84d5d35c9cf203e32b7a758dc9abf5b1cb",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "dracula-theme",
+      "themes": [
+        {
+          "id": "theme-dracula-json-0958b151",
+          "name": "Dracula Theme",
+          "path": "theme/dracula.json",
+          "mode": "dark"
+        },
+        {
+          "id": "theme-dracula-soft-json-d2835983",
+          "name": "Dracula Theme Soft",
+          "path": "theme/dracula-soft.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "enkia",
+      "name": "tokyo-night",
+      "version": "1.1.2",
+      "download": "https://open-vsx.org/api/enkia/tokyo-night/1.1.2/file/enkia.tokyo-night-1.1.2.vsix",
+      "sha256": "79aaf590d5ad65ef1aac809b0e1981aa72e4992bf6a4e54bf9087e70f8aad264",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "enkia",
+      "themes": [
+        {
+          "id": "themes-tokyo-night-color-theme-json-454f32ba",
+          "name": "Tokyo Night",
+          "path": "themes/tokyo-night-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-tokyo-night-storm-color-theme-j-39babf30",
+          "name": "Tokyo Night Storm",
+          "path": "themes/tokyo-night-storm-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-tokyo-night-light-color-theme-j-625948ca",
+          "name": "Tokyo Night Light",
+          "path": "themes/tokyo-night-light-color-theme.json",
+          "mode": "light"
+        }
+      ]
+    },
+    {
+      "namespace": "ericgomez",
+      "name": "phpstorm-theme",
+      "version": "1.0.21",
+      "download": "https://open-vsx.org/api/ericgomez/phpstorm-theme/1.0.21/file/ericgomez.phpstorm-theme-1.0.21.vsix",
+      "sha256": "79cbe044957419ccf60aaccf52ffcaa7df49e151d12daafdef1653f7fd6df1d5",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "ericgomez",
+      "themes": [
+        {
+          "id": "themes-dark-theme-json-74715ff1",
+          "name": "PhpStorm Dark",
+          "path": "themes/dark-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-dark-theme-islands-json-6856edcc",
+          "name": "PhpStorm Dark Islands",
+          "path": "themes/dark-theme-islands.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "fullstacklabXD",
+      "name": "matcha-ceremony-theme",
+      "version": "1.0.0",
+      "download": "https://open-vsx.org/api/fullstacklabXD/matcha-ceremony-theme/1.0.0/file/fullstacklabXD.matcha-ceremony-theme-1.0.0.vsix",
+      "sha256": "ad5e90d7532858be8b699dfd700bf6147e73812b5b2c9f8ce8ef9ed612a90bde",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "fullstacklabXD",
+      "themes": [
+        {
+          "id": "themes-matcha-ceremony-json-26e8322e",
+          "name": "Matcha Ceremony",
+          "path": "themes/matcha-ceremony.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-matcha-ceremony-dawn-json-35140a7f",
+          "name": "Matcha Ceremony Dawn",
+          "path": "themes/matcha-ceremony-dawn.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-matcha-ceremony-dusk-json-f410c942",
+          "name": "Matcha Ceremony Dusk",
+          "path": "themes/matcha-ceremony-dusk.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-matcha-ceremony-midnight-json-3f676407",
+          "name": "Matcha Ceremony Midnight",
+          "path": "themes/matcha-ceremony-midnight.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-matcha-ceremony-zen-json-81df0305",
+          "name": "Matcha Ceremony Zen",
+          "path": "themes/matcha-ceremony-zen.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-matcha-ceremony-sakura-json-1220c000",
+          "name": "Matcha Ceremony Sakura",
+          "path": "themes/matcha-ceremony-sakura.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "gitpod",
+      "name": "gitpod-theme",
+      "version": "0.0.2",
+      "download": "https://open-vsx.org/api/gitpod/gitpod-theme/0.0.2/file/gitpod.gitpod-theme-0.0.2.vsix",
+      "sha256": "09cc5ee29b956d9339d18cfed175fbf595c4c67ab4855e636f674102c732d832",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "gitpod",
+      "themes": [
+        {
+          "id": "themes-gitpod-dark-color-theme-json-c56a8fd1",
+          "name": "Gitpod Dark",
+          "path": "themes/gitpod-dark-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-gitpod-light-color-theme-json-1d820653",
+          "name": "Gitpod Light",
+          "path": "themes/gitpod-light-color-theme.json",
+          "mode": "light"
+        }
+      ]
+    },
+    {
+      "namespace": "hearth-code",
+      "name": "hearth-theme",
+      "version": "3.7.7",
+      "download": "https://open-vsx.org/api/hearth-code/hearth-theme/3.7.7/file/hearth-code.hearth-theme-3.7.7.vsix",
+      "sha256": "c92bab08c374beac021829e9a4d82a566bd66b12448d66307b899efdbadccba4",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "hearth-code",
+      "themes": [
+        {
+          "id": "themes-moss-dark-json-b876f4ba",
+          "name": "HearthCode Moss Dark",
+          "path": "themes/moss-dark.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-moss-light-json-f9061d08",
+          "name": "HearthCode Moss Light",
+          "path": "themes/moss-light.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-ember-dark-json-a22d0d5b",
+          "name": "HearthCode Ember Dark",
+          "path": "themes/ember-dark.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-ember-light-json-e4195dc2",
+          "name": "HearthCode Ember Light",
+          "path": "themes/ember-light.json",
+          "mode": "light"
+        }
+      ]
+    },
+    {
+      "namespace": "jdinhlife",
+      "name": "gruvbox",
+      "version": "1.29.1",
+      "download": "https://open-vsx.org/api/jdinhlife/gruvbox/1.29.1/file/jdinhlife.gruvbox-1.29.1.vsix",
+      "sha256": "8fd3166439d3bdc421ebc3d3f6d33f33985e173cb57d396c231daaaeb7e09240",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "jdinhlife",
+      "themes": [
+        {
+          "id": "themes-gruvbox-dark-medium-json-0f951be8",
+          "name": "Gruvbox Dark Medium",
+          "path": "themes/gruvbox-dark-medium.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-gruvbox-dark-hard-json-ff5fe8f9",
+          "name": "Gruvbox Dark Hard",
+          "path": "themes/gruvbox-dark-hard.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-gruvbox-dark-soft-json-6778f7b1",
+          "name": "Gruvbox Dark Soft",
+          "path": "themes/gruvbox-dark-soft.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-gruvbox-light-medium-json-6161a112",
+          "name": "Gruvbox Light Medium",
+          "path": "themes/gruvbox-light-medium.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-gruvbox-light-hard-json-d1868557",
+          "name": "Gruvbox Light Hard",
+          "path": "themes/gruvbox-light-hard.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-gruvbox-light-soft-json-978e0e16",
+          "name": "Gruvbox Light Soft",
+          "path": "themes/gruvbox-light-soft.json",
+          "mode": "light"
+        }
+      ]
+    },
+    {
+      "namespace": "mskelton",
+      "name": "one-dark-theme",
+      "version": "1.14.3",
+      "download": "https://open-vsx.org/api/mskelton/one-dark-theme/1.14.3/file/mskelton.one-dark-theme-1.14.3.vsix",
+      "sha256": "018397e88d51df81dd34d758f4ba4b90cfc91e6fdfd61f90f474ed12728c85d5",
+      "license": "ISC",
+      "licensePath": "LICENSE.txt",
+      "author": "mskelton",
+      "themes": [
+        {
+          "id": "themes-one-dark-json-d6444550",
+          "name": "One Dark",
+          "path": "themes/one-dark.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-one-dark-vivid-json-70824872",
+          "name": "One Dark Vivid",
+          "path": "themes/one-dark-vivid.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "mvllow",
+      "name": "rose-pine",
+      "version": "2.15.2",
+      "download": "https://open-vsx.org/api/mvllow/rose-pine/2.15.2/file/mvllow.rose-pine-2.15.2.vsix",
+      "sha256": "cd0b96b878258a0ec49aefb67a55e6a3d1b9304355b91582c0c73b3d9c4478ae",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "mvllow",
+      "themes": [
+        {
+          "id": "themes-rose-pine-color-theme-json-825ae519",
+          "name": "Rosé Pine",
+          "path": "themes/rose-pine-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-rose-pine-no-italics-color-them-6d0b4cdd",
+          "name": "Rosé Pine (no italics)",
+          "path": "themes/rose-pine-no-italics-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-rose-pine-moon-color-theme-json-5044cb9f",
+          "name": "Rosé Pine Moon",
+          "path": "themes/rose-pine-moon-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-rose-pine-moon-no-italics-color-ac4474d5",
+          "name": "Rosé Pine Moon (no italics)",
+          "path": "themes/rose-pine-moon-no-italics-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-rose-pine-dawn-color-theme-json-5a9519ca",
+          "name": "Rosé Pine Dawn",
+          "path": "themes/rose-pine-dawn-color-theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-rose-pine-dawn-no-italics-color-f02b31bf",
+          "name": "Rosé Pine Dawn (no italics)",
+          "path": "themes/rose-pine-dawn-no-italics-color-theme.json",
+          "mode": "light"
+        }
+      ]
+    },
+    {
+      "namespace": "nebula-themes",
+      "name": "nebula-aura-theme",
+      "version": "0.0.8",
+      "download": "https://open-vsx.org/api/nebula-themes/nebula-aura-theme/0.0.8/file/nebula-themes.nebula-aura-theme-0.0.8.vsix",
+      "sha256": "89e50fa6eca98a622a620bcf50d4e1b8d187d91a32f3eba1a64fffd27c5c4b04",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "nebula-themes",
+      "themes": [
+        {
+          "id": "themes-nebula-aura-light-color-theme-j-0a33a013",
+          "name": "Nebula Aura Light",
+          "path": "themes/nebula-aura-light-color-theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-nebula-aura-dark-color-theme-js-c086c4ce",
+          "name": "Nebula Aura Dark",
+          "path": "themes/nebula-aura-dark-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-nebula-aura-violet-color-theme--0baf1fb9",
+          "name": "Nebula Aura Violet",
+          "path": "themes/nebula-aura-violet-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-nebula-aura-midnight-color-them-447957ad",
+          "name": "Nebula Aura Midnight",
+          "path": "themes/nebula-aura-midnight-color-theme.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "nszihan",
+      "name": "vscode-dracula-colorful",
+      "version": "2.2.1",
+      "download": "https://open-vsx.org/api/nszihan/vscode-dracula-colorful/2.2.1/file/nszihan.vscode-dracula-colorful-2.2.1.vsix",
+      "sha256": "9e376180022a93ce3b9079629c68788ea1030f4e84eef07cfb23580b215e2124",
+      "license": "Apache-2.0",
+      "licensePath": "LICENSE.txt",
+      "author": "Zihan Ma",
+      "themes": [
+        {
+          "id": "themes-dracula-colorful-color-theme-js-dee779d9",
+          "name": "Dracula Colorful",
+          "path": "themes/Dracula Colorful-color-theme.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "production-sun-set",
+      "name": "theme-sunset-gradient",
+      "version": "1.0.3",
+      "download": "https://open-vsx.org/api/production-sun-set/theme-sunset-gradient/1.0.3/file/production-sun-set.theme-sunset-gradient-1.0.3.vsix",
+      "sha256": "f75d45128a4ef75050fa7a1c071f85fcf8a63e2a6e5d4076c8ff8f3f5f2ad56c",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "production-sun-set",
+      "themes": [
+        {
+          "id": "theme-sunset-gradient-json-bba25504",
+          "name": "Sunset Gradient",
+          "path": "theme/sunset-gradient.json",
+          "mode": "dark"
+        },
+        {
+          "id": "theme-sunset-gradient-soft-json-299490d5",
+          "name": "Sunset Gradient Soft",
+          "path": "theme/sunset-gradient-soft.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "psudo-dev",
+      "name": "nebula-oni-theme",
+      "version": "3.0.0",
+      "download": "https://open-vsx.org/api/psudo-dev/nebula-oni-theme/3.0.0/file/psudo-dev.nebula-oni-theme-3.0.0.vsix",
+      "sha256": "af2abcdd22f3717e6ca76c5fb63b353bcb7e0e033a2975fe9fc1e6fe3997b246",
+      "license": "Apache-2.0",
+      "licensePath": "LICENSE.md",
+      "author": "psudo-dev",
+      "themes": [
+        {
+          "id": "themes-nebula-oni-theme-hourglass-json-696adad0",
+          "name": "Nebula Oni (Hourglass)",
+          "path": "themes/nebula-oni-theme-hourglass.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-nebula-oni-theme-pegasus-json-a3649dc3",
+          "name": "Nebula Oni (Pegasus)",
+          "path": "themes/nebula-oni-theme-pegasus.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-nebula-oni-theme-spirograph-jso-43ac02e7",
+          "name": "Nebula Oni (Spirograph)",
+          "path": "themes/nebula-oni-theme-spirograph.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-nebula-oni-theme-cerberus-json-82e46a3a",
+          "name": "Nebula Oni (Cerberus)",
+          "path": "themes/nebula-oni-theme-cerberus.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-nebula-oni-theme-favorite-json-7631f8c9",
+          "name": "Nebula Oni (Favorite)",
+          "path": "themes/nebula-oni-theme-favorite.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "python-beautifier",
+      "name": "python-beautifier",
+      "version": "0.0.2",
+      "download": "https://open-vsx.org/api/python-beautifier/python-beautifier/0.0.2/file/python-beautifier.python-beautifier-0.0.2.vsix",
+      "sha256": "e8c85ca9e0c45b2448482a41c32e4b8f382986783d64e67f2ed7b679fa6d6361",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "python-beautifier",
+      "themes": [
+        {
+          "id": "themes-python-beautifier-color-theme-j-555e9ef1",
+          "name": "Python Beautifier",
+          "path": "themes/Python Beautifier-color-theme.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "radiolevity",
+      "name": "Neofloss",
+      "version": "1.1.6",
+      "download": "https://open-vsx.org/api/radiolevity/Neofloss/1.1.6/file/radiolevity.Neofloss-1.1.6.vsix",
+      "sha256": "c8e74c87ce867e1f858f9301a746c25cc85930a8bbb3fe65e8543359b0ee1578",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "radiolevity",
+      "themes": [
+        {
+          "id": "neofloss-color-theme-json-da630b2f",
+          "name": "Neofloss",
+          "path": "neofloss-color-theme.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "radiolevity",
+      "name": "search-lights",
+      "version": "1.10.3",
+      "download": "https://open-vsx.org/api/radiolevity/search-lights/1.10.3/file/radiolevity.search-lights-1.10.3.vsix",
+      "sha256": "a3ee9623e33c104413fae855af1d5ffd88df3826661d38cbfb60ffd429e2a84e",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "radiolevity",
+      "themes": [
+        {
+          "id": "themes-search-lights-color-theme-json-d492a3c0",
+          "name": "Search Lights",
+          "path": "themes/search-lights-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-search-lights-italic-color-them-3cdf7d3c",
+          "name": "Search Lights Italic",
+          "path": "themes/search-lights-italic-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-desert-lights-color-theme-json-7fe121cf",
+          "name": "Desert Lights",
+          "path": "themes/desert-lights-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-desert-lights-italic-color-them-f0d3bbc5",
+          "name": "Desert Lights Italic",
+          "path": "themes/desert-lights-italic-color-theme.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "rokoroku",
+      "name": "vscode-theme-darcula",
+      "version": "1.2.3",
+      "download": "https://open-vsx.org/api/rokoroku/vscode-theme-darcula/1.2.3/file/rokoroku.vscode-theme-darcula-1.2.3.vsix",
+      "sha256": "9cc94cc567c066418a2381b49034d2ddf62845bd865df95c266e37bbc4d04e9a",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "rokoroku",
+      "themes": [
+        {
+          "id": "themes-darcula-json-b3a2dbdf",
+          "name": "Darcula",
+          "path": "themes/darcula.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "subframe7536",
+      "name": "theme-maple",
+      "version": "1.0.0",
+      "download": "https://open-vsx.org/api/subframe7536/theme-maple/1.0.0/file/subframe7536.theme-maple-1.0.0.vsix",
+      "sha256": "852871940187f5ef1364fd8335693144e42d6a92e772775bdcd85a98ca50713b",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "subframe7536",
+      "themes": [
+        {
+          "id": "themes-maple-dark-color-theme-json-74a9e8d0",
+          "name": "Maple Dark",
+          "path": "themes/maple-dark-color-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-maple-light-color-theme-json-f555cea1",
+          "name": "Maple Light",
+          "path": "themes/maple-light-color-theme.json",
+          "mode": "light"
+        }
+      ]
+    },
+    {
+      "namespace": "teabyii",
+      "name": "ayu",
+      "version": "1.4.0",
+      "download": "https://open-vsx.org/api/teabyii/ayu/1.4.0/file/teabyii.ayu-1.4.0.vsix",
+      "sha256": "ecf5f4ae646f7f290e3f3e637a3a33f9e37606bcbacc3eff3666caaad2d5a6fc",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "teabyii",
+      "themes": [
+        {
+          "id": "ayu-light-json-fd4e29f2",
+          "name": "Ayu Light",
+          "path": "ayu-light.json",
+          "mode": "light"
+        },
+        {
+          "id": "ayu-mirage-json-57c7bc16",
+          "name": "Ayu Mirage",
+          "path": "ayu-mirage.json",
+          "mode": "dark"
+        },
+        {
+          "id": "ayu-dark-json-11d110a0",
+          "name": "Ayu Dark",
+          "path": "ayu-dark.json",
+          "mode": "dark"
+        },
+        {
+          "id": "ayu-light-unbordered-json-531e5d5b",
+          "name": "Ayu Light Unbordered",
+          "path": "ayu-light-unbordered.json",
+          "mode": "light"
+        },
+        {
+          "id": "ayu-mirage-unbordered-json-2967582b",
+          "name": "Ayu Mirage Unbordered",
+          "path": "ayu-mirage-unbordered.json",
+          "mode": "dark"
+        },
+        {
+          "id": "ayu-dark-unbordered-json-5e1e72a8",
+          "name": "Ayu Dark Unbordered",
+          "path": "ayu-dark-unbordered.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "unthrottled",
+      "name": "doki-theme",
+      "version": "88.1.15",
+      "download": "https://open-vsx.org/api/unthrottled/doki-theme/88.1.15/file/unthrottled.doki-theme-88.1.15.vsix",
+      "sha256": "e41ba3ec0dce4bda7c42f50d817bcaeaa98a6577e82535a87f9efb26a7af18b0",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "unthrottled",
+      "themes": [
+        {
+          "id": "generatedthemes-zero-two-dark-obsidian-1365686c",
+          "name": "Doki Theme: Franxx:  Zero Two Dark Obsidian",
+          "path": "generatedThemes/Zero Two Dark Obsidian.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-essex-theme-json-6b19e403",
+          "name": "Doki Theme: AzurLane:  Essex",
+          "path": "generatedThemes/Essex.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-maika-theme-json-732126d2",
+          "name": "Doki Theme: BlendS:  Maika",
+          "path": "generatedThemes/Maika.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-mai-dark-theme-json-85225120",
+          "name": "Doki Theme: BunnySenpai:  Mai",
+          "path": "generatedThemes/Mai Dark.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-mai-light-theme-json-ce510786",
+          "name": "Doki Theme: BunnySenpai:  Mai",
+          "path": "generatedThemes/Mai Light.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-tomori-nao-theme-json-e8c4b303",
+          "name": "Doki Theme: Charlotte:  Nao",
+          "path": "generatedThemes/Tomori Nao.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-takanashi-rikka-theme--86a67f7d",
+          "name": "Doki Theme: Chuunibyou:  Rikka",
+          "path": "generatedThemes/Takanashi Rikka.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-c-c-theme-json-988b5b1b",
+          "name": "Doki Theme: CodeGeass:  C.C.",
+          "path": "generatedThemes/C.C..theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-monika-dark-theme-json-7be09330",
+          "name": "Doki Theme: DDLC:  Monika",
+          "path": "generatedThemes/Monika Dark.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-monika-light-theme-jso-03521b67",
+          "name": "Doki Theme: DDLC:  Monika",
+          "path": "generatedThemes/Monika Light.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-natsuki-dark-theme-jso-41f9eb4f",
+          "name": "Doki Theme: DDLC:  Natsuki",
+          "path": "generatedThemes/Natsuki Dark.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-natsuki-light-theme-js-8507a552",
+          "name": "Doki Theme: DDLC:  Natsuki",
+          "path": "generatedThemes/Natsuki Light.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-sayori-dark-theme-json-214d07d5",
+          "name": "Doki Theme: DDLC:  Sayori",
+          "path": "generatedThemes/Sayori Dark.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-sayori-light-theme-jso-1111c850",
+          "name": "Doki Theme: DDLC:  Sayori",
+          "path": "generatedThemes/Sayori Light.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-yuri-dark-theme-json-d187e850",
+          "name": "Doki Theme: DDLC:  Yuri",
+          "path": "generatedThemes/Yuri Dark.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-yuri-light-theme-json-698096f5",
+          "name": "Doki Theme: DDLC:  Yuri",
+          "path": "generatedThemes/Yuri Light.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-kanna-theme-json-3ee8f79c",
+          "name": "Doki Theme: DM:  Kanna",
+          "path": "generatedThemes/Kanna.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-tohru-theme-json-67f09757",
+          "name": "Doki Theme: DM:  Tohru",
+          "path": "generatedThemes/Tohru.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-mioda-ibuki-dark-theme-a1287b74",
+          "name": "Doki Theme: DR:  Ibuki",
+          "path": "generatedThemes/Mioda Ibuki Dark.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-mioda-ibuki-light-them-a99b137d",
+          "name": "Doki Theme: DR:  Ibuki",
+          "path": "generatedThemes/Mioda Ibuki Light.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-hayase-nagatoro-theme--668b167b",
+          "name": "Doki Theme: DTWMMN:  Nagatoro",
+          "path": "generatedThemes/Hayase Nagatoro.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-rias-crimson-theme-jso-3d929447",
+          "name": "Doki Theme: DxD:  Rias",
+          "path": "generatedThemes/Rias Crimson.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-rias-onyx-theme-json-805eb0e1",
+          "name": "Doki Theme: DxD:  Rias",
+          "path": "generatedThemes/Rias Onyx.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-sagiri-theme-json-dffba9f3",
+          "name": "Doki Theme: EroManga:  Sagiri",
+          "path": "generatedThemes/Sagiri.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-katsuragi-misato-theme-f884d9b2",
+          "name": "Doki Theme: EVA:  Misato",
+          "path": "generatedThemes/Katsuragi Misato.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-rei-theme-json-6d3da43e",
+          "name": "Doki Theme: EVA:  Rei",
+          "path": "generatedThemes/Rei.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-hiro-theme-json-642a177f",
+          "name": "Doki Theme: Franxx:  Hiro",
+          "path": "generatedThemes/Hiro.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-hiro-x-zero-two-theme--d135584f",
+          "name": "Doki Theme: Franxx:  Hiro x Zero Two",
+          "path": "generatedThemes/Hiro x Zero Two.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-zero-two-dark-rose-the-eaf753af",
+          "name": "Doki Theme: Franxx:  Zero Two Dark Rose",
+          "path": "generatedThemes/Zero Two Dark Rose.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-zero-two-light-lily-th-d986f439",
+          "name": "Doki Theme: Franxx:  Zero Two Light Lily",
+          "path": "generatedThemes/Zero Two Light Lily.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-zero-two-light-sakura--348e710c",
+          "name": "Doki Theme: Franxx:  Zero Two Light Sakura",
+          "path": "generatedThemes/Zero Two Light Sakura.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-gasai-yuno-theme-json-e5b64930",
+          "name": "Doki Theme: FutureDiary:  Yuno",
+          "path": "generatedThemes/Gasai Yuno.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-rory-mercury-theme-jso-5b4f44d7",
+          "name": "Doki Theme: Gate:  Rory",
+          "path": "generatedThemes/Rory Mercury.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-yuzuriha-inori-theme-j-7fea015b",
+          "name": "Doki Theme: GuiltyCrown:  Inori",
+          "path": "generatedThemes/Yuzuriha Inori.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-hinata-shoyo-theme-jso-670aa7a1",
+          "name": "Doki Theme: Haikyu:  Shoyo",
+          "path": "generatedThemes/Hinata Shoyo.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-jahy-theme-json-0ac896d4",
+          "name": "Doki Theme: JahySama:  Jahy",
+          "path": "generatedThemes/Jahy.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-jabami-yumeko-theme-js-f25d5e1b",
+          "name": "Doki Theme: Kakegurui:  Yumeko",
+          "path": "generatedThemes/Jabami Yumeko.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-ryuko-dark-theme-json-160c47f9",
+          "name": "Doki Theme: KillLaKill:  Ryuko",
+          "path": "generatedThemes/Ryuko Dark.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-ryuko-light-theme-json-b67b7b98",
+          "name": "Doki Theme: KillLaKill:  Ryuko",
+          "path": "generatedThemes/Ryuko Light.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-satsuki-dark-theme-jso-d7d7dd71",
+          "name": "Doki Theme: KillLaKill:  Satsuki",
+          "path": "generatedThemes/Satsuki Dark.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-satsuki-light-theme-js-43b414e7",
+          "name": "Doki Theme: KillLaKill:  Satsuki",
+          "path": "generatedThemes/Satsuki Light.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-aqua-theme-json-fdb075a6",
+          "name": "Doki Theme: KonoSuba:  Aqua",
+          "path": "generatedThemes/Aqua.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-darkness-dark-theme-js-a9e6871f",
+          "name": "Doki Theme: KonoSuba:  Darkness",
+          "path": "generatedThemes/Darkness Dark.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-darkness-light-theme-j-c4e5b5cb",
+          "name": "Doki Theme: KonoSuba:  Darkness",
+          "path": "generatedThemes/Darkness Light.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-megumin-theme-json-838fff44",
+          "name": "Doki Theme: KonoSuba:  Megumin",
+          "path": "generatedThemes/Megumin.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-sonoda-umi-theme-json-54d0ce26",
+          "name": "Doki Theme: Love Live:  Umi",
+          "path": "generatedThemes/Sonoda Umi.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-konata-theme-json-953f39f9",
+          "name": "Doki Theme: LS:  Konata",
+          "path": "generatedThemes/Konata.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-hanekawa-tsubasa-theme-b6d56263",
+          "name": "Doki Theme: Monogatari:  Tsubasa",
+          "path": "generatedThemes/Hanekawa Tsubasa.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-miia-theme-json-901ea85e",
+          "name": "Doki Theme: MonsterMusume:  Miia",
+          "path": "generatedThemes/Miia.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-azuki-theme-json-0262f576",
+          "name": "Doki Theme: NekoPara:  Azuki",
+          "path": "generatedThemes/Azuki.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-chocola-theme-json-fab3b4b2",
+          "name": "Doki Theme: NekoPara:  Chocola",
+          "path": "generatedThemes/Chocola.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-christmas-chocola-them-8621f185",
+          "name": "Doki Theme: NekoPara:  Christmas Chocola",
+          "path": "generatedThemes/Christmas Chocola.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-cinnamon-theme-json-42532713",
+          "name": "Doki Theme: NekoPara:  Cinnamon",
+          "path": "generatedThemes/Cinnamon.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-coconut-theme-json-93e82736",
+          "name": "Doki Theme: NekoPara:  Coconut",
+          "path": "generatedThemes/Coconut.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-maple-dark-theme-json-2040d89f",
+          "name": "Doki Theme: NekoPara:  Maple",
+          "path": "generatedThemes/Maple Dark.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-maple-light-theme-json-82b388d7",
+          "name": "Doki Theme: NekoPara:  Maple",
+          "path": "generatedThemes/Maple Light.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-shigure-theme-json-5d7dae52",
+          "name": "Doki Theme: NekoPara:  Shigure",
+          "path": "generatedThemes/Shigure.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-vanilla-theme-json-1ee34739",
+          "name": "Doki Theme: NekoPara:  Vanilla",
+          "path": "generatedThemes/Vanilla.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-genos-theme-json-a74bc7b3",
+          "name": "Doki Theme: OPM:  Genos",
+          "path": "generatedThemes/Genos.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-yukinoshita-yukino-the-830bfc0a",
+          "name": "Doki Theme: OreGairu:  Yukino",
+          "path": "generatedThemes/Yukinoshita Yukino.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-kirino-theme-json-2cd4393d",
+          "name": "Doki Theme: OreImo:  Kirino",
+          "path": "generatedThemes/Kirino.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-nakano-ichika-theme-js-1d9ce2be",
+          "name": "Doki Theme: QQ:  Ichika",
+          "path": "generatedThemes/Nakano Ichika.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-nakano-itsuki-theme-js-8123c50f",
+          "name": "Doki Theme: QQ:  Itsuki",
+          "path": "generatedThemes/Nakano Itsuki.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-nakano-miku-theme-json-f6c7d5d6",
+          "name": "Doki Theme: QQ:  Miku",
+          "path": "generatedThemes/Nakano Miku.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-nakano-nino-theme-json-713bae97",
+          "name": "Doki Theme: QQ:  Nino",
+          "path": "generatedThemes/Nakano Nino.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-nakano-yotsuba-theme-j-75abb2cb",
+          "name": "Doki Theme: QQ:  Yotsuba",
+          "path": "generatedThemes/Nakano Yotsuba.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-misaka-mikoto-theme-js-da635262",
+          "name": "Doki Theme: Railgun:  Mikoto",
+          "path": "generatedThemes/Misaka Mikoto.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-beatrice-theme-json-ee2b2cd5",
+          "name": "Doki Theme: Re:Zero:  Beatrice",
+          "path": "generatedThemes/Beatrice.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-echidna-theme-json-1a89e1a3",
+          "name": "Doki Theme: Re:Zero:  Echidna",
+          "path": "generatedThemes/Echidna.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-emilia-dark-theme-json-7da4a769",
+          "name": "Doki Theme: Re:Zero:  Emilia",
+          "path": "generatedThemes/Emilia Dark.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-emilia-light-theme-jso-b3e14f20",
+          "name": "Doki Theme: Re:Zero:  Emilia",
+          "path": "generatedThemes/Emilia Light.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-ram-theme-json-d785acc9",
+          "name": "Doki Theme: Re:Zero:  Ram",
+          "path": "generatedThemes/Ram.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-rem-theme-json-4feba8fd",
+          "name": "Doki Theme: Re:Zero:  Rem",
+          "path": "generatedThemes/Rem.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-asuna-dark-theme-json-0d561c7d",
+          "name": "Doki Theme: SAO:  Asuna",
+          "path": "generatedThemes/Asuna Dark.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-asuna-light-theme-json-03890376",
+          "name": "Doki Theme: SAO:  Asuna",
+          "path": "generatedThemes/Asuna Light.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-senko-theme-json-536d7ed8",
+          "name": "Doki Theme: Senko-san:  Senko",
+          "path": "generatedThemes/Senko.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-raphtalia-theme-json-1306656b",
+          "name": "Doki Theme: ShieldHero:  Raphtalia",
+          "path": "generatedThemes/Raphtalia.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-yukihira-soma-theme-js-d9bf6890",
+          "name": "Doki Theme: Shokugeki:  Soma",
+          "path": "generatedThemes/Yukihira Soma.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-rimuru-tempest-theme-j-75311c0b",
+          "name": "Doki Theme: Slime:  Rimuru",
+          "path": "generatedThemes/Rimuru Tempest.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-makise-kurisu-theme-js-faf78a14",
+          "name": "Doki Theme: Steins Gate:  Kurisu",
+          "path": "generatedThemes/Makise Kurisu.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-astolfo-theme-json-c12b210a",
+          "name": "Doki Theme: TypeMoon:  Astolfo",
+          "path": "generatedThemes/Astolfo.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-gray-theme-json-d0647f6e",
+          "name": "Doki Theme: TypeMoon:  Gray",
+          "path": "generatedThemes/Gray.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-ishtar-dark-theme-json-149af833",
+          "name": "Doki Theme: TypeMoon:  Ishtar",
+          "path": "generatedThemes/Ishtar Dark.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-ishtar-light-theme-jso-5ef7def3",
+          "name": "Doki Theme: TypeMoon:  Ishtar",
+          "path": "generatedThemes/Ishtar Light.theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "generatedthemes-tohsaka-rin-theme-json-d6934746",
+          "name": "Doki Theme: TypeMoon:  Rin",
+          "path": "generatedThemes/Tohsaka Rin.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-hatsune-miku-theme-jso-4a654cfb",
+          "name": "Doki Theme: Vocaloid:  Miku",
+          "path": "generatedThemes/Hatsune Miku.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-nadeshiko-theme-json-d7b18bf9",
+          "name": "Doki Theme: YuruCamp:  Nadeshiko",
+          "path": "generatedThemes/Nadeshiko.theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "generatedthemes-shima-rin-theme-json-24bccf38",
+          "name": "Doki Theme: YuruCamp:  Rin",
+          "path": "generatedThemes/Shima Rin.theme.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "wesbos",
+      "name": "theme-cobalt2",
+      "version": "2.4.3",
+      "download": "https://open-vsx.org/api/wesbos/theme-cobalt2/2.4.3/file/wesbos.theme-cobalt2-2.4.3.vsix",
+      "sha256": "67c66ef0565389dd48035cb19ffcf2decc729541255a4e2aea8262214d8dd570",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "wesbos",
+      "themes": [
+        {
+          "id": "theme-cobalt2-json-3cea727e",
+          "name": "Cobalt2",
+          "path": "theme/cobalt2.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "wildberries-theme",
+      "name": "wildberries",
+      "version": "0.0.1",
+      "download": "https://open-vsx.org/api/wildberries-theme/wildberries/0.0.1/file/wildberries-theme.wildberries-0.0.1.vsix",
+      "sha256": "d995ac50163f7f44c345622e8400192f57994dd85e1fa8b8628ce02651f4fa63",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "wildberries-theme",
+      "themes": [
+        {
+          "id": "themes-wildberries-theme-json-c4b1d637",
+          "name": "Wildberries",
+          "path": "themes/wildberries-theme.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-wildberries-theme-darker-json-91393ba2",
+          "name": "Wildberries Darker",
+          "path": "themes/wildberries-theme-darker.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "yama",
+      "name": "yama-theme",
+      "version": "1.1.3",
+      "download": "https://open-vsx.org/api/yama/yama-theme/1.1.3/file/yama.yama-theme-1.1.3.vsix",
+      "sha256": "32bfc6f2b68eb2987bd317ae50dbc2d68020319a29dc662d5d64e23b99b23a3e",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "yama",
+      "themes": [
+        {
+          "id": "themes-yama-color-theme-json-0c2cf4b0",
+          "name": "YaMa theme light",
+          "path": "themes/YaMa-color-theme.json",
+          "mode": "light"
+        },
+        {
+          "id": "themes-yama-color-theme-dark-json-8f9c2f7a",
+          "name": "YaMa theme dark",
+          "path": "themes/YaMa-color-theme-dark.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "yurihs",
+      "name": "sublime-vscode-theme",
+      "version": "1.5.0",
+      "download": "https://open-vsx.org/api/yurihs/sublime-vscode-theme/1.5.0/file/yurihs.sublime-vscode-theme-1.5.0.vsix",
+      "sha256": "dc00990bdd7a6e6ce74ffa84a0fd435a16bfb3969e1fbcac7e1180490b30db3d",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "yurihs",
+      "themes": [
+        {
+          "id": "themes-sublime-vscode-theme-json-17c0b7fe",
+          "name": "Sublime VSCode Theme",
+          "path": "themes/sublime-vscode-theme.json",
+          "mode": "dark"
+        }
+      ]
+    },
+    {
+      "namespace": "zhuangtongfa",
+      "name": "material-theme",
+      "version": "3.20.3",
+      "download": "https://open-vsx.org/api/zhuangtongfa/material-theme/3.20.3/file/zhuangtongfa.material-theme-3.20.3.vsix",
+      "sha256": "fac19c53133cab9d4236bee87838d81992c8c3627795b7caeb519a009e4e74eb",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "author": "zhuangtongfa",
+      "themes": [
+        {
+          "id": "themes-onedark-pro-json-3438f19e",
+          "name": "One Dark Pro",
+          "path": "themes/OneDark-Pro.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-onedark-pro-flat-json-1726a000",
+          "name": "One Dark Pro Flat",
+          "path": "themes/OneDark-Pro-flat.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-onedark-pro-darker-json-fe75ef9d",
+          "name": "One Dark Pro Darker",
+          "path": "themes/OneDark-Pro-darker.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-onedark-pro-mix-json-90695de6",
+          "name": "One Dark Pro Mix",
+          "path": "themes/OneDark-Pro-mix.json",
+          "mode": "dark"
+        },
+        {
+          "id": "themes-onedark-pro-night-flat-json-4de2efe5",
+          "name": "One Dark Pro Night Flat",
+          "path": "themes/OneDark-Pro-night-flat.json",
+          "mode": "dark"
+        }
+      ]
+    }
+  ],
+  "report": {
+    "registryTotal": 1951,
+    "inspected": 121,
+    "searchWindow": 200,
+    "packageTarget": 50,
+    "omissions": [
+      {
+        "extension": "PKief.material-icon-theme",
+        "reason": "No color-theme contributions (icon/non-theme extension)"
+      },
+      {
+        "extension": "ms-vscode.powershell",
+        "reason": "License requires review: SEE LICENSE IN LICENSE.txt"
+      },
+      {
+        "extension": "vscode-icons-team.vscode-icons",
+        "reason": "No color-theme contributions (icon/non-theme extension)"
+      },
+      {
+        "extension": "ms-vscode.cpptools-themes",
+        "reason": "License requires review: SEE LICENSE IN LICENSE.txt"
+      },
+      {
+        "extension": "GitHub.github-vscode-theme",
+        "reason": "GitHub Dark Default: Non-hex color: symbolIcon.constantForeground"
+      },
+      {
+        "extension": "vscode.vscode-theme-seti",
+        "reason": "License requires review: SEE LICENSE IN LICENSE-vscode.txt"
+      },
+      {
+        "extension": "monokai.theme-monokai-pro-vscode",
+        "reason": "License requires review: SEE LICENSE IN LICENSE"
+      },
+      {
+        "extension": "vscode.theme-monokai-dimmed",
+        "reason": "License requires review: SEE LICENSE IN LICENSE-vscode.txt"
+      },
+      {
+        "extension": "vscode.theme-monokai",
+        "reason": "License requires review: SEE LICENSE IN LICENSE-vscode.txt"
+      },
+      {
+        "extension": "vscode.theme-defaults",
+        "reason": "License requires review: SEE LICENSE IN LICENSE-vscode.txt"
+      },
+      {
+        "extension": "vscode.theme-quietlight",
+        "reason": "License requires review: SEE LICENSE IN LICENSE-vscode.txt"
+      },
+      {
+        "extension": "vscode.theme-red",
+        "reason": "License requires review: SEE LICENSE IN LICENSE-vscode.txt"
+      },
+      {
+        "extension": "vscode.theme-kimbie-dark",
+        "reason": "License requires review: SEE LICENSE IN LICENSE-vscode.txt"
+      },
+      {
+        "extension": "vscode.theme-solarized-dark",
+        "reason": "License requires review: SEE LICENSE IN LICENSE-vscode.txt"
+      },
+      {
+        "extension": "vscode.theme-abyss",
+        "reason": "License requires review: SEE LICENSE IN LICENSE-vscode.txt"
+      },
+      {
+        "extension": "vscode.theme-tomorrow-night-blue",
+        "reason": "License requires review: SEE LICENSE IN LICENSE-vscode.txt"
+      },
+      {
+        "extension": "vscode.theme-solarized-light",
+        "reason": "License requires review: SEE LICENSE IN LICENSE-vscode.txt"
+      },
+      {
+        "extension": "Catppuccin.catppuccin-vsc-icons",
+        "reason": "No color-theme contributions (icon/non-theme extension)"
+      },
+      {
+        "extension": "emmanuelbeziat.vscode-great-icons",
+        "reason": "No color-theme contributions (icon/non-theme extension)"
+      },
+      {
+        "extension": "BeardedBear.beardedtheme",
+        "reason": "License requires review: "
+      },
+      {
+        "extension": "PKief.material-product-icons",
+        "reason": "License requires review: "
+      },
+      {
+        "extension": "bastndev.lynx-theme",
+        "reason": "8. LIQUIDㅤㅤ(Lynx Theme) 🧪: Expected opaque editor.background"
+      },
+      {
+        "extension": "thang-nm.flow-icons",
+        "reason": "License requires review: "
+      },
+      {
+        "extension": "illixion.vscode-vibrancy-continued",
+        "reason": "License requires review: "
+      },
+      {
+        "extension": "miguelsolorio.fluent-icons",
+        "reason": "License requires review: "
+      },
+      {
+        "extension": "sdras.night-owl",
+        "reason": "License requires review: SEE LICENSE IN LICENSE.md"
+      },
+      {
+        "extension": "LaurentTreguier.vscode-simple-icons",
+        "reason": "No color-theme contributions (icon/non-theme extension)"
+      },
+      {
+        "extension": "vira.vsc-vira-theme",
+        "reason": "License requires review: SEE LICENSE IN LICENSE"
+      },
+      {
+        "extension": "yusifaliyevpro.vscicons",
+        "reason": "No color-theme contributions (icon/non-theme extension)"
+      },
+      {
+        "extension": "RobbOwen.synthwave-vscode",
+        "reason": "License requires review: "
+      },
+      {
+        "extension": "BeardedBear.beardedicons",
+        "reason": "License requires review: "
+      },
+      {
+        "extension": "xscriptor.xscriptor-themes",
+        "reason": "License requires review: SEE LICENSE IN LICENSE"
+      },
+      {
+        "extension": "johnpapa.winteriscoming",
+        "reason": "License requires review: SEE LICENSE IN LICENSE.md"
+      },
+      {
+        "extension": "sainnhe.gruvbox-material",
+        "reason": "Deprecated extension"
+      },
+      {
+        "extension": "file-icons.file-icons",
+        "reason": "No color-theme contributions (icon/non-theme extension)"
+      },
+      {
+        "extension": "fogio.jetbrains-color-theme",
+        "reason": "| Dark | JetBrains New UI Color Theme: Non-hex color: git.blame.editorDecorationForeground"
+      },
+      {
+        "extension": "fisheva.eva-theme",
+        "reason": "License requires review: SEE LICENSE IN<LICENSE.md>"
+      },
+      {
+        "extension": "alexdauenhauer.catppuccin-noctis-icons",
+        "reason": "License requires review: "
+      },
+      {
+        "extension": "Yukina.yukinord",
+        "reason": "License requires review: GPL-3.0-only"
+      },
+      {
+        "extension": "pokey.parse-tree",
+        "reason": "No color-theme contributions (icon/non-theme extension)"
+      },
+      {
+        "extension": "drcika.apc-extension",
+        "reason": "No color-theme contributions (icon/non-theme extension)"
+      },
+      {
+        "extension": "travis.simple-dark",
+        "reason": "License requires review: "
+      },
+      {
+        "extension": "NailyZero.vscode-naily-ets",
+        "reason": "HTTP status client error (404 Not Found) for url (https://open-vsx.org/api/NailyZero/vscode-naily-ets/1.3.10/file/package.json)"
+      },
+      {
+        "extension": "ardonplay.vscode-jetbrains-icon-theme",
+        "reason": "No color-theme contributions (icon/non-theme extension)"
+      },
+      {
+        "extension": "scalet.let-icons",
+        "reason": "License requires review: SEE LICENSE IN LICENSE.md"
+      },
+      {
+        "extension": "DaltonMenezes.aura-theme",
+        "reason": "Missing full license notice"
+      },
+      {
+        "extension": "FelixIcaza.andromeda",
+        "reason": "Andromeda Colorizer: Missing editor.background"
+      },
+      {
+        "extension": "castrogusttavo.symbols",
+        "reason": "License requires review: "
+      },
+      {
+        "extension": "s-nlf-fh.glassit",
+        "reason": "No color-theme contributions (icon/non-theme extension)"
+      },
+      {
+        "extension": "lazyvscode-theme.lazyvscode-theme",
+        "reason": "No color-theme contributions (icon/non-theme extension)"
+      },
+      {
+        "extension": "hoovercj.vscode-power-mode",
+        "reason": "No color-theme contributions (icon/non-theme extension)"
+      },
+      {
+        "extension": "opensumi.opensumi-default-themes",
+        "reason": "OpenSumi Light: Non-hex color: gitDecoration.conflictingResourceForeground"
+      },
+      {
+        "extension": "aaa-lt.charmed-nest-icons",
+        "reason": "No color-theme contributions (icon/non-theme extension)"
+      },
+      {
+        "extension": "max-SS.Cyberpunk",
+        "reason": "Cyberpunk: Non-hex token foreground"
+      },
+      {
+        "extension": "thebearingedge.vscode-sql-lit",
+        "reason": "No color-theme contributions (icon/non-theme extension)"
+      },
+      {
+        "extension": "Sudhan.neondark-theme",
+        "reason": "License requires review: "
+      },
+      {
+        "extension": "RichardLuo.frosted-glass-theme",
+        "reason": "No color-theme contributions (icon/non-theme extension)"
+      },
+      {
+        "extension": "compassak.intellij-idea-new-ui",
+        "reason": "License requires review: "
+      },
+      {
+        "extension": "ginfuru.ginfuru-better-solarized-dark-theme",
+        "reason": "License requires review: See license inf license.txt"
+      },
+      {
+        "extension": "antfu.icons-carbon",
+        "reason": "No color-theme contributions (icon/non-theme extension)"
+      },
+      {
+        "extension": "ArmantGoldswain.seesharp-theme",
+        "reason": "Invalid repository path: screenshots/C# blue alt.png"
+      },
+      {
+        "extension": "TintedTheming.base16-tinted-themes",
+        "reason": "License requires review: "
+      },
+      {
+        "extension": "azat-io.eyecons",
+        "reason": "No color-theme contributions (icon/non-theme extension)"
+      },
+      {
+        "extension": "huacat.office-theme",
+        "reason": "License requires review: "
+      },
+      {
+        "extension": "Dekidev.dusk-office",
+        "reason": "License requires review: GPL-3.0-or-later"
+      },
+      {
+        "extension": "Endormi.2077-theme",
+        "reason": "Missing full license notice"
+      },
+      {
+        "extension": "arzg.xcode-theme",
+        "reason": "Missing full license notice"
+      },
+      {
+        "extension": "miguelsolorio.symbols",
+        "reason": "License requires review: "
+      },
+      {
+        "extension": "fogio.jetbrains-file-icon-theme",
+        "reason": "No color-theme contributions (icon/non-theme extension)"
+      },
+      {
+        "extension": "sainnhe.everforest",
+        "reason": "Deprecated extension"
+      },
+      {
+        "extension": "BrandonKirbyson.vscode-animations",
+        "reason": "No color-theme contributions (icon/non-theme extension)"
+      }
+    ]
+  }
+}

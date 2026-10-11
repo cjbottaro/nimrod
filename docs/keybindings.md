@@ -1,5 +1,9 @@
 # Keybindings
 
+**Select theme…** (`select-theme`) opens the live-preview theme picker. It is
+bindable but has no default shortcut; configure it here or use the command palette.
+
+
 Open **Settings → Keybindings**, or use **Edit keybindings…** in the command palette.
 
 Search by action name, shortcut, or “modified.” Click a shortcut to change it, or **Add** to assign another. Press the desired combination in the recorder, then **Save**. Escape cancels; recording never executes the shortcut. Changes are saved and synchronized across project windows.

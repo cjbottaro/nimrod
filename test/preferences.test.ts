@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { editSettings, installPreferences, legacyPreferences, parseSettings } from '../src/preferences';
+import { importTheme } from '../src/themes/theme';
 import { MemoryPreferences } from './preferences-fixture';
 
 function fixture() {
@@ -31,6 +32,22 @@ test('Omarchy built-ins persist and accept external settings updates', async () 
       assert.notEqual(p.theme().selected, selected);
     }
     assert.throws(() => parseSettings('{"appearance.theme":"unknown"}'));
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
+test('catalog acceptance preserves fresh external imports and never replaces an already-saved palette', async () => {
+  const f = fixture(), p = await f.install();
+  try {
+    const theme = importTheme('{"colors":{"editor.background":"#102030"}}', 'fixture.json', 'import-fixture').theme;
+    const other = { ...theme, id: 'import-other', name: 'Other' };
+    f.host.external(JSON.stringify({ 'appearance.theme': 'nimrod', 'appearance.importedThemes': [other], custom: true }));
+    await p.selectTheme(theme.id, theme);
+    assert.equal(p.theme().imports.length, 2);
+    assert.equal(parseSettings(f.host.value.text).custom, true);
+    await p.selectTheme(theme.id, { ...theme, colors: { ...theme.colors, 'editor.background': '#445566' } });
+    assert.equal(p.theme().imports.find(item => item.id === theme.id)!.colors['editor.background'], '#102030');
+    await p.selectTheme('dracula');
+    assert.equal(p.theme().imports.length, 2);
   } finally { p.dispose(); f.dom.window.close(); }
 });
 

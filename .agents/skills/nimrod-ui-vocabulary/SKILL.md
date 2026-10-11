@@ -107,7 +107,7 @@ A **card** does not imply a visible rectangular border. A **disclosure** is an e
 
 ## Theme
 
-- **Theme picker** — the selector in Settings → Appearance for built-in and imported color schemes. Its **Import color theme…** action opens a local file chooser for standalone VS Code JSON/JSONC themes.
+- **Theme picker** — the searchable **Select theme…** command-palette page for built-in, saved and bundled VS Code themes, with live hover/arrow-key previews, Enter/click to apply and Escape/Back to restore. Also the selector in Settings → Appearance for built-in and imported color schemes. Its **Import color theme…** action opens a local file chooser for standalone VS Code JSON/JSONC themes.
 - **Imported theme** — a saved local copy of an imported color palette, not an installed VS Code extension or terminal configuration. See [theme behavior](../../../docs/themes.md).
 - **Dracula** — Nimrod's dark adaptation of the established Dracula palette; distinct from the app's own scheme.
 - **Nimrod scheme** — the app's custom theme, defined in `src/theme.css`, with dark and light variants. Blue-gray foundations, mint/teal accents, and warm gold details. Use this name rather than calling it a VS Code theme or attributing it to an existing third-party palette. Some syntax-highlighting fallback colors are inherited from the original renderer.

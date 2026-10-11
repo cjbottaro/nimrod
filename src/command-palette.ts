@@ -27,6 +27,12 @@ export interface PaletteOptions {
   shortcuts?: boolean;
   ranking?: CommandRanking;
 }
+export interface PreviewSelectionRequest {
+  show(page: PalettePage, currentId?: string): void;
+  error(message: string): void;
+  isCurrent(): boolean;
+  cancel(): void;
+}
 export interface SelectionRequest {
   choose(options: string[], current?: string): Promise<string | undefined>;
   error(message: string): void;
@@ -68,6 +74,16 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   let disposed = false;
   let sessionKind: 'resume' | 'open' | 'delete' = 'resume';
   let deleting = false;
+  let preview: ((item?: PaletteItem) => void) | undefined;
+  let cancelPreview: (() => void) | undefined;
+  let previewed: string | undefined;
+  function endPreview(accepted = false): void {
+    const cancel = cancelPreview;
+    preview = undefined; cancelPreview = undefined; previewed = undefined;
+    delete dialog.dataset.preview;
+    hint.textContent = 'Esc to close';
+    if (!accepted) cancel?.();
+  }
 
   function deletionControls(pending: boolean): void {
     deleting = pending;
@@ -82,6 +98,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   function closeInteraction(action?: () => void | Promise<void>): void {
     if (!dialog.open) return;
     afterClose = action;
+    endPreview(!!action);
     cancelChoice(); createNamed = undefined; retryAction = undefined; generation++;
     closing = true;
     dialog.close();
@@ -121,11 +138,12 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       if (mode === 'selection' || mode === 'projects') {
         const marker = doc.createElement('span'); marker.className = 'palette-selection-marker';
         marker.setAttribute('aria-hidden', 'true'); marker.textContent = (mode === 'projects' ? item.projectOpen : item.current) ? '•' : '';
-        heading.append(marker);
+        if (preview) heading.append(label, marker);
+        else heading.append(marker);
         if (mode === 'selection' && item.current) row.setAttribute('aria-current', 'true');
         if (mode === 'projects') row.setAttribute('aria-label', `${item.label} — ${item.detail || item.id}${item.projectOpen ? ' — Open project window' : ''}`);
       }
-      heading.append(label);
+      if (!preview) heading.append(label);
       if (mode === 'projects') {
         row.className = 'palette-project-row';
         const parent = doc.createElement('small'); parent.className = 'palette-project-parent'; parent.textContent = item.projectParent || '';
@@ -134,6 +152,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
         row.setAttribute('aria-label', `${item.label} — ${item.detail || item.id}${item.projectOpen ? ' — Open project window' : ''} — Enter to open`);
         return row;
       }
+      if (preview) heading.append(enterHint());
       if (item.shortcut) { const shortcut = doc.createElement('kbd'); shortcut.className = 'palette-item-shortcut'; shortcut.textContent = item.shortcut; heading.append(shortcut); }
       if (item.badge) { const badge = doc.createElement('span'); badge.className = 'palette-item-badge'; badge.textContent = item.badge; heading.append(badge); }
       const detail = doc.createElement('small'); detail.className = 'palette-item-description'; detail.textContent = item.detail || '';
@@ -167,8 +186,11 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       if (row.offsetTop < list.scrollTop) list.scrollTop = row.offsetTop;
       else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight;
     } else input.removeAttribute('aria-activedescendant');
+    const item = matches[selected];
+    if (preview && item?.id !== previewed) { previewed = item?.id; preview(item); }
   }
   function commands(): void {
+    endPreview();
     deletionControls(false);
     cancelChoice(); createNamed = undefined; generation++; mode = 'commands'; loading = false; notice = ''; items = options.commands(); matches = []; selected = 0;
     title.textContent = 'Commands'; input.placeholder = 'Type a command…'; input.setAttribute('aria-label', 'Search commands');
@@ -176,6 +198,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   }
   function beginPage(kind: 'sessions' | 'projects' | 'selection', heading: string, placeholder: string, onRetry: () => void, keepQuery = false): number | undefined {
     if (!dialog.open && !open()) return;
+    endPreview();
     deletionControls(false);
     if (mode === 'commands') commandQuery = input.value;
     cancelChoice(); createNamed = undefined; mode = kind; title.textContent = heading; input.placeholder = placeholder;
@@ -236,11 +259,30 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       cancel() { if (current()) closeInteraction(); },
     };
   }
+  function startPreviewSelection(heading: string, onRetry: (() => void) | undefined, onPreview: (item?: PaletteItem) => void, onCancel: () => void): PreviewSelectionRequest | undefined {
+    const request = beginPage('selection', heading, 'Type to filter themes…', onRetry || (() => {}));
+    if (request === undefined) return;
+    preview = onPreview; cancelPreview = onCancel;
+    dialog.dataset.preview = 'theme'; hint.textContent = 'Esc to restore';
+    const current = () => !disposed && dialog.open && generation === request && mode === 'selection';
+    retry.textContent = 'Refresh'; retry.hidden = !onRetry;
+    return {
+      isCurrent: current,
+      show(page, currentId) {
+        if (!current()) return;
+        items = page.items; notice = page.notice || ''; loading = false;
+        if (!matches.length) { matches = items; selected = Math.max(0, items.findIndex(item => item.id === currentId)); }
+        draw();
+      },
+      error(message) { if (current()) { loading = false; notice = message; updateStatus(); } },
+      cancel() { if (current()) closeInteraction(); },
+    };
+  }
   function namedSession(onCreate: (name: string) => void | Promise<void>): void {
     if (doc.querySelector('dialog[open]:not(#command-palette)')) return;
     if (!dialog.open && !open()) return;
     if (mode === 'commands') commandQuery = input.value;
-    cancelChoice(); generation++; mode = 'name'; createNamed = onCreate; composing = false;
+    endPreview(); cancelChoice(); generation++; mode = 'name'; createNamed = onCreate; composing = false;
     title.textContent = 'New named session'; input.placeholder = 'Session name…'; input.setAttribute('aria-label', 'Session name');
     input.value = ''; back.hidden = true; retry.hidden = true; retryAction = undefined;
     loading = false; notice = ''; items = []; matches = []; selected = 0;
@@ -312,6 +354,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   dialog.addEventListener('cancel', event => { event.preventDefault(); if (!doc.querySelector('dialog[open]:not(#command-palette)')) closeInteraction(); }, { signal });
   dialog.addEventListener('close', () => {
     closing = false;
+    endPreview();
     cancelChoice(); createNamed = undefined; retryAction = undefined; generation++;
     const action = afterClose; afterClose = undefined;
     if (!doc.querySelector('dialog[open]') && opener?.isConnected && !opener.closest('[hidden], [inert]')) opener.focus({ preventScroll: true });
@@ -324,6 +367,11 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   list.addEventListener('click', event => {
     const row = (event.target as HTMLElement).closest<HTMLElement>('[data-index]'); if (row) choose(Number(row.dataset.index));
   }, { signal });
+  list.addEventListener('mousemove', event => {
+    if (!preview || !dialog.open || doc.querySelector('dialog[open]:not(#command-palette)')) return;
+    const row = (event.target as HTMLElement).closest<HTMLElement>('[data-index]');
+    if (row && selected !== Number(row.dataset.index)) { selected = Number(row.dataset.index); selection(); }
+  }, { signal });
   create.addEventListener('click', submitName, { signal });
   back.addEventListener('click', commands, { signal });
   retry.addEventListener('click', () => retryAction?.(), { signal });
@@ -333,5 +381,5 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     if (dialog.open) { event.preventDefault(); return; }
     if (open()) event.preventDefault();
   }, { signal });
-  return { get isDeleting() { return dialog.open && mode === 'sessions' && sessionKind === 'delete' && deleting; }, open, projects, close: () => closeInteraction(), sessions: () => sessions('resume'), openSessions: () => sessions('open'), deleteSessions: () => sessions('delete'), namedSession, startSelection, dispose: () => { disposed = true; cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
+  return { get isDeleting() { return dialog.open && mode === 'sessions' && sessionKind === 'delete' && deleting; }, open, projects, close: () => closeInteraction(), sessions: () => sessions('resume'), openSessions: () => sessions('open'), deleteSessions: () => sessions('delete'), namedSession, startSelection, startPreviewSelection, dispose: () => { disposed = true; endPreview(); cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
 }

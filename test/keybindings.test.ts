@@ -27,7 +27,10 @@ test('defaults distinguish creation, named creation, open-session switching and 
   assert.deepEqual(bindingsFor('resume', {}), ['primary+k']);
   assert.deepEqual(bindingsFor('restart', {}), ['primary+r']);
   assert.deepEqual(bindingsFor('keybindings', {}), ['primary+shift+,']);
-  assert.ok(ACTIONS.every(action => action.defaults.length > 0));
+  assert.ok(ACTIONS.filter(action => action.id !== 'select-theme').every(action => action.defaults.length > 0));
+  assert.deepEqual(bindingsFor('select-theme', {}), []);
+  assert.deepEqual(bindingsFor('select-theme', { 'select-theme': ['primary+j'] }), ['primary+j']);
+  assert.deepEqual(bindingsFor('select-theme', { 'select-theme': [] }), []);
   assert.equal(ACTIONS.some(action => ['demo', 'file'].includes(action.id)), false);
   for (const id of ['restart', 'keybindings'] as const) {
     assert.deepEqual(bindingsFor(id, { [id]: [] }), []);

@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "id": "tokyo-night-vscode",
+      "repository": "enkia/tokyo-night-vscode-theme",
+      "revision": "7c0f11eaef322f293621ca7befe462214b7ea468",
+      "author": "Enkia",
+      "license": "MIT",
+      "licensePath": "LICENSE.txt",
+      "themes": [
+        { "id": "tokyo-night", "name": "Tokyo Night (VS Code)", "path": "themes/tokyo-night-color-theme.json", "mode": "dark" },
+        { "id": "tokyo-night-storm", "name": "Tokyo Night Storm", "path": "themes/tokyo-night-storm-color-theme.json", "mode": "dark" },
+        { "id": "tokyo-night-light", "name": "Tokyo Night Light", "path": "themes/tokyo-night-light-color-theme.json", "mode": "light" }
+      ]
+    },
+    {
+      "id": "nord-vscode",
+      "repository": "nordtheme/visual-studio-code",
+      "revision": "8ead09822c02d0d49d0f764104505e5a34d3689f",
+      "author": "Sven Greb (Nord)",
+      "license": "MIT",
+      "licensePath": "license",
+      "themes": [ { "id": "nord", "name": "Nord", "path": "themes/nord-color-theme.json", "mode": "dark" } ]
+    },
+    {
+      "id": "night-owl-vscode",
+      "repository": "sdras/night-owl-vscode-theme",
+      "revision": "cc291eba7976b20d7c66bde6883c27b902196b07",
+      "author": "Sarah Drasner",
+      "license": "MIT",
+      "licensePath": "LICENSE.md",
+      "themes": [
+        { "id": "night-owl", "name": "Night Owl", "path": "themes/Night Owl-color-theme.json", "mode": "dark" },
+        { "id": "night-owl-light", "name": "Night Owl Light", "path": "themes/Night Owl-Light-color-theme.json", "mode": "light" }
+      ]
+    },
+    {
+      "id": "atom-one-dark-vscode",
+      "repository": "akamud/vscode-theme-onedark",
+      "revision": "a8be970644982221f9b61fb1c4b3da74b4beab79",
+      "author": "Mahmoud Ali",
+      "license": "MIT",
+      "licensePath": "LICENSE",
+      "themes": [ { "id": "atom-one-dark", "name": "Atom One Dark", "path": "themes/OneDark.json", "mode": "dark" } ]
+    },
+    {
+      "id": "atom-one-light-vscode",
+      "repository": "akamud/vscode-theme-onelight",
+      "revision": "5866e900db932d580e978a58db42f65cde07998b",
+      "author": "Mahmoud Ali",
+      "license": "MIT",
+      "licensePath": "LICENSE",
+      "themes": [ { "id": "atom-one-light", "name": "Atom One Light", "path": "themes/OneLight.json", "mode": "light" } ]
+    }
+  ]
+}

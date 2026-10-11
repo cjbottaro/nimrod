@@ -162,7 +162,25 @@ fn validate(text: &str) -> Result<(), String> {
                     .iter()
                     .any(|item| item.get("id").and_then(Value::as_str) == Some(theme))
             });
-        if !["nimrod", "dracula", "tokyo-night", "osaka-jade"].contains(&theme) && !imported {
+        static CATALOG_IDS: std::sync::OnceLock<std::collections::HashSet<String>> =
+            std::sync::OnceLock::new();
+        let bundled = CATALOG_IDS
+            .get_or_init(|| {
+                let catalog: Value =
+                    serde_json::from_str(include_str!("../../src/themes/catalog.json"))
+                        .expect("validated bundled theme catalog");
+                catalog["themes"]
+                    .as_array()
+                    .expect("catalog themes")
+                    .iter()
+                    .filter_map(|entry| entry["id"].as_str().map(String::from))
+                    .collect()
+            })
+            .contains(theme);
+        if !["nimrod", "dracula", "tokyo-night", "osaka-jade"].contains(&theme)
+            && !imported
+            && !bundled
+        {
             return Err("appearance.theme must name a built-in or imported theme".into());
         }
     }
@@ -507,6 +525,18 @@ mod tests {
         validate("{\"notifications.enabled\":false}").unwrap();
         assert!(validate("{\"runtime.piPath\":\"\"}").is_err());
     }
+    #[test]
+    fn catalog_selections_match_checked_in_ids() {
+        let catalog: Value =
+            serde_json::from_str(include_str!("../../src/themes/catalog.json")).unwrap();
+        for entry in catalog["themes"].as_array().unwrap() {
+            assert!(
+                validate(&serde_json::json!({"appearance.theme": entry["id"]}).to_string()).is_ok()
+            );
+        }
+        assert!(validate(r#"{"appearance.theme":"catalog-unknown"}"#).is_err());
+    }
+
     #[test]
     fn built_in_theme_selections() {
         for theme in ["nimrod", "dracula", "tokyo-night", "osaka-jade"] {

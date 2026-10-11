@@ -1,47 +1,85 @@
-# Theme catalog — deferred implementation
+# Theme catalog maintenance
 
-**Status: recorded for later, not authorized for implementation now.** The user explicitly chose to keep the existing Nimrod/Dracula picker and VS Code JSON/JSONC importer for the time being. This document describes a future direction, not current functionality. Resume only when requested.
+Theme discovery uses a checked-in VS Code theme catalog. **Normal development
+builds and app startup never fetch or regenerate it.** This is separate from
+building a development app for the `nimrod` CLI.
 
-## Goal
+## Discovering Open VSX themes
 
-Make discovering and choosing themes easy inside Nimrod:
+Run **`mise run themes-discover`** explicitly to search Open VSX's Themes category
+by download count, inspect color-theme contributions in `package.json`, and write
+`tools/theme-bundler/open-vsx.lock.json`. Then run `mise run themes-update` to
+regenerate the bundled catalog. Neither command is part of normal app builds.
 
-**Settings → Appearance → Theme picker → Browse themes… → searchable previews → Apply**
+The initial policy examines a window of 200 registry results until 50 compatible
+packages are accepted. The completed discovery inspected 121 of 1,951 results:
+50 accepted packages / 259 variants and 71 recorded exclusions. Combined with the
+original eight snapshots, the catalog contains **267 variants**. This is not an
+exhaustive registry mirror. The lock retains the report and explicit pinned
+versions/download URLs/SHA-256 checksums; inspect it before a release.
 
-The user raised terminal-theme repositories because they provide accessible collections of palettes. The important requirement is easy discovery/selection, not loyalty to the VS Code file format. Asking people to search GitHub for raw files or export from another editor should be the advanced path, not the normal experience.
+Icon-only extensions, deprecated entries, missing license notices, unsupported
+license declarations and incompatible palettes are skipped with recorded reasons.
+Current license policy accepts MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC and
+MPL-2.0; other declarations require separate review. All declared JSON variants in
+an accepted package are bundled. Duplicate-looking variants across publishers or
+legacy source snapshots are retained rather than silently removed.
 
-## Proposed approach
+## Preparing a catalog update
 
-- Start with a bundled, pinned catalog from [Tinted Theming's schemes](https://github.com/tinted-theming/schemes), initially considering Base16. Its defined color roles offer a consistent basis for UI and syntax mapping.
-- Map source palettes into Nimrod's existing color roles. A terminal-oriented palette can work without defining every widget color; derive missing surfaces, borders, accents and status colors deliberately.
-- Browse/search names with visual previews, then apply a selection. Keep discovery local and usable offline; no dependency on a live website or automatic startup downloads.
-- Preserve the bespoke **Nimrod scheme** as the default. The user prefers it to Dracula after comparing them directly; additional themes are alternatives, not a reason to redesign it.
-- Keep the current VS Code importer. Consider adding Base16 palette files and Windows Terminal JSON as additional manual-import formats.
-- Keep the current color-only boundary: importing palettes must not install extensions, run scripts, load arbitrary CSS, or change fonts/layout.
+1. For registry themes, run `mise run themes-discover` and review the resulting
+   version/checksum lock and omission report. For the retained raw-repository
+   sources, edit `tools/theme-bundler/sources.json`: add an explicit theme path and stable
+   ID, or advance a source's pinned 40-character Git revision. Retain author,
+   license identifier and the path to its complete license notice.
+2. Run the Rust maintenance program explicitly:
 
-## Relevant sources
+   ```sh
+   mise run themes-update
+   ```
 
-- [Tinted Theming](https://github.com/tinted-theming/schemes): Base16/Base24 palettes; proposed first catalog source. Base24 support is not yet decided.
-- [iTerm2 Color Schemes](https://github.com/mbadolato/iTerm2-Color-Schemes): broad public collection with previews, YAML sources and Windows Terminal JSON. Useful potential catalog/import source.
-- [Gogh](https://github.com/Gogh-Co/Gogh): another public terminal-palette collection to evaluate if needed.
-- [VS Code Themes](https://vscodethemes.com/): useful discovery gallery, but generally extension-oriented rather than a direct standalone JSON import service.
+3. Review `src/themes/catalog.json` and `THEME_CATALOG_NOTICES.md`, then run
+   `mise run themes-check`, `mise run check`, and `mise run build`. Validate
+   representative theme colors in the app before publishing a real release.
+4. Commit the manifest and generated files together when approved. Future normal
+   builds use this snapshot without repeating collection.
 
-These links are research leads, not runtime dependencies or commitments to support every format.
+No latest-branch fetching occurs implicitly: changing revisions is deliberate.
+To reproduce a bundle using only downloaded source files:
 
-## Decisions to resolve when implementing
+```sh
+mise exec -- cargo run --locked --manifest-path tools/theme-bundler/Cargo.toml -- --offline
+```
 
-- Exact source revision, catalog breadth, theme licenses and retained author attribution. Make any curation explicit; do not silently present a subset as the full upstream collection.
-- Stable catalog IDs, duplicate names, and separation from locally imported themes and built-ins.
-- Palette-to-UI mapping for light/dark variants and readable status/syntax colors; verify representative schemes rather than assuming one mapping makes every palette attractive.
-- Preview behavior: whether it previews a sample or the whole app. If preview changes the live app, cancellation must restore the previous theme and preview must not persist as an applied choice.
-- Catalog updates: begin with app-bundled snapshots; no background updater is implied.
+The ignored `.theme-source-cache/` is optional maintenance data, not an app
+dependency. A fresh checkout can build the app without it. Missing files, invalid
+themes or collection failures abort without replacing the existing bundle.
 
-## Acceptance expectations
+## Initial scope and boundaries
 
-- Search, preview and apply without downloading files or using VS Code.
-- Bundled themes work offline; selection survives relaunch.
-- Explicit Apply/cancel behavior and honest failures; existing imported themes remain usable.
-- No changes to Pi/harness state, drafts, zoom, disclosure choices, focus ownership or transcript scroll intent.
-- Tests for mapping, catalog identity, persistence, preview rollback and actual UI color/layout behavior. Native WebKit acceptance remains distinct from mocked DOM checks.
+The collection contains 259 variants from 50 pinned Open VSX packages plus the
+original eight dark/light snapshots from five repositories. This is explicitly
+curated, not an exhaustive Marketplace mirror. Existing built-in Dracula,
+Tokyo Night (Omarchy) and Osaka Jade are preserved.
 
-See [themes.md](themes.md) for the current supported behavior.
+For Open VSX, the builder downloads checksum-pinned VSIX packages, reads only
+bounded text assets in memory (no extraction to filesystem or extension execution),
+and resolves contributed color themes. Full licenses and root NOTICE files are
+retained. Only Open VSX and its Eclipse content host are permitted for redirects.
+For legacy raw-repository sources, it downloads pinned JSON/JSONC and license files directly, resolving
+relative `include` and external token-color JSON/TextMate files inside the same
+repository. It does not need to clone whole repositories or run their build
+scripts. Generated files retain full token rules and semantic color data for
+future use; today's renderer still maps only broad syntax foreground categories.
+
+Open VSX supplies published generated JSON even where author repositories contain
+only templates—official Dracula is now included through its package. Existing
+built-in Dracula remains a separate hand-tuned option. The tool never runs
+upstream generators.
+
+Stable `catalog-…` IDs mean a new app release can update a bundled theme in place.
+Manually imported and legacy Gogh copies remain independent and are not rewritten.
+There is no runtime updater, catalog Refresh control, extension installation,
+font/layout import or Highlight.js replacement.
+
+See [Themes](themes.md) for picker behavior.

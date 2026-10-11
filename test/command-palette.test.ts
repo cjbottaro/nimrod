@@ -41,6 +41,37 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }),
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
+test('preview selection shares cancellation lifecycle, mouse/arrow highlight and post-close acceptance', async () => {
+  for (const cancel of ['escape', 'native', 'back', 'api', 'dispose'] as const) {
+    const f = fixture(), previews: (string | undefined)[] = []; let restored = 0, accepted = 0;
+    try {
+      const request = f.palette.startPreviewSelection('Select theme', () => {}, item => previews.push(item?.id), () => { restored++; })!;
+      request.show({ items: ['one', 'two'].map(id => ({ id, label: id, run: () => { accepted++; } })) }, 'one');
+      const heading = f.list().children[0].querySelector('.palette-item-heading')!;
+      assert.equal(heading.children[0].className, 'palette-item-label');
+      assert.equal(heading.children[1].className, 'palette-selection-marker');
+      f.key('ArrowDown'); assert.equal(previews.at(-1), 'two');
+      f.list().children[0].dispatchEvent(new f.win.MouseEvent('mousemove', { bubbles: true }));
+      assert.equal(previews.at(-1), 'one');
+      f.query('no match'); assert.equal(previews.at(-1), undefined);
+      if (cancel === 'escape') f.key('Escape');
+      if (cancel === 'native') f.dialog.close();
+      if (cancel === 'back') (f.win.document.querySelector('#palette-back') as HTMLButtonElement).click();
+      if (cancel === 'api') request.cancel();
+      if (cancel === 'dispose') f.palette.dispose();
+      assert.equal(restored, 1); assert.equal(request.isCurrent(), false); assert.equal(accepted, 0);
+      request.show({ items: [] }); assert.notEqual(f.status(), 'No options available.');
+    } finally { f.dispose(); }
+  }
+  const f = fixture(); let restored = 0, accepted = 0;
+  try {
+    const request = f.palette.startPreviewSelection('Select theme', () => {}, () => {}, () => { restored++; })!;
+    request.show({ items: [{ id: 'one', label: 'one', run: () => { accepted++; assert.equal(f.win.document.activeElement, f.opener); } }] });
+    f.key('Enter'); f.key('Enter'); await tick();
+    assert.equal(restored, 0); assert.equal(accepted, 1); assert.equal(f.dialog.open, false);
+  } finally { f.dispose(); }
+});
+
 test('delete picker retains its dialog and surviving DOM, prunes confirmed rows without catalog refresh', async () => {
   let finish!: () => void, loads = 0, runs = 0;
   const f = fixture(async () => { loads++; return { items: ['one', 'two', 'three', 'hidden'].map(id => ({

@@ -1,9 +1,11 @@
+import catalog from './catalog.json';
 import { parse, printParseErrorCode, type ParseError } from 'jsonc-parser';
 
 export const MAX_THEME_BYTES = 512 * 1024;
 export const THEME_STORAGE_KEY = 'nimrod.themes.v1';
 export const MAX_IMPORTED_THEMES = 50;
 export type ThemeMode = 'dark' | 'light';
+export const CATALOG_THEME_IDS = catalog.themes.map(theme => theme.id);
 export const BUILTIN_THEME_IDS = ['nimrod', 'dracula', 'tokyo-night', 'osaka-jade'] as const;
 
 // Only color-valued keys actually used by Nimrod (plus inputs used to derive fallbacks).
@@ -41,6 +43,7 @@ export interface ColorTheme {
   id: string;
   name: string;
   mode: ThemeMode;
+  source?: { provider: 'gogh'; author: string };
   colors: Record<string, string>;
   syntax: Partial<Record<SyntaxKey, string>>;
 }
@@ -194,8 +197,10 @@ export function readLibrary(raw: unknown): ThemeLibrary {
       if (!isColor(item.syntax[key])) throw new Error('Invalid saved syntax color.');
       syntax[key] = item.syntax[key];
     }
-    return { id: item.id, name: cleanName(item.name, 'Imported theme'), mode: item.mode as ThemeMode, colors, syntax };
+    const source = record(item.source) && item.source.provider === 'gogh' && typeof item.source.author === 'string'
+      ? { provider: 'gogh' as const, author: item.source.author.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').slice(0, 160) } : undefined;
+    return { id: item.id, name: cleanName(item.name, 'Imported theme'), mode: item.mode as ThemeMode, colors, syntax, ...(source ? { source } : {}) };
   });
-  const selected = [...BUILTIN_THEME_IDS, ...ids].includes(raw.selected) ? raw.selected : 'nimrod';
+  const selected = [...BUILTIN_THEME_IDS, ...CATALOG_THEME_IDS, ...ids].includes(raw.selected) ? raw.selected : 'nimrod';
   return { version: 1, selected, imports };
 }

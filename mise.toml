@@ -17,6 +17,18 @@ run = "npm test && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && 
 [tasks.build]
 run = "npm run tauri build -- --bundles app && npm run verify:bundle"
 
+[tasks.themes-discover]
+description = "Explicit Open VSX discovery; write pinned package lock and omission report"
+run = "cargo run --locked --manifest-path tools/theme-bundler/Cargo.toml -- --discover"
+
+[tasks.themes-update]
+description = "Explicitly regenerate the pinned VS Code theme catalog (not part of builds)"
+run = "cargo run --locked --manifest-path tools/theme-bundler/Cargo.toml --"
+
+[tasks.themes-check]
+description = "Offline tests, formatting and lint for the release-maintenance tool"
+run = "cargo fmt --manifest-path tools/theme-bundler/Cargo.toml -- --check && cargo clippy --locked --manifest-path tools/theme-bundler/Cargo.toml --all-targets -- -D warnings && cargo test --locked --manifest-path tools/theme-bundler/Cargo.toml"
+
 [tasks.install-cli]
 description = "Install nimrod in ~/.local/bin without changing shell configuration"
 run = "bash scripts/install-cli.sh"

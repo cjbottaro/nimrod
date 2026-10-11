@@ -17,14 +17,14 @@
 - [Modal layout](modal-layout.md) — shared dialog shell, content boundaries and full-window Settings exception.
 - [Settings](settings.md) — category navigation, shared sidebar resizing with independent app-wide width, appearance, notifications, keybindings, runtime paths and configuration files.
 - [Keybindings](keybindings.md) — searchable shortcut editor, conflict reassignment and reset to defaults.
-- [Themes](themes.md) — Nimrod, Dracula, Tokyo Night and Osaka Jade, plus importing color schemes.
+- [Themes](themes.md) — live-preview Select theme picker, offline bundled VS Code catalog, built-ins and local imports.
 
 ## Project references
 
 - [Architecture](architecture.md) — boundaries and behavior contracts.
 - [Verification](verification.md) — tested behavior and remaining native/platform checks.
 - [Build cache](build-cache.md) — mise-managed Rust compiler caching shared across main and worktrees, with separate app artifacts.
-- [Theme catalog plan](theme-catalog-plan.md) — proposed work, not shipped behavior.
+- [Theme catalog direction](theme-catalog-plan.md) — explicit Open VSX discovery/Rust catalog maintenance, pinned sources and fast offline development builds.
 
 Detailed implementation references are indexed by the repository's
 [features skill](../.agents/skills/features/SKILL.md); guides here focus on usage and observable behavior.

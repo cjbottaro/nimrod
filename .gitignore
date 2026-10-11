@@ -6,6 +6,9 @@ target/
 *.tsbuildinfo
 .vite/
 
+# Explicit theme-maintenance source cache (generated catalog is tracked)
+/.theme-source-cache/
+
 # Test artifacts
 /test-results/
 /playwright-report/

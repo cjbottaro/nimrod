@@ -1,6 +1,6 @@
 import { applyEdits, modify, parse, type ParseError } from 'jsonc-parser';
 import { runtimePaths, RUNTIME_STORAGE_KEY } from './settings';
-import { readLibrary, THEME_STORAGE_KEY, type ThemeLibrary } from './themes/theme';
+import { readLibrary, THEME_STORAGE_KEY, MAX_IMPORTED_THEMES, type ColorTheme, type ThemeLibrary } from './themes/theme';
 import { DEFAULT_ZOOM, ZOOM_LEVELS, ZOOM_STORAGE_KEY } from './zoom';
 import { KEYBINDINGS_SETTING, readKeyOverrides, changeBinding, bindingsFor, type ActionId } from './keybindings';
 
@@ -130,6 +130,21 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
       const values: Record<string, unknown> = { 'appearance.theme': library.selected };
       if (JSON.stringify(library.imports) !== JSON.stringify(settings['appearance.importedThemes'] ?? [])) values['appearance.importedThemes'] = library.imports;
       return patch(values);
+    },
+    selectTheme(id: string, theme?: ColorTheme) {
+      return enqueue(async () => {
+        receive(await host.snapshot());
+        if (!snapshot || snapshot.error) throw new Error(snapshot?.error || 'Preferences unavailable.');
+        const library = readLibrary({ version: 1, selected: settings['appearance.theme'] ?? 'nimrod', imports: settings['appearance.importedThemes'] ?? [] });
+        if (theme && !library.imports.some(item => item.id === id)) {
+          if (library.imports.length >= MAX_IMPORTED_THEMES) throw new Error('At most 50 downloaded/imported themes can be saved. Remove one in Settings first.');
+          library.imports.push(theme);
+        }
+        library.selected = id;
+        const text = editSettings(snapshot.text, { 'appearance.theme': id, 'appearance.importedThemes': library.imports });
+        try { receive(await host.settings(snapshot.text, text)); }
+        catch (error) { receive(await host.snapshot()); throw error; }
+      });
     },
     keybindings() { return readKeyOverrides(settings[KEYBINDINGS_SETTING]); },
     saveKeybinding(id: ActionId, bindings: readonly string[] | undefined, reassign: boolean, mac: boolean) {
