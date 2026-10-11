@@ -32,22 +32,12 @@ From an open project, choose **Settings → Notifications → Send test notifica
 
 After a test, the status line also includes macOS’s reported authorization, desktop-alert setting/style, Notification Center setting, app-active state and **foreground handler calls**. **Refresh notification diagnostics** reads those values again without sending anything or requesting permission, even when alerts are off. The counter is cumulative for the running app, not proof that the latest test displayed a banner; refresh after delivery to account for asynchronous callbacks. Diagnostics currently cover macOS only.
 
-On macOS, Nimrod now uses Apple’s **UserNotifications** API with the packaged app’s real identity. It checks authorization, requests alert permission if undecided, and waits for the OS submission callback. Errors appear in Settings and the project error area rather than disappearing silently. After a permission prompt, background-session eligibility is checked again before sending.
+The status line records the latest alert attempt or suppression reason. “Submitted” means the OS accepted the request, not that a banner appeared. Errors remain visible; an ambiguous timeout isn't retried.
 
-### macOS build identity
+On macOS, use the packaged **Nimrod.app**, not an unbundled development executable. Local bundles are ad-hoc signed; rebuilding may require a fresh permission grant. If delivery reports an app identity/signature error, ask for a correctly packaged build.
 
-The packaged app must be signed **as a whole bundle**, not merely carry the executable’s automatic linker signature. A linker-only build can return **UNErrorDomain / 1 (NotificationsNotAllowed)** despite Nimrod being enabled in System Settings.
+## Platform limitations
 
-`mise run build` now applies local **ad-hoc signing** (`signingIdentity: "-"`) and verifies the bundle signature, matching signing/bundle identifier, bound Info.plist and sealed resources. No signing certificate, Apple Developer account or notarization is required for this local build. `npm run verify:bundle -- /path/to/Nimrod.app` checks an existing artifact without launching it or modifying permissions. Ad-hoc signatures can change across rebuilds, so macOS may require a fresh permission grant; no permission database/reset or Keychain change is automated.
-
-The status line also records the latest session alert attempt: quiet (with its reason), checking authorization, submitting, OS submission accepted, or a specific error. If the test succeeds but a background completion does not, check this line after that completion. “Submitted” means the OS accepted the request, not that a banner was visibly displayed. A timeout is not retried because acceptance can be ambiguous.
-
-## First-pass limitations
-
-- Click routing has automated shell/WebKit coverage and a macOS build, but native macOS click acceptance and Linux build/delivery/action/focus acceptance remain unverified.
-- **macOS 27.0.1:** signed test notifications reached Notification Center, but **Temporary** desktop presentation remained inconsistent despite enabled settings and a working foreground handler. The user confirmed that switching to **Persistent** makes foreground test alerts visible. Use Persistent if Temporary fails on your Mac; the underlying OS presentation/cache cause is not established, and Nimrod does not override your chosen style.
-- Linux delivery remains unverified. Its direct `notify-rust` backend now awaits submission and listens for the default open action, but neither desktop permission nor visible delivery is inferred. Windows retains the Tauri plugin's asynchronous delivery-error/permission limitations. Automated tests do not establish OS delivery.
-- Use the packaged **Nimrod.app** on macOS. An unbundled development executable now reports an explicit error instead of borrowing Terminal/Finder’s notification identity. Linux needs a desktop notification service; Windows notification identity/delivery needs an installed application and remains a possible future platform.
-- There is no notification history, badge count, per-event/per-session policy, custom sound, or background daemon. Closing a project still stops its agents.
-
-To validate native delivery locally: use two Pi sessions, send a message in one, and switch to the other before it finishes. Automated tests use isolated offline fixtures; there is no app demo mode. Then repeat with the originating project window unfocused and confirm the selected/focused case stays quiet. Real extension dialogs and native failure delivery still need separate acceptance.
+- On the tested **macOS 27.0.1** setup, signed test alerts reached Notification Center, while Temporary desktop presentation was inconsistent. The user confirmed that **Persistent** style makes foreground test alerts visible. Try Persistent in System Settings if Temporary fails; Nimrod does not override your style.
+- Native macOS session-click acceptance remains pending. Linux delivery/action/focus remains unverified and requires a desktop notification service. Windows session-click routing is not implemented, and native delivery remains unverified.
+- There is no notification history, badge count, per-event/per-session policy, custom sound or background daemon. Closing a project stops its agents.

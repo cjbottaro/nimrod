@@ -13,4 +13,4 @@ Models come from Pi's configured scope; thinking levels come from the selected m
 
 Controls are unavailable during startup/disconnection or another preference change. Pending prompt acceptance must finish before a change can begin. Disconnected sessions must be resumed first. Escape cancels the picker without submitting your draft; explicit Back returns to commands.
 
-Offline fixture tests cover controls, mutation guards and acknowledgement behavior. Native live-run acceptance and Linux/Windows verification remain pending.
+Native live-run behavior and Linux/possible Windows verification remain pending.

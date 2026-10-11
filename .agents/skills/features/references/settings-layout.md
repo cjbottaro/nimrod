@@ -1,5 +1,11 @@
 # Settings layout and category navigation
 
+**Status: implemented.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#settings-layout) retain prior execution records.
+
+## Specification and acceptance criteria
+
+Settings categories remain mounted with independent reading/dirty-control state. Its app-wide sidebar width is independent of project widths; browser modality and resize guards preserve the underlying conversation and nested-dialog focus.
+
 ## Code map
 
 - `index.html`: full-viewport native `#settings-page` dialog; fixed `.settings-header` above `#settings-layout`. Category sidebar buttons are vertical ARIA tabs controlling mounted `.settings-panel` tabpanels. Appearance initially shown; Notifications/Runtime initially hidden. Keybindings is inserted before Runtime by `src/keybinding-editor.ts` before navigation initializes.

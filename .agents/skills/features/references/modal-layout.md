@@ -1,5 +1,11 @@
 # Shared modal layout and command rows
 
+**Status: implemented.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#modal-layout) retain prior execution records.
+
+## Specification and acceptance criteria
+
+Ordinary dialogs share a shell, not identical content. Confirmation labels remain plain, Enter follows focused action/Cancel, Escape cancels, and loading review retains Cancel focus after late population.
+
 ## Contract and code map
 
 - `src/modal.css` is the sole ordinary-modal shell authority: `.nimrod-modal`, `--modal-*` geometry/spacing/backdrop tokens, `.modal-stack`, `.modal-header`, `.modal-title`, `.modal-description`, `.modal-body`, `.modal-actions` and `.modal-overlay`.
@@ -32,4 +38,4 @@ Unit tests cover default/Cancel focus, plain labels/shortcut metadata, IME/repea
 - Run `mise run check` and `npm run test:browser` locally with offline fixtures only. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow).
 - Native visual acceptance and Linux/Windows verification remain pending; fixture success is not platform acceptance.
 
-User guide: [Modal layout](../../../../docs/modal-layout.md), [Command palette](../../../../docs/command-palette.md).
+User guide: [Modal layout](../../../../docs/command-palette.md#confirmation-dialogs), [Command palette](../../../../docs/command-palette.md).

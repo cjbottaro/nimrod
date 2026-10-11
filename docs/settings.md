@@ -1,37 +1,64 @@
 # Settings
 
-Open **Settings** using the gear button in the project bar or **⌘/Ctrl ,**. Use **Back** or **Escape** to return. Opening Settings again while already there leaves the current control alone.
+Open the Project bar's gear or **⌘/Ctrl+,**. Choose Appearance, Notifications, Keybindings or Runtime in the category sidebar. **Back** or **Escape** returns to your project.
 
-Settings is a separate, full-window page with a **category sidebar** and a **settings content pane**. Choose Appearance, Notifications, Keybindings or Runtime to show that category. Hover highlights unselected categories; the selected category keeps its selection highlight unchanged. The pane follows the available width with 20 CSS-pixel gutters; its entire surface, including the gutters, scrolls. The sidebar and Back header stay visible. Internally it uses a full-viewport native HTML dialog: the project remains mounted and laid out underneath, while browser modality makes it non-interactive and removes it from the active accessibility surface. This avoids collapsing the transcript pane or resetting scroll/disclosure state.
+Pi keeps running while Settings is open. Returning preserves your draft, conversation and reading position and restores prior focus when available. Pi extension dialogs retain priority.
 
-Pi keeps running and the transcript continues receiving events. Opening, closing, or saving preferences never starts/stops/restarts a session or submits a prompt. Returning restores the prior focus target when available. If startup hid that original control, focus falls back to the Settings button. Existing RPC dialogs retain priority; Settings won't open over or close underneath an active Pi dialog.
+## Categories and width
 
-## Categories and sidebar width
+Category selection, unsaved Runtime fields, Keybindings search and each category's reading position survive navigation and reopening Settings in the same window, not app restart. **Edit keybindings…** / **⌘/Ctrl+Shift+,** opens Keybindings and focuses search.
 
-Category selection, unsaved Runtime edits, Keybindings search and each category's reading position are retained when switching categories or leaving/reopening Settings in that window. These transient values do not survive app restart. **Open keybindings…** / **⌘/Ctrl ⇧ ,** selects Keybindings and focuses its search. In the category sidebar, Up/Down cycle categories and Home/End select the first/last; Tab moves into the selected pane's controls.
+Use Up/Down in the category sidebar to cycle categories, Home/End for first/last, and Tab to enter the pane.
 
-Drag the sidebar's right edge to resize it. With the separator focused, Left/Right adjust by 10 CSS pixels (Shift: 50), Home/End choose its current limits, and double-click restores the 220px default. Its preferred width is saved app-wide and synchronizes across windows, independently of each project's Session sidebar width. Settings normally allows 160–360px; smaller windows clamp the visible sidebar to leave at least 240px for content without overwriting its saved width. Unlike the Session sidebar, it stays alongside the pane rather than becoming an overlay.
+Drag the sidebar's right edge to resize it. Its width is saved app-wide, separately from project Session sidebar widths. With the handle focused, Left/Right adjust by 10px (Shift: 50px), Home/End choose current limits, and double-click restores the default. Narrow windows temporarily cap the width without overwriting your preference.
 
-Escape during a drag cancels resizing without closing Settings; the next Escape returns to the project. Closing Settings, opening a higher-priority dialog, changing the viewport or losing window focus cancels an unfinished drag. Preference file paths appear under Runtime; configuration errors remain visible above any selected category.
+Escape during a drag cancels resizing; the next Escape closes Settings.
 
-## Files and synchronization
+## Appearance
 
-Nimrod uses the same home-directory/XDG-style layout on macOS, Linux, and Windows:
+- **Theme:** changes apply immediately and synchronize across windows. See [Themes](themes.md) for live previews, bundled themes and imports.
+- **Zoom:** scales the whole app, default **125%**, range **75–200%**. Use the picker or **⌘/Ctrl + / −**; **⌘/Ctrl+0** resets to 100%. Zoom is remembered and doesn't change drafts.
+- Theme/import/zoom errors appear alongside the controls.
+
+## Notifications
+
+**Background session alerts** are on by default. Turn them off across windows, send a fixed-content delivery test, or refresh read-only macOS diagnostics. See [Notifications](notifications.md) for triggers, click behavior and troubleshooting.
+
+## Keybindings
+
+Search actions, record shortcuts, resolve conflicts explicitly, remove bindings or reset defaults. Saved changes synchronize across project windows without changing running sessions. See [Keybindings](keybindings.md).
+
+## Runtime
+
+Pi and Node paths are discovered automatically; override them here if needed.
+
+1. Wait for initial detection.
+2. Edit executable names or paths.
+3. Click **Save runtime paths**, or press Enter in the form.
+4. Start a new session to use the saved paths.
+
+Saving never changes an already-running process. Unsaved fields survive navigation in this window, not restart, and aren't used for launch. External settings edits update saved launch paths without replacing dirty fields; Save then replaces those corresponding values. Invalid/failed saves retain the prior saved paths.
+
+On Windows, choose Pi's JS entry point and `node.exe` explicitly; npm `.cmd` wrappers aren't supported. Models and thinking levels are [live session controls](model-thinking.md), not app preferences.
+
+## Configuration files
+
+Resolved paths appear under Runtime. Defaults are:
 
 ```text
 ~/.config/nimrod/settings.json     # User-editable JSONC preferences
-~/.local/state/nimrod/state.json   # App-managed UI/session bookkeeping
-~/.local/state/nimrod/drafts/      # Per-session native draft records
-~/.local/state/nimrod/popouts/     # One Nimrod-owned JSON snapshot per saved pop-out
+~/.local/state/nimrod/state.json   # App-managed bookkeeping
+~/.local/state/nimrod/drafts/      # Native per-session draft records
+~/.local/state/nimrod/popouts/     # Saved reference snapshots
 ```
 
-Absolute `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the corresponding roots. Empty or relative overrides fall back to the home-directory defaults. Windows uses the user's home directory (normally `%USERPROFILE%`), not the registry or an AppData-only convention. The resolved paths appear on the Settings page.
+Absolute `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the roots. Empty/relative overrides fall back to home defaults. Windows uses the user's home directory, normally `%USERPROFILE%`.
 
 `settings.json` accepts comments and trailing commas:
 
 ```jsonc
 {
-  "appearance.theme": "nimrod", // Or "dracula", "tokyo-night", "osaka-jade" / an imported theme ID
+  "appearance.theme": "nimrod",
   "appearance.zoom": 125,
   "notifications.enabled": true,
   "runtime.piPath": "/path/to/pi",
@@ -39,67 +66,12 @@ Absolute `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the corresponding roots
 }
 ```
 
-Omitted keys use built-in defaults or runtime discovery. Imported color palettes are kept in `appearance.importedThemes`; the theme picker manages this array. Pi's configuration remains entirely Pi-owned.
+Omitted keys use defaults or runtime discovery. Imported themes live in `appearance.importedThemes`; [keybinding overrides](keybindings.md#configuration-file) live in `keybindings`. Pi's settings remain Pi-owned. [Drafts](drafts.md) use separate Rust-managed per-session files with debounced asynchronous saves; legacy webview drafts are ignored without migration.
 
-The Rust host polls both files every **500 ms**, detecting normal saves, atomic file replacement, and deletion. Valid external changes update open windows and their Settings controls without replacing conversation DOM or restarting agents. Invalid files keep the last valid values (defaults on a fresh launch), flag the Settings gear, and show the error on the Settings page. Correcting the file clears the error. Removing settings resets preferences to defaults; removing state clears remembered bookkeeping on disk without closing live sessions.
+Valid external edits update open windows. Invalid files keep the last valid values and show an error; correcting the file clears it. UI saves preserve comments and unrelated keys, refuse malformed files and report detected conflicts rather than silently retrying. External editors aren't locked.
 
-UI saves preserve comments and unrelated settings, use same-directory temporary-file replacement, and preserve existing dotfile symlinks. Native writes serialize across windows; settings edits compare the source text immediately before writing and report conflicts rather than silently retrying. External editors aren't locked: an external write racing between that check and replacement is not excluded. Malformed files are never overwritten by UI saves.
+Removing settings resets preferences. Removing state clears remembered disk bookkeeping without closing live sessions and can allow legacy migration again on next startup. Existing configuration takes precedence during legacy migration; source data is retained.
 
-On first use, valid legacy webview preferences, imported themes, recent projects, remembered open-session layouts, sidebar visibility, and the global last-session pointer are copied into the files. Existing configuration takes precedence, migration is marked in the versioned state file, and legacy sources are retained. Deleting state also deletes that marker, allowing legacy migration again at the next startup. **Drafts and uncertain submissions stay in their existing scoped webview storage**; this change does not migrate or replay them.
+Window size, placement and maximized state are saved per project on orderly close/quit. Missing-display fallback is supported, but abrupt termination can lose recent geometry and native multi-display/DPI behavior remains unverified.
 
-Window size, placement, and maximized state are app-managed and project-scoped. Normal geometry is remembered in memory and saved on orderly window close/app quit, not on every drag. On macOS, the Quit menu and ⌘Q use Nimrod's save/shutdown handler instead of AppKit's direct termination action. A final-exit fallback flushes event-cached geometry for termination paths that bypass the cancellable exit request, without querying windows after termination starts. Restoration bounds dimensions and repositions windows whose display disappeared. Abrupt process death can lose the latest geometry. Native multi-display/DPI/platform acceptance remains unverified.
-
-[Pop-outs](pop-outs.md) store captured content under the state root's `popouts/`, with references and window geometry in app-managed state—not preferences or Pi files.
-
-Project settings and personal project overrides are not implemented yet. There is no ancestor-directory discovery.
-
-## Appearance
-
-- **Color theme:** existing Nimrod/Dracula picker, import, and removal actions. Changes apply immediately and are saved. See [themes.md](themes.md).
-- **Zoom:** whole-app zoom, default 125%, with the existing saved preference. **⌘/Ctrl + / − / 0** are the customizable defaults. Zoom shortcuts work on this page and in the project, but pause through other dialogs.
-- Theme/import/zoom notices are shown alongside their controls in Settings.
-
-Existing theme and zoom choices are migrated into the file-backed preferences. Restoring zoom does not rewrite the settings file.
-
-## Notifications
-
-**Background session alerts** are on by default. The On/Off picker saves immediately and synchronizes across windows without changing running sessions. **Send test notification** checks the native delivery path without starting an agent; it is disabled while alerts are off. The status line shows the latest attempt/suppression/error plus macOS policy and foreground-handler diagnostics after a test. **Refresh notification diagnostics** is read-only and remains available with alerts off; it neither posts a notification nor requests permission. macOS authorization and submission errors also appear in the project error area; OS notification settings still apply. See [notifications](notifications.md) for triggers, focus suppression, privacy and current native limitations.
-
-## Keybindings
-
-Search Nimrod actions, record shortcuts, remove bindings, or restore defaults per action/all actions. Conflicts require explicit reassignment, and saved changes synchronize across project windows without touching running sessions. See [Keybindings](keybindings.md) for defaults, reset semantics and configuration syntax. Composer delivery and Pi’s internal keymap are unchanged.
-
-## Runtime
-
-Pi and Node executable paths now live here instead of the launch form.
-
-- Wait for initial runtime detection before editing; delayed startup must not overwrite an editable field.
-- Edit the paths and click **Save runtime paths** (or submit the runtime form with Enter).
-- Save validates non-empty, single-line executable names/paths and persists them locally. Actual executable existence is validated by the Rust host when starting the next session.
-- The next launch uses a snapshot of the **saved** paths. Editing or saving them cannot change the configuration of the already running process.
-- Unsaved field edits remain when leaving/reopening Settings but are not used for launching and do not survive app restart. External file edits update the committed launch paths without replacing dirty fields; a notice explains that Save will replace those corresponding saved paths.
-- Persistence/validation failures keep the previously committed paths available and show the error without changing sessions.
-- Existing `nimrod.runtime.v1` / old launch preferences are migration sources only. Runtime paths now live under `runtime.piPath` and `runtime.nodePath` in `settings.json`.
-
-Project-folder selection and explicit new saved / temporary actions stay on the launch screen; **Resume session…** searches saved project history through the command palette. There is no arbitrary session-file chooser or demo launch action. Resume last session restores its remembered file/project pair only on an explicit click, never automatically at startup. Pi owns conversation persistence; per-session drafts and the last-session pointer are separate from application preferences. Model and thinking-level controls stay in the session's status area: those are live session controls, not application preferences.
-
-## Implementation and verification
-
-- `index.html` / `src/theme.css` / `src/workspace.css`: category sidebar, mounted category panes and shared sidebar/content geometry.
-- `src/settings-navigation.ts` / `src/sidebar-resize.ts`: category navigation and shared zoom-aware resizing with independent persistence scopes.
-- `src/settings.ts`: navigation/shortcut handling and the explicit runtime Save boundary.
-- `src/preferences.ts`: JSONC edits, legacy migration, revision-ordered synchronization, and native persistence bridge.
-- `src-tauri/src/preferences.rs`: XDG paths, serialized/atomic writes, file polling, last-valid snapshots, and conflict checks.
-- `src-tauri/src/window_state.rs`: project-scoped native geometry capture/restoration.
-- `src/main.ts`: preference initialization, next-launch snapshot, and startup focus guard.
-- `test/preferences.test.ts`, native preferences tests, `test/settings.test.ts` / `test/shell.test.ts`: JSONC preservation, migration, external edits, stale revisions, conflicts/failures, dirty-field retention, startup focus, and renderer updates behind Settings. Native geometry tests check scope/validation, not actual window placement.
-- `test/browser/settings-layout.spec.ts`: offline WebKit category switching, retained edits/search/scroll, narrow/wide pane geometry, gutter scrolling, shared resizing at 125% fixture zoom, reset, modal priority and width restoration. `test/shell.test.ts` also checks width broadcasts to another project window. These are fixture results, not native macOS/Linux/Windows acceptance.
-- `scripts/check-settings.mjs`: optional local Chromium dialog/layout check, including background focus containment, focus restoration, retained geometry/scroll/draft/disclosure/spinner identity, nested dialogs, and saved runtime snapshots. Uses controlled animation-frame scheduling; does not establish native animation timing or WebKit acceptance.
-
-```sh
-CHROMIUM=/path/to/chrome-headless-shell node scripts/check-settings.mjs
-```
-
-This replaces the earlier project-bar theme/zoom pickers and launch-form runtime fields. Theme discovery and live previews are available through the command-palette [Select theme… picker](themes.md#select-and-preview-themes); Settings retains its existing selection/import/removal controls.
-
-Drafts use separate Rust-managed records with asynchronous debounced saves. Legacy webview drafts are ignored, not migrated; Pi history is unchanged. See [Drafts](drafts.md).
+Project-specific settings/ancestor-directory discovery and cloud sync are not implemented.

@@ -1,4 +1,6 @@
-# Verification
+# Historical verification records
+
+Retained execution records, **not current specifications or acceptance instructions**. Names, workflows, test totals and artifact paths can be superseded. Use [current verification](../verification.md) and the [features index](../../SKILL.md).
 
 ## Native drafts and composer typing
 
@@ -297,7 +299,7 @@ Resume integration with `main`: preserved the counted All / Unread / Working fil
 - `mise run check` passes **279 TypeScript/Node tests**, Rust formatting/Clippy and **69 default Rust tests** (two opt-in Pi smokes ignored). `mise run build` packages the macOS app; **18 offline WebKit tests** pass, including modal tree scrolling, cancellation, focus and correlated answers.
 - All deletion tests use mocked IPC or disposable fixtures. No user session tree, installed extension or sibling Pi GUI was modified, no live Pi/model request was made, and no user app/window was launched or interrupted. Native installed-extension deletion, real cross-window outcomes and Linux/Windows acceptance remain for user validation.
 
-See [session deletion](workspace-sessions.md#delete-session-tree) and its [implementation reference](../.agents/skills/features/references/session-deletion.md).
+See [session deletion](../../../../../docs/sessions.md#delete-session-tree) and its [implementation reference](../session-deletion.md).
 
 ## Blank Needs attention conversations
 
@@ -349,7 +351,7 @@ The hook below failed later user acceptance and has been removed in favor of the
 - The new WebKit test initially submitted before its offline child completed startup; the helper now waits for the new session and enabled Send. The focused test and full suite passed after that fixture correction.
 - No user app/window, live Pi/model request or real OS notification was used. Native visual/focus acceptance and Linux/Windows verification remain outstanding. View preference persists per project; attention reasons/order intentionally do not persist across reopening.
 
-See [sidebar views](workspace-sessions.md#sidebar-views) and the [implementation reference](../.agents/skills/features/references/sidebar-attention.md).
+See [sidebar views](../../../../../docs/session-sidebar.md#views) and the [implementation reference](../sidebar-attention.md).
 
 ## Background-session notifications
 
@@ -358,7 +360,7 @@ See [sidebar views](workspace-sessions.md#sidebar-views) and the [implementation
 - `mise run check` passes **241 TypeScript/Node tests**, Rust formatting/Clippy and **47 default Rust tests** (two opt-in Pi tests ignored). `mise run build` packages the macOS app. **14 offline WebKit tests** pass, with native notification dispatch mocked/recorded rather than actually delivered.
 - No user app/window was launched or interrupted, no real OS notification was emitted by tests, no live Pi/model request was made, and no user session/configuration was changed. Packaged-app banner delivery, OS settings/DND, platform identity and native focus remain for user acceptance. Linux/Windows have not been built or accepted. Click-to-session routing is explicitly deferred because the current desktop plugin ignores actions.
 
-See [notifications](notifications.md) and the [implementation reference](../.agents/skills/features/references/notifications.md).
+See [notifications](feature-records.md#notifications) and the [implementation reference](../notifications.md).
 
 ## Project bar and session restart
 
@@ -385,7 +387,7 @@ See [notifications](notifications.md) and the [implementation reference](../.age
   Windows/Linux behavior is not accepted from macOS builds or mocked IPC tests.
 - No user app was launched/interrupted, model request made, or user-session/state file modified.
 
-See the [feature guide](pop-outs.md) and [agent implementation reference](../.agents/skills/features/references/pop-outs.md).
+See the [feature guide](feature-records.md#pop-outs) and [agent implementation reference](../pop-outs.md).
 
 ## macOS Quit geometry persistence correction
 

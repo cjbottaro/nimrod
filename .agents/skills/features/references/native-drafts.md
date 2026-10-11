@@ -33,4 +33,4 @@ Rust fixtures: read/stage without disk writes, debounced vs forced flush, maximu
 
 Final validation: `mise run check` passed 453 TS/Node tests, formatting/Clippy and 111 Rust tests (two live-Pi smokes ignored); all 64 offline WebKit tests passed. A concurrent check/browser run hit the unchanged single-instance lock-holder timing test; standalone full check passed. Tests also assert Stop cannot release a queued pre-persistence steer later. No build/package or user-app launch performed.
 
-User guide: [Drafts](../../../../docs/drafts.md). Verification results: [verification](../../../../docs/verification.md). No app build unless explicitly requested.
+User guide: [Drafts](../../../../docs/drafts.md). Verification results: [verification](verification.md). No app build unless explicitly requested.

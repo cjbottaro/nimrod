@@ -1,10 +1,16 @@
 # Shared sidebar resizing
 
+**Status: implemented.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#sidebar-resize) retain prior execution records.
+
 The project and Settings share the layout/resize primitives with independent state. See [Settings categories and width](settings-layout.md) for that page's owner-dialog policy, app-wide broadcasts, bounds and non-overlay narrow layout. The contracts below describe Session sidebar defaults.
 
-Read the [human guide](../../../../docs/workspace-sessions.md#sidebar-width),
-[architecture](../../../../docs/architecture.md) and
+Read the [human guide](../../../../docs/session-sidebar.md#resize),
+[architecture](architecture.md) and
 [UI vocabulary](../../nimrod-ui-vocabulary/SKILL.md).
+
+## Specification and acceptance criteria
+
+Shared pointer/keyboard resizing persists preferred layout width independently by scope. Viewport clamping never overwrites preference; unfinished drags cancel on modality/blur/layout changes without mutating sessions or scroll intent.
 
 ## Code map
 
@@ -36,7 +42,5 @@ Rects are divided by the layout rect/offset-width scale to convert pointer displ
 - `test/sidebar-resize.test.ts`: restoration/validation, zoom-aware drag, once-per-release writes, focus/draft retention, pointer ownership, cancellation, keyboard bounds/reset, responsive defaults/caps, hidden/modal guards and disposal.
 - `test/shell.test.ts`: real shell/mocked native boundary restores/persists per-project app state, preserves unrelated project sizes, hide/show/focus behavior and no settings or harness operations.
 - `test/browser/sidebar-resize.spec.ts`: offline WebKit at 125% zoom covers real edge drag, restore in another fixture page, cancellation, window clamp/restore, keyboard/default reset, narrow-overlay handle alignment, pointer capture outside viewport, modal priority, unchanged mounted draft/tool/focus and both live follow and older-history pause during later streaming.
-
-Latest verification: `mise run check` passed 312 TypeScript/Node tests, formatting/Clippy and 71 default Rust tests (two opt-in Pi smokes ignored); `mise run build` packaged and verified the macOS bundle; all 23 offline WebKit tests passed. Native visual/pointer/zoom acceptance remains outstanding.
 
 Run `mise run check` and offline `npm run test:browser`. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow). No running user app, actual session files or real notification is used. Fixture WebKit does not establish native Tauri zoom/pointer, Linux or Windows acceptance; ask the user to validate dragging the packaged app's sidebar.

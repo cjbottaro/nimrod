@@ -1,6 +1,12 @@
 # Command interactions
 
-Human guide: [Command interactions](../../../../docs/workspace-sessions.md#command-interactions).
+**Status: implemented.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#command-interactions) retain prior execution records.
+
+Human guide: [Command interactions](../../../../docs/command-palette.md#pickers-and-cancellation).
+
+## Specification and acceptance criteria
+
+One interaction owns every palette page and entry point. Escape cancels the whole interaction, Back alone returns to commands, accepted actions run after focus restoration, and stale results cannot mutate or reopen canceled pages.
 
 ## Ownership and extension points
 
@@ -33,10 +39,8 @@ Command-list sorting and accepted-command history are independent of page lifecy
 
 - `test/command-palette.test.ts`: all current page kinds and a future-feature selection, direct/palette entry, keyboard/native/API dismissal, pending-choice cancellation, deferred native close, stale metadata, explicit Back/query retention, accepted action after focus restoration, IME/repeated Enter and refresh/error paths.
 - `test/shell.test.ts`: direct session/model/thinking shortcuts and status controls now assert one-Escape closure, with drafts, session lifecycle and prompt-free behavior retained; Pi dialog priority is unchanged.
-- `test/browser/preferences.spec.ts`: both picker bullet markers, blank-slot label alignment and separator-relative size, independent keyboard/hover highlights, and acknowledged effort changes without submitting the draft. On `fix/picker-selection-bullet`, `mise run check`, all 36 offline WebKit tests and the signed macOS worktree build pass; native visual acceptance and Linux/Windows verification remain pending.
+- `test/browser/preferences.spec.ts`: both picker bullet markers, blank-slot label alignment and separator-relative size, independent keyboard/hover highlights, and acknowledged effort changes without submitting the draft.
 - `test/browser/keybindings.spec.ts`: direct shortcuts dismiss in one press and retain composer focus/draft.
 - `test/browser/workspace-tabs.spec.ts`: offline streaming continues under the palette; explicit Back retains the command query and one Escape from Resume restores the untouched composer. Naming cancellation retains the live session.
-
-Verification on `fix/palette-dismissal`: `mise run check` passes 358 TypeScript/Node tests, formatting/Clippy and 93 default Rust tests (two opt-in Pi smokes ignored); all 33 offline WebKit tests and the signed macOS worktree build pass. See [verification](../../../../docs/verification.md#one-step-command-interaction-dismissal).
 
 Run `mise run check` and offline `npm run test:browser`. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow). Fixture/WebKit coverage does not establish native Tauri focus acceptance or Linux/Windows parity. Do not launch or interrupt the user's app for validation.

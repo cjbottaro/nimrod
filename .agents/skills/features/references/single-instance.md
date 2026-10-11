@@ -1,8 +1,14 @@
 # Single-instance startup and terminal forwarding
 
-Human guide: [Terminal launches](../../../../docs/workspace-sessions.md#terminal-launches).
-Related: [architecture](../../../../docs/architecture.md#terminal-entry-point),
+**Status: implemented.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#single-instance) retain prior execution records.
+
+Human guide: [Terminal launches](../../../../docs/projects.md#terminal-launches).
+Related: [architecture](single-instance.md),
 [projects/sessions](projects-and-sessions.md), [pop-out focus](pop-outs.md).
+
+## Specification and acceptance criteria
+
+macOS cold launches elect one owner before UI and publish forwarding synchronously. Secondary connected failures never retry or create duplicate UI; directory routing never starts Pi. Linux/Windows retain their separate backend.
 
 ## Code map
 
@@ -98,4 +104,4 @@ quit the old build and use the default `nimrod` launcher (or `NIMROD_APP` for an
 explicitly isolated artifact); issue two rapid commands from a cold start for distinct
 projects, and check Command–backtick/Window-menu membership. Repeat warm launches, reopen an
 already-open directory, quit/relaunch, and verify normal pop-out project visibility.
-See [verification](../../../../docs/verification.md) for executed results/artifact.
+See [historical startup results](history/feature-records.md#single-instance) for executed evidence and [verification status](verification.md) for current native gaps.

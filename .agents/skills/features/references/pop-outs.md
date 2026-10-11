@@ -1,13 +1,19 @@
 # Nimrod pop-outs: implementation guide
 
+**Status: implemented.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#pop-outs) retain prior execution records.
+
 Read the [human feature guide](../../../../docs/pop-outs.md) and
 [shared UI vocabulary](../../nimrod-ui-vocabulary/SKILL.md) first. Follow repository
-`AGENTS.md` and [architecture](../../../../docs/architecture.md). Paths below are
+`AGENTS.md` and [architecture](architecture.md). Paths below are
 repository-root relative; run commands from the repository root.
 
 This reference carries implementation detail, not a mandate to expand the feature.
 Keep `docs/pop-outs.md` concise and user-facing; update this reference when changing
 implementation, storage, invariants, platform workarounds or test coverage.
+
+## Specification and acceptance criteria
+
+Immutable source captures deduplicate per session/content/language. Saved snapshots survive source Close/quit, explicit reference Close removes them, and automatic visibility preserves focus while explicit opening focuses the reference.
 
 ## Product boundaries
 
@@ -314,16 +320,6 @@ Run `mise run check`. Build/package the app only on explicit user request, then 
 `npm run test:browser`; these are offline fixtures, not the user's app. Never launch
 or interrupt that app, run live compaction/model work, or modify user session/state
 files to test persistence without explicit authorization.
-
-Native-cycle change evidence in `.worktrees/popout-window-cycle`, branch
-`fix/popout-window-cycle`: 347 TS tests, 80 default Rust tests (two opt-in real-Pi
-smokes ignored), packaged macOS build and bundle-signature verification. Three new
-regressions cover flag preservation/conflicts, idempotence and hidden creation setup.
-These are flag/source-boundary tests, not native window-cycling acceptance. Targets
-and the app bundle are worktree-local; the primary checkout's bundle is untouched.
-Fourteen offline WebKit tests passed for the earlier content-first UI; they were not
-rerun for the later native-only focus/project-visibility changes.
-See [verification](../../../../docs/verification.md) for the latest recorded evidence.
 
 Do not infer native acceptance from compiler/source-guard/jsdom/browser tests.
 Ask the user to verify saved-session quit/relaunch focus, reference visibility on

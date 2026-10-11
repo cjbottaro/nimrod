@@ -1,74 +1,52 @@
 ---
 name: features
-description: Feature implementation guide for Nimrod. Load when designing, implementing, debugging or reviewing features, or updating their documentation. Use the index to read only the relevant detailed references, including session management, reload/restart, session tree deletion, pop-outs, code copying, snapshot persistence and native reference-window focus.
+description: Nimrod feature specifications and implementation guidance. Load for design, implementation, debugging, review or documentation; use the index to read only relevant references.
 ---
 
 # Nimrod features
 
-This is the shared entry point for feature implementation knowledge. Keep this
-skill short; put detailed per-feature guidance in `references/` and read only the
-items relevant to the task. Follow repository `AGENTS.md` and
-[architecture](../../../docs/architecture.md). For UI work, also load the
-[shared UI vocabulary](../nimrod-ui-vocabulary/SKILL.md).
-
-## Worktrees, validation and builds
-
-Use a dedicated task worktree under `.worktrees/` as required by `AGENTS.md`.
-Run checks and relevant offline tests, but **never automatically build/package the app**,
-including at task completion or after merging. Wait for an explicit user build request;
-the user coordinates expensive builds across concurrent agents.
-“Build the app” means build the requested source (task worktree before merge, `main`
-after merge) and publish the verified artifact into the primary `main` checkout's
-default app location so the installed `nimrod` CLI uses it. It does not authorize
-merging, launching or restarting the app. Worktree targets stay isolated; only the
-finished app is published. Requested builds may overwrite each other's published
-artifact by design. See [build workflow and paths](references/build-cache.md).
+Read repository `AGENTS.md`, [architecture](references/architecture.md) and the relevant references below before changes. For UI work, load the [shared vocabulary](../nimrod-ui-vocabulary/SKILL.md). Implement directly unless delegation is approved.
 
 ## Feature index
 
-| Feature / work area | Implementation reference | Human guide |
+References own specifications, acceptance criteria, code maps, state/lifecycle, invariants and tests. Labels below route work; they do not duplicate specifications.
+
+| Work area | Canonical reference | User guide |
 | --- | --- | --- |
-| Explicit-only app builds, publication to main for the CLI, and shared Rust compiler caching with checkout-local targets | [Build cache](references/build-cache.md) | [Build cache](../../../docs/build-cache.md) |
-| **Planned:** card plugins, bundled renderer API parity, core/presentation boundaries, fallback and incremental implementation | [Card plugins](references/card-plugins.md) | [Card plugins (planned)](../../../docs/card-plugins.md) |
-| Select theme command-palette picker, live hover/arrow preview and cancellation rollback, offline bundled VS Code/Open VSX catalog, explicit Rust discovery/locked-package maintenance tool, built-in/local themes, JSONC validation, cross-window/pop-out synchronization and CSS-only state preservation | [Color themes](references/themes.md) | [Themes](../../../docs/themes.md) |
-| Syntax highlighting: explicit-label precedence, user-only conservative detection, Elixir/Erlang registration, aliases and safe plain-text fallback | [Syntax highlighting](references/syntax-highlighting.md) | [Syntax highlighting](../../../docs/syntax-highlighting.md) |
-| Transcript tool/reasoning cards, call-ID keyed updates/placement, tooltip-free summaries and accessible status labels | [Transcript cards](references/transcript-cards.md) | [Rendering behavior](../../../docs/architecture.md#rendering-contract-retained-from-pi-gui) |
-| Customizable project/app keybindings, registered actions for every current palette command (Select theme is unbound by default) (Restart Cmd/Ctrl+R, Edit Cmd/Ctrl+Shift+Comma), recorder UI, conflict reassignment, JSONC overrides and action/all reset; removed demo/file actions stay inert | [Keybindings](references/keybindings.md) | [Keybindings](../../../docs/keybindings.md) |
-| Project bar identity: primary directory name, muted parent path with boundary-aware `~` home abbreviation, full-path hover and parent-first truncation | [Projects and sessions](references/projects-and-sessions.md#project-bar-identity) | [Projects](../../../docs/workspace-sessions.md#projects) |
-| Recent-project picker: configurable Cmd/Ctrl+Shift+O and palette entry (Cmd/Ctrl+O stays a native directory chooser), searchable names/paths, single-line compact-dot/name/muted-parent rows with selected-only, space-reserved Enter hints, native-window bullet markers shared with model/thinking pickers, no in-picker folder chooser; known recents-removal/empty-project UX gaps | [Projects and sessions](references/projects-and-sessions.md#recent-project-picker) | [Open project](../../../docs/workspace-sessions.md#projects) |
-| Settings page: category sidebar, mounted independently scrolling panes, shared zoom-aware resize mechanics, app-wide width synchronization, retained edits/search/scroll and fixed Back header | [Settings layout](references/settings-layout.md) | [Settings](../../../docs/settings.md) |
-| Shared ordinary-modal shell, layout tokens, structural spacing, focus-aligned confirmation actions with plain labels and non-visual shortcuts, and descriptive command rows with title-line shortcuts | [Modal layout](references/modal-layout.md) | [Modal layout](../../../docs/modal-layout.md), [Command palette](../../../docs/command-palette.md) |
-| Command palette ranking: replaceable strategy, VS Code-style MRU, app-wide bounded usage and atomic cross-window recording | [Command ranking](references/command-ranking.md) | [Command palette ordering](../../../docs/command-palette.md) |
-| Command interactions: shared one-step Escape dismissal, explicit Back, pending-choice cancellation, stale-result guards and focus restoration | [Command interactions](references/command-interactions.md) | [Command interactions](../../../docs/workspace-sessions.md#command-interactions) |
-| Live model/thinking changes, request-boundary application, Pi scope/capabilities and acknowledged controls | [Model and thinking preferences](references/model-thinking.md) | [Model and thinking preferences](../../../docs/model-thinking.md) |
-| Composer image paste, native clipboard fallback, thumbnail removal, bounded separate image draft storage, image-only Pi RPC, transcript images and conservative image-send recovery | [Image paste](references/image-paste.md) | [Paste images](../../../docs/image-paste.md) |
-| Native per-session drafts, Rust-debounced atomic saves, submission durability, ignored legacy drafts and native image-reference GC | [Native drafts](references/native-drafts.md) | [Drafts](../../../docs/drafts.md) |
-| Composer typing hot path, coalesced autosizing and offline performance fixtures; keyboard hints, working-only follow-up queueing, delivery fallback and immediate pending steering turns with acknowledgement/queue reconciliation | [Composer](references/composer.md) | [Steering messages](../../../docs/architecture.md#steering-messages), [Composer responsiveness](../../../docs/architecture.md#composer-responsiveness), [Pi-specific behavior](../../../docs/architecture.md#pi-specific-behavior) |
-| Shared configurable sidebar resizing, per-project session width, owner-dialog guards, zoom-aware drag/keyboard controls and responsive clamping | [Sidebar resizing](references/sidebar-resize.md) | [Sidebar width](../../../docs/workspace-sessions.md#sidebar-width) |
-| Shared session-navigation model: canonical All/Switch/cycling order, view projections, presentation-only selection intents, shared selected-session connection/deduplication/barrier deferral and connected-first batch cleanup | [Session navigation](references/session-navigation.md) | [Session navigation](../../../docs/workspace-sessions.md#session-navigation) |
-| Session sidebar All / Unread / Working views with overlapping live counts, working/compaction/subagent membership and selected settled-row retention, sorted creation/historical recency, prompt-only live recency updates (selection/rename never reorder), relative-time/date labels and state indicators shared with both session pickers, viewport anchoring, stable inbox order, selected-row retention, working empty-state, blank conversation surfaces and filtered navigation | [Sidebar views](references/sidebar-attention.md) | [Sidebar views](../../../docs/workspace-sessions.md#sidebar-views) |
-| Background-session desktop notifications, response previews, exact-open-session click-to-bottom routing (macOS/Linux), stale-target/no-resume policy, macOS authorization/delivery and bundle signing, test alerts/read-only foreground diagnostics, focus suppression and preferences | [Notifications](references/notifications.md) | [Notifications](../../../docs/notifications.md) |
-| Session management: Delete sessions picker (Cmd/Ctrl+Shift+Backspace), nested tree confirmation over a retained picker, unchanged cancellation and in-place successful-row removal without rediscovery; row-targeted sidebar trash/Delete session tree, Rust-native file preview/removal, window-scoped icon/guide-line tree review with delayed loading and idle sidebar indicators, affected-project locks, batch cleanup, partial outcomes and quarantined recovery | [Session deletion](references/session-deletion.md) | [Delete session tree](../../../docs/workspace-sessions.md#delete-session-tree) |
-| Session management: connected-first Close/deletion replacement, selected-session loading/reconnect with deletion-barrier guards, open vs connected terminology, top-level Resume picker, shared uncached Rust Resume/Delete catalog with forward header/preview and reverse name/user-time reads, shared sidebar/Switch/Resume row presentation, distinct closed indicators and reusable picker Enter hints (single SVG factory/style, title-line placement, selected-only visibility), temporary-session disposal, reload/Restart session, lifecycle ownership, exact-file resume, draft preservation, Project bar and native Open project menu | [Projects and sessions](references/projects-and-sessions.md#session-management) | [Projects and sessions](../../../docs/workspace-sessions.md#session-management) |
-| Terminal forwarding, atomic macOS cold-start ownership, listener publication, stale-socket recovery and native window cycling boundaries | [Single-instance startup](references/single-instance.md) | [Terminal launches](../../../docs/workspace-sessions.md#terminal-launches) |
-| Pop-outs, code Copy actions, content hashing, snapshot persistence, project/session visibility, reference-window focus, native window cycling and geometry | [Pop-outs](references/pop-outs.md) | [Pop-outs](../../../docs/pop-outs.md) |
+| Project identity, recent projects, session lifecycle and draft storage | [Projects/sessions](references/projects-and-sessions.md) | [Projects](../../../docs/projects.md), [Sessions](../../../docs/sessions.md) |
+| Ordering, activation, connection and cleanup selection | [Session navigation](references/session-navigation.md) | [Sidebar navigation](../../../docs/session-sidebar.md#ordering-and-navigation) |
+| All/Unread/Working membership, indicators and recency | [Sidebar views](references/sidebar-attention.md) | [Session sidebar](../../../docs/session-sidebar.md) |
+| Shared sidebar resize mechanics | [Sidebar resizing](references/sidebar-resize.md) | [Resize](../../../docs/session-sidebar.md#resize) |
+| Deletion preview, transactions, reconciliation and recovery | [Session deletion](references/session-deletion.md) | [Deletion](../../../docs/sessions.md#delete-session-tree) |
+| CLI forwarding and native instance ownership | [Single instance](references/single-instance.md) | [Terminal launches](../../../docs/projects.md#terminal-launches) |
+| Pi framing, response order and acknowledgement | [Pi transport](references/pi-transport.md) | [Writing messages](../../../docs/writing-messages.md) |
+| Native per-session drafts, debounced saves and submission durability | [Native drafts](references/native-drafts.md) | [Drafts](../../../docs/drafts.md) |
+| Send/steer/queue, pending turns and recovery | [Composer](references/composer.md) | [Writing messages](../../../docs/writing-messages.md) |
+| Image paste, draft bytes and image recovery | [Image paste](references/image-paste.md) | [Paste images](../../../docs/image-paste.md) |
+| Tool/reasoning identity, lifecycle and disclosures | [Transcript cards](references/transcript-cards.md) | [Reading conversations](../../../docs/reading-conversations.md) |
+| Transcript layout, scroll intent, focus and zoom | [Transcript interaction](references/transcript-interaction.md) | [Reading](../../../docs/reading-conversations.md), [Settings](../../../docs/settings.md) |
+| Explicit labels and user-code inference | [Syntax highlighting](references/syntax-highlighting.md) | [Syntax highlighting](../../../docs/syntax-highlighting.md) |
+| Snapshot storage, visibility and native reference focus | [Pop-outs](references/pop-outs.md) | [Pop-outs](../../../docs/pop-outs.md) |
+| Background alerts, previews and native click routing | [Notifications](references/notifications.md) | [Notifications](../../../docs/notifications.md) |
+| Live model/thinking configuration | [Model/thinking](references/model-thinking.md) | [Model/thinking](../../../docs/model-thinking.md) |
+| JSONC preferences, migration and window state | [Preferences](references/preferences.md) | [Settings](../../../docs/settings.md) |
+| Settings categories and independent width | [Settings layout](references/settings-layout.md) | [Settings](../../../docs/settings.md) |
+| Bindable actions, recorder and conflicts | [Keybindings](references/keybindings.md) | [Keybindings](../../../docs/keybindings.md) |
+| Palette page lifecycle and cancellation | [Command interactions](references/command-interactions.md) | [Command palette](../../../docs/command-palette.md) |
+| Palette command ranking and usage storage | [Command ranking](references/command-ranking.md) | [Ordering](../../../docs/command-palette.md#ordering) |
+| Shared modal shell and action focus | [Modal layout](references/modal-layout.md) | [Confirmations](../../../docs/command-palette.md#confirmation-dialogs) |
+| Theme selection, preview, import and synchronization | [Themes](references/themes.md) | [Themes](../../../docs/themes.md) |
+| Theme-catalog maintenance and pinned sources | [Theme catalog](references/theme-catalog.md) | [Contributing](../../../CONTRIBUTING.md) |
+| Explicit builds, publication and compiler cache | [Build workflow](references/build-cache.md) | [Contributing](../../../CONTRIBUTING.md#app-builds) |
+| **Planned:** card renderer plugins | [Card plugins](references/card-plugins.md) | [Card plugins](../../../docs/card-plugins.md) |
 
-Features without a reference yet: consult their existing docs and source; add a
-reference when doing substantive feature work rather than inventing details.
+## Workflow and documentation
 
-## Command palette and keybinding rule
-
-Every Nimrod command-palette command must have a matching action in `src/keybindings.ts`, appear in Settings → Keybindings, and use the shared dispatcher. Shortcut hints must come from effective bindings, never hard-coded labels. Assign a default where agreed; an empty default list is allowed but the command must still be bindable. Document defaults and test overrides/unbinding. Native-only menu actions (such as Open project / Cmd/Ctrl+O) remain explicit exceptions outside the palette. See [keybinding invariants](references/keybindings.md#invariants).
-
-## Keeping documentation useful
-
-- **External docs** are user guides in `docs/`: concise usage, observable behavior and limitations.
-- **Internal docs** are this features skill and `references/<feature>.md`: decisions, code map, invariants,
-  data formats, concurrency/lifecycle, platform pitfalls, tests and verification gaps.
-- Update the human guide and reference together when behavior changes. Keep
-  implementation-only changes in the reference instead of inflating the human guide.
-- Add new references to this index; link human guides from `docs/README.md` and the
-  main README as appropriate. Do not create a separate skill for every feature.
-- Reuse the vocabulary skill for shared UI terminology; do not duplicate its glossary.
-- Keep unsupported/deferred behavior explicit. Distinguish fixture evidence from
-  native/platform acceptance and follow the repository's local-testing restrictions.
+- Use a dedicated task worktree, run `mise run check`, and run offline browser tests for scrolling changes. No automatic app builds or user-app launch/interruption; [build workflow](references/build-cache.md) owns requested publication.
+- Keep tests fixture-based. No paid requests, live compaction, user-session deletion or upstream extension changes without authorization.
+- Every palette command must have a registered bindable action and shared dispatcher; empty defaults are allowed. Effective shortcut hints come from the registry. Native-only Open project remains an explicit exception. See [keybindings](references/keybindings.md#invariants).
+- `docs/` is user-facing usage, observable behavior and relevant limitations. References are internal specifications/implementation. Behavior changes update both; implementation-only changes update the reference.
+- Keep one canonical owner for shared contracts; other features link to it. The vocabulary skill owns names, not lifecycle specifications.
+- New references belong in this index; new user guides belong in [docs index](../../../docs/README.md) and README. Developer tooling belongs in Contributing, not an app feature guide.
+- Keep living references focused on current contracts/test maps. Archive significant superseded investigations in `references/history/` with clear historical status. [Verification](references/verification.md) owns current native evidence boundaries and acceptance gaps; fixture tests never establish native parity.
+- Documentation links/anchors are checked offline by `npm run check:docs`, included in `mise run check`. The checker ignores fenced examples and never fetches external URLs.
