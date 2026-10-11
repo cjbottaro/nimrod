@@ -20,4 +20,4 @@ This is a card-rendering extension point, not initially an unrestricted extensio
 
 Plugin packaging, installation, isolation, renderer selection and overrides, supported actions, and the transport for custom Pi content are not yet specified. Pi's existing text widgets and dialogs do not provide a rich-card transport, and TUI-only extensions will not automatically become GUI plugins.
 
-Implementation will proceed incrementally: establish the rendering boundary, migrate bundled renderers, prove the API with a richer card, then add external plugin support. No delivery schedule or cross-platform acceptance is implied.
+There is no delivery schedule. Bundled renderers may ship before external plugin loading becomes available.

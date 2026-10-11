@@ -1,5 +1,11 @@
 # Composer delivery and keyboard hints
 
+**Status: implemented.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#composer) retain prior execution records.
+
+## Specification and acceptance criteria
+
+Idle sends and busy Enter steering preserve acknowledged-draft semantics. Busy-only explicit follow-up queues and immediate pending turns reconcile without duplicate user messages, forced scrolling or inferred consumption.
+
 ## Code map
 
 - `src/pi/composer-dom.ts`: keyboard delivery mapping and hint ordering.
@@ -35,6 +41,6 @@ Image attachment behavior and its text-only queue recovery boundary are covered 
 
 `test/composer-dom.test.ts` covers idle/busy mapping, exact hint order, newline and IME guards. `test/session.test.ts` covers prompt RPC delivery and acknowledgement, including explicit follow-up requests arriving while idle. DOM/unit coverage is not native keyboard acceptance on macOS or Linux.
 
-`test/steering-transcript.test.ts` covers FIFO duplicates, historical exclusions, event-before-receipt, authoritative queue/dequeue/recovery and disconnect labels. `test/native-view.test.ts` covers immediate safe-Markdown previews, in-place reconciliation, acknowledgement/newer drafts, coalesced clear/recovery, failures/reset and follow-up/slash exclusions. `test/browser/steering-transcript.spec.ts` uses only the offline demo in automated WebKit to verify stable user articles, no duplicate/status text and preserved bottom follow/older-history reading. Validation in `.worktrees/transcript-steering`: offline `mise run check` passed 387 TS/Node tests, formatting, Clippy and 97 Rust tests (two real-Pi tests intentionally ignored); `mise run build` passed macOS app packaging/signature verification; the full `npm run test:browser` suite passed 43 automated WebKit tests. One repeat check during parallel build/browser validation hit the unchanged Rust `single_instance::tests::lock_holder_without_listener_times_out_without_becoming_primary` fixture's `Option::unwrap()`; a subsequent standalone full check passed all 97 Rust tests. Native Pi/macOS and Linux acceptance remain unverified; no user app was launched.
+`test/steering-transcript.test.ts` covers FIFO duplicates, historical exclusions, event-before-receipt, authoritative queue/dequeue/recovery and disconnect labels. `test/native-view.test.ts` covers immediate safe-Markdown previews, in-place reconciliation, acknowledgement/newer drafts, coalesced clear/recovery, failures/reset and follow-up/slash exclusions. `test/browser/steering-transcript.spec.ts` uses only the offline demo in automated WebKit to verify stable user articles, no duplicate/status text and preserved bottom follow/older-history reading.
 
-User-facing behavior: [architecture](../../../../docs/architecture.md#steering-messages).
+User-facing behavior: [architecture](../../../../docs/writing-messages.md#steering-messages).

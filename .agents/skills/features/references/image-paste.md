@@ -1,5 +1,11 @@
 # Composer image paste
 
+**Status: implemented.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#image-paste) retain prior execution records.
+
+## Specification and acceptance criteria
+
+Explicit focused paste attaches bounded original image bytes to the originating session. Image-only prompts, selective acknowledgement clearing and explicit image recovery must preserve newer drafts and never infer image consumption from text-only queues.
+
 ## Code map
 
 - `src/pi/image-attachments.ts`: reference/wire types, MIME/size/count/base64 bounds, clipboard file extraction, image decoding/dimension check, reference traversal.
@@ -35,7 +41,5 @@
 `test/session.test.ts`: actual prompt fields/image-only acceptance and malformed/slash validation before writing.
 `test/browser/paste-images.spec.ts`: offline WebKit image decode/removal/image-only send, mixed selection insertion and session isolation. Fixture allows local blob resources while aborting external networking.
 Automated WebKit also checks persistent-store byte roundtrip through a new store instance and missing-reference failure. Native paste acceptance, actual app reload/quota behavior and Linux desktop/Wayland acceptance remain manual checks. Unit/automated WebKit evidence is not native macOS acceptance. No user app or live Pi/model is launched by validation.
-
-Validation in `.worktrees/paste-images`: `mise run check` passed 445 TS/Node tests, formatting/Clippy and 108 Rust tests (two real-Pi smoke tests intentionally ignored); `mise run build` passed macOS app packaging/signature verification; `npm run test:browser` passed all 56 offline WebKit tests. No user app was launched. Native macOS/Linux clipboard and real Pi image acceptance remain unverified.
 
 See [user guide](../../../../docs/image-paste.md).

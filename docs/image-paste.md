@@ -41,5 +41,4 @@ consumption from a caption or idle state.
   and other OS image representations when the paste event exposes no image/text.
   Finder/file-manager copied files and HTML-only clipboard images are not imported.
 - Native macOS screenshot/image paste and Linux desktop/Wayland clipboard acceptance
-  still require manual verification. Offline automated WebKit tests do not establish
-  native platform parity. No file picker or drag-and-drop is included yet.
+  still require manual verification. Native clipboard support varies by desktop. No file picker or drag-and-drop is included yet.

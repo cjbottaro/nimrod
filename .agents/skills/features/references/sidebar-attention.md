@@ -1,7 +1,13 @@
 # Session sidebar views: implementation reference
 
-Read the [human guide](../../../../docs/workspace-sessions.md#sidebar-views) and
+**Status: implemented.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#sidebar-attention) retain prior execution records.
+
+Read the [human guide](../../../../docs/session-sidebar.md#views) and
 [UI vocabulary](../../nimrod-ui-vocabulary/SKILL.md). Paths below are repository-root relative.
+
+## Specification and acceptance criteria
+
+All/Unread/Working filter open membership without unloading or selecting new arrivals. Counts exclude settled retained rows; prompt-only recency and text-only time updates preserve reading position and authoritative session state.
 
 ## Code map
 
@@ -15,7 +21,7 @@ Read the [human guide](../../../../docs/workspace-sessions.md#sidebar-views) and
 - `src/main.ts`: attention reasons, `isWorking` membership shared by counts/filter/empty status, view persistence, minimal row moves/visibility, focus and keyboard navigation.
 - `src/pi/session.ts`: existing Pi attention callback for live settled completion, final run/process failures; input dialog lifetime is tracked by the shell's `withTabDialog`.
 
-Per-row trash/Close controls are siblings of the conversation-selection button in all three views. Trash targets that row without changing selection or recency; see [session deletion](session-deletion.md#sidebar-row-action) for eligibility, confirmation and cleanup.
+Per-row trash/Close controls are siblings of the conversation-selection button in all three views. Trash targets that row without changing selection or recency; see [session deletion](session-deletion.md#sidebar-action-and-review-ui) for eligibility, confirmation and cleanup.
 
 ## Membership and resolution
 
@@ -35,9 +41,11 @@ Per-row trash/Close controls are siblings of the conversation-selection button i
 
 A resolved row already in the inbox remains while selected. The count measures actual outstanding attention, so a retained read row may coexist with count 0. It disappears after selecting another session. Unresolved input/failure remains regardless of selection. Explicitly selecting a non-attention session through the palette/shortcuts switches to All before showing its conversation. New/resumed sessions follow the same rule. It never inserts an ordinary session into the inbox.
 
-`SessionNavigation.all()` sorts private membership by descending `lastUsed`; underlying open order remains unchanged for stable ties/lifecycle/storage. All, Switch and cycling share this projection; `adjacent` matches All's displayed order in both directions with wraparound, independently of filtered/collapsed sidebars. New (saved/named/temporary/demo) seeds creation time with `navigation.nextRecency()` and inserts at the top, including same-millisecond creations/clock rollback. Resume seeds the maximum valid remembered recency and historical `lastUserMessageAt`, never mtime or resume time. Exact-file/last-session opens use read-only inspection when no seed is available. Legacy unknown layout entries are inspected before insertion; UI session actions stay disabled through that asynchronous initial restoration. Late metadata cannot resurrect a confirmed deletion or create duplicates. Unreadable legacy entries/drafts remain for explicit recovery, without fabricated timestamps.
+[Session navigation](session-navigation.md#contracts) owns canonical All/Switch/cycling order, insertion and activation. Sidebar supplies prompt-only recency metadata and DOM effects; it must not maintain a parallel sort or connection policy.
 
-`lastUserMessageAt` is the latest valid timestamp among persisted Pi user-message records, across stored branches; it is navigation metadata, not a composer acknowledgement or reconstruction of active Pi context. Prefer nested numeric message milliseconds, falling back to the record's RFC3339 timestamp (including offsets). Ignore assistant/tool/rename/compaction/control entries, malformed/nonpositive/out-of-range timestamps and file mtime. Existing exact-file/catalog byte/record limits and read-only behavior remain. No new live history polling, Pi launch, transcript replay or uncertain-draft clearing for this metadata.
+`lastUserMessageAt`, never mtime or resume time. Exact-file/last-session opens use read-only inspection when no seed is available. Legacy unknown layout entries are inspected before insertion; UI session actions stay disabled through that asynchronous initial restoration. Late metadata cannot resurrect a confirmed deletion or create duplicates. Unreadable legacy entries/drafts remain for explicit recovery, without fabricated timestamps.
+
+`lastUserMessageAt` is read-only user-message recency metadata across stored branches; the catalog chooses the latest record with a usable timestamp while exact-file inspection retains its maximum-timestamp semantics (see [catalog specification](projects-and-sessions.md#ownership-discovery-and-persistence)); it is navigation metadata, not a composer acknowledgement or reconstruction of active Pi context. Prefer nested numeric message milliseconds, falling back to the record's RFC3339 timestamp (including offsets). Ignore assistant/tool/rename/compaction/control entries, malformed/nonpositive/out-of-range timestamps and file mtime. Existing exact-file/catalog byte/record limits and read-only behavior remain. No new live history polling, Pi launch, transcript replay or uncertain-draft clearing for this metadata.
 
 Live `touchTab` remains exclusive to `SessionUi.promptAccepted` after successful `prompt` RPCs (ordinary/steering/follow-up); `/name` accepts its composer receipt after `set_session_name` without this hook. Unknown/rejected/canceled submissions never advance recency. Selection, cycling, reading, model/metadata changes, compaction, snapshots, background output/completion and automatic Close/deletion selection do not mark use. Do not reconnect navigation or timer refresh to `touchTab`. Timestamp validation rejects unsafe integers and values outside JavaScript Date's range; monotonic advancement handles same-millisecond use/clock rollback. Sidebar Up/Down/Home/End follow displayed order; Switch session/cycling still cover all open entries independently of the filter. Switch and cycling follow All's recency order, not underlying open order or Unread's arrival order.
 
@@ -70,9 +78,9 @@ is measured in the shown pane.
   palette actions and ignore Cmd/Ctrl+W when no conversation is presented.
 - Hide, never unload: suspend renderer geometry through `setActive(false)` and
   retain DOM, drafts, disclosures, follow intent/reader position and live children.
-  Returning to All shows the remembered session without composer focus or a
-  filter-triggered launch. Inactive entries still require explicit selection to
-  resume. Persisted attention views boot blank without launching hidden sessions.
+  Returning to All shows the remembered session without composer focus and
+  requests its saved-session connection through the shared activation boundary.
+  A persisted filtered view still boots blank without launching hidden entries.
 - Completion of a hidden remembered session is unread and eligible for the
   existing background notification policy. New rows never automatically present
   their conversation or steal focus. Pending Pi dialogs keep existing modality.
@@ -81,7 +89,7 @@ is measured in the shown pane.
   retain an unrelated working session when entering the view.
 - Explicit Switch session, cycling (even one hidden session), New and Resume
   reveal a target outside the inbox in All, persisting that view. Automatic
-  Close/deletion replacement prefers the most-recently-used connected session in the current view, then across All (switching views if needed). If none are connected, use next/previous displayed-row fallback, switching to All when the filter has no candidates. Inactive saved fallback selection loads/reconnects Pi after any deletion barrier clears; see the [shared cleanup policy](projects-and-sessions.md#selection-after-close-or-successful-deletion). Closing a hidden row never changes the presented conversation.
+  Close/deletion replacement follows the [canonical navigation/connection policy](session-navigation.md#contracts), including inactive saved fallback connection after deletion barriers clear. Closing a hidden row never changes the presented conversation.
 - Focus inside a newly hidden pane/row falls back to the current view tab unless
   a dialog owns focus. Hiding the sidebar itself does not hide the conversation;
   the invariant concerns view membership, not whether navigation is collapsed.
@@ -120,11 +128,7 @@ Attention reasons, ordering and selected-row retention are in-memory for the cur
 
 ## Tests and verification
 
-Session-cycle ordering fix (`.worktrees/session-cycle-order`, branch `fix/session-cycle-order`): the regression fails against the old open-order implementation; `mise run check` passes 361 TS/Node tests and 93 Rust tests (two opt-in Pi smokes ignored), formatting/Clippy; `mise run build` verifies the signed macOS bundle; all 36 offline WebKit tests pass. Both cycling directions wrap in All's current recency order, including after acknowledged sends, with collapsed/filtered navigation and unchanged recency. No user app/window, main bundle, live Pi/models or upstream extension was touched. Native shortcut/focus and Linux acceptance remain user/platform validation.
-
 The counted-filter update adds shell coverage for overlapping counts, Working/compaction settlement and selected-row retention, blank arrivals, unchanged process ownership, three-view keyboard wrapping and Unread/Working restoration without hidden launches. Existing legacy `attention` restoration fixtures verify migration. Offline WebKit covers counted accessible tab names, Working selection/settlement and blank re-entry. Existing input/failure fixtures continue to cover Unread's broader attention semantics. A dedicated shell regression covers reported running/queued subagents, free-form status exclusion, input-waiting exclusion/resolution and unavailable/disconnected removal.
-
-Counted-filter verification in `.worktrees/sidebar-filters`: `mise run check` passes 345 TypeScript/Node tests, formatting/Clippy and 76 default Rust tests (two opt-in Pi smokes ignored); the signed worktree build and all 31 offline WebKit tests pass. Native visual/focus and Linux/possible Windows acceptance remain separate. No user app/window, sessions, Pi/models, OS notifications or upstream extension were touched.
 
 - `test/session.test.ts`: prompt acceptance hook fires for acknowledged ordinary/steering/follow-up sends, never inline/dialog renames (including canceled/rejected/unknown outcomes), compaction or uncertain prompts; accepted rename still updates name and composer receipt.
 - `test/session-sidebar.test.ts`: identity cache persistence/replacement/cleanup, relative/date thresholds and malformed/future values, indicator precedence, minute/visibility/focus timer cadence and disposal.
@@ -135,13 +139,5 @@ Counted-filter verification in `.worktrees/sidebar-filters`: `mise run check` pa
 - `test/session-attention.test.ts`: arrival order, repeated updates, selected resolved retention, unresolved membership, close/removal, returned-array isolation.
 - `test/shell.test.ts`: real shell/mocked IPC covers filtering, live completion, final failure/disconnect and input resolution, counts, full open-session palette, per-project view restore, history exclusion, keyboard order, unchanged child ownership, singular/plural working counts, stable pulse nodes, authoritative busy/compaction settlement, blank/inert conversations, restored attention views without hidden startup, action/Close suppression, hidden-session notification eligibility, and connected-first Close/deletion replacement, filtered-to-All fallback and inactive replacement (both reconnect; deletion waits for transaction release).
 - `test/browser/workspace-tabs.spec.ts`: offline WebKit children cover arrival order, retained read row/count, view switching and user-driven All recency, hidden-session navigation switching to All, blank conversation surfaces, mounted draft/disclosure/reader-position restoration, independent live processes, empty working/idle transitions, real CSS pulse/reduced-motion behavior and existing layout/focus regressions.
-
-Latest historical-recency/time-label verification (isolated worktree at `26e551e`): `mise run check` passed 338 TypeScript/Node tests, formatting/Clippy and 76 default Rust tests (two opt-in Pi smokes ignored); `mise run build` packaged/verified the worktree macOS app and all 28 offline WebKit tests passed. No main-checkout bundle change, manual app testing, real user-session deletion or live Pi/model request. Native/platform acceptance remains separate.
-
-Integration verification after rebasing onto `f149f66` in `.worktrees/sidebar-recency-time`: check passed 340 TypeScript/Node tests and 76 default Rust tests (two opt-in smokes ignored), formatting/Clippy, signed worktree build, and all 29 offline WebKit tests. Moving the worktree invalidated cached absolute Tauri permission paths; rebuilding only its generated Cargo target fixed this. No main bundle, user app/session, global cache or unrelated worktree changes.
-
-Earlier prompt-only recency/rename-exclusion verification: `mise run check` passed 294 TypeScript/Node tests, formatting/Clippy and 70 default Rust tests (two opt-in Pi smokes ignored); the macOS build/signature verification and all 20 offline WebKit tests passed. These are combined-checkout totals, with no Rust, Pi or installed-extension edits for this correction. Browser output was isolated under `/tmp`. Native visual/scroll/focus and Linux/Windows acceptance remain unperformed.
-
-Latest blank-surface verification: `mise run check` passed 279 TypeScript/Node tests, formatting/Clippy and 69 default Rust tests (two opt-in Pi smokes ignored); the packaged macOS build and 18 offline WebKit tests passed. An intermediate check encountered concurrent Rust formatting edits; the final rerun passed. No Rust changes were made for the blank-surface feature.
 
 Run `mise run check` and offline `npm run test:browser` for sidebar geometry/focus changes. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow). No real user sessions or OS notifications are used in fixtures. Native Tauri and Linux/Windows acceptance remain separate; ask the user to validate the visual feel in the packaged app.

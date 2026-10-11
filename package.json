@@ -10,6 +10,7 @@
     "test": "tsc --noEmit && tsx --test test/*.test.ts",
     "test:browser": "playwright test",
     "verify:bundle": "tsx scripts/verify-macos-bundle.ts",
+    "check:docs": "node --test test/check-docs.test.mjs && node scripts/check-docs.mjs",
     "check": "mise run check"
   },
   "dependencies": {

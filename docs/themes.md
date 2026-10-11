@@ -22,8 +22,7 @@ never overwritten by catalog updates.
 
 The catalog currently includes **267 variants**, including official Dracula,
 Catppuccin, One Dark Pro, Gruvbox, Ayu, Rosé Pine, Cobalt2, Tokyo Night and Nord.
-Most are collected from Open VSX packages; the original eight source snapshots
-remain available with their existing IDs.
+Most come from Open VSX packages.
 Our hand-tuned Dracula and Omarchy adaptations remain available separately.
 Bundled catalog themes do not count toward the 50-import limit and cannot be
 removed through the imported-theme removal action. Previously saved Gogh themes
@@ -43,7 +42,7 @@ Open **Settings** using the project-bar gear or **⌘/Ctrl ,**, then use the **t
 
 Both Omarchy adaptations stay dark regardless of OS appearance and work without Omarchy installed. They are bundled snapshots, not automatic synchronization with the active desktop theme. Attribution and licenses are in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). Transparency, blur and desktop theme following are not included.
 
-Changes apply immediately across project windows and pop-outs and are remembered between launches. They do not change zoom, layout, fonts, draft text, or the conversation. Switching colors does not rebuild transcript DOM or restart Pi. Native window decorations and OS file choosers still follow platform appearance settings.
+Changes apply immediately across project windows and pop-outs and are remembered between launches. They do not change zoom, layout, fonts, draft text, or the conversation. Switching colors does not reset expanded cards, reading position or restart Pi. Native window decorations and OS file choosers still follow platform appearance settings.
 
 ## Import a theme
 
@@ -80,24 +79,8 @@ This is also the workaround for themes whose source files use `include` or an ex
 - Up to **50 imported themes**. Theme selection and imported colors/names are stored in `appearance.theme` and `appearance.importedThemes` in Nimrod's JSONC settings file, separately from drafts and app-managed state. Legacy webview theme storage is migrated once. Valid external edits synchronize across windows; see [settings.md](settings.md). The original file is not needed after import. There is no cloud sync.
 - Invalid files, canceled file picking, and persistence failures leave the active theme unchanged and show a dismissible notice. If saved settings are corrupt, startup falls back to Nimrod with a notice. A successful change is persisted before being applied.
 
-## Catalog limits and verification
+## Catalog limits
 
-The catalog is a curated selection, not the complete VS Code Marketplace.
-Source snapshots and full licenses are in [THEME_CATALOG_NOTICES.md](../THEME_CATALOG_NOTICES.md).
-Maintainers update it explicitly using the [Rust bundle tool](theme-catalog-plan.md).
-Normal development builds never run that tool.
+The catalog is curated, not the complete VS Code Marketplace. Bundled source snapshots and full licenses are in [THEME_CATALOG_NOTICES.md](../THEME_CATALOG_NOTICES.md). Catalog updates arrive with app releases, not runtime downloads.
 
-Automated tests use offline fixtures. Native visual/focus acceptance on macOS and
-Linux remains user validation; possible Windows behavior is unverified.
-
-## Implementation
-
-- `src/theme.css`: Nimrod palette and application layout; internal `--vscode-*` compatibility tokens remain.
-- `src/themes/theme.ts`: JSONC parsing, allowlisted hex colors, palette fallbacks, broad syntax mapping, saved-state validation, and CSS-variable-only application.
-- `src/themes/catalog.json`: checked-in resolved VS Code theme catalog.
-- `tools/theme-bundler/`: explicit Rust release-maintenance tool and pinned source manifest.
-- `src/themes/builtins.ts`: shared built-in/catalog registry and selected-palette lookup for project windows and pop-outs.
-- `src/themes/dracula.json`, `tokyo-night.json`, `osaka-jade.json`: importable built-in adaptations.
-- `src/themes/picker.ts`: selection, local file import/removal, notices, persistence, and stale-import protection.
-- `test/themes.test.ts`: parser, lifecycle, persistence, and DOM-state regressions.
-- `scripts/check-themes.mjs`: optional actual Chromium color checks under both light/dark CSS branches, plus import/restore and state preservation. Run with `CHROMIUM=/path/to/chrome-headless-shell node scripts/check-themes.mjs`. This does not establish native WebKit/file-dialog acceptance.
+Linux/possible Windows theme rendering and native file-picker behavior remain unverified.

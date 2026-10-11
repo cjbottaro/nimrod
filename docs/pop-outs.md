@@ -39,5 +39,4 @@ Snapshots are stored in `~/.local/state/nimrod/popouts/`, with references in app
 state. `XDG_STATE_HOME` can change that root; Pi's session files are untouched.
 If a snapshot cannot be saved or restored, Nimrod reports the error.
 
-Native Windows/Linux focus behavior still needs verification. See
-[verification](verification.md) for tested behavior and remaining platform checks.
+Native Linux/possible Windows focus behavior and multi-display restoration remain unverified.

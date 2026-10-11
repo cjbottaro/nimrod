@@ -1,31 +1,27 @@
-# Documentation
+# User guides
 
-## Feature guides
+## Projects and conversations
 
-- [Card plugins](card-plugins.md) — **planned** customizable cards, with built-in renderers using the same API as third-party plugins.
+- [Projects](projects.md) — open directories, recent projects and terminal launches.
+- [Sessions](sessions.md) — create, switch, resume, restart, close and delete conversations.
+- [Session sidebar](session-sidebar.md) — All, Unread and Working views, indicators and width.
+- [Writing messages](writing-messages.md) — send, steer, queue, Stop, slash commands and recovery.
+- [Reading conversations](reading-conversations.md) — cards, code actions, links and auto-follow.
+- [Paste images](image-paste.md) — attachments, drafts and image-send recovery.
+- [Model and thinking preferences](model-thinking.md) — change configuration for upcoming requests.
+- [Pop-outs](pop-outs.md) — keep captured code or Markdown visible in reference windows.
+- [Notifications](notifications.md) — background alerts, click navigation and troubleshooting.
 
-- [Syntax highlighting](syntax-highlighting.md) — explicit language labels, conservative user-code detection, Elixir support and plain-text fallback.
-- [Transcript cards](architecture.md#rendering-contract-retained-from-pi-gui) — consistent tool summaries, invocation identity and disclosure behavior.
-- [Paste images](image-paste.md) — composer thumbnails, image-only sends, draft/recovery behavior and platform limits.
-- [Steering messages](architecture.md#steering-messages) — immediate pending user turns, acknowledgement, consumption and recovery.
+## Commands and preferences
 
-- [Notifications](notifications.md) — background-session desktop alerts, click-to-session/bottom navigation, preferences and native limitations.
+- [Command palette](command-palette.md) — search, selection, cancellation and ordering.
+- [Keybindings](keybindings.md) — shortcuts, reassignment and configuration syntax.
+- [Settings](settings.md) — categories, zoom, runtime paths and local files.
+- [Themes](themes.md) — live previews, bundled themes and standalone imports.
+- [Syntax highlighting](syntax-highlighting.md) — fence labels and conservative user-code detection.
 
-- [Pop-outs](pop-outs.md) — keep code/Markdown visible; session visibility and persistence.
-- [Projects and sessions](workspace-sessions.md) — [project-name/parent-path Project bar, searchable recent-project picker and native folder chooser](workspace-sessions.md#projects), plus session management: opening, closing, [consistent sidebar/Switch/shortcut navigation](workspace-sessions.md#session-navigation), connected-first cleanup selection with replacement loading/reconnect, [terminal launches and macOS window cycling](workspace-sessions.md#terminal-launches), [command cancellation and Back](workspace-sessions.md#command-interactions), [sidebar width](workspace-sessions.md#sidebar-width), [sidebar views, recency/time labels and blank attention surfaces](workspace-sessions.md#sidebar-views), [reload/restart](workspace-sessions.md#reload-restart-session), [repeated deletion picker](workspace-sessions.md#delete-sessions-picker), [delete session tree](workspace-sessions.md#delete-session-tree), saved sessions and drafts.
-- [Model and thinking preferences](model-thinking.md) — change selections during work; upcoming-request behavior and acknowledged state.
-- [Command palette](command-palette.md) — descriptive rows, right-aligned shortcuts, recent-first commands and shared history.
-- [Modal layout](modal-layout.md) — shared dialog shell, content boundaries and full-window Settings exception.
-- [Settings](settings.md) — category navigation, shared sidebar resizing with independent app-wide width, appearance, notifications, keybindings, runtime paths and configuration files.
-- [Keybindings](keybindings.md) — searchable shortcut editor, conflict reassignment and reset to defaults.
-- [Themes](themes.md) — live-preview Select theme picker, offline bundled VS Code catalog, built-ins and local imports.
+## Planned
 
-## Project references
+- [Card plugins](card-plugins.md) — intended customization; not implemented.
 
-- [Architecture](architecture.md) — boundaries and behavior contracts.
-- [Verification](verification.md) — tested behavior and remaining native/platform checks.
-- [Build cache](build-cache.md) — explicit-only app builds, publication to main for the CLI, and mise-managed Rust compiler caching across isolated worktree targets.
-- [Theme catalog direction](theme-catalog-plan.md) — explicit Open VSX discovery/Rust catalog maintenance, pinned sources and fast offline development builds.
-
-Detailed implementation references are indexed by the repository's
-[features skill](../.agents/skills/features/SKILL.md); guides here focus on usage and observable behavior.
+For development, see [Contributing](../CONTRIBUTING.md). Specifications and implementation details are indexed by the internal [features skill](../.agents/skills/features/SKILL.md).

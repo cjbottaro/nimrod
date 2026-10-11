@@ -1,10 +1,16 @@
 # Session tree deletion: implementation reference
 
-Read the [user guide](../../../../docs/workspace-sessions.md#delete-session-tree),
+**Status: implemented.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#session-deletion) retain prior execution records.
+
+Read the [user guide](../../../../docs/sessions.md#delete-session-tree),
 [shared vocabulary](../../nimrod-ui-vocabulary/SKILL.md) and
 [project/session reference](projects-and-sessions.md). Pi owns the JSONL format
 and conversation writes; Nimrod owns permanent file deletion. No Pi worker,
 installed extension, runtime executable or chat command participates in deletion.
+
+## Specification and acceptance criteria
+
+Review a fingerprinted descendants tree without launching Pi or activating the target. Affected idle/writer coordination precedes permanent children-first removal; only confirmed successes clean state, while unknown/partial outcomes require explicit guarded recovery.
 
 ## Code map
 
@@ -274,4 +280,4 @@ No real user session deletion, live Pi/model request, installed extension change
 or app launch is used for verification. Native multiple-window dialog/idle/close
 acceptance, real filesystem failure modes and Linux/Windows remain unverified;
 do not infer them from mocked IPC or macOS Rust/DOM tests. Record exact results
-in [verification](../../../../docs/verification.md).
+in [verification](verification.md).

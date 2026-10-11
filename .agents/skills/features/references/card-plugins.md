@@ -33,7 +33,7 @@ Using the plugin contract for normal sessions continuously exercises it, makes b
 
 ## Current code map
 
-These are existing anchors, not a completed boundary audit. Start with the [transcript-card reference](transcript-cards.md) and [rendering contract](../../../../docs/architecture.md#rendering-contract-retained-from-pi-gui).
+These are existing anchors, not a completed boundary audit. Start with the [transcript-card reference](transcript-cards.md) and [rendering contract](transcript-interaction.md).
 
 | Anchor | Current responsibility |
 | --- | --- |

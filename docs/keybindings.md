@@ -1,16 +1,12 @@
 # Keybindings
 
-**Select theme…** (`select-theme`) opens the live-preview theme picker. It is
-bindable but has no default shortcut; configure it here or use the command palette.
-
-
 Open **Settings → Keybindings**, or use **Edit keybindings…** in the command palette.
 
 Search by action name, shortcut, or “modified.” Click a shortcut to change it, or **Add** to assign another. Press the desired combination in the recorder, then **Save**. Escape cancels; recording never executes the shortcut. Changes are saved and synchronized across project windows.
 
 - **×** removes that shortcut. Removing every shortcut leaves the action unbound, not reset.
 - **Reset** restores an action’s complete built-in shortcut list.
-- **Reset all…** asks for confirmation, then clears all customizations and restores defaults. Enabled reset confirmations focus the Reset action with an Enter icon; Cancel shows Esc. Enter on Cancel cancels instead. Recording a shortcut still requires explicit Save.
+- **Reset all…** asks for confirmation, then clears all customizations and restores defaults. Enabled reset confirmations focus the plain-label Reset action; Escape cancels. Enter on Cancel cancels instead. Recording a shortcut still requires explicit Save.
 - Conflicts name the competing actions. **Reassign** explicitly removes those competing shortcuts before saving. Resetting one action can also require reassignment if another action has borrowed its defaults.
 - A failed save retains the current bindings. External edits that introduce new conflicts during a save require review rather than silently stealing another shortcut.
 
@@ -26,6 +22,7 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 | New temporary session | Cmd/Ctrl+Shift+N |
 | Delete session tree… | Cmd/Ctrl+Backspace |
 | Delete sessions… | Cmd/Ctrl+Shift+Backspace |
+| Select theme… | Unbound by default |
 | Select model… | Cmd/Ctrl+M |
 | Select thinking level… (“effort”) | Cmd/Ctrl+E |
 | Command palette | Cmd/Ctrl+Shift+P |
@@ -43,17 +40,17 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 
 **Open recent project…** searches recently opened directories and is configurable like other palette commands. **Open project…** / Cmd/Ctrl+O remains the native directory-only chooser, outside this editor.
 
-Every current command-palette command has a default shortcut and can be rebound or unbound. **Restart session** restarts the selected saved session's Pi process, not the window; its existing eligibility and interruption-confirmation rules still apply. Offline demo and arbitrary session-file opening are no longer app commands. Plus and Equals both invoke Zoom in. Existing user overrides remain unchanged when defaults change; Reset the affected action to adopt its new defaults.
+Every current command-palette command can be rebound or unbound. **Select theme…** has no default shortcut. **Restart session** restarts the selected saved session's Pi process, not the window; its existing eligibility and interruption-confirmation rules still apply. Plus and Equals both invoke Zoom in. Existing user overrides remain unchanged when defaults change; Reset the affected action to adopt its new defaults.
 
-**Delete sessions…** opens a searchable saved-history picker for repeated deletion. Enter opens tree review above the retained picker; Cancel leaves it unchanged, and completed deletion removes only confirmed-deleted rows in place, selecting the next match without refreshing history. Escape from the picker closes it. See [Delete sessions picker](workspace-sessions.md#delete-sessions-picker).
+**Delete sessions…** opens a searchable saved-history picker for repeated deletion. Enter opens tree review above the retained picker; Cancel leaves it unchanged, and completed deletion removes only confirmed-deleted rows in place, selecting the next match without refreshing history. Escape from the picker closes it. See [Delete sessions picker](sessions.md#delete-several-conversations).
 
 **Delete opens the existing session-tree review; it does not immediately delete a session.** Its normal saved-session/idle eligibility rules still apply. Closing a saved session is not deletion. Temporary sessions use their existing Close/disposal flow.
 
-Project actions pause while Settings, the command palette, a key recorder, or an extension dialog is open. Settings and zoom shortcuts remain available on the Settings page, but not through another dialog. Repeated keydowns and IME composition never execute these actions. Shortcuts target the visible session, not a session hidden by Unread.
+Project actions pause while Settings, the command palette, a key recorder, or an extension dialog is open. Settings and zoom shortcuts remain available on the Settings page, but not through another dialog. Repeated keydowns and IME composition never execute these actions. Shortcuts target the visible session, not a session hidden by Unread or Working.
 
 ## Configuration file
 
-Only user overrides are stored in [settings.json](settings.md#files-and-synchronization):
+Only user overrides are stored in [settings.json](settings.md#configuration-files):
 
 ```jsonc
 {
@@ -66,7 +63,7 @@ Only user overrides are stored in [settings.json](settings.md#files-and-synchron
 }
 ```
 
-On macOS, Command+Option shortcuts still identify the underlying letter/digit when Option produces a dead key or alternate symbol (for example, Option+N’s tilde). Matching and the recorder share this normalization. Plain Option typing and IME composition are not treated as application shortcuts. This fallback uses standard letter/digit key positions when the unmodified layout character is unavailable; alternate keyboard layouts still need native validation.
+On macOS, Command+Option shortcuts still identify the underlying letter/digit when Option produces a dead key or alternate symbol (for example, Option+N’s tilde). Plain Option typing and IME composition remain text input, not application shortcuts. Alternate keyboard layouts remain incompletely verified.
 
 `primary` means Cmd on macOS and Ctrl on Linux. Explicit `cmd` and `ctrl` modifiers are also accepted. Modifier order is `primary`, `cmd`, `ctrl`, `alt`, `shift`, followed by the lowercase key. Use names such as `backspace`, `enter`, `arrowup`, or `plus`. Each action accepts up to eight single-keystroke shortcuts. Omitted actions inherit built-in defaults; an empty array disables the action’s shortcuts. Reset removes that action’s override; Reset all leaves an empty overrides object.
 
@@ -78,4 +75,4 @@ This editor covers Nimrod’s project-shell actions and zoom, not Pi’s interna
 
 Unshifted Cmd/Ctrl+O remains reserved for the native directory chooser; Shift+O is configurable. Other native menu/text-editing keys such as Q, H, A, C, V, X, Z and Tab combinations are reserved. On macOS, **Minimize** remains in the Window menu without Cmd+M, freeing that shortcut for Select model. **Close Window** remains available in the native menu without Cmd/Ctrl+W, which belongs to Close session. OS-reserved shortcuts can still be intercepted before Nimrod receives them.
 
-Automated offline WebKit and fixture tests cover editing and focus/draft/disclosure preservation. Native menu delivery and keyboard-layout behavior still need macOS user validation; Linux support is intended but not platform-verified, and Windows remains a possible future target.
+Native menu delivery and alternate keyboard layouts remain incompletely verified on macOS. Linux behavior is intended but not platform-verified; Windows remains a possible future target.

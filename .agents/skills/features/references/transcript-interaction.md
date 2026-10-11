@@ -1,0 +1,41 @@
+# Transcript layout, scrolling and focus
+
+**Status: implemented.** User guide: [Reading conversations](../../../../docs/reading-conversations.md). Related: [cards](transcript-cards.md), [composer](composer.md), [navigation](session-navigation.md), [notifications](notifications.md).
+
+## Specification and acceptance criteria
+
+The transcript is its own scroll pane above the in-flow Status area/composer. Transcript, status content, submission notices and composer use fluid width with 20 CSS-pixel side gutters, not inherited 920/960px caps. Status background/separators remain full-width; launch forms/modals retain independent compact sizing.
+
+Preserve live follow versus older-history reading through incremental updates, card/content resizing, composer growth, native zoom and hidden-session switching. Routine snapshots never steal focus or rebuild connected disclosure/spinner nodes. Each mounted session owns geometry, nodes and draft selection.
+
+## Code map
+
+- `src/pi/transcript-scroll.ts`: sole deferred transcript-follow owner; capture/request/flush, reader cancellation, resize recovery and active suspension.
+- `src/pi/webview-client.ts`: mounted renderer, snapshot/paint ordering, explicit reset, viewport observers and bottom-navigation bridge.
+- `src/pi/tool-card.ts`: independently scrolling per-card output; disclosure state.
+- `src/main.ts`: presented-session activation, modality, native zoom requests and notification navigation.
+- `src/pi/transcript.css`, `src/theme.css`, `src/workspace.css`: fluid surfaces, overflow and focus/layout styling.
+
+## Scroll invariants
+
+- Capture follow intent before mutation and request deferred follow through the same owner. Native/fixture layout growth is not user intent.
+- Explicit upward wheel/touch/key input and meaningful upward scrollbar movement cancel follow. Horizontal code scrolling must not cancel transcript following merely for a smaller vertical delta.
+- Near-bottom threshold is 80 CSS pixels. Fractional WebKit settlement of at most 2px when recorded positions represent bottom must not cancel pending follow or latch interruption. During pending growth, compare against prior bottom as well.
+- Resize uses previously settled geometry; don't combine new viewport dimensions with old offsets. Bottom clamping after collapse is layout, not upward navigation.
+- Hidden views suspend scroll bookkeeping, retaining follow intent or reader offset. Reveal geometry before reactivating; don't interpret zero hidden dimensions as navigation.
+- Per-tool output inspection is independent from transcript follow and other tool outputs.
+- Only an explicit bottom-navigation action (currently valid notification click) overrides reading position/re-enables follow. Ordinary switching preserves it.
+
+## Focus, reset and zoom
+
+Routine state/history refresh never focuses the composer. Explicit launch focuses once only when its session is still selected and no modal owns focus. Mounted view switching uses unique IDs and stable `data-pi-id` hooks; never reuse one renderer across sessions.
+
+Explicit resume/restart resets session-local disclosure/composer presentation through the established boundary, without resetting siblings or replaying prompts. Settings uses HTML modality over unchanged underlying layout and restores prior focus; startup cannot focus through it.
+
+Whole-app native webview page zoom is 75–200%, default 125%; reset is 100%. Never use font-size or CSS transforms as replacement. Requests serialize and only successful changes persist. Zoom doesn't refocus, mutate drafts or change harness state; resize/follow owns resulting geometry. [Keybindings](keybindings.md) owns dispatch/modal policy.
+
+## Tests and remaining acceptance
+
+`test/transcript-scroll.test.ts`, `test/native-view.test.ts`, tool/disclosure tests and offline WebKit workspace/steering/sidebar/settings/notification regressions cover rounding, pause/resume, identity, hidden geometry, focus and independent reading positions. The historical rounding reproducer is preserved in [verification history](history/verification.md#fractional-zoom-auto-follow-regression).
+
+Scrolling changes require `mise run check` and `npm run test:browser`. Fixtures use CSS zoom/mock native IPC, not native Tauri page zoom. Native trackpad/keyboard, 5K/multi-display geometry, animation timing and Linux/possible Windows webviews require user/platform acceptance.

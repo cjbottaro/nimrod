@@ -1,5 +1,11 @@
 # Build cache implementation reference
 
+**Status: implemented.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical record](history/feature-records.md#build-cache) retains prior execution records.
+
+## Specification and acceptance criteria
+
+Explicitly requested builds use checkout-local targets and publish verified whole artifacts to the primary CLI destination; no automatic packaging, branch changes or app launch. Compiler-cache reuse must never depend on shared target directories.
+
 ## Code map and invariants
 
 - `mise.toml`: pins `aqua:mozilla/sccache` at 0.18.0 alongside Rust/Node;
@@ -16,7 +22,7 @@
   tool pin without changing their tracked files. Explicit child overrides can
   supersede them. External worktrees need the configuration in their own branch.
   Tool installation alone does not enable the wrapper outside this config hierarchy.
-- User guide: `docs/build-cache.md`, linked from README and documentation index.
+- Developer guide: [Contributing](../../../../CONTRIBUTING.md#app-builds).
 
 ## Explicit build and publication workflow
 
@@ -78,27 +84,6 @@ local daemon; its stats are cumulative for its lifetime, and some settings only
 change after a server restart. Do not stop a pre-existing user's server just to
 reset counters. Cache entries survive a restart.
 
-## Verification
+## Tests and remaining acceptance
 
-On macOS, installed the pinned Aqua binary through mise. Offline fixtures used two
-separate Cargo roots (`main` and `.worktrees/branch`), separate targets, and one
-shared dependency source directory, modeling Cargo's shared registry source cache.
-Main-first compilation produced a dependency miss; branch compilation produced a
-Rust cache hit. After editing only the fixture dependency, branch-first compilation
-produced a miss and main compilation produced a hit. The second sequence also
-verified disk cache use after restarting the server started by this task; no
-pre-existing sccache executable/server was found before setup.
-
-The fixture created no model/Pi calls or application windows and did not modify
-main's artifacts. `CARGO_NET_OFFLINE=true mise run check` passed 341 TS/Node tests, formatting,
-Clippy and 76 Rust tests (two opt-in real-Pi tests ignored).
-`CARGO_NET_OFFLINE=true mise run build` passed packaging and macOS signature
-verification for `.worktrees/shared-build-cache/src-tauri/target/release/bundle/macos/Nimrod.app`.
-Both used the task worktree only; main's default/running bundle was untouched.
-After merging into main, verified `mise exec -- printenv RUSTC_WRAPPER
-CARGO_INCREMENTAL` and `mise exec -- sccache --version` in main and every existing
-worktree (card-plugin-plan, keybinding-option-key, native-session-deletion,
-resume-session-picker, session-terminology, shared-build-cache, sidebar-filters).
-All resolved `sccache`, `0` and version 0.18.0. Existing in-progress worktree edits
-were preserved; no child overrides, branch merges or app launches were needed.
-Linux and Windows cache behavior and native application acceptance are unverified.
+Offline two-root fixtures established compatible shared dependency reuse in both directions on macOS. Source-local crates and final linking need not hit. Linux/possible Windows cache behavior remains unverified. Historical setup evidence is in [build history](history/feature-records.md#build-cache).

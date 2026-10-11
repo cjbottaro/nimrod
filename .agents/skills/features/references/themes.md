@@ -1,7 +1,13 @@
 # Color themes
 
+**Status: implemented.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#themes) retain prior execution records.
+
 Human guide: [Themes](../../../../docs/themes.md). Maintenance guide:
-[Theme catalog](../../../../docs/theme-catalog-plan.md).
+[Theme catalog](theme-catalog.md).
+
+## Specification and acceptance criteria
+
+Theme application changes CSS colors only. Window-local previews never persist/broadcast; cancellation restores the latest committed theme. Imports remain bounded standalone files, catalog IDs stay stable, and no runtime networking occurs.
 
 ## Code map and invariants
 
@@ -66,76 +72,9 @@ Human guide: [Themes](../../../../docs/themes.md). Maintenance guide:
   command and source module were removed. Catalog release updates replace bundled
   data under stable IDs but never overwrite manually imported/Gogh copies.
 
-## Rust maintenance tool
+## Catalog maintenance boundary
 
-- `tools/theme-bundler/` is a standalone binary/library crate with its own pinned
-  Cargo.lock. `sources.json` explicitly lists repository, immutable 40-digit
-  revision, source ID, author/license path and stable theme IDs/names/paths/modes.
-- Explicit `mise run themes-update` downloads bounded raw files at the pinned
-  revisions (no whole clone, extension install or upstream scripts). Add/update
-  sources by editing the manifest, not implicitly chasing HEAD. `--offline` uses
-  cached pinned files only; `--manifest/--output/--notices/--cache` are override paths.
-- `src/lib.rs`: validate IDs/repositories/metadata, JSONC comments/trailing commas,
-  normalize repository-relative paths, resolve include trees and token-file
-  JSON/TextMate XML, detect cycles/depth, merge child colors and append token rules
-  after parent rules. Preserve semantic data. Reject URLs/absolute/backslash paths
-  and repository escapes. Plain XML parsing never retrieves external resources.
-- Bounds: 100 sources, 100 explicit themes/source, 512 KiB/source or resolved theme,
-  32-level include depth, 16 MiB compact bundle. Bounds fail visibly, never truncate.
-  Hex colors required; explicit normalization of legacy token `white`/`black` to
-  hex and removal of `inherit` preserves existing source compatibility. Runtime
-  importer still accepts only hex values. Type/name are manifest-owned.
-- `src/main.rs`: 30-second HTTPS request timeout, no redirects, bounded stream read,
-  per-run dedup and optional ignored `.theme-source-cache/` keyed by pinned path
-  hash. Bundle provenance hashes actual source bytes (including license/includes).
-  Builds never need this cache. Editing/deleting cache is maintenance-only.
-- All collection/resolution/validation must succeed before output replacement.
-  Temporary files plus same-directory replacement preserve old output on collection
-  failure. Notices and catalog are individually atomic, **not** a two-file atomic
-  transaction; if filesystem replacement fails between them, rerun/review both.
-- Outputs: `src/themes/catalog.json`, `THEME_CATALOG_NOTICES.md`; commit/review
-  manifest and generated files together only with permission. Both old notices and
-  generated catalog notices are packaged as Tauri resources.
-- Current Dracula repo commits YAML source, not declared generated JSON; Open VSX
-  published packages supply generated official Dracula/Soft JSON without executing
-  upstream generators. Hand-tuned built-in Dracula remains separate. Template/published-artifact adapters are future explicit work. Similarly,
-  Highlight.js remains unchanged; full TextMate/Shiki migration is separate work.
-
-## Open VSX discovery and locked packages
-
-- `tools/theme-bundler/src/open_vsx.rs`: `mise run themes-discover` searches Themes
-  by download count, bounded 2×100 search window / 50 accepted-package target.
-  Initial run inspected 121 of 1,951 results; 50 accepted packages / 259 variants,
-  71 omitted with reasons in `open-vsx.lock.json`. No exhaustive coverage claim.
-- Inspect version metadata and `package.json` for actual `contributes.themes`
-  (category includes icon themes). Each accepted package contains all compatible
-  declared JSON/JSONC variants; reject package if a variant fails resolution/color
-  validation. No silent per-package sampling. Licenses accepted explicitly:
-  MIT/Apache-2.0/BSD-2-Clause/BSD-3-Clause/ISC/MPL-2.0. Other declarations, missing
-  full license notices, deprecated/icon-only/non-JSON packages are reported.
-- Lock: namespace/name/version, pinned download URL, registry SHA-256, license path,
-  author and stable contribution IDs from normalized paths. Labels/versions/order
-  don't change IDs; path changes do. Discovery is the only latest-version search;
-  `themes-update` consumes the lock without rediscovery. `--registry-lock` overrides
-  it (isolated CLI tests explicitly pass a nonexistent lock).
-- Native maintenance HTTP client: 40-second requests; redirect allowlist only HTTPS
-  `open-vsx.org`/`openvsx.eclipsecontent.org`, max 3 redirects. Fixed pinned registry
-  URL validation and SHA-256 verification before caching/collection, including
-  cached bytes. `.theme-source-cache/ovsx-<sha>.vsix` is ignored maintenance data.
-- `archive_files`: in-memory ZIP reading, never filesystem extraction. 32 MiB archive,
-  128 MiB declared expansion, 20,000 entries and 512 KiB text bounds. Reject symlinks,
-  traversal/absolute/backslash paths, duplicate normalized paths and oversized data.
-  Read only JSON/JSONC/TextMate/license/notice text, never executable code.
-- Reuse existing include/token resolver and hex validator. Root NOTICE files append
-  to full license text; manifest/file digests plus package hash retained in source
-  provenance. `registry` metadata adds version/checksum information; legacy GitHub
-  provenance remains unchanged. Generated notices link to registry/source pins.
-- Legacy snapshots and publisher variants may duplicate names/palettes; retained
-  for ID compatibility and transparency, author subtitle disambiguates. A future
-  dedup UX is separate work. Current renderer only broad syntax, not extension CSS.
-- Catalog grew to ~10.9 MB resolved JSON. Rust settings validator caches exact ID
-  set via `OnceLock` rather than reparsing catalog on every selection/snapshot.
-  Registry/assets are consumed only during explicit maintenance, never runtime.
+[Theme catalog](theme-catalog.md) owns discovery, pinned sources, archive limits, license policy, generation and atomic-output procedure. Runtime import does not gain catalog-time include/token resolution or HTTP capabilities. Catalog updates remain explicit and never run during app build/startup.
 
 ## Existing palette provenance
 
@@ -166,53 +105,3 @@ bundled dark snapshots, not Omarchy installation/desktop following.
   without conversation replacement/downloads. Native acceptance is distinct.
 - Validate with `mise run themes-check`, `mise run check` and the offline browser
   suite. Explicit maintenance generation is separate from tests. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow).
-
-### Open VSX verification
-
-On `feature/open-vsx-themes`, tool formatting/Clippy and 7 offline Rust tests
-passed (6 library, 1 CLI integration). `mise run check` passed 436 TS/Node tests,
-formatting/Clippy and 108 app Rust tests (2 opt-in live-Pi smokes ignored). Explicit
-registry discovery/collection succeeded; cache-only regeneration is byte-identical.
-Signed `mise run build` passed; artifact:
-`.worktrees/open-vsx-themes/src-tauri/target/release/bundle/macos/Nimrod.app`.
-The first full WebKit run passed 51 tests and exposed a test-only adjacency
-assumption in the theme test (new duplicate variants); corrected test passes
-in isolation and the final full suite passed all 52 tests. No live app
-launch/quit or user model/session requests.
-
-At the user's explicit request, installed the verified 267-variant app at the
-primary checkout's `src-tauri/target/release/bundle/macos/Nimrod.app`, used by the
-installed `~/.local/bin/nimrod` symlink. Previous eight-theme bundle retained at
-`src-tauri/target/release/bundle/macos/.previous-app.4ljWdM/Nimrod.app`. Verified
-installed signature and executable equality with the worktree build. No CLI
-configuration or primary tracked source changes. User must fully quit/relaunch
-the running older app; installation did not launch or quit any window.
-
-### Previous bundled-source verification
-
-On `feature/bundled-vscode-themes`, `mise run check` passed 436 TS/Node tests,
-formatting/Clippy and 108 Rust tests (2 opt-in live-Pi smokes ignored). All 52
-offline WebKit tests passed. `mise run themes-check` passed formatting/Clippy,
-4 library tests and the offline CLI integration test. Initial explicit collection
-succeeded; offline regeneration is byte-identical for catalog and notices.
-`mise run build` passed and verified the macOS bundle signature. Build artifact:
-`.worktrees/bundled-vscode-themes/src-tauri/target/release/bundle/macos/Nimrod.app`.
-No app launch/quit or live sessions/model requests. At the user's subsequent
-explicit request, installed the verified app at the primary checkout's
-`src-tauri/target/release/bundle/macos/Nimrod.app`, used by `~/.local/bin/nimrod`.
-Retained the previous Gogh app at
-`src-tauri/target/release/bundle/macos/.previous-app.glAQyH/Nimrod.app`; verified
-installed signature and executable equality. No CLI config/primary tracked source
-changes. Quit/relaunch is user-controlled.
-Native visual acceptance and Linux/possible Windows verification remain pending.
-
-## Development history
-
-Prior Gogh implementation lives uncommitted in `.worktrees/gogh-theme-picker` and
-was copied as this feature's starting point without committing or discarding it.
-That earlier build was installed at the primary CLI path with user permission;
-previous bundle retained at `.previous-app.Y5j43z/Nimrod.app`. This worktree's build
-subsequently replaced that CLI bundle on explicit request (see verification above),
-without launching/quitting the user's app.
-Native palette visual/focus acceptance on macOS and Linux remains user validation;
-possible Windows support is not verified parity.

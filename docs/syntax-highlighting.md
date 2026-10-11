@@ -6,8 +6,7 @@ comes from you or the agent. Unsupported labels and explicit `text` or `plaintex
 fences stay plain text.
 
 When you paste code in triple backticks without a language (or use indented code),
-Nimrod tries to detect it. Detection now requires a higher relevance score and a
-clear lead over the next candidate. Accepted guesses show **(detected)** beside
+Nimrod tries to detect it. Only a strong, unambiguous guess is accepted. Accepted guesses show **(detected)** beside
 the language; weak or ambiguous snippets stay plain text. This is a heuristic,
 not a guarantee—short Elixir snippets, for example, can tie with Ruby. Label the
 fence `elixir` to remove that ambiguity.
@@ -16,7 +15,7 @@ Unlabeled agent and reasoning code stays plain text; detection is only enabled f
 user text, including pending steering turns.
 
 Elixir is supported with `elixir`, `ex` and `exs` labels; Erlang with `erlang` and
-`erl`. The usual Highlight.js common languages and their aliases (such as `js`,
+`erl`. The usual common programming languages and their aliases (such as `js`,
 `ts`, `py`, `sh` and `yml`) remain supported. Language names are case-insensitive.
 
 For example:

@@ -1,6 +1,12 @@
 # Model and thinking preferences
 
+**Status: implemented.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#model-thinking) retain prior execution records.
+
 Human guide: [Model and thinking preferences](../../../../docs/model-thinking.md).
+
+## Specification and acceptance criteria
+
+Changing Pi-scoped model/thinking preferences stays available during work/compaction and affects upcoming requests, not in-flight streams. Only acknowledged Pi state updates displayed configuration; readiness and mutation guards remain.
 
 ## Code map
 
@@ -25,5 +31,4 @@ Human guide: [Model and thinking preferences](../../../../docs/model-thinking.md
 
 - `test/model-thinking-controller.test.ts`: changes while busy/compacting, work beginning during a picker/lookup, startup and concurrent-operation guards, disconnect and capability races, failed mutation without optimistic display.
 - `test/native-view.test.ts`: status controls remain enabled during working/compacting snapshots, route picker actions without sending/stopping work, preserve drafts, and disable for readiness/changing/unavailability.
-- Verified on `fix/live-model-preferences`: `mise run check` passes 399 TypeScript/Node tests, Rust formatting/Clippy and 97 Rust tests (two opt-in Pi smokes ignored). `mise run build` produces the signed macOS bundle and passes signature verification.
 - Fixture tests do not establish native acceptance; manually changing selections during a real run and Linux/Windows verification remain pending. No paid requests or live compaction for automated validation.

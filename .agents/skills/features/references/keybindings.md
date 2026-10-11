@@ -1,6 +1,12 @@
 # Customizable keybindings
 
+**Status: implemented.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#keybindings) retain prior execution records.
+
 Human guide: [Keybindings](../../../../docs/keybindings.md).
+
+## Specification and acceptance criteria
+
+Every palette action is bindable through one shared dispatcher; empty default bindings are valid. Recorder/reassignment/reset and file overrides preserve modal priority, explicit conflicts and existing session methods without accidental execution.
 
 ## Code map
 
@@ -41,7 +47,7 @@ The original matcher compared Command+Option+N to `event.key === 'n'`, and the r
 
 ## Tests and remaining acceptance
 
-Palette-cleanup coverage: shell tests assert shortcuts on every visible command, removed `demo`/`file` controls/actions and inert old overrides; Cmd-R tests retain mounted draft/file identity and modal/repeat/IME/eligibility guards, plus rebinding/unbinding. WebKit checks command shortcut coverage, removed rows/controls, temporary Restart no-op and direct keybinding-search focus. Full cleanup verification: 397 TS/Node tests, 97 Rust tests (two opt-in Pi smokes ignored), formatting/Clippy, all 43 offline WebKit tests and signed macOS build passed. Native Cmd-R delivery/menu interception and Linux/possible Windows acceptance remain unverified.
+Palette-cleanup coverage: shell tests assert shortcuts on every visible command, removed `demo`/`file` controls/actions and inert old overrides; Cmd-R tests retain mounted draft/file identity and modal/repeat/IME/eligibility guards, plus rebinding/unbinding. WebKit checks command shortcut coverage, removed rows/controls, temporary Restart no-op and direct keybinding-search focus.
 
 - `test/keybindings.test.ts`: defaults, grammar, unbinding/reset, unknown IDs, Cmd/Ctrl/Shift/layout matching, IME/repeat/unavailable/modal priority, conflict reassign/reset, nested JSONC patches, stale/new conflicts, invalid external edits, recording/search/failure/focus.
 - `test/shell.test.ts`: requested New/Temporary/Model/Effort defaults call the real shell methods against mocked native transport, retaining drafts and never prompting; creation/navigation defaults open distinct Switch/Resume/naming pages without accidental launches; Cmd-P is unbound; naming launches once with its literal name; modal/repeat/IME guards and user overrides remain authoritative; rebinding disables old listeners; temporary deletion is unavailable; saved Cmd-Backspace opens review and Cancel retains state.
@@ -49,7 +55,5 @@ Palette-cleanup coverage: shell tests assert shortcuts on every visible command,
 - Native validator tests cover defaults, future IDs, disabled bindings, reserved/malformed/duplicate shortcuts.
 
 Validate with `mise run check` and offline `npm run test:browser`. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow). No live Pi/model requests or user-session deletion. Native shortcut interception/menu actions, non-US layouts, actual app focus and Linux/possible Windows behavior require user/platform acceptance; jsdom/WebKit fixtures do not prove these.
-
-Latest Option-key fix verification (worktree `keybinding-option-key`, branch `fix/option-keybindings`): 341 TS/Node tests, 76 default Rust tests (two opt-in real-Pi smokes ignored), formatting/Clippy, all three targeted keybinding WebKit tests and signed macOS build pass. The complete browser suite was not rerun for this matcher/recorder-only fix. Artifact: `.worktrees/keybinding-option-key/src-tauri/target/release/bundle/macos/Nimrod.app`. Injected WebKit keyboard events are regression evidence, not native layout acceptance. No running app/default bundle modification or user-session/model request occurred.
 
 Deferred: composer Send/Steer/Queue/Newline remapping, Pi keymap integration, pop-out keyboard customization, chords/macros/context language, per-project preferences and native menu accelerator customization.

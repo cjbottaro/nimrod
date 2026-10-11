@@ -1,5 +1,11 @@
 # Syntax highlighting: implementation
 
+**Status: implemented.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#syntax-highlighting) retain prior execution records.
+
+## Specification and acceptance criteria
+
+Explicit labels always win; only user text opts into strong unambiguous inference. Unsupported/weak code stays plain, source bytes survive Copy/Pop out, and captured snapshot language is never re-guessed.
+
 ## Code map and policy
 
 - `src/pi/safe-markdown.ts`: common Highlight.js bundle plus locally registered
@@ -57,10 +63,6 @@ user vs assistant/reasoning policy across strings and blocks, pending steering,
 incremental label changes and detected-language snapshot payloads.
 
 Run `mise run check` and offline `npm run test:browser`. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow).
-Current user-only inference revision on `fix/syntax-highlighting` passes full
-`mise run check` (97 Rust tests, two opt-in tests ignored, plus the TypeScript
-suite), `mise run build` with macOS signature verification, and all 50 offline
-WebKit tests.
 
 Shared portable frontend behavior, not a native integration: macOS visual
 acceptance and Linux/Windows webview verification remain user/platform checks;
