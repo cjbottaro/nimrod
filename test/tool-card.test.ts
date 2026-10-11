@@ -240,6 +240,48 @@ test("streaming output has a dedicated capped viewport and retains inspection po
   assert.ok(updated.querySelector(".tool-output-final") === null);
 });
 
+test("distinct execution and final output remain readable while raw-input disclosure survives updates", () => {
+  const doc = document();
+  const block = { name: "vendor_action", arguments: { payload: "original" }, toolStatus: "running" as const, executionOutput: "progress" };
+  const tool = card(doc, block);
+  doc.body.append(tool);
+  const raw = tool.querySelector<HTMLDetailsElement>(".tool-raw-inputs")!;
+  raw.open = true;
+  const resultSection = tool.querySelector('[data-output-kind="result"]');
+  const resultOutput = resultSection?.querySelector(".tool-output");
+
+  updateToolCard(doc, tool, { ...block, arguments: { payload: "updated" }, toolStatus: "result", resultOutput: "final" });
+  assert.equal(tool.querySelector(".tool-raw-inputs"), raw);
+  assert.equal(raw.open, true);
+  assert.match(raw.querySelector("pre")?.textContent || "", /updated/);
+  assert.equal(tool.querySelector('[data-output-kind="result"]'), resultSection);
+  assert.equal(resultSection?.querySelector(".tool-output"), resultOutput);
+  assert.deepEqual(Array.from(tool.querySelectorAll(".tool-section"), section => ({
+    kind: (section as HTMLElement).dataset.outputKind,
+    label: section.querySelector(".tool-label")?.textContent,
+    text: section.querySelector(".tool-output")?.textContent,
+    final: section.querySelector(".tool-output-final") !== null,
+  })), [
+    { kind: "execution", label: "Live output", text: "progress", final: true },
+    { kind: "result", label: "Result", text: "final", final: true },
+  ]);
+
+  updateToolCard(doc, tool, { ...block, toolStatus: "result", resultOutput: "progress" });
+  assert.equal(tool.querySelectorAll(".tool-section").length, 1);
+  assert.equal(tool.querySelector('[data-output-kind="result"]'), resultSection);
+  assert.equal(tool.querySelector(".tool-output")?.textContent, "progress");
+});
+
+test("unknown-tool raw inputs and outputs render literally without truncating source", () => {
+  const doc = document();
+  const source = '<script>alert(1)</script>\n<img src=x onerror=alert(1)>\n[run](command:execute)\n' + "line\n".repeat(100);
+  const tool = card(doc, { name: "vendor_action", arguments: { payload: source }, resultOutput: source });
+  assert.equal(tool.querySelector(".tool-card-preview")?.textContent, "1 field");
+  assert.equal(tool.querySelector(".tool-output-final")?.textContent, source);
+  assert.equal(tool.querySelector(".tool-raw-inputs pre")?.textContent, JSON.stringify({ payload: source }, null, 2));
+  assert.equal(tool.querySelector("script, img, a"), null);
+});
+
 test("automatic completion close does not become a user disclosure preference", async () => {
   const doc = document();
   const expanded = new Map<string, boolean>();
