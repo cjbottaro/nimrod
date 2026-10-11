@@ -1,6 +1,6 @@
 # Card plugins
 
-**Status: internal tool-renderer contract implemented; bundled extraction and external plugins pending.**
+**Status: bundled tool/reasoning/parallel renderers implemented; richer renderer and external plugins pending.**
 
 User-facing feature description: [Card plugins](../../../../docs/card-plugins.md).
 This reference records accepted architectural decisions and the living implementation plan. Keep API details provisional until renderer extraction provides evidence.
@@ -43,6 +43,15 @@ Milestone 1 audited these anchors and their regression suites at baseline `9607a
 | `src/pi/tool-card.ts` | Incremental tool-card summary, input preview, raw inputs and output |
 | `src/pi/reasoning-card.ts` | Harness-provided reasoning disclosure and preview |
 | `src/pi/transcript-presentation.ts` | Transcript presentation including standalone tool envelopes |
+
+## Bundled renderers (milestone 3)
+
+- `src/pi/card-plugins/tool.ts`, `reasoning.ts`, `parallel.ts` are the complete current default card-renderer inventory. All implement `CardRenderer` mount/update/dispose and return validated content without DOM or host/transport access. Tool-preview branches remain one bundled renderer; skill disclosures remain user-turn presentation outside this API.
+- The common content contract adds optional safe-Markdown section format and keyed member presentation. Core consumes Markdown only through the existing safe renderer; lifecycle and member status remain host-owned. Reasoning keeps its existing first-line preview, empty/opaque omission and incremental shell/indicator behavior; parallel keeps live-only placement, completed-first sorting and initially open disclosure.
+- `src/pi/parallel-card.ts` separates mounted parallel shell/member indicators from progress projection; `tool-progress.ts` retains authoritative projection and compatibility export. Removed members are pruned. `reasoning-card.ts` retains its shell and safe body rendering.
+- View pruning, replacement, empty reasoning removal, reset and disposal release reasoning/parallel instances; tool instances retain milestone-2 ownership. `test/bundled-card-renderers.test.ts` verifies the shared contract and stable parallel members/indicator/disclosure.
+- Compatibility exports in `tool-presentation.ts` remain for current consumers. No default card presentation is silently exempted or allowed privileged session actions. Exact API remains internal pending richer-card evidence.
+- Validation: `mise run check` passes **464 TS/Node tests**, Rust formatting/Clippy and **111 Rust tests** (two opt-in smokes ignored); `npm run test:browser` passes **64 offline WebKit tests**. No app build/launch or native/platform acceptance.
 
 ## Internal tool-renderer contract (milestone 2)
 
@@ -133,13 +142,13 @@ Other card-shaped presentations are reasoning and the parallel-tools overview. S
 
 ## Incremental implementation plan
 
-Milestones 1–2 are complete; milestones 3–5 remain pending. Treat each as independently mergeable work in a dedicated task worktree. Dependencies are sequential unless noted; external loading must not gate bundled extraction.
+Milestones 1–3 are complete; milestones 4–5 remain pending. Treat each as independently mergeable work in a dedicated task worktree. Dependencies are sequential unless noted; external loading must not gate bundled extraction.
 
 | Milestone | Dependency | Acceptance criteria |
 | --- | --- | --- |
 | 1. Audit current rendering boundaries — complete | None | Boundary map, concrete renderer inventory, data/recovery limitations, regression additions and next extraction order recorded above. No runtime extraction or native/plugin acceptance. |
 | 2. Introduce the internal renderer contract — complete | 1 | Existing tool cards render through the boundary without visible behavior changes. Core still owns the shell and policies; unsupported content and renderer failure have tested raw fallback behavior. |
-| 3. Extract bundled renderers | 2 | Default tool-card presentations use the supported contract without privileged access. Record the concrete built-in inventory and reasoning-card scope; remaining default card renderers must be tracked explicitly, not silently exempted. |
+| 3. Extract bundled renderers — complete | 2 | Default tool-card presentations use the supported contract without privileged access. Record the concrete built-in inventory and reasoning-card scope; remaining default card renderers must be tracked explicitly, not silently exempted. |
 | 4. Prove extensibility with a richer renderer | 3 | Choose a concrete card with available structured fixture data. Implement it using only the contract and host-supported capabilities, without tool-specific presentation branches in core. Refine the API from evidence. |
 | 5. Support external plugins | 4 | Resolve packaging, compatibility, isolation, matching/overrides and action permissions before loading external code. Test missing/incompatible/failing plugins and historical fallback; document actual installation and selection behavior. |
 

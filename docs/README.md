@@ -21,8 +21,8 @@
 - [Themes](themes.md) — live previews, bundled themes and standalone imports.
 - [Syntax highlighting](syntax-highlighting.md) — fence labels and conservative user-code detection.
 
-## Planned
+## Card customization
 
-- [Card plugins](card-plugins.md) — intended customization; not implemented.
+- [Card plugins](card-plugins.md) — bundled renderers; external customization planned.
 
 For development, see [Contributing](../CONTRIBUTING.md). Specifications and implementation details are indexed by the internal [features skill](../.agents/skills/features/SKILL.md).
