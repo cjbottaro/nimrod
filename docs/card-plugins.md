@@ -1,6 +1,6 @@
 # Card plugins
 
-**Status: implemented for bundled renderers and local declarative tool plugins.** External JavaScript, custom CSS, install/selection UI and agent-execution actions are not supported.
+**Status: local declarative plugins implemented; executable TypeScript plugins in progress.** The current JSON subset is not the intended final plugin API. The next API will support TypeScript-authored custom DOM and presentation interactions; executable loading is not available yet. Custom CSS, install/selection UI and agent-execution actions remain unsupported.
 
 Pi extensions define agent capabilities; Nimrod card plugins define their transcript presentation. Tool, reasoning and parallel-tools renderers ship bundled through the same presentation-only instance contract. Core owns card identity, placement, status, disclosure, focus, output caps and scrolling; plugins supply validated content, not transcript DOM or transport access.
 
