@@ -16,6 +16,7 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }),
   const opener = win.document.querySelector<HTMLButtonElement>('#open-settings')!; opener.focus();
   const calls: string[] = [];
   let allowed = true;
+  const deleted = new Set<string>();
   const palette = installCommandPalette(win as unknown as Window, dialog, {
     canOpen: () => allowed,
     ranking,
@@ -27,12 +28,12 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }),
         assert.equal(dialog.open, false); assert.equal(win.document.activeElement, opener);
         calls.push(`named:${name}`);
       }) },
-    ], sessions: load, deleteSessions: load, projects,
+    ], sessions: load, deleteSessions: load, sessionDeleted: id => deleted.has(id), projects,
     openSessions: () => ({ items: [{ id: 'open-demo', label: 'Offline demo', detail: 'Ready', run: () => { calls.push('open-demo'); } }] }),
   });
   const key = (key: string, init: KeyboardEventInit = {}) => input.dispatchEvent(new win.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
   const query = (value: string) => { input.value = value; input.dispatchEvent(new win.Event('input')); };
-  return { dom, win, dialog, input, opener, palette, calls, key, query,
+  return { dom, win, dialog, input, opener, palette, calls, key, query, deleted,
     list: () => win.document.querySelector('#palette-list')!, status: () => win.document.querySelector('#palette-status')!.textContent,
     allow: (value: boolean) => { allowed = value; },
     dispose: () => { palette.dispose(); win.close(); },
@@ -40,23 +41,30 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }),
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
-test('delete picker returns after each action with query, row selection and original focus retained', async () => {
-  let finish!: () => void;
-  const remaining = ['one', 'two', 'three'];
-  const f = fixture(async () => ({ items: remaining.map(id => ({ id, label: `Saved ${id}`, run: () => new Promise<void>(resolve => { finish = resolve; }) })) }));
+test('delete picker retains its dialog and surviving DOM, prunes confirmed rows without catalog refresh', async () => {
+  let finish!: () => void, loads = 0, runs = 0;
+  const f = fixture(async () => { loads++; return { items: ['one', 'two', 'three', 'hidden'].map(id => ({
+    id, label: `${id === 'hidden' ? 'Other' : 'Saved'} ${id}`,
+    run: () => { runs++; return new Promise<void>(resolve => { finish = resolve; }); },
+  })) }; });
   try {
     await f.palette.deleteSessions(); f.query('Saved'); f.key('ArrowDown');
+    const rows = [...f.list().children]; f.list().scrollTop = 120;
     f.key('Enter'); f.key('Enter'); await tick();
-    assert.equal(f.dialog.open, false); assert.equal(f.win.document.activeElement, f.opener);
+    assert.equal(f.dialog.open, true); assert.equal(f.win.document.activeElement, f.input);
+    assert.equal(runs, 1); assert.equal(f.input.readOnly, true);
     finish(); await tick();
-    assert.equal(f.dialog.open, true); assert.equal(f.input.value, 'Saved');
+    assert.equal(f.input.value, 'Saved'); assert.equal(f.input.readOnly, false);
     assert.equal(f.list().querySelector('[aria-selected="true"]')!.textContent, 'Saved two');
-    f.key('Enter'); await tick(); remaining.splice(1, 1); finish(); await tick();
+    assert.deepEqual([...f.list().children], rows); assert.equal(f.list().scrollTop, 120);
+    f.key('Enter'); await tick(); f.deleted.add('two'); f.deleted.add('hidden'); finish(); await tick();
+    assert.equal(f.list().children[0], rows[0]); assert.equal(f.list().children[1], rows[2]);
     assert.equal(f.list().querySelector('[aria-selected="true"]')!.textContent, 'Saved three');
-    f.key('Enter'); await tick(); remaining.pop(); finish(); await tick();
+    f.key('Enter'); await tick(); f.deleted.add('three'); finish(); await tick();
     assert.equal(f.list().querySelector('[aria-selected="true"]')!.textContent, 'Saved one');
-    f.key('Enter'); await tick(); remaining.pop(); finish(); await tick();
+    f.key('Enter'); await tick(); f.deleted.add('one'); finish(); await tick();
     assert.equal(f.dialog.open, true); assert.equal(f.list().children.length, 0); assert.match(f.status()!, /No sessions yet/);
+    assert.equal(loads, 1); f.query(''); assert.equal(f.list().children.length, 0, 'hidden successes are pruned too');
     f.key('Escape'); await tick(); assert.equal(f.dialog.open, false); assert.equal(f.win.document.activeElement, f.opener);
   } finally { f.dispose(); }
 });
@@ -67,14 +75,31 @@ test('delete return cannot overwrite a newer interaction or reopen after explici
     const f = fixture(async () => ({ items: [{ id: 'one', label: 'One', run: () => new Promise<void>(resolve => { finish = resolve; }) }] }));
     try {
       await f.palette.deleteSessions(); f.key('Enter'); await tick();
-      if (cancel === 'new') f.palette.open();
+      if (cancel === 'new') { f.palette.close(); f.palette.open(); }
       else if (cancel === 'close') f.palette.close();
-      else f.palette.dispose();
+      else { f.palette.close(); f.palette.dispose(); }
       finish(); await tick();
       assert.equal(f.dialog.open, cancel === 'new');
       if (cancel === 'new') assert.equal(f.win.document.querySelector('#palette-title')!.textContent, 'Commands');
     } finally { f.dispose(); }
   }
+});
+
+test('partial deletion removes only successes and does not dismiss or refocus through a higher modal', async () => {
+  let finish!: () => void, runs = 0;
+  const f = fixture(async () => ({ items: ['root', 'sibling'].map(id => ({ id, label: id, run: () => { runs++; return new Promise<void>(resolve => { finish = resolve; }); } })) }));
+  try {
+    await f.palette.deleteSessions(); const root = f.list().children[0];
+    f.key('Enter');
+    const host = f.win.document.querySelector<HTMLDialogElement>('#host-dialog')!;
+    host.tabIndex = -1; host.showModal(); host.focus();
+    f.key('Escape'); f.key('Enter'); assert.equal(f.dialog.open, true); assert.equal(runs, 1);
+    f.deleted.add('sibling'); finish(); await tick();
+    assert.equal(f.list().children.length, 1); assert.equal(f.list().children[0], root);
+    assert.equal(root.getAttribute('aria-selected'), 'true');
+    assert.equal(f.win.document.activeElement, host);
+    host.close(); f.key('Escape'); assert.equal(f.dialog.open, false);
+  } finally { f.dispose(); }
 });
 
 test('delete action errors return to the picker without replay and stale discovery stays dismissed', async () => {

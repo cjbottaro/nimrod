@@ -24,20 +24,31 @@ test('Delete sessions returns from Cancel, Escape and Delete, retains search/foc
     const prompt = page.locator(visible('prompt')); await prompt.fill('Keep my draft'); await prompt.focus();
     await page.keyboard.press('Meta+Shift+Backspace');
     await expect(page.locator('#palette-title')).toHaveText('Delete sessions');
-    await page.locator('#palette-input').fill('Old'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
-    await expect(page.locator('#deletion-review')).toBeVisible(); await expect(page.locator('#command-palette')).not.toBeVisible();
+    await page.locator('#palette-input').fill('Old'); await page.keyboard.press('ArrowDown');
+    await page.evaluate(() => Object.assign(window, { retainedDeletePicker: { rows: [...document.querySelectorAll('#palette-list [role="option"]')], input: document.querySelector('#palette-input') } }));
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#deletion-review')).toBeVisible(); await expect(page.locator('#command-palette')).toBeVisible();
     await page.locator('#deletion-cancel').focus(); await page.keyboard.press('Enter');
     await expect(page.locator('#command-palette')).toBeVisible(); await expect(page.locator('#palette-input')).toBeFocused();
     await expect(page.locator('#palette-input')).toHaveValue('Old'); await expect(page.locator('#palette-list [aria-selected="true"]')).toContainText('Old two');
+    expect(await page.evaluate(() => {
+      const retained = (window as unknown as { retainedDeletePicker: { rows: Element[]; input: Element } }).retainedDeletePicker;
+      return retained.input === document.querySelector('#palette-input') && retained.rows.every(row => row.isConnected);
+    })).toBe(true);
     await page.keyboard.press('Enter'); await expect(page.locator('#deletion-confirm')).toBeFocused(); await page.keyboard.press('Escape');
     await expect(page.locator('#palette-input')).toBeFocused(); await expect(page.locator('#palette-list')).toContainText('Old two');
     await page.keyboard.press('Enter'); await expect(page.locator('#deletion-confirm')).toBeFocused(); await page.keyboard.press('Enter');
     await expect(page.locator('#palette-input')).toBeFocused(); await expect(page.locator('#palette-list [role="option"]')).toHaveCount(1);
     await expect(page.locator('#palette-list [aria-selected="true"]')).toContainText('Old one');
+    expect(await page.evaluate(() => {
+      const rows = (window as unknown as { retainedDeletePicker: { rows: Element[] } }).retainedDeletePicker.rows;
+      return rows[0] === document.querySelector('#palette-list [role="option"]') && !rows[1].isConnected;
+    })).toBe(true);
     await page.keyboard.press('Enter'); await expect(page.locator('#deletion-confirm')).toBeFocused(); await page.keyboard.press('Enter');
     await expect(page.locator('#palette-input')).toBeFocused(); await expect(page.locator('#palette-list [role="option"]')).toHaveCount(0);
     await page.keyboard.press('Escape'); await expect(page.locator('#command-palette')).not.toBeVisible(); await expect(prompt).toBeFocused(); await expect(prompt).toHaveValue('Keep my draft');
-    expect(demo.children.size).toBe(1); expect(demo.calls.filter(call => call.command === 'start_pi')).toHaveLength(1); expect(demo.errors).toEqual([]);
+    expect(demo.children.size).toBe(1); expect(demo.calls.filter(call => call.command === 'start_pi')).toHaveLength(1);
+    expect(demo.calls.filter(call => call.command === 'list_workspace_sessions')).toHaveLength(1); expect(demo.errors).toEqual([]);
   } finally { await demo.close(); }
 });
 

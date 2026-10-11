@@ -59,7 +59,9 @@ required('state-file-path').textContent = preferences.paths.state;
 const welcome = required('welcome'), conversation = required('conversation');
 const error = required('launch-error'), cwd = required<HTMLInputElement>('cwd');
 const dialogs = new Dialogs();
-const deletionReview = installDeletionReview(required<HTMLDialogElement>('deletion-review'));
+const deletionReview = installDeletionReview(required<HTMLDialogElement>('deletion-review'), {
+  canCover: other => other.id === 'command-palette' && palette.isDeleting,
+});
 const settings = installSettings(window, required<HTMLDialogElement>('settings-page'), required<HTMLButtonElement>('open-settings'), required<HTMLButtonElement>('settings-back'), false);
 const keybindingEditor = installKeybindingEditor(window, required('settings-page').querySelector<HTMLElement>('.settings-content')!, {
   read: () => preferences.keybindings(),
@@ -585,6 +587,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
   },
   sessions: () => paletteSessions(),
   deleteSessions: () => paletteSessions('delete'),
+  sessionDeleted: path => deletion.removed(path),
   openSessions: openSessionPicker,
   projects: paletteProjects,
   commands: () => {

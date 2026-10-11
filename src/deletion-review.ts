@@ -16,7 +16,7 @@ function sessionIcon(doc: Document): SVGSVGElement {
 }
 
 /** App-owned HTML dialog; no native alert, prompts, or filesystem operations. */
-export function installDeletionReview(dialog: HTMLDialogElement) {
+export function installDeletionReview(dialog: HTMLDialogElement, options: { canCover?: (other: HTMLDialogElement) => boolean } = {}) {
   const doc = dialog.ownerDocument;
   const win = doc.defaultView!;
   const tree = dialog.querySelector<HTMLElement>('#deletion-tree')!;
@@ -34,7 +34,8 @@ export function installDeletionReview(dialog: HTMLDialogElement) {
     loadingTimer = undefined;
   }
   function tryShow(): void {
-    if (loadingTimer !== undefined || (!pending && preview !== 'loading') || disposed || dialog.open || doc.querySelector('dialog[open]')) return;
+    if (loadingTimer !== undefined || (!pending && preview !== 'loading') || disposed || dialog.open ||
+      [...doc.querySelectorAll<HTMLDialogElement>('dialog[open]')].some(other => !options.canCover?.(other))) return;
     dialog.returnValue = '';
     dialog.showModal(); (confirm.disabled ? cancel : confirm).focus();
   }

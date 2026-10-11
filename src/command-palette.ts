@@ -21,6 +21,7 @@ export interface PaletteOptions {
   sessions(): Promise<PalettePage>;
   openSessions(): PalettePage;
   deleteSessions?: () => Promise<PalettePage>;
+  sessionDeleted?: (id: string) => boolean;
   projects?: () => Promise<PalettePage>;
   canOpen(): boolean;
   shortcuts?: boolean;
@@ -66,13 +67,20 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   let closing = false;
   let disposed = false;
   let sessionKind: 'resume' | 'open' | 'delete' = 'resume';
+  let deleting = false;
+
+  function deletionControls(pending: boolean): void {
+    deleting = pending;
+    input.readOnly = pending; back.disabled = pending; retry.disabled = pending;
+    list.setAttribute('aria-busy', String(pending));
+  }
 
   function cancelChoice(): void { const resolve = resolveChoice; resolveChoice = undefined; resolve?.(undefined); }
   // Invalidate synchronously: native dialog close events are queued, and pending
   // metadata/choices must stop being actionable before focus restoration completes.
   // Omitting an action is cancellation, never navigation or command execution.
   function closeInteraction(action?: () => void | Promise<void>): void {
-    if (!dialog.open) { generation++; return; }
+    if (!dialog.open) return;
     afterClose = action;
     cancelChoice(); createNamed = undefined; retryAction = undefined; generation++;
     closing = true;
@@ -134,10 +142,13 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       row.title = item.keywords || item.detail || item.label;
       return row;
     }));
+    updateStatus();
+    selection();
+  }
+  function updateStatus(): void {
     const noun = mode === 'commands' ? 'commands' : mode === 'sessions' ? 'sessions' : mode === 'projects' ? 'projects' : 'options';
     status.textContent = loading ? `Loading ${noun}…` : notice || (matches.length ? `${matches.length} ${noun}` : items.length || mode === 'commands' ? `No matching ${noun}.` : mode === 'sessions' ? 'No sessions yet.' : mode === 'projects' ? 'No recent projects. Use File → Open project… to open a folder.' : 'No options available.');
     input.setAttribute('aria-busy', String(loading));
-    selection();
   }
   function enterHint(): SVGSVGElement {
     const enter = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -158,12 +169,14 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     } else input.removeAttribute('aria-activedescendant');
   }
   function commands(): void {
+    deletionControls(false);
     cancelChoice(); createNamed = undefined; generation++; mode = 'commands'; loading = false; notice = ''; items = options.commands(); matches = []; selected = 0;
     title.textContent = 'Commands'; input.placeholder = 'Type a command…'; input.setAttribute('aria-label', 'Search commands');
     input.value = commandQuery; back.hidden = true; retry.hidden = true; retryAction = undefined; draw(); input.focus();
   }
   function beginPage(kind: 'sessions' | 'projects' | 'selection', heading: string, placeholder: string, onRetry: () => void, keepQuery = false): number | undefined {
     if (!dialog.open && !open()) return;
+    deletionControls(false);
     if (mode === 'commands') commandQuery = input.value;
     cancelChoice(); createNamed = undefined; mode = kind; title.textContent = heading; input.placeholder = placeholder;
     input.setAttribute('aria-label', kind === 'sessions' ? 'Search project sessions' : heading);
@@ -247,32 +260,35 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   }
   function choose(index = selected): void {
     const item = matches[index];
-    if (!dialog.open || !item || loading) return;
+    if (!dialog.open || !item || loading || deleting || doc.querySelector('dialog[open]:not(#command-palette)')) return;
     if (mode === 'commands') options.ranking?.record(item.id);
     if (item.next) { void item.run(); return; }
     if (mode === 'sessions' && sessionKind === 'delete') {
-      const query = input.value, index = selected, originalOpener = opener, originalCommandQuery = commandQuery;
-      // The native review owns modality while the picker is closed. Return only
-      // after the whole transaction settles, never replaying an accepted deletion.
-      closeInteraction(async () => {
-        const request = generation;
+      if (selected !== index) { selected = index; selection(); }
+      const request = generation, selectedId = matches[selected]?.id, previousIndex = selected;
+      deletionControls(true);
+      // Only deletion nests a review over this retained page. Never reload the
+      // catalog or rebuild surviving rows after an accepted/cancelled transaction.
+      void (async () => {
         let failure = '';
         try { await item.run(); } catch (error) { failure = String(error); }
-        if (disposed || generation !== request || !open()) return;
-        opener = originalOpener;
-        commandQuery = originalCommandQuery;
-        const returning = sessions('delete'), returnGeneration = generation;
-        input.value = query;
-        await returning;
-        if (!dialog.open || generation !== returnGeneration || mode !== 'sessions' || sessionKind !== 'delete') return;
-        // Cancellation keeps the same row; removal advances to the next row,
-        // falling back to the previous row when the last matching row was removed.
+        if (disposed || !dialog.open || generation !== request) return;
+        deletionControls(false);
+        const removed = new Set(items.filter(item => options.sessionDeleted?.(item.id)).map(item => item.id));
+        if (removed.size) {
+          const rows = [...list.children];
+          for (let i = 0; i < matches.length; i++) if (removed.has(matches[i].id)) rows[i].remove();
+          items = items.filter(item => !removed.has(item.id));
+          matches = matches.filter(item => !removed.has(item.id));
+          for (const [index, row] of [...list.children].entries()) (row as HTMLElement).dataset.index = String(index);
+          const same = matches.findIndex(item => item.id === selectedId);
+          selected = same >= 0 ? same : Math.max(0, Math.min(previousIndex, matches.length - 1));
+          selection();
+        }
         if (failure) notice = [failure, notice].filter(Boolean).join(' ');
-        draw();
-        const same = matches.findIndex(match => match.id === item.id);
-        selected = same >= 0 ? same : Math.max(0, Math.min(index, matches.length - 1));
-        selection(); input.focus();
-      });
+        updateStatus();
+        if (!doc.querySelector('dialog[open]:not(#command-palette)')) input.focus({ preventScroll: true });
+      })();
       return;
     }
     // The action owns resolution after native focus restoration. Dismissal alone cancels.
@@ -283,9 +299,9 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   input.addEventListener('compositionend', () => { composing = false; }, { signal });
   input.addEventListener('input', () => { matches = []; selected = 0; draw(); }, { signal });
   dialog.addEventListener('keydown', event => {
-    if (!dialog.open || event.isComposing || event.keyCode === 229) return;
+    if (!dialog.open || event.isComposing || event.keyCode === 229 || doc.querySelector('dialog[open]:not(#command-palette)')) return;
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeInteraction(); }
-    else if (event.target === input && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+    else if (!deleting && event.target === input && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault(); if (matches.length) selected = (selected + (event.key === 'ArrowDown' ? 1 : -1) + matches.length) % matches.length; selection();
       } else if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) { if (mode === 'name') submitName(); else choose(); } }
@@ -293,7 +309,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       event.preventDefault();
     }
   }, { signal });
-  dialog.addEventListener('cancel', event => { event.preventDefault(); closeInteraction(); }, { signal });
+  dialog.addEventListener('cancel', event => { event.preventDefault(); if (!doc.querySelector('dialog[open]:not(#command-palette)')) closeInteraction(); }, { signal });
   dialog.addEventListener('close', () => {
     closing = false;
     cancelChoice(); createNamed = undefined; retryAction = undefined; generation++;
@@ -317,5 +333,5 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     if (dialog.open) { event.preventDefault(); return; }
     if (open()) event.preventDefault();
   }, { signal });
-  return { open, projects, close: () => closeInteraction(), sessions: () => sessions('resume'), openSessions: () => sessions('open'), deleteSessions: () => sessions('delete'), namedSession, startSelection, dispose: () => { disposed = true; cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
+  return { get isDeleting() { return dialog.open && mode === 'sessions' && sessionKind === 'delete' && deleting; }, open, projects, close: () => closeInteraction(), sessions: () => sessions('resume'), openSessions: () => sessions('open'), deleteSessions: () => sessions('delete'), namedSession, startSelection, dispose: () => { disposed = true; cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
 }

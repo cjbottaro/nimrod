@@ -5,7 +5,7 @@ import { JSDOM } from 'jsdom';
 import { installDeletionReview } from '../src/deletion-review';
 import { stubDialogs } from './dialog-fixture';
 
-function fixture() {
+function fixture(canCover?: (other: HTMLDialogElement) => boolean) {
   const dom = new JSDOM(readFileSync('index.html', 'utf8'), { pretendToBeVisual: true });
   stubDialogs(dom.window);
   let now = 0, nextTimer = 0;
@@ -20,7 +20,7 @@ function fixture() {
     for (const [id, timer] of [...timers]) if (timer.at <= now) { timers.delete(id); timer.run(); }
   };
   const dialog = dom.window.document.querySelector<HTMLDialogElement>('#deletion-review')!;
-  const controller = installDeletionReview(dialog);
+  const controller = installDeletionReview(dialog, { canCover });
   return { dom, dialog, controller, advance, timers, doc: dom.window.document, dispose() { controller.dispose(); dom.window.close(); } };
 }
 const sessions = [
@@ -28,6 +28,28 @@ const sessions = [
   { file: '/store/child', title: 'Child', parent: '/store/root' },
   { file: '/store/grandchild', title: '<script>unsafe</script>', parent: '/store/child' },
 ];
+
+test('review can cover only the authorized deletion picker, with loading and higher-dialog priority retained', async () => {
+  const f = fixture(other => other.id === 'command-palette');
+  try {
+    const picker = f.doc.querySelector<HTMLDialogElement>('#command-palette')!;
+    const host = f.doc.querySelector<HTMLDialogElement>('#host-dialog')!;
+    picker.showModal(); f.doc.querySelector<HTMLInputElement>('#palette-input')!.focus();
+    f.controller.loading(); f.advance(150);
+    assert.equal(picker.open, true); assert.equal(f.dialog.open, true);
+    assert.equal(f.doc.activeElement?.id, 'deletion-cancel');
+    const answer = f.controller.review({ id: 'nested', sessions });
+    assert.equal(f.doc.activeElement?.id, 'deletion-cancel');
+    f.dialog.close('cancel'); assert.equal(await answer, false);
+    assert.equal(picker.open, true); assert.equal(f.doc.activeElement?.id, 'palette-input');
+    host.showModal();
+    const blocked = f.controller.review({ id: 'blocked', sessions });
+    assert.equal(f.dialog.open, false);
+    host.close(); assert.equal(f.dialog.open, true);
+    assert.equal(f.doc.activeElement?.id, 'deletion-confirm');
+    f.dialog.close('delete'); assert.equal(await blocked, true); assert.equal(picker.open, true);
+  } finally { f.dispose(); }
+});
 
 test('fast previews open the populated review directly and cancel the delayed loading timer', async () => {
   const f = fixture();

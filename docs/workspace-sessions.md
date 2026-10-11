@@ -100,7 +100,7 @@ The composer's **Stop** interrupts work without ending its process. Use Restart 
 
 Use **Delete sessions…** in the command palette or **⌘/Ctrl ⇧ Backspace** to clean up several saved conversations. It searches the same top-level project history as Resume session, including open and closed sessions, with the same row indicators and timestamps. Selecting a row with Enter or a click opens the existing session-tree confirmation without selecting or resuming that conversation.
 
-After Cancel, Escape in the confirmation, or completed deletion, the picker returns with your filter retained. Cancellation keeps the same row selected; deletion selects the next matching row, or the previous one at the end. The list refreshes after each attempt and stays open even when empty. **Escape from the picker closes it** and restores prior focus. Explicit Back returns to commands.
+The picker stays visible beneath the confirmation, which owns focus and Escape. Cancel or Escape in the confirmation leaves the rows, filter, selection and reading position unchanged. After the transaction settles, only confirmed-deleted rows are removed in place—there is no automatic history refresh. Selection advances to the next matching row, or the previous one at the end; failed/retained rows stay listed. The picker stays open even when empty. Use Refresh explicitly to rediscover history. **Escape from the picker closes it** and restores prior focus. Explicit Back returns to commands.
 
 Each confirmation still deletes that session **and its descendants**, not just the picker row. Existing idle, identity, quarantine and partial-failure rules apply. Busy/recovery-blocked targets remain undeleted; there is no automatic retry or recovery.
 

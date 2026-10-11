@@ -405,7 +405,7 @@ test('Delete sessions shortcut loops native review over closed history without l
     shortcut(); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Delete sessions');
     const input = f.element<HTMLInputElement>('palette-input'); input.value = 'Old'; input.dispatchEvent(new f.win.Event('input'));
     pickerKey('ArrowDown'); pickerKey('Enter'); pickerKey('Enter'); await f.tick();
-    assert.equal(f.element<HTMLDialogElement>('deletion-review').open, true); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+    assert.equal(f.element<HTMLDialogElement>('deletion-review').open, true); assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
     f.element('deletion-cancel').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
     assert.equal(f.element<HTMLDialogElement>('command-palette').open, true); assert.equal(input.value, 'Old');
     assert.match(f.element('palette-list').querySelector('[aria-selected="true"]')!.textContent!, /Old two/);
@@ -421,6 +421,7 @@ test('Delete sessions shortcut loops native review over closed history without l
       { root: '/sessions/two.jsonl', sessionId: 'two' }, { root: '/sessions/two.jsonl', sessionId: 'two' },
       { root: '/sessions/one.jsonl', sessionId: 'one' }, { root: '/sessions/one.jsonl', sessionId: 'one' },
     ]);
+    assert.equal(f.calls.filter(call => call.command === 'list_workspace_sessions').length, 1, 'deletion never reloads the catalog');
     f.preferences.external('{"keybindings":{"delete-sessions":["primary+j"]}}');
     shortcut(); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'j', metaKey: true, bubbles: true })); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Delete sessions');

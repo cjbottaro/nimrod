@@ -1,5 +1,11 @@
 # Verification
 
+## Retained Delete sessions picker under tree review
+
+- Implemented locally on `fix/delete-picker-overlay` in `.worktrees/delete-picker-overlay`. The deletion picker stays visible/mounted under its authorized tree review. Cancellation preserves rows/filter/selection/scroll; authoritative successful deletions remove cached rows and their DOM nodes in place, preserving survivors and advancing selection. No automatic catalog refresh, picker close/reopen, target activation or deletion retry. Pending controls and higher-dialog guards retain modality and duplicate prevention; explicit Refresh remains available after settlement.
+- Final `mise run check` passes **422 TS/Node tests**, formatting/Clippy and **97 Rust tests** (two Pi smokes ignored). All **51 offline WebKit tests** passed; after the final selection-scroll adjustment, all four deletion WebKit tests passed again. New tests cover retained DOM/query/scroll, hidden successful rows, partial-result retention, narrow review coverage/loading, modal focus/Escape, no catalog reload and stale completion guards. One intermediate check caught redundant selection reveal resetting scroll plus an unfocusable mock dialog; fixed the redundant reveal and made the test dialog focusable before the final passing check.
+- Final `mise run build` packages/ad-hoc-signs/verifies `.worktrees/delete-picker-overlay/src-tauri/target/release/bundle/macos/Nimrod.app`. Native Tauri visual/focus/keyboard and multi-window acceptance, Linux and possible Windows remain unverified. No primary-checkout build change, user-app launch/interruption, real user-session deletion, live Pi/model request, upstream change, commit or push.
+
 ## Repeated Delete sessions picker
 
 - Implemented locally on `feature/delete-sessions-picker` in `.worktrees/delete-sessions-picker`: **Delete sessions…** / Cmd/Ctrl+Shift+Backspace shares Resume's saved top-level project history. Enter/click opens the existing tree review without selecting/resuming the target. Cancel, confirmation Escape and completed deletion return to a refreshed picker with the filter retained, same/next/previous row selection and original focus restoration on final Escape. Empty lists remain open. Selected-tree Cmd/Ctrl+Backspace is unchanged.
