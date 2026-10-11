@@ -1,6 +1,6 @@
 # Card plugins
 
-**Status: bundled renderers and requested-edit previews implemented; external plugins pending.**
+**Status: implemented — bundled renderers, requested-edit previews and local declarative external tool plugins.**
 
 User-facing feature description: [Card plugins](../../../../docs/card-plugins.md).
 This reference records accepted architectural decisions and the living implementation plan. Keep API details provisional until renderer extraction provides evidence.
@@ -20,16 +20,13 @@ This reference records accepted architectural decisions and the living implement
 
 Using the plugin contract for normal sessions continuously exercises it, makes bundled renderers useful examples, and prevents a second-class extension API alongside a privileged built-in renderer. Keeping behavioral infrastructure in core avoids duplicating disclosure, lifecycle and scroll logic in every plugin.
 
-## Open questions (not accepted API decisions)
+## Follow-on questions (not accepted API decisions)
 
-- Plugin manifest, packaging, discovery, installation, API versioning and compatibility policy.
-- Execution environment, isolation, allowed styling, resource access and failure boundaries. API parity alone does not establish safe external-code loading.
-- Renderer matching, precedence, user overrides and when a renderer may change for an existing card.
-- Exact incremental update/disposal contract, summary/body slots and state ownership at the API boundary.
-- Host action capabilities, explicit execution semantics and historical/closed-session behavior.
-- Structured custom-content transport and persistence through the concrete Pi integration. Current RPC text widgets/dialogs are not a rich-card channel; TUI component factories cannot simply be reused.
-- Scope and order of reasoning-card extraction after the initial tool-card work.
-- Which richer card proves the API. Diffs and subagents are candidates, not approved implementation tasks. Subagent detail must come from actual data, not inferred status counts.
+- Arbitrary executable renderers, stronger isolation/resource policy, custom styling and broader versioned API. V1 supports declarations only; it is not evidence for safe external-code loading.
+- External reasoning/parallel renderers, install/selection UI and package-only hot reload. Their bundled implementations are extracted; external customization is tool-only.
+- Explicit host action capabilities and historical/closed-session availability. V1 grants no execution actions.
+- Structured result/custom-content preservation through the concrete Pi integration. Current RPC text widgets/dialogs are not a rich-card channel; TUI component factories cannot simply be reused.
+- Additional rich cards such as subagents/test/research; subagent detail must come from actual data, not inferred status counts. Requested-edit previews are the implemented richer-renderer proof.
 
 ## Current code map
 
@@ -43,6 +40,27 @@ Milestone 1 audited these anchors and their regression suites at baseline `9607a
 | `src/pi/tool-card.ts` | Incremental tool-card summary, input preview, raw inputs and output |
 | `src/pi/reasoning-card.ts` | Harness-provided reasoning disclosure and preview |
 | `src/pi/transcript-presentation.ts` | Transcript presentation including standalone tool envelopes |
+
+## Local declarative plugins (milestone 5)
+
+### Accepted API and loading decisions
+
+- External v1 packages are **strict JSON declarations**, not executable JavaScript. The interpreter implements the same `CardRenderer` instance contract as bundled renderers, but has no DOM, CSS, filesystem, network, transport or action capabilities. This deliberately bounded implementation avoids claiming an arbitrary-code sandbox. External Markdown is not supported; text and diff use literal safe DOM construction. Bundled reasoning alone requests existing safe Markdown.
+- `declarative.ts` validates `apiVersion: 1`, non-reserved namespaced ID, normalized exact tool matches, optional title/preview and keyed sections. Template placeholders are JSON pointers into the retained tool data, with own-property lookup and forbidden prototype segments. Unknown fields/versions, invalid formats/pointers, duplicate matches/keys and oversized packages are rejected. No action permissions are granted.
+- `cards.plugins` is an ordered list of at most 50 unique JSON filenames; `cards.renderers` maps up to 100 normalized tool names to IDs. TS/native settings validators reject paths and invalid shapes. `src-tauri/src/card_plugins.rs` reads only regular non-symlink files under the config-adjacent `card-plugins` directory, bounds reads to 256 KiB, and authorizes welcome/project windows. No directory scan, install mutation or remote requests. Config root follows existing absolute XDG/home policy.
+- `catalog.ts` loads listed packages in order; later duplicate IDs fail. First matching loaded external package wins, then bundled; explicit overrides select the named compatible renderer, `nimrod.tool`, `nimrod.edit-preview` for edit or `nimrod.raw`. A missing/incompatible explicit selection uses raw fallback. Errors appear in Settings without blocking startup/conversations.
+- `main.ts` loads catalog at startup and on relevant settings changes. Generation ordering prevents stale loads from overwriting newer configuration. Already mounted cards retain their instance; new shells use the current loaded catalog. Package-only edits require window reopen or remove/re-add in settings (no file watcher or reload command). Existing session reset remains the explicit disclosure reset boundary, not a new automatic resume/restart operation.
+- External sections are followed by retained raw execution/final result sections; core always keeps raw inputs. `card-shell.ts` now associates the host-owned raw output viewport so custom sections do not steal live-output following. Historical results remain readable when a package is gone. Raw recovery still cannot expose dropped non-text/structured Pi result metadata.
+
+### Code/test map and acceptance
+
+- `src/pi/card-plugins/declarative.ts`, `catalog.ts`, `registry.ts`: schema/interpreter, loading/matching/overrides and bundled selection.
+- `src/pi/view-host.ts`, `webview-client.ts`: injected presentation selector used only on shell creation; no external host capability exposure.
+- `src/preferences.ts`, `src-tauri/src/preferences.rs`, `card_plugins.rs`, `main.rs`: settings validation, bounded native read and IPC registration. `index.html` / `main.ts` expose Settings errors.
+- `test/external-card-plugins.test.ts`: malformed/incompatible/declarative-only packages, safe pointers/text, settings paths, matching/overrides, missing/duplicate packages, historical raw fallback and stale-load ordering.
+- Native filesystem fixtures: traversal/URL/extension, oversize, directory and symlink rejection; no user config files read or written.
+- `test/browser/card-plugins.spec.ts`: real offline app rendering through mock package IPC, raw result availability and stable inspected cards when settings change. No live model, external network or user app.
+- No arbitrary-code loading, external reasoning/parallel customization, CSS, install UI, agent actions or custom Pi-content transport. These are explicit limitations, not acceptance claims. Native macOS UI and Linux/possible Windows delivery remain unverified.
 
 ## Requested-edit renderer (milestone 4)
 
@@ -59,7 +77,7 @@ Milestone 1 audited these anchors and their regression suites at baseline `9607a
 - The common content contract adds optional safe-Markdown section format and keyed member presentation. Core consumes Markdown only through the existing safe renderer; lifecycle and member status remain host-owned. Reasoning keeps its existing first-line preview, empty/opaque omission and incremental shell/indicator behavior; parallel keeps live-only placement, completed-first sorting and initially open disclosure.
 - `src/pi/parallel-card.ts` separates mounted parallel shell/member indicators from progress projection; `tool-progress.ts` retains authoritative projection and compatibility export. Removed members are pruned. `reasoning-card.ts` retains its shell and safe body rendering.
 - View pruning, replacement, empty reasoning removal, reset and disposal release reasoning/parallel instances; tool instances retain milestone-2 ownership. `test/bundled-card-renderers.test.ts` verifies the shared contract and stable parallel members/indicator/disclosure.
-- Compatibility exports in `tool-presentation.ts` remain for current consumers. No default card presentation is silently exempted or allowed privileged session actions. Exact API remains internal pending richer-card evidence.
+- Compatibility exports in `tool-presentation.ts` remain for current consumers. No default card presentation is silently exempted or allowed privileged session actions. The instance contract is internal; the supported external declaration schema is owned by milestone 5.
 - Validation: `mise run check` passes **464 TS/Node tests**, Rust formatting/Clippy and **111 Rust tests** (two opt-in smokes ignored); `npm run test:browser` passes **64 offline WebKit tests**. No app build/launch or native/platform acceptance.
 
 ## Internal tool-renderer contract (milestone 2)
@@ -69,7 +87,7 @@ Milestone 1 audited these anchors and their regression suites at baseline `9607a
 - `src/pi/tool-card.ts` retains the mounted shell, status/ARIA, raw inputs, keyed section nodes and output caps. All existing creation and patch paths use its per-shell renderer controller. Presentation changes do not replace the disclosure or healthy sibling shells.
 - `src/pi/card-shell.ts` owns disclosure helpers/constants and existing live-output capture/restore (compatibility exports remain in `tool-card.ts`). `ToolDisclosureController.remove` releases pruned-card timers; view pruning/reset/disposal explicitly disposes renderer instances.
 - Unsupported content, mount/update/validation failures latch that card to current raw fallback until its shell is removed/reset. Disposal and diagnostic errors are contained. `test/card-renderer.test.ts` covers failures, current fallback data, stable healthy siblings and exactly-once instance disposal.
-- API refinement for richer sections, reasoning and parallel presentation remains milestone 3/4 work. No external code loading, renderer selection UI or behavior change to normal tool cards.
+- Subsequent milestones refine this contract for reasoning/parallel, requested edits and declarative packages; the sections above own current behavior. There is no executable external code loading or renderer-selection UI.
 
 ## Rendering-boundary audit (milestone 1)
 
@@ -151,7 +169,7 @@ Other card-shaped presentations are reasoning and the parallel-tools overview. S
 
 ## Incremental implementation plan
 
-Milestones 1–4 are complete; milestone 5 remains pending. Treat each as independently mergeable work in a dedicated task worktree. Dependencies are sequential unless noted; external loading must not gate bundled extraction.
+Milestones 1–5 are complete within the bounded declarative external-plugin scope above. Treat each as independently mergeable work in a dedicated task worktree. Dependencies are sequential unless noted; external loading must not gate bundled extraction.
 
 | Milestone | Dependency | Acceptance criteria |
 | --- | --- | --- |
@@ -159,7 +177,7 @@ Milestones 1–4 are complete; milestone 5 remains pending. Treat each as indepe
 | 2. Introduce the internal renderer contract — complete | 1 | Existing tool cards render through the boundary without visible behavior changes. Core still owns the shell and policies; unsupported content and renderer failure have tested raw fallback behavior. |
 | 3. Extract bundled renderers — complete | 2 | Default tool-card presentations use the supported contract without privileged access. Record the concrete built-in inventory and reasoning-card scope; remaining default card renderers must be tracked explicitly, not silently exempted. |
 | 4. Prove extensibility with a richer renderer — complete | 3 | Choose a concrete card with available structured fixture data. Implement it using only the contract and host-supported capabilities, without tool-specific presentation branches in core. Refine the API from evidence. |
-| 5. Support external plugins | 4 | Resolve packaging, compatibility, isolation, matching/overrides and action permissions before loading external code. Test missing/incompatible/failing plugins and historical fallback; document actual installation and selection behavior. |
+| 5. Support external plugins — complete (declarative tool packages) | 4 | Resolve packaging, compatibility, isolation, matching/overrides and action permissions before loading external code. Test missing/incompatible/failing plugins and historical fallback; document actual installation and selection behavior. |
 
 Custom Pi-produced content is a separate follow-on track: resolve transport and history semantics before committing implementation milestones. It is not a prerequisite for alternative renderers of existing tool calls.
 
@@ -167,12 +185,10 @@ For each milestone, update this reference with changes, remaining questions and 
 
 ## Verification
 
-The boundary audit and internal tool-renderer contract are complete. No external loading or native/plugin acceptance has been established. Milestone 2: `mise run check` passes **462 TS/Node tests** and **111 Rust tests** (two opt-in smokes ignored); `npm run test:browser` passes **64 offline WebKit tests**. `git diff --check` passes. No app build/launch or native acceptance; audit evidence below remains baseline.
+All five milestones are implemented within the explicit declarative scope above. Final validation: `mise run check` passes offline docs, TypeScript checking and **473 TS/Node tests**, Rust formatting/Clippy and **114 Rust tests** (two opt-in Pi smokes ignored). `npm run test:browser` passes **66 offline WebKit tests**, including external package rendering/settings retention and incompatible/missing-package Settings errors. `git diff --check` passes. No packaged app, native/plugin visual acceptance, Linux parity or possible Windows acceptance is established.
 
-- `mise run check` passes: offline documentation checks (53 Markdown files), TypeScript checking and **457 Node/TypeScript tests**, Rust formatting/Clippy and **111 Rust tests** (two opt-in Pi smokes ignored).
-- Four added regressions pass: distinct/final output and raw-input disclosure retention; literal unknown-tool data; integrated reasoning shell/indicator/disclosure/focus; invocation-ID isolation across separate mounted-view fixtures. The latter fixtures use separate jsdom documents, not native multi-window acceptance.
-- `git diff --check` passes. No runtime/CSS changes, app build, app launch, live model requests or upstream Pi/extension changes. Browser tests were not run for this audit; native/platform verification remains unchanged.
+Fixtures cover renderer failure/disposal, bundled inventory, requested edits, local declarative schemas/settings/matching, safe text, missing/incompatible/duplicate packages, historical raw recovery, output-scroll ownership and stale loads. View fixtures use jsdom documents, not native multi-window acceptance. Offline browser fixtures exercise the app without real model requests, notifications or user-session mutation. No app build/launch or upstream Pi/extension changes.
 
-Relevant existing regression suites include `test/tool-call.test.ts`, `test/tool-input-lifecycle.test.ts`, `test/native-view.test.ts`, `test/transcript-presentation.test.ts`, `test/tool-card.test.ts` and `test/reasoning-card.test.ts`. Add contract and fallback tests as the boundary is implemented.
+Relevant existing regression suites include `test/tool-call.test.ts`, `test/tool-input-lifecycle.test.ts`, `test/native-view.test.ts`, `test/transcript-presentation.test.ts`, `test/tool-card.test.ts` and `test/reasoning-card.test.ts`. Contract/fallback, bundled/edit and external-package suites listed above cover the implemented boundary.
 
 Implementation requires `mise run check`; scrolling changes also require the offline `npm run test:browser` suite. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow). Keep tests fixture-based, with no paid requests or live session mutation. Request user validation for packaged-app visual behavior; record per-platform verification separately.

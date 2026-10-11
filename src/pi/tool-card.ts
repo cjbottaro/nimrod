@@ -1,4 +1,5 @@
 import { CardRendererController, type CardRenderer, type CardPresentation } from './card-renderer';
+import { associateOutputViewport } from './card-shell';
 import { bundledToolRenderer } from './card-plugins/registry';
 import { rawToolPresentation } from './tool-presentation';
 export { toolInputPreview } from './tool-presentation';
@@ -16,10 +17,12 @@ export interface ToolCardBlock {
 }
 
 const renderers = new WeakMap<HTMLDetailsElement, CardRendererController<ToolCardBlock>>();
+const outputContent = new WeakMap<HTMLElement, { format: string; source: string }>();
 
 export function disposeToolCard(details: HTMLDetailsElement): void {
   renderers.get(details)?.dispose();
   renderers.delete(details);
+  associateOutputViewport(details);
 }
 
 export function toolCardIsBusy(block: ToolCardBlock): boolean {
@@ -132,9 +135,9 @@ function updateOutputs(document: Document, root: HTMLDetailsElement, block: Tool
     const output = section.querySelector<HTMLPreElement>('.tool-output')!;
     output.setAttribute('aria-label', part.label);
     const format = part.format || 'text';
-    if (output.dataset.format !== format || output.dataset.source !== part.value) {
-      output.dataset.format = format;
-      output.dataset.source = part.value;
+    const previous = outputContent.get(output);
+    if (previous?.format !== format || previous.source !== part.value) {
+      outputContent.set(output, { format, source: part.value });
       if (format === 'diff') {
         output.replaceChildren();
         for (const line of part.value.split('\n')) {
@@ -148,6 +151,8 @@ function updateOutputs(document: Document, root: HTMLDetailsElement, block: Tool
     if (current !== section) root.insertBefore(section, current || null);
   });
   for (const section of existing.values()) section.remove();
+  const raw = sections().filter(section => ['execution', 'result'].includes(section.dataset.outputKind || ''));
+  associateOutputViewport(root, raw.find(section => section.querySelector('.tool-output-streaming'))?.querySelector<HTMLElement>('.tool-output') || raw[0]?.querySelector<HTMLElement>('.tool-output') || sections()[0]?.querySelector<HTMLElement>('.tool-output') || undefined);
 }
 
 function rawInputs(document: Document, value: unknown): HTMLDetailsElement {

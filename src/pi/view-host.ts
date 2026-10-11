@@ -3,6 +3,7 @@ import type { JsonRecord } from './types';
 
 /** The existing Pi renderer's small in-process boundary; no VS Code compatibility shim. */
 export interface ViewHost {
+  cardRenderer?: (data: Readonly<import('./tool-card').ToolCardBlock>) => import('./card-renderer').CardRenderer<import('./tool-card').ToolCardBlock>;
   attachments?: import('./image-attachments').AttachmentHost;
   postMessage(message: JsonRecord): void;
   onMessage(listener: (message: HostMessage) => void): void;

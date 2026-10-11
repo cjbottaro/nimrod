@@ -118,6 +118,36 @@ fn jsonc(text: &str) -> Result<Value, String> {
 fn validate(text: &str) -> Result<(), String> {
     let value = jsonc(text)?;
     let object = value.as_object().ok_or("Settings must be a JSON object")?;
+    if let Some(files) = object.get("cards.plugins") {
+        let files = files.as_array().ok_or("cards.plugins must be an array")?;
+        let mut seen = std::collections::HashSet::new();
+        if files.len() > 50
+            || files.iter().any(|file| {
+                file.as_str()
+                    .is_none_or(|name| !crate::card_plugins::filename(name) || !seen.insert(name))
+            })
+        {
+            return Err("cards.plugins must contain at most 50 unique JSON filenames".into());
+        }
+    }
+    if let Some(overrides) = object.get("cards.renderers") {
+        let overrides = overrides
+            .as_object()
+            .ok_or("cards.renderers must be an object")?;
+        if overrides.len() > 100
+            || overrides.iter().any(|(name, id)| {
+                name.is_empty()
+                    || !name
+                        .bytes()
+                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"_-".contains(&b))
+                    || id
+                        .as_str()
+                        .is_none_or(|id| !crate::card_plugins::renderer_id(id))
+            })
+        {
+            return Err("cards.renderers must map normalized tool names to renderer IDs".into());
+        }
+    }
     if let Some(bindings) = object.get("keybindings") {
         crate::keybindings::validate(bindings)?;
     }
@@ -486,6 +516,20 @@ pub fn watch(app: &tauri::AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn validates_card_plugin_filenames_and_renderer_overrides() {
+        assert!(validate(r#"{"cards.plugins":["example.json"],"cards.renderers":{"read":"example.read","edit":"nimrod.raw"}}"#).is_ok());
+        for text in [
+            r#"{"cards.plugins":["../example.json"]}"#,
+            r#"{"cards.plugins":["example.json","example.json"]}"#,
+            r#"{"cards.plugins":["https://example.json"]}"#,
+            r#"{"cards.renderers":{"functions.read":"example.read"}}"#,
+            r#"{"cards.renderers":{"read":"example..read"}}"#,
+            r#"{"cards.renderers":{"read":"1example.read"}}"#,
+        ] {
+            assert!(validate(text).is_err(), "{text}");
+        }
+    }
     fn fixture() -> (tempfile::TempDir, Preferences) {
         let dir = tempfile::tempdir().unwrap();
         let preferences = Preferences {

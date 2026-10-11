@@ -1,3 +1,4 @@
+import { readPluginSettings } from './pi/card-plugins/declarative';
 import { applyEdits, modify, parse, type ParseError } from 'jsonc-parser';
 import { runtimePaths, RUNTIME_STORAGE_KEY } from './settings';
 import { readLibrary, THEME_STORAGE_KEY, MAX_IMPORTED_THEMES, type ColorTheme, type ThemeLibrary } from './themes/theme';
@@ -26,6 +27,7 @@ export function parseSettings(text: string): Record<string, unknown> {
   if (errors.length || !settings || typeof settings !== 'object' || Array.isArray(settings)) throw new Error('Settings must be a valid JSON/JSONC object.');
   if (settings['notifications.enabled'] !== undefined && typeof settings['notifications.enabled'] !== 'boolean') throw new Error('notifications.enabled must be a boolean.');
   readKeyOverrides(settings[KEYBINDINGS_SETTING]);
+  readPluginSettings(settings);
   const zoom = settings['appearance.zoom'];
   if (zoom !== undefined && !ZOOM_LEVELS.includes(zoom)) throw new Error('Invalid appearance.zoom percentage.');
   for (const key of ['runtime.piPath', 'runtime.nodePath']) {
@@ -170,6 +172,7 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
       });
     },
     resetKeybindings() { return patch({ [KEYBINDINGS_SETTING]: {} }); },
+    cardPlugins() { return readPluginSettings(settings); },
     notificationsEnabled() { return settings['notifications.enabled'] !== false; },
     saveNotifications(enabled: boolean) { return patch({ 'notifications.enabled': enabled }); },
     zoom() { return settings['appearance.zoom'] ?? DEFAULT_ZOOM; },

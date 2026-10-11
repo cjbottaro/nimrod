@@ -23,6 +23,6 @@
 
 ## Card customization
 
-- [Card plugins](card-plugins.md) — bundled renderers; external customization planned.
+- [Card plugins](card-plugins.md) — bundled renderers, edit previews and local declarative tool customization.
 
 For development, see [Contributing](../CONTRIBUTING.md). Specifications and implementation details are indexed by the internal [features skill](../.agents/skills/features/SKILL.md).
