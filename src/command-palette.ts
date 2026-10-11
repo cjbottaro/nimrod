@@ -1,4 +1,5 @@
 import { vscodeMruRanking, type CommandRanking } from './command-ranking';
+import { createPickerEnterHint } from './picker-hints';
 import { createSessionRowContent, updateSessionRowContent, type SessionRowPresentation } from './session-sidebar';
 
 export interface PaletteItem {
@@ -130,7 +131,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
         const content = createSessionRowContent(row, `${row.id}-time`);
         content.rowLabel.classList.add('palette-item-label');
         updateSessionRowContent(content, item.label, item.sessionRow);
-        row.append(enterHint());
+        content.rowLabel.parentElement!.append(createPickerEnterHint(doc));
         return row;
       }
       const heading = doc.createElement('div'); heading.className = 'palette-item-heading';
@@ -147,12 +148,12 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       if (mode === 'projects') {
         row.className = 'palette-project-row';
         const parent = doc.createElement('small'); parent.className = 'palette-project-parent'; parent.textContent = item.projectParent || '';
-        heading.append(parent, enterHint()); row.append(heading);
+        heading.append(parent, createPickerEnterHint(doc)); row.append(heading);
         row.title = item.detail || item.id;
         row.setAttribute('aria-label', `${item.label} — ${item.detail || item.id}${item.projectOpen ? ' — Open project window' : ''} — Enter to open`);
         return row;
       }
-      if (preview) heading.append(enterHint());
+      if (preview) heading.append(createPickerEnterHint(doc));
       if (item.shortcut) { const shortcut = doc.createElement('kbd'); shortcut.className = 'palette-item-shortcut'; shortcut.textContent = item.shortcut; heading.append(shortcut); }
       if (item.badge) { const badge = doc.createElement('span'); badge.className = 'palette-item-badge'; badge.textContent = item.badge; heading.append(badge); }
       const detail = doc.createElement('small'); detail.className = 'palette-item-description'; detail.textContent = item.detail || '';
@@ -168,15 +169,6 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     const noun = mode === 'commands' ? 'commands' : mode === 'sessions' ? 'sessions' : mode === 'projects' ? 'projects' : 'options';
     status.textContent = loading ? `Loading ${noun}…` : notice || (matches.length ? `${matches.length} ${noun}` : items.length || mode === 'commands' ? `No matching ${noun}.` : mode === 'sessions' ? 'No sessions yet.' : mode === 'projects' ? 'No recent projects. Use File → Open project… to open a folder.' : 'No options available.');
     input.setAttribute('aria-busy', String(loading));
-  }
-  function enterHint(): SVGSVGElement {
-    const enter = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    enter.classList.add('palette-project-enter'); enter.setAttribute('viewBox', '0 0 24 24');
-    enter.setAttribute('fill', 'none'); enter.setAttribute('stroke', 'currentColor'); enter.setAttribute('stroke-width', '1.7');
-    enter.setAttribute('stroke-linecap', 'round'); enter.setAttribute('stroke-linejoin', 'round');
-    enter.setAttribute('aria-hidden', 'true'); enter.setAttribute('focusable', 'false');
-    const path = doc.createElementNS('http://www.w3.org/2000/svg', 'path'); path.setAttribute('d', 'M20 4v8a4 4 0 0 1-4 4H4m5-5-5 5 5 5');
-    enter.append(path); return enter;
   }
   function selection(): void {
     for (const [index, row] of [...list.children].entries()) row.setAttribute('aria-selected', String(index === selected));

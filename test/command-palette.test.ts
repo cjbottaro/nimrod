@@ -181,7 +181,7 @@ test('project rows are inline dot/name/parent/Enter hints, searchable without a 
     for (const row of f.list().children) {
       assert.equal(row.children.length, 1, 'one inline heading, no subtitle');
       const heading = row.firstElementChild!;
-      assert.deepEqual([...heading.children].map(node => node.classList[0]), ['palette-selection-marker', 'palette-item-label', 'palette-project-parent', 'palette-project-enter']);
+      assert.deepEqual([...heading.children].map(node => node.classList[0]), ['palette-selection-marker', 'palette-item-label', 'palette-project-parent', 'picker-enter-hint']);
       assert.equal(heading.querySelector('svg')!.getAttribute('aria-hidden'), 'true');
       assert.match(row.getAttribute('aria-label')!, /Enter to open/);
       assert.equal(row.hasAttribute('aria-current'), false);
@@ -225,6 +225,8 @@ test('session row options share indicators and muted timestamps without visible 
       assert.equal(row.querySelector('.session-indicator')!.textContent, status.mark);
       assert.equal(row.querySelector('.session-indicator')!.getAttribute('aria-hidden'), 'true');
       assert.equal(row.querySelector('.session-row-text > span')!.textContent, `Conversation ${index}`);
+      assert.ok(row.querySelector('.session-row-heading > .picker-enter-hint'), 'Enter hint aligns with the title, not the whole two-line row');
+      assert.equal(row.querySelector(':scope > .picker-enter-hint'), null);
       assert.equal(row.querySelector('small > time')!.textContent, sessionTime(timestamp));
       assert.equal(row.querySelector('time')!.getAttribute('datetime'), new Date(timestamp).toISOString());
       assert.equal(row.getAttribute('aria-label'), `Conversation ${index} — ${status.label}`);
@@ -317,9 +319,9 @@ test('session membership is searchable without badges and rows share selected En
     await f.palette.sessions();
     assert.equal(f.list().querySelectorAll('.session-row').length, 2);
     assert.equal(f.list().querySelectorAll('.session-row-badge').length, 0);
-    assert.equal(f.list().querySelectorAll('.palette-project-enter').length, 2);
-    assert.equal(f.list().querySelector('.palette-project-enter')!.getAttribute('aria-hidden'), 'true');
-    assert.equal(f.list().querySelector('.palette-project-enter')!.getAttribute('focusable'), 'false');
+    assert.equal(f.list().querySelectorAll('.picker-enter-hint').length, 2);
+    assert.equal(f.list().querySelector('.picker-enter-hint')!.getAttribute('aria-hidden'), 'true');
+    assert.equal(f.list().querySelector('.picker-enter-hint')!.getAttribute('focusable'), 'false');
     assert.equal(f.list().children[0].getAttribute('aria-selected'), 'true');
     f.key('ArrowDown');
     assert.equal(f.list().children[1].getAttribute('aria-selected'), 'true');

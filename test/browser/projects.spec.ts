@@ -14,7 +14,7 @@ test('recent-project rows show dot/name/muted parent/Enter inline without a fold
     await expect(markers).toHaveCount(3);
     expect(await markers.allTextContents()).toEqual(['•', '', '']);
     await expect(page.locator('#palette-list .palette-item-badge, #palette-browse, #palette-project-footer')).toHaveCount(0);
-    const enterHints = page.locator('#palette-list .palette-project-enter');
+    const enterHints = page.locator('#palette-list .picker-enter-hint');
     await expect(enterHints).toHaveCount(3);
     await expect(enterHints.nth(0)).toBeVisible();
     await expect(enterHints.nth(1)).toBeHidden();
@@ -24,7 +24,7 @@ test('recent-project rows show dot/name/muted parent/Enter inline without a fold
       const marker = row.querySelector('.palette-selection-marker')!;
       const label = row.querySelector('.palette-item-label')!;
       const parent = row.querySelector('.palette-project-parent')!;
-      const enter = row.querySelector('.palette-project-enter')!;
+      const enter = row.querySelector('.picker-enter-hint')!;
       const rect = (node: Element) => { const r = node.getBoundingClientRect(); return { left: r.left, right: r.right, mid: r.top + r.height / 2 }; };
       return { row: rect(row), marker: rect(marker), markerBasis: getComputedStyle(marker).flexBasis, label: rect(label), parent: rect(parent), enter: rect(enter), muted: getComputedStyle(parent).color,
         description: getComputedStyle(document.querySelector('#palette-status')!).color, overflow: row.scrollWidth > row.clientWidth + 1,
@@ -65,7 +65,7 @@ test('recent-project rows show dot/name/muted parent/Enter inline without a fold
     await page.locator('#palette-input').fill('/other');
     await expect(page.locator('#palette-list [role=option]')).toHaveCount(1);
     await expect(page.locator('#palette-list small')).toHaveText(longParent);
-    await expect(page.locator('#palette-list .palette-project-enter')).toBeVisible();
+    await expect(page.locator('#palette-list .picker-enter-hint')).toBeVisible();
     await page.locator('#palette-input').fill('no match');
     await expect(page.locator('#palette-list [role=option]')).toHaveCount(0);
     await expect(page.locator('#palette-browse')).toHaveCount(0);

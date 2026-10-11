@@ -337,7 +337,7 @@ test('Resume uses Switch row layout and typography while historical preview stay
     expect(await option.locator('small').evaluate(typography)).toEqual(switchType);
     await expect(option.locator('.session-indicator')).toHaveAttribute('data-state', 'closed');
     await expect(option.locator('.session-indicator')).toHaveText('—');
-    await expect(option.locator('.palette-project-enter')).toBeVisible();
+    await expect(option.locator('.picker-enter-hint')).toBeVisible();
     await expect(option.locator('.session-row-badge')).toHaveCount(0);
     await expect(option.locator('time')).toContainText('2 minutes ago');
     await expect(option).not.toContainText('Find this hidden preview');
@@ -367,11 +367,11 @@ test('session Enter hints follow keyboard selection without shifting titles or t
       return { titleX: title.x, titleWidth: title.width, timeX: time.x };
     }));
     const before = await bounds();
-    await expect(rows.nth(0).locator('.palette-project-enter')).toBeVisible();
-    await expect(rows.nth(1).locator('.palette-project-enter')).toBeHidden();
+    await expect(rows.nth(0).locator('.picker-enter-hint')).toBeVisible();
+    await expect(rows.nth(1).locator('.picker-enter-hint')).toBeHidden();
     await page.keyboard.press('ArrowDown');
-    await expect(rows.nth(0).locator('.palette-project-enter')).toBeHidden();
-    await expect(rows.nth(1).locator('.palette-project-enter')).toBeVisible();
+    await expect(rows.nth(0).locator('.picker-enter-hint')).toBeHidden();
+    await expect(rows.nth(1).locator('.picker-enter-hint')).toBeVisible();
     expect(await bounds()).toEqual(before);
     await expect(rows.locator('.session-indicator')).toHaveText(['—', '—']);
     await expect(rows.locator('.session-row-badge')).toHaveCount(0);

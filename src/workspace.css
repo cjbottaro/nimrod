@@ -94,7 +94,6 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor:col-resize !important; u
 #command-palette[data-preview=theme] #palette-list { max-height:32vh; }
 #command-palette[data-preview=theme] .palette-item-label { flex:0 1 auto; }
 #command-palette[data-preview=theme] .palette-selection-marker { flex-basis:8px; }
-#command-palette[data-preview=theme] .palette-item-heading .palette-project-enter { margin-left:auto; }
 #command-palette[data-mode=selection] #palette-list [role=option]:hover:not([aria-selected=true]) { background:var(--vscode-list-hoverBackground, var(--vscode-toolbar-hoverBackground)); }
 #palette-list .palette-item-badge { flex:none; border:1px solid var(--vscode-panel-border); border-radius:3px; padding:1px 5px; font-size:10px; color:var(--vscode-descriptionForeground); }
 #palette-list small { color:var(--vscode-descriptionForeground); font-size:11px; }
@@ -103,8 +102,10 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor:col-resize !important; u
 #palette-list .palette-project-row .palette-selection-marker { flex-basis:8px; margin-right:-4px; }
 #palette-list .palette-project-row .palette-item-label { flex:0 0 auto; max-width:55%; }
 #palette-list .palette-project-parent { flex:0 1 auto; min-width:0; }
-#palette-list .palette-project-enter { flex:0 0 16px; width:16px; height:16px; margin-left:auto; color:var(--vscode-descriptionForeground); visibility:hidden; }
-#palette-list [aria-selected=true] .palette-project-enter { visibility:visible; }
+/* Shared picker-hint appearance; picker placement/selection is separate below. */
+.picker-enter-hint { flex:none; width:16px; height:16px; color:var(--vscode-descriptionForeground); }
+#palette-list .picker-enter-hint { margin-left:auto; visibility:hidden; }
+#palette-list [aria-selected=true] .picker-enter-hint { visibility:visible; }
 #command-palette[data-mode=projects] #palette-list [role=option]:hover:not([aria-selected=true]) { background:var(--vscode-list-hoverBackground, var(--vscode-toolbar-hoverBackground)); }
 #palette-status { margin:0; font-size:11px; color:var(--vscode-descriptionForeground); white-space:pre-wrap; }
 @media (max-width:760px) { #session-sidebar { width:var(--session-sidebar-width,210px); } }

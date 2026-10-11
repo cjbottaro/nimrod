@@ -2471,7 +2471,7 @@ test('Resume marks sidebar membership independently of connectivity and filters 
     assert.deepEqual(pickerRows().map(row => row.querySelector('.palette-item-label')!.textContent), ['Selected root', 'Inactive root', 'Closed root']);
     assert.deepEqual(pickerRows().map(isOpen), [true, true, false]);
     assert.equal(f.element('palette-list').querySelectorAll('.session-row-badge').length, 0);
-    assert.equal(f.element('palette-list').querySelectorAll('.palette-project-enter').length, 3);
+    assert.equal(f.element('palette-list').querySelectorAll('.picker-enter-hint').length, 3);
     for (const [index, option] of pickerRows().slice(0, 2).entries()) {
       const sidebar = f.rows()[index];
       assert.equal(option.querySelector('.session-row-label')!.textContent, sidebar.querySelector('.session-row-label')!.textContent);
