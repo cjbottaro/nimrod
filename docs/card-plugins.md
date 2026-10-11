@@ -8,7 +8,9 @@ Customizable cards are a central direction for Nimrod: tools and workflows shoul
 
 Default tool, reasoning and parallel-tools renderers ship as bundled Nimrod plugins through a shared presentation-only instance contract. Core creates and updates the mounted UI; plugins supply validated content rather than accessing the transcript DOM or agent transport. The migration preserves current card behavior and appearance. The contract remains internal until external loading is implemented.
 
-The intended customization includes alternative presentations for existing tools and, later, structured content produced by companion Pi extensions. Diff, subagent, test-result and research cards are examples of possible presentations, not committed individual features.
+Edit tool cards now show **Requested edit** previews when their structured inputs contain `oldText`/`newText` substitutions. Removed and added text is highlighted; raw inputs and Pi's result remain available. These are requested substitutions, **not an applied-file diff**: failed or interrupted edits do not imply any file change. Single-edit and multi-edit inputs are supported; partial/unsupported inputs keep the normal card presentation.
+
+Further customization includes alternative presentations for existing tools and, later, structured content produced by companion Pi extensions. Subagent, test-result and research cards remain possibilities, not committed individual features.
 
 ## Consistent behavior
 

@@ -1,5 +1,6 @@
 import { CardRendererController, type CardRenderer, type CardPresentation } from './card-renderer';
-import { defaultToolRenderer, rawToolPresentation } from './tool-presentation';
+import { bundledToolRenderer } from './card-plugins/registry';
+import { rawToolPresentation } from './tool-presentation';
 export { toolInputPreview } from './tool-presentation';
 export { TOOL_AUTO_DISCLOSURE_MS, createToolDetails, setToolDetailsAutoOpen, captureStreamingOutput, restoreStreamingOutput } from './card-shell';
 export type { ToolOutputScrollState } from './card-shell';
@@ -26,7 +27,7 @@ export function toolCardIsBusy(block: ToolCardBlock): boolean {
   return status === "running" || status === "thinking";
 }
 
-export function renderToolCard(document: Document, block: ToolCardBlock, details: HTMLDetailsElement, renderer: CardRenderer<ToolCardBlock> = defaultToolRenderer, report?: (error: unknown) => void): HTMLDetailsElement {
+export function renderToolCard(document: Document, block: ToolCardBlock, details: HTMLDetailsElement, renderer: CardRenderer<ToolCardBlock> = bundledToolRenderer(block), report?: (error: unknown) => void): HTMLDetailsElement {
   disposeToolCard(details);
   renderers.set(details, new CardRendererController(renderer, rawToolPresentation, report));
   details.classList.add("tool-card");
@@ -70,7 +71,7 @@ export function updateToolCard(document: Document, details: HTMLDetailsElement, 
     summaryContent.append(title);
   }
   let renderer = renderers.get(details);
-  if (!renderer) { renderer = new CardRendererController(defaultToolRenderer, rawToolPresentation); renderers.set(details, renderer); }
+  if (!renderer) { renderer = new CardRendererController(bundledToolRenderer(block), rawToolPresentation); renderers.set(details, renderer); }
   const presentation = renderer.update(block);
   title.textContent = presentation.title;
 
@@ -113,7 +114,7 @@ function updateInputs(document: Document, root: HTMLDetailsElement, argumentsVal
 }
 
 function updateOutputs(document: Document, root: HTMLDetailsElement, block: ToolCardBlock, presentation: CardPresentation): void {
-  const desired = presentation.sections.map(section => ({ kind: section.key, label: section.label, value: section.text, streaming: toolCardIsBusy(block) }));
+  const desired = presentation.sections.map(section => ({ kind: section.key, label: section.label, value: section.text, format: section.format, streaming: toolCardIsBusy(block) }));
   const sections = (): HTMLElement[] => (Array.from(root.children) as HTMLElement[]).filter((child) => child.classList.contains("tool-section"));
   const existing = new Map(sections().map((section) => [section.dataset.outputKind || "", section]));
 
@@ -125,8 +126,23 @@ function updateOutputs(document: Document, root: HTMLDetailsElement, block: Tool
       section.querySelector<HTMLElement>(".tool-label")!.textContent = part.label;
       const output = section.querySelector<HTMLPreElement>(".tool-output")!;
       output.className = `tool-output ${part.streaming ? "tool-output-streaming" : "tool-output-final"}`;
-      if (output.textContent !== part.value) output.textContent = part.value;
+      if (part.format !== 'diff' && output.textContent !== part.value) output.textContent = part.value;
       existing.delete(part.kind);
+    }
+    const output = section.querySelector<HTMLPreElement>('.tool-output')!;
+    output.setAttribute('aria-label', part.label);
+    const format = part.format || 'text';
+    if (output.dataset.format !== format || output.dataset.source !== part.value) {
+      output.dataset.format = format;
+      output.dataset.source = part.value;
+      if (format === 'diff') {
+        output.replaceChildren();
+        for (const line of part.value.split('\n')) {
+          const span = document.createElement('span');
+          span.className = line.startsWith('+') ? 'hljs-addition' : line.startsWith('-') ? 'hljs-deletion' : '';
+          span.textContent = line; output.append(span, document.createTextNode('\n'));
+        }
+      } else output.textContent = part.value;
     }
     const current = sections()[index];
     if (current !== section) root.insertBefore(section, current || null);

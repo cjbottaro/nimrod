@@ -1,6 +1,6 @@
 # Card plugins
 
-**Status: bundled tool/reasoning/parallel renderers implemented; richer renderer and external plugins pending.**
+**Status: bundled renderers and requested-edit previews implemented; external plugins pending.**
 
 User-facing feature description: [Card plugins](../../../../docs/card-plugins.md).
 This reference records accepted architectural decisions and the living implementation plan. Keep API details provisional until renderer extraction provides evidence.
@@ -43,6 +43,15 @@ Milestone 1 audited these anchors and their regression suites at baseline `9607a
 | `src/pi/tool-card.ts` | Incremental tool-card summary, input preview, raw inputs and output |
 | `src/pi/reasoning-card.ts` | Harness-provided reasoning disclosure and preview |
 | `src/pi/transcript-presentation.ts` | Transcript presentation including standalone tool envelopes |
+
+## Requested-edit renderer (milestone 4)
+
+- `src/pi/card-plugins/edit.ts` proves richer rendering through the same contract, using actual structured `oldText`/`newText` arguments (Pi single-edit shape and multi-edit `edits` shape). It does not require structured result metadata or new custom Pi content transport.
+- `registry.ts` selects the edit renderer for normalized `edit` tool names; all other tools retain the generic renderer. Selection is fixed per mounted shell, so late identity/name changes do not silently replace an inspected renderer.
+- Each valid substitution supplies a keyed `diff` section. Core renders literal text with removal/addition theme classes, retains viewport caps and raw inputs/results. Labels explicitly say requested edit, not an applied-file diff; rejected/interrupted edits remain requested previews. No file reads, command execution or interactive apply action.
+- Invalid/partial argument shapes retain the generic presentation. No tool-specific branches were added to the shell; `diff` is a generic presentation format. `test/edit-card.test.ts` covers single/multiple edits, insertion/deletion, malformed fields, safe literal content, stable nodes/disclosures, rejected results and historical rendering.
+- Remaining structured-result/custom-content preservation is a separate follow-on, not claimed by this input-backed renderer. Diff formatting does not imply a full integrated diff editor.
+- Validation: `mise run check` passes **466 TS/Node tests**, Rust formatting/Clippy and **111 Rust tests** (two opt-in smokes ignored); `npm run test:browser` passes **64 offline WebKit tests**. No app build/launch or native acceptance.
 
 ## Bundled renderers (milestone 3)
 
@@ -142,14 +151,14 @@ Other card-shaped presentations are reasoning and the parallel-tools overview. S
 
 ## Incremental implementation plan
 
-Milestones 1–3 are complete; milestones 4–5 remain pending. Treat each as independently mergeable work in a dedicated task worktree. Dependencies are sequential unless noted; external loading must not gate bundled extraction.
+Milestones 1–4 are complete; milestone 5 remains pending. Treat each as independently mergeable work in a dedicated task worktree. Dependencies are sequential unless noted; external loading must not gate bundled extraction.
 
 | Milestone | Dependency | Acceptance criteria |
 | --- | --- | --- |
 | 1. Audit current rendering boundaries — complete | None | Boundary map, concrete renderer inventory, data/recovery limitations, regression additions and next extraction order recorded above. No runtime extraction or native/plugin acceptance. |
 | 2. Introduce the internal renderer contract — complete | 1 | Existing tool cards render through the boundary without visible behavior changes. Core still owns the shell and policies; unsupported content and renderer failure have tested raw fallback behavior. |
 | 3. Extract bundled renderers — complete | 2 | Default tool-card presentations use the supported contract without privileged access. Record the concrete built-in inventory and reasoning-card scope; remaining default card renderers must be tracked explicitly, not silently exempted. |
-| 4. Prove extensibility with a richer renderer | 3 | Choose a concrete card with available structured fixture data. Implement it using only the contract and host-supported capabilities, without tool-specific presentation branches in core. Refine the API from evidence. |
+| 4. Prove extensibility with a richer renderer — complete | 3 | Choose a concrete card with available structured fixture data. Implement it using only the contract and host-supported capabilities, without tool-specific presentation branches in core. Refine the API from evidence. |
 | 5. Support external plugins | 4 | Resolve packaging, compatibility, isolation, matching/overrides and action permissions before loading external code. Test missing/incompatible/failing plugins and historical fallback; document actual installation and selection behavior. |
 
 Custom Pi-produced content is a separate follow-on track: resolve transport and history semantics before committing implementation milestones. It is not a prerequisite for alternative renderers of existing tool calls.
