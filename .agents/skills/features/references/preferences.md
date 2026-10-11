@@ -22,7 +22,7 @@ Missing keys use defaults; malformed external files retain the last valid snapsh
 
 Defaults: `~/.config/nimrod/settings.json`, `~/.local/state/nimrod/state.json`, and saved snapshots in `~/.local/state/nimrod/popouts/`. Absolute XDG roots override on all platforms; empty/relative overrides fall back to home. Windows uses the user's home, not a registry/AppData-only layout.
 
-Settings include appearance, notification boolean, runtime paths, keybinding overrides and [card-plugin files/renderer overrides](card-plugins.md#local-declarative-plugins-milestone-5). Feature references own their schemas. State includes project/session layout, recency, last-session pointer, widths, command history, geometry, pop-out references and deletion guards. [Draft records/uncertainty](native-drafts.md) are scoped Rust-managed files with debounced asynchronous disk saves and no legacy-draft migration; image bytes are separate IndexedDB, temporary bytes memory-only. See [image paste](image-paste.md).
+Settings include appearance, notification boolean, runtime paths, keybinding overrides and [card-plugin files/renderer overrides](card-plugins.md#current-code-and-preserved-evidence). Feature references own their schemas. State includes project/session layout, recency, last-session pointer, widths, command history, geometry, pop-out references and deletion guards. [Draft records/uncertainty](native-drafts.md) are scoped Rust-managed files with debounced asynchronous disk saves and no legacy-draft migration; image bytes are separate IndexedDB, temporary bytes memory-only. See [image paste](image-paste.md).
 
 Each preferences/state file retains its 8 MiB cap; saved pop-out content stays in separate bounded files, never embedded in global state.
 
