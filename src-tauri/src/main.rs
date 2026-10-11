@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod card_plugins;
 mod cli;
 mod command_usage;
 mod drafts;
@@ -464,6 +465,7 @@ fn main() {
             drafts::drafts_flush,
             drafts::drafts_references,
             runtime_defaults,
+            card_plugins::read_card_plugin,
             session_deletion::delete_session_tree,
             session_deletion::deletion_snapshot,
             session_deletion::acknowledge_deletion,

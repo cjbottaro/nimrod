@@ -21,7 +21,7 @@ type TestWindow = Window & {
 export const visible = (id: string) => `.session-view:not([hidden]) [data-pi-id="${id}"]`;
 
 /** Real app bundle and independent offline demo children. Never starts Pi. */
-export async function demoFixture(page: Page, appState: Record<string, unknown> = {}, catalog: { path: string; sessionId: string; name: string; preview: string; modified: number; lastUserMessageAt?: number }[] = [], typingOptions?: { drafts: Record<string, unknown>; persistent: boolean }) {
+export async function demoFixture(page: Page, appState: Record<string, unknown> = {}, catalog: { path: string; sessionId: string; name: string; preview: string; modified: number; lastUserMessageAt?: number }[] = [], typingOptions?: { drafts: Record<string, unknown>; persistent: boolean }, pluginOptions?: { settings: string; packages: Record<string, string> }) {
   const result = await build({ entryPoints: ['src/main.ts'], bundle: true, format: 'iife', platform: 'browser', write: false,
     loader: { '.css': 'empty' }, plugins: [{ name: 'raw', setup(builder) {
       builder.onResolve({ filter: /\.html\?raw$/ }, args => ({ path: path.resolve(args.resolveDir, args.path.replace('?raw', '')), namespace: 'raw' }));
@@ -37,6 +37,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
   const calls: { command: string; args: JsonRecord }[] = [];
   const nativeDrafts = new Map(Object.entries(typingOptions?.drafts ?? {}).map(([key, value]) => [key, { key, value, revision: 1 }]));
   const preferences = new MemoryPreferences();
+  if (pluginOptions) { preferences.value.text = pluginOptions.settings; preferences.value.state.legacyMigrated = true; }
   Object.assign(preferences.value.state, appState);
   page.on('pageerror', error => errors.push(String(error)));
   const send = (token: string, packet: Packet) => {
@@ -68,6 +69,11 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'drafts_references') return [];
     if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 1;
     if (command.startsWith('preferences_') || command === 'record_command_usage') return preferences.invoke(command, args);
+    if (command === 'read_card_plugin') {
+      const text = pluginOptions?.packages[String(args.name)];
+      if (text === undefined) throw new Error('Fixture package missing');
+      return text;
+    }
     if (command === 'runtime_defaults') return { cwd: process.cwd(), node: process.execPath, pi: 'fixture-only' };
     if (command === 'take_project_picker_request') return false;
     if (command === 'list_projects') return (preferences.value.state['nimrod.workspaces.v1'] as string[] || []).map(cwd => ({ cwd, open: cwd === process.cwd() }));

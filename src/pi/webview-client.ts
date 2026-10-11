@@ -261,7 +261,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     let details = toolCards.get(key);
     if (details) updateToolCard(document, details, block);
     else {
-      details = renderToolCardDom(document, block, toolDetail(key), undefined, reportRenderError);
+      details = renderToolCardDom(document, block, toolDetail(key), host.cardRenderer?.(block), reportRenderError);
       toolCards.set(key, details);
     }
     applyToolDetailsLifecycle(details, block);

@@ -11,6 +11,7 @@ import { installDeletionReview } from './deletion-review';
 import { SessionDeletion, type DeletionEvent, type DeletionSnapshot } from './session-deletion';
 import { presentActivity } from './pi/activity-state';
 import { listen } from '@tauri-apps/api/event';
+import { CardPluginCatalog } from './pi/card-plugins/catalog';
 import { installPreferences, type PreferencesSnapshot } from './preferences';
 import { open } from '@tauri-apps/plugin-dialog';
 import { AttachmentStore } from './attachment-store';
@@ -61,6 +62,18 @@ const preferences = await installPreferences({
 });
 required('settings-file-path').textContent = preferences.paths.settings;
 required('state-file-path').textContent = preferences.paths.state;
+const cardPlugins = new CardPluginCatalog();
+let pluginSignature = '';
+async function reloadCardPlugins(): Promise<void> {
+  const config = preferences.cardPlugins();
+  const signature = JSON.stringify(config);
+  if (signature === pluginSignature) return;
+  pluginSignature = signature;
+  await cardPlugins.reload(config, name => invoke<string>('read_card_plugin', { name }), message => {
+    const notice = required('card-plugin-error'); notice.hidden = !message; notice.textContent = message;
+  });
+}
+await reloadCardPlugins();
 const welcome = required('welcome'), conversation = required('conversation');
 const error = required('launch-error'), cwd = required<HTMLInputElement>('cwd');
 const dialogs = new Dialogs();
@@ -305,6 +318,7 @@ const unlistenDeletion = await listen<DeletionEvent>('nimrod-session-deletion', 
 preferences.subscribe(() => {
   const width = preferences.readState(settingsSidebarWidthKey);
   if (!Object.is(width, settingsSidebarWidth)) { settingsSidebarWidth = width; settingsSidebarResize.reload(); }
+  void reloadCardPlugins();
   runtime.reload(); themes.reload(); void zoom.reload(); reloadNotifications(); keybindingEditor.reload(); refreshShortcutHints();
 });
 const unlistenDraftErrors = await listen<string>('nimrod-draft-error', event => persistenceError(event.payload));
@@ -698,6 +712,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
   let pendingNativeSubmission: string | undefined;
   root.addEventListener('nimrod-dispose-images', () => { imagesDisposed = true; for (const id of ephemeralImages) temporaryImages.delete(id); });
   tab.view = mountPiView({
+    cardRenderer: data => cardPlugins.select(data),
     attachments: {
       readClipboard: readClipboardImage,
       put: async (blob, name) => {

@@ -1,6 +1,15 @@
 export const TOOL_AUTO_DISCLOSURE_MS = 500;
 
 export interface ToolOutputScrollState { top: number; atBottom: boolean; }
+const outputViewports = new WeakMap<ParentNode, HTMLElement>();
+export function associateOutputViewport(root: ParentNode, viewport?: HTMLElement): void {
+  if (viewport) outputViewports.set(root, viewport); else outputViewports.delete(root);
+}
+function liveViewport(root: ParentNode): HTMLElement | null {
+  const associated = outputViewports.get(root);
+  if (associated) return associated.classList.contains('tool-output-streaming') ? associated : null;
+  return root.querySelector<HTMLElement>('.tool-output-streaming');
+}
 
 /**
  * Keeps the automatic lifecycle default separate from explicit user toggles.
@@ -39,7 +48,7 @@ export function setToolDetailsAutoOpen(node: HTMLDetailsElement, open: boolean):
 
 /** Captures only the live-output viewport, never the page transcript scroll position. */
 export function captureStreamingOutput(root: ParentNode): ToolOutputScrollState | undefined {
-  const output = root.querySelector<HTMLElement>(".tool-output-streaming");
+  const output = liveViewport(root);
   if (!output) return undefined;
   return {
     top: output.scrollTop,
@@ -49,7 +58,7 @@ export function captureStreamingOutput(root: ParentNode): ToolOutputScrollState 
 
 /** Restores inspection position, or follows new live output when the viewport was at its bottom. */
 export function restoreStreamingOutput(root: ParentNode, previous?: ToolOutputScrollState): void {
-  const output = root.querySelector<HTMLElement>(".tool-output-streaming");
+  const output = liveViewport(root);
   if (!output) return;
   output.scrollTop = previous && !previous.atBottom ? previous.top : output.scrollHeight;
 }

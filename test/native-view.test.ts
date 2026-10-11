@@ -5,7 +5,7 @@ import { webviewHtml, rendererBundle } from './view-fixture';
 import { createSafeMarkdownRenderer } from '../src/pi/safe-markdown';
 import { initialConversationState, reduceRpcEvent } from '../src/pi/reducer';
 
-function fixture(options: { images?: boolean; clipboard?: boolean; missing?: boolean } = {}) {
+function fixture(options: { images?: boolean; clipboard?: boolean; missing?: boolean; cardRenderer?: import('../src/pi/view-host').ViewHost['cardRenderer'] } = {}) {
   const dom = new JSDOM(webviewHtml(), { runScripts: 'outside-only', pretendToBeVisual: true });
   const win = dom.window;
   let persisted: unknown;
@@ -22,7 +22,7 @@ function fixture(options: { images?: boolean; clipboard?: boolean; missing?: boo
   win.requestAnimationFrame = cb => { frames.push(cb); return frames.length; };
   const sent: Record<string, unknown>[] = [];
   let receive: (message: unknown) => void = () => {};
-  Object.assign(win, { testHost: { attachments, getState: () => undefined, setState: (state: unknown) => { persisted = state; }, postMessage: (message: Record<string, unknown>) => sent.push(message), onMessage: (listener: typeof receive) => { receive = listener; } } });
+  Object.assign(win, { testHost: { attachments, cardRenderer: options.cardRenderer, getState: () => undefined, setState: (state: unknown) => { persisted = state; }, postMessage: (message: Record<string, unknown>) => sent.push(message), onMessage: (listener: typeof receive) => { receive = listener; } } });
   win.eval(rendererBundle() + '\nwindow.testView = PiView.mountPiView(window.testHost);');
   const flush = () => { while (frames.length) frames.shift()!(0); };
   const snapshot = (state: Record<string, unknown>) => { receive({ type: 'snapshot', state }); flush(); };
@@ -250,6 +250,25 @@ test('the same tool invocation has independent shells and disclosure in separate
     assert.equal(second.win.document.querySelector('.tool-card'), secondCard);
     assert.equal(secondCard.isConnected, true);
   } finally { first.dom.window.close(); second.dom.window.close(); }
+});
+
+test('mounted view disposes tool renderer instances on removal, reset and view disposal, not routine snapshots', () => {
+  let mounted = 0; let disposed = 0;
+  const f = fixture({ cardRenderer: () => ({ id: 'fixture.tool', supports: () => true, mount() {
+    mounted++; return { update: () => ({ title: 'fixture', sections: [] }), dispose() { disposed++; } };
+  } }) });
+  try {
+    const state = { messages: [{ key: 'a', role: 'assistant', content: [{ type: 'toolCall', id: 'a', name: 'bash' }] }] };
+    f.snapshot(state); f.snapshot(state);
+    assert.deepEqual([mounted, disposed], [1, 0]);
+    f.snapshot({ messages: [] });
+    assert.deepEqual([mounted, disposed], [1, 1]);
+    f.snapshot(state); f.receive({ type: 'sessionReset' }); f.flush();
+    assert.deepEqual([mounted, disposed], [2, 2]);
+    f.snapshot(state);
+    (f.win as unknown as { testView: { dispose(): void } }).testView.dispose();
+    assert.deepEqual([mounted, disposed], [3, 3]);
+  } finally { f.dom.window.close(); }
 });
 
 test('Markdown cannot add scripts or native command links', () => {
