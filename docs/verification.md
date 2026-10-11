@@ -1,5 +1,13 @@
 # Verification
 
+## Native drafts and composer typing
+
+In `.worktrees/native-drafts`, `mise run check` passed 453 TypeScript/Node tests, formatting/Clippy and 111 Rust tests (two real-Pi smoke tests ignored). All 64 offline WebKit tests passed, including native draft submission ordering, five typing fixtures, fractional zoom, scrolling/focus, images and steering. The final standalone check passed after a concurrent run hit the pre-existing Rust `single_instance::tests::lock_holder_without_listener_times_out_without_becoming_primary` timing fixture. No changes were made to that fixture. Final coverage includes persistence-failure gating and Stop cancelling a steer awaiting flush. No app build/package was requested or performed, and no user app/window, live Pi/model or upstream extension was touched.
+
+Rust owns per-scope draft records, asynchronously staged and debounced on disk (300ms idle/2s max wait). Legacy localStorage drafts are ignored without migration or deletion. Native CSS content sizing is used on supported WebKit, with coalesced manual fallback. The 80-character typing fixtures showed zero localStorage writes, manual geometry reads and status/button mutations, including the 160-message/~5,100-node transcript and 200 retained native drafts. Handler p95 was roughly 0–1ms; this is coarse instrumented handler timing, not native input-to-paint latency.
+
+Tests cover revision ordering/conflicts, failure retention, max wait, project separation, restart, tombstones/image references and deletion across closed projects. Native macOS typing feel, close/Quit durability and Linux/Windows runtime acceptance remain manual. Abrupt termination can lose recent undelivered or debounced typing; unload flushing is best effort. Existing image bytes remain IndexedDB-backed.
+
 ## Uncached native session catalog scans
 
 - Implemented locally on `perf/native-session-discovery` in `.worktrees/native-session-discovery`. Resume and Delete sessions retain one shared `paletteSessions` → native catalog path. Header/preview read forward; latest name/user-message time read backward in bounded 64 KiB chunks, stopping when found. No metadata cache, Pi launch, view-specific reader, history migration or storage schema change. Unnamed files may still require a full byte scan. Catalog extraction no longer validates skipped middle records; exact-file resume and deletion validation remain strict.

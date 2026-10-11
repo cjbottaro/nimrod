@@ -15,6 +15,9 @@ import type { DeletionEvent, DeletionSnapshot } from '../src/session-deletion';
 // Real shell/renderer/controller bundle, mocked native boundary—not native WebKit acceptance.
 interface ShellOptions {
   storage?: Record<string, unknown>;
+  nativeDrafts?: Record<string, unknown>;
+  draftFlushError?: string;
+  draftFlushGate?: Promise<void>;
   appState?: Record<string, unknown>;
   state?: () => JsonRecord;
   history?: JsonRecord[];
@@ -72,6 +75,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   const frames: FrameRequestCallback[] = [];
   win.requestAnimationFrame = cb => { frames.push(cb); return frames.length; };
   const calls: { command: string; args: JsonRecord }[] = [];
+  const nativeDrafts = new Map(Object.entries(options.nativeDrafts ?? {}).map(([key, value]) => [key, { key, value, revision: 1 }]));
   let channel: { onmessage: (packet: Packet) => void };
   let activeToken: string;
   let activeConfig: JsonRecord = {};
@@ -93,6 +97,10 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     transformCallback: (callback: (event: unknown) => void) => { const id = callbacks.size + 1; callbacks.set(id, callback); return id; }, unregisterCallback: () => {},
     invoke: async (command: string, args: JsonRecord = {}) => {
       calls.push({ command, args });
+      if (command === 'drafts_load') return [...nativeDrafts.values()];
+      if (command === 'drafts_stage') { const record = args.record as { key: string; value: unknown; revision: number }; nativeDrafts.set(record.key, record); return; }
+      if (command === 'drafts_flush') { await options.draftFlushGate; if (options.draftFlushError) throw new Error(options.draftFlushError); return; }
+      if (command === 'drafts_references') return [];
       if (command === 'plugin:event|listen') {
         if (args.event === 'nimrod-open-project') projectPicker = target => {
           const listenerTarget = args.target as { kind: string; label?: string };
@@ -193,7 +201,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   const rows = () => [...win.document.querySelectorAll('.session-view')].map(root => win.document.querySelector<HTMLButtonElement>(`.session-row[aria-controls="${root.id}"]`)!);
   return { dom, win, tick, calls, element, openSettings, back, preferences, openPalette, rows,
     confirm: async () => { await tick(); element<HTMLDialogElement>('host-dialog').close('ok'); await tick(); await tick(); },
-    saved: () => JSON.parse(win.localStorage.getItem(`nimrod.sessions.v1:${workspace}`) || win.localStorage.getItem('nimrod.sessions.v1') || '{}'),
+    saved: (): { drafts: Record<string, any>; last: unknown } => ({ drafts: Object.fromEntries([...nativeDrafts].filter(([, record]) => record.value !== null).map(([key, record]) => [key, record.value])), last: preferences.value.state['nimrod.last-session.v1'] }),
     sessions,
     deletionEvent: (event: DeletionEvent, target?: string) => deletionEvent?.(event, target),
     projectPicker: (target?: string) => projectPicker?.(target),
@@ -1014,7 +1022,7 @@ test('returned deletion results remove a whole subtree once and select according
       assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 4, 'no deleted or intermediate replacement launches');
       assert.equal(f.saved().drafts[`file:${root}`], undefined);
       const closed = JSON.parse(f.win.localStorage.getItem('nimrod.sessions.v1:/closed')!);
-      assert.equal(closed.drafts[`file:${root}`], undefined); assert.equal(closed.last, undefined); assert.equal(closed.drafts['file:/keep'].draft, 'Keep');
+      assert.equal(closed.drafts[`file:${root}`].draft, 'Closed draft'); assert.deepEqual(closed.last, { path: root }); assert.equal(closed.drafts['file:/keep'].draft, 'Keep');
       assert.deepEqual((f.preferences.value.state['nimrod.tabs.v1:/project'] as { tabs: { path: string }[] }).tabs.map(tab => tab.path), ['/sessions/new.jsonl', view === 'all-last' ? '/sessions/new-1.jsonl' : '/sessions/new-3.jsonl']);
     } finally { f.dom.window.close(); }
   }
@@ -1254,9 +1262,9 @@ test('sidebar trash targets a background row without selecting/resuming it and p
         { path: child, sessionId: 'fixture-id', name: 'Child', lastUsed: 20 },
         { path: selected, sessionId: 'fixture-id', name: 'Selected', lastUsed: 30 },
       ], active: selected },
-    }, storage: { 'nimrod.sessions.v1:/project': { drafts: {
+    }, nativeDrafts: {
       [`file:${root}`]: { draft: 'Root draft' }, [`file:${child}`]: { draft: 'Child draft' }, [`file:${selected}`]: { draft: 'Selected draft' },
-    } } }, confirmReview: args => answer(args.confirmed === true), deleteTree: async emit => {
+    }, confirmReview: args => answer(args.confirmed === true), deleteTree: async emit => {
       await preview;
       const confirmed = new Promise<boolean>(resolve => { answer = resolve; });
       emit({ id: 'row-review', phase: 'review', files: [root, child], results: [], pending: true,
@@ -1412,7 +1420,7 @@ test('restored deletion quarantine blocks implicit launch/restart and explicit R
   const file = '/sessions/retained.jsonl';
   const f = await fixture(undefined, { windowWorkspace: '/project', deletionSnapshot: { pending: false, quarantine: [file], files: [] }, appState: {
     'nimrod.tabs.v1:/project': { tabs: [{ path: file, sessionId: 'fixture-id', name: 'Retained draft' }], active: file },
-  }, storage: { 'nimrod.sessions.v1:/project': { drafts: { [`file:${file}`]: { draft: 'Preserved after unknown deletion' } } } } });
+  }, nativeDrafts: { [`file:${file}`]: { draft: 'Preserved after unknown deletion' } } });
   try {
     assert.equal(f.calls.some(c => c.command === 'start_pi'), false);
     assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, true);
@@ -1946,7 +1954,7 @@ test('external settings edits synchronize Appearance and saved Runtime while pre
 test('shell boots without Pi and Settings holds application preferences, not session controls', async () => {
   const f = await fixture(); const { win, calls, element } = f;
   try {
-    assert.deepEqual(calls.map(c => c.command), ['plugin:event|listen', 'preferences_snapshot', 'preferences_migrate', 'plugin:event|listen', 'plugin:event|listen', 'plugin:webview|set_webview_zoom', 'plugin:event|listen', 'plugin:event|listen', 'stop_pi', 'runtime_defaults', 'window_workspace', 'deletion_snapshot', 'take_project_picker_request']);
+    assert.deepEqual(calls.filter(c => !(c.command === 'plugin:event|listen' && ['nimrod-draft-error', 'tauri://close-requested'].includes(String(c.args.event)))).map(c => c.command), ['plugin:event|listen', 'preferences_snapshot', 'preferences_migrate', 'plugin:event|listen', 'plugin:event|listen', 'plugin:webview|set_webview_zoom', 'plugin:event|listen', 'plugin:event|listen', 'stop_pi', 'runtime_defaults', 'window_workspace', 'deletion_snapshot', 'take_project_picker_request']);
     assert.equal(calls.find(c => c.command === 'plugin:webview|set_webview_zoom')!.args.value, 1.25);
     assert.equal(element<HTMLSelectElement>('zoom-level').value, '125');
     const page = element<HTMLDialogElement>('settings-page');
@@ -2062,10 +2070,10 @@ test('saved launch waits for a written Pi file before remembering exact resume i
 
 test('resume last is explicit, restores exact-file history and scoped uncertain draft without replay', async () => {
   const last = { path: '/sessions/exact.jsonl', cwd: '/project', sessionId: 'fixture-id' };
-  const f = await fixture(undefined, { storage: { 'nimrod.sessions.v1': { last, drafts: {
+  const f = await fixture(undefined, { appState: { 'nimrod.last-session.v1': last }, nativeDrafts: {
     [`file:${last.path}`]: { draft: 'newer draft', submission: { id: 'old-send', text: 'possibly accepted', mode: 'steer', status: 'pending' } },
     'file:/sessions/other.jsonl': { draft: 'other conversation' },
-  } } }, history: [{ role: 'user', content: 'restored history', timestamp: 1 }] });
+  }, history: [{ role: 'user', content: 'restored history', timestamp: 1 }] });
   try {
     assert.equal(f.calls.some(c => c.command === 'start_pi'), false);
     assert.equal(f.element('resume-last').hidden, false);
@@ -2113,8 +2121,8 @@ test('startup extension editor events apply only after the target draft is bound
   try {
     f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
     assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'extension draft');
-    assert.equal(Object.keys(f.saved().drafts).some(key => key.startsWith('temporary:')), false, 'temporary editor text stays in memory');
-    assert.equal(f.saved().drafts.legacy.draft, 'legacy');
+    assert.deepEqual(f.saved().drafts, {}, 'temporary editor updates never write the saved draft library');
+    assert.equal(JSON.parse(f.win.localStorage.getItem('nimrod.poc.composer')!).draft, 'legacy', 'legacy recovery remains intact without an unrelated migration write');
     f.disconnect();
   } finally { f.dom.window.close(); }
 });
@@ -2175,9 +2183,7 @@ test('new saved session remains persistent when startup identity is absent', asy
 
 test('invalid native resume does not fall back to a new session or overwrite remembered drafts', async () => {
   const last = { path: '/sessions/missing.jsonl', cwd: '/project', sessionId: 'fixture-id' };
-  const f = await fixture(undefined, { startError: 'Session file unavailable', storage: {
-    'nimrod.sessions.v1': { last, drafts: { [`file:${last.path}`]: { draft: 'keep me' } } },
-  } });
+  const f = await fixture(undefined, { startError: 'Session file unavailable', appState: { 'nimrod.last-session.v1': last }, nativeDrafts: { [`file:${last.path}`]: { draft: 'keep me' } } });
   try {
     f.element<HTMLButtonElement>('resume-last').click(); await f.confirm();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
@@ -2190,21 +2196,16 @@ test('invalid native resume does not fall back to a new session or overwrite rem
   } finally { f.dom.window.close(); }
 });
 
-test('legacy draft recovery is explicit and temporary drafts never leak into saved sessions', async () => {
-  const f = await fixture(undefined, { storage: { 'nimrod.poc.composer': { draft: 'legacy text',
-    submission: { id: 'legacy', text: 'legacy text', mode: 'steer', status: 'pending' } } } });
+test('legacy drafts are ignored without deleting their localStorage source', async () => {
+  const legacy = { draft: 'legacy text', submission: { id: 'legacy', text: 'legacy text', mode: 'steer', status: 'pending' } };
+  const f = await fixture(undefined, { storage: { 'nimrod.poc.composer': legacy } });
   try {
-    assert.equal(f.element('recover-draft').hidden, false);
+    assert.equal(f.element('recover-draft').hidden, true);
     f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
     assert.equal(f.element<HTMLTextAreaElement>('prompt').value, '');
-    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'demo draft'; prompt.dispatchEvent(new f.win.Event('input'));
-    f.win.document.querySelector<HTMLButtonElement>('.session-close')!.click(); await f.confirm();
-    f.element<HTMLButtonElement>('recover-draft').click(); await f.confirm();
-    assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'legacy text');
-    assert.equal(f.element<HTMLButtonElement>('send').disabled, true);
-    assert.equal(Object.keys(f.saved().drafts).some(key => key.startsWith('temporary:')), false, 'closed temporary drafts are discarded, not recoverable');
-    assert.equal(f.saved().drafts['file:/sessions/new.jsonl'].submission.status, 'unknown');
-    assert.equal(f.calls.filter(c => (c.args.message as JsonRecord)?.type === 'prompt').length, 0);
+    assert.deepEqual(f.saved().drafts, {});
+    assert.deepEqual(JSON.parse(f.win.localStorage.getItem('nimrod.poc.composer')!), legacy);
+    assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
     f.disconnect();
   } finally { f.dom.window.close(); }
 });
@@ -2565,10 +2566,9 @@ test('closing one idle tab stops only its token, preserves history and leaves it
 });
 
 test('the selected restored tab loads automatically without replaying its scoped uncertain draft', async () => {
-  const f = await fixture(undefined, { windowWorkspace: '/project', storage: {
+  const f = await fixture(undefined, { windowWorkspace: '/project', appState: {
     'nimrod.tabs.v1:/project': { tabs: [{ path: '/sessions/a.jsonl', sessionId: 'fixture-id', name: 'Earlier work' }], active: '/sessions/a.jsonl' },
-    'nimrod.sessions.v1:/project': { drafts: { 'file:/sessions/a.jsonl': { draft: 'retained', submission: { id: 'old', text: 'uncertain', mode: 'steer', status: 'pending' } } } },
-  } });
+  }, nativeDrafts: { 'file:/sessions/a.jsonl': { draft: 'retained', submission: { id: 'old', text: 'uncertain', mode: 'steer', status: 'pending' } } } });
   try {
     await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
@@ -2846,4 +2846,40 @@ test('palette command history restores app-wide, persists acceptance and does no
     assert.equal(f.calls.filter(c => c.command === 'record_command_usage').length, 1);
     assert.equal(f.calls.some(c => c.command === 'start_pi'), false);
   } finally { f.win.close(); }
+});
+
+
+test('native draft persistence failure prevents a saved prompt without losing its text', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', draftFlushError: 'fixture disk failure' });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt');
+    prompt.value = 'Do not lose this'; prompt.dispatchEvent(new f.win.Event('input'));
+    prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
+    assert.equal(prompt.value, 'Do not lose this');
+    assert.match(f.element('storage-error').textContent!, /fixture disk failure/);
+    assert.match(f.element('submission-notice').textContent!, /Nothing was sent/);
+    f.disconnect();
+  } finally { f.dom.window.close(); }
+});
+
+
+test('Stop cancels a saved steer waiting for native persistence without later sending it', async () => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const f = await fixture(undefined, { windowWorkspace: '/project', draftFlushGate: gate });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    f.sessions.values().next().value!.channel.onmessage({ kind: 'rpc', value: { type: 'agent_start' } }); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Do not send'; prompt.dispatchEvent(new f.win.Event('input'));
+    prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await f.tick();
+    f.element<HTMLButtonElement>('send').click(); await f.tick();
+    release(); await f.tick(); await f.tick();
+    assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
+    assert.equal(prompt.value, 'Do not send');
+    f.disconnect();
+  } finally { release(); f.dom.window.close(); }
 });

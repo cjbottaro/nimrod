@@ -52,6 +52,9 @@ test('single-line typing keeps composer height stable', async ({ page }) => {
     for (const zoom of [1, 1.1, 1.25, 1.5, 2]) {
       await page.evaluate(zoom => { document.documentElement.style.zoom = String(zoom); }, zoom);
       await prompt.fill('');
+      // Draft-only autosizing settles before the next paint rather than forcing
+      // layout in the input handler. Capture the settled height at each zoom.
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const initialHeight = await prompt.evaluate(field => field.getBoundingClientRect().height);
       // Exercise native caret scrolling before returning to a short draft.
       await prompt.fill(Array.from({ length: 30 }, () => 'Long draft').join('\n'));
@@ -72,6 +75,7 @@ test('single-line typing keeps composer height stable', async ({ page }) => {
 
       const firstLine = 'Let’s talk about settings ';
       await prompt.fill(`${firstLine}\nWe need somewhere to store settings. I’m thinking \`~/.config/nimrod/\`.`);
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const multilineHeight = await prompt.evaluate(field => field.getBoundingClientRect().height);
       await prompt.evaluate((field, caret) => (field as HTMLTextAreaElement).setSelectionRange(caret, caret), firstLine.length);
       for (const character of 'management') {

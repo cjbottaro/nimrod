@@ -3,7 +3,7 @@
 ## Code map
 
 - `src/pi/image-attachments.ts`: reference/wire types, MIME/size/count/base64 bounds, clipboard file extraction, image decoding/dimension check, reference traversal.
-- `src/attachment-store.ts`: IndexedDB `nimrod.attachments.v1`, `images` object store keyed by UUID. ArrayBuffer bytes + MIME are separate from localStorage draft metadata; reconstruct Blob on read. WebKit rejected IndexedDB Blob persistence (`UnknownError: Error preparing Blob/File data`), so avoid storing Blob/File directly.
+- `src/attachment-store.ts`: IndexedDB `nimrod.attachments.v1`, `images` object store keyed by UUID. ArrayBuffer bytes + MIME are separate from native draft metadata; reconstruct Blob on read. WebKit rejected IndexedDB Blob persistence (`UnknownError: Error preparing Blob/File data`), so avoid storing Blob/File directly.
 - `src/clipboard-image.ts`: user-triggered Tauri clipboard-manager fallback, RGBA + dimensions → canvas PNG, native resource closed in finally.
 - `src/main.ts`: attachment host; persistent IndexedDB vs temporary window-local Blob map. Temporary disposal invalidates late writes and releases bytes.
 - `src/pi/composer-state.ts`, `webview-state.ts`: attachment-aware submission snapshot, selective acknowledgement clearing, rejected/unknown recovery, accepted image-send recovery references.
@@ -25,7 +25,7 @@
 - Stop cancels unposted image preparation; posted requests retain existing unknown/acknowledgement rules. No automatic retry.
 - Pi queue_update/clear_queue report text, not image identity. Accepted image sends retain explicit imageRecovery (max 32) until Restore images/Dismiss; do not infer consumption from snapshots, count, idle, caption or normalized Pi image content. Caption recovery remains authoritative and separate. Pending image previews may remain unconfirmed after Pi normalization; this is deliberate conservative behavior, not authority.
 - Image recovery is collapsed/bounded, not a duplicate prompt replay. Restoring images merges references without overwriting newer draft text; recovered rejected items restore text+images with bounds.
-- IndexedDB writes use one readwrite transaction to check 128 MiB quota across windows. On each write, collect localStorage library references; delete only unreferenced entries >24h old. Corrupt/unreadable libraries never authorize GC. Grace protects other windows/in-flight drafts. Confirmed session deletion removes draft references; orphan blobs expire on subsequent saves rather than immediate deletion, preserving copied recovery references.
+- IndexedDB writes use one readwrite transaction to check 128 MiB quota across windows. On each write, query Rust persisted/staged draft references (legacy localStorage references ignored); delete only unreferenced entries >24h old. Failed/corrupt native-reference queries never authorize GC. Grace protects other windows/in-flight drafts. Confirmed session deletion removes draft references; orphan blobs expire on subsequent saves rather than immediate deletion, preserving copied recovery references.
 - Temporary images never touch IndexedDB; bounded window-local map released with owning session disposal. Temporary drafts remain excluded from library serialization.
 - Object URLs revoked on removal/reset/disposal; reuse unchanged transcript image elements to preserve load/scroll stability. Existing TranscriptScroll resize/follow handling owns geometry, never force-focus or scroll on load.
 

@@ -21,7 +21,7 @@ type TestWindow = Window & {
 export const visible = (id: string) => `.session-view:not([hidden]) [data-pi-id="${id}"]`;
 
 /** Real app bundle and independent offline demo children. Never starts Pi. */
-export async function demoFixture(page: Page, appState: Record<string, unknown> = {}, catalog: { path: string; sessionId: string; name: string; preview: string; modified: number; lastUserMessageAt?: number }[] = []) {
+export async function demoFixture(page: Page, appState: Record<string, unknown> = {}, catalog: { path: string; sessionId: string; name: string; preview: string; modified: number; lastUserMessageAt?: number }[] = [], typingOptions?: { drafts: Record<string, unknown>; persistent: boolean }) {
   const result = await build({ entryPoints: ['src/main.ts'], bundle: true, format: 'iife', platform: 'browser', write: false,
     loader: { '.css': 'empty' }, plugins: [{ name: 'raw', setup(builder) {
       builder.onResolve({ filter: /\.html\?raw$/ }, args => ({ path: path.resolve(args.resolveDir, args.path.replace('?raw', '')), namespace: 'raw' }));
@@ -35,6 +35,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
   let closing = false;
   const errors: string[] = [];
   const calls: { command: string; args: JsonRecord }[] = [];
+  const nativeDrafts = new Map(Object.entries(typingOptions?.drafts ?? {}).map(([key, value]) => [key, { key, value, revision: 1 }]));
   const preferences = new MemoryPreferences();
   Object.assign(preferences.value.state, appState);
   page.on('pageerror', error => errors.push(String(error)));
@@ -61,6 +62,10 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
   }
   await page.exposeFunction('__fixtureHost', async (command: string, args: JsonRecord) => {
     calls.push({ command, args });
+    if (command === 'drafts_load') return [...nativeDrafts.values()];
+    if (command === 'drafts_stage') { const record = args.record as { key: string; value: unknown; revision: number }; nativeDrafts.set(record.key, record); return; }
+    if (command === 'drafts_flush') return;
+    if (command === 'drafts_references') return [];
     if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 1;
     if (command.startsWith('preferences_') || command === 'record_command_usage') return preferences.invoke(command, args);
     if (command === 'runtime_defaults') return { cwd: process.cwd(), node: process.execPath, pi: 'fixture-only' };
@@ -80,7 +85,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'list_workspace_sessions') return { sessions: catalog, warnings: [] };
     if (command === 'start_pi') {
       const token = String(args.token);
-      if ((args.config as JsonRecord)?.mode !== 'temporary' || children.has(token)) throw new Error('Only independent offline fixture processes are allowed');
+      if ((args.config as JsonRecord)?.mode !== (typingOptions?.persistent ? 'saved' : 'temporary') || children.has(token)) throw new Error('Only independent offline fixture processes are allowed');
       const child = spawn(process.execPath, ['src-tauri/resources/demo.mjs'], { cwd: process.cwd(), stdio: ['pipe', 'pipe', 'pipe'] });
       children.set(token, child);
       createInterface({ input: child.stdout }).on('line', line => send(token, { kind: 'rpc', value: JSON.parse(line) }));
@@ -98,6 +103,9 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'plugin:webview|set_webview_zoom') return;
     throw new Error(`Unexpected native operation ${command}`);
   });
+  if (typingOptions) await page.addInitScript(({ cwd, drafts }) => {
+    localStorage.setItem(`nimrod.sessions.v1:${cwd}`, JSON.stringify({ version: 1, drafts }));
+  }, { cwd: process.cwd(), drafts: typingOptions.drafts });
   await page.addInitScript(() => {
     const state = window as unknown as TestWindow;
     state.__fixtureSettled = 0; state.__fixtureChannels = {};
@@ -123,7 +131,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
   try {
     await page.goto('https://nimrod.test/');
     await page.addScriptTag({ content: result.outputFiles![0].text });
-    await page.locator('#start-temporary').click();
+    await page.locator(typingOptions?.persistent ? '#start-pi' : '#start-temporary').click();
     await expect(page.locator(visible('send'))).toBeEnabled();
     await page.evaluate(() => {
       document.documentElement.style.zoom = '1.25';
@@ -135,7 +143,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     gap: Math.max(0, pane.scrollHeight - pane.clientHeight - pane.scrollTop),
   }));
   return {
-    errors, metrics, calls, children,
+    errors, metrics, calls, children, nativeDrafts,
     async notificationClick(target: { session: string; token: string }) { await page.evaluate(payload => (window as unknown as TestWindow).__fixtureNotificationClick?.(payload), target); },
     state: () => structuredClone(preferences.value.state),
     async deletionEvent(event: DeletionEvent) { await page.evaluate(payload => (window as unknown as TestWindow).__fixtureDeletionReceive?.(payload), event); },

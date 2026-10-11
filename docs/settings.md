@@ -21,6 +21,7 @@ Nimrod uses the same home-directory/XDG-style layout on macOS, Linux, and Window
 ```text
 ~/.config/nimrod/settings.json     # User-editable JSONC preferences
 ~/.local/state/nimrod/state.json   # App-managed UI/session bookkeeping
+~/.local/state/nimrod/drafts/      # Per-session native draft records
 ~/.local/state/nimrod/popouts/     # One Nimrod-owned JSON snapshot per saved pop-out
 ```
 
@@ -100,3 +101,5 @@ CHROMIUM=/path/to/chrome-headless-shell node scripts/check-settings.mjs
 ```
 
 This replaces the earlier project-bar theme/zoom pickers and launch-form runtime fields. Theme discovery and live previews are available through the command-palette [Select theme… picker](themes.md#select-and-preview-themes); Settings retains its existing selection/import/removal controls.
+
+Drafts use separate Rust-managed records with asynchronous debounced saves. Legacy webview drafts are ignored, not migrated; Pi history is unchanged. See [Drafts](drafts.md).

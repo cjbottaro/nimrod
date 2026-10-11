@@ -8,6 +8,8 @@
 - [Transcript cards](architecture.md#rendering-contract-retained-from-pi-gui) — consistent tool summaries, invocation identity and disclosure behavior.
 - [Paste images](image-paste.md) — composer thumbnails, image-only sends, draft/recovery behavior and platform limits.
 - [Steering messages](architecture.md#steering-messages) — immediate pending user turns, acknowledgement, consumption and recovery.
+- [Drafts](drafts.md) — native per-session storage, debounce/durability boundaries and ignored legacy drafts.
+- [Composer responsiveness](architecture.md#composer-responsiveness) — coalesced autosizing, immediate saved drafts, lightweight typing updates and remaining scaling limits.
 
 - [Notifications](notifications.md) — background-session desktop alerts, click-to-session/bottom navigation, preferences and native limitations.
 

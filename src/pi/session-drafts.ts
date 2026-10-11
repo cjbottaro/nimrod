@@ -29,7 +29,7 @@ export class SessionDrafts {
   private metadata: { last?: LastSession } = {};
   get last(): LastSession | undefined { return this.metadata.last; }
   set last(value: LastSession | undefined) { this.metadata.last = value; }
-  constructor(value: unknown, legacy: unknown, private persist: (value: unknown) => void) {
+  constructor(value: unknown, legacy: unknown, private persist: (value: unknown) => void, private changed?: (key: string, value: unknown) => void) {
     const raw = record(value);
     // Older builds persisted temporary/demo drafts; they are no longer recoverable.
     this.drafts = Object.fromEntries(Object.entries(record(raw.drafts)).filter(([key]) => !ephemeral(key)));
@@ -41,7 +41,7 @@ export class SessionDrafts {
   }
   /** Separate tab selection, shared window-local library; no stale whole-library writes. */
   fork(): SessionDrafts {
-    const fork = new SessionDrafts(undefined, undefined, this.persist);
+    const fork = new SessionDrafts(undefined, undefined, this.persist, this.changed);
     fork.drafts = this.drafts;
     fork.metadata = this.metadata;
     return fork;
@@ -50,7 +50,9 @@ export class SessionDrafts {
   write(value: unknown): void {
     if (this.discarded) return;
     this.drafts[this.active] = value;
-    this.flush();
+    // Runtime-only drafts cannot affect the persisted library. Avoid serializing
+    // every saved sibling on each temporary-session keystroke.
+    if (!ephemeral(this.active)) { this.changed?.(this.active, value); if (!this.changed) this.flush(); }
   }
   /** Retire runtime-only state after the owned child has stopped and the view is disposed. */
   discardTemporary(): void {
@@ -72,14 +74,18 @@ export class SessionDrafts {
     if (Object.hasOwn(this.drafts, key)) throw new Error('Session already has a local draft; resume it explicitly');
     this.drafts[key] = this.read();
     delete this.drafts[this.active];
+    const previous = this.active;
     this.active = key;
-    this.flush();
+    this.changed?.(key, this.read());
+    this.changed?.(previous, null);
+    if (!this.changed) this.flush();
   }
   remember(last: LastSession): void { this.last = last; this.flush(); }
   deleteFile(path: string): void {
     delete this.drafts[`file:${path}`];
     if (this.last?.path === path) this.last = undefined;
-    this.flush();
+    this.changed?.(`file:${path}`, null);
+    if (!this.changed) this.flush();
   }
   recoverable(): { key: string; label: string }[] {
     return Object.entries(this.drafts).flatMap(([key, value]) => {

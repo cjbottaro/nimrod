@@ -59,6 +59,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   let pendingState: State | undefined;
   let displayedState: State = {};
   let renderScheduled = false;
+  let composerResizeFrame: number | undefined;
   const rendered = new Map<string, { node: HTMLElement; signature: string }>();
   let steeringTranscript = new SteeringTranscript();
   const expanded = new Map<string, boolean>();
@@ -73,6 +74,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   window.addEventListener("resize", resizeTranscript, { passive: true, signal: listeners.signal });
   function dispose(): void {
     disposed = true;
+    if (composerResizeFrame !== undefined) window.cancelAnimationFrame(composerResizeFrame);
     composerGeneration++;
     for (const url of attachmentUrls.values()) URL.revokeObjectURL(url);
     attachmentUrls.clear();
@@ -120,13 +122,35 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     host.setState(persistedState);
   }
 
+  function resizePrompt(): void {
+    if (composerResizeFrame !== undefined) window.cancelAnimationFrame(composerResizeFrame);
+    composerResizeFrame = undefined;
+    if (active && !disposed) resizeComposer(prompt);
+  }
+
+  function schedulePromptResize(): void {
+    if (!active || composerResizeFrame !== undefined || window.CSS?.supports('field-sizing', 'content')) return;
+    // Keep forced geometry measurement out of the native input handler and
+    // coalesce rapid edits. TranscriptScroll still owns follow/reading intent.
+    composerResizeFrame = window.requestAnimationFrame(() => {
+      composerResizeFrame = undefined;
+      if (active && !disposed) resizeComposer(prompt);
+    });
+  }
+
   function updateComposer(next: ComposerState): void {
+    const draftOnly = next.attachments === composer.attachments && next.imageRecovery === composer.imageRecovery
+      && next.submission === composer.submission && next.lastError === composer.lastError
+      && next.recovered === composer.recovered && next.queue === composer.queue;
+    const recoveryChanged = next.recovered !== composer.recovered;
     composer = next;
     if (prompt.value !== composer.draft) prompt.value = composer.draft;
-    resizeComposer(prompt);
+    if (draftOnly) schedulePromptResize();
+    else resizePrompt();
+    // Recovery durability and pending-submission eligibility remain synchronous.
     persistComposer();
-    renderActivity(displayedState);
-    renderComposer();
+    if (recoveryChanged) renderActivity(displayedState);
+    if (!draftOnly) renderComposer();
     slashCompletion.refresh();
   }
 
@@ -833,7 +857,11 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     setActive(value) {
       active = value;
       transcriptScroll.setActive(value);
-      if (value) resizeComposer(prompt);
+      if (value) resizePrompt();
+      else if (composerResizeFrame !== undefined) {
+        window.cancelAnimationFrame(composerResizeFrame);
+        composerResizeFrame = undefined;
+      }
     },
   };
 }

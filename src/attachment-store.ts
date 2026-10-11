@@ -1,5 +1,5 @@
-import { isAttachment, referencedAttachments, validateImageBlob, validateImageDimensions, type ImageAttachment } from './pi/image-attachments';
-import { SESSION_STORAGE_KEY } from './pi/session-drafts';
+import { isAttachment, validateImageBlob, validateImageDimensions, type ImageAttachment } from './pi/image-attachments';
+import { invoke } from '@tauri-apps/api/core';
 
 const MAX_STORE_BYTES = 128 * 1024 * 1024;
 const ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000;
@@ -8,6 +8,7 @@ interface StoredImage { id: string; bytes: ArrayBuffer; mimeType: string; create
 /** IndexedDB transactions serialize quota checks across windows. Never store image bytes in localStorage. */
 export class AttachmentStore {
   private database?: Promise<IDBDatabase>;
+  constructor(private referenceIds = () => invoke<string[]>('drafts_references')) {}
   private open(): Promise<IDBDatabase> {
     return this.database ??= new Promise((resolve, reject) => {
       const request = indexedDB.open('nimrod.attachments.v1', 1);
@@ -22,7 +23,8 @@ export class AttachmentStore {
     // Store structured-cloneable bytes and reconstruct the Blob on read.
     const imageBytes = await blob.arrayBuffer();
     const image: ImageAttachment = { id: crypto.randomUUID(), name: (name || 'Pasted image').slice(0, 200), mimeType: blob.type, size: blob.size };
-    const references = this.references();
+    // Failure must disable GC, not authorize deletion of referenced images.
+    const references = await this.referenceIds().then(ids => new Set(ids)).catch(() => undefined);
     const db = await this.open();
     await new Promise<void>((resolve, reject) => {
       const transaction = db.transaction('images', 'readwrite');
@@ -56,16 +58,5 @@ export class AttachmentStore {
     if (!entry || entry.bytes.byteLength !== image.size || entry.mimeType !== image.mimeType) throw new Error(`Image draft is missing: ${image.name}. Remove it or paste it again; nothing was sent.`);
     const blob = new Blob([entry.bytes], { type: entry.mimeType });
     validateImageBlob(blob); return blob;
-  }
-  private references(): Set<string> | undefined {
-    const ids = new Set<string>();
-    try {
-      for (let index = 0; index < localStorage.length; index++) {
-        const key = localStorage.key(index)!;
-        if (key !== SESSION_STORAGE_KEY && !key.startsWith(`${SESSION_STORAGE_KEY}:`)) continue;
-        for (const id of referencedAttachments(JSON.parse(localStorage.getItem(key) || '{}'))) ids.add(id);
-      }
-      return ids;
-    } catch { return undefined; } // Corrupt/unreadable libraries never authorize deletion.
   }
 }
