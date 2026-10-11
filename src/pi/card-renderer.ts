@@ -3,12 +3,14 @@ export interface CardSection {
   key: string;
   label: string;
   text: string;
+  format?: 'text' | 'markdown';
 }
 
 export interface CardPresentation {
   title: string;
   preview?: string;
   sections: readonly CardSection[];
+  members?: readonly { key: string; title: string; preview?: string }[];
 }
 
 export interface CardRendererInstance<Data> {
@@ -29,8 +31,18 @@ export function validatePresentation(value: CardPresentation): CardPresentation 
   const keys = new Set<string>();
   for (const section of value.sections) {
     if (!section || typeof section.key !== 'string' || !section.key || keys.has(section.key)
-      || typeof section.label !== 'string' || typeof section.text !== 'string') throw new Error('Invalid card section');
+      || typeof section.label !== 'string' || typeof section.text !== 'string'
+      || (section.format !== undefined && !['text', 'markdown'].includes(section.format))) throw new Error('Invalid card section');
     keys.add(section.key);
+  }
+  if (value.members !== undefined) {
+    if (!Array.isArray(value.members)) throw new Error('Invalid card members');
+    const memberKeys = new Set<string>();
+    for (const member of value.members) {
+      if (!member || typeof member.key !== 'string' || !member.key || memberKeys.has(member.key)
+        || typeof member.title !== 'string' || (member.preview !== undefined && typeof member.preview !== 'string')) throw new Error('Invalid card member');
+      memberKeys.add(member.key);
+    }
   }
   return value;
 }

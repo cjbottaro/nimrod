@@ -1,12 +1,12 @@
 # Card plugins
 
-**Status: planned feature.** Card plugins are not implemented yet; there is no plugin installation or renderer-selection UI today.
+**Status: bundled renderers implemented; external plugins planned.** Tool cards, reasoning cards and the parallel-tools overview now use bundled presentation plugins. There is no external installation or renderer-selection UI yet.
 
 Customizable cards are a central direction for Nimrod: tools and workflows should have purpose-built presentations in the transcript, rather than only text output. Pi extensions define agent capabilities; Nimrod card plugins define how those capabilities are presented.
 
 ## Built-in and custom cards
 
-Default card renderers will ship as bundled Nimrod plugins, using the same supported rendering API as third-party plugins. The initial migration will preserve current card behavior and appearance. Bundled plugins can ship before external plugin loading is available.
+Default tool, reasoning and parallel-tools renderers ship as bundled Nimrod plugins through a shared presentation-only instance contract. Core creates and updates the mounted UI; plugins supply validated content rather than accessing the transcript DOM or agent transport. The migration preserves current card behavior and appearance. The contract remains internal until external loading is implemented.
 
 The intended customization includes alternative presentations for existing tools and, later, structured content produced by companion Pi extensions. Diff, subagent, test-result and research cards are examples of possible presentations, not committed individual features.
 

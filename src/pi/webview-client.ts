@@ -13,7 +13,8 @@ import { captureStreamingOutput, createToolDetails, renderToolCard as renderTool
 import { ToolDisclosureController } from "./tool-disclosure";
 import { toolMessageBlock } from "./tool-call";
 import { TranscriptScroll } from "./transcript-scroll";
-import { renderReasoningCard, updateReasoningCard } from "./reasoning-card";
+import { disposeParallelCard } from './parallel-card';
+import { renderReasoningCard, updateReasoningCard, disposeReasoningCard } from "./reasoning-card";
 import { transcriptRolePresentation } from "./transcript-presentation";
 import { SteeringTranscript, steeringStatusLabel, type SteeringStatus } from "./steering-transcript";
 import { renderSkillInvocation } from "./skill-invocation";
@@ -80,6 +81,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     attachmentUrls.clear();
     listeners.abort();
     toolDisclosure.dispose();
+    for (const entry of rendered.values()) disposeMessageCards(entry.node);
     for (const card of toolCards.values()) disposeToolCard(card);
     toolCards.clear();
     transcriptScroll.dispose();
@@ -349,6 +351,11 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     node.setAttribute("aria-label", `User message: ${label.textContent}`);
   }
 
+  function disposeMessageCards(node: HTMLElement): void {
+    for (const card of node.querySelectorAll<HTMLDetailsElement>('.reasoning-card')) disposeReasoningCard(card);
+    for (const card of node.querySelectorAll<HTMLDetailsElement>('.parallel-tool-card')) disposeParallelCard(card);
+  }
+
   /** Patches tool cards in their existing article so active spinner nodes never disconnect. */
   function patchMessage(node: HTMLElement, message: DisplayMessage): boolean {
     if (node.dataset.key !== safeText(message.key) || node.classList.contains(safeText(message.role)) === false) return false;
@@ -392,11 +399,15 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
         : safeText(block.type) === "thinking" && previous instanceof HTMLDetailsElement && typeof block.thinking === "string" && block.thinking.trim()
           ? (updateReasoningCard(previous, block.thinking, renderMarkdown, block.thinkingComplete === false), previous)
           : renderBlock(block, safeText(message.key), index, safeText(message.role), previous);
+      if (previous && previous !== blockNode && previous.classList.contains('reasoning-card')) disposeReasoningCard(previous as HTMLDetailsElement);
       reconcileContentBlock(node, previous, blockNode, blockChildren()[visibleIndex]);
       if (blockNode) visibleIndex++;
       existing.delete(key);
     });
-    for (const stale of existing.values()) stale.remove();
+    for (const stale of existing.values()) {
+      if (stale.classList.contains('reasoning-card')) disposeReasoningCard(stale as HTMLDetailsElement);
+      stale.remove();
+    }
     return true;
   }
 
@@ -566,6 +577,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       } catch (error) {
         reportRenderError(error);
         // Recover from a broken incremental patch using the authoritative snapshot.
+        for (const entry of rendered.values()) disposeMessageCards(entry.node);
         rendered.clear();
         messages.replaceChildren();
         const display = steeringTranscript.project(Array.isArray(snapshot.messages) ? snapshot.messages : []);
@@ -608,7 +620,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
           entry.signature = signature;
         } else {
           const node = renderMessage(message);
-          if (entry) entry.node.replaceWith(node);
+          if (entry) { disposeMessageCards(entry.node); entry.node.replaceWith(node); }
           entry = { node, signature };
           rendered.set(key, entry);
         }
@@ -618,6 +630,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     });
     for (const [key, entry] of rendered) {
       if (!nextKeys.has(key)) {
+        disposeMessageCards(entry.node);
         entry.node.remove();
         rendered.delete(key);
       }
@@ -790,6 +803,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       for (const card of toolCards.values()) disposeToolCard(card);
       toolCards.clear();
       expanded.clear();
+      for (const entry of rendered.values()) disposeMessageCards(entry.node);
       rendered.clear();
       steeringTranscript = new SteeringTranscript();
       messages.replaceChildren();

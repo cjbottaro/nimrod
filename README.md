@@ -53,7 +53,7 @@ Without installation, use `./bin/nimrod .`. The launcher opens or focuses a proj
 - [Settings](docs/settings.md) — appearance, zoom, runtime paths and local configuration.
 - [Themes](docs/themes.md) and [Syntax highlighting](docs/syntax-highlighting.md) — bundled palettes, local imports and labeled code.
 
-See the [user-guide index](docs/README.md). [Card plugins](docs/card-plugins.md) are planned, not available.
+See the [user-guide index](docs/README.md). [Card plugins](docs/card-plugins.md) power bundled cards; external plugins are planned.
 
 ## Platform status and limitations
 

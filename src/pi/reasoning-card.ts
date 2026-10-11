@@ -1,3 +1,8 @@
+import { CardRendererController } from './card-renderer';
+import { defaultReasoningRenderer } from './card-plugins/reasoning';
+const instances = new WeakMap<HTMLDetailsElement, CardRendererController<string>>();
+export function disposeReasoningCard(details: HTMLDetailsElement): void { instances.get(details)?.dispose(); instances.delete(details); }
+
 export type ReasoningRenderer = (thinking: string) => HTMLElement;
 
 /** Renders only text Pi supplied, never opaque reasoning signatures. */
@@ -23,7 +28,7 @@ export function renderReasoningCard(
   indicator.setAttribute("aria-hidden", "true");
   const label = document.createElement("span");
   label.className = "tool-card-title";
-  label.textContent = "Reasoning";
+  label.textContent = 'Reasoning';
   const preview = document.createElement("span");
   preview.className = "tool-card-preview reasoning-preview";
   row.append(indicator, label, preview);
@@ -41,9 +46,18 @@ export function updateReasoningCard(details: HTMLDetailsElement, thinking: strin
   const className = `reasoning-indicator ${streaming ? "tool-card-spinner" : "tool-card-dot tool-card-succeeded"}`;
   if (indicator.className !== className) indicator.className = className;
   details.querySelector("summary")!.setAttribute("aria-label", `Reasoning (${streaming ? "streaming" : "complete"})`);
-  const line = thinking.split(/\r?\n/).find(line => line.trim())?.trim() || "";
+  let instance = instances.get(details);
+  if (!instance) {
+    instance = new CardRendererController(defaultReasoningRenderer, text => ({ title: 'Reasoning', sections: [{ key: 'reasoning', label: 'Reasoning', text }] }));
+    instances.set(details, instance);
+  }
+  const presentation = instance.update(thinking);
+  details.querySelector<HTMLElement>('.tool-card-title')!.textContent = presentation.title;
+  const line = presentation.preview || '';
   const preview = details.querySelector<HTMLElement>(".reasoning-preview")!;
   preview.textContent = line;
   const body = details.querySelector<HTMLElement>(".reasoning-body")!;
-  body.replaceChildren(render(thinking));
+  const section = presentation.sections[0];
+  if (section?.format === 'markdown') body.replaceChildren(render(section.text));
+  else body.textContent = section?.text || '';
 }
