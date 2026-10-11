@@ -20,6 +20,20 @@ test('JSONC edits preserve comments, unknown fields, and unrelated settings', ()
   for (const value of ['[]', '{bad}', '{"appearance.zoom":126}', '{"runtime.piPath":""}', '{"appearance.importedThemes":[{}]}']) assert.throws(() => parseSettings(value));
 });
 
+test('Omarchy built-ins persist and accept external settings updates', async () => {
+  const f = fixture(); const p = await f.install();
+  try {
+    for (const selected of ['tokyo-night', 'osaka-jade']) {
+      await p.saveTheme({ version: 1, selected, imports: [] });
+      assert.equal(parseSettings(f.host.value.text)['appearance.theme'], selected);
+      assert.equal(p.theme().selected, selected);
+      f.host.external(JSON.stringify({ 'appearance.theme': selected === 'tokyo-night' ? 'osaka-jade' : 'tokyo-night' }));
+      assert.notEqual(p.theme().selected, selected);
+    }
+    assert.throws(() => parseSettings('{"appearance.theme":"unknown"}'));
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
 test('notifications default on, persist through JSONC edits, and retain last valid values', async () => {
   const f = fixture(); const p = await f.install();
   try {

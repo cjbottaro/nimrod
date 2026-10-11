@@ -30,7 +30,7 @@ Absolute `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the corresponding roots
 
 ```jsonc
 {
-  "appearance.theme": "nimrod", // Or "dracula" / an imported theme ID
+  "appearance.theme": "nimrod", // Or "dracula", "tokyo-night", "osaka-jade" / an imported theme ID
   "appearance.zoom": 125,
   "notifications.enabled": true,
   "runtime.piPath": "/path/to/pi",

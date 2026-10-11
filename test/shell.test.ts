@@ -2622,6 +2622,13 @@ test('pop-out route mounts only read-only code, copies exact text and follows th
     assert.equal(f.win.document.querySelector<HTMLButtonElement>('.code-copy')!.title, 'Copied to clipboard');
     f.preferences.external(JSON.stringify({ 'appearance.theme': 'dracula' })); await f.tick();
     assert.equal(f.win.document.documentElement.style.getPropertyValue('--vscode-editor-background'), '#282a36');
+    const code = f.win.document.querySelector('pre > code');
+    for (const [theme, background] of [['tokyo-night', '#1a1b26'], ['osaka-jade', '#111c18']]) {
+      f.preferences.external(JSON.stringify({ 'appearance.theme': theme })); await f.tick();
+      assert.equal(f.win.document.documentElement.dataset.theme, theme);
+      assert.equal(f.win.document.documentElement.style.getPropertyValue('--vscode-editor-background'), background);
+      assert.equal(f.win.document.querySelector('pre > code'), code);
+    }
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'w', metaKey: true, cancelable: true })); await f.tick();
     assert.ok(f.calls.some(call => call.command === 'plugin:window|close'));
     assert.equal(f.calls.some(call => call.command === 'stop_pi'), false);

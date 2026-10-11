@@ -1,0 +1,101 @@
+{
+  "name": "Osaka Jade",
+  "type": "dark",
+  "colors": {
+    "foreground": "#c1c497",
+    "editor.foreground": "#c1c497",
+    "editor.background": "#111c18",
+    "descriptionForeground": "#81b8a8",
+    "focusBorder": "#509475",
+    "errorForeground": "#ff5345",
+    "editorWidget.background": "#23372b",
+    "editorGroupHeader.tabsBackground": "#0c1512",
+    "editorCodeLens.foreground": "#81b8a8",
+    "editorIndentGuide.background1": "#53685b",
+    "editor.selectionBackground": "#32473b",
+    "editorWarning.foreground": "#e5c736",
+    "input.background": "#0c1512",
+    "input.foreground": "#c1c497",
+    "input.border": "#53685b",
+    "button.background": "#32473b",
+    "button.foreground": "#f7e8b2",
+    "button.hoverBackground": "#53685b",
+    "button.secondaryBackground": "#23372b",
+    "button.secondaryForeground": "#c1c497",
+    "button.secondaryHoverBackground": "#32473b",
+    "panel.border": "#53685b",
+    "widget.border": "#53685b",
+    "widget.shadow": "#090f0d80",
+    "progressBar.background": "#509475",
+    "textLink.foreground": "#2dd5b7",
+    "textLink.activeForeground": "#8cd3cb",
+    "textBlockQuote.background": "#23372b",
+    "textBlockQuote.border": "#509475",
+    "textCodeBlock.background": "#0c1512",
+    "toolbar.hoverBackground": "#32473b",
+    "list.focusBackground": "#32473b",
+    "list.focusForeground": "#f7e8b2",
+    "testing.iconPassed": "#549e6a",
+    "testing.iconFailed": "#ff5345",
+    "terminal.ansiGreen": "#549e6a",
+    "terminal.ansiRed": "#ff5345",
+    "terminal.ansiYellow": "#e5c736"
+  },
+  "tokenColors": [
+    {
+      "scope": "comment",
+      "settings": {
+        "foreground": "#81b8a8"
+      }
+    },
+    {
+      "scope": [
+        "keyword",
+        "storage"
+      ],
+      "settings": {
+        "foreground": "#d2689c"
+      }
+    },
+    {
+      "scope": "string",
+      "settings": {
+        "foreground": "#549e6a"
+      }
+    },
+    {
+      "scope": [
+        "constant.numeric",
+        "constant.language"
+      ],
+      "settings": {
+        "foreground": "#a2734b"
+      }
+    },
+    {
+      "scope": [
+        "entity.name.function",
+        "support.function"
+      ],
+      "settings": {
+        "foreground": "#509475"
+      }
+    },
+    {
+      "scope": [
+        "entity.name.type",
+        "support.type",
+        "support.class"
+      ],
+      "settings": {
+        "foreground": "#8cd3cb"
+      }
+    },
+    {
+      "scope": "string.regexp",
+      "settings": {
+        "foreground": "#75bbb3"
+      }
+    }
+  ]
+}

@@ -7,7 +7,12 @@ Open **Settings** using the project-bar gear or **⌘/Ctrl ,**, then use the **t
 - **Nimrod (system)** — the app's custom Nimrod scheme; follows macOS/Windows/Linux light/dark appearance. This remains the default.
 - **Dracula** — a dark adaptation of [Dracula's official palette](https://draculatheme.com/), including purple accents, pink keywords, yellow strings, and green functions. It stays dark even when the OS is light. Attribution and license are in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
 
-Changes apply immediately and are remembered between launches. They do not change zoom, layout, fonts, draft text, or the conversation. Switching colors does not rebuild transcript DOM or restart Pi. Native window decorations and OS file choosers still follow platform appearance settings.
+- **Tokyo Night** — a dark adaptation of [Omarchy’s Tokyo Night palette](https://github.com/omacom/omarchy/blob/quattro/themes/tokyo-night/colors.toml), with blue accents, purple keywords and green strings.
+- **Osaka Jade** — a dark adaptation of [Omarchy’s Osaka Jade palette](https://github.com/omacom/omarchy/blob/quattro/themes/osaka-jade/colors.toml), with green surfaces, warm foregrounds and jade accents.
+
+Both Omarchy adaptations stay dark regardless of OS appearance and work without Omarchy installed. They are bundled snapshots, not automatic synchronization with the active desktop theme. Attribution and licenses are in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). Transparency, blur and desktop theme following are not included.
+
+Changes apply immediately across project windows and pop-outs and are remembered between launches. They do not change zoom, layout, fonts, draft text, or the conversation. Switching colors does not rebuild transcript DOM or restart Pi. Native window decorations and OS file choosers still follow platform appearance settings.
 
 ## Import a theme
 
@@ -52,7 +57,8 @@ A searchable, offline-friendly catalog backed by public palette collections is r
 
 - `src/theme.css`: Nimrod palette and application layout; internal `--vscode-*` compatibility tokens remain.
 - `src/themes/theme.ts`: JSONC parsing, allowlisted hex colors, palette fallbacks, broad syntax mapping, saved-state validation, and CSS-variable-only application.
-- `src/themes/dracula.json`: built-in Dracula adaptation.
+- `src/themes/builtins.ts`: shared built-in registry and selected-palette lookup for project windows and pop-outs.
+- `src/themes/dracula.json`, `tokyo-night.json`, `osaka-jade.json`: importable built-in adaptations.
 - `src/themes/picker.ts`: selection, local file import/removal, notices, persistence, and stale-import protection.
 - `test/themes.test.ts`: parser, lifecycle, persistence, and DOM-state regressions.
 - `scripts/check-themes.mjs`: optional actual Chromium color checks under both light/dark CSS branches, plus import/restore and state preservation. Run with `CHROMIUM=/path/to/chrome-headless-shell node scripts/check-themes.mjs`. This does not establish native WebKit/file-dialog acceptance.

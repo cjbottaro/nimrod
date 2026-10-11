@@ -3,7 +3,8 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
 import { applyTheme, COLOR_KEYS, importTheme, isColor, MAX_THEME_BYTES, readLibrary, themeProperties, type ThemeLibrary } from '../src/themes/theme';
-import { DRACULA } from '../src/themes/builtins';
+import { BUILTIN_THEMES, DRACULA, OSAKA_JADE, TOKYO_NIGHT, selectedTheme } from '../src/themes/builtins';
+import { BUILTIN_THEME_IDS } from '../src/themes/theme';
 import { installThemes } from '../src/themes/picker';
 import { webviewHtml, rendererBundle } from './view-fixture';
 
@@ -19,6 +20,24 @@ test('Dracula uses the official base/accent/syntax palette', () => {
   assert.equal(properties['--nimrod-syntax-string'], '#f1fa8c');
   assert.equal(properties['--nimrod-syntax-function'], '#50fa7b');
   assert.equal(properties['--nimrod-syntax-regexp'], '#ffb86c');
+});
+
+test('Omarchy adaptations preserve source base, accent, surface and syntax colors', () => {
+  for (const [theme, bg, accent, surface, keyword, string] of [
+    [TOKYO_NIGHT, '#1a1b26', '#7aa2f7', '#13141c', '#ad8ee6', '#9ece6a'],
+    [OSAKA_JADE, '#111c18', '#509475', '#0c1512', '#d2689c', '#549e6a'],
+  ] as const) {
+    const properties = themeProperties(theme);
+    assert.equal(theme.mode, 'dark');
+    assert.equal(properties['--vscode-editor-background'], bg);
+    assert.equal(properties['--vscode-focusBorder'], accent);
+    assert.equal(properties['--vscode-textCodeBlock-background'], surface);
+    assert.equal(properties['--nimrod-syntax-keyword'], keyword);
+    assert.equal(properties['--nimrod-syntax-string'], string);
+    for (const color of Object.values(properties)) assert.ok(isColor(color));
+  }
+  assert.equal(themeProperties(OSAKA_JADE)['--vscode-editorWarning-foreground'], '#e5c736');
+  assert.deepEqual(['nimrod', ...BUILTIN_THEMES.map(theme => theme.id)], [...BUILTIN_THEME_IDS]);
 });
 
 test('JSONC comments, trailing commas, BOM, and uppercase file extensions work', () => {
@@ -143,6 +162,39 @@ test('picker switches builtins immediately and restores the saved selection', ()
   } finally { f.close(); }
 });
 
+for (const theme of [TOKYO_NIGHT, OSAKA_JADE]) {
+  test(`${theme.name} selects, restores, reloads and cannot be removed as an import`, () => {
+    const f = pickerFixture();
+    try {
+      f.choose(theme.id);
+      assert.equal(f.select.title, `Color theme: ${theme.name}`);
+      assert.equal(f.document.documentElement.dataset.theme, theme.id);
+      assert.equal(f.select.querySelector('option[value="$remove"]'), null);
+      const saved = f.saves.at(-1)!;
+      assert.equal(readLibrary(saved).selected, theme.id);
+      assert.equal(selectedTheme(saved), theme);
+      const next = pickerFixture(saved);
+      try {
+        assert.equal(next.select.value, theme.id);
+        assert.equal(next.document.documentElement.style.colorScheme, 'dark');
+        assert.equal(next.document.documentElement.style.getPropertyValue('--vscode-editor-background'), theme.colors['editor.background']);
+        saved.selected = 'dracula'; next.picker.reload();
+        assert.equal(next.select.value, 'dracula');
+      } finally { next.close(); }
+      f.choose('nimrod');
+      assert.equal(f.document.documentElement.style.getPropertyValue('--nimrod-syntax-keyword'), '');
+    } finally { f.close(); }
+  });
+
+  test(`imports named ${theme.name} do not collide with the built-in label`, async () => {
+    const f = pickerFixture();
+    try {
+      await f.importFile(JSON.stringify({ ...minimal, name: theme.name }));
+      assert.equal(f.saves.at(-1)!.imports[0].name, `${theme.name} (2)`);
+    } finally { f.close(); }
+  });
+}
+
 test('file import adds, selects, persists and removes only the local theme copy', async () => {
   const f = pickerFixture();
   try {
@@ -243,7 +295,8 @@ test('theme changes preserve live transcript DOM, spinners, disclosure, drafts a
     tool.open = true; tool.dispatchEvent(new win.Event('toggle'));
     const prompt = win.document.querySelector<HTMLTextAreaElement>('#prompt')!; prompt.value = 'keep me'; prompt.focus();
     const pane = win.document.getElementById('transcript-viewport')!; pane.scrollTop = 100;
-    applyTheme(win.document.documentElement, DRACULA); applyTheme(win.document.documentElement);
+    for (const theme of BUILTIN_THEMES) applyTheme(win.document.documentElement, theme);
+    applyTheme(win.document.documentElement);
     assert.equal(win.document.querySelector('.tool-card'), tool); assert.equal(tool.open, true);
     assert.equal(tool.querySelector('.tool-card-spinner'), spinner); assert.equal(spinner?.isConnected, true);
     assert.equal(win.document.activeElement, prompt); assert.equal(prompt.value, 'keep me'); assert.equal(pane.scrollTop, 100);

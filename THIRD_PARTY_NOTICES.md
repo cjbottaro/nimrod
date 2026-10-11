@@ -1,5 +1,29 @@
 # Third-party notices
 
+## Tokyo Night and Osaka Jade palettes
+
+Nimrod's built-in Tokyo Night and Osaka Jade themes adapt Omarchy's public palettes to this app's UI and broad syntax categories. They are not official Omarchy applications or complete editor themes. No Omarchy artwork is bundled.
+
+- Omarchy project: https://github.com/omacom/omarchy
+- Tokyo Night palette: https://github.com/omacom/omarchy/blob/04b374a989c49bdeda72542f194106ea0c3da3ff/themes/tokyo-night/colors.toml
+- Osaka Jade palette: https://github.com/omacom/omarchy/blob/04b374a989c49bdeda72542f194106ea0c3da3ff/themes/osaka-jade/colors.toml
+- Omarchy license: https://github.com/omacom/omarchy/blob/04b374a989c49bdeda72542f194106ea0c3da3ff/LICENSE
+- Tokyo Night original author/project: Enkia, https://github.com/enkia/tokyo-night-vscode-theme
+- Tokyo Night license: https://github.com/enkia/tokyo-night-vscode-theme/blob/master/LICENSE.txt
+- Nimrod adaptations: `src/themes/tokyo-night.json`, `src/themes/osaka-jade.json`
+
+The MIT License (MIT)
+
+Copyright (c) David Heinemeier Hansson (Omarchy)
+
+Copyright (c) 2018-present Enkia (Tokyo Night)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 ## Dracula theme
 
 Nimrod's built-in Dracula theme adapts the official Dracula palette to this app's UI and broad syntax-highlighting categories. It is not the complete VS Code theme or an official Dracula application.

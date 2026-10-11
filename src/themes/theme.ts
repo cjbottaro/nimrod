@@ -4,6 +4,7 @@ export const MAX_THEME_BYTES = 512 * 1024;
 export const THEME_STORAGE_KEY = 'nimrod.themes.v1';
 export const MAX_IMPORTED_THEMES = 50;
 export type ThemeMode = 'dark' | 'light';
+export const BUILTIN_THEME_IDS = ['nimrod', 'dracula', 'tokyo-night', 'osaka-jade'] as const;
 
 // Only color-valued keys actually used by Nimrod (plus inputs used to derive fallbacks).
 export const COLOR_KEYS = [
@@ -195,6 +196,6 @@ export function readLibrary(raw: unknown): ThemeLibrary {
     }
     return { id: item.id, name: cleanName(item.name, 'Imported theme'), mode: item.mode as ThemeMode, colors, syntax };
   });
-  const selected = ['nimrod', 'dracula', ...ids].includes(raw.selected) ? raw.selected : 'nimrod';
+  const selected = [...BUILTIN_THEME_IDS, ...ids].includes(raw.selected) ? raw.selected : 'nimrod';
   return { version: 1, selected, imports };
 }

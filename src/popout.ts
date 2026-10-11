@@ -5,7 +5,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { parseSettings, type PreferencesSnapshot } from './preferences';
 import { applyTheme, readLibrary } from './themes/theme';
-import { DRACULA } from './themes/builtins';
+import { selectedTheme } from './themes/builtins';
 import { DEFAULT_ZOOM } from './zoom';
 import { codeBlockSource, createSafeMarkdownRenderer } from './pi/safe-markdown';
 import { setCodeIcon, showCopyResult } from './pi/code-actions';
@@ -31,7 +31,7 @@ export async function mountPopout(): Promise<void> {
     try {
       const settings = parseSettings(snapshot.text);
       const library = readLibrary({ version: 1, selected: settings['appearance.theme'] ?? 'nimrod', imports: settings['appearance.importedThemes'] ?? [] });
-      applyTheme(document.documentElement, library.selected === 'dracula' ? DRACULA : library.imports.find(theme => theme.id === library.selected));
+      applyTheme(document.documentElement, selectedTheme(library));
       const scale = (settings['appearance.zoom'] as number | undefined ?? DEFAULT_ZOOM) / 100;
       zoomTask = zoomTask.then(() => getCurrentWebview().setZoom(scale)).catch(report);
       revision = snapshot.revision;

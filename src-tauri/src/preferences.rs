@@ -162,7 +162,7 @@ fn validate(text: &str) -> Result<(), String> {
                     .iter()
                     .any(|item| item.get("id").and_then(Value::as_str) == Some(theme))
             });
-        if !["nimrod", "dracula"].contains(&theme) && !imported {
+        if !["nimrod", "dracula", "tokyo-night", "osaka-jade"].contains(&theme) && !imported {
             return Err("appearance.theme must name a built-in or imported theme".into());
         }
     }
@@ -506,6 +506,13 @@ mod tests {
         assert!(validate("{\"notifications.enabled\":\"yes\"}").is_err());
         validate("{\"notifications.enabled\":false}").unwrap();
         assert!(validate("{\"runtime.piPath\":\"\"}").is_err());
+    }
+    #[test]
+    fn built_in_theme_selections() {
+        for theme in ["nimrod", "dracula", "tokyo-night", "osaka-jade"] {
+            validate(&format!(r#"{{"appearance.theme":"{theme}"}}"#)).unwrap();
+        }
+        assert!(validate(r#"{"appearance.theme":"unknown"}"#).is_err());
     }
     #[test]
     fn external_edits_conflicts_and_invalid_recovery() {

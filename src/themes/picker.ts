@@ -1,4 +1,4 @@
-import { DRACULA } from './builtins';
+import { BUILTIN_THEMES, selectedTheme } from './builtins';
 import { applyTheme, importTheme, MAX_IMPORTED_THEMES, MAX_THEME_BYTES, readLibrary, type ThemeLibrary } from './theme';
 
 interface ThemeHost {
@@ -34,7 +34,7 @@ export function installThemes(elements: ThemeElements, host: ThemeHost): {
       const node = document.createElement('option'); node.value = value; node.textContent = label; return node;
     };
     const builtins = document.createElement('optgroup'); builtins.label = 'Built-in';
-    builtins.append(option('nimrod', 'Nimrod (system)'), option('dracula', 'Dracula'));
+    builtins.append(option('nimrod', 'Nimrod (system)'), ...BUILTIN_THEMES.map(theme => option(theme.id, theme.name)));
     const imported = document.createElement('optgroup'); imported.label = 'Imported';
     imported.append(...state.imports.map(theme => option(theme.id, theme.name)));
     const actions = document.createElement('optgroup'); actions.label = 'Themes';
@@ -42,11 +42,11 @@ export function installThemes(elements: ThemeElements, host: ThemeHost): {
     if (state.imports.some(theme => theme.id === state.selected)) actions.append(option('$remove', 'Remove current imported theme'));
     select.replaceChildren(builtins, ...(state.imports.length ? [imported] : []), actions);
     select.value = state.selected;
-    select.title = `Color theme: ${state.selected === 'nimrod' ? 'Nimrod scheme (follows system appearance)' : state.selected === 'dracula' ? 'Dracula' : state.imports.find(theme => theme.id === state.selected)?.name}`;
+    select.title = `Color theme: ${state.selected === 'nimrod' ? 'Nimrod scheme (follows system appearance)' : selectedTheme(state)?.name}`;
     select.disabled = false;
   }
   function apply(): void {
-    applyTheme(root, state.selected === 'dracula' ? DRACULA : state.imports.find(theme => theme.id === state.selected));
+    applyTheme(root, selectedTheme(state));
   }
   async function commit(next: ThemeLibrary): Promise<void> {
     // Persist first; quota/privacy failures must not pretend the choice survives relaunch.
@@ -68,7 +68,7 @@ export function installThemes(elements: ThemeElements, host: ThemeHost): {
       const { theme, warnings } = importTheme(text, input.name, host.newId());
       // Distinguish repeated imports without overwriting a saved theme or colliding with built-ins.
       const base = theme.name;
-      const names = new Set(['Nimrod', 'Nimrod (system)', 'Dracula', ...state.imports.map(t => t.name)]);
+      const names = new Set(['Nimrod', 'Nimrod (system)', ...BUILTIN_THEMES.map(theme => theme.name), ...state.imports.map(t => t.name)]);
       let suffix = 2;
       while (names.has(theme.name)) theme.name = `${base.slice(0, 70)} (${suffix++})`;
       await commit({ ...state, selected: theme.id, imports: [...state.imports, theme] });
@@ -85,7 +85,7 @@ export function installThemes(elements: ThemeElements, host: ThemeHost): {
     if (selected === '$import') { file.value = ''; file.click(); return; }
     try {
       if (selected === '$remove') await commit({ ...state, selected: 'nimrod', imports: state.imports.filter(theme => theme.id !== state.selected) });
-      else if (['nimrod', 'dracula', ...state.imports.map(theme => theme.id)].includes(selected)) await commit({ ...state, selected });
+      else if (['nimrod', ...BUILTIN_THEMES.map(theme => theme.id), ...state.imports.map(theme => theme.id)].includes(selected)) await commit({ ...state, selected });
     } catch (error) { options(); tell(`Could not save theme settings: ${String(error)}`); }
   };
   const onFile = () => { const input = file.files?.[0]; file.value = ''; if (input) void importFile(input); };

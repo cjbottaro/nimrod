@@ -50,6 +50,17 @@ try {
       assert(getComputedStyle(document.getElementById('send')).backgroundColor === 'rgb(68, 71, 90)', 'Dracula button');
       assert(getComputedStyle(root).colorScheme === 'dark', 'Dracula stays dark');
       rows.push(os + ': Dracula colors pass');
+      for (const [id, background, keyword, button] of [
+        ['tokyo-night', 'rgb(26, 27, 38)', 'rgb(173, 142, 230)', 'rgb(41, 46, 66)'],
+        ['osaka-jade', 'rgb(17, 28, 24)', 'rgb(210, 104, 156)', 'rgb(50, 71, 59)'],
+      ]) {
+        choose(id);
+        assert(getComputedStyle(root).backgroundColor === background, id + ' background on ' + os);
+        assert(getComputedStyle(document.querySelector('.hljs-keyword')).color === keyword, id + ' syntax');
+        assert(getComputedStyle(document.getElementById('send')).backgroundColor === button, id + ' button');
+        assert(getComputedStyle(root).colorScheme === 'dark', id + ' stays dark');
+        rows.push(os + ': ' + id + ' colors pass');
+      }
       await picker.importFile(new File([JSON.stringify({name:'Paper',type:'light',colors:{'editor.background':'#fdfdfd','editor.foreground':'#222222'},tokenColors:[{scope:'keyword',settings:{foreground:'#0055cc'}}]})], 'paper.json'));
       assert(getComputedStyle(root).backgroundColor === 'rgb(253, 253, 253)', 'Imported light background');
       assert(getComputedStyle(document.querySelector('.hljs-keyword')).color === 'rgb(0, 85, 204)', 'Imported syntax color');

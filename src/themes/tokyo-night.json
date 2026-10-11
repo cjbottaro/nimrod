@@ -1,0 +1,101 @@
+{
+  "name": "Tokyo Night",
+  "type": "dark",
+  "colors": {
+    "foreground": "#a9b1d6",
+    "editor.foreground": "#a9b1d6",
+    "editor.background": "#1a1b26",
+    "descriptionForeground": "#565f89",
+    "focusBorder": "#7aa2f7",
+    "errorForeground": "#f7768e",
+    "editorWidget.background": "#24283b",
+    "editorGroupHeader.tabsBackground": "#13141c",
+    "editorCodeLens.foreground": "#565f89",
+    "editorIndentGuide.background1": "#414868",
+    "editor.selectionBackground": "#292e42",
+    "editorWarning.foreground": "#e0af68",
+    "input.background": "#13141c",
+    "input.foreground": "#a9b1d6",
+    "input.border": "#414868",
+    "button.background": "#292e42",
+    "button.foreground": "#c0caf5",
+    "button.hoverBackground": "#414868",
+    "button.secondaryBackground": "#24283b",
+    "button.secondaryForeground": "#a9b1d6",
+    "button.secondaryHoverBackground": "#292e42",
+    "panel.border": "#414868",
+    "widget.border": "#414868",
+    "widget.shadow": "#0e0e1480",
+    "progressBar.background": "#7aa2f7",
+    "textLink.foreground": "#449dab",
+    "textLink.activeForeground": "#0db9d7",
+    "textBlockQuote.background": "#24283b",
+    "textBlockQuote.border": "#7aa2f7",
+    "textCodeBlock.background": "#13141c",
+    "toolbar.hoverBackground": "#292e42",
+    "list.focusBackground": "#292e42",
+    "list.focusForeground": "#c0caf5",
+    "testing.iconPassed": "#9ece6a",
+    "testing.iconFailed": "#f7768e",
+    "terminal.ansiGreen": "#9ece6a",
+    "terminal.ansiRed": "#f7768e",
+    "terminal.ansiYellow": "#e0af68"
+  },
+  "tokenColors": [
+    {
+      "scope": "comment",
+      "settings": {
+        "foreground": "#565f89"
+      }
+    },
+    {
+      "scope": [
+        "keyword",
+        "storage"
+      ],
+      "settings": {
+        "foreground": "#ad8ee6"
+      }
+    },
+    {
+      "scope": "string",
+      "settings": {
+        "foreground": "#9ece6a"
+      }
+    },
+    {
+      "scope": [
+        "constant.numeric",
+        "constant.language"
+      ],
+      "settings": {
+        "foreground": "#eb927b"
+      }
+    },
+    {
+      "scope": [
+        "entity.name.function",
+        "support.function"
+      ],
+      "settings": {
+        "foreground": "#7aa2f7"
+      }
+    },
+    {
+      "scope": [
+        "entity.name.type",
+        "support.type",
+        "support.class"
+      ],
+      "settings": {
+        "foreground": "#0db9d7"
+      }
+    },
+    {
+      "scope": "string.regexp",
+      "settings": {
+        "foreground": "#bb9af7"
+      }
+    }
+  ]
+}
