@@ -8,6 +8,8 @@
 - `src/pi/steering-transcript.ts`: live pending-turn projection, queue reconciliation and user-turn key aliases.
 - `src/pi/webview-client.ts`: applies every ordered snapshot before coalesced painting; patches pending-status labels in the existing user article.
 
+Image attachment behavior and its text-only queue recovery boundary are covered in [Image paste](image-paste.md).
+
 ## Contract
 
 - Idle: Enter sends normally; Option-Enter also sends normally, never queues. Hints: `Enter to send · Shift+Enter for newline`.

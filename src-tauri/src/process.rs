@@ -12,7 +12,9 @@ use tokio::{
 };
 use tokio_util::codec::{FramedRead, LinesCodec};
 
-const MAX_RECORD: usize = 16 * 1024 * 1024;
+// get_messages contains the entire history, including base64 image blocks.
+// Individual Pi session records remain bounded separately at 16 MiB.
+const MAX_RECORD: usize = 256 * 1024 * 1024;
 
 #[derive(Clone, Serialize, Debug)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -163,7 +165,7 @@ pub fn validate_command(value: &Value) -> Result<(), String> {
         .ok_or("Missing RPC request id")?;
     if id.is_empty()
         || id.len() > 128
-        || serde_json::to_vec(value).map_err(|e| e.to_string())?.len() > 2_000_000
+        || serde_json::to_vec(value).map_err(|e| e.to_string())?.len() > 13_000_000
     {
         return Err("Invalid or oversized RPC request".into());
     }
@@ -287,6 +289,13 @@ mod tests {
         assert!(validate_command(&json!({"type":"bash", "id":"1"})).is_err());
         assert!(validate_command(&json!({"type":"compact", "id":"1"})).is_ok());
         assert!(validate_command(&json!({"type":"prompt", "id":"1", "message":"hi"})).is_ok());
+        assert!(validate_command(&json!({"type":"prompt", "id":"image", "message":"", "images":[{"type":"image", "mimeType":"image/png", "data":"a".repeat(3_000_000)}]})).is_ok());
+        assert!(
+            validate_command(
+                &json!({"type":"prompt", "id":"large", "message":"a".repeat(13_000_000)})
+            )
+            .is_err()
+        );
     }
 
     #[tokio::test]

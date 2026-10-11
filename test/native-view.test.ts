@@ -5,21 +5,36 @@ import { webviewHtml, rendererBundle } from './view-fixture';
 import { createSafeMarkdownRenderer } from '../src/pi/safe-markdown';
 import { initialConversationState, reduceRpcEvent } from '../src/pi/reducer';
 
-function fixture() {
+function fixture(options: { images?: boolean; clipboard?: boolean; missing?: boolean } = {}) {
   const dom = new JSDOM(webviewHtml(), { runScripts: 'outside-only', pretendToBeVisual: true });
   const win = dom.window;
+  let persisted: unknown;
+  let clipboardReads = 0;
+  const blobs = new Map<string, Blob>();
+  let imageId = 0;
+  Object.assign(win.URL, { createObjectURL: () => `blob:fixture-${imageId}`, revokeObjectURL: () => {} });
+  const attachments = options.images ? {
+    put: async (blob: Blob, name: string) => { const image = { id: `image-${++imageId}`, name, mimeType: blob.type, size: blob.size }; blobs.set(image.id, blob); return image; },
+    get: async (image: { id: string }) => { if (options.missing) throw new Error('Image draft is missing'); return blobs.get(image.id)!; },
+    readClipboard: options.clipboard ? async () => { clipboardReads++; return new win.Blob(['abc'], { type: 'image/png' }); } : undefined,
+  } : undefined;
   const frames: FrameRequestCallback[] = [];
   win.requestAnimationFrame = cb => { frames.push(cb); return frames.length; };
   const sent: Record<string, unknown>[] = [];
   let receive: (message: unknown) => void = () => {};
-  Object.assign(win, { testHost: { getState: () => undefined, setState: () => {}, postMessage: (message: Record<string, unknown>) => sent.push(message), onMessage: (listener: typeof receive) => { receive = listener; } } });
-  win.eval(rendererBundle() + '\nPiView.mountPiView(window.testHost);');
+  Object.assign(win, { testHost: { attachments, getState: () => undefined, setState: (state: unknown) => { persisted = state; }, postMessage: (message: Record<string, unknown>) => sent.push(message), onMessage: (listener: typeof receive) => { receive = listener; } } });
+  win.eval(rendererBundle() + '\nwindow.testView = PiView.mountPiView(window.testHost);');
   const flush = () => { while (frames.length) frames.shift()!(0); };
   const snapshot = (state: Record<string, unknown>) => { receive({ type: 'snapshot', state }); flush(); };
   const prompt = win.document.querySelector<HTMLTextAreaElement>('#prompt')!;
   const draft = (text: string) => { prompt.value = text; prompt.dispatchEvent(new win.Event('input')); };
   const send = () => prompt.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-  return { dom, win, sent, receive, snapshot, prompt, draft, send, flush };
+  const paste = (image = true, text = '') => {
+    const event = new win.Event('paste', { cancelable: true, bubbles: true });
+    Object.defineProperty(event, 'clipboardData', { value: { items: image ? [{ kind: 'file', type: 'image/png', getAsFile: () => new win.File(['abc'], 'Screenshot.png', { type: 'image/png' }) }] : [], types: text ? ['text/plain'] : [], files: [], getData: () => text } });
+    prompt.dispatchEvent(event); return event;
+  };
+  return { dom, win, sent, receive, snapshot, prompt, draft, send, flush, paste, state: () => persisted, clipboardReads: () => clipboardReads };
 }
 
 test('bundled native bridge preserves drafts through pending/unknown/late acknowledgements', () => {
@@ -372,5 +387,55 @@ test('follow-up delivery and slash controls do not acquire optimistic steering t
     f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' });
     f.draft('/name renamed'); f.send(); f.flush();
     assert.equal(f.win.document.querySelectorAll('#messages .user').length, 0);
+  } finally { f.dom.window.close(); }
+});
+
+
+const tickImages = () => new Promise(resolve => setTimeout(resolve, 30));
+test('paste uses event images once, preserves newer attachments on ack, and never persists base64', async () => {
+  const f = fixture({ images: true, clipboard: true });
+  try {
+    f.snapshot({ sessionUnavailable: false, messages: [] });
+    assert.equal(f.paste().defaultPrevented, true); await tickImages();
+    assert.equal(f.clipboardReads(), 0);
+    assert.equal(f.win.document.querySelectorAll('.composer-attachments img').length, 1);
+    f.send(); await tickImages();
+    const submission = f.sent.find(message => message.type === 'prompt')!;
+    assert.deepEqual(JSON.parse(JSON.stringify(submission.images)), [{ type: 'image', mimeType: 'image/png', data: 'YWJj' }]);
+    f.draft('newer'); f.paste(); await tickImages();
+    f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' });
+    assert.equal(f.prompt.value, 'newer');
+    assert.equal(f.win.document.querySelectorAll('.composer-attachments img').length, 1);
+    assert.equal(JSON.stringify(f.state()).includes('YWJj'), false);
+    assert.match(f.win.document.querySelector('.image-recovery')!.textContent!, /1 image/);
+  } finally { f.dom.window.close(); }
+});
+
+test('native fallback reads only empty composer pastes; missing image data blocks submission', async () => {
+  const f = fixture({ images: true, clipboard: true, missing: true });
+  try {
+    f.snapshot({ sessionUnavailable: false, messages: [] });
+    assert.equal(f.paste(false, 'ordinary text').defaultPrevented, false); await tickImages();
+    assert.equal(f.clipboardReads(), 0);
+    f.receive({ type: 'deletionLock', locked: true }); f.paste(false); await tickImages();
+    assert.equal(f.clipboardReads(), 0);
+    f.receive({ type: 'deletionLock', locked: false }); f.paste(false); await tickImages();
+    assert.equal(f.clipboardReads(), 1);
+    f.send(); await tickImages();
+    assert.equal(f.sent.some(message => message.type === 'prompt'), false);
+    assert.match(f.win.document.querySelector('#submission-notice')!.textContent!, /missing/);
+    assert.equal(f.win.document.querySelectorAll('.composer-attachments img').length, 1);
+  } finally { f.dom.window.close(); }
+});
+
+test('unchanged image transcript blocks keep their DOM identity across later streaming snapshots', () => {
+  const f = fixture();
+  try {
+    const user = { key: 'image', role: 'user', content: [{ type: 'image', mimeType: 'image/png', data: 'YWJj' }, { type: 'text', text: 'caption' }] };
+    f.snapshot({ messages: [user] });
+    const image = f.win.document.querySelector('.transcript-image img');
+    f.snapshot({ messages: [{ ...user, content: [user.content[0], { type: 'text', text: 'updated caption' }] }] });
+    assert.equal(f.win.document.querySelector('.transcript-image img'), image);
+    assert.ok(image);
   } finally { f.dom.window.close(); }
 });

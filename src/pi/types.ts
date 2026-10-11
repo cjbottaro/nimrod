@@ -12,6 +12,8 @@ export interface NativeSessionStats {
 
 export interface ContentBlock {
   type: string;
+  data?: string;
+  mimeType?: string;
   text?: string;
   thinking?: string;
   thinkingComplete?: boolean;

@@ -139,6 +139,7 @@ Native desktop alerts share product policy across platforms: live settled comple
 ## Pi-specific behavior
 
 - Ordinary sends always include `streamingBehavior: steer`, including when the latest snapshot said idle. While the main agent is working, Option-Enter (Alt+Enter on Linux) explicitly queues with `streamingBehavior: followUp`; idle submissions retain the steering fallback. The busy composer hints show **Enter to steer · Option-Enter to queue · Shift+Enter for newline**; the queue hint is absent while idle.
+- Image paste attaches removable composer thumbnails and sends Pi image blocks, including image-only messages. Image draft bytes are separate from localStorage metadata; temporary images are memory-only. Pi text-only queue recovery requires explicit, conservative image-send recovery. See [Paste images](image-paste.md).
 - Retain submitted text until acknowledgement; clear only the unchanged draft. Preserve rejected/uncertain originals alongside newer text.
 - `agent_end` is not idle; `agent_settled` is the normal idle boundary.
 - Stop requests authoritative `clear_queue`, exposes its exact returned text for recovery, then sends `abort`. During compaction, abort without clearing the queue.

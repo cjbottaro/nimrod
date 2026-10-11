@@ -1,3 +1,4 @@
+import type { ImageContent } from './image-attachments';
 import type { SubmissionOutcome } from './composer-state';
 
 export type SteeringStatus = 'sending' | 'pending' | 'unknown' | 'interrupted' | 'rejected' | 'cancelled';
@@ -10,6 +11,7 @@ export interface SteeringMessage {
 interface PendingSteering {
   key: string;
   text: string;
+  images?: ImageContent[];
   submissionId?: string;
   status: SteeringStatus;
 }
@@ -26,8 +28,8 @@ export class SteeringTranscript {
   private aliases = new Map<string, string>();
   private nextKey = 0;
 
-  begin(id: string, text: string, status: SteeringStatus = 'sending'): void {
-    this.pending.push({ key: `steering:${id}`, submissionId: id, text, status });
+  begin(id: string, text: string, status: SteeringStatus = 'sending', images?: ImageContent[]): void {
+    this.pending.push({ key: `steering:${id}`, submissionId: id, text, status, images });
   }
 
   receipt(id: string, outcome: SubmissionOutcome): void {
@@ -45,7 +47,7 @@ export class SteeringTranscript {
   recover(texts: string[]): void {
     // clear_queue returns occurrences, not a set: identical steers remain distinct.
     for (const text of texts) {
-      const index = this.pending.findIndex(item => eligible(item) && sameText(item.text, text));
+      const index = this.pending.findIndex(item => eligible(item) && !item.images?.length && sameText(item.text, text));
       if (index >= 0) this.pending.splice(index, 1);
     }
   }
@@ -57,7 +59,8 @@ export class SteeringTranscript {
       this.seen.add(message.key);
       if (message.role !== 'user') continue;
       const text = userText(message.content);
-      const index = this.pending.findIndex(item => eligible(item) && sameText(item.text, text));
+      const images = Array.isArray(message.content) ? message.content.filter(block => block?.type === 'image').map(block => ({ type: 'image', mimeType: block.mimeType, data: block.data })) : [];
+      const index = this.pending.findIndex(item => eligible(item) && sameText(item.text, text) && JSON.stringify(item.images ?? []) === JSON.stringify(images));
       if (index < 0) continue;
       const [entry] = this.pending.splice(index, 1);
       this.aliases.set(message.key, entry.key);
@@ -81,7 +84,7 @@ export class SteeringTranscript {
     return [
       ...messages.map(message => this.aliases.has(message.key || '')
         ? { ...message, key: this.aliases.get(message.key!) } : message),
-      ...this.pending.map(entry => ({ key: entry.key, role: 'user', content: entry.text, steeringStatus: entry.status })),
+      ...this.pending.map(entry => ({ key: entry.key, role: 'user', content: entry.images?.length ? [{ type: 'text', text: entry.text }, ...entry.images] : entry.text, steeringStatus: entry.status })),
     ];
   }
 }

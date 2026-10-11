@@ -30,6 +30,22 @@ test('ordinary submissions include steering fallback and wait for Pi acknowledge
   f.rpc.disconnect('done');
 });
 
+test('image-only prompts forward Pi image blocks and reject malformed/slash attachments before writing', async () => {
+  const f = fixture();
+  const images = [{ type: 'image', mimeType: 'image/png', data: 'YWJj' }];
+  const pending = f.session.handle({ type: 'prompt', id: 'image', text: '', images });
+  assert.deepEqual(f.sent[0].images, images);
+  assert.equal(f.sent[0].message, '');
+  assert.equal(f.sent[0].streamingBehavior, 'steer');
+  f.respond(true); await pending;
+  for (const message of [{ text: '/name nope', images }, { text: 'bad', images: [{ ...images[0], mimeType: 'image/svg+xml' }] }]) {
+    await f.session.handle({ type: 'prompt', id: 'invalid', ...message });
+    assert.equal(f.published.at(-1)?.outcome, 'rejected');
+  }
+  assert.equal(f.sent.length, 1);
+  f.rpc.disconnect('done');
+});
+
 test('rename acknowledgement updates the name and composer receipt but never prompt recency', async () => {
   for (const text of ['/name Inline name', '/name']) {
     const f = fixture();

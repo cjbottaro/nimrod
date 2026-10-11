@@ -85,7 +85,7 @@ export class SessionDrafts {
     return Object.entries(this.drafts).flatMap(([key, value]) => {
       if (key !== 'legacy' && !key.startsWith('unassigned:')) return [];
       const state = restoreComposerState(value);
-      const text = state.draft || state.submission?.text || state.recovered[0]?.text;
+      const text = state.draft || state.submission?.text || state.recovered[0]?.text || (state.attachments?.length || state.imageRecovery?.length || state.submission?.attachments?.length ? 'Image draft' : '');
       const label = key === 'legacy' ? 'Previous PoC draft' : 'Unassigned session draft';
       return text ? [{ key, label: `${label}: ${text.slice(0, 100)}` }] : [];
     });

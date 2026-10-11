@@ -74,7 +74,7 @@ test("skill-only history has no empty argument area, assistant/example text rema
     ]);
     assert.equal(win.document.querySelectorAll(".skill-card").length, 1);
     assert.equal(win.document.querySelector(".skill-invocation > .markdown"), null);
-    assert.match(win.document.querySelector("article.user")!.textContent!, /\[image\]/);
+    assert.match(win.document.querySelector("article.user")!.textContent!, /\[Unsupported or invalid image\]/);
     assert.match(win.document.querySelector("article.assistant")!.textContent!, /Review instructions/);
     assert.equal(win.document.querySelector<HTMLDetailsElement>(".skill-card")!.open, false);
   } finally { dom.window.close(); }

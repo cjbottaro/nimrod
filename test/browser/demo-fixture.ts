@@ -119,7 +119,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     } });
   });
   await page.route('**/*', route => route.request().url() === 'https://nimrod.test/'
-    ? route.fulfill({ contentType: 'text/html', body: html }) : route.abort());
+    ? route.fulfill({ contentType: 'text/html', body: html }) : route.request().url().startsWith('blob:') ? route.continue() : route.abort());
   try {
     await page.goto('https://nimrod.test/');
     await page.addScriptTag({ content: result.outputFiles![0].text });
