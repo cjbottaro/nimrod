@@ -203,6 +203,55 @@ test('each tool output retains its own inspection position in a multi-tool turn'
   } finally { f.dom.window.close(); }
 });
 
+test('reasoning patches preserve the mounted shell, indicator and disclosure without stealing focus', () => {
+  const f = fixture();
+  try {
+    const snapshot = (thinking: string, thinkingComplete = false) => f.snapshot({ messages: [{
+      key: 'reasoning', role: 'assistant', content: [{ type: 'thinking', thinking, thinkingComplete }],
+    }] });
+    snapshot('First line');
+    const card = f.win.document.querySelector<HTMLDetailsElement>('.reasoning-card')!;
+    const indicator = card.querySelector('.reasoning-indicator');
+    card.open = true; card.dispatchEvent(new f.win.Event('toggle'));
+    f.prompt.focus();
+    snapshot('First line\nMore reasoning');
+    assert.equal(f.win.document.querySelector('.reasoning-card'), card);
+    assert.equal(card.querySelector('.reasoning-indicator'), indicator);
+    assert.equal(indicator?.isConnected, true);
+    assert.equal(card.open, true);
+    assert.equal(f.win.document.activeElement, f.prompt);
+    snapshot('First line\nCompleted reasoning', true);
+    assert.equal(card.querySelector('.reasoning-indicator'), indicator);
+    assert.ok(card.querySelector('.tool-card-succeeded'));
+    assert.equal(card.open, true);
+    snapshot('');
+    assert.equal(f.win.document.querySelector('.reasoning-card'), null);
+    assert.equal(f.sent.some(message => message.type === 'renderError'), false);
+  } finally { f.dom.window.close(); }
+});
+
+test('the same tool invocation has independent shells and disclosure in separate mounted views', () => {
+  const first = fixture();
+  const second = fixture();
+  try {
+    const state = { messages: [{ key: 'a', role: 'assistant', content: [{
+      type: 'toolCall', id: 'shared-id', name: 'bash', arguments: { command: 'fixture' }, toolStatus: 'running',
+    }] }] };
+    first.snapshot(state); second.snapshot(state);
+    const firstCard = first.win.document.querySelector<HTMLDetailsElement>('.tool-card')!;
+    const secondCard = second.win.document.querySelector<HTMLDetailsElement>('.tool-card')!;
+    firstCard.open = true; firstCard.dispatchEvent(new first.win.Event('toggle'));
+    first.snapshot(state); second.snapshot(state);
+    assert.notEqual(firstCard, secondCard);
+    assert.equal(firstCard.open, true);
+    assert.equal(secondCard.open, false);
+    first.receive({ type: 'sessionReset' }); first.flush();
+    assert.equal(first.win.document.querySelector('.tool-card'), null);
+    assert.equal(second.win.document.querySelector('.tool-card'), secondCard);
+    assert.equal(secondCard.isConnected, true);
+  } finally { first.dom.window.close(); second.dom.window.close(); }
+});
+
 test('Markdown cannot add scripts or native command links', () => {
   const dom = new JSDOM('');
   try {
