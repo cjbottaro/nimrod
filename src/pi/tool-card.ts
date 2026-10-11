@@ -1,4 +1,5 @@
-import { CardRendererController, type CardRenderer, type CardPresentation } from './card-renderer';
+import { type CardRenderer } from './card-renderer';
+import { DomCardController, presentationPlugin, type DomCardRenderer, type CardDomHost } from './dom-card-renderer';
 import { associateOutputViewport } from './card-shell';
 import { bundledToolRenderer } from './card-plugins/registry';
 import { rawToolPresentation } from './tool-presentation';
@@ -15,144 +16,84 @@ export interface ToolCardBlock {
   isError?: boolean;
   toolStatus?: "running" | "finished" | "result";
 }
-
-const renderers = new WeakMap<HTMLDetailsElement, CardRendererController<ToolCardBlock>>();
-const outputContent = new WeakMap<HTMLElement, { format: string; source: string }>();
+export type ToolCardRenderer = DomCardRenderer<ToolCardBlock> | CardRenderer<ToolCardBlock>;
+const renderers = new WeakMap<HTMLDetailsElement, DomCardController<ToolCardBlock>>();
+const retained = new WeakMap<HTMLDetailsElement, ToolCardBlock>();
 
 export function disposeToolCard(details: HTMLDetailsElement): void {
-  renderers.get(details)?.dispose();
-  renderers.delete(details);
-  associateOutputViewport(details);
+  renderers.get(details)?.dispose(); renderers.delete(details); retained.delete(details); associateOutputViewport(details);
 }
-
 export function toolCardIsBusy(block: ToolCardBlock): boolean {
-  const status = toolStatus(block);
-  return status === "running" || status === "thinking";
+  const status = toolStatus(block); return status === 'running' || status === 'thinking';
 }
-
-export function renderToolCard(document: Document, block: ToolCardBlock, details: HTMLDetailsElement, renderer: CardRenderer<ToolCardBlock> = bundledToolRenderer(block), report?: (error: unknown) => void): HTMLDetailsElement {
-  disposeToolCard(details);
-  renderers.set(details, new CardRendererController(renderer, rawToolPresentation, report));
-  details.classList.add("tool-card");
-  const summary = document.createElement("summary");
-  const summaryContent = document.createElement("span");
-  summaryContent.className = "tool-card-summary";
-  summary.append(summaryContent);
-  details.append(summary);
-  updateToolCard(document, details, block);
-  return details;
+export function renderToolCard(document: Document, block: ToolCardBlock, details: HTMLDetailsElement,
+  renderer: ToolCardRenderer = bundledToolRenderer(block), report?: (error: unknown) => void, host: CardDomHost = {}): HTMLDetailsElement {
+  disposeToolCard(details); details.classList.add('tool-card');
+  const summary = document.createElement('summary');
+  const row = document.createElement('span'); row.className = 'tool-card-summary';
+  const content = document.createElement('span'); content.className = 'card-plugin-summary';
+  row.append(content); summary.append(row);
+  const body = document.createElement('div'); body.className = 'card-plugin-body';
+  details.append(summary, body);
+  const plugin = 'apiVersion' in renderer ? renderer : presentationPlugin(renderer);
+  renderers.set(details, new DomCardController(plugin, content, body, rawToolPresentation, { ...host, report: report ?? host.report,
+    afterUpdate: () => syncRawRecovery(document, details, retained.get(details) ?? block),
+  }));
+  updateToolCard(document, details, block); return details;
 }
-
-/**
- * Updates a card in place. In particular, a running indicator stays in its
- * connected summary so its CSS animation timeline is never restarted by a
- * streaming snapshot.
- */
 export function updateToolCard(document: Document, details: HTMLDetailsElement, block: ToolCardBlock): void {
-  const name = string(block.name) || "tool";
-  const status = toolStatus(block);
-  const summary = directChild<HTMLElement>(details, "summary");
-  const summaryContent = summary?.querySelector<HTMLElement>(".tool-card-summary");
-  if (!summary || !summaryContent) return;
-
-  summary.setAttribute("aria-label", `${name} (${status})`);
-  let indicator = summaryContent.querySelector<HTMLElement>(".tool-card-spinner, .tool-card-dot");
-  const indicatorClass = status === "running" || status === "pending" || status === "thinking" ? "tool-card-spinner" : `tool-card-dot tool-card-${status}`;
-  if (!indicator || indicator.className !== indicatorClass) {
-    const next = document.createElement("span");
-    next.className = indicatorClass;
-    next.setAttribute("aria-hidden", "true");
-    if (indicator) indicator.replaceWith(next);
-    else summaryContent.prepend(next);
-    indicator = next;
+  const name = string(block.name) || 'tool'; const status = toolStatus(block);
+  const summary = directChild<HTMLElement>(details, 'summary');
+  const row = summary?.querySelector<HTMLElement>('.tool-card-summary');
+  if (!summary || !row) return;
+  summary.setAttribute('aria-label', `${name} (${status})`);
+  let indicator = Array.from(row.children).find(child => child.classList.contains('tool-card-spinner') || child.classList.contains('tool-card-dot'));
+  const className = ['running', 'pending', 'thinking'].includes(status) ? 'tool-card-spinner' : `tool-card-dot tool-card-${status}`;
+  if (!indicator || indicator.className !== className) {
+    const next = document.createElement('span'); next.className = className; next.setAttribute('aria-hidden', 'true');
+    if (indicator) indicator.replaceWith(next); else row.prepend(next); indicator = next;
   }
-
-  let title = summaryContent.querySelector<HTMLElement>(".tool-card-title");
-  if (!title) {
-    title = document.createElement("span");
-    title.className = "tool-card-title";
-    summaryContent.append(title);
-  }
-  let renderer = renderers.get(details);
-  if (!renderer) { renderer = new CardRendererController(bundledToolRenderer(block), rawToolPresentation); renderers.set(details, renderer); }
-  const presentation = renderer.update(block);
-  title.textContent = presentation.title;
-
-  const preview = summaryContent.querySelector<HTMLElement>('.tool-card-preview');
-  if (presentation.preview !== undefined) {
-    if (preview) preview.textContent = presentation.preview;
-    else {
-      const next = document.createElement('span'); next.className = 'tool-card-preview';
-      next.textContent = presentation.preview; summaryContent.append(next);
-    }
-  } else preview?.remove();
-
-  let phase = directChild<HTMLElement>(details, ".tool-phase");
-  if (status === "stopped") {
-    if (!phase) {
-      phase = document.createElement("div");
-      phase.className = "tool-phase";
-      summary.after(phase);
-    }
-    phase.textContent = "Execution was interrupted before completion was reported.";
+  let phase = directChild<HTMLElement>(details, '.tool-phase');
+  if (status === 'stopped') {
+    if (!phase) { phase = document.createElement('div'); phase.className = 'tool-phase'; summary.after(phase); }
+    phase.textContent = 'Execution was interrupted before completion was reported.';
   } else phase?.remove();
+  retained.set(details, block);
   updateInputs(document, details, block.arguments);
-  updateOutputs(document, details, block, presentation);
+  renderers.get(details)?.update(block, { streaming: toolCardIsBusy(block) });
+  const raw = Array.from(details.querySelectorAll<HTMLElement>('.tool-section')).filter(section => ['execution', 'result'].includes(section.dataset.outputKind || ''));
+  associateOutputViewport(details, raw.find(section => section.querySelector('.tool-output-streaming'))?.querySelector<HTMLElement>('.tool-output') || raw[0]?.querySelector<HTMLElement>('.tool-output') || details.querySelector<HTMLElement>('.tool-output') || undefined);
+}
+function updateInputs(document: Document, root: HTMLDetailsElement, value: unknown): void {
+  const existing = directChild<HTMLDetailsElement>(root, 'details.tool-raw-inputs:not(.tool-raw-output)');
+  if (value === undefined || value === '') { existing?.remove(); return; }
+  if (existing) { const pre = existing.querySelector('pre'); if (pre) pre.textContent = stringify(value); return; }
+  root.insertBefore(rawInputs(document, value), directChild(root, '.card-plugin-body') || null);
 }
 
-function updateInputs(document: Document, root: HTMLDetailsElement, argumentsValue: unknown): void {
-  const existing = directChild<HTMLDetailsElement>(root, "details.tool-raw-inputs");
-  if (argumentsValue === undefined || argumentsValue === "") {
-    existing?.remove();
-    return;
+function syncRawRecovery(document: Document, details: HTMLDetailsElement, block: ToolCardBlock): void {
+  const expected = rawToolPresentation(block).sections;
+  const body = details.querySelector<HTMLElement>('.card-plugin-body')!;
+  const provided = expected.every(part => Array.from(body.querySelectorAll<HTMLElement>('.tool-section')).some(section =>
+    section.dataset.outputKind === part.key && section.querySelector('.tool-output')?.textContent === part.text));
+  let recovery = directChild<HTMLDetailsElement>(details, '.tool-raw-output');
+  if (provided || !expected.length) { if (recovery) recovery.hidden = true; return; }
+  if (!recovery) {
+    recovery = document.createElement('details'); recovery.className = 'tool-raw-output tool-raw-inputs';
+    const summary = document.createElement('summary'); summary.textContent = 'Raw output'; recovery.append(summary); details.append(recovery);
   }
-  if (existing) {
-    const pre = existing.querySelector("pre");
-    if (pre) pre.textContent = stringify(argumentsValue);
-    return;
+  recovery.hidden = false;
+  const old = new Map(Array.from(recovery.querySelectorAll<HTMLElement>('.tool-section')).map(section => [section.dataset.outputKind!, section]));
+  for (const part of expected) {
+    let section = old.get(part.key);
+    if (!section) { section = document.createElement('div'); section.className = 'tool-section'; section.dataset.outputKind = part.key; section.append(document.createElement('pre')); recovery.append(section); }
+    const output = section.querySelector('pre')!;
+    output.className = `tool-output ${toolCardIsBusy(block) ? 'tool-output-streaming' : 'tool-output-final'}`;
+    output.tabIndex = 0; output.setAttribute('aria-label', part.label);
+    if (output.textContent !== part.text) output.textContent = part.text;
+    old.delete(part.key);
   }
-  const inputs = rawInputs(document, argumentsValue);
-  const firstOutput = directChild<HTMLElement>(root, ".tool-section");
-  root.insertBefore(inputs, firstOutput || null);
-}
-
-function updateOutputs(document: Document, root: HTMLDetailsElement, block: ToolCardBlock, presentation: CardPresentation): void {
-  const desired = presentation.sections.map(section => ({ kind: section.key, label: section.label, value: section.text, format: section.format, streaming: toolCardIsBusy(block) }));
-  const sections = (): HTMLElement[] => (Array.from(root.children) as HTMLElement[]).filter((child) => child.classList.contains("tool-section"));
-  const existing = new Map(sections().map((section) => [section.dataset.outputKind || "", section]));
-
-  desired.forEach((part, index) => {
-    let section = existing.get(part.kind);
-    if (!section) {
-      section = outputSection(document, part.label, part.value, part.streaming, part.kind);
-    } else {
-      section.querySelector<HTMLElement>(".tool-label")!.textContent = part.label;
-      const output = section.querySelector<HTMLPreElement>(".tool-output")!;
-      output.className = `tool-output ${part.streaming ? "tool-output-streaming" : "tool-output-final"}`;
-      if (part.format !== 'diff' && output.textContent !== part.value) output.textContent = part.value;
-      existing.delete(part.kind);
-    }
-    const output = section.querySelector<HTMLPreElement>('.tool-output')!;
-    output.setAttribute('aria-label', part.label);
-    const format = part.format || 'text';
-    const previous = outputContent.get(output);
-    if (previous?.format !== format || previous.source !== part.value) {
-      outputContent.set(output, { format, source: part.value });
-      if (format === 'diff') {
-        output.replaceChildren();
-        for (const line of part.value.split('\n')) {
-          const span = document.createElement('span');
-          span.className = line.startsWith('+') ? 'hljs-addition' : line.startsWith('-') ? 'hljs-deletion' : '';
-          span.textContent = line; output.append(span, document.createTextNode('\n'));
-        }
-      } else output.textContent = part.value;
-    }
-    const current = sections()[index];
-    if (current !== section) root.insertBefore(section, current || null);
-  });
-  for (const section of existing.values()) section.remove();
-  const raw = sections().filter(section => ['execution', 'result'].includes(section.dataset.outputKind || ''));
-  associateOutputViewport(root, raw.find(section => section.querySelector('.tool-output-streaming'))?.querySelector<HTMLElement>('.tool-output') || raw[0]?.querySelector<HTMLElement>('.tool-output') || sections()[0]?.querySelector<HTMLElement>('.tool-output') || undefined);
+  for (const stale of old.values()) stale.remove();
 }
 
 function rawInputs(document: Document, value: unknown): HTMLDetailsElement {
@@ -164,22 +105,6 @@ function rawInputs(document: Document, value: unknown): HTMLDetailsElement {
   pre.textContent = stringify(value);
   details.append(summary, pre);
   return details;
-}
-
-function outputSection(document: Document, label: string, value: string, streaming: boolean, kind: string): HTMLElement {
-  const root = document.createElement("div");
-  root.className = "tool-section";
-  root.dataset.outputKind = kind;
-  const heading = document.createElement("div");
-  heading.className = "tool-label";
-  heading.textContent = label;
-  const pre = document.createElement("pre");
-  pre.className = `tool-output ${streaming ? "tool-output-streaming" : "tool-output-final"}`;
-  pre.tabIndex = 0;
-  pre.setAttribute("aria-label", label);
-  pre.textContent = value;
-  root.append(heading, pre);
-  return root;
 }
 
 function toolStatus(block: ToolCardBlock): "running" | "thinking" | "stopped" | "failed" | "succeeded" | "pending" {

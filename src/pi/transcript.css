@@ -51,7 +51,8 @@ details { margin:8px 0; border:0; border-radius:0; padding:0; }
 .tool-card, .tool-raw-inputs { border:0; padding:4px 0; background:transparent; position:relative; }
 :is(.tool-card, .tool-raw-inputs)[open]::after { content:""; position:absolute; left:3px; top:calc(1.5em + 8px); bottom:4px; width:1px; pointer-events:none; background:var(--vscode-editorIndentGuide-background1, color-mix(in srgb, var(--vscode-descriptionForeground) 35%, transparent)); }
 .tool-card .tool-raw-inputs > pre { margin-left:14px; }
-.tool-card > .reasoning-body, .tool-card > .tool-section, .tool-card > .skill-body { margin-left:14px; }
+.card-plugin-summary { display:contents; }
+.tool-card > .reasoning-body, .tool-card > .tool-section, .tool-card > .skill-body, .card-plugin-body > .tool-section { margin-left:14px; }
 .skill-invocation > :first-child { margin-top:0; } .skill-invocation > :last-child { margin-bottom:0; }
 .skill-card .skill-name { font-weight:600; } .skill-location { margin:6px 0; overflow-wrap:anywhere; color:var(--vscode-descriptionForeground); font-family:var(--vscode-editor-font-family, monospace), monospace; font-size:.9em; }
 .tool-card > .tool-raw-inputs { margin-left:14px; }

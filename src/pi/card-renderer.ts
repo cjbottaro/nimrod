@@ -1,4 +1,4 @@
-/** Internal presentation-only contract. Pi lifecycle and mounted DOM stay in the host. */
+/** Internal pure-presentation helpers for the DOM adapter; not the executable plugin API. */
 export interface CardSection {
   key: string;
   label: string;
