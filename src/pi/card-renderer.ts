@@ -3,7 +3,7 @@ export interface CardSection {
   key: string;
   label: string;
   text: string;
-  format?: 'text' | 'markdown';
+  format?: 'text' | 'markdown' | 'diff';
 }
 
 export interface CardPresentation {
@@ -32,7 +32,7 @@ export function validatePresentation(value: CardPresentation): CardPresentation 
   for (const section of value.sections) {
     if (!section || typeof section.key !== 'string' || !section.key || keys.has(section.key)
       || typeof section.label !== 'string' || typeof section.text !== 'string'
-      || (section.format !== undefined && !['text', 'markdown'].includes(section.format))) throw new Error('Invalid card section');
+      || (section.format !== undefined && !['text', 'markdown', 'diff'].includes(section.format))) throw new Error('Invalid card section');
     keys.add(section.key);
   }
   if (value.members !== undefined) {
