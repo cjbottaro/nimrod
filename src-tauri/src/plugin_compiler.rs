@@ -66,6 +66,7 @@ pub struct Compiler {
     pub cache: PathBuf,
     gate: Arc<Mutex<()>>,
     runs: Arc<AtomicUsize>,
+    stopping: tokio_util::sync::CancellationToken,
 }
 
 fn digest(bytes: &[u8]) -> String {
@@ -328,6 +329,7 @@ impl Compiler {
             cache,
             gate: Arc::new(Mutex::new(())),
             runs: Arc::new(AtomicUsize::new(0)),
+            stopping: tokio_util::sync::CancellationToken::new(),
         }
     }
     pub fn bundled(cache: PathBuf) -> Self {
@@ -347,6 +349,10 @@ impl Compiler {
             sidecar.unwrap_or_else(|| PathBuf::from(env!("NIMROD_PLUGIN_COMPILER"))),
             cache,
         )
+    }
+    pub async fn shutdown(&self) {
+        self.stopping.cancel();
+        let _guard = self.gate.lock().await;
     }
     fn identity(&self) -> Result<String, String> {
         Ok(digest(
@@ -407,6 +413,9 @@ impl Compiler {
         entry: &str,
         identity: &str,
     ) -> Result<Bundle, String> {
+        if self.stopping.is_cancelled() {
+            return Err("Plugin compiler is shutting down".into());
+        }
         let root = root.canonicalize().map_err(|e| e.to_string())?;
         let path = resolve_entry(&root, entry)?;
         fs::create_dir_all(&self.cache).map_err(|e| e.to_string())?;
@@ -448,6 +457,9 @@ impl Compiler {
         for _ in 0..3 {
             let before = snapshot(&root, &known)?;
             self.runs.fetch_add(1, Ordering::Relaxed);
+            if self.stopping.is_cancelled() {
+                return Err("Plugin compiler is shutting down".into());
+            }
             let mut child = Command::new(&self.binary)
                 .current_dir(&root)
                 .arg(&path)
@@ -466,10 +478,13 @@ impl Compiler {
                 .ok_or("Missing compiler error pipe")?
                 .take(8192);
             let mut errors = Vec::new();
-            let result = timeout(Duration::from_secs(20), async {
-                tokio::join!(child.wait(), stderr.read_to_end(&mut errors))
-            })
-            .await;
+            let result = tokio::select! {
+                result = timeout(Duration::from_secs(20), async { tokio::join!(child.wait(), stderr.read_to_end(&mut errors)) }) => result,
+                _ = self.stopping.cancelled() => {
+                    let _ = child.kill().await; let _ = child.wait().await;
+                    return Err("Owned plugin compiler stopped for app shutdown".into());
+                }
+            };
             let (status, read) = match result {
                 Ok(result) => result,
                 Err(_) => {

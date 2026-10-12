@@ -23,7 +23,8 @@ test('session shortcut defaults open Switch, Resume and New named directly witho
     await page.keyboard.press(primary + '+Shift+P');
     const commands = page.locator('#palette-list [role=option]');
     await expect(commands).not.toHaveCount(0);
-    expect(await commands.count() - 1).toBe(await commands.locator('kbd').count()); // Select theme is bindable, intentionally unbound by default.
+    expect(await commands.count() - 2).toBe(await commands.locator('kbd').count()); // Theme and plugin reload are bindable, intentionally unbound by default.
+    await expect(commands.filter({ hasText: 'Reload card plugins' }).locator('kbd')).toHaveCount(0);
     await expect(page.locator('#palette-list')).not.toContainText('New offline demo');
     await expect(page.locator('#palette-list')).not.toContainText('Open session file');
     await page.keyboard.press('Escape');

@@ -22,7 +22,7 @@ type TestWindow = Window & {
 export const visible = (id: string) => `.session-view:not([hidden]) [data-pi-id="${id}"]`;
 
 /** Real app bundle and independent offline demo children. Never starts Pi. */
-export async function demoFixture(page: Page, appState: Record<string, unknown> = {}, catalog: { path: string; sessionId: string; name: string; preview: string; modified: number; lastUserMessageAt?: number }[] = [], typingOptions?: { drafts: Record<string, unknown>; persistent: boolean }, pluginOptions?: { settings: string; packages: Record<string, string> }, fixtureOptions?: { tool?: 'edit'; enforceCsp?: boolean }) {
+export async function demoFixture(page: Page, appState: Record<string, unknown> = {}, catalog: { path: string; sessionId: string; name: string; preview: string; modified: number; lastUserMessageAt?: number }[] = [], typingOptions?: { drafts: Record<string, unknown>; persistent: boolean }, pluginOptions?: { settings: string; packages: Record<string, string>; personal?: () => Promise<import('../../src/pi/card-plugins/catalog').PersonalBundles> }, fixtureOptions?: { tool?: 'edit'; enforceCsp?: boolean }) {
   const result = await build({ entryPoints: ['src/main.ts'], bundle: true, format: 'iife', platform: 'browser', write: false,
     loader: { '.css': 'empty' }, plugins: [{ name: 'raw', setup(builder) {
       builder.onResolve({ filter: /\.html\?raw$/ }, args => ({ path: path.resolve(args.resolveDir, args.path.replace('?raw', '')), namespace: 'raw' }));
@@ -75,6 +75,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 1;
     if (command.startsWith('preferences_') || command === 'record_command_usage') return preferences.invoke(command, args);
     if (command === 'plugin:clipboard-manager|write_text' || command === 'open_card_link' || command === 'open_code_popout') return; // Recorded presentation actions, no OS side effects.
+    if (command === 'load_personal_card_plugins') return pluginOptions?.personal?.() ?? { entries: [], plugins: [], warnings: [] };
     if (command === 'read_card_plugin_module') {
       const name = String(args.name); const manifestText = pluginOptions?.packages[name];
       // Native trust uses current settings, not the initial fixture options.

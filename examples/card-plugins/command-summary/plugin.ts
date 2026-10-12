@@ -3,6 +3,7 @@ import type { CardPlugin, ToolCardData } from '../../../src/card-plugin-api';
 const plugin: CardPlugin<ToolCardData> = {
   apiVersion: 2,
   id: 'example.command-summary',
+  tools: ['bash', 'shell', 'terminal'],
   supports: () => true,
   mount(context) {
     const doc = context.document;

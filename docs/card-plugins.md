@@ -1,28 +1,74 @@
 # Card plugins
 
-**Status: implemented for bundled renderers, trusted TypeScript/JavaScript tool plugins, and optional declarative JSON plugins.** External executable plugins use the same mounted DOM API as bundled cards; JSON is their manifest, not a renderer limitation.
+**Status: implemented.** Personal TypeScript plugins load automatically, using the same mounted DOM API as bundled cards. Nimrod compiles/bundles them internally and caches the result. No manual JS build, manifest or per-file settings are required for this workflow.
 
-Pi extensions define agent capabilities; Nimrod card plugins define their transcript presentation. Core owns identity, placement, authoritative status, outer disclosure, focus, output caps, scrolling and raw recovery. Plugins own content inside explicit summary/body slots and can provide interactive presentation controls.
+Pi extensions define agent capabilities; Nimrod card plugins define their transcript presentation. Core owns identity, placement, authoritative status, outer disclosure, focus, output caps, scrolling and raw recovery. Plugins own content inside summary/body slots and can provide interactive presentation controls.
 
-## Requested edit previews
+## Personal TypeScript plugins
 
-Edit cards show **Requested edit** previews from structured `oldText`/`newText` substitutions. Removed and added text is highlighted; **Copy requested diff** copies substitutions without executing anything. These are **not applied-file diffs**: rejected/interrupted edits do not imply any file change. Raw inputs and Pi results remain readable.
+Place a `.ts` or `.tsx` file here:
 
-## Install an executable plugin
+```text
+~/.config/nimrod/card-plugins/my-tool.ts
+```
 
-1. Review its compiled JavaScript. The initial execution model is **trusted and in-process, not sandboxed**; installed code can reach webview globals.
-2. Put the JSON manifest and its self-contained `.js`/`.mjs` entry beside each other under `card-plugins/` next to `settings.json` (normally `~/.config/nimrod/card-plugins/`; absolute XDG config roots apply).
-3. List the manifest in settings **and explicitly trust it**:
+Or use a directory entry point for a multi-file plugin:
+
+```text
+~/.config/nimrod/card-plugins/my-tool/index.ts
+```
+
+The folder is next to the resolved `settings.json`; absolute XDG config roots apply. Discovery is shallow: direct TS/TSX files and immediate directories with `index.ts`/`index.tsx`. Hidden entries, `.d.ts`, `node_modules`, entry symlinks and arbitrary deeper/config-tree files are not autoloaded. Local imported helpers can live in subdirectories without an entry point.
+
+The default export supplies its own metadata:
+
+```ts
+export default {
+  apiVersion: 2,
+  id: 'example.my-tool',
+  tools: ['my_tool'],
+  supports: () => true,
+  mount(context) {
+    // Build your summary/body DOM and return update/dispose hooks.
+    return { update(data, state) {}, dispose() {} };
+  },
+};
+```
+
+The complete [command-summary example](../examples/card-plugins/command-summary/plugin.ts) adds custom HTML, a local note field and Copy. Copy it as `command-summary.ts` or `command-summary/index.ts` in the personal directory; its type-only SDK import is erased during loading. For editor/type checking, see the [authoring guide](card-plugin-api.md).
+
+**Placing code in this dedicated personal directory installs and trusts it**, like personal Pi extensions. It executes in Nimrod's webview, **not Node and not a sandbox**. Keep module initialization side-effect-free; manage per-card resources in mount/dispose. No project-level discovery or implicit project trust is introduced. To disable all personal autoloading, set `"cards.autoLoad": false` and reload/reopen the window. Manifest packages retain their separate trust rules.
+
+## Startup, reload and caching
+
+Plugins load in the background at window startup; unrelated boot, draft restoration and session controls do not wait for compilation. Before a plugin finishes loading, new cards may use bundled rendering. Those already-mounted cards keep their renderer; later cards use the refreshed catalog.
+
+Run **Reload card plugins** in the command palette after edits/additions/removals. It is bindable in Settings → Keybindings with no default shortcut. Settings shows loading status, loaded/cache-hit counts and errors. Reload does not restart Pi, send/replay prompts, change drafts, navigate or rebuild cards you're inspecting. Start a new tool invocation/window when you need to see a refreshed renderer. File changes are not watched continuously.
+
+First load transpiles TypeScript and bundles static local imports and already-installed browser-compatible dependencies using Nimrod's native esbuild helper. No Node daemon, npm install, package lifecycle script or download runs during loading. Node builtins, external runtime imports, extra CSS/asset outputs and implicit tsconfig/alias configuration are unsupported; output is fixed browser ESM targeting ES2022. Compilation is not type checking.
+
+Bundles are cached under `~/.cache/nimrod/card-plugins/` (absolute `XDG_CACHE_HOME` applies; empty/relative roots fall back to home). Unchanged starts reuse the disk bundle without spawning a compiler. Validation covers entry/import contents, dependency resolution inventories, package metadata/lockfiles, compiler/options and SDK contract—not just timestamps. Conservative metadata changes may rebuild. Warm starts still validate inputs and execute module initialization; they do not restore a running plugin instance.
+
+Corrupt/stale caches rebuild. Failed edits do not execute the old bundle as a fallback. Deleting the cache simply causes recompilation. Native reads/cache publication are bounded: 50 personal entries, 1 MiB JS bundle, 8 MiB per input, 4096 inputs, 100,000 entries per resolution tree and 20s per compiler attempt. Limit/compile errors are reported, not silently truncated. Source files are not locked against external editors.
+
+## Matching and overrides
+
+`tools` contains normalized exact names: Nimrod lowercases the tool name and takes its final namespace component (`functions.read` matches `read`). Explicit manifest packages retain their configured order/precedence; then personal entries use sorted relative-path order; then bundled rendering. Duplicate IDs are rejected. For personal sources, metadata is known only after evaluating trusted code, so duplicate detection does not undo module-global effects.
+
+`cards.renderers` maps normalized tool names to renderer IDs. Bundled choices are `nimrod.tool`, `nimrod.edit-preview` and `nimrod.raw`. Missing/incompatible explicit choices use raw fallback rather than silently choosing another plugin.
+
+Already-mounted cards retain their renderer on reload. Disabling autoload or removing an entry on reload stops its managed callbacks/actions on the next event/update, disposing that card to raw fallback. Unmanaged/global effects or already accepted native actions cannot be undone; reopen the window for full webview teardown.
+
+## Existing manifest packages
+
+Compiled-JS API-v2 manifests remain supported for distribution/compatibility. Put the `.json` manifest and its self-contained `.js`/`.mjs` entry together in the personal directory and explicitly enable/trust the manifest:
 
 ```jsonc
 {
   "cards.plugins": ["command-summary.json"],
-  "cards.trustedPlugins": ["command-summary.json"],
-  "cards.renderers": { "bash": "example.command-summary" }
+  "cards.trustedPlugins": ["command-summary.json"]
 }
 ```
-
-The [command-summary example](../examples/card-plugins/command-summary/plugin.ts) mounts custom HTML, retains a local note through streaming and provides Copy. Its manifest is:
 
 ```json
 {
@@ -33,46 +79,16 @@ The [command-summary example](../examples/card-plugins/command-summary/plugin.ts
 }
 ```
 
-Use the [authoring API guide](card-plugin-api.md) and [example bundling instructions](../CONTRIBUTING.md#card-plugin-examples). Nimrod loads compiled browser ESM; it does not compile TypeScript or resolve npm imports at runtime.
+These JS files are not automatically discovered. Entry/manifest names cannot include paths or URLs; files must not be symlinks. Limits are 50 listed/trusted manifests, 256 KiB per manifest and 1 MiB per entry. Unknown versions, mismatched exports, missing files and failed imports are isolated and reported.
 
-Packages are explicitly listed: no directory scan, remote download, automatic install or automatic trust. Entry names and manifest names cannot include paths/URLs. Symlink files are unsupported. Limits are 50 listed/trusted manifests, 256 KiB per manifest and 1 MiB per executable entry. Unsupported versions, mismatched module IDs/exports, failed imports and missing files appear in Settings without blocking ordinary cards.
+API-v1 declarative JSON remains an optional no-executable-code adapter: `id`, `tools`, optional title/preview templates and keyed sections using own-property JSON pointers such as `{{/arguments/path}}`. Formats are literal `text`/`diff`, not HTML. It requires `cards.plugins` but no executable trust. Limits remain 32 sections, 16,384 characters per template and 2 Mi characters per expanded presentation; code/CSS/actions and invalid pointers are rejected.
 
-There is no sandbox or enforced CSS/resource isolation. Supported APIs provide safe Markdown/code, Copy, validated links/files, Pop out, managed events, output registration and layout mutation—not agent execution. Exception recovery cannot prevent malicious/global effects or infinite loops. Trust applies to that manifest filename's code on future loads, including local file edits; it is not a signature/hash approval.
+## Requested edits and recovery
 
-## Matching, updates and trust removal
+Bundled edit cards show **Requested edit** previews and **Copy requested diff** from structured `oldText`/`newText` substitutions. They are **not applied-file diffs**: rejected/interrupted calls imply no file changes.
 
-`tools` contains normalized exact names: Nimrod lowercases a tool name and takes its final namespace component (`functions.read` matches `read`). Without an override, the first matching successfully loaded package in `cards.plugins` order wins, then the bundled renderer. Later duplicate IDs are rejected before their code is loaded.
+Core retains raw inputs and execution/final output independently of custom DOM. Missing/incompatible/failed renderers recover within the affected card without rebuilding healthy siblings. Historical results remain readable. Registered output viewports retain core caps/reading intent; later layout changes should use managed mutation.
 
-`cards.renderers` maps normalized tool names to renderer IDs. Bundled tool choices are `nimrod.tool` (generic), `nimrod.edit-preview` (edit substitutions) and `nimrod.raw` (raw fallback). An explicitly selected missing/incompatible renderer uses raw fallback instead of silently selecting another plugin.
+Structured/non-text Pi result metadata, external reasoning/parallel matching, agent-affecting actions, package installation UI and continuous hot reload remain follow-ons. Controlled slots/capabilities are conventions for trusted code, not confinement from malicious/global effects or blocked JavaScript.
 
-Packages load at window startup and when any of `cards.plugins`, `cards.trustedPlugins` or `cards.renderers` changes. Package-only file edits are not watched: reopen the window or remove/re-add the manifest in settings. Already mounted cards keep their selected renderer; new shells use the current catalog. No loading/configuration operation connects Pi, submits a prompt or replays one.
-
-Removing an executable package from the enabled/trusted list prevents new code loads and stops its existing **managed** callbacks/actions on the next event/update, disposing that card to raw fallback. It cannot undo module-global effects or forcibly cancel arbitrary code. Reopen the window for full webview teardown. Renderer-override changes alone do not rebuild inspected cards.
-
-External matching currently targets tool cards; reasoning/parallel customization, installation UI, package-only hot reload and agent-affecting actions remain follow-ons.
-
-## Optional declarative plugins
-
-API v1 declarations remain a no-executable-code convenience adapter, using the same DOM lifecycle internally. They require no `cards.trustedPlugins` entry:
-
-```json
-{
-  "apiVersion": 1,
-  "id": "example.read-preview",
-  "tools": ["read"],
-  "preview": "Reading {{/arguments/path}}",
-  "sections": [
-    { "key": "request", "label": "Requested file", "template": "{{/arguments/path}}", "format": "text" }
-  ]
-}
-```
-
-List its manifest filename in `cards.plugins`. Templates use own-property JSON pointers (`~0`/`~1` escapes supported); missing/null fields become empty text, objects/arrays become JSON. Arguments may still be streamed text until structured inputs arrive. Formats are literal `text` or `diff` (`+`/`-` colors), not HTML or external Markdown. Limits: 32 sections, 16,384 characters per template and 2 Mi characters per expanded presentation. Unknown fields, code/CSS/actions, invalid pointers and incompatible versions are rejected.
-
-## Recovery and verification boundaries
-
-Core retains raw inputs and execution/final output independently of custom DOM. Missing, incompatible or failed renderers recover within the affected card without rebuilding healthy siblings. Historical results remain readable without their plugin. Registered output viewports retain core scrolling/caps; plugins must use the managed mutation API for later layout changes.
-
-Pi result metadata and non-text blocks are not currently retained for plugins; `resultOutput` is text. Rich custom Pi content still needs a separate transport/history design.
-
-Offline DOM/WebKit/CSP and native filesystem fixtures do not establish packaged-app acceptance. Native macOS executable loading/actions/focus and Linux behavior remain to be validated; Windows is a possible future target.
+Offline compiler, DOM/WebKit/CSP and filesystem fixtures are not packaged-app acceptance. Native sidecar signing/execution, module loading/actions/focus and Linux behavior remain platform validation; Windows remains a possible future target.

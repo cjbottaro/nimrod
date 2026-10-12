@@ -5,6 +5,7 @@ export const ACTIONS = [
   { id: 'temporary', label: 'New temporary session', scope: 'project', defaults: ['primary+shift+n'] },
   { id: 'delete', label: 'Delete session tree…', scope: 'project', defaults: ['primary+backspace'] },
   { id: 'delete-sessions', label: 'Delete sessions…', scope: 'project', defaults: ['primary+shift+backspace'] },
+  { id: 'reload-card-plugins', label: 'Reload card plugins', scope: 'project', defaults: [] },
   { id: 'select-theme', label: 'Select theme…', scope: 'project', defaults: [] },
   { id: 'model', label: 'Select model…', scope: 'project', defaults: ['primary+m'] },
   { id: 'thinking', label: 'Select thinking level…', keywords: 'effort reasoning', scope: 'project', defaults: ['primary+e'] },

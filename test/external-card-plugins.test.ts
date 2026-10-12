@@ -29,7 +29,7 @@ test('oversized expanded templates fail to raw recovery rather than multiplying 
 });
 
 test('settings accept only local package filenames and normalized tool overrides', () => {
-  assert.deepEqual(readPluginSettings({}), { files: [], overrides: {}, trusted: [] });
+  assert.deepEqual(readPluginSettings({}), { files: [], overrides: {}, trusted: [], autoLoad: true });
   assert.deepEqual(parseSettings('{"cards.plugins":["read.json"],"cards.renderers":{"read":"example.read"}}')['cards.plugins'], ['read.json']);
   for (const files of [['../x.json'], ['/x.json'], ['x.js'], ['x.json', 'x.json']]) assert.throws(() => readPluginSettings({ 'cards.plugins': files }));
   assert.throws(() => readPluginSettings({ 'cards.renderers': { 'functions.read': 'example.read' } }));

@@ -11,7 +11,8 @@ import { installDeletionReview } from './deletion-review';
 import { SessionDeletion, type DeletionEvent, type DeletionSnapshot } from './session-deletion';
 import { presentActivity } from './pi/activity-state';
 import { listen } from '@tauri-apps/api/event';
-import { CardPluginCatalog } from './pi/card-plugins/catalog';
+import { CardPluginCatalog, type PersonalBundles } from './pi/card-plugins/catalog';
+import { installCardPluginLoading } from './card-plugin-loading';
 import { installPreferences, type PreferencesSnapshot } from './preferences';
 import { open } from '@tauri-apps/plugin-dialog';
 import { AttachmentStore } from './attachment-store';
@@ -63,17 +64,22 @@ const preferences = await installPreferences({
 required('settings-file-path').textContent = preferences.paths.settings;
 required('state-file-path').textContent = preferences.paths.state;
 const cardPlugins = new CardPluginCatalog();
-let pluginSignature = '';
-async function reloadCardPlugins(): Promise<void> {
-  const config = preferences.cardPlugins();
-  const signature = JSON.stringify(config);
-  if (signature === pluginSignature) return;
-  pluginSignature = signature;
-  await cardPlugins.reload(config, name => invoke<string>('read_card_plugin', { name }), message => {
-    const notice = required('card-plugin-error'); notice.hidden = !message; notice.textContent = message;
-  }, { readModule: (name, expectedManifest) => invoke<string>('read_card_plugin_module', { name, expectedManifest }) });
-}
-await reloadCardPlugins();
+const pluginLoading = installCardPluginLoading(cardPlugins, {
+  config: () => preferences.cardPlugins(),
+  read: name => invoke<string>('read_card_plugin', { name }),
+  executable: {
+    readModule: (name, expectedManifest) => invoke<string>('read_card_plugin_module', { name, expectedManifest }),
+    loadPersonal: () => invoke<PersonalBundles>('load_personal_card_plugins'),
+  },
+  loading: () => { required('card-plugin-status').textContent = 'Loading card plugins…'; },
+  complete: (report, errors) => {
+    required('card-plugin-status').textContent = `Card plugins: ${report.personalLoaded} personal (${report.cacheHits} cached), ${report.manifestLoaded} manifest packages. Reload affects new cards.`;
+    const notice = required('card-plugin-error'); notice.hidden = !errors; notice.textContent = errors;
+  },
+});
+function reloadCardPlugins(force = false): Promise<void> { return pluginLoading.reload(force); }
+// Compiler/module loading must not gate project/session boot or input restoration.
+void reloadCardPlugins();
 const welcome = required('welcome'), conversation = required('conversation');
 const error = required('launch-error'), cwd = required<HTMLInputElement>('cwd');
 const dialogs = new Dialogs();
@@ -331,7 +337,7 @@ const disposeTimeRefresh = installSessionTimeRefresh(window, () => { for (const 
 window.addEventListener('unload', () => {
   unloading = true;
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
-  cardPlugins.dispose();
+  pluginLoading.dispose();
   sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
   for (const tab of tabs) { tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.session?.rpc.disconnect('Window closed'); }
   keybindingDispatch.dispose(); keybindingEditor.dispose(); settingsNavigation.dispose(); settingsSidebarResize.dispose();
@@ -624,6 +630,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     const active = presented;
     return [
     { id: 'open-recent-project', label: 'Open recent project…', detail: 'Open or focus a previously opened project', next: true, run: () => palette.projects() },
+    { id: 'reload-card-plugins', label: 'Reload card plugins', detail: 'Rescan personal sources and refresh renderers for new cards; no Pi restart', run: () => reloadCardPlugins(true) },
     { id: 'select-theme', label: 'Select theme…', detail: 'Preview bundled VS Code themes and saved imports', next: true, run: () => pickTheme() },
     { id: 'resume', label: 'Resume session…', detail: 'Open a saved conversation in this project', next: true, run: () => palette.sessions() },
     { id: 'delete-sessions', label: 'Delete sessions…', detail: 'Repeatedly review and delete saved session trees in this project', next: true, run: () => palette.deleteSessions() },
@@ -1191,6 +1198,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'temporary': return newSession('temporary');
       case 'delete': return presented ? deleteSession(presented) : undefined;
       case 'delete-sessions': return palette.deleteSessions();
+      case 'reload-card-plugins': return reloadCardPlugins(true);
       case 'select-theme': return pickTheme();
       case 'model': return presented ? pickPreference(presented, 'model') : undefined;
       case 'thinking': return presented ? pickPreference(presented, 'thinking') : undefined;

@@ -4,22 +4,32 @@ import type { ToolCardRenderer, ToolCardBlock } from '../tool-card';
 import { defaultToolRenderer, rawToolPresentation } from './tool';
 import { bundledToolRenderer } from './registry';
 import { declarativeRenderer, parsePluginPackage, type PluginSettings } from './declarative';
-import { parseExecutableManifest, importCardModule, executableRenderer } from './executable';
+import { parseExecutableManifest, importCardModule, executableRenderer, personalRenderer } from './executable';
 
+export interface PersonalBundles {
+  entries: string[];
+  plugins: { entry: string; source: string; cacheHit: boolean }[];
+  warnings: string[];
+}
+export interface CatalogReport { personalLoaded: number; cacheHits: number; manifestLoaded: number; }
 export interface ExecutablePluginHost {
+  loadPersonal?(): Promise<PersonalBundles>;
   readModule(name: string, expectedManifest: string): Promise<string>;
   importModule?(source: string): Promise<unknown>;
 }
-interface Entry { tools: string[]; renderer: DomCardRenderer<ToolCardBlock>; file: string; executable: boolean; }
+interface Entry { tools: string[]; renderer: DomCardRenderer<ToolCardBlock>; file: string; executable: boolean; personal?: boolean; }
 export class CardPluginCatalog {
   private generation = 0;
   private enabled = new Set<string>();
   private trusted = new Set<string>();
+  private personal = new Set<string>();
+  private autoLoad = true;
   private config: PluginSettings = { files: [], overrides: {}, trusted: [] };
   private packages = new Map<string, Entry>();
 
-  async reload(config: PluginSettings, read: (name: string) => Promise<string>, report: (message: string) => void, host?: ExecutablePluginHost): Promise<void> {
+  async reload(config: PluginSettings, read: (name: string) => Promise<string>, report: (message: string) => void, host?: ExecutablePluginHost): Promise<CatalogReport | undefined> {
     const generation = ++this.generation;
+    this.autoLoad = config.autoLoad !== false;
     this.enabled = new Set(config.files); this.trusted = new Set(config.trusted ?? []);
     const packages = new Map<string, Entry>();
     const errors: string[] = [];
@@ -51,12 +61,37 @@ export class CardPluginCatalog {
         }
       } catch (error) { errors.push(`${file}: ${String(error)}`); }
     }
+    let personalLoaded = 0; let cacheHits = 0;
+    const manifestLoaded = packages.size;
+    if (this.autoLoad && host?.loadPersonal) {
+      try {
+        const result = await host.loadPersonal();
+        if (generation !== this.generation) return;
+        this.personal = new Set(result.entries);
+        errors.push(...result.warnings);
+        for (const item of result.plugins) {
+          try {
+            if (generation !== this.generation) return;
+            const module = await (host.importModule ?? importCardModule)(item.source);
+            if (generation !== this.generation) return;
+            const { renderer, tools } = personalRenderer(module);
+            if (packages.has(renderer.id)) throw new Error(`Duplicate renderer ID ${renderer.id}`);
+            packages.set(renderer.id, { renderer, tools, file: item.entry, executable: true, personal: true });
+            personalLoaded++; if (item.cacheHit) cacheHits++;
+          } catch (error) { errors.push(`${item.entry}: ${String(error)}`); }
+        }
+      } catch (error) {
+        if (generation !== this.generation) return;
+        this.personal.clear(); errors.push(`Personal plugins: ${String(error)}`);
+      }
+    } else if (!this.autoLoad) this.personal.clear();
     if (generation !== this.generation) return;
     this.config = config; this.packages = packages;
     report(errors.join('\n'));
+    return { personalLoaded, cacheHits, manifestLoaded };
   }
 
-  dispose(): void { this.generation++; this.enabled.clear(); this.trusted.clear(); this.packages.clear(); }
+  dispose(): void { this.generation++; this.enabled.clear(); this.trusted.clear(); this.personal.clear(); this.packages.clear(); }
 
   select(data: Readonly<ToolCardBlock>): ToolCardRenderer {
     const name = typeof data.name === 'string' ? data.name.trim().toLowerCase().split(/[.:/]/).pop() || '' : '';
@@ -68,7 +103,7 @@ export class CardPluginCatalog {
     if (entry && entry.tools.includes(name)) {
       if (!entry.executable) return entry.renderer;
       // Fixed renderer selection, but managed work must still honor current package trust.
-      return { ...entry.renderer, supports: value => this.enabled.has(entry.file) && this.trusted.has(entry.file) && entry.renderer.supports(value) };
+      return { ...entry.renderer, supports: value => (entry.personal ? this.autoLoad && this.personal.has(entry.file) : this.enabled.has(entry.file) && this.trusted.has(entry.file)) && entry.renderer.supports(value) };
     }
     if (override) return { apiVersion: 2, id: override, supports: () => false, mount() { throw new Error('Missing or incompatible renderer'); } };
     return bundled;

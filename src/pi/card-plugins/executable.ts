@@ -13,7 +13,15 @@ export function parseExecutableManifest(text: string): ExecutableManifest {
   return value as ExecutableManifest;
 }
 
-/** Trusted, self-contained ESM. No eval or runtime TypeScript compilation. */
+export function personalRenderer(module: unknown): { renderer: DomCardRenderer<ToolCardBlock>; tools: string[] } {
+  const definition = module && typeof module === 'object' ? (module as { default?: unknown }).default : undefined;
+  if (!definition || typeof definition !== 'object') throw new Error('Personal source must default-export a card plugin');
+  const candidate = definition as { apiVersion?: unknown; id?: unknown; tools?: unknown };
+  const manifest = parseExecutableManifest(JSON.stringify({ apiVersion: candidate.apiVersion, id: candidate.id, tools: candidate.tools, entry: 'personal.js' }));
+  return { renderer: executableRenderer(manifest, module), tools: manifest.tools };
+}
+
+/** Evaluate already-bundled trusted ESM; compilation, when needed, is native. */
 export async function importCardModule(source: string): Promise<unknown> {
   if (typeof source !== 'string' || new TextEncoder().encode(source).length > 1024 * 1024) throw new Error('Card module exceeds 1 MiB');
   const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
