@@ -25,6 +25,47 @@ test('one strip keeps its position and remains actionable through Settings and n
   } finally { await fixture.close(); }
 });
 
+test('notification timeout has an accessible Dismiss control in Settings and the conversation without retrying', async ({ page }) => {
+  const fixture = await demoFixture(page);
+  try {
+    await page.evaluate(() => {
+      const state = window as unknown as { __fixtureHost(command: string, args: Record<string, unknown>): Promise<unknown> };
+      const original = state.__fixtureHost;
+      state.__fixtureHost = async (command, args) => {
+        if (command === 'test_notification') throw new Error('macOS notification settings lookup timed out; nothing will be retried');
+        return original(command, args);
+      };
+    });
+    const strip = page.locator('#application-notices');
+    const dismiss = strip.getByRole('button', { name: 'Dismiss Desktop notifications', exact: true });
+    for (const surface of ['Settings', 'conversation']) {
+      await page.locator('#open-settings').click();
+      await page.locator('#settings-category-notifications').click();
+      await page.locator('#notification-test').click();
+      await expect(strip).toContainText('macOS notification settings lookup timed out');
+      if (surface === 'conversation') await page.locator('#settings-back').click();
+      await expect(dismiss).toBeInViewport();
+      await expect(dismiss).toBeEnabled();
+      const calls = fixture.calls.length;
+      // WebKit pointer clicks need not focus buttons; exercise keyboard dismissal
+      // from a known Settings focus owner as well as pointer dismissal outside it.
+      if (surface === 'Settings') {
+        await page.locator('#notification-test').focus();
+        await dismiss.focus();
+        await page.keyboard.press('Enter');
+      } else await dismiss.click();
+      await expect(strip).toBeHidden();
+      expect(fixture.calls.length).toBe(calls);
+      if (surface === 'Settings') {
+        await expect(page.locator('#settings-page')).toBeVisible();
+        await expect(page.locator('#notification-test')).toBeFocused();
+        await page.locator('#settings-back').click();
+      }
+    }
+    expect(fixture.errors).toEqual([]);
+  } finally { await fixture.close(); }
+});
+
 test('runtime validation uses the strip, not an inline error or native validation popup', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {

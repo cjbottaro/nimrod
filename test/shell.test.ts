@@ -1748,13 +1748,19 @@ test('diagnostic read failure does not misreport an already accepted test as a d
   } finally { f.dom.window.close(); }
 });
 
-test('native notification failures use one shared notice in Settings', async () => {
-  const f = await fixture(undefined, { windowWorkspace: '/project', notificationError: 'fixture macOS submission failure' });
+test('native notification timeouts can be dismissed in Settings without retrying or affecting the session', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', notificationError: 'macOS notification settings lookup timed out; nothing will be retried' });
   try {
     f.openSettings(); f.element<HTMLButtonElement>('notification-test').click(); await f.tick();
     assert.equal(f.element('notification-status').textContent, '');
-    assert.match(f.element('application-notices').textContent!, /fixture macOS submission failure/);
+    const strip = f.element('application-notices');
+    assert.match(strip.textContent!, /macOS notification settings lookup timed out/);
     assert.equal(f.element<HTMLButtonElement>('notification-test').disabled, false);
+    const callsBeforeDismiss = f.calls.length;
+    strip.querySelector<HTMLButtonElement>('button[data-dismiss]')!.click(); await f.tick();
+    assert.equal(strip.hidden, true);
+    assert.equal(f.element<HTMLDialogElement>('settings-page').open, true);
+    assert.equal(f.calls.length, callsBeforeDismiss, 'dismissal must not invoke native operations or retry');
   } finally { f.dom.window.close(); }
 });
 
