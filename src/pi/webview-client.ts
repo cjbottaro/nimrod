@@ -30,6 +30,11 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   const markdown = createSafeMarkdownRenderer(window);
   const messages = required("messages");
   const transcriptViewport = required("transcript-viewport");
+  // One sticky stack keeps multiple queued turns from covering one another.
+  const queuedTurns = document.createElement('div');
+  queuedTurns.className = 'queued-turns';
+  queuedTurns.hidden = true;
+  messages.append(queuedTurns);
   const prompt = required<HTMLTextAreaElement>("prompt");
   const send = required<HTMLButtonElement>("send");
   const attachmentTray = document.createElement('div'); attachmentTray.className = 'composer-attachments'; attachmentTray.setAttribute('aria-label', 'Image attachments');
@@ -72,7 +77,15 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     transcriptScroll.request(transcriptScroll.capture());
   });
   const resizeTranscript = () => transcriptScroll.resize();
-  const transcriptResizeObserver = "ResizeObserver" in window ? new ResizeObserver(resizeTranscript) : undefined;
+  const transcriptResizeObserver = "ResizeObserver" in window ? new ResizeObserver(entries => {
+    const height = entries[0]?.contentRect.height;
+    // Bound to the actual pane, not the window (composer growth and zoom matter).
+    if (height && height > 0) {
+      const maxHeight = `${height * 0.4}px`;
+      if (queuedTurns.style.maxHeight !== maxHeight) queuedTurns.style.maxHeight = maxHeight;
+    }
+    resizeTranscript();
+  }) : undefined;
   transcriptResizeObserver?.observe(transcriptViewport);
   window.addEventListener("resize", resizeTranscript, { passive: true, signal: listeners.signal });
   function dispose(): void {
@@ -345,12 +358,14 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
 
   function renderSteeringStatus(node: HTMLElement, message: DisplayMessage): void {
     let label = node.querySelector<HTMLElement>(".steering-status");
-    if (!message.steeringStatus || message.steeringStatus === "sending" || message.steeringStatus === "pending") { label?.remove(); return; }
+    node.classList.toggle('queued-turn', message.queued === true);
+    node.classList.toggle('sticky-turn', message.sticky === true);
+    if (!message.steeringStatus || (!message.queued && (message.steeringStatus === "sending" || message.steeringStatus === "pending"))) { label?.remove(); return; }
     if (!label) {
       label = element("div", "steering-status");
       node.prepend(label);
     }
-    label.textContent = steeringStatusLabel(message.steeringStatus);
+    label.textContent = message.queued && message.steeringStatus === 'pending' ? 'Queued' : steeringStatusLabel(message.steeringStatus);
     node.setAttribute("aria-label", `User message: ${label.textContent}`);
   }
 
@@ -524,7 +539,8 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     if (queue?.authoritative) {
       const count = queue.steering?.length || 0;
       if (count) queueActivity.append(activityRow("steering", `${count} pending`));
-      for (const text of queue.followUp || []) queueActivity.append(activityRow("queued", text));
+      const followUps = queue.followUp?.length || 0;
+      if (followUps) queueActivity.append(activityRow("queued", `${followUps} pending`));
     } else if (typeof queue?.pendingCount === "number" && queue.pendingCount > 0) {
       queueActivity.append(activityRow("Pi queue", `${queue.pendingCount} message${queue.pendingCount === 1 ? "" : "s"} pending; text unavailable until Pi sends a queue update.`));
     }
@@ -589,23 +605,26 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
         // Recover from a broken incremental patch using the authoritative snapshot.
         for (const entry of rendered.values()) disposeMessageCards(entry.node);
         rendered.clear();
-        messages.replaceChildren();
+        queuedTurns.replaceChildren();
+        messages.replaceChildren(queuedTurns);
         const display = steeringTranscript.project(Array.isArray(snapshot.messages) ? snapshot.messages : []);
         for (const [index, message] of display.entries()) {
           const key = safeText(message.key) || `message-${index}`;
           try {
             const node = renderMessage(message);
-            messages.append(node);
+            if (message.sticky) queuedTurns.append(node);
+            else messages.insertBefore(node, queuedTurns);
             rendered.set(key, { node, signature: JSON.stringify(message) });
           }
           catch (messageError) {
             reportRenderError(messageError);
             const fallback = element("pre", "message error");
             fallback.textContent = `Unable to render this message. Raw content:\n${JSON.stringify(message.content, null, 2)}`;
-            messages.append(fallback);
+            messages.insertBefore(fallback, queuedTurns);
             rendered.set(key, { node: fallback, signature: JSON.stringify(message) });
           }
         }
+        queuedTurns.hidden = queuedTurns.childElementCount === 0;
       }
     });
   }
@@ -620,6 +639,8 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
 
     const nextKeys = new Set<string>();
     const display = steeringTranscript.project(Array.isArray(state.messages) ? state.messages : []);
+    let normalIndex = 0;
+    let stickyIndex = 0;
     display.forEach((message, index) => {
       const key = safeText(message.key) || `message-${index}`;
       nextKeys.add(key);
@@ -635,8 +656,9 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
           rendered.set(key, entry);
         }
       }
-      const currentAtIndex = messages.children.item(index);
-      if (currentAtIndex !== entry.node) messages.insertBefore(entry.node, currentAtIndex || null);
+      const parent = message.sticky ? queuedTurns : messages;
+      const currentAtIndex = parent.children.item(message.sticky ? stickyIndex++ : normalIndex++);
+      if (currentAtIndex !== entry.node) parent.insertBefore(entry.node, currentAtIndex || (parent === messages && queuedTurns.parentElement === messages ? queuedTurns : null));
     });
     for (const [key, entry] of rendered) {
       if (!nextKeys.has(key)) {
@@ -645,6 +667,10 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
         rendered.delete(key);
       }
     }
+    queuedTurns.hidden = queuedTurns.childElementCount === 0;
+    // The stack is always last, after ordinary pending and authoritative turns.
+    if (queuedTurns.hidden) queuedTurns.remove();
+    else if (messages.lastElementChild !== queuedTurns) messages.append(queuedTurns);
     for (const [key, card] of toolCards) {
       if (!card.isConnected) {
         disposeToolCard(card);
@@ -680,8 +706,8 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       return imageContent(await host.attachments.get(image));
     })) : undefined;
     // Slash commands may be controls or expand into different content.
-    if (!imagesReady && mode !== "followUp" && !text.startsWith("/")) {
-      steeringTranscript.begin(id, submittedText);
+    if (!imagesReady && !text.startsWith("/")) {
+      steeringTranscript.begin(id, submittedText, 'sending', undefined, mode === 'followUp' ? 'followUp' : 'steering');
       queueRender(pendingState || displayedState);
     }
     updateComposer(clearDraft(composer));
@@ -694,7 +720,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
           if (disposed || generation !== composerGeneration) return;
           const state = pendingState || displayedState;
           if (deletionLocked || state.compacting || state.sessionUnavailable) throw new Error('Session became unavailable while preparing images. Nothing was sent.');
-          if (mode !== 'followUp') { steeringTranscript.begin(id, submittedText, 'sending', images); queueRender(state); }
+          steeringTranscript.begin(id, submittedText, 'sending', images, mode === 'followUp' ? 'followUp' : 'steering'); queueRender(state);
           post('prompt', { id, text: submittedText, mode, images });
         } catch (error) { if (!disposed && generation === composerGeneration) updateComposer({ ...composer, lastError: String(error) }); }
         finally { if (!disposed && generation === composerGeneration) { preparing--; renderComposer(); } }
@@ -808,6 +834,8 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       for (const entry of rendered.values()) disposeMessageCards(entry.node);
       rendered.clear();
       steeringTranscript = new SteeringTranscript();
+      queuedTurns.replaceChildren();
+      queuedTurns.hidden = true;
       messages.replaceChildren();
       pendingState = undefined;
       displayedState = { sessionUnavailable: true };
@@ -836,7 +864,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       }
       if (data.commands !== undefined) slashCompletion.setCommands(data.commands);
       const state = data.state || {};
-      steeringTranscript.snapshot(state.messages || [], state.queue?.authoritative ? state.queue.steering || [] : undefined);
+      steeringTranscript.snapshot(state.messages || [], state.queue?.authoritative ? state.queue.steering || [] : undefined, state.queue?.authoritative ? state.queue.followUp || [] : undefined);
       if (state.sessionUnavailable) steeringTranscript.disconnect();
       queueRender(state);
     }
@@ -857,6 +885,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     }
     if (data.type === "queueRecovery") {
       steeringTranscript.recover(stringArray(data.steering));
+      steeringTranscript.recover(stringArray(data.followUp), 'followUp');
       queueRender(pendingState || displayedState);
       updateComposer(recoverClearedQueue(composer, stringArray(data.steering), stringArray(data.followUp)));
     }
@@ -973,6 +1002,8 @@ interface ContentBlock {
 
 interface DisplayMessage {
   steeringStatus?: SteeringStatus;
+  queued?: boolean;
+  sticky?: boolean;
   uiPhase?: "thinking" | "stopped";
   key?: string;
   role?: string;

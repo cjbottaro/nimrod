@@ -93,3 +93,62 @@ test('disconnect distinguishes unconfirmed delivery from unknown acceptance; rej
   transcript.snapshot([user('other', 'failed')]);
   assert.equal(transcript.project([user('other', 'failed')]).length, 4);
 });
+
+test('follow-ups reconcile duplicate occurrences without adopting identical steering queue entries', () => {
+  const transcript = new SteeringTranscript();
+  transcript.begin('queued', 'same', 'sending', undefined, 'followUp');
+  transcript.snapshot([], ['same'], ['same', 'same']);
+  assert.equal(transcript.project([]).length, 3);
+  assert.equal(transcript.project([]).filter(message => message.sticky).length, 2);
+  transcript.receipt('queued', 'accepted');
+  transcript.snapshot([], [], []);
+  assert.equal(transcript.project([]).filter(message => message.sticky).length, 2);
+  transcript.recover(['same'], 'followUp');
+  assert.equal(transcript.project([]).filter(message => message.sticky).length, 1);
+  transcript.recover(['same'], 'followUp');
+  assert.equal(transcript.project([]).length, 1);
+  assert.equal(transcript.project([])[0].queued, undefined);
+});
+
+test('steering overtakes an identical follow-up without unpinning it', () => {
+  const transcript = new SteeringTranscript();
+  transcript.begin('queued', 'same', 'sending', undefined, 'followUp');
+  transcript.begin('steer', 'same');
+  transcript.snapshot([], ['same'], ['same']);
+  transcript.snapshot([], [], ['same']);
+  const actual = user('actual', 'same');
+  transcript.snapshot([actual], [], ['same']);
+  assert.equal(transcript.project([actual])[0].key, 'steering:steer');
+  assert.equal(transcript.project([actual])[1].key, 'steering:queued');
+  assert.equal(transcript.project([actual])[1].sticky, true);
+});
+
+test('follow-up user event before receipt adopts identity and unpins without duplication', () => {
+  const transcript = new SteeringTranscript();
+  transcript.begin('queued', 'later', 'sending', undefined, 'followUp');
+  const actual = user('actual', 'later');
+  transcript.snapshot([actual], [], []);
+  transcript.receipt('queued', 'accepted');
+  assert.deepEqual(transcript.project([actual]), [{ ...actual, key: 'steering:queued' }]);
+});
+
+for (const outcome of ['rejected', 'cancelled', 'unknown'] as const) test(`follow-up ${outcome} unpins but retains its status`, () => {
+  const transcript = new SteeringTranscript();
+  transcript.begin('queued', 'later', 'sending', undefined, 'followUp');
+  transcript.receipt('queued', outcome);
+  assert.equal(transcript.project([])[0].sticky, false);
+  assert.equal(transcript.project([])[0].steeringStatus, outcome);
+});
+
+test('follow-up disconnect unpins and image-bearing queue recovery matches text-only occurrences', () => {
+  const transcript = new SteeringTranscript();
+  transcript.begin('queued', '', 'sending', [{ type: 'image', mimeType: 'image/png', data: 'abc' }], 'followUp');
+  transcript.snapshot([], [], ['']);
+  assert.equal(transcript.project([]).length, 1);
+  transcript.receipt('queued', 'accepted');
+  transcript.disconnect();
+  assert.equal(transcript.project([])[0].sticky, false);
+  assert.equal(transcript.project([])[0].steeringStatus, 'interrupted');
+  transcript.recover([''], 'followUp');
+  assert.equal(transcript.project([]).length, 0);
+});

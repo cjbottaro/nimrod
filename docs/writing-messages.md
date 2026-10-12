@@ -18,15 +18,23 @@ Ordinary messages appear in the transcript immediately, without waiting for Pi a
 
 Rejected local turns remain marked **Not sent**; cancelled ones show **Cancelled**, and uncertain ones show **Acceptance unknown**. An acknowledged message disconnected before its actual user event shows **Delivery unconfirmed**. Previews are not saved as conversation history, and nothing retries automatically.
 
-Slash commands do not create literal previews because Pi may handle them as controls or expand their content. Explicit queued follow-ups remain in the Status area.
+Slash commands do not create literal previews because Pi may handle them as controls or expand their content.
 
 ### Steering messages
 
 A steer immediately appears at the bottom of the transcript after live output, with no sending/pending label. Pi’s actual user message reconciles in place without a duplicate turn. Visible or acknowledged does not mean the agent has consumed it.
 
-The Status area shows the authoritative steering count. Explicit follow-up text stays in its queue there.
+The Status area shows the authoritative steering and queued follow-up counts; message text appears in the transcript.
 
 Rejected local steering turns remain marked **Not sent**; the error also appears in the notice strip. Uncertain previews remain labeled **Acceptance unknown**. An acknowledged steer disconnected before confirmed consumption shows **Delivery unconfirmed**. Nothing retries automatically.
+
+### Queued messages
+
+Queued follow-ups appear as user turns pinned to the bottom of the transcript pane, even while you read older history. New assistant/tool output continues above them. Multiple queued turns stack in order; a long stack scrolls independently.
+
+Their indicator changes from **Sending…** to **Queued** when Pi accepts the request. They stay pinned until Pi consumes them as actual user turns, then become ordinary transcript messages in place, without a duplicate. Accepting a message into Pi’s queue is not the same as consuming it.
+
+Rejected, cancelled or uncertain queued sends become non-sticky turns with the same outcome labels as other sends. Disconnect also unpins them with an **Acceptance unknown** or **Delivery unconfirmed** label. Nothing retries automatically, and newer drafts remain unchanged.
 
 ## Stop and recover
 
