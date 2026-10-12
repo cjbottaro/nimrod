@@ -240,7 +240,7 @@ export class PiSession {
     try { images = validateImageContents(message.images); } catch (error) { receipt('rejected', String(error)); return; }
     if (images.length && text.trim().startsWith('/')) { receipt('rejected', 'Image attachments cannot be sent with slash commands.'); return; }
     if (!id || (!text.trim() && !images.length) || text.length > 1_000_000 || this.submission || this.state.sessionUnavailable || this.state.compacting || this.state.modelControls.changing) {
-      receipt('rejected', 'Pi is not ready for this submission. Your draft was kept.'); return;
+      receipt('rejected', 'Pi is not ready for this submission. Nothing was sent.'); return;
     }
     if (/^\/(?:resume|delete|new|fork|clone|tree|reload|quit)(?:\s|$)/.test(text.trim())) {
       receipt('rejected', 'That operation is not implemented in this PoC.'); return;
@@ -279,7 +279,7 @@ export class PiSession {
     const customInstructions = typeof message.customInstructions === 'string' ? message.customInstructions.trim() : undefined;
     const receipt = (outcome: 'accepted' | 'rejected' | 'unknown', error?: string) => this.ui.publish({ type: 'submissionReceipt', id, outcome, error });
     if (!id || (message.customInstructions !== undefined && typeof message.customInstructions !== 'string') || (customInstructions?.length ?? 0) > 1_000_000 || this.compactionRequest || this.submission || this.state.sessionUnavailable || this.state.busy || this.state.compacting) {
-      receipt('rejected', 'Manual compaction is available only while Pi is idle. Your draft was kept.'); return;
+      receipt('rejected', 'Manual compaction is available only while Pi is idle. Nothing was sent.'); return;
     }
     this.compactionRequest = true;
     this.state = { ...this.state, busy: true, compacting: true, status: 'Compacting context…' };

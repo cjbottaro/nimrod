@@ -27,7 +27,8 @@ test('paste previews, removes and sends image-only turns', async ({ page }) => {
     await page.locator(visible('prompt')).press('Enter');
     await expect(page.locator('.session-view:not([hidden]) .message.user .transcript-image img')).toHaveCount(1);
     await expect(tray).toBeHidden();
-    await expect(page.locator('.session-view:not([hidden]) .image-recovery summary')).toHaveText('Image send recovery (1)');
+    await expect(page.locator('.session-view:not([hidden]) .image-recovery')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Restore images', exact: true })).toHaveCount(0);
     await expect(page.locator(visible('prompt'))).toHaveValue('');
     await page.waitForFunction(() => (window as unknown as { __fixtureSettled: number }).__fixtureSettled >= 1);
     expect((await fixture.metrics()).gap).toBeLessThanOrEqual(2);

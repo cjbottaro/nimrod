@@ -22,7 +22,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Pi framing, response order and acknowledgement | [Pi transport](references/pi-transport.md) | [Writing messages](../../../docs/writing-messages.md) |
 | Native per-session drafts, debounced saves and submission durability | [Native drafts](references/native-drafts.md) | [Drafts](../../../docs/drafts.md) |
 | Send/steer/queue, pending turns and recovery | [Composer](references/composer.md) | [Writing messages](../../../docs/writing-messages.md) |
-| Image paste, draft bytes and image recovery | [Image paste](references/image-paste.md) | [Paste images](../../../docs/image-paste.md) |
+| Image paste, draft bytes and send outcomes | [Image paste](references/image-paste.md) | [Paste images](../../../docs/image-paste.md) |
 | Tool/reasoning identity, lifecycle and disclosures | [Transcript cards](references/transcript-cards.md) | [Reading conversations](../../../docs/reading-conversations.md) |
 | Transcript layout, scroll intent, focus and zoom | [Transcript interaction](references/transcript-interaction.md) | [Reading](../../../docs/reading-conversations.md), [Settings](../../../docs/settings.md) |
 | Explicit labels and user-code inference | [Syntax highlighting](references/syntax-highlighting.md) | [Syntax highlighting](../../../docs/syntax-highlighting.md) |

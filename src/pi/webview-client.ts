@@ -34,7 +34,6 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   const send = required<HTMLButtonElement>("send");
   const attachmentTray = document.createElement('div'); attachmentTray.className = 'composer-attachments'; attachmentTray.setAttribute('aria-label', 'Image attachments');
   required('composer').prepend(attachmentTray);
-  const imageRecovery = document.createElement('details'); imageRecovery.className = 'image-recovery'; required('composer').append(imageRecovery);
   const attachmentUrls = new Map<string, string>();
   let composerGeneration = 0;
   let preparing = 0;
@@ -142,7 +141,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   }
 
   function updateComposer(next: ComposerState): void {
-    const draftOnly = next.attachments === composer.attachments && next.imageRecovery === composer.imageRecovery
+    const draftOnly = next.attachments === composer.attachments
       && next.submission === composer.submission && next.lastError === composer.lastError
       && next.recovered === composer.recovered && next.queue === composer.queue;
     const recoveryChanged = next.recovered !== composer.recovered;
@@ -158,7 +157,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   }
 
   function renderAttachments(): void {
-    const signature = JSON.stringify([composer.attachments, composer.imageRecovery, deletionLocked, displayedState.compacting, preparing]);
+    const signature = JSON.stringify([composer.attachments, deletionLocked, displayedState.compacting, preparing]);
     if (signature === attachmentSignature) return;
     attachmentSignature = signature;
     const images = composer.attachments ?? [];
@@ -183,23 +182,6 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       }
     }
     if (preparing) { const status = element('span'); status.textContent = 'Preparing images…'; attachmentTray.append(status); }
-    imageRecovery.replaceChildren(); imageRecovery.hidden = !composer.imageRecovery?.length;
-    if (composer.imageRecovery?.length) {
-      const summary = element('summary'); summary.textContent = `Image send recovery (${composer.imageRecovery.length})`; imageRecovery.append(summary);
-      const label = element('div'); label.textContent = 'Image send recovery — Pi accepted these images, but queue recovery reports text only. Restore only if needed; nothing is retried automatically.'; imageRecovery.append(label);
-      for (const item of composer.imageRecovery) {
-        const row = element('div'); const description = element('span'); description.textContent = `${item.attachments?.length} image(s) · ${item.text.slice(0, 80) || 'Image-only message'}`;
-        const restore = element('button'); restore.type = 'button'; restore.textContent = 'Restore images'; restore.disabled = deletionLocked || displayedState.compacting === true;
-        restore.addEventListener('click', () => {
-          const attachments = [...(composer.attachments ?? []), ...(item.attachments ?? []).filter(image => !composer.attachments?.some(current => current.id === image.id))];
-          try { validateAttachments(attachments); updateComposer({ ...composer, attachments, imageRecovery: composer.imageRecovery?.filter(entry => entry.id !== item.id) }); }
-          catch (error) { updateComposer({ ...composer, lastError: String(error) }); }
-        });
-        const discard = element('button'); discard.type = 'button'; discard.textContent = 'Dismiss'; discard.disabled = deletionLocked;
-        discard.addEventListener('click', () => updateComposer({ ...composer, imageRecovery: composer.imageRecovery?.filter(entry => entry.id !== item.id) }));
-        row.append(description, restore, discard); imageRecovery.append(row);
-      }
-    }
   }
 
   function renderComposer(): void {
@@ -232,11 +214,11 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       submissionNotice.hidden = false;
       submissionNotice.replaceChildren();
       const text = element("span");
-      text.textContent = "Pi did not confirm this message. Check the conversation or queue before allowing another send; it may already be accepted.";
+      text.textContent = "Pi did not confirm whether this message was received. Check the transcript or queue before writing a new message. Nothing was retried automatically.";
       const allow = element("button");
       allow.type = "button";
       allow.dataset.action = "dismiss-unknown";
-      allow.textContent = "Allow another send";
+      allow.textContent = "Write a new message";
       submissionNotice.append(text, allow);
       return;
     }
@@ -537,7 +519,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       queueActivity.append(activityRow("Pi queue", `${queue.pendingCount} message${queue.pendingCount === 1 ? "" : "s"} pending; text unavailable until Pi sends a queue update.`));
     }
     for (const item of composer.recovered) {
-      const row = activityRow(`Recovered ${item.kind}`, `${item.text}${item.attachments?.length ? ` · ${item.attachments.length} image(s)` : ''}`);
+      const row = activityRow(`Recovered ${item.kind}`, item.text);
       const restore = element("button");
       restore.type = "button";
       restore.dataset.recoveryId = item.id;
@@ -670,7 +652,6 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     if (deletionLocked || preparing) return;
     const text = composer.draft.trim();
     if (composer.attachments?.length && text.startsWith('/')) { updateComposer({ ...composer, lastError: 'Send images with a message, not a slash command. Your draft was kept.' }); return; }
-    if (composer.attachments?.length && (composer.imageRecovery?.length ?? 0) >= 32) { updateComposer({ ...composer, lastError: 'Dismiss or restore older image send recovery entries before sending more images.' }); return; }
     const compact = /^\/compact(?:\s+([\s\S]*))?$/.exec(text);
     if (/^\/(?:resume|delete|new|fork|clone|tree|reload|quit)(?:\s|$)/.test(text)) {
       updateComposer({ ...composer, lastError: 'Use the project session controls for session management. This slash operation is not supported; nothing was sent.' }); return;
@@ -702,7 +683,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
           validateAttachments(submitted.attachments!);
           const images = await Promise.all(submitted.attachments!.map(async image => imageContent(await host.attachments!.get(image))));
           if (disposed || generation !== composerGeneration || composer.submission?.id !== id) return;
-          if (deletionLocked || displayedState.compacting || displayedState.sessionUnavailable) throw new Error('Session became unavailable while preparing images. Your draft was kept.');
+          if (deletionLocked || displayedState.compacting || displayedState.sessionUnavailable) throw new Error('Session became unavailable while preparing images. Nothing was sent.');
           if (displayedState.busy && mode !== 'followUp') { steeringTranscript.begin(id, submitted.text, 'sending', images); queueRender(pendingState || displayedState); }
           preparingSubmission = undefined;
           post('prompt', { id, text: submitted.text, mode, images });
@@ -759,16 +740,15 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   prompt.addEventListener("input", () => updateComposer(updateDraft(composer, prompt.value)));
   submissionNotice.addEventListener("click", (event) => {
     const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button[data-action='dismiss-unknown']") : undefined;
-    if (target) updateComposer(dismissUnknownSubmission(composer));
+    if (target) {
+      updateComposer(dismissUnknownSubmission(composer));
+      if (active && !prompt.readOnly && !document.querySelector('dialog[open]')) prompt.focus({ preventScroll: true });
+    }
   });
   queueActivity.addEventListener("click", (event) => {
     const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button[data-recovery-id]") : undefined;
     const id = target?.dataset.recoveryId;
-    if (id) {
-      const next = restoreRecoveredQueueItem(composer, id);
-      try { validateAttachments(next.attachments ?? []); updateComposer(next); }
-      catch (error) { updateComposer({ ...composer, lastError: String(error) }); }
-    }
+    if (id) updateComposer(restoreRecoveredQueueItem(composer, id));
   });
   prompt.addEventListener("keydown", (event) => {
     const mode = keyboardSubmissionMode(event, displayedState.busy === true);
@@ -845,7 +825,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     if (data.type === "deletionLock") {
       deletionLocked = data.locked === true;
       renderComposer();
-      if (deletionLocked) { persistComposer(); post("deletionState", { id: data.id, hasDraft: !!(composer.draft.trim() || composer.attachments?.length || composer.imageRecovery?.length || preparing || composer.submission || composer.recovered.length) }); }
+      if (deletionLocked) { persistComposer(); post("deletionState", { id: data.id, hasDraft: !!(composer.draft.trim() || composer.attachments?.length || preparing || composer.submission || composer.recovered.length) }); }
     }
     if (data.type === "snapshot") {
       if (typeof data.state?.deletionLocked === "boolean") deletionLocked = data.state.deletionLocked;

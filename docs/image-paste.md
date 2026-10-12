@@ -12,20 +12,24 @@ be combined with slash commands; nothing is sent and the draft remains intact.
 
 ## Drafts and recovery
 
-Only Pi acknowledgement clears submitted text/images. Newer edits and attachments
-remain. Rejected or uncertain sends are kept, and nothing is retried automatically.
+Successful sends clear the submitted text/images without keeping an extra recovery
+copy. Definitively rejected sends show an error and discard that attempted message;
+write a new message if needed. Text or images added while a send was pending remain.
+If Pi does not confirm acceptance, the message is marked uncertain and sending stays
+blocked. **Write a new message** explicitly discards the uncertain attempt while
+preserving newer edits; it does not retry it or prove it failed.
 Saved-session image drafts are stored locally, separate from Pi history. Temporary
 session images stay in memory and are lost when that session closes or the app
-reloads/quits. Missing image draft data blocks sending; remove or repaste that image.
+reloads/quits. If an image cannot be read when Send is attempted, nothing is sent:
+the attempted message is discarded and the error is shown.
 
-Pi's queue recovery returns text only. Consequently, acknowledged image sends also
-retain a collapsed **Image send recovery** section. **Restore images** explicitly
-reattaches those images without restoring the caption or sending anything; recover
-cleared caption text through the existing status-area Restore control if needed.
-**Dismiss** removes the recovery entry. Check the transcript/queue before restoring
-an accepted or uncertain message. Recovery does not prove images are still queued
-or that the agent has read them. Pi may normalize images; Nimrod does not guess
-consumption from a caption or idle state.
+There is no separate image-send recovery section or Restore images action. Images
+in accepted user turns belong to Pi's conversation history. A later model/provider
+failure does not turn an accepted message into a failed send.
+
+Stop's existing queue restoration returns text only. It does not reconstruct image
+attachments; paste an image again if you decide to send it in a new message. Empty
+image-only queue text does not create a blank Restore row.
 
 ## Limits and platform status
 
@@ -34,8 +38,6 @@ consumption from a caption or idle state.
 - Local image draft storage is bounded to 128 MiB. Unreferenced persistent images
   older than 24 hours are cleaned when another image is saved; temporary storage
   is released when its session closes.
-- Up to 32 accepted image-send recovery entries per session. Dismiss or restore old
-  entries before sending more image messages.
 - Pi remains responsible for model/provider image support and image normalization.
 - Paste events are the shared path. A native clipboard fallback reads screenshots
   and other OS image representations when the paste event exposes no image/text.

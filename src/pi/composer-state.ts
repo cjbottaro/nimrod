@@ -24,15 +24,12 @@ export interface QueueState {
 export interface RecoveredQueueItem {
   id: string;
   text: string;
-  kind: "steering" | "followUp" | "unsent";
-  attachments?: ImageAttachment[];
+  kind: "steering" | "followUp";
 }
 
 export interface ComposerState {
   draft: string;
   attachments?: ImageAttachment[];
-  /** Accepted images retained conservatively because Pi queue recovery is text-only. */
-  imageRecovery?: RecoveredQueueItem[];
   submission?: Submission;
   lastError?: string;
   queue: QueueState;
@@ -55,7 +52,6 @@ export function markPendingSubmissionUnknownAfterReload(state: ComposerState): C
   const submission = state.submission;
   return {
     ...state,
-    draft: state.draft || submission.text,
     submission: { ...submission, status: "unknown", error: "Reload interrupted this send. Pi may have accepted it; it will not be sent again automatically." },
     lastError: "Reload interrupted this send. Check the conversation or queue before allowing another send.",
   };
@@ -71,20 +67,23 @@ export function beginSubmission(state: ComposerState, id: string, mode: Submissi
   };
 }
 
-/**
- * A successful RPC response is the only acceptance acknowledgement. A changed
- * draft belongs to the user and must survive acknowledgement of its predecessor.
- */
+/** Drop a resolved submission, never a newer draft. This is not an acceptance inference. */
+function discardSubmittedDraft(state: ComposerState, submitted: Submission): ComposerState {
+  return {
+    ...state,
+    draft: state.draft === submitted.text ? "" : state.draft,
+    attachments: state.attachments?.filter(image => !submitted.attachments?.some(sent => sent.id === image.id)),
+    submission: undefined,
+  };
+}
+
+/** Pi acknowledgement alone establishes acceptance. Definitive failure discards the attempted message. */
 export function settleSubmission(state: ComposerState, id: string, outcome: SubmissionOutcome, error?: string): ComposerState {
   if (!state.submission || state.submission.id !== id) return state;
   const submitted = state.submission;
   if (outcome === "accepted") {
     return {
-      ...state,
-      draft: state.draft === submitted.text ? "" : state.draft,
-      attachments: state.attachments?.filter(image => !submitted.attachments?.some(sent => sent.id === image.id)),
-      imageRecovery: submitted.attachments?.length ? [...(state.imageRecovery ?? []), { id: `images-${submitted.id}`, text: submitted.text, attachments: submitted.attachments, kind: submitted.mode === 'followUp' ? 'followUp' : 'steering' }] : state.imageRecovery,
-      submission: undefined,
+      ...discardSubmittedDraft(state, submitted),
       lastError: undefined,
     };
   }
@@ -96,23 +95,17 @@ export function settleSubmission(state: ComposerState, id: string, outcome: Subm
     };
   }
   return {
-    ...state,
-    submission: undefined,
-    recovered: state.draft !== submitted.text || submitted.attachments?.some(image => !state.attachments?.some(current => current.id === image.id))
-      ? [...state.recovered, { id: `unsent-${submitted.id}`, text: submitted.text, attachments: submitted.attachments, kind: "unsent" }]
-      : state.recovered,
-    lastError: error || (outcome === "cancelled" ? "Session rename cancelled." : "Pi rejected this message."),
+    ...discardSubmittedDraft(state, submitted),
+    lastError: error || (outcome === "cancelled" ? "Submission cancelled. Nothing was sent." : "Pi rejected this message. Compose a new message."),
   };
 }
 
 /** An explicit user action is required before another message can be sent after an unknown outcome. */
 export function dismissUnknownSubmission(state: ComposerState): ComposerState {
   if (state.submission?.status !== "unknown") return state;
-  const submitted = state.submission;
-  const missingImages = submitted.attachments?.some(image => !state.attachments?.some(current => current.id === image.id));
-  return { ...state, submission: undefined, recovered: missingImages
-    ? [...state.recovered, { id: `unknown-${submitted.id}`, text: submitted.text, attachments: submitted.attachments, kind: 'unsent' }]
-    : state.recovered };
+  // This explicit user action discards the uncertain attempt, not an automatic
+  // acknowledgement or retry. Otherwise Enter could replay the same draft.
+  return { ...discardSubmittedDraft(state, state.submission), lastError: undefined };
 }
 
 /** queue_update is authoritative; local prompt acknowledgements never alter this list. */
@@ -134,6 +127,7 @@ export function recoverClearedQueue(state: ComposerState, steering: string[], fo
   const recovered = [...state.recovered];
   for (const [kind, texts] of [["steering", steering], ["followUp", followUp]] as const) {
     for (const text of texts) {
+      if (!text.trim()) continue; // Image-only queues return no restorable text.
       let index = recovered.length;
       while (recovered.some(item => item.id === `${kind}-${index}`)) index++;
       recovered.push({ id: `${kind}-${index}`, text, kind });
@@ -149,7 +143,6 @@ export function restoreRecoveredQueueItem(state: ComposerState, id: string): Com
   return {
     ...state,
     draft: state.draft ? `${state.draft}\n${item.text}` : item.text,
-    attachments: [...(state.attachments ?? []), ...(item.attachments ?? []).filter(image => !state.attachments?.some(current => current.id === image.id))],
     recovered: state.recovered.filter((candidate) => candidate.id !== id),
   };
 }

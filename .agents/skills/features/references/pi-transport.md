@@ -8,7 +8,7 @@ Pi remains authoritative for request acceptance, queues, active history and mode
 
 Every stdout response/event travels over one ordered Tauri channel. State/history response callbacks execute synchronously during delivery so later streaming events cannot be overwritten by stale snapshots. Request promises may resolve afterward, but are not the snapshot ordering mechanism.
 
-Ordinary acknowledgement timeout is 20 seconds. Explicit rejection, acknowledged acceptance and unknown acceptance are distinct states. Only acknowledgement clears an unchanged submitted draft; newer drafts survive. History, queue counts, idle state and user-message events never substitute for a receipt. No timeout/disconnect automatic retry or prompt replay.
+Ordinary acknowledgement timeout is 20 seconds. Explicit rejection, acknowledged acceptance and unknown acceptance are distinct states. Only acknowledgement establishes acceptance. Accepted or definitively rejected/cancelled attempts are discarded without preserving backup copies; newer drafts survive. Unknown attempts remain blocked until the explicit new-message action. History, queue counts, idle state and user-message events never substitute for a receipt. No timeout/disconnect automatic retry or prompt replay.
 
 `agent_end` is not the idle boundary; `agent_settled` is. Manual/automatic compaction locks submission. Stop first obtains authoritative `clear_queue` recovery then aborts, except during compaction. RPC abort can remain stuck awaiting acknowledgement; exact-file Restart uses native owned-child stop, not another RPC.
 

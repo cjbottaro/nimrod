@@ -111,7 +111,7 @@ The user-facing action is **Restart session**; “reload” refers to its Projec
 
 `stopOwned` coalesces concurrent cleanup requests for a token. Clear only the matching cached promise on rejection so another explicit attempt can actually retry stop. Keep successful stops cached until `launch` allocates a new token, preventing delayed old cleanup from stopping the new child.
 
-No automatic prompt or queue replay. Renderer `sessionDisconnected` turns pending submissions into unknown; only actual Pi acknowledgement may clear an unchanged submitted draft. Newer drafts remain. Token/generation guards reject old channel events, late receipts, identity callbacks and startup failures after another launch. Sibling transport/drafts/processes remain independent.
+No automatic prompt or queue replay. Renderer `sessionDisconnected` turns pending submissions into unknown; only actual Pi acknowledgement establishes acceptance. Definitive failure discards the attempted message; unknown delivery remains blocked until the explicit new-message action. Newer drafts remain. Token/generation guards reject old channel events, late receipts, identity callbacks and startup failures after another launch. Sibling transport/drafts/processes remain independent.
 
 Do not call `clear_queue` before restart: that would require a responsive Pi and defeat the escape hatch. Existing locally retained recovery text survives; remote in-flight/queue state is not a process-continuity guarantee.
 

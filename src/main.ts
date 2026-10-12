@@ -27,6 +27,7 @@ import { PiTransport, type Packet } from './pi/transport';
 import { PiSession } from './pi/session';
 import { SessionDrafts, type LastSession } from './pi/session-drafts';
 import { NativeDrafts } from './native-drafts';
+import { referencedAttachments } from './pi/image-attachments';
 import { restoreComposerState } from './pi/webview-state';
 import { Dialogs } from './dialogs';
 import { COMMAND_USAGE_KEY, readCommandUsage } from './command-ranking';
@@ -274,7 +275,7 @@ const deletion = new SessionDeletion({
     refresh: async () => { if (tab.session && !tab.ended) await tab.session.refreshDeletionState(); },
     report: () => {
       const composer = restoreComposerState(tab.drafts.read());
-      return { file: tab.file!.path, token: tab.token, title: tab.title, busy: deletionBusy(tab), hasDraft: !!(composer.draft.trim() || composer.attachments?.length || composer.imageRecovery?.length || composer.submission || composer.recovered.length) };
+      return { file: tab.file!.path, token: tab.token, title: tab.title, busy: deletionBusy(tab), hasDraft: !!(composer.draft.trim() || composer.attachments?.length || composer.submission || composer.recovered.length) };
     },
     deleted: () => removeDeletedSessions([tab.file!.path]),
     failed: message => {
@@ -756,10 +757,14 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
     getState: () => tab.drafts.read(),
     setState: value => {
       const pending = submissionPending(tab);
-      const previous = tab.drafts.read() as { submission?: unknown; recovered?: unknown; imageRecovery?: unknown; attachments?: unknown } | undefined;
+      const previous = tab.drafts.read() as { submission?: unknown; recovered?: unknown; attachments?: unknown } | undefined;
       try { tab.drafts.write(value); } catch (e) { persistenceError(e); }
       const next = value as typeof previous;
-      if (tab.mode !== 'temporary' && (previous?.submission !== next?.submission || previous?.recovered !== next?.recovered || previous?.imageRecovery !== next?.imageRecovery || previous?.attachments !== next?.attachments)) void nativeDrafts?.flush().catch(persistenceError);
+      if (tab.mode === 'temporary' && (previous?.submission !== next?.submission || previous?.attachments !== next?.attachments)) {
+        const retained = referencedAttachments(value);
+        for (const id of referencedAttachments(previous)) if (!retained.has(id)) { temporaryImages.delete(id); ephemeralImages.delete(id); }
+      }
+      if (tab.mode !== 'temporary' && (previous?.submission !== next?.submission || previous?.recovered !== next?.recovered || previous?.attachments !== next?.attachments)) void nativeDrafts?.flush().catch(persistenceError);
       // A receipt can be pending before Pi publishes any state/activity event.
       if (pending !== submissionPending(tab)) updateTab(tab);
     },
@@ -796,7 +801,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
         }).catch(failure => {
           pendingNativeSubmission = undefined;
           persistenceError(failure);
-          if (current()) tab.receive?.({ type: 'submissionReceipt', id: String(message.id), outcome: 'rejected', error: 'Could not save submission recovery. Nothing was sent.' });
+          if (current()) tab.receive?.({ type: 'submissionReceipt', id: String(message.id), outcome: 'rejected', error: 'Could not save the message before sending. Nothing was sent.' });
         });
       } else void tab.session.handle(message);
     },
@@ -931,7 +936,7 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
       if (!currentToken()) return;
       tab.ended = true; tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' }); dialogs.cancel(token);
       void stopOwned(tab).catch(e => { if (currentToken()) showNotice(tab, `Could not stop Pi: ${e}`); });
-      if (!tab.closing && !tab.restarting && !tab.deleting) showNotice(tab, 'Session disconnected. Your draft is retained; nothing will be sent automatically.', !!tab.file?.exists);
+      if (!tab.closing && !tab.restarting && !tab.deleting) showNotice(tab, 'Session disconnected. Nothing will be sent automatically.', !!tab.file?.exists);
       updateTab(tab); controls();
     },
     identity: async (file, id) => {

@@ -2,23 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { applyQueuePendingCount, applyQueueUpdate, beginSubmission, initialComposerState, recoverClearedQueue, restoreRecoveredQueueItem, settleSubmission, updateDraft } from "../src/pi/composer-state";
 
-test("failed acknowledgement retains the submitted draft and settles the sender", () => {
+test("definitive rejection discards the submitted draft and settles the sender", () => {
   let state = initialComposerState("fix the test");
   state = beginSubmission(state, "one", "normal");
   state = settleSubmission(state, "one", "rejected", "Pi prompt failed: busy");
-  assert.equal(state.draft, "fix the test");
+  assert.equal(state.draft, "");
+  assert.deepEqual(state.recovered, []);
   assert.equal(state.submission, undefined);
   assert.match(state.lastError || "", /Pi prompt failed/);
 });
 
-test("rejected sends retain both the original submission and a draft edited while waiting", () => {
+test("rejected sends preserve newer edits without creating an unsent recovery copy", () => {
   let state = beginSubmission(initialComposerState("original prompt"), "send1", "normal");
   state = updateDraft(state, "new draft");
   state = settleSubmission(state, "send1", "rejected", "unavailable");
   assert.equal(state.draft, "new draft");
-  assert.deepEqual(state.recovered.map(item => [item.kind, item.text]), [["unsent", "original prompt"]]);
-  state = restoreRecoveredQueueItem(state, state.recovered[0].id);
-  assert.equal(state.draft, "new draft\noriginal prompt");
+  assert.deepEqual(state.recovered, []);
 });
 
 test("recovering more queue text after restoring one item does not reuse another item's ID", () => {

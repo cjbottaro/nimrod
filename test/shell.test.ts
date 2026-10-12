@@ -2874,7 +2874,7 @@ test('palette command history restores app-wide, persists acceptance and does no
 });
 
 
-test('native draft persistence failure prevents a saved prompt without losing its text', async () => {
+test('native draft persistence failure prevents a saved prompt and discards the attempted message', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project', draftFlushError: 'fixture disk failure' });
   try {
     f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
@@ -2883,7 +2883,8 @@ test('native draft persistence failure prevents a saved prompt without losing it
     prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await f.tick(); await f.tick();
     assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
-    assert.equal(prompt.value, 'Do not lose this');
+    assert.equal(prompt.value, '');
+    assert.equal(f.element('queue-activity').querySelector('[data-recovery-id]'), null);
     assert.match(f.element('storage-error').textContent!, /fixture disk failure/);
     assert.match(f.element('submission-notice').textContent!, /Nothing was sent/);
     f.disconnect();
@@ -2901,10 +2902,13 @@ test('Stop cancels a saved steer waiting for native persistence without later se
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Do not send'; prompt.dispatchEvent(new f.win.Event('input'));
     prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await f.tick();
+    prompt.value = 'New draft'; prompt.dispatchEvent(new f.win.Event('input'));
     f.element<HTMLButtonElement>('send').click(); await f.tick();
     release(); await f.tick(); await f.tick();
     assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
-    assert.equal(prompt.value, 'Do not send');
+    assert.equal(prompt.value, 'New draft');
+    assert.equal(f.element('queue-activity').querySelector('[data-recovery-id]'), null);
+    assert.equal(f.element('messages').querySelector('.user'), null);
     f.disconnect();
   } finally { release(); f.dom.window.close(); }
 });

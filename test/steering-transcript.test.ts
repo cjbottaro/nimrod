@@ -45,14 +45,14 @@ test('authoritative queue text appears once, survives dequeue-before-consumption
   assert.equal(transcript.project([]).length, 0);
 });
 
-test('disconnect distinguishes unconfirmed delivery from unknown acceptance; rejection is never consumed', () => {
+test('disconnect distinguishes unconfirmed delivery from unknown acceptance; rejected previews are discarded', () => {
   const transcript = new SteeringTranscript();
   transcript.begin('send', 'sending');
   transcript.snapshot([], ['queued']);
   transcript.begin('failed', 'failed');
   transcript.receipt('failed', 'rejected');
   transcript.disconnect();
-  assert.deepEqual(transcript.project([]).map(message => message.steeringStatus), ['unknown', 'interrupted', 'rejected']);
+  assert.deepEqual(transcript.project([]).map(message => message.steeringStatus), ['unknown', 'interrupted']);
   transcript.snapshot([user('other', 'failed')]);
-  assert.equal(transcript.project([user('other', 'failed')]).length, 4);
+  assert.equal(transcript.project([user('other', 'failed')]).length, 3);
 });

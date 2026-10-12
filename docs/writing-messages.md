@@ -18,15 +18,21 @@ A steer immediately appears at the bottom of the transcript after live output. *
 
 The Status area shows the authoritative steering count. Explicit follow-up text stays in its queue there.
 
-Rejected/uncertain messages remain labeled **Not sent** or **Acceptance unknown**. An acknowledged steer disconnected before confirmed consumption shows **Delivery unconfirmed**. Nothing retries automatically.
+Rejected local steering previews are removed; the error appears near the composer. Uncertain previews remain labeled **Acceptance unknown**. An acknowledged steer disconnected before confirmed consumption shows **Delivery unconfirmed**. Nothing retries automatically.
 
 ## Stop and recover
 
 **Stop** clears queued work for explicit recovery, then aborts the main agent. During compaction it aborts without clearing queues.
 
-Returned queue text appears with **Restore** controls in the Status area. Restore puts text back for editing; it does not send it. [Image send recovery](image-paste.md#drafts-and-recovery) is separate because Pi's queue recovery returns text only.
+Returned nonempty queue text appears with **Restore** controls in the Status area. Restore puts text back for editing; it does not send it. Pi returns text only, so image attachments are not restored; paste them again if needed. This is separate from failed-send handling.
 
-Only Pi acknowledgement clears the unchanged submitted draft. Newer edits survive. An uncertain send stays blocked until you explicitly allow another send; that is not proof the previous request failed. Check the transcript/queue before sending again. Disconnect, reload and Restart never replay a prompt.
+## Send outcomes
+
+- **Accepted:** clear the submitted text and images. No extra image recovery copy is kept.
+- **Definitely not sent:** show the error and discard that attempted message. Write a new message if needed; nothing is restored or retried.
+- **Acceptance unknown:** show the uncertainty and block further sends. Check the transcript/queue, then use **Write a new message** to discard the uncertain attempt and continue. This action does not prove the previous message failed.
+
+Newer text/images entered while waiting survive every outcome. Only Pi's response establishes acceptance; later model/provider failures leave accepted messages in the transcript. Disconnect, reload and Restart never replay a prompt.
 
 Stop keeps the process alive. Use [Restart session](sessions.md#restart-session) for a stuck saved session, or Close for temporary/unsaved sessions.
 

@@ -25,7 +25,7 @@ There is no extra Node backend; Pi itself requires Node. The reducer and request
 ## Cross-cutting contracts
 
 - One ordered channel carries all stdout events and responses. Synchronous snapshot application is required; Promise continuations alone can overwrite newer streaming state.
-- Unknown acceptance is not rejection. Never replay a prompt; only Pi acknowledgement clears the unchanged submitted draft.
+- Unknown acceptance is not rejection. Never replay a prompt; only Pi acknowledgement establishes acceptance. Accepted or definitively failed attempts are discarded without touching newer drafts. An uncertain attempt is discarded only on the explicit new-message action.
 - Native ownership is window/token scoped. Shutdown must observe owned-child exit before replacement launch; failed shutdown retains reservations. No OS-wide process scans or external-writer exclusion guarantee.
 - Shared navigation decides membership/order/replacement; the shell owns DOM, focus, persistence and native effects. All activations request connection through the single connection coordinator.
 - Routine updates preserve mounted nodes, disclosures, focus and scroll intent. Explicit resume/restart is a distinct reset boundary.
