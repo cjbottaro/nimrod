@@ -5,6 +5,7 @@ interface ThemeHost {
   read(): unknown;
   save(library: ThemeLibrary): void | Promise<void>;
   newId(): string;
+  error?(message?: string): void;
 }
 interface ThemeElements {
   root: HTMLElement;
@@ -27,9 +28,12 @@ export function installThemes(elements: ThemeElements, host: ThemeHost): {
   let disposed = false;
   let generation = 0;
   let previewing = false;
-  const tell = (text: string) => { noticeText.textContent = text; notice.hidden = false; };
+  const tell = (text: string, failed = false) => {
+    if (failed && host.error) { host.error(text); notice.hidden = true; }
+    else { noticeText.textContent = text; notice.hidden = false; }
+  };
   try { state = readLibrary(host.read()); }
-  catch (error) { tell(`Could not restore themes: ${String(error)}`); }
+  catch (error) { tell(`Could not restore themes: ${String(error)}`, true); }
 
   function options(): void {
     const document = select.ownerDocument;
@@ -57,7 +61,7 @@ export function installThemes(elements: ThemeElements, host: ThemeHost): {
     // Persist first; quota/privacy failures must not pretend the choice survives relaunch.
     const saving = host.save(next);
     if (saving) await saving;
-    state = next; apply(); options(); notice.hidden = true;
+    state = next; apply(); options(); notice.hidden = true; host.error?.();
   }
   apply(); options();
 
@@ -79,7 +83,7 @@ export function installThemes(elements: ThemeElements, host: ThemeHost): {
       await commit({ ...state, selected: theme.id, imports: [...state.imports, theme] });
       tell(`Imported ${theme.name}. ${warnings.join(' ')}`.trim());
     } catch (error) {
-      if (!disposed && request === generation) { options(); tell(`Theme not imported: ${String(error)}`); }
+      if (!disposed && request === generation) { options(); tell(`Theme not imported: ${String(error)}`, true); }
     } finally { if (!disposed && request === generation) select.disabled = false; }
   }
   const onSelect = async () => {
@@ -91,7 +95,7 @@ export function installThemes(elements: ThemeElements, host: ThemeHost): {
     try {
       if (selected === '$remove') await commit({ ...state, selected: 'nimrod', imports: state.imports.filter(theme => theme.id !== state.selected) });
       else if (['nimrod', ...BUILTIN_THEMES.map(theme => theme.id), ...CATALOG_THEMES.map(entry => entry.theme.id), ...state.imports.map(theme => theme.id)].includes(selected)) await commit({ ...state, selected });
-    } catch (error) { options(); tell(`Could not save theme settings: ${String(error)}`); }
+    } catch (error) { options(); tell(`Could not save theme settings: ${String(error)}`, true); }
   };
   const onFile = () => { const input = file.files?.[0]; file.value = ''; if (input) void importFile(input); };
   const onDismiss = () => { notice.hidden = true; };

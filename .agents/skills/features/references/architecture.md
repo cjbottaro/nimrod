@@ -29,6 +29,7 @@ There is no extra Node backend; Pi itself requires Node. The reducer and request
 - Native ownership is window/token scoped. Shutdown must observe owned-child exit before replacement launch; failed shutdown retains reservations. No OS-wide process scans or external-writer exclusion guarantee.
 - Shared navigation decides membership/order/replacement; the shell owns DOM, focus, persistence and native effects. All activations request connection through the single connection coordinator.
 - Routine updates preserve mounted nodes, disclosures, focus and scroll intent. Explicit resume/restart is a distinct reset boundary.
+- All Nimrod-generated errors share one shell-owned surface, including Settings/dialogs. Placement, wording, deduplication and notice lifecycle follow the [error presentation policy](error-presentation.md). The shared shell strip routes operational errors; remaining producer metadata cleanup is not precedent for new surfaces.
 - Preferences and bookkeeping are separate from Pi history and scoped draft storage.
 - Delivery/completion never navigates itself. Explicit user navigation can connect a saved session without sending a prompt.
 - Platform direction is macOS first, Linux next, Windows possibly later. Narrow native integrations must not turn macOS conventions into portable product requirements. See [verification](verification.md) for actual acceptance.

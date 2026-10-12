@@ -17,6 +17,7 @@ interface ZoomHost {
   read(): unknown;
   save(percent: number): void | Promise<void>;
   apply(scale: number): Promise<void>;
+  error?(message?: string): void;
 }
 
 /** Native page zoom, not font-size or CSS transform. Serialize IPC so older changes cannot win. */
@@ -43,14 +44,17 @@ export function installZoom(window: Window, select: HTMLSelectElement, notice: H
         applied = percent;
         select.value = String(applied);
         notice.hidden = true;
-        try { if (persist) await host.save(percent); }
-        catch { notice.textContent = 'Zoom changed, but could not be saved for next launch.'; notice.hidden = false; }
+        try { if (persist) await host.save(percent); host.error?.(); }
+        catch {
+          const text = 'Zoom changed, but could not be saved for next launch.';
+          if (host.error) host.error(text); else { notice.textContent = text; notice.hidden = false; }
+        }
       } catch (error) {
         if (disposed) return;
         if (requested === percent) requested = applied;
         select.value = String(applied);
-        notice.textContent = `Could not change zoom: ${String(error)}`;
-        notice.hidden = false;
+        const text = `Could not change zoom: ${String(error)}`;
+        if (host.error) host.error(text); else { notice.textContent = text; notice.hidden = false; }
       } finally { if (!disposed) select.disabled = false; }
     });
     return work;

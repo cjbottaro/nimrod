@@ -19,7 +19,8 @@ test('file settings synchronize behind Settings without replacing the offline co
     await expect(page.locator('#pi-path')).toHaveValue('/unsaved/pi');
     await expect(page.locator('#runtime-status')).toContainText('unsaved edits are retained');
     await fixture.editPreferences('{broken}');
-    await expect(page.locator('#preferences-error')).toBeVisible();
+    await expect(page.locator('#application-notices')).toBeVisible();
+    await expect(page.locator('#preferences-error')).toBeHidden();
     await expect(page.locator('#theme-picker')).toHaveValue('dracula');
     await fixture.editPreferences('{"appearance.theme":"dracula","runtime.piPath":"/external/pi","runtime.nodePath":"/external/node"}');
     await expect(page.locator('#preferences-error')).toBeHidden();

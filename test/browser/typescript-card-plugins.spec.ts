@@ -32,7 +32,7 @@ test('executable trust is explicit and revocation stops managed controls without
   const demo = await demoFixture(page, {}, [], undefined, { settings: '{"cards.plugins":["command-summary.json"]}', packages: source }, { enforceCsp: true });
   try {
     expect(demo.calls.filter(call => call.command === 'read_card_plugin_module')).toHaveLength(0);
-    await page.locator('#open-settings').click(); await expect(page.locator('#card-plugin-error')).toContainText('explicit cards.trustedPlugins'); await page.locator('#settings-back').click();
+    await page.locator('#open-settings').click(); await expect(page.locator('#application-notices')).toContainText('explicit cards.trustedPlugins'); await page.locator('#settings-back').click();
     await demo.editPreferences('{"cards.plugins":["command-summary.json"],"cards.trustedPlugins":["command-summary.json"]}');
     await expect.poll(() => demo.calls.filter(call => call.command === 'read_card_plugin_module').length).toBe(1);
     await demo.turn(1);
@@ -85,7 +85,7 @@ test('trusted module initialization exception is reported without preventing ord
     packages: { 'command-summary.json': manifest, 'command-summary.js': 'throw new Error("Fixture module initialization failed"); export default {};' } }, { enforceCsp: true });
   try {
     await demo.turn(1); await expect(page.locator(visible('messages'))).toContainText('Fixture complete');
-    await page.locator('#open-settings').click(); await expect(page.locator('#card-plugin-error')).toContainText('Fixture module initialization failed');
+    await page.locator('#open-settings').click(); await expect(page.locator('#application-notices')).toContainText('Fixture module initialization failed');
     expect(demo.errors).toEqual([]);
   } finally { await demo.close(); }
 });
@@ -96,7 +96,7 @@ test('trusted incompatible module falls back to raw historical data without prev
   try {
     await demo.turn(1);
     await expect(page.locator(visible('messages'))).toContainText('Fixture complete');
-    await page.locator('#open-settings').click(); await expect(page.locator('#card-plugin-error')).toContainText('does not match manifest');
+    await page.locator('#open-settings').click(); await expect(page.locator('#application-notices')).toContainText('does not match manifest');
     expect(demo.errors).toEqual([]);
   } finally { await demo.close(); }
 });

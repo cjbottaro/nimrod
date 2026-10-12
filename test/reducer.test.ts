@@ -172,5 +172,5 @@ test("working status remains specific through tool, retry, and compaction lifecy
   assert.equal(state.status, "Compacting context…");
   state = reduceRpcEvent(state, { type: "process_error", error: "Pi exited" });
   assert.equal(state.busy, false);
-  assert.equal(state.status, "Pi process error: Pi exited");
+  assert.equal(state.status, "Disconnected");
 });

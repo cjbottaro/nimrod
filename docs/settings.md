@@ -18,7 +18,7 @@ Escape during a drag cancels resizing; the next Escape closes Settings.
 
 - **Theme:** changes apply immediately and synchronize across windows. See [Themes](themes.md) for live previews, bundled themes and imports.
 - **Zoom:** scales the whole app, default **125%**, range **75–200%**. Use the picker or **⌘/Ctrl + / −**; **⌘/Ctrl+0** resets to 100%. Zoom is remembered and doesn't change drafts.
-- Theme/import/zoom errors appear alongside the controls.
+- Theme/import/zoom errors use the shared [notice strip](error-messages.md). Non-error progress and import details stay alongside the controls.
 
 ## Notifications
 
@@ -66,11 +66,11 @@ Absolute `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the roots. Empty/relati
 }
 ```
 
-Personal [card plugins](card-plugins.md#personal-typescript-plugins) are discovered/compiled automatically from the dedicated user directory; `cards.autoLoad: false` disables this directory-trusted workflow. Existing manifests use `cards.plugins` / `cards.trustedPlugins`; `cards.renderers` overrides tool matching. Declarative manifests need no executable trust. They are configured in this file, not a dedicated Settings category. Package load errors appear in Settings; catalog changes affect newly mounted cards without restarting agents.
+Personal [card plugins](card-plugins.md#personal-typescript-plugins) are discovered/compiled automatically from the dedicated user directory; `cards.autoLoad: false` disables this directory-trusted workflow. Existing manifests use `cards.plugins` / `cards.trustedPlugins`; `cards.renderers` overrides tool matching. Declarative manifests need no executable trust. They are configured in this file, not a dedicated Settings category. Package load errors use the shared notice strip, including while Settings is open; catalog changes affect newly mounted cards without restarting agents.
 
 Omitted keys use defaults or runtime discovery. Imported themes live in `appearance.importedThemes`; [keybinding overrides](keybindings.md#configuration-file) live in `keybindings`. Pi's settings remain Pi-owned. [Drafts](drafts.md) use separate Rust-managed per-session files with debounced asynchronous saves; legacy webview drafts are ignored without migration.
 
-Valid external edits update open windows. Invalid files keep the last valid values and show an error; correcting the file clears it. UI saves preserve comments and unrelated keys, refuse malformed files and report detected conflicts rather than silently retrying. External editors aren't locked.
+Valid external edits update open windows. Invalid files keep the last valid values and show an error in the shared notice strip; correcting the file clears it. UI saves preserve comments and unrelated keys, refuse malformed files and report detected conflicts rather than silently retrying. External editors aren't locked.
 
 Removing settings resets preferences. Removing state clears remembered disk bookkeeping without closing live sessions and can allow legacy migration again on next startup. Existing configuration takes precedence during legacy migration; source data is retained.
 

@@ -10,6 +10,9 @@ export interface ViewHost {
     popOutCode(text: string, language: string): Promise<void>;
   };
   attachments?: import('./image-attachments').AttachmentHost;
+  reportNotice?(notice: import('../application-notices').ApplicationNotice): void;
+  resolveNotice?(id: string): void;
+  resolveNoticeCause?(cause: string): void;
   postMessage(message: JsonRecord): void;
   onMessage(listener: (message: HostMessage) => void): void;
   getState(): unknown;

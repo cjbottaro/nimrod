@@ -8,9 +8,10 @@ test('incompatible and missing packages show Settings errors without blocking or
     await demo.turn(1);
     await expect(page.locator(visible('messages')).locator('.tool-card-title', { hasText: 'bash' })).toHaveCount(1);
     await page.locator('#open-settings').click();
-    await expect(page.locator('#card-plugin-error')).toBeVisible();
-    await expect(page.locator('#card-plugin-error')).toContainText('Unsupported card plugin API version');
-    await expect(page.locator('#card-plugin-error')).toContainText('missing.json');
+    await expect(page.locator('#application-notices')).toBeVisible();
+    await expect(page.locator('#card-plugin-error')).toBeHidden();
+    await expect(page.locator('#application-notices')).toContainText('Unsupported card plugin API version');
+    await expect(page.locator('#application-notices')).toContainText('missing.json');
     expect(demo.errors).toEqual([]);
   } finally { await demo.close(); }
 });

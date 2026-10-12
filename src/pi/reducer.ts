@@ -66,7 +66,7 @@ function reduceConversationEvent(state: ConversationState, event: JsonRecord): C
   if (type === "agent_start") return { ...state, busy: true, status: "Thinking…" };
   // Pi may retry, compact, or consume a queued prompt after agent_end. Only settled is idle.
   if (type === "agent_settled") return { ...state, busy: state.compacting === true, status: state.compacting ? "Compacting context…" : "Ready" };
-  if (type === "process_error") return { ...state, busy: false, compacting: false, status: `Pi process error: ${string(event.error) || "unknown error"}` };
+  if (type === "process_error") return { ...state, busy: false, compacting: false, status: 'Disconnected' };
   if (type === "queue_update") {
     const steering = stringArray(event.steering);
     const followUp = stringArray(event.followUp);
@@ -77,7 +77,7 @@ function reduceConversationEvent(state: ConversationState, event: JsonRecord): C
   if (type === "compaction_start") return { ...state, busy: true, compacting: true, status: "Compacting context…" };
   if (type === "compaction_end") {
     const manual = event.reason === "manual";
-    const status = typeof event.errorMessage === "string" ? event.errorMessage
+    const status = typeof event.errorMessage === "string" ? 'Compaction failed'
       : event.aborted === true ? "Compaction cancelled"
         : manual ? "Compaction complete" : event.willRetry === true ? "Retrying after compaction…" : "Working…";
     return { ...state, compacting: false, busy: !manual, status };
@@ -148,7 +148,7 @@ function reduceConversationEvent(state: ConversationState, event: JsonRecord): C
     });
   }
 
-  if (type === "extension_error") return { ...state, status: `Extension error: ${string(event.error) || "unknown error"}` };
+  if (type === "extension_error") return state;
   return state;
 }
 

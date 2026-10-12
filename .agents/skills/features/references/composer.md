@@ -14,7 +14,7 @@ Idle sends and busy Enter steering preserve acknowledged-draft semantics. Busy-o
 - `src/pi/steering-transcript.ts`: live pending-turn projection, queue reconciliation and user-turn key aliases.
 - `src/pi/webview-client.ts`: applies every ordered snapshot before coalesced painting; patches pending-status labels in the existing user article.
 
-Image attachment behavior and its text-only queue recovery boundary are covered in [Image paste](image-paste.md).
+Image attachment behavior and its text-only queue recovery boundary are covered in [Image paste](image-paste.md). Error/uncertainty presentation follows the [error presentation policy](error-presentation.md); this reference owns delivery semantics, not a separate error surface.
 
 ## Contract
 

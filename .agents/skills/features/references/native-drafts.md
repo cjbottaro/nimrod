@@ -1,5 +1,7 @@
 # Native drafts
 
+Persistence-error routing and wording follow the [error presentation policy](error-presentation.md). The existing bottom storage banner is a consolidation target, not a feature-specific exception.
+
 ## Code map
 
 - `src/native-drafts.ts`: ordered per-record staging IPC, restored revisions, failed-stage retention/retry and explicit flush.

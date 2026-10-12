@@ -24,7 +24,8 @@ export interface SessionUi {
   attention?(kind: 'completed' | 'input' | 'failed', response?: string): void;
   /** Only a successful prompt RPC is conversational use; metadata/control RPCs aren't. */
   promptAccepted?(): void;
-  disconnected?(): void;
+  notice?(message: string, severity?: 'error' | 'warning' | 'info', cause?: string): void;
+  disconnected?(message?: string): void;
   identity?(file: string | undefined, id: string | undefined): Promise<void>;
 }
 const record = (v: unknown): JsonRecord => v && typeof v === 'object' && !Array.isArray(v) ? v as JsonRecord : {};
@@ -38,6 +39,7 @@ export class PiSession {
   private scope?: ModelReference[];
   private submission?: string;
   private compactionRequest = false;
+  private compactionNoticeId?: string;
   private disconnected = false;
   private initialized = false;
   private contextRefreshNeeded = false;
@@ -80,7 +82,7 @@ export class PiSession {
 
   /** Each picker invocation is bound to this session, including cancellation and errors. */
   async selectPreference(kind: 'model' | 'thinking', picker: PreferencePicker): Promise<void> {
-    const showError = (error: unknown) => { this.notice(errorText(error)); picker.error(errorText(error)); };
+    const showError = (error: unknown) => { picker.error(errorText(error)); };
     if (kind === 'model') await this.model.selectModel({
       chooseModel: (models, current) => this.chooseModel(models, current, picker.choose), showError,
     });
@@ -171,11 +173,15 @@ export class PiSession {
       this.disconnected = true;
       this.notificationRun = false;
       this.ui.attention?.('failed');
-      this.ui.disconnected?.();
+      // Model disconnection publishes synchronously. Mark availability first so
+      // that intermediate control snapshots cannot resolve a connection notice.
+      this.state = { ...this.state, sessionUnavailable: true, extensionStatuses: {}, extensionWidgets: {} };
+      this.ui.disconnected?.(errorText(event.error || 'Pi disconnected'));
       this.stats.dispose();
       this.model.disconnect();
-      this.state = { ...this.state, sessionUnavailable: true, extensionStatuses: {}, extensionWidgets: {} };
     }
+    if (event.type === 'extension_error') this.notice(`Extension error: ${errorText(event.error)}`);
+    if (event.type === 'compaction_end' && typeof event.errorMessage === 'string') this.notice(`Compaction: ${event.errorMessage}`, 'error', this.compactionNoticeId);
     this.state = reduceRpcEvent(this.state, event);
     this.publish();
     if (event.type === 'agent_settled' && this.notificationRun && !this.state.busy) {
@@ -277,11 +283,11 @@ export class PiSession {
   private async compact(message: JsonRecord): Promise<void> {
     const id = typeof message.id === 'string' ? message.id : '';
     const customInstructions = typeof message.customInstructions === 'string' ? message.customInstructions.trim() : undefined;
-    const receipt = (outcome: 'accepted' | 'rejected' | 'unknown', error?: string) => this.ui.publish({ type: 'submissionReceipt', id, outcome, error });
+    const receipt = (outcome: 'accepted' | 'rejected' | 'unknown', error?: string) => this.ui.publish({ type: 'submissionReceipt', id, outcome, error, noticeCause: `compaction:${id}`, operation: 'Compact context' });
     if (!id || (message.customInstructions !== undefined && typeof message.customInstructions !== 'string') || (customInstructions?.length ?? 0) > 1_000_000 || this.compactionRequest || this.submission || this.state.sessionUnavailable || this.state.busy || this.state.compacting) {
       receipt('rejected', 'Manual compaction is available only while Pi is idle. Nothing was sent.'); return;
     }
-    this.compactionRequest = true;
+    this.compactionRequest = true; this.compactionNoticeId = `compaction:${id}`;
     this.state = { ...this.state, busy: true, compacting: true, status: 'Compacting context…' };
     this.publish();
     try {
@@ -293,12 +299,12 @@ export class PiSession {
     } catch (error) {
       if (this.state.compacting) this.state = { ...this.state, busy: false, compacting: false };
       receipt(error instanceof RpcResponseError ? 'rejected' : 'unknown', errorText(error));
-      this.notice(errorText(error));
-    } finally { this.compactionRequest = false; }
+    } finally { this.compactionRequest = false; this.compactionNoticeId = undefined; }
   }
 
-  private notice(text: string): void {
-    this.state = { ...this.state, status: text }; this.publish();
+  private notice(text: string, severity: 'error' | 'warning' | 'info' = 'error', cause?: string): void {
+    if (this.ui.notice) this.ui.notice(text, severity, this.disconnected ? 'connection' : cause);
+    else { this.state = { ...this.state, status: text }; this.publish(); }
   }
 
   private extensionUi(event: JsonRecord): void {
@@ -313,7 +319,7 @@ export class PiSession {
       this.state = setExtensionWidget(this.state, event.widgetKey, event.widgetLines === undefined ? undefined : { lines: strings(event.widgetLines).slice(0, 50).map(sanitizeExtensionUiText) });
       this.publish(); return;
     }
-    if (method === 'notify') { this.notice(sanitizeExtensionUiText(String(event.message || 'Pi notification'))); return; }
+    if (method === 'notify') { this.notice(sanitizeExtensionUiText(String(event.message || 'Pi notification')), event.notifyType === 'error' ? 'error' : event.notifyType === 'warning' ? 'warning' : 'info'); return; }
     if (method === 'set_editor_text') { this.ui.publish({ type: 'setEditorText', text: event.text }); return; }
     if (method === 'setTitle') return;
     if (!['select', 'confirm', 'input', 'editor'].includes(String(method))) return;

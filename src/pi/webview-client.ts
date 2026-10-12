@@ -7,7 +7,7 @@ import { informationalExtensionStatuses, presentActivity } from "./activity-stat
 import { beginSubmission, ComposerState, dismissUnknownSubmission, recoverClearedQueue, restoreRecoveredQueueItem, settleSubmission, SubmissionMode, updateDraft } from "./composer-state";
 import { keyboardHint, keyboardSubmissionMode, renderPrimaryAction, resizeComposer } from "./composer-dom";
 import { codeBlockSource, createSafeMarkdownRenderer, isSafeLink } from "./safe-markdown";
-import { showCopyResult } from './code-actions';
+import { showCopyResult, setCodeIcon } from './code-actions';
 import { persistWebviewState, restoreComposerState } from "./webview-state";
 import { captureStreamingOutput, createToolDetails, renderToolCard as renderToolCardDom, restoreStreamingOutput, updateToolCard, toolCardIsBusy, disposeToolCard } from "./tool-card";
 import { ToolDisclosureController } from "./tool-disclosure";
@@ -39,6 +39,11 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   let preparing = 0;
   let preparingSubmission: string | undefined;
   let attachmentSignature = '';
+  let uncertainNoticeId: string | undefined;
+  let errorNoticeText: string | undefined;
+  let errorNoticeSequence = 0;
+  let composerNoticeCause: string | undefined;
+  let composerNoticeOperation: string | undefined;
   const keyboardHintNode = required("keyboard-hint");
   const model = required<HTMLButtonElement>("model");
   const thinking = required<HTMLButtonElement>("thinking");
@@ -162,6 +167,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     attachmentSignature = signature;
     const images = composer.attachments ?? [];
     for (const [id, url] of attachmentUrls) if (!images.some(image => image.id === id)) { URL.revokeObjectURL(url); attachmentUrls.delete(id); }
+    for (const old of attachmentTray.querySelectorAll<HTMLElement>('[data-image-id]')) if (!images.some(image => image.id === old.dataset.imageId)) host.resolveNotice?.(`image-preview:${old.dataset.imageId}`);
     attachmentTray.replaceChildren(); attachmentTray.hidden = !images.length && !preparing;
     for (const image of images) {
       const card = element('div', 'composer-attachment'); card.dataset.imageId = image.id;
@@ -178,7 +184,12 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
           if (disposed || generation !== composerGeneration || !composer.attachments?.some(item => item.id === image.id)) return;
           const loaded = attachmentUrls.get(image.id) ?? URL.createObjectURL(blob); attachmentUrls.set(image.id, loaded);
           for (const node of attachmentTray.querySelectorAll<HTMLImageElement>('img')) if (node.parentElement?.dataset.imageId === image.id) node.src = loaded;
-        }).catch(error => { if (!disposed && generation === composerGeneration) { card.classList.add('error'); preview.alt = String(error); } });
+        }).catch(error => {
+          if (!disposed && generation === composerGeneration && composer.attachments?.some(item => item.id === image.id)) {
+            card.classList.add('error'); preview.alt = 'Image unavailable';
+            host.reportNotice?.({ id: `image-preview:${image.id}`, cause: `image:${image.id}`, operation: `Read image: ${image.name}`, message: String(error) });
+          }
+        });
       }
     }
     if (preparing) { const status = element('span'); status.textContent = 'Preparing images…'; attachmentTray.append(status); }
@@ -204,6 +215,30 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     if (compacting) {
       send.title = "Cancel compaction";
       send.setAttribute("aria-label", "Cancel compaction");
+    }
+    if (host.reportNotice) {
+      submissionNotice.hidden = true; submissionNotice.replaceChildren();
+      const uncertain = submission?.status === 'unknown' ? `delivery:${submission.id}` : undefined;
+      if (uncertainNoticeId && uncertainNoticeId !== uncertain) host.resolveNotice?.(uncertainNoticeId);
+      uncertainNoticeId = uncertain;
+      if (uncertain && submission) {
+        const id = submission.id;
+        host.reportNotice({ id: uncertain, cause: 'connection', priority: 100, operation: 'Message delivery unknown', severity: 'warning', dismissible: false,
+          message: 'Pi did not confirm whether this message was received. Check the transcript or queue before writing a new message. Nothing was retried automatically.',
+          actions: [{ label: 'Write a new message', enabled: () => !disposed && composer.submission?.id === id && composer.submission.status === 'unknown', run: () => {
+            if (disposed || composer.submission?.id !== id || composer.submission.status !== 'unknown') return;
+            updateComposer(dismissUnknownSubmission(composer));
+            if (active && !prompt.readOnly && !document.querySelector('dialog[open]')) prompt.focus({ preventScroll: true });
+          } }],
+        });
+      } else if (composer.lastError && composer.lastError !== errorNoticeText) {
+        host.reportNotice({ id: `composer:${++errorNoticeSequence}`, operation: composerNoticeOperation || 'Send message', message: composer.lastError, cause: composerNoticeCause, priority: composerNoticeCause ? 20 : undefined });
+        composerNoticeCause = undefined; composerNoticeOperation = undefined;
+      }
+      errorNoticeText = composer.lastError;
+      if (displayedState.recoveryNotice) host.reportNotice({ id: 'session-recovery', operation: 'Session unavailable', message: displayedState.recoveryNotice });
+      else host.resolveNotice?.('session-recovery');
+      return;
     }
     if (displayedState.recoveryNotice) {
       submissionNotice.hidden = false;
@@ -449,16 +484,19 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
         await navigator.clipboard.writeText(source);
       }
       setCopyStatus(button, status, true);
-    } catch {
-      if (host.cardActions) { setCopyStatus(button, status, false); return; }
+    } catch (error) {
+      if (host.cardActions) { setCopyStatus(button, status, false, String(error)); return; }
       const id = `copy-${++nextCopyRequest}`;
       pendingCopies.set(id, { button, status });
       post("copyCode", { id, text: source });
     }
   }
 
-  function setCopyStatus(button: HTMLButtonElement, status: HTMLElement, success: boolean): void {
-    showCopyResult(button, status, success);
+  function setCopyStatus(button: HTMLButtonElement, status: HTMLElement, success: boolean, detail?: string): void {
+    if (!success && host.reportNotice) {
+      button.disabled = false; status.textContent = ''; setCodeIcon(button, 'copy');
+      host.reportNotice({ id: `clipboard:${++nextCopyRequest}`, operation: 'Copy code', message: detail || 'Could not copy code to the clipboard.' });
+    } else showCopyResult(button, status, success);
   }
 
   function receiveCopyResult(id: string | undefined, success: boolean): void {
@@ -681,7 +719,10 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
         try {
           if (!host.attachments) throw new Error('Image storage is unavailable.');
           validateAttachments(submitted.attachments!);
-          const images = await Promise.all(submitted.attachments!.map(async image => imageContent(await host.attachments!.get(image))));
+          const images = await Promise.all(submitted.attachments!.map(async image => {
+            try { return await imageContent(await host.attachments!.get(image)); }
+            catch (error) { composerNoticeCause = `image:${image.id}`; throw error; }
+          }));
           if (disposed || generation !== composerGeneration || composer.submission?.id !== id) return;
           if (deletionLocked || displayedState.compacting || displayedState.sessionUnavailable) throw new Error('Session became unavailable while preparing images. Nothing was sent.');
           if (displayedState.busy && mode !== 'followUp') { steeringTranscript.begin(id, submitted.text, 'sending', images); queueRender(pendingState || displayedState); }
@@ -845,6 +886,9 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     if (data.type === "submissionReceipt" && typeof data.id === "string" && (data.outcome === "accepted" || data.outcome === "rejected" || data.outcome === "cancelled" || data.outcome === "unknown")) {
       steeringTranscript.receipt(data.id, data.outcome);
       queueRender(pendingState || displayedState);
+      composerNoticeCause = typeof data.noticeCause === 'string' ? data.noticeCause : undefined;
+      composerNoticeOperation = typeof data.operation === 'string' ? data.operation : undefined;
+      if (data.outcome === 'accepted' && composerNoticeCause) host.resolveNoticeCause?.(composerNoticeCause);
       updateComposer(settleSubmission(composer, data.id, data.outcome, safeText(data.error) || undefined));
     }
     if (data.type === "queueRecovery") {
@@ -939,6 +983,8 @@ export interface HostMessage {
   success?: boolean;
   outcome?: "accepted" | "rejected" | "cancelled" | "unknown";
   error?: unknown;
+  noticeCause?: string;
+  operation?: string;
   steering?: unknown;
   followUp?: unknown;
 }

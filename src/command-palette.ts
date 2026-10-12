@@ -26,6 +26,7 @@ export interface PaletteOptions {
   projects?: () => Promise<PalettePage>;
   canOpen(): boolean;
   shortcuts?: boolean;
+  error?(message: string, operation: string): void;
   ranking?: CommandRanking;
 }
 export interface PreviewSelectionRequest {
@@ -78,6 +79,10 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   let preview: ((item?: PaletteItem) => void) | undefined;
   let cancelPreview: (() => void) | undefined;
   let previewed: string | undefined;
+  function failure(message: string): void {
+    if (options.error) { options.error(message, title.textContent || 'Command palette'); notice = ''; }
+    else notice = message;
+  }
   function endPreview(accepted = false): void {
     const cancel = cancelPreview;
     preview = undefined; cancelPreview = undefined; previewed = undefined;
@@ -213,7 +218,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       items = page.items; notice = page.notice || '';
     } catch (error) {
       if (!dialog.open || generation !== request) return;
-      notice = `Could not load sessions: ${error}. Use Refresh to retry.`;
+      failure(`Could not load sessions: ${error}. Use Refresh to retry.`);
     }
     if (dialog.open && generation === request) { loading = false; draw(); }
   }
@@ -228,7 +233,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       items = page.items; notice = page.notice || '';
     } catch (error) {
       if (!dialog.open || generation !== request) return;
-      notice = `Could not load projects: ${error}. Use Refresh to retry.`;
+      failure(`Could not load projects: ${error}. Use Refresh to retry.`);
     }
     if (dialog.open && generation === request) { loading = false; draw(); }
   }
@@ -246,8 +251,8 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
           loading = false; notice = ''; draw();
         });
       },
-      error(message) { if (current()) { loading = false; notice = message; draw(); } },
-      finish() { if (current() && loading) { loading = false; notice = 'Pi did not provide choices. Retry when the session is ready.'; draw(); } },
+      error(message) { if (current()) { loading = false; failure(message); draw(); } },
+      finish() { if (current() && loading) { loading = false; failure('Pi did not provide choices. Retry when the session is ready.'); draw(); } },
       cancel() { if (current()) closeInteraction(); },
     };
   }
@@ -266,7 +271,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
         if (!matches.length) { matches = items; selected = Math.max(0, items.findIndex(item => item.id === currentId)); }
         draw();
       },
-      error(message) { if (current()) { loading = false; notice = message; updateStatus(); } },
+      error(message) { if (current()) { loading = false; failure(message); updateStatus(); } },
       cancel() { if (current()) closeInteraction(); },
     };
   }
@@ -319,7 +324,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
           selected = same >= 0 ? same : Math.max(0, Math.min(previousIndex, matches.length - 1));
           selection();
         }
-        if (failure) notice = [failure, notice].filter(Boolean).join(' ');
+        if (failure) { if (options.error) options.error(failure, 'Delete sessions'); else notice = [failure, notice].filter(Boolean).join(' '); }
         updateStatus();
         if (!doc.querySelector('dialog[open]:not(#command-palette)')) input.focus({ preventScroll: true });
       })();
@@ -352,7 +357,8 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     if (!doc.querySelector('dialog[open]') && opener?.isConnected && !opener.closest('[hidden], [inert]')) opener.focus({ preventScroll: true });
     if (action) void Promise.resolve().then(action).catch(error => {
       // An action error is not a reason to replay it (especially a launch).
-      if (open()) { notice = String(error); draw(); }
+      if (options.error) options.error(String(error), 'Command action');
+      else if (open()) { notice = String(error); draw(); }
     });
   }, { signal });
   list.addEventListener('mousedown', event => event.preventDefault(), { signal });
