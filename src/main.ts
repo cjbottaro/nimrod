@@ -415,7 +415,7 @@ function renderSidebar(moved?: HTMLElement): void {
   const visible = sidebarTabs();
   const membership = new Set(visible);
   if (presented && !membership.has(presented)) presentConversation(undefined);
-  const sidebar = required('session-sidebar'), list = required('open-sessions');
+  const sidebar = required('sidebar-session-panel'), list = required('open-sessions');
   const restoreScroll = captureSidebarScroll(sidebar, [...list.children] as HTMLElement[], moved);
   const focused = document.activeElement;
   const filteredFocus = tabs.some(tab => !membership.has(tab) && focused instanceof Node && tab.rowNode.contains(focused));
@@ -457,7 +457,7 @@ function selectSidebarView(view: SessionView): void {
   if (target) activate(target, 'restore');
   else presentConversation(undefined);
   controls();
-  if (returningToAll && target) revealSidebarRow(required('session-sidebar'), target.rowNode);
+  if (returningToAll && target) revealSidebarRow(required('sidebar-session-panel'), target.rowNode);
 }
 function presentConversation(tab: Tab | undefined): void {
   if (presented !== tab) {
@@ -840,7 +840,7 @@ function activate(tab: Tab, intent: SelectionIntent = 'explicit'): void {
   // Effects live at this one boundary; the model never touches Pi or drafts.
   for (const item of tabs) updateTab(item);
   persistTabs(); controls(); syncPopouts();
-  if (plan.reveal && presented === tab) revealSidebarRow(required('session-sidebar'), tab.rowNode);
+  if (plan.reveal && presented === tab) revealSidebarRow(required('sidebar-session-panel'), tab.rowNode);
   if (plan.focus && presented === tab && !document.querySelector('dialog[open]')) (tab.focus?.isConnected ? tab.focus : tab.root.querySelector<HTMLElement>('[data-pi-id="prompt"]'))?.focus({ preventScroll: true });
   selectedConnection.request();
 }

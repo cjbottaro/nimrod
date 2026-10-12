@@ -9,14 +9,15 @@
 #workspace-empty p { color:var(--vscode-descriptionForeground); line-height:1.6; }
 #launch-error { flex:none; margin:0; padding:10px 20px; background:var(--vscode-editorWidget-background); }
 #launch-error:empty { display:none; }
-#session-sidebar { overflow-anchor:none; }
+#session-sidebar { display:flex; flex-direction:column; overflow:hidden; }
+#sidebar-session-panel { flex:1; min-height:0; overflow:auto; overflow-anchor:none; }
 .sidebar-resizer { position:absolute; top:0; bottom:0; left:var(--sidebar-width,260px); margin-left:-4px; width:8px; z-index:11; cursor:col-resize; touch-action:none; }
 .sidebar-resizer::after { content:""; position:absolute; top:0; bottom:0; left:3px; width:2px; background:transparent; }
 .sidebar-resizer:hover::after, .sidebar-resizer:focus-visible::after, .sidebar-layout.resizing-sidebar .sidebar-resizer::after { background:var(--vscode-focusBorder); }
 .sidebar-resizer:focus-visible { outline:1px solid var(--vscode-focusBorder); outline-offset:-1px; }
 body.resizing-sidebar, body.resizing-sidebar * { cursor:col-resize !important; user-select:none !important; }
-#sidebar-new { width:100%; margin-bottom:12px; }
-#sidebar-views { display:flex; align-items:stretch; gap:3px; margin-bottom:10px; border-bottom:1px solid var(--vscode-panel-border); }
+#sidebar-new { flex:none; width:100%; margin-bottom:12px; }
+#sidebar-views { display:flex; flex:none; align-items:stretch; gap:3px; margin-bottom:10px; border-bottom:1px solid var(--vscode-panel-border); }
 #sidebar-views [role=tab] { background:transparent; color:var(--vscode-descriptionForeground); border-radius:4px 4px 0 0; padding:8px 4px; font-size:11px; flex:1; min-width:0; border-bottom:2px solid transparent; }
 #sidebar-views [role=tab][aria-selected=true] { color:var(--vscode-foreground); border-bottom-color:var(--vscode-progressBar-background); }
 #sidebar-views [role=tab]:hover { background:var(--vscode-toolbar-hoverBackground); }
