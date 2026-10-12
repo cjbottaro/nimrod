@@ -5,7 +5,7 @@ import { webviewHtml, rendererBundle } from './view-fixture';
 import { createSafeMarkdownRenderer } from '../src/pi/safe-markdown';
 import { initialConversationState, reduceRpcEvent } from '../src/pi/reducer';
 
-function fixture(options: { images?: boolean; clipboard?: boolean; missing?: boolean; cardRenderer?: import('../src/pi/view-host').ViewHost['cardRenderer'] } = {}) {
+function fixture(options: { images?: boolean; clipboard?: boolean; missing?: boolean; cardRenderer?: import('../src/pi/view-host').ViewHost['cardRenderer']; cardActions?: import('../src/pi/view-host').ViewHost['cardActions'] } = {}) {
   const dom = new JSDOM(webviewHtml(), { runScripts: 'outside-only', pretendToBeVisual: true });
   const win = dom.window;
   let persisted: unknown;
@@ -22,7 +22,7 @@ function fixture(options: { images?: boolean; clipboard?: boolean; missing?: boo
   win.requestAnimationFrame = cb => { frames.push(cb); return frames.length; };
   const sent: Record<string, unknown>[] = [];
   let receive: (message: unknown) => void = () => {};
-  Object.assign(win, { testHost: { attachments, cardRenderer: options.cardRenderer, getState: () => undefined, setState: (state: unknown) => { persisted = state; }, postMessage: (message: Record<string, unknown>) => sent.push(message), onMessage: (listener: typeof receive) => { receive = listener; } } });
+  Object.assign(win, { testHost: { attachments, cardRenderer: options.cardRenderer, cardActions: options.cardActions, getState: () => undefined, setState: (state: unknown) => { persisted = state; }, postMessage: (message: Record<string, unknown>) => sent.push(message), onMessage: (listener: typeof receive) => { receive = listener; } } });
   win.eval(rendererBundle() + '\nwindow.testView = PiView.mountPiView(window.testHost);');
   const flush = () => { while (frames.length) frames.shift()!(0); };
   const snapshot = (state: Record<string, unknown>) => { receive({ type: 'snapshot', state }); flush(); };
@@ -268,6 +268,21 @@ test('mounted view disposes tool renderer instances on removal, reset and view d
     f.snapshot(state);
     (f.win as unknown as { testView: { dispose(): void } }).testView.dispose();
     assert.deepEqual([mounted, disposed], [3, 3]);
+  } finally { f.dom.window.close(); }
+});
+
+test('historical edit Copy uses presentation capability without connection, draft mutation or modal delivery', async () => {
+  const copied: string[] = [];
+  const f = fixture({ cardActions: { copy: async text => { copied.push(text); }, openLink: async () => {}, popOutCode: async () => {} } });
+  try {
+    f.snapshot({ sessionUnavailable: true, messages: [{ key: 'history', role: 'assistant', content: [{ type: 'toolCall', id: 'edit', name: 'edit', arguments: { oldText: 'a', newText: 'b' }, toolStatus: 'result', resultOutput: 'saved' }] }] });
+    f.draft('retained draft');
+    const button = f.win.document.querySelector<HTMLButtonElement>('.card-plugin-copy')!;
+    button.focus(); button.click(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+    assert.deepEqual(copied, ['-a\n+b']); assert.equal(f.prompt.value, 'retained draft'); assert.equal(f.win.document.activeElement, button);
+    const modal = f.win.document.createElement('dialog'); modal.setAttribute('open', ''); f.win.document.body.append(modal);
+    button.click(); await Promise.resolve(); assert.equal(copied.length, 1);
+    assert.equal(f.sent.some(message => message.type === 'prompt'), false);
   } finally { f.dom.window.close(); }
 });
 

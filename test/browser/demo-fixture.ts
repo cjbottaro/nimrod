@@ -21,7 +21,7 @@ type TestWindow = Window & {
 export const visible = (id: string) => `.session-view:not([hidden]) [data-pi-id="${id}"]`;
 
 /** Real app bundle and independent offline demo children. Never starts Pi. */
-export async function demoFixture(page: Page, appState: Record<string, unknown> = {}, catalog: { path: string; sessionId: string; name: string; preview: string; modified: number; lastUserMessageAt?: number }[] = [], typingOptions?: { drafts: Record<string, unknown>; persistent: boolean }, pluginOptions?: { settings: string; packages: Record<string, string> }) {
+export async function demoFixture(page: Page, appState: Record<string, unknown> = {}, catalog: { path: string; sessionId: string; name: string; preview: string; modified: number; lastUserMessageAt?: number }[] = [], typingOptions?: { drafts: Record<string, unknown>; persistent: boolean }, pluginOptions?: { settings: string; packages: Record<string, string> }, fixtureOptions?: { tool?: 'edit' }) {
   const result = await build({ entryPoints: ['src/main.ts'], bundle: true, format: 'iife', platform: 'browser', write: false,
     loader: { '.css': 'empty' }, plugins: [{ name: 'raw', setup(builder) {
       builder.onResolve({ filter: /\.html\?raw$/ }, args => ({ path: path.resolve(args.resolveDir, args.path.replace('?raw', '')), namespace: 'raw' }));
@@ -69,6 +69,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'drafts_references') return [];
     if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 1;
     if (command.startsWith('preferences_') || command === 'record_command_usage') return preferences.invoke(command, args);
+    if (command === 'plugin:clipboard-manager|write_text' || command === 'open_card_link' || command === 'open_code_popout') return; // Recorded presentation actions, no OS side effects.
     if (command === 'read_card_plugin') {
       const text = pluginOptions?.packages[String(args.name)];
       if (text === undefined) throw new Error('Fixture package missing');
@@ -92,7 +93,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'start_pi') {
       const token = String(args.token);
       if ((args.config as JsonRecord)?.mode !== (typingOptions?.persistent ? 'saved' : 'temporary') || children.has(token)) throw new Error('Only independent offline fixture processes are allowed');
-      const child = spawn(process.execPath, ['src-tauri/resources/demo.mjs'], { cwd: process.cwd(), stdio: ['pipe', 'pipe', 'pipe'] });
+      const child = spawn(process.execPath, ['src-tauri/resources/demo.mjs'], { cwd: process.cwd(), env: { ...process.env, NIMROD_DEMO_TOOL: fixtureOptions?.tool ?? '' }, stdio: ['pipe', 'pipe', 'pipe'] });
       children.set(token, child);
       createInterface({ input: child.stdout }).on('line', line => send(token, { kind: 'rpc', value: JSON.parse(line) }));
       child.stderr.on('data', chunk => errors.push(String(chunk)));

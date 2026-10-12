@@ -305,6 +305,22 @@ async fn open_link(
     open_link_at(&href, &cwd).await
 }
 
+#[tauri::command]
+async fn open_card_link(
+    window: tauri::Window,
+    workspaces: tauri::State<'_, WorkspaceWindows>,
+    href: String,
+) -> Result<(), String> {
+    let cwd = workspaces
+        .directories
+        .lock()
+        .unwrap()
+        .get(window.label())
+        .cloned()
+        .ok_or("Card links require an owned project window")?;
+    open_link_at(&href, &cwd).await
+}
+
 async fn open_link_at(href: &str, cwd: &Path) -> Result<(), String> {
     match links::parse_link(href, cwd)? {
         links::Link::Web(url) => {
@@ -496,7 +512,8 @@ fn main() {
             session_file_info,
             write_pi,
             stop_pi,
-            open_link
+            open_link,
+            open_card_link
         ])
         .on_menu_event(|app, event| {
             if native_menu::is_quit(event.id().as_ref()) {

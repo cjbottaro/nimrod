@@ -6,7 +6,7 @@ import { reconcileContentBlock } from "./content-dom";
 import { informationalExtensionStatuses, presentActivity } from "./activity-state";
 import { beginSubmission, ComposerState, dismissUnknownSubmission, recoverClearedQueue, restoreRecoveredQueueItem, settleSubmission, SubmissionMode, updateDraft } from "./composer-state";
 import { keyboardHint, keyboardSubmissionMode, renderPrimaryAction, resizeComposer } from "./composer-dom";
-import { codeBlockSource, createSafeMarkdownRenderer } from "./safe-markdown";
+import { codeBlockSource, createSafeMarkdownRenderer, isSafeLink } from "./safe-markdown";
 import { showCopyResult } from './code-actions';
 import { persistWebviewState, restoreComposerState } from "./webview-state";
 import { captureStreamingOutput, createToolDetails, renderToolCard as renderToolCardDom, restoreStreamingOutput, updateToolCard, toolCardIsBusy, disposeToolCard } from "./tool-card";
@@ -258,6 +258,10 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   function cardDomHost(): import('./dom-card-renderer').CardDomHost {
     return {
       markdown: renderMarkdown,
+      code: (source, language) => { const node = element('div', 'markdown'); node.innerHTML = markdown.renderCode(source, language); return node; },
+      copy: host.cardActions?.copy,
+      openLink: host.cardActions ? async href => { if (!isSafeLink(href)) throw new Error('Unsupported card link'); await host.cardActions!.openLink(href); } : undefined,
+      popOutCode: host.cardActions?.popOutCode,
       beforeChange: () => transcriptScroll.request(transcriptScroll.capture()),
       afterChange: () => transcriptScroll.resize(),
       canInteract: () => active && !disposed && !document.querySelector('dialog[open]'),
@@ -457,10 +461,14 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     button.disabled = true;
     status.textContent = "Copying…";
     try {
-      if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
-      await navigator.clipboard.writeText(source);
+      if (host.cardActions) await host.cardActions.copy(source);
+      else {
+        if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
+        await navigator.clipboard.writeText(source);
+      }
       setCopyStatus(button, status, true);
     } catch {
+      if (host.cardActions) { setCopyStatus(button, status, false); return; }
       const id = `copy-${++nextCopyRequest}`;
       pendingCopies.set(id, { button, status });
       post("copyCode", { id, text: source });
@@ -792,7 +800,10 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     // Native host handles validated links; never navigate the application webview.
     event.stopPropagation();
     const href = link.getAttribute("href");
-    if (href) post("openLink", { href });
+    if (href) {
+      if (host.cardActions) { if (isSafeLink(href)) void host.cardActions.openLink(href).catch(reportRenderError); }
+      else post('openLink', { href });
+    }
   });
   required("dialog-save").addEventListener("click", () => {
     if (editorRequest) post("uiResponse", { id: editorRequest, value: dialogText.value });
