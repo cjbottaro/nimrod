@@ -43,7 +43,7 @@ Without installation, use `./bin/nimrod .`. The launcher opens or focuses a proj
 - [Sessions](docs/sessions.md) — persistent and temporary conversations, resume, restart, close and deletion.
 - [Session sidebar](docs/session-sidebar.md) — All, Unread and Working views, activity indicators and resizing.
 - [Drafts](docs/drafts.md) — native per-session storage, debounced saves and recovery.
-- [Writing messages](docs/writing-messages.md) — send, steer, queue, Stop, slash commands and recovery.
+- [Writing messages](docs/writing-messages.md) — send, steer, queue, Stop, slash commands and recovery. [Error messages](docs/error-messages.md) describes the shared notice strip and remaining consolidation work.
 - [Reading conversations](docs/reading-conversations.md) — tool/reasoning cards, code actions, links and auto-follow.
 - [Paste images](docs/image-paste.md) — image attachments and delivery behavior.
 - [Model and thinking preferences](docs/model-thinking.md) — change upcoming-request configuration during work.

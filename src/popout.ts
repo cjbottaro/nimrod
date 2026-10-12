@@ -1,3 +1,4 @@
+import { installApplicationNotices } from './application-notices';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
@@ -21,11 +22,13 @@ export async function mountPopout(): Promise<void> {
   content.setAttribute('aria-label', 'Pop-out content');
   const rendered = document.createElement('div'); rendered.className = 'markdown popout-document';
   content.append(rendered);
-  const error = document.createElement('p'); error.className = 'popout-error'; error.setAttribute('role', 'alert'); error.hidden = true;
-  document.body.append(error, content);
+  document.body.append(content);
+  const notices = installApplicationNotices(window);
+  window.addEventListener('unload', () => notices.dispose(), { once: true });
+  let noticeSequence = 0;
   let revision = -1;
   let zoomTask = Promise.resolve();
-  const report = (message: unknown) => { error.textContent = String(message); error.hidden = false; };
+  const report = (message: unknown) => { notices.report({ id: `reference:${++noticeSequence}`, operation: 'Reference window', message: String(message) }); };
   const applyPreferences = (snapshot: PreferencesSnapshot) => {
     if (snapshot.revision < revision) return;
     try {
@@ -73,7 +76,7 @@ export async function mountPopout(): Promise<void> {
         if (source === undefined || !status) return;
         copy.disabled = true;
         try { await writeText(source); showCopyResult(copy, status, true); }
-        catch { showCopyResult(copy, status, false); }
+        catch (error) { copy.disabled = false; status.textContent = ''; setCodeIcon(copy, 'copy'); report(`Could not copy source: ${String(error)}`); }
         return;
       }
       const link = target?.closest('a');

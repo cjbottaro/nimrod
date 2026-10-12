@@ -51,7 +51,7 @@ export function runtimePaths(value: unknown): RuntimePaths {
 /** Runtime fields have an explicit Save boundary; unsaved edits never affect a launch. */
 export function installRuntimeSettings(elements: {
   form: HTMLFormElement; fields: HTMLFieldSetElement; pi: HTMLInputElement; node: HTMLInputElement; status: HTMLElement;
-}, host: { read(): unknown; save(paths: RuntimePaths & { version: 1 }): void | Promise<void> }): {
+}, host: { read(): unknown; save(paths: RuntimePaths & { version: 1 }): void | Promise<void>; error?(message?: string): void }): {
   initialize(defaults: RuntimePaths, legacy?: unknown): void;
   current(): RuntimePaths;
   reload(): void;
@@ -60,7 +60,11 @@ export function installRuntimeSettings(elements: {
   const { form, fields, pi, node, status } = elements;
   let committed: RuntimePaths | undefined;
   fields.disabled = true;
-  const message = (text: string, error = false) => { status.textContent = text; status.classList.toggle('error', error); };
+  if (host.error) form.noValidate = true;
+  const message = (text: string, error = false) => {
+    if (error && host.error) { host.error(text); status.textContent = ''; status.classList.remove('error'); }
+    else { status.textContent = text; status.classList.toggle('error', error); }
+  };
   const show = () => { if (committed) { pi.value = committed.pi; node.value = committed.node; } };
   const submit = async (event: Event) => {
     event.preventDefault();
@@ -70,7 +74,7 @@ export function installRuntimeSettings(elements: {
       fields.disabled = true;
       const saving = host.save({ version: 1, ...next });
       if (saving) await saving;
-      committed = next; show();
+      committed = next; show(); host.error?.();
       message('Saved. These paths will be used for the next session.');
     } catch (error) { message(`Not saved: ${String(error)}`, true); }
     finally { fields.disabled = false; }

@@ -263,7 +263,7 @@ test('theme persistence failure restores committed colors without replaying acce
     query('Nord'); assert.equal(f.win.document.documentElement.dataset.themeMode, 'dark');
     key('Enter'); await f.tick(); await f.tick();
     assert.equal(f.win.document.documentElement.dataset.theme, 'nimrod');
-    assert.equal(saves, 1); assert.match(f.element('palette-status').textContent!, /disk full/);
+    assert.equal(saves, 1); assert.match(f.element('application-notices').textContent!, /disk full/);
     assert.equal(f.calls.some(c => c.command === 'start_pi'), false);
   } finally { f.win.close(); }
 });
@@ -1435,7 +1435,7 @@ test('failed file preview and cancelled confirmation keep the conversation and d
       assert.equal(f.win.document.querySelectorAll('.session-row').length, 1); assert.equal(prompt.value, 'Keep after cancellation');
       assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false); assert.equal(prompt.readOnly, false);
       assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
-      if (!cancelled) assert.match(f.element('launch-error').textContent!, /Session store unavailable/);
+      if (!cancelled) assert.match(f.element('application-notices').textContent!, /Session store unavailable/);
       f.disconnect();
     } finally { f.dom.window.close(); }
   }
@@ -1741,19 +1741,19 @@ test('diagnostic read failure does not misreport an already accepted test as a d
   const f = await fixture(undefined, { windowWorkspace: '/project', notificationDiagnosticsError: 'fixture diagnostics unavailable' });
   try {
     f.openSettings(); f.element<HTMLButtonElement>('notification-test').click(); await f.tick();
-    assert.match(f.element('notification-status').textContent!, /Test notification submitted.*Could not read diagnostics.*fixture diagnostics unavailable/);
+    assert.match(f.element('application-notices').textContent!, /Test notification submitted.*Could not read diagnostics.*fixture diagnostics unavailable/);
     assert.equal(f.element('launch-error').textContent, '');
     assert.equal(f.calls.filter(c => c.command === 'test_notification').length, 1);
     assert.equal(f.element<HTMLButtonElement>('notification-test').disabled, false);
   } finally { f.dom.window.close(); }
 });
 
-test('native notification failures are visible both in Settings and the project error area', async () => {
+test('native notification failures use one shared notice in Settings', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project', notificationError: 'fixture macOS submission failure' });
   try {
     f.openSettings(); f.element<HTMLButtonElement>('notification-test').click(); await f.tick();
-    assert.match(f.element('notification-status').textContent!, /fixture macOS submission failure/);
-    assert.match(f.element('launch-error').textContent!, /fixture macOS submission failure/);
+    assert.equal(f.element('notification-status').textContent, '');
+    assert.match(f.element('application-notices').textContent!, /fixture macOS submission failure/);
     assert.equal(f.element<HTMLButtonElement>('notification-test').disabled, false);
   } finally { f.dom.window.close(); }
 });
@@ -1845,7 +1845,7 @@ test('unconfirmed launch name fails startup without a rename RPC or prompt fallb
   try {
     await chooseNamedSession(f);
     await submitSessionName(f, 'Planned work');
-    assert.match(f.element('launch-error').textContent!, /Pi did not confirm the selected session name/);
+    assert.match(f.element('application-notices').textContent!, /Pi did not confirm the selected session name/);
     assert.equal(f.element<HTMLButtonElement>('send').disabled, true);
     assert.equal(f.calls.filter(c => (c.args.message as JsonRecord)?.type === 'set_session_name').length, 0);
     assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
@@ -1925,7 +1925,7 @@ test('failed workspace initialization shows the error without flashing welcome',
   const f = await fixture(undefined, { windowWorkspaceError: 'fixture startup failure' });
   try {
     assert.equal(f.element('welcome').hidden, true);
-    assert.match(f.element('launch-error').textContent!, /fixture startup failure/);
+    assert.match(f.element('application-notices').textContent!, /fixture startup failure/);
     assert.equal(f.calls.some(c => c.command === 'start_pi'), false);
   } finally { f.dom.window.close(); }
 });
@@ -1963,7 +1963,8 @@ test('external settings edits synchronize Appearance and saved Runtime while pre
     assert.match(f.element('runtime-status').textContent!, /unsaved edits are retained/);
     assert.equal(f.calls.some(c => c.command === 'start_pi'), false);
     f.preferences.external('{broken}');
-    assert.equal(f.element('preferences-error').hidden, false);
+    assert.equal(f.element('preferences-error').hidden, true);
+    assert.equal(f.element('application-notices').hidden, false);
     assert.equal(f.element<HTMLSelectElement>('theme-picker').value, 'dracula');
     assert.equal(pi.value, '/unsaved/pi');
     f.preferences.external('{"appearance.theme":"dracula","appearance.zoom":150,"runtime.piPath":"/external/pi","runtime.nodePath":"/external/node"}');
@@ -2109,7 +2110,7 @@ test('resume last is explicit, restores exact-file history and scoped uncertain 
     assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'newer draft');
     assert.equal(f.saved().drafts[`file:${last.path}`].submission.status, 'unknown');
     assert.equal(f.element<HTMLButtonElement>('send').disabled, true);
-    assert.match(f.element('submission-notice').textContent!, /did not confirm/i);
+    assert.match(f.element('application-notices').textContent!, /did not confirm/i);
     assert.equal(f.calls.filter(c => (c.args.message as JsonRecord)?.type === 'prompt').length, 0);
     f.disconnect();
   } finally { f.dom.window.close(); }
@@ -2132,7 +2133,7 @@ test('resume picker cancellation starts nothing and identity mismatch disables s
     f.element<HTMLInputElement>('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await f.tick(); await f.tick();
     assert.equal(f.element('welcome').hidden, true);
-    assert.match(f.element('launch-error').textContent!, /exact selected session/);
+    assert.match(f.element('application-notices').textContent!, /exact selected session/);
     assert.equal(f.element<HTMLButtonElement>('send').disabled, true);
     assert.equal(f.saved().last, undefined);
     assert.ok(f.calls.filter(c => c.command === 'stop_pi').length > 1);
@@ -2213,11 +2214,11 @@ test('invalid native resume does not fall back to a new session or overwrite rem
     f.element<HTMLButtonElement>('resume-last').click(); await f.confirm();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
     assert.equal(f.calls.filter(c => c.command === 'write_pi').length, 0);
-    assert.match(f.element('launch-error').textContent!, /Session file unavailable/);
+    assert.match(f.element('application-notices').textContent!, /Session file unavailable/);
     assert.equal(f.saved().drafts[`file:${last.path}`].draft, 'keep me');
     assert.deepEqual(f.saved().last, last);
     assert.equal(f.element('welcome').hidden, true);
-    assert.match(f.win.document.querySelector('.tab-notice')!.textContent!, /Session file unavailable/);
+    assert.match(f.element('application-notices').textContent!, /Session file unavailable/);
   } finally { f.dom.window.close(); }
 });
 
@@ -2400,7 +2401,7 @@ test('failed restart shutdown never launches a replacement and a second attempt 
     const restart = f.element<HTMLButtonElement>('restart-session'); restart.click(); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
     assert.equal(f.win.document.querySelectorAll('.session-row').length, 1);
-    assert.match(f.win.document.querySelector('.tab-notice')!.textContent!, /Could not restart Pi.*fixture shutdown failure/);
+    assert.match(f.element('application-notices').textContent!, /Could not restart Pi.*fixture shutdown failure/);
     assert.equal(restart.disabled, false);
     stopError = undefined; restart.click(); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'stop_pi' && c.args.token).length, 2);
@@ -2421,7 +2422,7 @@ test('restart resume failure keeps the saved session and draft without falling b
     assert.equal(starts.length, 2); assert.equal((starts[1].args.config as JsonRecord).mode, 'resume');
     assert.equal(f.win.document.querySelectorAll('.session-row').length, 1);
     assert.equal(prompt.value, 'Retained after failed resume');
-    assert.match(f.element('launch-error').textContent!, /Session file unavailable/);
+    assert.match(f.element('application-notices').textContent!, /Session file unavailable/);
     assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
   } finally { f.dom.window.close(); }
 });
@@ -2675,7 +2676,7 @@ test('brand-new unwritten session can select its first model and effort through 
     assert.equal(f.element('mode-badge').textContent, 'Pi · awaiting first save');
     f.element<HTMLButtonElement>('thinking').click(); await f.tick();
     assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
-    assert.match(f.element('palette-status').textContent!, /Select a model/);
+    assert.match(f.element('application-notices').textContent!, /Select a model/);
     const key = (key: string) => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
     key('Escape'); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
     f.element<HTMLButtonElement>('model').click(); await f.tick();
@@ -2885,8 +2886,9 @@ test('native draft persistence failure prevents a saved prompt and discards the 
     assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
     assert.equal(prompt.value, '');
     assert.equal(f.element('queue-activity').querySelector('[data-recovery-id]'), null);
-    assert.match(f.element('storage-error').textContent!, /fixture disk failure/);
-    assert.match(f.element('submission-notice').textContent!, /Nothing was sent/);
+    assert.equal(f.element('storage-error').textContent, '');
+    assert.equal(f.element('submission-notice').hidden, true);
+    assert.match(f.element('application-notices').textContent!, /fixture disk failure.*Nothing was sent/);
     f.disconnect();
   } finally { f.dom.window.close(); }
 });

@@ -1,3 +1,4 @@
+import { installApplicationNotices } from './application-notices';
 import { Channel, invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -44,9 +45,25 @@ import './theme.css';
 import './workspace.css';
 import './keybindings.css';
 import './modal.css';
+import './application-notices.css';
 
 const required = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+let applicationNotices: ReturnType<typeof installApplicationNotices> | undefined;
 async function main(): Promise<void> {
+const notices = applicationNotices = installApplicationNotices(window);
+let noticeSequence = 0;
+const feedback = (id: string, operation: string) => (message?: string) => {
+  if (message) notices.report({ id: `${id}:${++noticeSequence}`, cause: `feedback:${id}`, operation, message }); else notices.store.resolveCause(`feedback:${id}`);
+};
+let projectErrorText = '';
+// Transitional producer channel: legacy writers no longer own a visible node.
+const projectErrors = {
+  get textContent() { return projectErrorText; },
+  set textContent(text: string | null) {
+    projectErrorText = text ?? '';
+    if (projectErrorText) notices.report({ id: `project-operation:${++noticeSequence}`, operation: 'Project action', message: projectErrorText });
+  },
+};
 const preferences = await installPreferences({
   snapshot: () => invoke<PreferencesSnapshot>('preferences_snapshot'),
   settings: (expected, text) => invoke<PreferencesSnapshot>('preferences_settings', { expected, text }),
@@ -55,8 +72,9 @@ const preferences = await installPreferences({
   migrate: (text, entries) => invoke<PreferencesSnapshot>('preferences_migrate', { text, entries }),
   listen: receive => listen<PreferencesSnapshot>('nimrod-preferences', event => receive(event.payload)),
 }, localStorage, message => {
-  const notice = required('preferences-error');
-  notice.hidden = !message; notice.textContent = message ?? '';
+  required('preferences-error').hidden = true;
+  if (message) notices.report({ id: 'preferences', operation: 'Read settings', message });
+  else notices.resolve('preferences');
   const button = required('open-settings');
   button.classList.toggle('error', !!message);
   button.title = message ? 'Settings file error — open Settings for details' : 'Settings · ⌘/Ctrl ,';
@@ -75,14 +93,15 @@ const pluginLoading = installCardPluginLoading(cardPlugins, {
   loading: () => { required('card-plugin-status').textContent = 'Loading card plugins…'; },
   complete: (report, errors) => {
     required('card-plugin-status').textContent = `Card plugins: ${report.personalLoaded} personal (${report.cacheHits} cached), ${report.manifestLoaded} manifest packages. Reload affects new cards.`;
-    const notice = required('card-plugin-error'); notice.hidden = !errors; notice.textContent = errors;
+    required('card-plugin-error').hidden = true;
+    if (errors) notices.report({ id: `card-plugins:${++noticeSequence}`, cause: 'card-plugins', operation: 'Load card plugins', message: errors }); else notices.store.resolveCause('card-plugins');
   },
 });
 function reloadCardPlugins(force = false): Promise<void> { return pluginLoading.reload(force); }
 // Compiler/module loading must not gate project/session boot or input restoration.
 void reloadCardPlugins();
 const welcome = required('welcome'), conversation = required('conversation');
-const error = required('launch-error'), cwd = required<HTMLInputElement>('cwd');
+const error = projectErrors, cwd = required<HTMLInputElement>('cwd');
 const dialogs = new Dialogs();
 const deletionReview = installDeletionReview(required<HTMLDialogElement>('deletion-review'), {
   canCover: other => other.id === 'command-palette' && palette.isDeleting,
@@ -92,6 +111,7 @@ const keybindingEditor = installKeybindingEditor(window, required('settings-page
   read: () => preferences.keybindings(),
   save: (id, bindings, reassign) => preferences.saveKeybinding(id, bindings, reassign, isMac(window)),
   resetAll: () => preferences.resetKeybindings(),
+  error: feedback('keybindings', 'Edit keybindings'),
 });
 const settingsNavigation = installSettingsNavigation(required<HTMLDialogElement>('settings-page'));
 const settingsSidebarWidthKey = 'nimrod.settings.sidebar.width';
@@ -129,8 +149,7 @@ let recency = new SessionRecency(undefined);
 const sidebarViews = SESSION_VIEWS;
 let sidebarView: SessionView = 'all';
 function popoutError(message: string): void {
-  const notice = required('storage-error');
-  notice.hidden = false; notice.textContent = `Pop-outs: ${message}`;
+  notices.report({ id: `popout:${++noticeSequence}`, operation: 'Reference windows', message });
 }
 const popouts = installSessionPopouts({
   sync: (sessions, active) => invoke('sync_popout_sessions', { sessions, active }),
@@ -161,8 +180,10 @@ function stored(key: string): unknown {
   return localState.has(key) ? localState.get(key) : preferences.readState(key);
 }
 function persistenceError(e: unknown): void {
-  required('storage-error').hidden = false;
-  required('storage-error').textContent = `Local persistence failed: ${e}. Keep a copy of your draft before quitting.`;
+  notices.report({ id: `storage:${++noticeSequence}`, operation: 'Save local data', message: String(e) });
+}
+function draftPersistenceError(e: unknown): void {
+  notices.report({ id: 'draft-storage', cause: 'draft-storage', operation: 'Save drafts', message: String(e) });
 }
 function save(key: string, value: unknown): void {
   localState.set(key, value);
@@ -192,6 +213,7 @@ const runtime = installRuntimeSettings({
 }, {
   read: () => runtimeDefaults ? preferences.runtime(runtimeDefaults) : null,
   save: paths => preferences.saveRuntime(paths),
+  error: feedback('runtime', 'Save runtime paths'),
 });
 const themes = installThemes({
   root: document.documentElement,
@@ -200,10 +222,12 @@ const themes = installThemes({
 }, {
   read: () => preferences.theme(),
   save: library => preferences.saveTheme(library), newId: () => `import-${crypto.randomUUID()}`,
+  error: feedback('themes', 'Color theme'),
 });
 const zoom = installZoom(window, required<HTMLSelectElement>('zoom-level'), required('zoom-error'), {
   read: () => preferences.zoom(), save: percent => preferences.saveZoom(percent),
   apply: scale => getCurrentWebview().setZoom(scale),
+  error: feedback('zoom', 'App zoom'),
 }, false);
 const notificationPicker = required<HTMLSelectElement>('notification-mode');
 const notificationStatus = required('notification-status');
@@ -216,10 +240,13 @@ const reloadNotifications = () => {
   notificationDiagnostics.disabled = testingNotification || readingNotificationDiagnostics;
 };
 const notificationProgress = (message: string) => { notificationStatus.textContent = message; };
-const notificationError = (message: string) => { notificationProgress(message); error.textContent = message; };
+const notificationError = (message: string) => {
+  notificationStatus.textContent = '';
+  notices.report({ id: `notifications:${++noticeSequence}`, cause: 'notifications', operation: 'Desktop notifications', message });
+};
 async function refreshNotificationDiagnostics(prefix = 'Notification diagnostics.') {
   try { notificationProgress(`${prefix} ${await invoke<string>('notification_diagnostics')}`); }
-  catch (error) { notificationProgress(`${prefix} Could not read diagnostics: ${String(error)}`); }
+  catch (error) { notificationError(`${prefix} Could not read diagnostics: ${String(error)}`); }
 }
 notificationDiagnostics.addEventListener('click', () => {
   if (testingNotification || readingNotificationDiagnostics) return;
@@ -234,7 +261,7 @@ notificationTest.addEventListener('click', () => {
   void invoke<NotificationDispatch>('test_notification').then(async outcome => {
     if (outcome === 'suppressed') notificationProgress('Test notification was suppressed because the app is closing or alerts were disabled.');
     else {
-      if (outcome === 'submitted' && error.textContent?.startsWith('Notifications:')) error.textContent = '';
+      if (outcome === 'submitted') notices.store.resolveCause('notifications');
       await refreshNotificationDiagnostics('Test notification submitted to the OS.');
     }
   }).catch(error => notificationError(`Notifications: ${String(error)}`)).finally(() => {
@@ -245,8 +272,8 @@ reloadNotifications();
 notificationPicker.addEventListener('change', () => {
   notificationPicker.disabled = true;
   void preferences.saveNotifications(notificationPicker.value === 'on').then(() => {
-    notificationStatus.textContent = 'Saved. System notification settings still apply.';
-  }).catch(error => { notificationStatus.textContent = String(error); }).finally(() => {
+    notificationStatus.textContent = 'Saved. System notification settings still apply.'; notices.resolve('notification-settings');
+  }).catch(error => { notificationStatus.textContent = ''; notices.report({ id: 'notification-settings', operation: 'Save notification settings', message: String(error) }); }).finally(() => {
     reloadNotifications(); notificationPicker.disabled = false;
   });
 });
@@ -328,15 +355,16 @@ preferences.subscribe(() => {
   void reloadCardPlugins();
   runtime.reload(); themes.reload(); void zoom.reload(); reloadNotifications(); keybindingEditor.reload(); refreshShortcutHints();
 });
-const unlistenDraftErrors = await listen<string>('nimrod-draft-error', event => persistenceError(event.payload));
+const unlistenDraftErrors = await listen<string>('nimrod-draft-error', event => draftPersistenceError(event.payload));
 const unlistenDraftClose = await getCurrentWindow().onCloseRequested(() => {
   // Rust owns child shutdown/window destruction and flushes staged drafts.
-  void nativeDrafts?.flush().catch(persistenceError);
+  void nativeDrafts?.flush().catch(draftPersistenceError);
 });
-window.addEventListener('pagehide', () => { void nativeDrafts?.flush().catch(persistenceError); });
+window.addEventListener('pagehide', () => { void nativeDrafts?.flush().catch(draftPersistenceError); });
 const disposeTimeRefresh = installSessionTimeRefresh(window, () => { for (const tab of tabs) refreshTime(tab); });
 window.addEventListener('unload', () => {
   unloading = true;
+  notices.dispose();
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
   pluginLoading.dispose();
   sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
@@ -516,7 +544,7 @@ async function enterWorkspace(path: string): Promise<void> {
   sidebarResize.reload();
   const savedView = stored(`nimrod.sidebar.view:${path}`);
   sidebarView = savedView === 'attention' || savedView === 'unread' ? 'unread' : savedView === 'working' ? 'working' : 'all';
-  nativeDrafts = new NativeDrafts(path, persistenceError);
+  nativeDrafts = new NativeDrafts(path, draftPersistenceError);
   try { drafts = makeDrafts(await nativeDrafts.load()); }
   catch (failure) { persistenceError(failure); throw failure; }
   const { name, parent } = projectPathParts(path);
@@ -610,6 +638,7 @@ async function paletteProjects(): Promise<PalettePage> {
 }
 const palette = installCommandPalette(window, required<HTMLDialogElement>('command-palette'), {
   canOpen: () => ready && !settings.isOpen,
+  error: (message, operation) => notices.report({ id: `palette:${operation}:${++noticeSequence}`, operation, message }),
   shortcuts: false,
   ranking: {
     usage: () => readCommandUsage(preferences.readState(COMMAND_USAGE_KEY)),
@@ -617,8 +646,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
       // Native read-modify-write serializes acceptance across project windows.
       // Failure reports independently; never blocks or replays the command.
       void preferences.recordCommandUsage(id).catch(error => {
-        required('storage-error').hidden = false;
-        required('storage-error').textContent = `Could not save command history: ${error}`;
+        notices.report({ id: `command-history:${++noticeSequence}`, operation: 'Save command history', message: String(error) });
       });
     },
   },
@@ -724,6 +752,12 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
     if (!ready || !workspace || presented !== tab || !tabs.includes(tab) || tab.closing || tab.restarting || tab.deleting || document.querySelector('dialog[open]')) throw new Error('Card action is no longer available');
   }
   tab.view = mountPiView({
+    reportNotice: notice => {
+      if (unloading || tab.closing || !tabs.includes(tab)) return;
+      notices.report({ ...notice, id: `${tab.id}:${notice.id}`, owner: notice.cause === 'draft-storage' ? undefined : tab.id, operation: `${tab.title}: ${notice.operation}` });
+    },
+    resolveNotice: id => notices.resolve(`${tab.id}:${id}`),
+    resolveNoticeCause: cause => notices.store.resolveCause(cause, tab.id),
     cardRenderer: data => cardPlugins.select(data),
     cardActions: {
       copy: async text => { guardCardAction(); await writeText(text); },
@@ -764,7 +798,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
         const retained = referencedAttachments(value);
         for (const id of referencedAttachments(previous)) if (!retained.has(id)) { temporaryImages.delete(id); ephemeralImages.delete(id); }
       }
-      if (tab.mode !== 'temporary' && (previous?.submission !== next?.submission || previous?.recovered !== next?.recovered || previous?.attachments !== next?.attachments)) void nativeDrafts?.flush().catch(persistenceError);
+      if (tab.mode !== 'temporary' && (previous?.submission !== next?.submission || previous?.recovered !== next?.recovered || previous?.attachments !== next?.attachments)) void nativeDrafts?.flush().catch(draftPersistenceError);
       // A receipt can be pending before Pi publishes any state/activity event.
       if (pending !== submissionPending(tab)) updateTab(tab);
     },
@@ -800,8 +834,8 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
           if (tab.session === session && tab.token === token && currentSubmission()?.id === message.id) tab.receive?.({ type: 'submissionReceipt', id: String(message.id), outcome: 'rejected', error: 'Session changed before submission. Nothing was sent.' });
         }).catch(failure => {
           pendingNativeSubmission = undefined;
-          persistenceError(failure);
-          if (current()) tab.receive?.({ type: 'submissionReceipt', id: String(message.id), outcome: 'rejected', error: 'Could not save the message before sending. Nothing was sent.' });
+          draftPersistenceError(failure);
+          if (current()) tab.receive?.({ type: 'submissionReceipt', id: String(message.id), outcome: 'rejected', noticeCause: 'draft-storage', error: `Could not save the message before sending: ${String(failure)}. Nothing was sent.` });
         });
       } else void tab.session.handle(message);
     },
@@ -853,9 +887,10 @@ function updateTab(tab: Tab): void {
 }
 function showNotice(tab: Tab, text: string, retry = false): void {
   tab.failed = true;
-  tab.notice.hidden = false; tab.notice.replaceChildren();
-  const message = document.createElement('p'); message.textContent = text; tab.notice.append(message);
-  if (retry && !deletion.blocked(tab.file?.path)) tab.notice.append(button('Retry', () => { if (!tab.restarting && !deletion.pending) void launch(tab); }));
+  tab.notice.hidden = true; tab.notice.replaceChildren();
+  notices.report({ id: `${tab.id}:connection`, owner: tab.id, cause: 'connection', priority: 10, operation: `${tab.title}: Session connection`, message: text,
+    actions: retry && !deletion.blocked(tab.file?.path) ? [{ label: 'Retry connection', enabled: () => tabs.includes(tab) && !tab.closing && !tab.restarting && !deletion.pending, run: () => launch(tab) }] : undefined,
+  });
   updateTab(tab);
 }
 async function withTabDialog<T>(tab: Tab, action: (title: string) => Promise<T>, title: string): Promise<T> {
@@ -878,7 +913,8 @@ async function pickPreference(tab: Tab, kind: 'model' | 'thinking'): Promise<voi
       choose: (_title, options, current) => request.choose(options, current),
       error: message => {
         request.error(message);
-        if (tab.cancelPreference === request.cancel) error.textContent = `${tab.title}: ${message}`;
+        // The palette's error callback routes this failure to the shared strip;
+        // do not add a second project-level copy of the same operation.
       },
     });
   })();
@@ -913,6 +949,9 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
   let startupPackets: Packet[] | undefined = [];
   const current = new PiSession(rpc, {
     publish: message => { if (currentToken()) tab.receive?.(message); },
+    notice: (message, severity, cause) => {
+      if (currentToken() && !tab.closing && !tab.restarting && !tab.deleting) notices.report({ id: `${tab.id}:pi:${++noticeSequence}`, owner: tab.id, cause, operation: `${tab.title}: Pi operation`, message, severity });
+    },
     promptAccepted: () => { if (!unloading && currentToken() && !tab.closing && !tab.restarting && !tab.deleting) touchTab(tab); },
     attention: (kind, response) => {
       if (unloading || !currentToken() || tab.closing || tab.restarting || tab.deleting) return;
@@ -932,11 +971,11 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
     input: (title, prefill) => withTabDialog(tab, label => dialogs.input(label, prefill, token), title),
     confirm: (title, message) => withTabDialog(tab, label => dialogs.confirm(label, message, token), title),
     copy: writeText, openLink: href => invoke('open_link', { token, href }),
-    disconnected: () => {
+    disconnected: reason => {
       if (!currentToken()) return;
       tab.ended = true; tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' }); dialogs.cancel(token);
       void stopOwned(tab).catch(e => { if (currentToken()) showNotice(tab, `Could not stop Pi: ${e}`); });
-      if (!tab.closing && !tab.restarting && !tab.deleting) showNotice(tab, 'Session disconnected. Nothing will be sent automatically.', !!tab.file?.exists);
+      if (!tab.closing && !tab.restarting && !tab.deleting) showNotice(tab, `${reason || 'Session disconnected'}. Nothing will be sent automatically.`, !!tab.file?.exists);
       updateTab(tab); controls();
     },
     identity: async (file, id) => {
@@ -957,6 +996,7 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
     },
     changed: state => {
       if (!currentToken()) return;
+      if (!state.sessionUnavailable) notices.resolve(`${tab.id}:connection`);
       if (state.busy && !state.compacting && !state.sessionUnavailable) tab.failed = false;
       const previousTitle = tab.title;
       if (state.sessionName) tab.title = state.sessionName;
@@ -988,8 +1028,8 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
     await current.initialize(initialName);
     if (presented === tab && !tab.restarting && !document.querySelector('dialog[open]')) tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true });
   } catch (e) {
-    error.textContent = String(e); startupPackets = undefined; rpc.disconnect(String(e));
-    try { await stopOwned(tab); } catch (stopError) { persistenceError(stopError); }
+    startupPackets = undefined; rpc.disconnect(String(e));
+    try { await stopOwned(tab); } catch (stopError) { notices.report({ id: `${tab.id}:stop:${++noticeSequence}`, owner: tab.id, operation: `${tab.title}: Stop Pi`, message: String(stopError) }); }
     showNotice(tab, String(e), !!tab.file?.exists); tab.ended = true;
   } finally { tab.starting = false; updateTab(tab); controls(); }
 }
@@ -1077,7 +1117,7 @@ function removeDeletedSessions(files: string[]): void {
     try { drafts.deleteFile(file); } catch (e) { persistenceError(e); }
     if ((stored(lastKey) as LastSession | null)?.path === file) save(lastKey, null);
   }
-  void nativeDrafts?.flush().catch(persistenceError);
+  void nativeDrafts?.flush().catch(draftPersistenceError);
   if (selected && removed.includes(selected)) selectCleanupReplacement(before);
   controls(); persistTabs(); syncPopouts();
 }
@@ -1091,6 +1131,7 @@ function disposeTab(tab: Tab): void {
   if (!tabs.includes(tab)) return;
   tab.closing = true;
   tab.root.dispatchEvent(new Event('nimrod-dispose-images'));
+  notices.store.resolveOwner(tab.id);
   navigation.remove(tab);
   if (active === tab) active = undefined;
   if (presented === tab) { tab.view.setActive(false); presented = undefined; conversation.hidden = true; }
@@ -1103,6 +1144,7 @@ function disposeTab(tab: Tab): void {
 function detachTab(tab: Tab): void {
   if (!tabs.includes(tab)) return;
   tab.closing = true;
+  notices.store.resolveOwner(tab.id);
   if (tab.token) dialogs.cancel(tab.token);
   tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' }); tab.session?.rpc.disconnect('Session closed');
   const before = navigationSnapshot();
@@ -1252,7 +1294,7 @@ if (new URLSearchParams(location.search).has('popout')) {
   void import('./popout').then(module => module.mountPopout());
 } else {
   void main().catch(e => {
-    required('launch-error').textContent = `Could not initialize preferences: ${e}`;
+    applicationNotices?.report({ id: 'startup', operation: 'Start Nimrod', message: `Could not initialize preferences: ${e}` });
     required('welcome').hidden = false;
   });
 }

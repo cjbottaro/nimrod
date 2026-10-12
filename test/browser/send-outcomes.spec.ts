@@ -45,7 +45,7 @@ test('definitive rejection shows an error and discards the attempted message wit
     await expect(page.locator('.session-view:not([hidden]) .composer-attachments img')).toHaveCount(1);
     await page.locator(visible('prompt')).press('Enter'); await expect.poll(() => attempts(page)).toBe(1);
     await rejectPrompt(page);
-    await expect(page.locator(visible('submission-notice'))).toContainText('Offline fixture rejected');
+    await expect(page.locator('#application-notices')).toContainText('Offline fixture rejected');
     await expect(page.locator(visible('prompt'))).toHaveValue('');
     await expect(page.locator('.session-view:not([hidden]) .composer-attachments')).toBeHidden();
     await expect(page.locator('.image-recovery, [data-recovery-id]')).toHaveCount(0);
@@ -79,7 +79,7 @@ test('unknown delivery is explicit and Write a new message cannot replay the old
       const state = window as unknown as HeldWindow;
       state.__fixtureChannels[state.__heldPrompt!.token].onmessage({ kind: 'disconnected', message: 'Offline fixture connection lost before acknowledgement' });
     });
-    await expect(page.locator(visible('submission-notice'))).toContainText('did not confirm');
+    await expect(page.locator('#application-notices')).toContainText('did not confirm');
     await page.locator(visible('prompt')).press('Enter'); expect(await attempts(page)).toBe(1);
     await page.getByRole('button', { name: 'Write a new message', exact: true }).click();
     await expect(page.locator(visible('prompt'))).toHaveValue(''); await expect(page.locator(visible('prompt'))).toBeFocused();

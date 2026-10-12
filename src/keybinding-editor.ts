@@ -6,6 +6,7 @@ export function installKeybindingEditor(window: Window, content: HTMLElement, ho
   read(): KeyOverrides;
   save(id: ActionId, bindings: readonly string[] | undefined, reassign: boolean): Promise<void>;
   resetAll(): Promise<void>;
+  error?(message?: string): void;
 }) {
   const document = content.ownerDocument, mac = isMac(window);
   const section = document.createElement('section'); section.id = 'keybindings-section'; section.setAttribute('aria-labelledby', 'keybindings-title');
@@ -22,7 +23,10 @@ export function installKeybindingEditor(window: Window, content: HTMLElement, ho
   let editing: { id: ActionId; index?: number; reset?: boolean } | undefined;
   let candidate: string | undefined, resetAll = false, saving = false, disposed = false;
   let editingBindings: readonly string[] = [], reviewedConflicts = '', recorderNotice = '', renderedOverrides = '';
-  const notice = (message: string, error = false) => { status.textContent = message; status.classList.toggle('error', error); };
+  const notice = (message: string, error = false) => {
+    if (error && host.error) { status.textContent = ''; status.classList.remove('error'); host.error(message); }
+    else { status.textContent = message; status.classList.toggle('error', error); }
+  };
   function render() {
     const overrides = host.read(), query = search.value.toLowerCase().trim();
     renderedOverrides = JSON.stringify(overrides);
@@ -99,11 +103,11 @@ export function installKeybindingEditor(window: Window, content: HTMLElement, ho
       await operation();
       if (disposed) return;
       if (close) recorder.close();
-      notice('Saved. Keybindings updated.');
+      notice('Saved. Keybindings updated.'); host.error?.();
     } catch (error) {
       if (disposed) return;
       notice(`Not saved: ${String(error)}`, true);
-      if (recorder.open) { recorderNotice = `Not saved: ${String(error)}`; get('keybinding-conflicts').textContent = recorderNotice; }
+      if (recorder.open && !host.error) { recorderNotice = `Not saved: ${String(error)}`; get('keybinding-conflicts').textContent = recorderNotice; }
     } finally { saving = false; if (!disposed) { render(); updateRecorder(); } }
   }
   const record = (event: KeyboardEvent) => {
@@ -121,7 +125,7 @@ export function installKeybindingEditor(window: Window, content: HTMLElement, ho
     try {
       const binding = recordBinding(event, mac); if (!binding) return;
       candidate = binding; recorderNotice = ''; input.value = shortcutLabel(binding, mac); reassign.checked = false; updateRecorder();
-    } catch (error) { candidate = undefined; input.value = ''; save.disabled = true; get('keybinding-conflicts').textContent = String(error); }
+    } catch (error) { candidate = undefined; input.value = ''; save.disabled = true; if (host.error) { host.error(String(error)); get('keybinding-conflicts').textContent = ''; } else get('keybinding-conflicts').textContent = String(error); }
   };
   const cancel = (event: Event) => { event.preventDefault(); if (!saving) recorder.close(); };
   recorder.addEventListener('keydown', record); recorder.addEventListener('cancel', cancel);
