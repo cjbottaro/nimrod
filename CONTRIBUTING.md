@@ -48,9 +48,11 @@ mise run build
 This packages and verifies the current checkout. An agent-directed **build the app** request also includes staging and publishing the finished artifact to the primary checkout's CLI-visible default location. Before merge, build the task worktree's source with its own targets; after merge, build main when asked. A build request does not authorize merging or launching/quitting/restarting the user's app.
 
 - macOS: `src-tauri/target/release/bundle/macos/Nimrod.app`
-- Linux: `src-tauri/target/release/nimrod`
+- Linux: `src-tauri/target/release/nimrod`, with the same-build `esbuild` sidecar beside it.
 
 Keep the installed CLI pointing to the primary checkout. Requested publications may overwrite one another; the user coordinates builds. For staging, signature verification and cache pitfalls, follow the [internal build workflow](.agents/skills/features/references/build-cache.md).
+
+Cargo asset preparation copies a target-matching esbuild binary/license from the installed npm dependency into an ignored staging directory; Tauri packages it as a compiler sidecar. No compiler is downloaded at runtime. Native same-platform builds use `npm ci`; cross builds require the matching target dependency installed locally. Requested macOS verification includes the helper signature. Compiler packaging/execution still needs native acceptance; no app build is part of checks.
 
 ## Card plugin examples
 

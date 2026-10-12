@@ -15,6 +15,9 @@ export function validateSignature(details: string, identifier: string): void {
 }
 
 export function verifyMacosBundle(app: string, identifier: string): void {
+  const helper = path.join(app, 'Contents', 'MacOS', 'esbuild');
+  const helperSignature = spawnSync('codesign', ['--verify', '--strict', '--verbose=2', helper], { encoding: 'utf8' });
+  if (helperSignature.error || helperSignature.status !== 0) throw new Error(helperSignature.error?.message || helperSignature.stderr || 'Missing/invalid plugin compiler sidecar');
   for (const args of [['--verify', '--strict', '--verbose=2', app], ['-dv', '--verbose=4', app]]) {
     const result = spawnSync('codesign', args, { encoding: 'utf8' });
     if (result.error || result.status !== 0) throw new Error(result.error?.message || result.stderr || `codesign exited ${result.status}`);

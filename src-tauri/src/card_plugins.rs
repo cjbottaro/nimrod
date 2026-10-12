@@ -170,6 +170,30 @@ pub async fn read_card_plugin_module(
     .await
     .map_err(|e| e.to_string())?
 }
+#[tauri::command]
+pub async fn load_personal_card_plugins(
+    window: tauri::Window,
+    compiler: tauri::State<'_, crate::plugin_compiler::Compiler>,
+) -> Result<crate::plugin_compiler::Bundles, String> {
+    let snapshot = authorized_snapshot(&window)?;
+    let settings = crate::preferences::jsonc(&snapshot.text)?;
+    if settings.get("cards.autoLoad").and_then(Value::as_bool) == Some(false) {
+        return Ok(crate::plugin_compiler::Bundles::default());
+    }
+    let root = snapshot
+        .settings_path
+        .parent()
+        .ok_or("Missing config directory")?
+        .join("card-plugins");
+    let compiler = compiler.inner().clone();
+    // Filesystem hashing runs off the IPC/agent event workers; only the owned helper is spawned.
+    tauri::async_runtime::spawn_blocking(move || {
+        tauri::async_runtime::block_on(compiler.load(&root))
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
