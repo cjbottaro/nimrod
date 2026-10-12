@@ -40,7 +40,9 @@ test('All reorders only on accepted sends, preserves its visible anchor at zoom 
     await page.locator(`#${background}`).click();
     expect(await page.locator('.session-row').evaluateAll(rows => rows.map(row => row.id))).toEqual(originalOrder);
     const prompt = page.locator(visible('prompt')); await prompt.fill('Keep my other session draft'); await prompt.focus();
-    const sidebar = page.locator('#session-sidebar');
+    const sidebar = page.locator('#sidebar-session-panel');
+    const fixedControls = page.locator('#sidebar-new, #sidebar-views');
+    const controlBounds = await fixedControls.evaluateAll(nodes => nodes.map(node => ({ top: node.getBoundingClientRect().top, height: node.getBoundingClientRect().height })));
     const snapshot = await sidebar.evaluate(node => {
       node.scrollTop = 250;
       const bounds = node.getBoundingClientRect();
@@ -48,6 +50,8 @@ test('All reorders only on accepted sends, preserves its visible anchor at zoom 
       return { id: row.querySelector('.session-row')!.id, top: row.getBoundingClientRect().top, scroll: node.scrollTop };
     });
     expect(snapshot.scroll).toBeGreaterThan(100);
+    expect(await fixedControls.evaluateAll(nodes => nodes.map(node => ({ top: node.getBoundingClientRect().top, height: node.getBoundingClientRect().height })))).toEqual(controlBounds);
+    expect(await page.locator('#session-sidebar').evaluate(node => node.scrollTop)).toBe(0);
     await expect(page.locator(`#${target}`)).toHaveAttribute('aria-label', /Unread/);
     expect(await page.locator('.session-row').evaluateAll(rows => rows.map(row => row.id))).toEqual(originalOrder);
     await page.evaluate(() => (window as unknown as RecencyFixture).__heldReceipts.release());
@@ -78,6 +82,7 @@ test('All reorders only on accepted sends, preserves its visible anchor at zoom 
     const selectedBounds = await page.locator(`#${snapshot.id}`).boundingBox(), bounds = await sidebar.boundingBox();
     expect(selectedBounds!.y).toBeGreaterThanOrEqual(bounds!.y - 2);
     expect(selectedBounds!.y + selectedBounds!.height).toBeLessThanOrEqual(bounds!.y + bounds!.height + 2);
+    expect(await fixedControls.evaluateAll(nodes => nodes.map(node => ({ top: node.getBoundingClientRect().top, height: node.getBoundingClientRect().height })))).toEqual(controlBounds);
     expect(demo.children.size).toBe(15);
     expect(demo.calls.filter(call => call.command === 'stop_pi')).toHaveLength(1);
     expect(demo.errors).toEqual([]);
@@ -98,7 +103,7 @@ test('minute refresh preserves sidebar/transcript reading, draft, focus, order a
     const prompt = page.locator(visible('prompt')); await prompt.fill('Retain my draft'); await prompt.focus();
     const order = await page.locator('.session-row').evaluateAll(rows => rows.map(row => row.id));
     await expect(page.locator(`#${oldest} time`)).toContainText('Just now ·');
-    const snapshot = await page.locator('#session-sidebar').evaluate(sidebar => {
+    const snapshot = await page.locator('#sidebar-session-panel').evaluate(sidebar => {
       sidebar.scrollTop = 60;
       return { top: sidebar.scrollTop, rowTops: [...sidebar.querySelectorAll('.open-session')].map(row => row.getBoundingClientRect().top) };
     });
@@ -106,7 +111,7 @@ test('minute refresh preserves sidebar/transcript reading, draft, focus, order a
     await page.clock.fastForward(120_000);
     await expect(page.locator(`#${oldest} time`)).toContainText('2 minutes ago ·');
     expect(await page.locator('.session-row').evaluateAll(rows => rows.map(row => row.id))).toEqual(order);
-    expect(await page.locator('#session-sidebar').evaluate(sidebar => ({ top: sidebar.scrollTop, rowTops: [...sidebar.querySelectorAll('.open-session')].map(row => row.getBoundingClientRect().top) }))).toEqual(snapshot);
+    expect(await page.locator('#sidebar-session-panel').evaluate(sidebar => ({ top: sidebar.scrollTop, rowTops: [...sidebar.querySelectorAll('.open-session')].map(row => row.getBoundingClientRect().top) }))).toEqual(snapshot);
     expect(await demo.metrics()).toEqual(metrics); await expect(prompt).toHaveValue('Retain my draft'); await expect(prompt).toBeFocused();
     expect(demo.calls.length).toBe(calls); expect(demo.children.size).toBe(6);
     const status = page.locator(`#${oldest} .session-indicator`);

@@ -45,6 +45,10 @@ export async function mountPopout(): Promise<void> {
     window.addEventListener('unload', unlisten, { once: true });
     const unlistenErrors = await listen<string>('nimrod-popout-error', event => report(event.payload));
     window.addEventListener('unload', unlistenErrors, { once: true });
+    const unlistenLinkErrors = await listen<string>('nimrod-link-error', event => {
+      notices.report({ id: `link:${++noticeSequence}`, operation: 'Open link', message: event.payload });
+    }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
+    window.addEventListener('unload', unlistenLinkErrors, { once: true });
     applyPreferences(await invoke<PreferencesSnapshot>('preferences_snapshot'));
     const snapshot = await invoke<CodeSnapshot>('code_popout_snapshot');
     const renderer = createSafeMarkdownRenderer(window);

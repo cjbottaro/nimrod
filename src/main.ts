@@ -157,6 +157,9 @@ const popouts = installSessionPopouts({
   error: popoutError,
 });
 const unlistenPopoutErrors = await listen<string>('nimrod-popout-error', event => popoutError(event.payload));
+const unlistenLinkErrors = await listen<string>('nimrod-link-error', event => {
+  notices.report({ id: `link:${++noticeSequence}`, operation: 'Open link', message: event.payload });
+}, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
 function syncPopouts(): void {
   if (!workspace) return;
   popouts.sync(tabs.map(tab => ({ runtimeId: tab.id, pi: tab.file?.exists && tab.mode !== 'temporary'
@@ -368,7 +371,7 @@ window.addEventListener('unload', () => {
   notices.dispose();
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
   pluginLoading.dispose();
-  sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
+  sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); unlistenLinkErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
   for (const tab of tabs) { tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.session?.rpc.disconnect('Window closed'); }
   keybindingDispatch.dispose(); keybindingEditor.dispose(); settingsNavigation.dispose(); settingsSidebarResize.dispose();
   unlistenProjectPicker(); palette.dispose(); zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose();
@@ -413,7 +416,7 @@ function renderSidebar(moved?: HTMLElement): void {
   const visible = sidebarTabs();
   const membership = new Set(visible);
   if (presented && !membership.has(presented)) presentConversation(undefined);
-  const sidebar = required('session-sidebar'), list = required('open-sessions');
+  const sidebar = required('sidebar-session-panel'), list = required('open-sessions');
   const restoreScroll = captureSidebarScroll(sidebar, [...list.children] as HTMLElement[], moved);
   const focused = document.activeElement;
   const filteredFocus = tabs.some(tab => !membership.has(tab) && focused instanceof Node && tab.rowNode.contains(focused));
@@ -455,7 +458,7 @@ function selectSidebarView(view: SessionView): void {
   if (target) activate(target, 'restore');
   else presentConversation(undefined);
   controls();
-  if (returningToAll && target) revealSidebarRow(required('session-sidebar'), target.rowNode);
+  if (returningToAll && target) revealSidebarRow(required('sidebar-session-panel'), target.rowNode);
 }
 function presentConversation(tab: Tab | undefined): void {
   if (presented !== tab) {
@@ -839,7 +842,7 @@ function activate(tab: Tab, intent: SelectionIntent = 'explicit'): void {
   // Effects live at this one boundary; the model never touches Pi or drafts.
   for (const item of tabs) updateTab(item);
   persistTabs(); controls(); syncPopouts();
-  if (plan.reveal && presented === tab) revealSidebarRow(required('session-sidebar'), tab.rowNode);
+  if (plan.reveal && presented === tab) revealSidebarRow(required('sidebar-session-panel'), tab.rowNode);
   if (plan.focus && presented === tab && !document.querySelector('dialog[open]')) (tab.focus?.isConnected ? tab.focus : tab.root.querySelector<HTMLElement>('[data-pi-id="prompt"]'))?.focus({ preventScroll: true });
   selectedConnection.request();
 }

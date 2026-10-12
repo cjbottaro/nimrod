@@ -93,6 +93,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   let deletionEvent: ((event: DeletionEvent, target?: string) => void) | undefined;
   let notificationClick: ((event: unknown, target?: string) => void) | undefined;
   let projectPicker: ((target?: string) => void) | undefined;
+  let linkError: ((message: string, target?: string) => void) | undefined;
   let projectPickerPending = options.projectPickerPending || false;
   Object.assign(win, { TextEncoder, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener() {} }, __TAURI_INTERNALS__: {
     metadata: { currentWindow: { label: options.windowLabel || 'main' }, currentWebview: { label: options.windowLabel || 'main' } },
@@ -109,6 +110,10 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
           if (!target || listenerTarget.kind === 'Any' || listenerTarget.label === target) {
             projectPickerPending = true; callbacks.get(Number(args.handler))?.({ payload: null });
           }
+        };
+        if (args.event === 'nimrod-link-error') linkError = (payload, target) => {
+          const listenerTarget = args.target as { kind: string; label?: string };
+          if (!target || listenerTarget.kind === 'Any' || listenerTarget.label === target) callbacks.get(Number(args.handler))?.({ payload });
         };
         if (args.event === 'nimrod-preferences') preferences.receive = payload => callbacks.get(Number(args.handler))?.({ payload });
         if (args.event === 'nimrod-session-deletion') deletionEvent = (payload, target) => {
@@ -211,6 +216,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     sessions,
     deletionEvent: (event: DeletionEvent, target?: string) => deletionEvent?.(event, target),
     projectPicker: (target?: string) => projectPicker?.(target),
+    linkError: (message: string, target?: string) => linkError?.(message, target),
     notificationClick: (event: unknown, target?: string) => notificationClick?.(event, target),
     captureChannel: () => channel,
     emit: (event: JsonRecord) => channel.onmessage({ kind: 'rpc', value: event }),
@@ -244,6 +250,23 @@ test('operational notices stay with their session without cross-session sidebar 
     f.rows()[1].click(); f.rows()[0].click(); await f.tick();
     assert.equal(f.element('session-notices').hidden, true, 'navigation does not resurrect a dismissed issue');
   } finally { f.win.close(); }
+});
+
+test('native browser failures stay in the originating project or reference notice strip without navigation or Pi work', async () => {
+  for (const popout of [undefined, { session: 'source', title: 'Source', text: 'Captured source', language: 'text' }]) {
+    const label = popout ? 'popout-fixture' : 'workspace-fixture';
+    const f = await fixture(undefined, { windowLabel: label, windowWorkspace: '/project', popout });
+    try {
+      const before = f.win.location.href;
+      f.linkError('Other window browser failure', 'other-window'); await f.tick();
+      assert.doesNotMatch(f.element('application-notices').textContent!, /Other window/);
+      f.linkError('Could not open link in your browser: fixture opener failed', label); await f.tick();
+      assert.match(f.element('application-notices').textContent!, /Open link.*fixture opener failed/);
+      assert.equal(f.win.location.href, before);
+      assert.equal(f.calls.some(call => call.command === 'start_pi'), false);
+      assert.equal(f.calls.some(call => call.command === 'open_card_link' || call.command === 'open_popout_link'), false, 'no automatic retry');
+    } finally { f.win.close(); }
+  }
 });
 
 test('bundled picker previews locally, restores on cancellation, commits offline and honors bind/unbind', async () => {
@@ -2018,7 +2041,7 @@ test('external settings edits synchronize Appearance and saved Runtime while pre
 test('shell boots without Pi and Settings holds application preferences, not session controls', async () => {
   const f = await fixture(); const { win, calls, element } = f;
   try {
-    assert.deepEqual(calls.filter(c => !(c.command === 'plugin:event|listen' && ['nimrod-draft-error', 'tauri://close-requested'].includes(String(c.args.event)))).map(c => c.command), ['plugin:event|listen', 'preferences_snapshot', 'preferences_migrate', 'load_personal_card_plugins', 'plugin:event|listen', 'plugin:event|listen', 'plugin:webview|set_webview_zoom', 'plugin:event|listen', 'plugin:event|listen', 'stop_pi', 'runtime_defaults', 'window_workspace', 'deletion_snapshot', 'take_project_picker_request']);
+    assert.deepEqual(calls.filter(c => !(c.command === 'plugin:event|listen' && ['nimrod-draft-error', 'nimrod-link-error', 'tauri://close-requested'].includes(String(c.args.event)))).map(c => c.command), ['plugin:event|listen', 'preferences_snapshot', 'preferences_migrate', 'load_personal_card_plugins', 'plugin:event|listen', 'plugin:event|listen', 'plugin:webview|set_webview_zoom', 'plugin:event|listen', 'plugin:event|listen', 'stop_pi', 'runtime_defaults', 'window_workspace', 'deletion_snapshot', 'take_project_picker_request']);
     assert.equal(calls.find(c => c.command === 'plugin:webview|set_webview_zoom')!.args.value, 1.25);
     assert.equal(element<HTMLSelectElement>('zoom-level').value, '125');
     const page = element<HTMLDialogElement>('settings-page');
