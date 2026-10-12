@@ -30,6 +30,7 @@ interface ShellOptions {
   filePath?: string | null;
   holdPrompts?: boolean;
   focused?: () => boolean;
+  performanceControl?: { after: (() => void)[]; writeError?: string };
   notificationError?: string;
   notificationDiagnosticsError?: string;
   notificationFocusGate?: Promise<void>;
@@ -85,7 +86,18 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   let selectedModel: JsonRecord | null = null;
   let thinkingLevel = 'medium';
   for (const [key, value] of Object.entries(options.storage || {})) win.localStorage.setItem(key, JSON.stringify(value));
-  const tick = async () => { await new Promise(resolve => setTimeout(resolve, 0)); while (frames.length) frames.shift()!(0); };
+  const tick = async () => {
+    await new Promise(resolve => setTimeout(resolve, 0));
+    if (options.performanceControl) { for (const frame of frames.splice(0)) frame(0); }
+    else while (frames.length) frames.shift()!(0);
+  };
+  if (options.performanceControl) {
+    const timeout = win.setTimeout.bind(win);
+    win.setTimeout = (handler, delay, ...args) => {
+      if (delay === 5000 && typeof handler === 'function') { options.performanceControl!.after.push(handler as () => void); return 0; }
+      return timeout(handler, delay, ...args);
+    };
+  }
   const preferences = new MemoryPreferences();
   Object.assign(preferences.value.state, options.appState);
   const callbacks = new Map<number, (event: unknown) => void>();
@@ -129,6 +141,10 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       if (command === 'plugin:event|unlisten') return 1;
       if (command.startsWith('preferences_') || command === 'record_command_usage') return preferences.invoke(command, args);
       if (command === 'plugin:window|is_focused') return options.focused?.() ?? true;
+      if (command === 'write_performance_report') {
+        if (options.performanceControl?.writeError) throw new Error(options.performanceControl.writeError);
+        return '/fixture/.local/state/nimrod/performance/performance-report.json';
+      }
       if (command === 'prepare_notifications') return;
       if (command === 'focus_notification_window') { await options.notificationFocusGate; return; }
       if (command === 'notification_diagnostics') {
@@ -314,7 +330,7 @@ test('palette commands have registered shortcuts (theme intentionally unbound) a
     f.openPalette();
     const rows = [...f.element('palette-list').querySelectorAll('[role=option]')];
     assert.ok(rows.length > 0);
-    for (const row of rows) if (!/Select theme|Reload card plugins/.test(row.textContent || '')) assert.ok(row.querySelector('kbd')?.textContent, row.textContent!);
+    for (const row of rows) if (!/Select theme|Reload card plugins|Capture performance report/.test(row.textContent || '')) assert.ok(row.querySelector('kbd')?.textContent, row.textContent!);
     assert.doesNotMatch(f.element('palette-list').textContent!, /offline demo|session file/i);
     f.element<HTMLDialogElement>('command-palette').close(); await f.tick();
     f.preferences.external('{"keybindings":{"demo":["primary+d"],"file":["primary+f"]}}'); await f.tick();
@@ -336,6 +352,49 @@ test('palette commands have registered shortcuts (theme intentionally unbound) a
     f.preferences.external('{"keybindings":{"keybindings":["primary+j"]}}'); await f.tick();
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'j', metaKey: true, bubbles: true, cancelable: true }));
     assert.equal(f.win.document.activeElement, f.element('keybinding-search'));
+  } finally { f.win.close(); }
+});
+
+test('performance capture is opt-in, bindable, timing-only and preserves the mounted session', async () => {
+  const control = { after: [] as (() => void)[], writeError: undefined as string | undefined };
+  const f = await fixture(undefined, { windowWorkspace: '/project', performanceControl: control });
+  try {
+    assert.equal(f.element<HTMLSelectElement>('performance-mode').value, 'off');
+    assert.equal(f.element<HTMLButtonElement>('performance-capture').disabled, true);
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt');
+    prompt.value = 'private draft'; prompt.dispatchEvent(new f.win.Event('input')); prompt.focus();
+    await f.tick();
+    const view = prompt.closest('.session-view');
+    const started = f.calls.filter(c => c.command === 'start_pi').length;
+    const prompted = f.calls.filter(c => c.command === 'write_pi' && (c.args.message as JsonRecord).type === 'prompt').length;
+    f.preferences.external('{"diagnostics.performance":true,"keybindings":{"capture-performance":["primary+alt+p"]}}'); await f.tick();
+    assert.equal(f.element<HTMLButtonElement>('performance-capture').disabled, false);
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'p', metaKey: true, altKey: true, bubbles: true, cancelable: true }));
+    assert.equal(control.after.length, 1);
+    assert.equal(f.element<HTMLButtonElement>('performance-capture').disabled, true);
+    assert.equal(f.win.document.activeElement, prompt);
+    control.after.shift()!(); await f.tick();
+    const saved = f.calls.find(c => c.command === 'write_performance_report')!;
+    assert.ok(saved); assert.doesNotMatch(JSON.stringify(saved.args), /private draft|\/project|\/sessions/);
+    assert.match(f.element('performance-status').textContent!, /Report saved:.*performance-report.json/);
+    assert.equal(prompt.closest('.session-view'), view); assert.equal(prompt.value, 'private draft');
+    assert.equal(f.win.document.activeElement, prompt);
+    assert.equal(f.calls.filter(c => c.command === 'start_pi').length, started);
+    assert.equal(f.calls.filter(c => c.command === 'write_pi' && (c.args.message as JsonRecord).type === 'prompt').length, prompted);
+    f.preferences.external('{"diagnostics.performance":true,"keybindings":{"capture-performance":[]}}'); await f.tick();
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'p', metaKey: true, altKey: true, bubbles: true, cancelable: true }));
+    assert.equal(control.after.length, 0, 'unbound shortcut does not capture');
+    control.writeError = 'fixture disk full';
+    f.element<HTMLButtonElement>('performance-capture').click(); control.after.shift()!(); await f.tick();
+    assert.match(f.element('application-notices').textContent!, /fixture disk full/);
+    assert.equal(f.element<HTMLButtonElement>('performance-capture').disabled, false);
+    f.element<HTMLButtonElement>('performance-capture').click();
+    f.preferences.external('{"diagnostics.performance":false}'); await f.tick();
+    const writes = f.calls.filter(c => c.command === 'write_performance_report').length;
+    control.after.shift()!(); await f.tick();
+    assert.equal(f.calls.filter(c => c.command === 'write_performance_report').length, writes);
+    assert.equal(f.element<HTMLButtonElement>('performance-capture').disabled, true);
   } finally { f.win.close(); }
 });
 

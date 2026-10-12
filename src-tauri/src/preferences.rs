@@ -170,6 +170,12 @@ fn validate(text: &str) -> Result<(), String> {
     {
         return Err("notifications.enabled must be a boolean".into());
     }
+    if object
+        .get("diagnostics.performance")
+        .is_some_and(|v| !v.is_boolean())
+    {
+        return Err("diagnostics.performance must be a boolean".into());
+    }
     if let Some(zoom) = object.get("appearance.zoom") {
         if ![75, 90, 100, 110, 125, 150, 175, 200]
             .iter()
@@ -583,6 +589,9 @@ mod tests {
         assert!(validate("[]").is_err());
         assert!(validate("{\"notifications.enabled\":\"yes\"}").is_err());
         validate("{\"notifications.enabled\":false}").unwrap();
+        validate("{\"diagnostics.performance\":true}").unwrap();
+        assert!(validate("{\"diagnostics.performance\":\"true\"}").is_err());
+        assert!(validate("{\"diagnostics.performance\":null}").is_err());
         assert!(validate("{\"runtime.piPath\":\"\"}").is_err());
     }
     #[test]

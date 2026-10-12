@@ -18,6 +18,7 @@
 
 - [Command palette](command-palette.md) — search, selection, cancellation and ordering.
 - [Keybindings](keybindings.md) — shortcuts, reassignment and configuration syntax.
+- [Performance reports](performance-diagnostics.md) — opt-in timing diagnostics and local slowdown captures.
 - [Settings](settings.md) — categories, zoom, runtime paths and local files.
 - [Themes](themes.md) — live previews, bundled themes and standalone imports.
 - [Syntax highlighting](syntax-highlighting.md) — fence labels and conservative user-code detection.

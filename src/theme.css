@@ -85,7 +85,7 @@ h1 { font-size:clamp(28px,4vw,42px); line-height:1.12; letter-spacing:-1.4px; ma
 .launch-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:24px; } .launch-actions button { padding:10px 18px; border-radius:6px; }
 .fine-print { font-size:11px; line-height:1.7; color:var(--vscode-descriptionForeground); }
 #preferences-error, #open-settings.error { color:var(--vscode-errorForeground); }
-#settings-file-path, #state-file-path { overflow-wrap:anywhere; }
+#performance-status, #settings-file-path, #state-file-path { overflow-wrap:anywhere; }
 #launch-error, #storage-error { color:var(--vscode-errorForeground); white-space:pre-wrap; }
 #storage-error { margin:0; padding:8px 20px; }
 #conversation { display:grid; min-height:0; min-width:0; grid-template-rows:minmax(0,1fr); }

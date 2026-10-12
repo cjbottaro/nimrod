@@ -35,6 +35,7 @@ import { COMMAND_USAGE_KEY, readCommandUsage } from './command-ranking';
 import { abbreviateHome, projectPathParts } from './project-path';
 import { installCommandPalette, type PalettePage } from './command-palette';
 import { installSettings, installRuntimeSettings } from './settings';
+import { installPerformanceDiagnostics } from './performance-diagnostics';
 import { installSettingsNavigation } from './settings-navigation';
 import { ACTIONS, bindingsFor, installKeybindingDispatch, isMac, shortcutLabel, type ActionId } from './keybindings';
 import { installKeybindingEditor } from './keybinding-editor';
@@ -232,6 +233,53 @@ const zoom = installZoom(window, required<HTMLSelectElement>('zoom-level'), requ
   apply: scale => getCurrentWebview().setZoom(scale),
   error: feedback('zoom', 'App zoom'),
 }, false);
+const performanceDiagnostics = installPerformanceDiagnostics(window, () => ({
+  userAgent: navigator.userAgent.slice(0, 512), fieldSizing: window.CSS?.supports('field-sizing', 'content') ?? false,
+  zoom: Number(preferences.zoom()), devicePixelRatio: window.devicePixelRatio, hardwareConcurrency: navigator.hardwareConcurrency || 0,
+}));
+const performancePicker = required<HTMLSelectElement>('performance-mode');
+const performanceCapture = required<HTMLButtonElement>('performance-capture');
+const performanceStatus = required('performance-status');
+let capturingPerformance = false;
+let performancePath: string | undefined;
+function reloadPerformance(): void {
+  const enabled = preferences.performanceEnabled();
+  const changed = enabled !== performanceDiagnostics.enabled;
+  performanceDiagnostics.setEnabled(enabled);
+  performancePicker.value = enabled ? 'on' : 'off';
+  performanceCapture.disabled = !enabled || capturingPerformance;
+  if (changed || !enabled) performanceStatus.textContent = enabled ? 'Timing diagnostics enabled. Capture when the app feels slow.' : 'Performance diagnostics are off.';
+}
+async function capturePerformance(): Promise<void> {
+  if (capturingPerformance) return;
+  capturingPerformance = true; reloadPerformance();
+  performanceStatus.textContent = 'Capturing five more seconds of timing data…';
+  try {
+    const report = await performanceDiagnostics.capture();
+    if (!report) { if (!unloading) performanceStatus.textContent = 'Capture cancelled; timing buffer cleared.'; return; }
+    performanceStatus.textContent = 'Saving performance report…';
+    const path = await invoke<string>('write_performance_report', { report });
+    if (unloading) return;
+    performancePath = path;
+    performanceStatus.textContent = `Report saved: ${path}`;
+    notices.resolve('performance-capture');
+  } catch (error) {
+    if (!unloading) {
+      performanceStatus.textContent = '';
+      notices.report({ id: 'performance-capture', operation: 'Capture performance report', message: String(error) });
+    }
+  } finally { capturingPerformance = false; if (!unloading) reloadPerformance(); }
+}
+performanceCapture.addEventListener('click', () => { void capturePerformance(); });
+performancePicker.addEventListener('change', () => {
+  performancePicker.disabled = true;
+  void preferences.savePerformance(performancePicker.value === 'on').then(() => {
+    notices.resolve('performance-settings');
+  }).catch(error => {
+    notices.report({ id: 'performance-settings', operation: 'Save performance diagnostics setting', message: String(error) });
+  }).finally(() => { reloadPerformance(); performancePicker.disabled = false; });
+});
+reloadPerformance();
 const notificationPicker = required<HTMLSelectElement>('notification-mode');
 const notificationStatus = required('notification-status');
 const notificationTest = required<HTMLButtonElement>('notification-test');
@@ -356,7 +404,7 @@ preferences.subscribe(() => {
   const width = preferences.readState(settingsSidebarWidthKey);
   if (!Object.is(width, settingsSidebarWidth)) { settingsSidebarWidth = width; settingsSidebarResize.reload(); }
   void reloadCardPlugins();
-  runtime.reload(); themes.reload(); void zoom.reload(); reloadNotifications(); keybindingEditor.reload(); refreshShortcutHints();
+  runtime.reload(); themes.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); keybindingEditor.reload(); refreshShortcutHints();
 });
 const unlistenDraftErrors = await listen<string>('nimrod-draft-error', event => draftPersistenceError(event.payload));
 const unlistenDraftClose = await getCurrentWindow().onCloseRequested(() => {
@@ -368,6 +416,7 @@ const disposeTimeRefresh = installSessionTimeRefresh(window, () => { for (const 
 window.addEventListener('unload', () => {
   unloading = true;
   notices.dispose();
+  performanceDiagnostics.dispose();
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
   pluginLoading.dispose();
   sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); unlistenLinkErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
@@ -659,6 +708,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     const active = presented;
     return [
     { id: 'open-recent-project', label: 'Open recent project…', detail: 'Open or focus a previously opened project', next: true, run: () => palette.projects() },
+    { id: 'capture-performance', label: 'Capture performance report', detail: performancePath ? `Last report: ${performancePath}` : 'Save recent timing data; enable in Settings → Diagnostics first. Saved path appears there.', run: capturePerformance },
     { id: 'reload-card-plugins', label: 'Reload card plugins', detail: 'Rescan personal sources and refresh renderers for new cards; no Pi restart', run: () => reloadCardPlugins(true) },
     { id: 'select-theme', label: 'Select theme…', detail: 'Preview bundled VS Code themes and saved imports', next: true, run: () => pickTheme() },
     { id: 'resume', label: 'Resume session…', detail: 'Open a saved conversation in this project', next: true, run: () => palette.sessions() },
@@ -756,6 +806,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
     if (!ready || !workspace || presented !== tab || !tabs.includes(tab) || tab.closing || tab.restarting || tab.deleting || document.querySelector('dialog[open]')) throw new Error('Card action is no longer available');
   }
   tab.view = mountPiView({
+    performance: performanceDiagnostics.probe,
     reportNotice: notice => {
       if (unloading || tab.closing || !tabs.includes(tab)) return;
       notices.report({ ...notice, id: `${tab.id}:${notice.id}`, owner: notice.cause === 'draft-storage' ? undefined : tab.id, operation: `${tab.title}: ${notice.operation}` });
@@ -1214,6 +1265,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
     if (unloading) return false;
     if (['settings', 'zoom-in', 'zoom-out', 'zoom-reset'].includes(id)) return true;
     if (!ready) return false;
+    if (id === 'capture-performance') return preferences.performanceEnabled() && !capturingPerformance;
     if (['close', 'model', 'thinking', 'restart', 'delete'].includes(id)) return !!presented;
     return true;
   },
@@ -1224,6 +1276,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'temporary': return newSession('temporary');
       case 'delete': return presented ? deleteSession(presented) : undefined;
       case 'delete-sessions': return palette.deleteSessions();
+      case 'capture-performance': return capturePerformance();
       case 'reload-card-plugins': return reloadCardPlugins(true);
       case 'select-theme': return pickTheme();
       case 'model': return presented ? pickPreference(presented, 'model') : undefined;

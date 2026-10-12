@@ -50,6 +50,7 @@ Without installation, use `./bin/nimrod .`. The launcher opens or focuses a proj
 - [Pop-outs](docs/pop-outs.md) — persistent reference windows for code and rendered Markdown.
 - [Notifications](docs/notifications.md) — background-session alerts and delivery troubleshooting.
 - [Command palette](docs/command-palette.md) and [Keybindings](docs/keybindings.md) — searchable commands and customizable shortcuts.
+- [Performance reports](docs/performance-diagnostics.md) — opt-in local timing captures for sluggish typing/scrolling.
 - [Settings](docs/settings.md) — appearance, zoom, runtime paths and local configuration.
 - [Themes](docs/themes.md) and [Syntax highlighting](docs/syntax-highlighting.md) — bundled palettes, local imports and labeled code.
 

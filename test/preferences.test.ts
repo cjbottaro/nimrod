@@ -67,6 +67,22 @@ test('notifications default on, persist through JSONC edits, and retain last val
   } finally { p.dispose(); f.dom.window.close(); }
 });
 
+test('performance diagnostics default off, preserve JSONC and synchronize only valid booleans', async () => {
+  const f = fixture(), p = await f.install();
+  try {
+    assert.equal(p.performanceEnabled(), false);
+    f.host.external('// retain comment\n{"custom":true}');
+    await p.savePerformance(true);
+    assert.equal(p.performanceEnabled(), true);
+    assert.match(f.host.value.text, /retain comment/);
+    assert.equal(parseSettings(f.host.value.text).custom, true);
+    f.host.external('{"diagnostics.performance":"true"}');
+    assert.equal(p.performanceEnabled(), true);
+    assert.throws(() => parseSettings('{"diagnostics.performance":null}'));
+    f.host.external('{}'); assert.equal(p.performanceEnabled(), false);
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
 test('legacy migration excludes drafts and never deletes their recovery sources', () => {
   const f = fixture(); const storage = f.dom.window.localStorage;
   try {

@@ -52,6 +52,7 @@
         <div id="settings-categories" role="tablist" aria-label="Settings categories" aria-orientation="vertical">
           <button id="settings-category-appearance" type="button" role="tab" aria-selected="true" aria-controls="settings-panel-appearance" data-category="appearance">Appearance</button>
           <button id="settings-category-notifications" type="button" role="tab" aria-selected="false" aria-controls="settings-panel-notifications" data-category="notifications" tabindex="-1">Notifications</button>
+          <button id="settings-category-diagnostics" type="button" role="tab" aria-selected="false" aria-controls="settings-panel-diagnostics" data-category="diagnostics" tabindex="-1">Diagnostics</button>
           <button id="settings-category-keybindings" type="button" role="tab" aria-selected="false" aria-controls="keybindings-section" data-category="keybindings" tabindex="-1">Keybindings</button>
           <button id="settings-category-runtime" type="button" role="tab" aria-selected="false" aria-controls="settings-panel-runtime" data-category="runtime" tabindex="-1">Runtime</button>
         </div>
@@ -81,6 +82,15 @@
         <button id="notification-test" type="button" class="secondary">Send test notification</button>
         <button id="notification-diagnostics" type="button" class="secondary">Refresh notification diagnostics</button>
         <p id="notification-status" role="status">No notification attempt yet. System notification settings apply; click-to-session routing is not available yet.</p>
+      </section>
+      <section id="settings-panel-diagnostics" class="settings-panel" data-category="diagnostics" role="tabpanel" aria-labelledby="settings-category-diagnostics" tabindex="0" hidden>
+        <h2>Diagnostics</h2>
+        <label for="performance-mode">Performance diagnostics</label>
+        <select id="performance-mode"><option value="off">Off (default)</option><option value="on">On</option></select>
+        <p class="settings-hint">Keep up to 60 seconds of timing data in memory. No prompt text, responses, key values or session paths are recorded. Enabling applies to all project windows; reports capture only this window.</p>
+        <button id="performance-capture" type="button" class="secondary" disabled>Capture performance report</button>
+        <p class="settings-hint">When the app feels slow, capture here or through the command palette. Recording continues for five seconds, then saves locally. No data is uploaded. Keeps the latest 20 reports.</p>
+        <p id="performance-status" role="status">Performance diagnostics are off.</p>
       </section>
       <section id="settings-panel-runtime" class="settings-panel" data-category="runtime" role="tabpanel" aria-labelledby="settings-category-runtime" tabindex="0" hidden>
         <h2 id="runtime-title">Runtime</h2>

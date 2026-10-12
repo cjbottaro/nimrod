@@ -102,6 +102,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'deletion_snapshot') return { pending: false, quarantine: [], files: [] };
     if (command === 'confirm_session_deletion' || command === 'acknowledge_deletion') return; // Recorded only, no native file deletion.
     if (command === 'plugin:window|is_focused') return true;
+    if (command === 'write_performance_report') return '/fixture/.local/state/nimrod/performance/performance-report.json'; // Recorded only; never writes user files.
     if (command === 'prepare_notifications' || command === 'focus_notification_window') return;
     if (command === 'notification_diagnostics') return 'macOS: authorized; desktop alerts: enabled; style: temporary; Notification Center: enabled; app active: yes; foreground handler calls: 1 (requests Banner + List).';
     if (command === 'notify_session' || command === 'test_notification') return 'submitted'; // Recorded only: never emit real OS notifications.

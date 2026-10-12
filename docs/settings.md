@@ -1,6 +1,6 @@
 # Settings
 
-Open the Project bar's gear or **⌘/Ctrl+,**. Choose Appearance, Notifications, Keybindings or Runtime in the category sidebar. **Back** or **Escape** returns to your project.
+Open the Project bar's gear or **⌘/Ctrl+,**. Choose Appearance, Notifications, Diagnostics, Keybindings or Runtime in the category sidebar. **Back** or **Escape** returns to your project.
 
 Pi keeps running while Settings is open. Returning preserves your draft, conversation and reading position and restores prior focus when available. Pi extension dialogs retain priority.
 
@@ -23,6 +23,10 @@ Escape during a drag cancels resizing; the next Escape closes Settings.
 ## Notifications
 
 **Background session alerts** are on by default. Turn them off across windows, send a fixed-content delivery test, or refresh read-only macOS diagnostics. See [Notifications](notifications.md) for triggers, click behavior and troubleshooting.
+
+## Diagnostics
+
+**Performance diagnostics** are off by default. Enable timing-only in-memory history, then choose **Capture performance report** when typing or scrolling feels slow. The saved path appears here; capture is also available through the command palette and can be bound to a shortcut. See [Performance reports](performance-diagnostics.md) for privacy, local storage and limitations.
 
 ## Keybindings
 

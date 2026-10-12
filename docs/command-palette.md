@@ -1,5 +1,7 @@
 # Command palette
 
+**Capture performance report** saves local timing data for a slowdown, after enabling Settings → Diagnostics. It has no default shortcut; the saved path appears in Diagnostics. See [Performance reports](performance-diagnostics.md).
+
 **Reload card plugins** rescans personal TypeScript sources and refreshes the catalog for new cards, using cached bundles when unchanged. It does not restart Pi, send prompts or rebuild inspected cards. It has no default shortcut; assign one in [Keybindings](keybindings.md). See [Card plugins](card-plugins.md#startup-reload-and-caching).
 
 Open with **⌘/Ctrl+Shift+P**, type an action or description, then press Enter or click a result. Commands show a short description and their effective shortcut; unbound actions leave the shortcut space empty. Every palette command is bindable, but **Select theme…** has no default shortcut.

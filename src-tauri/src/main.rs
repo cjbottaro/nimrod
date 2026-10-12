@@ -7,6 +7,7 @@ mod keybindings;
 mod links;
 mod native_menu;
 mod notifications;
+mod performance_diagnostics;
 mod plugin_compiler;
 mod popout_store;
 mod popout_windows;
@@ -510,6 +511,7 @@ fn main() {
             popouts::sync_popout_sessions,
             popouts::code_popout_snapshot,
             popouts::open_popout_link,
+            performance_diagnostics::write_performance_report,
             preferences::preferences_snapshot,
             preferences::preferences_settings,
             preferences::preferences_state,

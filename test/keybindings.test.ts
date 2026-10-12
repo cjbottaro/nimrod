@@ -27,8 +27,11 @@ test('defaults distinguish creation, named creation, open-session switching and 
   assert.deepEqual(bindingsFor('resume', {}), ['primary+k']);
   assert.deepEqual(bindingsFor('restart', {}), ['primary+r']);
   assert.deepEqual(bindingsFor('keybindings', {}), ['primary+shift+,']);
-  assert.ok(ACTIONS.filter(action => !['select-theme', 'reload-card-plugins'].includes(action.id)).every(action => action.defaults.length > 0));
+  assert.ok(ACTIONS.filter(action => !['select-theme', 'reload-card-plugins', 'capture-performance'].includes(action.id)).every(action => action.defaults.length > 0));
   assert.deepEqual(bindingsFor('select-theme', {}), []);
+  assert.deepEqual(bindingsFor('capture-performance', {}), []);
+  assert.deepEqual(bindingsFor('capture-performance', { 'capture-performance': ['primary+alt+p'] }), ['primary+alt+p']);
+  assert.deepEqual(bindingsFor('capture-performance', { 'capture-performance': [] }), []);
   assert.deepEqual(bindingsFor('reload-card-plugins', {}), []);
   assert.deepEqual(bindingsFor('reload-card-plugins', { 'reload-card-plugins': ['primary+alt+l'] }), ['primary+alt+l']);
   assert.deepEqual(bindingsFor('reload-card-plugins', { 'reload-card-plugins': [] }), []);

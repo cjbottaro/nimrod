@@ -3,6 +3,7 @@ import type { JsonRecord } from './types';
 
 /** The existing Pi renderer's small in-process boundary; no VS Code compatibility shim. */
 export interface ViewHost {
+  performance?: import('../performance-diagnostics').PerformanceProbe;
   cardRenderer?: (data: Readonly<import('./tool-card').ToolCardBlock>) => import('./tool-card').ToolCardRenderer;
   cardActions?: {
     copy(text: string): Promise<void>;

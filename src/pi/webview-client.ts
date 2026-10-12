@@ -103,7 +103,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   // would describe a conversation that no longer exists. The draft remains intact.
   if (isTemporaryRestore(bootstrapRestore)) composer = { ...composer, recovered: [], queue: { steering: [], followUp: [], authoritative: false } };
   prompt.value = composer.draft;
-  resizeComposer(prompt);
+  sizeComposer();
   const slashCompletion = installSlashCompletion(prompt, required("slash-suggestions"), text => updateComposer(updateDraft(composer, text)));
 
   function post(type: string, extra: Record<string, unknown> = {}): void { host.postMessage({ type, ...extra }); }
@@ -127,10 +127,15 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     host.setState(persistedState);
   }
 
+  function sizeComposer(): void {
+    if (host.performance) host.performance.measure('composer-layout', () => resizeComposer(prompt), active);
+    else resizeComposer(prompt);
+  }
+
   function resizePrompt(): void {
     if (composerResizeFrame !== undefined) window.cancelAnimationFrame(composerResizeFrame);
     composerResizeFrame = undefined;
-    if (active && !disposed) resizeComposer(prompt);
+    if (active && !disposed) sizeComposer();
   }
 
   function schedulePromptResize(): void {
@@ -139,7 +144,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     // coalesce rapid edits. TranscriptScroll still owns follow/reading intent.
     composerResizeFrame = window.requestAnimationFrame(() => {
       composerResizeFrame = undefined;
-      if (active && !disposed) resizeComposer(prompt);
+      if (active && !disposed) sizeComposer();
     });
   }
 
@@ -611,6 +616,11 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   }
 
   function render(state: State): void {
+    if (host.performance) host.performance.measure('transcript-render', () => renderState(state), active);
+    else renderState(state);
+  }
+
+  function renderState(state: State): void {
     const wasAtBottom = transcriptScroll.capture();
     const outputPositions = new Map(Array.from(toolCards, ([key, card]) => [key, captureStreamingOutput(card)]));
     displayedState = state;
@@ -745,7 +755,11 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       finally { if (!disposed && generation === composerGeneration) { preparing--; renderComposer(); transcriptScroll.resize(); } }
     })();
   }, { signal: listeners.signal });
-  prompt.addEventListener("input", () => updateComposer(updateDraft(composer, prompt.value)));
+  prompt.addEventListener("input", () => {
+    const update = () => updateComposer(updateDraft(composer, prompt.value));
+    if (host.performance) host.performance.measure('input-handler', update, active);
+    else update();
+  });
   queueActivity.addEventListener("click", (event) => {
     const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button[data-recovery-id]") : undefined;
     const id = target?.dataset.recoveryId;
@@ -827,6 +841,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       if (deletionLocked) { persistComposer(); post("deletionState", { id: data.id, hasDraft: !!(composer.draft.trim() || composer.attachments?.length || preparing || composer.recovered.length) }); }
     }
     if (data.type === "snapshot") {
+      host.performance?.record('snapshot', active);
       if (typeof data.state?.deletionLocked === "boolean") deletionLocked = data.state.deletionLocked;
       if (typeof data.build === "string") activeBuild = data.build;
       if (data.restore && typeof data.restore === "object" && !Array.isArray(data.restore)) {
