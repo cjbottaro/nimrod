@@ -57,6 +57,12 @@ Explicitly requested builds use checkout-local targets and publish verified whol
   restarts it. Linux publication is intended behavior, not locally verified acceptance;
   Windows remains a possible future target with no current CLI wrapper.
 
+## Personal plugin compiler asset
+
+`src-tauri/build.rs` stages a target-matching native esbuild executable and license from already-installed npm dependencies. It is a Tauri `externalBin` sidecar, not a Node backend. Cargo check/test may prepare this ignored asset; that is dependency staging, not app packaging. No runtime downloads or package installation. Cross compilation requires the matching target esbuild dependency installed locally; wrong-target helpers fail staging.
+
+Requested app bundles include/sign the sidecar. The macOS bundle verifier checks `Contents/MacOS/esbuild` before the whole app. Linux publication now requires both `nimrod` and its adjacent `esbuild` companion from the same build (and applicable notices); copying only the main executable is incomplete. Linux/possible Windows packaging and helper execution remain unverified. The separate runtime bundle cache is owned by [card plugins](card-plugins.md#native-compilercache-stage-e), not sccache.
+
 ## Cache boundaries / pitfalls
 
 Compatible registry dependencies use the same source directory under Cargo home

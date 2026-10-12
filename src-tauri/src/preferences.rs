@@ -118,6 +118,12 @@ pub(crate) fn jsonc(text: &str) -> Result<Value, String> {
 fn validate(text: &str) -> Result<(), String> {
     let value = jsonc(text)?;
     let object = value.as_object().ok_or("Settings must be a JSON object")?;
+    if object
+        .get("cards.autoLoad")
+        .is_some_and(|value| !value.is_boolean())
+    {
+        return Err("cards.autoLoad must be a boolean".into());
+    }
     for key in ["cards.plugins", "cards.trustedPlugins"] {
         if let Some(files) = object.get(key) {
             let files = files

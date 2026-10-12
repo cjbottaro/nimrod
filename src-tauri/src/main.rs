@@ -7,6 +7,7 @@ mod keybindings;
 mod links;
 mod native_menu;
 mod notifications;
+mod plugin_compiler;
 mod popout_store;
 mod popout_windows;
 mod popouts;
@@ -463,6 +464,14 @@ fn main() {
                     .unwrap()
                     .join("drafts"),
             ));
+            app.manage(plugin_compiler::Compiler::bundled(
+                preferences::directory(
+                    &home,
+                    std::env::var_os("XDG_CACHE_HOME").map(Into::into),
+                    ".cache",
+                )
+                .join("card-plugins"),
+            ));
             app.manage(preferences);
             drafts::watch(app.handle());
             preferences::watch(app.handle());
@@ -483,6 +492,7 @@ fn main() {
             runtime_defaults,
             card_plugins::read_card_plugin,
             card_plugins::read_card_plugin_module,
+            card_plugins::load_personal_card_plugins,
             session_deletion::delete_session_tree,
             session_deletion::deletion_snapshot,
             session_deletion::acknowledge_deletion,

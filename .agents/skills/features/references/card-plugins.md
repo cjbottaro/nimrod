@@ -11,6 +11,25 @@
 - One call-ID-keyed shell survives placement/streaming. Manual disclosure and each output reading position survive; generation/execution/result/result-processing phases remain distinct. Pi acknowledgement remains the only draft-clearing authority. No upstream Pi/extension changes.
 - Portable behavior remains macOS first, Linux next, possible Windows later. Native acceptance is not established by fixtures.
 
+## Personal-source loader work
+
+Approved next workflow: personal `card-plugins/*.ts` / `*.tsx` and immediate directories with `index.ts` / `index.tsx` are trusted by placement, discovered automatically and compiled/bundled invisibly. No per-source manifest, enable list or trust list. Exported metadata owns matching. Legacy manifests remain compatible with explicit trust. No project directory discovery or arbitrary config-tree scan.
+
+| Stage | Acceptance |
+| --- | --- |
+| E. Native compiler and persistent bundle cache — implemented, frontend integration pending | Target-native esbuild sidecar; shallow discovery; local dependency bundling without execution/downloads; content/resolution/compiler/options/SDK fingerprints, atomic shared cache and owned compiler timeout/exit. |
+| F. Automatic catalog, background startup and reload — pending | Exported source metadata; automatic personal trust; nonblocking loading, Settings status/errors and bindable Reload card plugins. New cards use refreshed catalog; inspected cards remain mounted. |
+
+### Native compiler/cache (stage E)
+
+- `plugin_compiler.rs` / `plugin_compiler_tests.rs` own discovery, bundling and cache. Hidden entries, declarations, dependencies, deeper folders and entry symlinks are not autoloaded. Maximum 50 entries; overflow is explicit and loads nothing. TS/TSX only are automatic; compiled legacy JS remains manifest-driven.
+- `src-tauri/build.rs` stages the already-installed target-matching esbuild binary/license from pinned npm dependencies. Tauri `externalBin` packages/signs it as a sidecar; no Node backend, runtime npm install or compiler download. Cargo asset staging is not an app build/launch. `scripts/verify-macos-bundle.ts` additionally verifies the packaged helper when a build is explicitly requested.
+- Native `load_personal_card_plugins` is welcome/project-window authorized, uses config-adjacent sources and absolute XDG cache/home policy (`~/.cache/nimrod/card-plugins`). Filesystem work runs on a blocking worker; compiler processes are owned and killed/reaped on timeout. `cards.autoLoad: false` is the native escape hatch (frontend validation/integration follows in F).
+- CLI compilation uses fixed browser ESM/ES2022 options and disables implicit tsconfig discovery (`--tsconfig-raw={}`). Static local imports and already-installed browser packages are supported; Node builtins, static external runtime imports and extra CSS/asset outputs are rejected. No type-checking or package lifecycle code executes. Maximum output 1 MiB, input file 8 MiB, cache record 4 MiB, 4096 inputs, 100,000 resolution-tree entries, 20s per compiler attempt; limits fail visibly rather than truncate code.
+- Warm loads validate entry/import content hashes, module resolution directory/file inventories, package JSON/lockfiles, compiler binary hash, fixed options and embedded SDK contract hash. Only actual input contents and resolution metadata are hashed—not all dependency file contents. Conservative metadata changes may rebuild. Cache hits spawn no compiler; imports are still evaluated later in the webview.
+- A changed resolved graph is retried against a fresh before/after snapshot (up to three passes); missing prior inputs do not pin an obsolete graph. User files are not locked, so this does not exclude arbitrary external writers. Stale/corrupt cache or changed code rebuilds; failed edits never fall back to an old bundle. Atomic private cache records serialize across windows via the shared compiler gate.
+- Native fixture tests run real esbuild only on disposable sources: cold/warm across managers, zero warm compiler runs, source/dependency edits, added/removed resolution candidates, package/lockfile changes, cache corruption/identity, browser-only/error behavior and shared publication. No user's source/config/cache, model or app is used. Stage E `mise run check` passes **494 TS/Node tests** and **122 Rust tests** (two opt-in smokes ignored), docs/formatting/Clippy. No UI/scroll changes in this backend stage; browser tests resume with stage F. No app package/build/launch or native sidecar acceptance.
+
 ## Execution decision
 
 The initial executable API is **explicitly trusted, in-process JavaScript** to allow direct incremental DOM rendering through the same API as bundled plugins. It is **not a sandbox**: in-process code can reach webview globals; host capabilities and controlled slots are supported API boundaries, not security confinement. Packages require explicit per-package trust in settings before entry code is loaded. JSON declarations require no executable trust. No remote package fetch, directory scan, automatic trust or arbitrary module execution during tests.
