@@ -1126,7 +1126,7 @@ test('returning to All loads and connects its selected restored session without 
   } finally { f.win.close(); }
 });
 
-test('deletion reconnect waits for barrier release, ignores duplicates and respects changed selection/quarantine', async () => {
+test('deletion reconnects unrelated replacements immediately and respects changed selection/quarantine', async () => {
   for (const scenario of ['event', 'returned-pending', 'changed-selection', 'quarantine']) {
     const root = '/sessions/new-1.jsonl', child = '/sessions/new-2.jsonl', fallback = '/sessions/new.jsonl';
     const results = [{ file: root, deleted: true }, { file: child, deleted: true }];
@@ -1148,12 +1148,12 @@ test('deletion reconnect waits for barrier release, ignores duplicates and respe
       } else f.deletionEvent(event);
       await f.tick(); await f.tick(); await f.tick();
       assert.equal(rows[0].getAttribute('aria-current'), 'true', 'whole subtree removed before replacement selection');
-      assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 4, 'no resume while native launch barrier remains');
+      assert.equal(f.calls.filter(c => c.command === 'start_pi').length, scenario === 'quarantine' ? 4 : 5, 'unrelated replacement resumes before transaction release');
       if (scenario === 'changed-selection') { rows[3].click(); await f.tick(); }
       const release: DeletionEvent = { ...event, phase: 'release', pending: false };
       f.deletionEvent(release); await f.tick(); await f.tick();
       const resumes = scenario !== 'quarantine';
-      assert.equal(f.calls.filter(c => c.command === 'start_pi').length, resumes ? 5 : 4);
+      assert.equal(f.calls.filter(c => c.command === 'start_pi').length, scenario === 'changed-selection' ? 6 : resumes ? 5 : 4);
       if (resumes) {
         const selected = scenario === 'changed-selection' ? 3 : 0;
         assert.equal((f.calls.filter(c => c.command === 'start_pi').at(-1)!.args.config as JsonRecord).sessionFile, selected ? '/sessions/new-3.jsonl' : fallback);
@@ -1162,7 +1162,7 @@ test('deletion reconnect waits for barrier release, ignores duplicates and respe
       if (scenario === 'changed-selection') assert.equal(rows[3].getAttribute('aria-current'), 'true');
       f.deletionEvent({ ...event, pending: false }); f.deletionEvent(release);
       await f.tick(); await f.tick();
-      assert.equal(f.calls.filter(c => c.command === 'start_pi').length, resumes ? 5 : 4, 'duplicate reconciliation never reconnects twice');
+      assert.equal(f.calls.filter(c => c.command === 'start_pi').length, scenario === 'changed-selection' ? 6 : resumes ? 5 : 4, 'duplicate reconciliation never reconnects twice');
       assert.equal(f.calls.some(c => c.command === 'write_pi' && (c.args.message as JsonRecord).type === 'prompt'), false);
     } finally { f.win.close(); }
   }
@@ -1803,6 +1803,73 @@ async function submitSessionName(f: Awaited<ReturnType<typeof fixture>>, name: s
   input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
   await f.tick(); await f.tick();
 }
+
+test('new-session commands remain available while another project reviews deletion', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  const key = (altKey = false, shiftKey = false) => f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'n', metaKey: true, altKey, shiftKey, bubbles: true, cancelable: true }));
+  try {
+    f.deletionEvent({ id: 'other-project', phase: 'begin', files: [], results: [], pending: true }); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('deletion-review').open, false);
+    assert.equal(f.element<HTMLButtonElement>('sidebar-new').disabled, false);
+    key(); await f.tick(); await f.tick();
+    key(true); await f.tick(); await submitSessionName(f, 'During review');
+    key(false, true); await f.tick(); await f.tick();
+    await chooseNamedSession(f); await submitSessionName(f, 'Palette during review');
+    const starts = f.calls.filter(c => c.command === 'start_pi');
+    assert.equal(starts.length, 4);
+    assert.deepEqual(starts.map(c => (c.args.config as JsonRecord).mode), ['saved', 'saved', 'temporary', 'saved']);
+    assert.equal((starts[1].args.config as JsonRecord).sessionName, 'During review');
+    assert.equal((starts[3].args.config as JsonRecord).sessionName, 'Palette during review');
+    f.deletionEvent({ id: 'other-project', phase: 'release', files: [], results: [], pending: false }); await f.tick();
+    assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 4, 'release does not replay commands');
+    assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
+  } finally { f.dom.window.close(); }
+});
+
+test('deletion beginning during session naming does not prevent submission', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    await chooseNamedSession(f);
+    f.deletionEvent({ id: 'other-project', phase: 'begin', files: [], results: [], pending: true }); await f.tick();
+    await submitSessionName(f, 'Started during review');
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+    assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
+    assert.equal(f.rows().length, 1);
+  } finally { f.dom.window.close(); }
+});
+
+test('pending deletion leaves unrelated Resume, Restart and Close available', async () => {
+  const file = '/sessions/unrelated.jsonl';
+  const f = await fixture(undefined, { windowWorkspace: '/project', catalog: [{ path: file, sessionId: 'fixture-id', name: 'Unrelated', modified: 1 }] });
+  const key = (value: string) => f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: value, metaKey: true, bubbles: true, cancelable: true }));
+  try {
+    f.deletionEvent({ id: 'other-project', phase: 'lock', files: ['/sessions/affected.jsonl'], results: [], pending: true }); await f.tick();
+    key('k'); await f.tick();
+    f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+    assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
+    assert.equal((f.calls.find(c => c.command === 'start_pi')!.args.config as JsonRecord).sessionFile, file);
+    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, false);
+    key('r'); await f.tick(); await f.tick();
+    assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 2);
+    key('w'); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 0);
+    assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
+  } finally { f.dom.window.close(); }
+});
+
+test('a cached Resume row deleted after discovery reports an error without launching or replacing history', async () => {
+  const file = '/sessions/stale.jsonl';
+  const f = await fixture(undefined, { windowWorkspace: '/project', catalog: [{ path: file, sessionId: 'fixture-id', name: 'Stale history', modified: 1 }] });
+  try {
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true, cancelable: true })); await f.tick();
+    assert.match(f.element('palette-list').textContent!, /Stale history/);
+    f.deletionEvent({ id: 'deleted-elsewhere', phase: 'complete', files: [file], results: [{ file, deleted: true }], pending: false }); await f.tick();
+    f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+    assert.match(f.element('application-notices').textContent!, /selected session was deleted/);
+    assert.equal(f.calls.some(c => c.command === 'start_pi'), false);
+    assert.equal(f.rows().length, 0);
+  } finally { f.dom.window.close(); }
+});
 
 test('new named session passes its name at launch without a rename RPC and waits for Pi startup', async () => {
   let release!: () => void;

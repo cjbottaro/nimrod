@@ -288,7 +288,7 @@ const selectedConnection = new SessionConnection<Tab>({
   eligibility: tab => {
     if (!ready || unloading || !workspace || !tabs.includes(tab) || !tab.file?.exists || deletion.blocked(tab.file.path) || tab.closing || tab.restarting) return 'unavailable';
     if (tab.starting || (tab.session && !tab.ended)) return 'connected';
-    if (deletion.pending || tab.deleting) return 'blocked';
+    if (tab.deleting || deletion.locked(tab.file.path)) return 'blocked';
     return 'connectable';
   },
   connect: tab => launch(tab, undefined, true),
@@ -335,7 +335,7 @@ const unlistenNotificationClicks = await listen<NotificationClick>('nimrod-notif
   const target = event.payload;
   const tab = tabs.find(tab => tab.id === target?.session && tab.token === target?.token);
   const valid = () => ready && !unloading && !!tab && tabs.includes(tab) && tab.token === target.token &&
-    !tab.starting && !tab.closing && !tab.restarting && !tab.deleting && !deletion.pending && !deletion.blocked(tab.file?.path);
+    !tab.starting && !tab.closing && !tab.restarting && !tab.deleting && !deletion.locked(tab.file?.path) && !deletion.blocked(tab.file?.path);
   if (!valid()) return;
   const navigation = ++notificationNavigation;
   void (async () => {
@@ -380,7 +380,7 @@ function controls(): void {
   welcome.hidden = !ready || !!workspace;
   required('workspace-empty').hidden = !workspace || !!active || sidebarView !== 'all';
   for (const id of ['workspace-new', 'workspace-resume', 'start-pi', 'start-temporary', 'resume-last', 'recover-draft', 'browse', 'cwd', 'enter-workspace', 'sidebar-new']) {
-    (required(id) as HTMLButtonElement | HTMLInputElement).disabled = !ready || deletion.pending;
+    (required(id) as HTMLButtonElement | HTMLInputElement).disabled = !ready;
   }
   cwd.readOnly = !!workspace;
   required('resume-last').hidden = !lastSession();
@@ -495,7 +495,7 @@ function deletable(tab: Tab | undefined): boolean {
 function restartControl(): void {
   const active = presented;
   const button = required<HTMLButtonElement>('restart-session');
-  button.disabled = !ready || deletion.pending || !active || !restartable(active) || deletion.blocked(active.file?.path) || active.starting || active.closing || active.restarting;
+  button.disabled = !ready || !active || !restartable(active) || active.deleting || deletion.locked(active.file?.path) || deletion.blocked(active.file?.path) || active.starting || active.closing || active.restarting;
   const remove = required<HTMLButtonElement>('delete-session');
   remove.disabled = !deletable(active);
   remove.title = !active ? 'Delete session tree… — no open session' : deletion.pending ? 'Delete session tree… — deletion pending' : deletion.blocked(active.file?.path) ? 'Delete session tree… — recover through Resume session first' : active.mode === 'temporary' ? 'Delete session tree… — unavailable for temporary sessions' : !restartable(active) ? 'Delete session tree… — unavailable until saved' : deletionBusy(active) ? 'Delete session tree… — wait for active work to finish' : 'Delete session tree…';
@@ -858,7 +858,7 @@ function updateTab(tab: Tab): void {
   tab.root.setAttribute('aria-busy', String(tab.session?.state.busy === true));
   updateSessionRowContent(tab, name, sessionRow(tab));
   tab.row.disabled = !ready;
-  tab.row.setAttribute('aria-current', String(tab === presented)); tab.closeButton.setAttribute('aria-label', `Close ${name}`); tab.closeButton.disabled = !ready || deletion.pending || tab.closing || tab.starting || tab.restarting;
+  tab.row.setAttribute('aria-current', String(tab === presented)); tab.closeButton.setAttribute('aria-label', `Close ${name}`); tab.closeButton.disabled = !ready || tab.deleting || deletion.locked(tab.file?.path) || tab.closing || tab.starting || tab.restarting;
   tab.deleteButton.setAttribute('aria-label', `Delete session tree for ${name}`); tab.deleteButton.disabled = !deletable(tab);
   if (presented === tab) presentConversation(tab);
   renderSidebar();
@@ -867,7 +867,7 @@ function showNotice(tab: Tab, text: string, retry = false): void {
   tab.failed = true;
   tab.notice.hidden = true; tab.notice.replaceChildren();
   notices.report({ id: `${tab.id}:connection`, owner: tab.id, cause: 'connection', priority: 10, operation: `${tab.title}: Session connection`, message: text,
-    actions: retry && !deletion.blocked(tab.file?.path) ? [{ label: 'Retry connection', enabled: () => tabs.includes(tab) && !tab.closing && !tab.restarting && !deletion.pending, run: () => launch(tab) }] : undefined,
+    actions: retry && !deletion.blocked(tab.file?.path) ? [{ label: 'Retry connection', enabled: () => tabs.includes(tab) && !tab.closing && !tab.restarting && !tab.deleting && !deletion.locked(tab.file?.path), run: () => launch(tab) }] : undefined,
   });
   updateTab(tab);
 }
@@ -913,7 +913,7 @@ async function stopOwned(tab: Tab): Promise<void> {
   catch (error) { if (tab.stopTask === task) tab.stopTask = undefined; throw error; }
 }
 async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, initialName?: string): Promise<void> {
-  if (!ready || deletion.pending || deletion.blocked(tab.file?.path) || tab.deleting || tab.starting || tab.closing || (tab.session && !tab.ended) || (!acceptedAction && settings.isOpen) || !workspace) return;
+  if (!ready || deletion.blocked(tab.file?.path) || deletion.locked(tab.file?.path) || tab.deleting || tab.starting || tab.closing || (tab.session && !tab.ended) || (!acceptedAction && settings.isOpen) || !workspace) return;
   tab.starting = true; tab.failed = false; updateTab(tab); error.textContent = ''; tab.notice.hidden = true;
   try { await stopOwned(tab); } catch (e) { tab.starting = false; showNotice(tab, `Could not stop the previous process: ${e}`); updateTab(tab); return; }
   const token = crypto.randomUUID(); tab.token = token; tab.stopTask = undefined; tab.ended = false;
@@ -1021,11 +1021,14 @@ function newNamedSession(): void {
   palette.namedSession(name => newSession('saved', undefined, name));
 }
 async function newSession(mode: LaunchMode = 'saved', copyDraft?: string, initialName?: string): Promise<void> {
-  if (!ready || deletion.pending || settings.isOpen || !await ensureWorkspace()) return;
+  if (!ready || settings.isOpen || !await ensureWorkspace()) return;
+  if (!ready || unloading || settings.isOpen) return;
   const tab = createTab(mode, undefined, undefined, navigation.nextRecency()); activate(tab); await launch(tab, copyDraft, true, initialName);
 }
 async function openSession(info: Pick<SessionSummary, 'path' | 'sessionId' | 'name' | 'lastUserMessageAt'>): Promise<void> {
-  if (!ready || deletion.pending || settings.isOpen || !await ensureWorkspace()) return;
+  if (!ready || settings.isOpen || !await ensureWorkspace()) return;
+  if (deletion.locked(info.path)) { error.textContent = 'This session is locked for deletion. Finish or cancel its review before resuming it.'; return; }
+  if (deletion.removed(info.path)) { error.textContent = 'The selected session was deleted. Refresh Resume session and choose another session.'; return; }
   if (deletion.blocked(info.path)) {
     try { await deletion.recover(info.path, info.sessionId); } catch (e) { error.textContent = String(e); return; }
   }
@@ -1041,14 +1044,16 @@ async function openSession(info: Pick<SessionSummary, 'path' | 'sessionId' | 'na
     } catch (e) { error.textContent = String(e); return; }
   }
   // Recheck after metadata awaits: duplicate open actions must share one mounted session.
-  if (!ready || unloading || settings.isOpen || deletion.pending || deletion.removed(info.path) || deletion.blocked(info.path)) return;
+  if (!ready || unloading || settings.isOpen) return;
+  if (deletion.removed(info.path)) { error.textContent = 'The selected session was deleted. Refresh Resume session and choose another session.'; return; }
+  if (deletion.locked(info.path) || deletion.blocked(info.path)) { error.textContent = 'This session is unavailable because of deletion. Finish or cancel its review, or explicitly recover it through Resume session.'; return; }
   const concurrent = tabs.find(tab => tab.file?.path === info.path);
   if (concurrent) { activate(concurrent); return; }
   const tab = createTab('resume', { path: info.path, sessionId: info.sessionId, exists: true }, info.name || 'Session', used);
   activate(tab); await launch(tab, undefined, true);
 }
 async function restartSession(tab: Tab): Promise<void> {
-  if (!ready || deletion.pending || deletion.blocked(tab.file?.path) || !tabs.includes(tab) || !restartable(tab) || tab.starting || tab.closing || tab.restarting || settings.isOpen) return;
+  if (!ready || tab.deleting || deletion.locked(tab.file?.path) || deletion.blocked(tab.file?.path) || !tabs.includes(tab) || !restartable(tab) || tab.starting || tab.closing || tab.restarting || settings.isOpen) return;
   const needsConfirmation = !!tab.session && !tab.ended && (tab.session.state.busy || promptPending(tab) || !!tab.inputCount || !!tab.session.state.queue?.pendingCount);
   tab.restarting = true; updateTab(tab);
   let resumed = false;
@@ -1137,7 +1142,7 @@ function detachTab(tab: Tab): void {
   controls(); persistTabs(); syncPopouts();
 }
 async function closeTab(tab: Tab): Promise<void> {
-  if (deletion.pending || tab.closing || tab.starting || tab.restarting || settings.isOpen) return;
+  if (tab.deleting || deletion.locked(tab.file?.path) || tab.closing || tab.starting || tab.restarting || settings.isOpen) return;
   const running = tab.session && !tab.ended;
   if ((tab.mode === 'temporary' || (running && (tab.session!.state.busy || promptPending(tab) || tab.inputCount || tab.session!.state.queue?.pendingCount))) && !await dialogs.confirm(`Close ${tab.title}?`, tab.mode === 'temporary' ? 'This stops its agent and discards this temporary session, including its draft, queued messages and pop-outs.' : 'This stops only this session’s agent. Written history and your draft remain; queued and in-flight work will not continue.', undefined, tab.mode === 'temporary' ? 'Close temporary session' : 'Close session')) return;
   if (tab.closing || !tabs.includes(tab)) return;

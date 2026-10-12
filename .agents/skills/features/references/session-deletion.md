@@ -25,7 +25,7 @@ Review a fingerprinted descendants tree without launching Pi or activating the t
 | `src/pi/session-drafts.ts` | Confirmed-success file draft cleanup and matching last-session pointer |
 | `src-tauri/src/session_files.rs` | Bounded store scan, header lineage, fingerprints, revalidation and children-first unlink |
 | `src-tauri/src/session_deletion.rs` | Native transaction, affected-project reports, owner-scoped review, observed writer exit and quarantine |
-| `src-tauri/src/workspaces.rs` | New-launch barrier, affected-file write freeze and native owner enumeration |
+| `src-tauri/src/workspaces.rs` | Affected-file launch/write freeze, stale-file rejection and native owner enumeration |
 | `src-tauri/src/main.rs` | IPC registration, quarantine-aware startup and owner-close/quit cancellation |
 
 The former `delete_bridge.rs` subprocess integration and its fixture have been
@@ -89,10 +89,15 @@ Execute is one locally owned operation and never automatically replayed.
 
 One native transaction per app process:
 
-1. Acquire native/global new-launch barriers, broadcast begin, validate root
+1. Reserve the single native deletion transaction, broadcast begin, validate root
    ID/cwd and construct the preview in an awaited blocking task. Nothing is stopped.
-2. Freeze affected mutating RPC writes; idle reads and unrelated writes remain
-   operational. New starts/resumes stay blocked until the transaction finishes.
+   This reservation does not block session creation or unrelated lifecycle actions.
+2. Freeze affected file attachments and mutating RPC writes; idle reads,
+   unrelated writes, fresh launches and unrelated saved resumes remain operational.
+   The file gate is held through reservation/spawn and new identity binding, so
+   freezing the reviewed set cannot miss a concurrently attaching affected writer.
+   Existing owners may refresh their unchanged identity. Starts attaching to a
+   reviewed file fail; stale missing files fail even after the freeze releases.
 3. Choose acknowledgement participants from registered windows whose project
    directories occur in the plan, plus native affected owners and the initiator.
    Unrelated project windows do not participate. Request locks/fresh `get_state`,
@@ -112,9 +117,60 @@ One native transaction per app process:
 7. Await native execution on a blocking task. Owner close/quit checks before each
    unlink stop further removal; already removed files are not rolled back.
 8. Reconcile successes/pop-outs/bookkeeping, clear operation state and release
-   host gate while the app-level transaction still blocks launches. Clear that
-   flag and publish completion atomically under the start/finish transition mutex.
+   the affected-file gate. Clear the deletion transaction reservation and publish
+   completion atomically under the start/finish transition mutex.
    A new begin cannot overtake the old completion. Round IDs reject stale reports.
+
+### Unrelated actions and stale history
+
+`SessionDeletion.pending` reserves deletion itself, not all session lifecycle
+operations. `locked(file)` tracks only the active reviewed set; `blocked(file)`
+tracks persisted quarantine (or invalid persisted safety state for saved paths).
+New/New named/Temporary session, unrelated Resume/Restart/Close and notification
+navigation stay available while another window reviews or executes deletion.
+Normal dialog priority still applies within the reviewing window. There is no
+launch queue, implicit review cancellation or command replay.
+
+Resume catalogs are snapshots, not leases on files. An accepted stale row reports
+an error through the shared notice strip: known tombstones fail immediately,
+otherwise native exact-file inspection and the final file-presence check fail
+without substituting fresh history. Discovery need not be serialized with deletion.
+Unrelated quarantined history may be explicitly validated/recovered during a
+transaction; recovery of files in its active set remains refused. Invalid
+persisted deletion state blocks saved resumes/recovery, but not fresh sessions.
+
+#### Decisions and rationale
+
+- **Deletion is file-scoped, not an app-wide lifecycle freeze.** Sharing a native
+  host does not make unrelated conversations part of a deletion transaction.
+  Fresh sessions do not attach to the reviewed history, and unrelated saved
+  sessions are outside the removal plan. A review may remain open indefinitely;
+  it must not disable work in other projects. The former global launch barrier
+  is explicitly superseded, not a safety invariant to restore.
+- **Accept stale picker rows and validate at use time.** Resume discovery is a
+  snapshot; files can disappear after discovery regardless of a Nimrod-wide
+  gate, including through external changes. An explicit open should error if its
+  exact file is gone or invalid, not require globally fresh catalogs, freeze
+  discovery/launches, silently return, or create replacement history.
+- **Retain only guards that protect affected files.** Rejecting a stale picker
+  row is not sufficient once an agent is already attached or concurrently
+  attaching: it could write during removal or recreate deleted history. Native
+  file-scoped attachment/write guards and observed affected-writer shutdown
+  address that race without restricting unrelated sessions.
+- **Do not queue or reinterpret user actions.** An unrelated creation/open runs
+  when requested; deletion must not defer it, cancel another window's review, or
+  replay it after settlement. Ordinary modal priority remains window-local.
+  The single-deletion reservation serializes deletion transactions only.
+- **Keep corrupt-state restrictions proportional.** Unverifiable persisted
+  quarantine cannot safely authorize saved-history resume/recovery. Fresh
+  sessions have no saved target to recover, so that error must not block them.
+
+Shell tests cover another window's begin, all creation variants and naming races,
+unrelated Resume/Restart/Close, immediate unrelated cleanup reconnection and
+stale cached Resume rows. Coordinator tests cover file-scoped locks/recovery;
+Rust ownership fixtures cover fresh/unrelated launches, affected attachment
+rejection and missing-file rejection after release. Fixture coverage is not
+native multi-window acceptance.
 
 ### Preview locks versus execution activity
 
@@ -218,7 +274,7 @@ an event arrives before the command result. Batch confirmed files once, dispose
 mounted views/receivers first, then choose replacement once. Never ordinary Close,
 reconfirm, stop unrelated tokens or resume a soon-to-be-deleted descendant.
 Removing a background subtree leaves a surviving selection unchanged. Selection
-uses the shared [connected-first cleanup policy](projects-and-sessions.md#selection-after-close-or-successful-deletion): most-recently-used connected in the current view, then across All, then next/previous inactive fallback. `activate` requests connection through the shared `SessionConnection` coordinator. It owns the latest deferred selection while launch eligibility is blocked. Deletion's `changed` hook only signals `selectedConnection.barriersChanged()`; it owns no pending target and does not replay navigation. The common shell eligibility adapter permits connection only after the native barrier clears, and the coordinator revalidates the still-presented target. Existing exact-file, quarantine and lifecycle guards gate launch. This handles completion events, returned results, snapshots and delayed barrier release without reconnecting descendants, changing a later user selection, duplicating launches, creating sessions or replaying prompts. Background deletion does not change the surviving selection. Close and deletion share selected-session loading/reconnect; only deletion needs deferred activation while native barriers remain. Shell fixtures cover inactive next/previous resume, pending results/events, duplicates, changed selection and quarantined fallback.
+uses the shared [connected-first cleanup policy](projects-and-sessions.md#selection-after-close-or-successful-deletion): most-recently-used connected in the current view, then across All, then next/previous inactive fallback. `activate` requests connection through the shared `SessionConnection` coordinator. It owns the latest deferred selection while launch eligibility is blocked. Deletion's `changed` hook only signals `selectedConnection.barriersChanged()`; it owns no pending target and does not replay navigation. The common shell eligibility adapter defers only affected-file connections until their lock clears; unrelated saved replacements reconnect immediately even while deletion remains pending. The coordinator revalidates the still-presented target. Existing exact-file, quarantine and lifecycle guards gate launch. This handles completion events, returned results, snapshots and delayed barrier release without reconnecting descendants, changing a later user selection, duplicating launches, creating sessions or replaying prompts. Background deletion does not change the surviving selection. Close and deletion share selected-session loading/reconnect; only an affected-file lock requires deferred activation. Shell fixtures cover inactive next/previous resume, pending results/events, duplicates, changed selection and quarantined fallback.
 
 Success clears corresponding `nimrod.tabs.v1:<cwd>` layouts, `nimrod.recency.v1:<cwd>`
 identity-bound timestamp entries (including closed projects), matching last-session
@@ -244,8 +300,8 @@ no migration:
 - `nimrod.deletion.deleted.v1`: definitive success tombstones for stale restored
   sidebar/history/draft state.
 
-Load guards before restoring entries. Corrupt/unreadable state fails closed and
-requires resolving the state error/restarting. Settings-file errors alone do not
+Load guards before restoring entries. Corrupt/unreadable state fails closed for saved resumes/recovery and
+requires resolving the state error/restarting; fresh sessions remain available. Settings-file errors alone do not
 block startup. Guard state is separate from drafts, runtime tokens and pop-outs.
 Snapshots reconcile locks and missed completion as well as guards.
 
@@ -257,8 +313,9 @@ Snapshots reconcile locks and missed completion as well as guards.
   wrong root ID/cwd/store, malformed headers, cycles, symlinks and hard links.
 - `session_deletion.rs` tests cover affected-window selection, fresh writer/idle
   reports, owner/ID single-use answers, quarantine/corrupt state and success cleanup.
-- `workspaces.rs` tests retain new-launch and affected-write barriers, unrelated
-  writes, exact-token stop/observed exit and failed-shutdown reservations.
+- `workspaces.rs` tests retain affected-file attachment/write guards, fresh and
+  unrelated saved launches, stale-file rejection, unrelated writes, exact-token
+  stop/observed exit and failed-shutdown reservations.
 - `test/shell.test.ts` tests two-window targeted review vs global completion,
   extension-free IPC arguments, row targets without selection/resume, fast-preview
   loading suppression, duplicate-click guards, cancellation/failure and confirmed-only cleanup.
