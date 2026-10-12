@@ -26,7 +26,7 @@ A steer immediately appears at the bottom of the transcript after live output, w
 
 The Status area shows the authoritative steering count. Explicit follow-up text stays in its queue there.
 
-Rejected local steering turns remain marked **Not sent**; the error also appears in the notice strip. Uncertain previews remain labeled **Acceptance unknown**. An acknowledged steer disconnected before confirmed consumption shows **Delivery unconfirmed**. Nothing retries automatically.
+Rejected local steering turns remain marked **Not sent**; the error also appears in that session's notices above the transcript pane. Uncertain previews remain labeled **Acceptance unknown**. An acknowledged steer disconnected before confirmed consumption shows **Delivery unconfirmed**. Nothing retries automatically.
 
 ## Stop and recover
 

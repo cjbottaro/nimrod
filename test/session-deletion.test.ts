@@ -89,6 +89,28 @@ test('deletion locks affected sessions only, refreshes idle state and includes r
   assert.equal(f.panels[0].removed, false);
 });
 
+test('pending deletion tracks affected files without guarding unrelated history or recovery', async () => {
+  const f = fixture();
+  await f.controller.handle(f.event('begin', { files: [] }));
+  assert.equal(f.controller.locked(f.panels[0].file), false);
+  await f.controller.handle(f.event('lock'));
+  assert.equal(f.controller.locked(f.panels[0].file), true);
+  assert.equal(f.controller.locked(f.panels[2].file), false);
+  assert.equal(f.controller.blocked(f.panels[2].file), false);
+  await f.controller.recover(f.panels[2].file, 'id');
+  assert.equal(f.calls.includes(`recover:${f.panels[2].file}`), true);
+  await assert.rejects(f.controller.recover(f.panels[0].file, 'id'), /locked/);
+  await f.controller.handle(f.event('release'));
+  assert.equal(f.controller.locked(f.panels[0].file), false);
+});
+
+test('invalid persisted deletion state guards saved paths but never pathless new sessions', () => {
+  const f = fixture();
+  f.controller.load({ pending: true, files: [], quarantine: [], error: 'Invalid persisted deletion state' });
+  assert.equal(f.controller.blocked('/store/unknown.jsonl'), true);
+  assert.equal(f.controller.blocked(undefined), false);
+});
+
 test('busy or unresponsive descendants report busy and cannot silently disappear from the acknowledgement', async () => {
   const f = fixture(); f.panels[1].failing = true;
   await f.controller.handle(f.event('lock'));
@@ -119,11 +141,11 @@ test('known partial results remove only successful files and quarantine failed i
   assert.equal(f.panels[1].locked, false);
 });
 
-test('unknown outcomes retain all entries and require explicit recovery; pending deletion keeps launches blocked', async () => {
+test('unknown outcomes retain entries and keep only affected recovery guarded until release', async () => {
   const f = fixture(); await f.controller.handle(f.event('lock'));
   await f.controller.handle(f.event('complete', { message: 'Outcome unknown', pending: true }));
   assert.equal(f.controller.pending, true); assert.equal(f.panels.some(p => p.removed), false);
-  await assert.rejects(f.controller.recover(f.panels[0].file, 'id'), /pending/);
+  await assert.rejects(f.controller.recover(f.panels[0].file, 'id'), /locked/);
   await f.controller.handle(f.event('release'));
   await f.controller.recover(f.panels[0].file, 'id');
   assert.equal(f.controller.blocked(f.panels[0].file), false); assert.equal(f.controller.blocked(f.panels[1].file), true);

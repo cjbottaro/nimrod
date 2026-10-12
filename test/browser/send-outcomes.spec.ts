@@ -51,7 +51,7 @@ test('definitive rejection marks the retained transcript turn without composer r
     await expect(turn.locator('.steering-status')).toHaveCount(0);
     await turn.evaluate(node => { (node as HTMLElement).dataset.testIdentity = 'failed-turn'; });
     await rejectPrompt(page);
-    await expect(page.locator('#application-notices')).toContainText('Offline fixture rejected');
+    await expect(page.locator(visible('session-notices'))).toContainText('Offline fixture rejected');
     await expect(turn.locator('.steering-status')).toHaveText('Not sent');
     await expect(turn).toHaveAttribute('data-test-identity', 'failed-turn');
     await expect(turn.locator('.transcript-image img')).toHaveCount(1);
@@ -76,7 +76,7 @@ test('sending another message does not wait for the first acknowledgement; failu
     await expect.poll(() => attempts(page)).toBe(2);
     await prompt.fill('Second message');
     await rejectPrompt(page);
-    await expect(page.locator('#application-notices')).toContainText('Offline fixture rejected');
+    await expect(page.locator(visible('session-notices'))).toContainText('Offline fixture rejected');
     await expect(prompt).toHaveValue('Second message');
     await expect(page.locator(visible('send'))).toBeEnabled();
     expect(fixture.errors).toEqual([]);
@@ -110,7 +110,7 @@ test('unknown delivery reports an error without composer recovery or replay', as
       const state = window as unknown as HeldWindow;
       state.__fixtureChannels[state.__heldPrompt!.token].onmessage({ kind: 'disconnected', message: 'Offline fixture connection lost before acknowledgement' });
     });
-    await expect(page.locator('#application-notices')).toContainText('did not confirm');
+    await expect(page.locator(visible('session-notices'))).toContainText('did not confirm');
     const turn = page.locator(visible('messages')).locator('.message.user').filter({ hasText: 'Maybe received' });
     await expect(turn).toHaveCount(1); await expect(turn.locator('.steering-status')).toHaveText('Acceptance unknown');
     await page.locator(visible('prompt')).press('Enter'); expect(await attempts(page)).toBe(1);

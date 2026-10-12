@@ -118,12 +118,15 @@ impl SessionDeletion {
         self.quarantine.lock().unwrap().contains(file)
     }
     pub fn snapshot(&self) -> DeletionSnapshot {
+        // Do not hold quarantine while taking files: recovery checks the active
+        // file set before updating quarantine and uses the opposite order.
+        let files = self.files.lock().unwrap().clone();
         DeletionSnapshot {
             pending: self.running.load(Ordering::SeqCst),
             quarantine: self.quarantine.lock().unwrap().iter().cloned().collect(),
-            files: self.files.lock().unwrap().clone(),
+            files,
             deleted: self.deleted.lock().unwrap().iter().cloned().collect(),
-            error: self.state_invalid.load(Ordering::SeqCst).then(|| "Deletion state cannot be verified. Session launches remain blocked; resolve the error and restart Nimrod.".into()),
+            error: self.state_invalid.load(Ordering::SeqCst).then(|| "Deletion state cannot be verified. Saved-session resumes remain blocked; resolve the error and restart Nimrod.".into()),
         }
     }
     fn remember(&self, app: &tauri::AppHandle, files: &[PathBuf]) -> Result<(), String> {
@@ -239,13 +242,17 @@ pub async fn recover_deletion_session(
     session_id: String,
 ) -> Result<(), String> {
     let state = app.state::<SessionDeletion>();
-    if state.running.load(Ordering::SeqCst) || state.state_invalid.load(Ordering::SeqCst) {
-        return Err("Deletion is pending or state is invalid; recovery is blocked".into());
+    if state.state_invalid.load(Ordering::SeqCst) {
+        return Err("Deletion state is invalid; saved-session recovery is blocked".into());
     }
     let cwd = project(&app, window.label())?;
     let file = crate::sessions::inspect(&path, &cwd)?;
     if file.session_id != session_id {
         return Err("Saved session identity changed".into());
+    }
+    let files = state.files.lock().unwrap();
+    if files.contains(&file.path) {
+        return Err("This session is locked for deletion; recovery is blocked".into());
     }
     let mut quarantine = state.quarantine.lock().unwrap();
     let mut updated = quarantine.clone();
@@ -555,7 +562,7 @@ pub async fn delete_session_tree(
     state.files.lock().unwrap().clear();
     *state.round.lock().await = Round::default();
     state.owner.lock().unwrap().clear();
-    // Publish completion atomically with release of the app-level launch barrier.
+    // Publish completion atomically with release of the transaction reservation.
     state.publish_completion(|| {
         let _ = app.emit(EVENT, event);
     });
