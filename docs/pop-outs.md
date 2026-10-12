@@ -10,6 +10,7 @@ icon, to the left of **Copy**. Copy briefly becomes a checkmark after success.
 - **Copy** copies the original source. Markdown has a small upper-right Copy source
   icon; nested code blocks have their own Copy buttons.
 - A short content-based window title, without a redundant session/snapshot header.
+- HTTP(S) links, including the native right-click menu's **Open Link / Open URL**, open your default browser rather than replacing the reference window.
 - Clicking Pop out on identical content and language in the same session focuses
   the existing window—even if that content appears in another turn.
 

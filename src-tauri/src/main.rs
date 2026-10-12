@@ -21,6 +21,7 @@ mod session_smoke;
 mod sessions;
 #[cfg(any(target_os = "macos", all(test, unix)))]
 mod single_instance;
+mod webview_navigation;
 mod window_state;
 mod workspace_windows;
 mod workspaces;

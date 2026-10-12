@@ -168,17 +168,18 @@ async fn create_window(app: &tauri::AppHandle, id: &str, entry: PopoutEntry) -> 
         .unwrap()
         .entries
         .insert(id.into(), entry);
-    let result = tauri::WebviewWindowBuilder::new(
+    let builder = tauri::WebviewWindowBuilder::new(
         app,
         label(id),
         tauri::WebviewUrl::App("index.html?popout".into()),
-    )
-    .title("Nimrod") // The rendered pop-out sets its content-derived title.
-    .inner_size(720.0, 540.0)
-    .min_inner_size(320.0, 220.0)
-    .visible(false)
-    .focused(false)
-    .build();
+    );
+    let result = crate::webview_navigation::guard(builder, app, &label(id))
+        .title("Nimrod") // The rendered pop-out sets its content-derived title.
+        .inner_size(720.0, 540.0)
+        .min_inner_size(320.0, 220.0)
+        .visible(false)
+        .focused(false)
+        .build();
     let window = match result {
         Ok(window) => window,
         Err(e) => {
