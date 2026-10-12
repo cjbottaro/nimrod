@@ -36,6 +36,14 @@ button { color:var(--vscode-button-foreground); background:var(--vscode-button-b
 .transcript-image { margin:8px 0; }
 .transcript-image img { display:block; max-width:100%; max-height:360px; width:auto; height:auto; border-radius:6px; }
 .steering-status { font-size:.78em; color:var(--vscode-descriptionForeground); margin-bottom:6px; }
+/* Fill short transcripts too; preserve the normal collapsed 16px turn spacing. */
+:is(#app, [data-pi-id="app"]):has(.queued-turns:not([hidden])) { min-height:100%; display:flex; flex-direction:column; }
+:is(#messages, [data-pi-id="messages"]):has(> .queued-turns:not([hidden])) { flex:1; display:flex; flex-direction:column; }
+:is(#messages, [data-pi-id="messages"]):has(> .queued-turns:not([hidden])) > .message { flex:none; margin:0 0 16px; }
+.queued-turns { position:sticky; bottom:0; z-index:1; flex:none; margin-top:auto; max-height:40vh; overflow:auto; overscroll-behavior:contain; background:var(--vscode-editor-background); border-top:1px solid var(--vscode-panel-border); }
+.queued-turns[hidden] { display:none; }
+.queued-turns > .message { margin:8px 0; }
+.queued-turns > .message:last-child { margin-bottom:0; }
 .message > :first-child, .markdown > :first-child { margin-top:0; }
 .message > :last-child, .markdown > :last-child, .tool-card > :last-child { margin-bottom:0; } .label { font-size:.78em; color:var(--vscode-descriptionForeground); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
 .markdown blockquote { margin:.65em 0; padding:2px 0 2px 12px; border:0; border-left:2px solid; border-left-color:var(--vscode-textBlockQuote-border, var(--vscode-panel-border)); border-radius:0; background:transparent; box-shadow:none; color:inherit; font-style:normal; }

@@ -445,20 +445,21 @@ test('steering appears before acknowledgement, remains after live output, and re
     assert.equal(f.prompt.value, '');
     assert.equal(f.win.document.activeElement, f.prompt);
     f.snapshot({ busy: true, messages: [assistant], queue: { authoritative: true, steering: [submission.text], followUp: ['Later'] } });
-    assert.equal(f.win.document.querySelectorAll('#messages .user').length, 1);
+    assert.equal(f.win.document.querySelectorAll('#messages .user').length, 2);
     assert.doesNotMatch(f.win.document.querySelector('#queue-activity')!.textContent!, /change direction/);
-    assert.match(f.win.document.querySelector('#queue-activity')!.textContent!, /1 pending.*Later/);
+    assert.match(f.win.document.querySelector('#queue-activity')!.textContent!, /queued.*1 pending/);
+    assert.doesNotMatch(f.win.document.querySelector('#queue-activity')!.textContent!, /Later/);
     f.draft('new draft');
     f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' }); f.flush();
     assert.equal(f.prompt.value, 'new draft');
     assert.equal(pending.querySelector('.steering-status'), null);
     f.snapshot({ busy: true, messages: [assistant, { key: 'tool', role: 'tool', toolCallId: 't', toolName: 'bash', toolStatus: 'running' }], queue: { authoritative: true, steering: [], followUp: [] } });
-    assert.equal(f.win.document.querySelector('#messages')!.lastElementChild, pending);
+    assert.equal(f.win.document.querySelector('#messages')!.lastElementChild?.previousElementSibling, pending);
     f.snapshot({ busy: true, messages: [assistant, { key: 'user', role: 'user', content: [{ type: 'text', text: submission.text }] }] });
     assert.equal(f.win.document.querySelector('#messages .user'), pending);
     assert.equal(pending.querySelector('.steering-status'), null);
     assert.equal(pending.getAttribute('aria-label'), 'User message');
-    assert.equal(f.win.document.querySelectorAll('#messages .user').length, 1);
+    assert.equal(f.win.document.querySelectorAll('#messages .user').length, 2);
     assert.equal(f.win.document.activeElement, f.prompt);
   } finally { f.dom.window.close(); }
 });
@@ -498,7 +499,7 @@ for (const busy of [false, true]) for (const outcome of ['rejected', 'unknown'] 
   } finally { f.dom.window.close(); }
 });
 
-test('follow-up delivery and slash controls do not acquire optimistic steering turns', () => {
+test('follow-ups stay pinned through acceptance and dequeue, then reconcile in place; slash controls have no preview', () => {
   const f = fixture();
   try {
     f.snapshot({ busy: true, messages: [] });
@@ -506,13 +507,58 @@ test('follow-up delivery and slash controls do not acquire optimistic steering t
     f.prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true, cancelable: true })); f.flush();
     const submission = f.sent.find(m => m.type === 'prompt')!;
     assert.equal(submission.mode, 'followUp');
-    assert.equal(f.win.document.querySelectorAll('#messages .user').length, 0);
-    f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' });
+    const pending = f.win.document.querySelector('#messages .user')!;
+    assert.ok(pending.closest('.queued-turns'));
+    assert.match(pending.textContent!, /Sending….*Later/);
+    f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' }); f.flush();
+    assert.match(pending.textContent!, /Queued.*Later/);
+    f.snapshot({ busy: true, messages: [], queue: { authoritative: true, steering: [], followUp: ['Later'] } });
+    assert.equal(f.win.document.querySelectorAll('#messages .user').length, 1);
+    f.snapshot({ busy: true, messages: [], queue: { authoritative: true, steering: [], followUp: [] } });
+    assert.ok(pending.closest('.queued-turns'), 'dequeue is not consumption');
+    f.snapshot({ busy: true, messages: [{ key: 'actual', role: 'user', content: 'Later' }] });
+    assert.equal(f.win.document.querySelector('#messages .user'), pending);
+    assert.equal(pending.parentElement?.id, 'messages');
+    assert.equal(pending.querySelector('.steering-status'), null);
     f.draft('/name renamed'); f.send(); f.flush();
-    assert.equal(f.win.document.querySelectorAll('#messages .user').length, 0);
+    assert.equal(f.win.document.querySelectorAll('#messages .user').length, 1);
   } finally { f.dom.window.close(); }
 });
 
+
+for (const outcome of ['rejected', 'unknown', 'cancelled', 'disconnected'] as const) test(`queued ${outcome} becomes an ordinary transcript turn without losing identity`, () => {
+  const f = fixture();
+  try {
+    f.snapshot({ busy: true, messages: [] });
+    f.draft('Later');
+    f.prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true, cancelable: true })); f.flush();
+    const submission = f.sent.find(m => m.type === 'prompt')!;
+    const pending = f.win.document.querySelector('.queued-turns .user')!;
+    f.draft('New draft');
+    f.receive(outcome === 'disconnected' ? { type: 'sessionDisconnected' } : { type: 'submissionReceipt', id: submission.id, outcome }); f.flush();
+    assert.equal(f.win.document.querySelector('#messages > .user'), pending);
+    assert.equal(pending.classList.contains('sticky-turn'), false);
+    assert.equal(f.prompt.value, 'New draft');
+    assert.equal(f.sent.filter(m => m.type === 'prompt').length, 1);
+  } finally { f.dom.window.close(); }
+});
+
+test('queued recovery handles coalesced removal and reset discards the old sticky stack', () => {
+  const f = fixture();
+  try {
+    f.snapshot({ busy: true, messages: [], queue: { authoritative: true, steering: ['same'], followUp: ['same', 'same'] } });
+    assert.equal(f.win.document.querySelectorAll('.queued-turns .user').length, 2);
+    f.receive({ type: 'snapshot', state: { busy: true, messages: [], queue: { authoritative: true, steering: ['same'], followUp: [] } } });
+    f.receive({ type: 'queueRecovery', steering: [], followUp: ['same', 'same'] }); f.flush();
+    assert.equal(f.win.document.querySelectorAll('#messages .user').length, 1);
+    assert.equal(f.win.document.querySelectorAll('[data-recovery-id]').length, 2);
+    f.snapshot({ busy: true, messages: [], queue: { authoritative: true, steering: [], followUp: ['old'] } });
+    f.receive({ type: 'sessionReset' }); f.flush();
+    f.snapshot({ busy: true, messages: [], queue: { authoritative: true, steering: [], followUp: ['new'] } });
+    assert.equal(f.win.document.querySelectorAll('.queued-turns .user').length, 1);
+    assert.doesNotMatch(f.win.document.querySelector('#messages')!.textContent!, /old/);
+  } finally { f.dom.window.close(); }
+});
 
 const tickImages = () => new Promise(resolve => setTimeout(resolve, 30));
 test('paste uses event images once, preserves newer attachments on ack, and never persists base64', async () => {

@@ -7,6 +7,8 @@ export interface SteeringMessage {
   role?: string;
   content?: unknown;
   steeringStatus?: SteeringStatus;
+  queued?: boolean;
+  sticky?: boolean;
 }
 interface PendingSteering {
   key: string;
@@ -14,6 +16,7 @@ interface PendingSteering {
   images?: ImageContent[];
   submissionId?: string;
   status: SteeringStatus;
+  kind: 'steering' | 'followUp';
 }
 
 export const steeringStatusLabel = (status: SteeringStatus): string => ({
@@ -28,8 +31,8 @@ export class SteeringTranscript {
   private aliases = new Map<string, string>();
   private nextKey = 0;
 
-  begin(id: string, text: string, status: SteeringStatus = 'sending', images?: ImageContent[]): void {
-    this.pending.push({ key: `steering:${id}`, submissionId: id, text, status, images });
+  begin(id: string, text: string, status: SteeringStatus = 'sending', images?: ImageContent[], kind: 'steering' | 'followUp' = 'steering'): void {
+    this.pending.push({ key: `steering:${id}`, submissionId: id, text, status, images, kind });
   }
 
   receipt(id: string, outcome: SubmissionOutcome): void {
@@ -45,33 +48,36 @@ export class SteeringTranscript {
     }
   }
 
-  recover(texts: string[]): void {
+  recover(texts: string[], kind: 'steering' | 'followUp' = 'steering'): void {
     // clear_queue returns occurrences, not a set: identical steers remain distinct.
     for (const text of texts) {
-      const index = this.pending.findIndex(item => eligible(item) && !item.images?.length && sameText(item.text, text));
+      const index = this.pending.findIndex(item => eligible(item) && item.kind === kind && (kind === 'followUp' || !item.images?.length) && sameText(item.text, text));
       if (index >= 0) this.pending.splice(index, 1);
     }
   }
 
   /** Apply every ordered snapshot, even when DOM painting is coalesced into one frame. */
-  snapshot(messages: SteeringMessage[], steering?: string[]): void {
+  snapshot(messages: SteeringMessage[], steering?: string[], followUp?: string[]): void {
     for (const message of messages) {
       if (!message.key || this.seen.has(message.key)) continue;
       this.seen.add(message.key);
       if (message.role !== 'user') continue;
       const text = userText(message.content);
       const images = Array.isArray(message.content) ? message.content.filter(block => block?.type === 'image').map(block => ({ type: 'image', mimeType: block.mimeType, data: block.data })) : [];
-      const index = this.pending.findIndex(item => eligible(item) && sameText(item.text, text) && JSON.stringify(item.images ?? []) === JSON.stringify(images));
-      if (index < 0) continue;
-      const [entry] = this.pending.splice(index, 1);
+      const candidates = this.pending.filter(item => eligible(item) && sameText(item.text, text) && JSON.stringify(item.images ?? []) === JSON.stringify(images));
+      // Pi consumes steering before follow-ups; duplicates within each kind are FIFO.
+      const entry = candidates.find(item => item.kind === 'steering') ?? candidates[0];
+      if (!entry) continue;
+      this.pending.splice(this.pending.indexOf(entry), 1);
       this.aliases.set(message.key, entry.key);
     }
-    if (steering) {
+    for (const [kind, texts] of [['steering', steering], ['followUp', followUp]] as const) {
+      if (!texts) continue;
       const matched = new Set<PendingSteering>();
-      for (const text of steering) {
-        let entry = this.pending.find(item => !matched.has(item) && eligible(item) && sameText(item.text, text));
+      for (const text of texts) {
+        let entry = this.pending.find(item => !matched.has(item) && eligible(item) && item.kind === kind && sameText(item.text, text));
         if (!entry) {
-          entry = { key: `steering:queue-${++this.nextKey}`, text, status: 'pending' };
+          entry = { key: `steering:queue-${++this.nextKey}`, text, status: 'pending', kind };
           this.pending.push(entry);
         }
         matched.add(entry);
@@ -85,7 +91,9 @@ export class SteeringTranscript {
     return [
       ...messages.map(message => this.aliases.has(message.key || '')
         ? { ...message, key: this.aliases.get(message.key!) } : message),
-      ...this.pending.map(entry => ({ key: entry.key, role: 'user', content: entry.images?.length ? [{ type: 'text', text: entry.text }, ...entry.images] : entry.text, steeringStatus: entry.status })),
+      ...this.pending.map(entry => ({ key: entry.key, role: 'user', content: entry.images?.length ? [{ type: 'text', text: entry.text }, ...entry.images] : entry.text, steeringStatus: entry.status,
+        ...(entry.kind === 'followUp' ? { queued: true, sticky: entry.status === 'sending' || entry.status === 'pending' } : {}),
+      })),
     ];
   }
 }

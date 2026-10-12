@@ -7,6 +7,8 @@ let active = false, compacting = false, pendingCompaction, name = 'Demo', thinki
 const messages = [];
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const reply = (request, data) => emit({ type: 'response', id: request.id, command: request.type, success: true, data });
+const queueText = kind => queue.filter(item => item.kind === kind).map(item => item.message);
+const emitQueue = () => emit({ type: 'queue_update', steering: queueText('steer'), followUp: queueText('followUp') });
 async function run(prompt, images = []) {
   active = true;
   const run = ++generation;
@@ -37,7 +39,8 @@ async function run(prompt, images = []) {
   assistant.content = [{ type: 'thinking', thinking: 'Exercising the real Rust transport with synthetic events.' }, tool, text(answer)];
   messages.push(assistant); emit({ type: 'message_end', message: assistant }); emit({ type: 'agent_end', messages: [assistant] });
   if (queue.length) {
-    const next = queue.shift(); emit({ type: 'queue_update', steering: queue.map(item => item.message), followUp: [] }); void runNext(next);
+    const index = queue.findIndex(item => item.kind === 'steer');
+    const [next] = queue.splice(index < 0 ? 0 : index, 1); emitQueue(); void runNext(next);
   } else { active = false; emit({ type: 'agent_settled' }); }
 }
 const runNext = prompt => run(prompt.message, prompt.images);
@@ -69,14 +72,14 @@ createInterface({ input: process.stdin }).on('line', line => {
     case 'set_thinking_level': thinking = request.level; reply(request); break;
     case 'prompt':
       reply(request);
-      if (active) { queue.push({ message: request.message, images: request.images ?? [] }); emit({ type: 'queue_update', steering: queue.map(item => item.message), followUp: [] }); }
+      if (active) { queue.push({ message: request.message, images: request.images ?? [], kind: request.streamingBehavior === 'followUp' ? 'followUp' : 'steer' }); emitQueue(); }
       else void run(request.message, request.images);
       break;
     case 'compact':
       if (active || compacting) emit({ type: 'response', id: request.id, command: request.type, success: false, error: 'Fixture is not idle' });
       else void compact(request);
       break;
-    case 'clear_queue': { const steering = queue.map(item => item.message); queue = []; emit({ type: 'queue_update', steering: [], followUp: [] }); reply(request, { steering, followUp: [] }); break; }
+    case 'clear_queue': { const steering = queueText('steer'), followUp = queueText('followUp'); queue = []; emitQueue(); reply(request, { steering, followUp }); break; }
     case 'abort':
       generation++; active = false;
       if (compacting) {
