@@ -23,6 +23,7 @@
 
 ## Card customization
 
-- [Card plugins](card-plugins.md) — bundled renderers, edit previews and local declarative tool customization.
+- [Card plugins](card-plugins.md) — bundled renderers, edit previews, trusted TypeScript/JavaScript and optional declarative tool customization.
+- [Authoring card plugins](card-plugin-api.md) — mounted DOM lifecycle, host capabilities and TypeScript API.
 
 For development, see [Contributing](../CONTRIBUTING.md). Specifications and implementation details are indexed by the internal [features skill](../.agents/skills/features/SKILL.md).

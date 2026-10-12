@@ -52,6 +52,20 @@ This packages and verifies the current checkout. An agent-directed **build the a
 
 Keep the installed CLI pointing to the primary checkout. Requested publications may overwrite one another; the user coordinates builds. For staging, signature verification and cache pitfalls, follow the [internal build workflow](.agents/skills/features/references/build-cache.md).
 
+## Card plugin examples
+
+The supported type-only SDK is `src/card-plugin-api.ts`; it has no runtime dependencies and may be copied into a separate plugin project. API usage/ownership is documented in [Authoring card plugins](docs/card-plugin-api.md). The example is included in normal TypeScript checking.
+
+Compile the self-contained browser ESM example explicitly (this is not an app build):
+
+```sh
+npx esbuild examples/card-plugins/command-summary/plugin.ts \
+  --bundle --platform=browser --format=esm --target=es2022 \
+  --outfile=src-tauri/target/card-plugin-examples/command-summary.js
+```
+
+Copy the compiled `command-summary.js` and `examples/card-plugins/command-summary/plugin.json` (named `command-summary.json`) into your config-adjacent `card-plugins/` directory, then configure explicit enablement/trust as described in [Card plugins](docs/card-plugins.md#install-an-executable-plugin). These are manual development/install steps; tests compile only disposable/in-memory fixture modules and never write the user's config or trust settings.
+
 ## Documentation ownership
 
 - `README.md`: product introduction, first use and feature links.

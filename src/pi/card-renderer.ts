@@ -1,17 +1,6 @@
 /** Internal pure-presentation helpers for the DOM adapter; not the executable plugin API. */
-export interface CardSection {
-  key: string;
-  label: string;
-  text: string;
-  format?: 'text' | 'markdown' | 'diff';
-}
-
-export interface CardPresentation {
-  title: string;
-  preview?: string;
-  sections: readonly CardSection[];
-  members?: readonly { key: string; title: string; preview?: string }[];
-}
+import type { CardPresentation } from '../card-plugin-api';
+export type { CardPresentation, CardSection } from '../card-plugin-api';
 
 export interface CardRendererInstance<Data> {
   update(data: Readonly<Data>): CardPresentation;

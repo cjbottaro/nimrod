@@ -7,15 +7,8 @@ export { toolInputPreview } from './tool-presentation';
 export { TOOL_AUTO_DISCLOSURE_MS, createToolDetails, setToolDetailsAutoOpen, captureStreamingOutput, restoreStreamingOutput } from './card-shell';
 export type { ToolOutputScrollState } from './card-shell';
 
-export interface ToolCardBlock {
-  name?: unknown;
-  arguments?: unknown;
-  uiPhase?: "thinking" | "stopped";
-  executionOutput?: string;
-  resultOutput?: string;
-  isError?: boolean;
-  toolStatus?: "running" | "finished" | "result";
-}
+import type { ToolCardData as ToolCardBlock } from '../card-plugin-api';
+export type { ToolCardData as ToolCardBlock } from '../card-plugin-api';
 export type ToolCardRenderer = DomCardRenderer<ToolCardBlock> | CardRenderer<ToolCardBlock>;
 const renderers = new WeakMap<HTMLDetailsElement, DomCardController<ToolCardBlock>>();
 const retained = new WeakMap<HTMLDetailsElement, ToolCardBlock>();

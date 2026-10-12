@@ -38,7 +38,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Theme selection, preview, import and synchronization | [Themes](references/themes.md) | [Themes](../../../docs/themes.md) |
 | Theme-catalog maintenance and pinned sources | [Theme catalog](references/theme-catalog.md) | [Contributing](../../../CONTRIBUTING.md) |
 | Explicit builds, publication and compiler cache | [Build workflow](references/build-cache.md) | [Contributing](../../../CONTRIBUTING.md#app-builds) |
-| Card renderers, edit previews and local declarative plugins | [Card plugins](references/card-plugins.md) | [Card plugins](../../../docs/card-plugins.md) |
+| Mounted DOM renderers, host capabilities and trusted executable/declarative plugins | [Card plugins](references/card-plugins.md) | [Card plugins](../../../docs/card-plugins.md), [Authoring](../../../docs/card-plugin-api.md) |
 
 ## Workflow and documentation
 
