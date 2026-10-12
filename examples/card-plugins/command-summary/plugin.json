@@ -1,0 +1,6 @@
+{
+  "apiVersion": 2,
+  "id": "example.command-summary",
+  "tools": ["bash", "shell", "terminal"],
+  "entry": "command-summary.js"
+}

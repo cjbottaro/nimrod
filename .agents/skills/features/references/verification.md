@@ -16,6 +16,7 @@ This is the current evidence/acceptance map, not a chronological test log. Featu
 | Area | Evidence | Boundary |
 | --- | --- | --- |
 | Zoom | User confirmed the initial zoom improvement | Not every resize/5K/native input case |
+| Card plugins, macOS declarative baseline | User restarted the built baseline and reported existing cards/requested-edit previews look good | Not the subsequent executable DOM API, module loading/CSP or new host actions |
 | Deletion review | User accepted tree presentation and fast-preview transition | Not external-writer, partial-failure or cross-window acceptance |
 | macOS notifications, 27.0.1 | Signed tests reached Notification Center; Persistent style made foreground test alerts visible | Temporary presentation inconsistent; cause unproven; not all event types or click routing |
 
@@ -30,6 +31,7 @@ Detailed provenance is retained in [history](history/verification.md#evidence-bo
 | Sessions | Real first-save/exact-file resume, Close/Restart cancellation and failure, independent multi-window shutdown, no replay |
 | Deletion | Native multi-window review/idle locks, recovery after partial filesystem failure, external mutation limits |
 | Transcript/sidebar | Native zoom/trackpad/keyboard, follow/pause, disclosure animation, narrow/ultrawide geometry and view selection |
+| Executable card plugins | Native Tauri ESM/blob CSP, explicit trust/load failures, custom DOM/update/focus/reading intent, clipboard/editor/pop-out actions and Linux delivery. Browser CSP/fixture success is not packaged-app acceptance. |
 | Settings/keybindings/themes | Native menus, alternative keyboard layouts, file chooser, live import/preview focus and cross-window preferences |
 | Images | Native macOS screenshot paste, Linux/Wayland clipboard, reload/quota and real Pi image normalization |
 | Pop-outs/window state | Quit/relaunch persistence, automatic versus explicit focus, own-window Close, minimization and multi-display/DPI geometry |

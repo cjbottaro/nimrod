@@ -46,6 +46,18 @@ test('async lifecycle updates are rejected with raw recovery and no unhandled re
   assert.match(card.textContent || '', /raw/); assert.equal(errors.length, 2); dom.window.close();
 });
 
+test('reentrant managed mount failure disposes the returned instance without updating it', () => {
+  const dom = new JSDOM('<body></body>'); const doc = dom.window.document; let updates = 0; let disposals = 0;
+  const plugin: DomCardRenderer<ToolCardBlock> = { apiVersion: 2, id: 'fixture.reentrant', supports: () => true,
+    mount(ctx) {
+      ctx.mutate(() => { throw new Error('mount mutation failed'); });
+      return { update() { updates++; }, dispose() { disposals++; } };
+    },
+  };
+  const card = renderToolCard(doc, { name: 'fixture', resultOutput: 'raw' }, doc.createElement('details'), plugin);
+  assert.match(card.textContent || '', /raw/); assert.deepEqual([updates, disposals], [0, 1]); dom.window.close();
+});
+
 test('custom DOM retains local input/focus across updates and independent registered output inspection', () => {
   const dom = new JSDOM('<body></body>'); const doc = dom.window.document; let field!: HTMLInputElement;
   const outputs: HTMLElement[] = [];

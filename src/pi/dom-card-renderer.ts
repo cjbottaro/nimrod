@@ -1,34 +1,8 @@
 import { isSafeLink } from './safe-markdown';
 import { validatePresentation, type CardPresentation, type CardRenderer } from './card-renderer';
 
-export interface CardUpdateState { streaming: boolean; }
-/** Supported API boundaries for trusted code, not a JavaScript sandbox. */
-export interface CardPluginContext {
-  readonly document: Document;
-  readonly summary: HTMLElement;
-  readonly body: HTMLElement;
-  readonly signal: AbortSignal;
-  readonly capabilities: Readonly<{ copy: boolean; openLink: boolean; popOutCode: boolean }>;
-  copy(text: string): Promise<void>;
-  openLink(href: string): Promise<void>;
-  popOutCode(text: string, language?: string): Promise<void>;
-  code(source: string, language?: string): HTMLElement;
-  renderPresentation(presentation: CardPresentation): void;
-  markdown(source: string): HTMLElement;
-  registerOutput(key: string, element: HTMLElement): () => void;
-  mutate(change: () => void): void;
-  on(target: EventTarget, type: string, handler: (event: Event) => void | Promise<void>): () => void;
-}
-export interface DomCardInstance<Data> {
-  update(data: Readonly<Data>, state: Readonly<CardUpdateState>): void;
-  dispose(): void;
-}
-export interface DomCardRenderer<Data> {
-  readonly apiVersion: 2;
-  readonly id: string;
-  supports(data: Readonly<Data>): boolean;
-  mount(context: CardPluginContext): DomCardInstance<Data>;
-}
+import type { CardPlugin as DomCardRenderer, CardPluginInstance as DomCardInstance, CardPluginContext, CardUpdateState } from '../card-plugin-api';
+export type { CardPlugin as DomCardRenderer, CardPluginInstance as DomCardInstance, CardPluginContext, CardUpdateState } from '../card-plugin-api';
 export interface CardDomHost {
   markdown?: (source: string) => HTMLElement;
   code?: (source: string, language?: string) => HTMLElement;
@@ -49,6 +23,16 @@ export function presentationPlugin<Data>(renderer: CardRenderer<Data>): DomCardR
     const instance = renderer.mount();
     return { update(data) { context.renderPresentation(instance.update(data)); }, dispose: () => instance.dispose() };
   } };
+}
+
+function immutableSnapshot<Data>(data: Data): Readonly<Data> {
+  const copy: Data = typeof structuredClone === 'function' ? structuredClone(data) : JSON.parse(JSON.stringify(data));
+  const seen = new WeakSet<object>();
+  const freeze = (value: unknown): void => {
+    if (!value || typeof value !== 'object' || seen.has(value)) return;
+    seen.add(value); for (const child of Object.values(value)) freeze(child); Object.freeze(value);
+  };
+  freeze(copy); return copy;
 }
 
 export class DomCardController<Data> {
@@ -92,6 +76,8 @@ export class DomCardController<Data> {
       },
       mutate: change => {
         if (!this.alive()) return;
+        try { if (!this.supported()) throw new Error('Card plugin is no longer enabled or trusted'); }
+        catch (error) { this.fail(error); return; }
         this.host.beforeChange?.();
         const positions = this.captureOutputs();
         try { const result: unknown = change(); this.assertSynchronous(result, 'mutate'); } catch (error) { this.fail(error); }
@@ -102,7 +88,10 @@ export class DomCardController<Data> {
         const listener = (event: Event) => {
           if (!this.alive() || !this.body.isConnected || this.host.canInteract?.() === false) return;
           if (target instanceof this.body.ownerDocument.defaultView!.Node && !target.isConnected) return;
-          try { void Promise.resolve(handler(event)).catch(error => this.fail(error)); } catch (error) { this.fail(error); }
+          try {
+            if (!this.supported()) throw new Error('Card plugin is no longer enabled or trusted');
+            void Promise.resolve(handler(event)).catch(error => this.fail(error));
+          } catch (error) { this.fail(error); }
         };
         target.addEventListener(type, listener);
         const remove = () => { target.removeEventListener(type, listener); this.cleanups.delete(remove); };
@@ -113,23 +102,26 @@ export class DomCardController<Data> {
 
   update(data: Readonly<Data>, state: CardUpdateState): void {
     if (this.disposed) return;
-    this.data = data; this.state = state;
+    this.data = data; this.state = Object.freeze({ ...state });
+    try { this.data = immutableSnapshot(data); } catch (error) { this.fail(error); return; }
     const positions = this.captureOutputs();
     if (!this.failed) {
       try {
-        const supported: unknown = this.renderer.supports(data);
-        this.assertSynchronous(supported, 'supports');
-        if (supported !== true) throw new Error(`Unsupported card for ${this.renderer.id}`);
+        if (!this.supported()) throw new Error(`Unsupported card for ${this.renderer.id}`);
         if (!this.instance) {
           const candidate = this.renderer.mount(this.context);
           this.assertSynchronous(candidate, 'mount');
+          if (this.failed || this.disposed) {
+            try { const result: unknown = candidate?.dispose(); this.assertSynchronous(result, 'dispose'); } catch (error) { this.report(error); }
+            return;
+          }
           this.instance = candidate;
         }
         if (!this.instance || typeof this.instance.update !== 'function' || typeof this.instance.dispose !== 'function') throw new Error('Invalid DOM renderer instance');
-        const result: unknown = this.instance.update(data, state);
+        const result: unknown = this.instance.update(this.data, this.state);
         this.assertSynchronous(result, 'update');
       } catch (error) { this.fail(error); }
-    } else this.renderPresentation(this.fallback(data));
+    } else this.renderPresentation(this.fallback(this.data));
     for (const [key, output] of this.outputs) {
       if (!this.body.contains(output)) this.outputs.delete(key);
       else this.applyOutputPolicy(output);
@@ -148,7 +140,15 @@ export class DomCardController<Data> {
   }
   private async action(run: () => Promise<void>): Promise<void> {
     if (!this.alive() || !this.body.isConnected || this.host.canInteract?.() === false) throw new Error('Card actions are unavailable for an inactive, modal or disposed view');
+    try {
+      if (!this.supported()) throw new Error('Card plugin is no longer enabled or trusted');
+    } catch (error) { this.fail(error); throw error; }
     await run();
+  }
+  private supported(): boolean {
+    if (this.data === undefined) return false;
+    const supported: unknown = this.renderer.supports(this.data);
+    this.assertSynchronous(supported, 'supports'); return supported === true;
   }
   private alive(): boolean { return !this.disposed && !this.failed; }
   private literal(text: string): HTMLElement { const node = this.body.ownerDocument.createElement('pre'); node.textContent = text; return node; }
@@ -234,5 +234,24 @@ export class DomCardController<Data> {
       old.delete(part.key);
     });
     for (const [key, section] of old) { section.remove(); this.outputs.delete(key); }
+    let list = Array.from(this.body.children).find(node => node.classList.contains('card-plugin-members')) as HTMLElement | undefined;
+    if (!value.members) list?.remove();
+    else {
+      if (!list) { list = doc.createElement('ul'); list.className = 'card-plugin-members'; this.body.append(list); }
+      const previous = new Map(Array.from(list.children).map(node => [(node as HTMLElement).dataset.memberKey!, node as HTMLElement]));
+      value.members.forEach((member, index) => {
+        let row = previous.get(member.key);
+        if (!row) {
+          row = doc.createElement('li'); row.dataset.memberKey = member.key;
+          const title = doc.createElement('span'); title.className = 'tool-card-title';
+          const preview = doc.createElement('span'); preview.className = 'tool-card-preview'; row.append(title, preview);
+        }
+        row.querySelector('.tool-card-title')!.textContent = member.title;
+        row.querySelector('.tool-card-preview')!.textContent = member.preview || '';
+        if (list!.children[index] !== row) list!.insertBefore(row, list!.children[index] || null);
+        previous.delete(member.key);
+      });
+      for (const stale of previous.values()) stale.remove();
+    }
   }
 }

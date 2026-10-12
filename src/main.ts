@@ -71,7 +71,7 @@ async function reloadCardPlugins(): Promise<void> {
   pluginSignature = signature;
   await cardPlugins.reload(config, name => invoke<string>('read_card_plugin', { name }), message => {
     const notice = required('card-plugin-error'); notice.hidden = !message; notice.textContent = message;
-  });
+  }, { readModule: (name, expectedManifest) => invoke<string>('read_card_plugin_module', { name, expectedManifest }) });
 }
 await reloadCardPlugins();
 const welcome = required('welcome'), conversation = required('conversation');
@@ -331,6 +331,7 @@ const disposeTimeRefresh = installSessionTimeRefresh(window, () => { for (const 
 window.addEventListener('unload', () => {
   unloading = true;
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
+  cardPlugins.dispose();
   sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
   for (const tab of tabs) { tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.session?.rpc.disconnect('Window closed'); }
   keybindingDispatch.dispose(); keybindingEditor.dispose(); settingsNavigation.dispose(); settingsSidebarResize.dispose();

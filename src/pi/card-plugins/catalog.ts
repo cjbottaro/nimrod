@@ -1,48 +1,76 @@
 import type { CardRenderer } from '../card-renderer';
-import type { ToolCardRenderer } from '../tool-card';
-import { defaultToolRenderer } from './tool';
-import type { ToolCardBlock } from '../tool-card';
-import { rawToolPresentation } from './tool';
+import { presentationPlugin, type DomCardRenderer } from '../dom-card-renderer';
+import type { ToolCardRenderer, ToolCardBlock } from '../tool-card';
+import { defaultToolRenderer, rawToolPresentation } from './tool';
 import { bundledToolRenderer } from './registry';
-import { declarativeRenderer, parsePluginPackage, type PluginSettings, type PluginPackage } from './declarative';
+import { declarativeRenderer, parsePluginPackage, type PluginSettings } from './declarative';
+import { parseExecutableManifest, importCardModule, executableRenderer } from './executable';
 
+export interface ExecutablePluginHost {
+  readModule(name: string, expectedManifest: string): Promise<string>;
+  importModule?(source: string): Promise<unknown>;
+}
+interface Entry { tools: string[]; renderer: DomCardRenderer<ToolCardBlock>; file: string; executable: boolean; }
 export class CardPluginCatalog {
   private generation = 0;
-  private config: PluginSettings = { files: [], overrides: {} };
-  private packages = new Map<string, { package: PluginPackage; renderer: CardRenderer<ToolCardBlock> }>();
-  async reload(config: PluginSettings, read: (name: string) => Promise<string>, report: (message: string) => void): Promise<void> {
+  private enabled = new Set<string>();
+  private trusted = new Set<string>();
+  private config: PluginSettings = { files: [], overrides: {}, trusted: [] };
+  private packages = new Map<string, Entry>();
+
+  async reload(config: PluginSettings, read: (name: string) => Promise<string>, report: (message: string) => void, host?: ExecutablePluginHost): Promise<void> {
     const generation = ++this.generation;
-    const packages = new Map<string, { package: PluginPackage; renderer: CardRenderer<ToolCardBlock> }>();
+    this.enabled = new Set(config.files); this.trusted = new Set(config.trusted ?? []);
+    const packages = new Map<string, Entry>();
     const errors: string[] = [];
     for (const file of config.files) {
       try {
-        const pkg = parsePluginPackage(await read(file));
-        if (packages.has(pkg.id)) throw new Error(`Duplicate renderer ID ${pkg.id}`);
-        packages.set(pkg.id, { package: pkg, renderer: declarativeRenderer(pkg) });
+        const text = await read(file);
+        if (generation !== this.generation) return;
+        if (new TextEncoder().encode(text).length > 256 * 1024) throw new Error('Card manifest exceeds 256 KiB');
+        if (JSON.parse(text)?.apiVersion === 2) {
+          const manifest = parseExecutableManifest(text);
+          if (packages.has(manifest.id)) throw new Error(`Duplicate renderer ID ${manifest.id}`);
+          if (!config.trusted?.includes(file)) throw new Error('Executable plugin requires explicit cards.trustedPlugins opt-in');
+          if (!host) throw new Error('Executable module host unavailable');
+          const source = await host.readModule(file, text);
+          if (generation !== this.generation) return;
+          const module = await (host.importModule ?? importCardModule)(source);
+          if (generation !== this.generation) return;
+          const renderer = executableRenderer(manifest, module);
+          packages.set(manifest.id, { tools: manifest.tools, renderer, file, executable: true });
+        } else {
+          const pkg = parsePluginPackage(text);
+          if (packages.has(pkg.id)) throw new Error(`Duplicate renderer ID ${pkg.id}`);
+          const declaration = declarativeRenderer(pkg);
+          const withRaw: CardRenderer<ToolCardBlock> = { ...declaration, mount() {
+            const instance = declaration.mount();
+            return { update(value) { const presentation = instance.update(value); return { ...presentation, sections: [...presentation.sections, ...rawToolPresentation(value).sections] }; }, dispose: () => instance.dispose() };
+          } };
+          packages.set(pkg.id, { tools: pkg.tools, renderer: presentationPlugin(withRaw), file, executable: false });
+        }
       } catch (error) { errors.push(`${file}: ${String(error)}`); }
     }
     if (generation !== this.generation) return;
     this.config = config; this.packages = packages;
     report(errors.join('\n'));
   }
+
+  dispose(): void { this.generation++; this.enabled.clear(); this.trusted.clear(); this.packages.clear(); }
+
   select(data: Readonly<ToolCardBlock>): ToolCardRenderer {
     const name = typeof data.name === 'string' ? data.name.trim().toLowerCase().split(/[.:/]/).pop() || '' : '';
     const override = Object.hasOwn(this.config.overrides, name) ? this.config.overrides[name] : undefined;
-    if (override === 'nimrod.raw') return { id: 'nimrod.raw', supports: () => true, mount: () => ({ update: rawToolPresentation, dispose() {} }) };
+    if (override === 'nimrod.raw') return presentationPlugin({ id: 'nimrod.raw', supports: () => true, mount: () => ({ update: rawToolPresentation, dispose() {} }) });
     const bundled = bundledToolRenderer(data);
-    if (override === bundled.id || override === 'nimrod.tool') {
-      return override === 'nimrod.tool' ? defaultToolRenderer : bundled;
+    if (override === bundled.id || override === 'nimrod.tool') return override === 'nimrod.tool' ? presentationPlugin(defaultToolRenderer) : bundled;
+    const entry = override ? this.packages.get(override) : [...this.packages.values()].find(entry => entry.tools.includes(name));
+    if (entry && entry.tools.includes(name)) {
+      if (!entry.executable) return entry.renderer;
+      // Fixed renderer selection, but managed work must still honor current package trust.
+      return { ...entry.renderer, supports: value => this.enabled.has(entry.file) && this.trusted.has(entry.file) && entry.renderer.supports(value) };
     }
-    const entry = override ? this.packages.get(override) : [...this.packages.values()].find(entry => entry.package.tools.includes(name));
-    if (entry && entry.package.tools.includes(name)) {
-      const renderer = entry.renderer;
-      // Always retain raw result sections as recovery, including historical content.
-      return { ...renderer, mount() {
-        const instance = renderer.mount();
-        return { update(value: Readonly<ToolCardBlock>) { const presentation = instance.update(value); return { ...presentation, sections: [...presentation.sections, ...rawToolPresentation(value).sections] }; }, dispose: () => instance.dispose() };
-      } };
-    }
-    if (override) return { id: override, supports: () => false, mount() { throw new Error('Missing or incompatible renderer'); } };
+    if (override) return { apiVersion: 2, id: override, supports: () => false, mount() { throw new Error('Missing or incompatible renderer'); } };
     return bundled;
   }
 }

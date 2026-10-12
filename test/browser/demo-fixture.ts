@@ -8,6 +8,7 @@ import type { Packet } from '../../src/pi/transport';
 import type { JsonRecord } from '../../src/pi/types';
 import { MemoryPreferences } from '../preferences-fixture';
 import type { PreferencesSnapshot } from '../../src/preferences';
+import { parse } from 'jsonc-parser';
 import type { DeletionEvent } from '../../src/session-deletion';
 
 type TestWindow = Window & {
@@ -21,7 +22,7 @@ type TestWindow = Window & {
 export const visible = (id: string) => `.session-view:not([hidden]) [data-pi-id="${id}"]`;
 
 /** Real app bundle and independent offline demo children. Never starts Pi. */
-export async function demoFixture(page: Page, appState: Record<string, unknown> = {}, catalog: { path: string; sessionId: string; name: string; preview: string; modified: number; lastUserMessageAt?: number }[] = [], typingOptions?: { drafts: Record<string, unknown>; persistent: boolean }, pluginOptions?: { settings: string; packages: Record<string, string> }, fixtureOptions?: { tool?: 'edit' }) {
+export async function demoFixture(page: Page, appState: Record<string, unknown> = {}, catalog: { path: string; sessionId: string; name: string; preview: string; modified: number; lastUserMessageAt?: number }[] = [], typingOptions?: { drafts: Record<string, unknown>; persistent: boolean }, pluginOptions?: { settings: string; packages: Record<string, string> }, fixtureOptions?: { tool?: 'edit'; enforceCsp?: boolean }) {
   const result = await build({ entryPoints: ['src/main.ts'], bundle: true, format: 'iife', platform: 'browser', write: false,
     loader: { '.css': 'empty' }, plugins: [{ name: 'raw', setup(builder) {
       builder.onResolve({ filter: /\.html\?raw$/ }, args => ({ path: path.resolve(args.resolveDir, args.path.replace('?raw', '')), namespace: 'raw' }));
@@ -29,7 +30,11 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     } }],
   });
   const css = ['src/pi/transcript.css', 'src/theme.css', 'src/workspace.css', 'src/keybindings.css', 'src/modal.css'].map(p => readFileSync(p, 'utf8')).join('\n');
-  const html = readFileSync('index.html', 'utf8').replace('<script type="module" src="/src/main.ts"></script>', '').replace('</head>', `<style>${css}</style></head>`);
+  let html = readFileSync('index.html', 'utf8').replace('<script type="module" src="/src/main.ts"></script>', '').replace('</head>', `<style>${css}</style></head>`);
+  if (fixtureOptions?.enforceCsp) {
+    const policy = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8')).app.security.csp as string;
+    html = html.replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="${policy}">`);
+  }
   const children = new Map<string, ChildProcessWithoutNullStreams>();
   let delivery = Promise.resolve();
   let closing = false;
@@ -70,6 +75,16 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 1;
     if (command.startsWith('preferences_') || command === 'record_command_usage') return preferences.invoke(command, args);
     if (command === 'plugin:clipboard-manager|write_text' || command === 'open_card_link' || command === 'open_code_popout') return; // Recorded presentation actions, no OS side effects.
+    if (command === 'read_card_plugin_module') {
+      const name = String(args.name); const manifestText = pluginOptions?.packages[name];
+      // Native trust uses current settings, not the initial fixture options.
+      const current = parse(preferences.value.text) as { 'cards.plugins'?: string[]; 'cards.trustedPlugins'?: string[] };
+      if (!current['cards.plugins']?.includes(name) || !current['cards.trustedPlugins']?.includes(name)) throw new Error('Fixture package not trusted');
+      if (manifestText !== args.expectedManifest) throw new Error('Fixture manifest changed');
+      const entry = JSON.parse(manifestText!).entry as string;
+      const source = pluginOptions?.packages[entry]; if (source === undefined) throw new Error('Fixture module missing');
+      return source;
+    }
     if (command === 'read_card_plugin') {
       const text = pluginOptions?.packages[String(args.name)];
       if (text === undefined) throw new Error('Fixture package missing');
@@ -137,7 +152,10 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     ? route.fulfill({ contentType: 'text/html', body: html }) : route.request().url().startsWith('blob:') ? route.continue() : route.abort());
   try {
     await page.goto('https://nimrod.test/');
-    await page.addScriptTag({ content: result.outputFiles![0].text });
+    if (fixtureOptions?.enforceCsp) {
+      const url = await page.evaluate(source => URL.createObjectURL(new Blob([source], { type: 'text/javascript' })), result.outputFiles![0].text);
+      try { await page.addScriptTag({ url }); } finally { await page.evaluate(url => URL.revokeObjectURL(url), url); }
+    } else await page.addScriptTag({ content: result.outputFiles![0].text });
     await page.locator(typingOptions?.persistent ? '#start-pi' : '#start-temporary').click();
     await expect(page.locator(visible('send'))).toBeEnabled();
     await page.evaluate(() => {

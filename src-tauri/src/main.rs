@@ -482,6 +482,7 @@ fn main() {
             drafts::drafts_references,
             runtime_defaults,
             card_plugins::read_card_plugin,
+            card_plugins::read_card_plugin_module,
             session_deletion::delete_session_tree,
             session_deletion::deletion_snapshot,
             session_deletion::acknowledge_deletion,
