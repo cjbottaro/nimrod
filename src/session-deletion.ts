@@ -30,11 +30,14 @@ interface Dependencies {
 export class SessionDeletion {
   pending = false;
   private quarantine = new Set<string>();
+  private lockedFiles = new Set<string>();
+  private stateInvalid = false;
   private events = Promise.resolve();
   private disposed = false;
   private confirmedDeleted = new Set<string>();
   constructor(private readonly deps: Dependencies) {}
-  blocked(file: string | undefined): boolean { return !!file && this.quarantine.has(file); }
+  blocked(file: string | undefined): boolean { return !!file && (this.stateInvalid || this.quarantine.has(file)); }
+  locked(file: string | undefined): boolean { return !!file && this.lockedFiles.has(file); }
   removed(file: string): boolean { return this.confirmedDeleted.has(file); }
   private removeConfirmed(files: string[]): void {
     const fresh = [...new Set(files)].filter(file => !this.confirmedDeleted.has(file));
@@ -46,6 +49,8 @@ export class SessionDeletion {
   load(snapshot: DeletionSnapshot): void {
     if (this.disposed) return;
     this.pending = snapshot.pending; this.quarantine = new Set(snapshot.quarantine);
+    this.stateInvalid = !!snapshot.error;
+    this.lockedFiles = new Set(snapshot.pending ? snapshot.files : []);
     if (!snapshot.pending) this.deps.cancelReview?.();
     if (snapshot.error) this.deps.error(snapshot.error);
     const successful = new Set(snapshot.deleted || []);
@@ -62,6 +67,7 @@ export class SessionDeletion {
     const task = this.events.then(async () => {
       if (this.disposed) return;
       const panels = this.deps.panels().filter(panel => event.files.includes(panel.file));
+      if (['lock', 'check', 'review', 'quarantine'].includes(event.phase)) event.files.forEach(file => this.lockedFiles.add(file));
       if (event.phase === 'lock' || event.phase === 'check') {
         for (const panel of panels) panel.lock(true);
         const reports = await Promise.all(panels.map(async panel => {
@@ -88,6 +94,7 @@ export class SessionDeletion {
         }
         for (const panel of this.deps.panels().filter(panel => event.files.includes(panel.file))) panel.lock(false);
         this.pending = event.pending;
+        if (!event.pending) this.lockedFiles.clear();
         if (event.message) this.deps.error(event.message);
         if (!event.pending) this.deps.cancelReview?.();
       }
@@ -115,14 +122,14 @@ export class SessionDeletion {
           const snapshot = await this.deps.snapshot();
           this.load({ ...snapshot, deleted: [...snapshot.deleted || [], ...results.filter(result => result.deleted).map(result => result.file)] });
         }
-        catch (error) { this.deps.error(`Could not verify deletion state: ${error}. Session launches remain blocked.`); }
+        catch (error) { this.deps.error(`Could not verify deletion state: ${error}. Affected sessions remain guarded until deletion state is verified.`); }
         this.removeConfirmed(results.filter(result => result.deleted).map(result => result.file));
         this.deps.changed();
       }
     }
   }
   async recover(file: string, sessionId: string): Promise<void> {
-    if (this.pending || this.disposed) throw new Error('Deletion is pending; recovery is blocked.');
+    if (this.disposed || this.stateInvalid || this.locked(file)) throw new Error('This session is locked for deletion or deletion state is invalid; recovery is blocked.');
     await this.deps.recover(file, sessionId);
     this.quarantine.delete(file); this.confirmedDeleted.delete(file); this.deps.changed();
   }

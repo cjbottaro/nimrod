@@ -1,6 +1,25 @@
 import { expect, test } from '@playwright/test';
 import { demoFixture, visible } from './demo-fixture';
 
+test('another project’s pending deletion does not block a new offline session or disturb the existing draft', async ({ page }) => {
+  const demo = await demoFixture(page);
+  try {
+    const first = page.locator('.session-view').first();
+    await page.locator(visible('prompt')).fill('Keep this draft');
+    await demo.deletionEvent({ id: 'other-project', phase: 'begin', files: [], results: [], pending: true });
+    await expect(page.locator('#deletion-review')).not.toBeVisible();
+    await page.keyboard.press('Meta+Shift+N');
+    await expect(page.locator('#open-sessions .session-row')).toHaveCount(2);
+    await expect(page.locator(visible('send'))).toBeEnabled();
+    await expect(page.locator(visible('prompt'))).toBeFocused();
+    await expect(first.locator('[data-pi-id="prompt"]')).toHaveValue('Keep this draft');
+    expect(demo.children.size).toBe(2);
+    expect(demo.calls.filter(call => call.command === 'start_pi')).toHaveLength(2);
+    expect(demo.calls.some(call => (call.args.message as Record<string, unknown>)?.type === 'prompt')).toBe(false);
+    expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
 test('Delete sessions returns from Cancel, Escape and Delete, retains search/focus and advances through saved history', async ({ page }) => {
   const demo = await demoFixture(page, {}, ['one', 'two'].map((id, i) => ({ path: `/fixture/${id}.jsonl`, sessionId: id, name: `Old ${id}`, preview: 'Saved history', modified: 2 - i })));
   try {

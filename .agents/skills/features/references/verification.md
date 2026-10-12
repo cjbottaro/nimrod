@@ -33,6 +33,7 @@ Detailed provenance is retained in [history](history/verification.md#evidence-bo
 | Deletion | Native multi-window review/idle locks, recovery after partial filesystem failure, external mutation limits |
 | Transcript/sidebar | Native zoom/trackpad/keyboard, follow/pause, disclosure animation, narrow/ultrawide geometry and view selection |
 | Executable card plugins | Broader compiler packaging/cold-warm cache, trust/load failure, custom DOM/focus/reading and host-action matrices; Linux delivery. User-confirmed macOS Pi Web Access reload/rendering/containment is limited evidence, not general plugin/platform parity. |
+| Error presentation | Native macOS scoped-notice visuals, reader/focus preservation, announcements, dialog layering and page zoom; Linux/WebKitGTK remains unverified. Offline fixtures are not native acceptance. |
 | Settings/keybindings/themes | Native menus, alternative keyboard layouts, file chooser, live import/preview focus and cross-window preferences |
 | Images | Native macOS screenshot paste, Linux/Wayland clipboard, reload/quota and real Pi image normalization |
 | Pop-outs/window state | Quit/relaunch persistence, automatic versus explicit focus, own-window Close, minimization and multi-display/DPI geometry |

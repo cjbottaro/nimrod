@@ -86,8 +86,9 @@ A **card** needn't have a visible rectangle. A **disclosure** expands/collapses;
 - **Activity indicator** — spinner/dot with activity context; specify main agent/subagent/tool/reasoning when ambiguous.
 - **Usage metrics** — Pi-reported cost/context estimates.
 - **Prompt field / Send/Stop button / keyboard hints** — composer input, primary action and delivery hints.
-- **Notice strip** — single shell-owned application-error surface 48 CSS pixels below the viewport top, including Settings/dialogs. It occupies reserved space and remains accessible through the active dialog's top layer. [Error presentation](../features/references/error-presentation.md) owns routing and lifecycle.
-- **Submission notice** — legacy standalone-renderer feedback near the composer; the app routes this feedback to the notice strip.
+- **Session notices** — session-owned operational feedback at the top of its conversation area, above and outside the transcript pane, aligned with its gutters. Visible only in that session; not transcript entries or sidebar indicators.
+- **Application notice strip** (or **notice strip**) — shell-owned window/application feedback 48 CSS pixels below the viewport top, including Settings/dialogs. It reserves space and remains accessible through the active dialog's top layer. [Error presentation](../features/references/error-presentation.md) owns placement, routing and lifecycle for both notice surfaces.
+- **Submission notice** — legacy standalone-renderer feedback near the composer; the app routes this feedback to session notices.
 - **Slash suggestions** — autocomplete above the composer.
 - **Keybinding editor / key recorder** — action shortcut list and nested combination-capture dialog.
 - **Open project / Open recent project** — native directory chooser versus searchable recent-directory picker.

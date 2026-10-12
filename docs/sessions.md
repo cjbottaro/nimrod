@@ -35,7 +35,7 @@ Click its row's **Close** button or use **⌘/Ctrl+W**. Closing waits for that a
 - Cancel or failed shutdown keeps the session and draft available.
 - Closing a window stops its agents; quitting stops all Nimrod-owned agents. There is no background daemon or process continuity.
 
-After closing or deleting the selected session, Nimrod prefers the most recently used connected session in the current view, then All. With none connected, it chooses the next surviving row or the previous one at the end. An inactive saved replacement loads and connects; deletion waits until its transaction finishes. Removing the last session never creates one.
+After closing or deleting the selected session, Nimrod prefers the most recently used connected session in the current view, then All. With none connected, it chooses the next surviving row or the previous one at the end. An inactive saved replacement loads and connects immediately unless that specific session is still locked for deletion. Removing the last session never creates one.
 
 ## Restart session
 
@@ -53,7 +53,9 @@ The **trash icon left of Close** targets that row without switching to or resumi
 2. Inspect the selected session and its descendants, including any in other projects.
 3. Choose **Delete N sessions** to permanently remove them, or Cancel/Escape to retain everything.
 
-Deletion is permanent, not a move to OS trash. No Pi deletion plugin is required. Temporary/unsaved sessions cannot be deleted. Every affected open session must be idle; review locks affected composers and blocks new launches while coordination finishes, without stopping unrelated work.
+Deletion is permanent, not a move to OS trash. No Pi deletion plugin is required. Temporary/unsaved sessions cannot be deleted. Every affected open session must be idle; review locks only affected sessions. New sessions and unrelated Resume, Restart and Close actions remain available in other project windows, without stopping unrelated work.
+
+Saved-history pickers can contain a stale row if its file is deleted after discovery. Choosing it shows an error; Nimrod never substitutes a new conversation. A session in the active deletion tree cannot attach a new agent until review is canceled or deletion finishes. The reviewing window retains normal modal focus and shortcut priority.
 
 Slower previews show **Loading session tree…** with Delete disabled. Cancel during loading prevents deletion even if preparation finishes later. Enter respects the focused action; Enter on Cancel cancels.
 

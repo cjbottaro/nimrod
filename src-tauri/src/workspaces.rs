@@ -35,8 +35,12 @@ impl WorkspaceHost {
         if closing.contains(window) || closing.contains("*") {
             return Err("Project is closing".into());
         }
-        if self.deleting.lock().await.is_some() {
-            return Err("Session deletion is pending; new launches are blocked".into());
+        // Hold the file-scoped gate through reservation/spawn so a freeze cannot
+        // miss a writer that was concurrently attaching to an affected file.
+        let gate = self.deleting.lock().await;
+        ensure_not_deleting(gate.as_ref(), file.as_ref())?;
+        if file.as_ref().is_some_and(|file| !file.is_file()) {
+            return Err("The selected session file no longer exists".into());
         }
         let mut sessions = self.sessions.lock().await;
         if sessions.contains_key(&token) {
@@ -102,6 +106,7 @@ impl WorkspaceHost {
 
     /// Reserve Pi's canonical identity as soon as it reports one, even before first save.
     pub async fn bind_file(&self, window: &str, token: &str, file: PathBuf) -> Result<(), String> {
+        let gate = self.deleting.lock().await;
         let mut sessions = self.sessions.lock().await;
         let session = sessions
             .get(token)
@@ -113,6 +118,9 @@ impl WorkspaceHost {
             .is_some_and(|current| current != &file)
         {
             return Err("Pi unexpectedly changed session file".into());
+        }
+        if session.file.as_ref() != Some(&file) {
+            ensure_not_deleting(gate.as_ref(), Some(&file))?;
         }
         ensure_file_available(&sessions, &file, token)?;
         sessions.get_mut(token).expect("checked session").file = Some(file);
@@ -180,6 +188,17 @@ impl WorkspaceHost {
         let _lifecycle = self.closing.lock().await;
         let tokens = self.sessions.lock().await.keys().cloned().collect();
         stop_sessions(&self.sessions, tokens).await
+    }
+}
+
+fn ensure_not_deleting(
+    files: Option<&std::collections::HashSet<PathBuf>>,
+    file: Option<&PathBuf>,
+) -> Result<(), String> {
+    if file.is_some_and(|file| files.is_some_and(|files| files.contains(file))) {
+        Err("This session is locked for deletion".into())
+    } else {
+        Ok(())
     }
 }
 
@@ -265,10 +284,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn deletion_barrier_blocks_new_writers_and_freezes_only_affected_sessions() {
+    async fn deletion_freezes_only_affected_files_and_allows_unrelated_launches() {
         let host = WorkspaceHost::default();
         let cwd = std::env::temp_dir();
-        let file = cwd.join("deletion-owned-fixture.jsonl");
+        let file = cwd.join(format!("deletion-owned-{}.jsonl", uuid::Uuid::new_v4()));
+        std::fs::write(&file, "fixture").unwrap();
         let (out, _rx) = output();
         host.start(
             "one",
@@ -291,18 +311,16 @@ mod tests {
         .await
         .unwrap();
         host.begin_deletion().await.unwrap();
-        assert!(
-            host.start(
-                "three",
-                echo(),
-                cwd.clone(),
-                "new".into(),
-                None,
-                out.clone()
-            )
-            .await
-            .is_err()
-        );
+        host.start(
+            "three",
+            echo(),
+            cwd.clone(),
+            "new".into(),
+            None,
+            out.clone(),
+        )
+        .await
+        .unwrap();
         host.freeze_deletion([file.clone()].into_iter().collect())
             .await;
         assert!(
@@ -328,16 +346,64 @@ mod tests {
         )
         .await
         .unwrap();
-        let owners = host.deletion_owners(&[file].into_iter().collect()).await;
+        host.start(
+            "three",
+            echo(),
+            cwd.clone(),
+            "fresh".into(),
+            None,
+            out.clone(),
+        )
+        .await
+        .unwrap();
+        let other_file = cwd.join(format!("deletion-unrelated-{}.jsonl", uuid::Uuid::new_v4()));
+        std::fs::write(&other_file, "fixture").unwrap();
+        host.start(
+            "three",
+            echo(),
+            cwd.clone(),
+            "resume-unrelated".into(),
+            Some(other_file.clone()),
+            out.clone(),
+        )
+        .await
+        .unwrap();
+        assert!(
+            host.bind_file("three", "fresh", file.clone())
+                .await
+                .is_err()
+        );
+        let owners = host
+            .deletion_owners(&[file.clone()].into_iter().collect())
+            .await;
         assert_eq!(owners.len(), 1);
         assert_eq!(owners[0].1, "affected");
         host.stop_window("one", Some("affected")).await.unwrap();
         assert!(host.cwd("two", "unrelated").await.is_ok());
-        host.end_deletion().await;
-        host.start("three", echo(), cwd, "new".into(), None, out)
+        // Even after the old writer exits, affected resumes cannot slip in.
+        assert!(
+            host.start(
+                "three",
+                echo(),
+                cwd.clone(),
+                "affected-resume".into(),
+                Some(file.clone()),
+                out.clone()
+            )
             .await
-            .unwrap();
+            .is_err()
+        );
+        std::fs::remove_file(&file).unwrap();
+        host.end_deletion().await;
+        // An inspected-but-now-deleted selection must not recreate its history.
+        assert!(
+            host.start("three", echo(), cwd, "stale-resume".into(), Some(file), out)
+                .await
+                .unwrap_err()
+                .contains("no longer exists")
+        );
         host.stop_all().await.unwrap();
+        std::fs::remove_file(other_file).unwrap();
     }
 
     #[tokio::test]
@@ -376,7 +442,8 @@ mod tests {
     async fn window_scoping_and_duplicate_file_reservations() {
         let host = WorkspaceHost::default();
         let cwd = std::env::temp_dir();
-        let file = cwd.join("nimrod-owned-fixture.jsonl"); // reservation only, never read/written
+        let file = cwd.join(format!("nimrod-owned-{}.jsonl", uuid::Uuid::new_v4()));
+        std::fs::write(&file, "fixture").unwrap(); // disposable presence/reservation fixture
         let (a, _ra) = output();
         let (b, _rb) = output();
         host.start(
@@ -440,10 +507,11 @@ mod tests {
                 .is_err()
         );
         host.stop_all().await.unwrap();
-        host.start("one", echo(), cwd, "c".into(), Some(file), a)
+        host.start("one", echo(), cwd, "c".into(), Some(file.clone()), a)
             .await
             .unwrap();
         host.stop_all().await.unwrap();
+        std::fs::remove_file(file).unwrap();
     }
 
     #[tokio::test]
@@ -557,7 +625,8 @@ mod tests {
     async fn failed_spawn_releases_reservation() {
         let host = WorkspaceHost::default();
         let cwd = std::env::temp_dir();
-        let file = cwd.join("nimrod-failed-fixture.jsonl");
+        let file = cwd.join(format!("nimrod-failed-{}.jsonl", uuid::Uuid::new_v4()));
+        std::fs::write(&file, "fixture").unwrap();
         let (out, _rx) = output();
         assert!(
             host.start(
@@ -571,9 +640,10 @@ mod tests {
             .await
             .is_err()
         );
-        host.start("one", echo(), cwd, "a".into(), Some(file), out)
+        host.start("one", echo(), cwd, "a".into(), Some(file.clone()), out)
             .await
             .unwrap();
         host.stop_all().await.unwrap();
+        std::fs::remove_file(file).unwrap();
     }
 }

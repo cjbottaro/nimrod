@@ -1,7 +1,58 @@
 import { test, expect } from '@playwright/test';
 import { demoFixture, visible } from './demo-fixture';
 
-test('one strip keeps its position and remains actionable through Settings and nested native dialogs', async ({ page }) => {
+test('session notices stay inside their conversation, preserving reader intent, focus and background isolation', async ({ page }) => {
+  const fixture = await demoFixture(page);
+  try {
+    await fixture.editPreferences('{"appearance.theme":"dracula"}');
+    for (let i = 1; i <= 4; i++) await fixture.turn(i);
+    const firstToken = String(fixture.calls.find(call => call.command === 'start_pi')!.args.token);
+    const firstRoot = page.locator('.session-view').first();
+    const pane = page.locator(visible('transcript-viewport'));
+    await pane.hover(); await page.mouse.wheel(0, -10000);
+    await expect.poll(async () => (await fixture.metrics()).gap).toBeGreaterThan(80);
+    const before = await fixture.metrics();
+    const prompt = page.locator(visible('prompt')); await prompt.fill('Keep draft'); await prompt.focus();
+    await page.locator(visible('messages')).locator('.message').first().evaluate(node => { (node as HTMLElement).dataset.identity = 'retained'; });
+    const report = async (token: string, id: string, message: string) => page.evaluate(({ token, id, message }) => {
+      const state = window as unknown as { __fixtureChannels: Record<string, { onmessage(packet: unknown): void }> };
+      state.__fixtureChannels[token].onmessage({ kind: 'rpc', value: { type: 'extension_ui_request', method: 'notify', notifyType: 'error', id, message } });
+    }, { token, id, message });
+    await report(firstToken, 'one', 'Playwright MCP server could not start. ' + 'Diagnostic ENOENT '.repeat(20));
+    const notice = page.locator(visible('session-notices'));
+    await expect(notice).toBeVisible(); await expect(page.locator('#application-notices')).toBeHidden();
+    await expect(prompt).toBeFocused(); await expect(prompt).toHaveValue('Keep draft');
+    expect(Math.abs((await fixture.metrics()).top - before.top)).toBeLessThanOrEqual(2);
+    const bounds = (await notice.boundingBox())!, conversation = (await firstRoot.boundingBox())!;
+    expect(bounds.x - conversation.x).toBeCloseTo(25, 0); // 20px gutter at fixture zoom.
+    expect(bounds.width).toBeLessThan(conversation.width);
+    expect((await pane.boundingBox())!.y).toBeGreaterThanOrEqual(bounds.y + bounds.height);
+    await expect(notice.locator('.notice-details')).not.toHaveAttribute('open', '');
+    await notice.getByText('Details', { exact: true }).click();
+    await expect(notice.locator('.notice-details')).toHaveAttribute('open', '');
+    await expect(page.locator(visible('messages')).locator('.message').first()).toHaveAttribute('data-identity', 'retained');
+    expect(Math.abs((await fixture.metrics()).top - before.top)).toBeLessThanOrEqual(2);
+    await page.keyboard.press('ControlOrMeta+Shift+n'); await expect(page.locator('.session-view')).toHaveCount(2);
+    await expect(page.locator(visible('send'))).toBeEnabled();
+    const secondPrompt = page.locator(visible('prompt')); await secondPrompt.fill('Second draft'); await secondPrompt.focus();
+    await report(firstToken, 'background', 'Another first-session issue');
+    await expect(page.locator(visible('session-notices'))).toBeHidden();
+    await expect(page.locator('#application-notices')).toBeHidden(); await expect(secondPrompt).toBeFocused();
+    await page.locator(`.session-row[aria-controls="${await firstRoot.getAttribute('id')}"]`).click();
+    await expect(notice.locator('.notice-group-summary')).toHaveText('2 session issues');
+    await expect(notice.locator('.notice-group')).not.toHaveAttribute('open', '');
+    await notice.locator('.notice-group-summary').click();
+    await expect(notice).toContainText('Another first-session issue');
+    await page.locator('#open-settings').click();
+    await expect(page.locator('#settings-page .session-notices')).toHaveCount(0);
+    await expect(page.locator('#application-notices')).toBeHidden();
+    await page.locator('#settings-back').click();
+    await expect(notice.locator('.notice-group')).toHaveAttribute('open', '');
+    expect(fixture.errors).toEqual([]);
+  } finally { await fixture.close(); }
+});
+
+test('window strip keeps its position and remains actionable through Settings and nested native dialogs', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {
     await page.locator(visible('prompt')).fill('Keep my draft');
@@ -97,15 +148,18 @@ test('connection loss before acceptance has one dismissible uncertainty notice w
       };
     });
     const prompt = page.locator(visible('prompt')); await prompt.fill('Maybe received'); await prompt.press('Enter');
-    await expect(page.locator('#application-notices .application-notice')).toHaveCount(1);
-    await expect(page.locator('#application-notices')).toContainText('Message delivery unknown');
+    const sessionNotice = page.locator(visible('session-notices'));
+    await expect(sessionNotice.locator('.application-notice')).toHaveCount(1);
+    await expect(sessionNotice).toContainText('Message delivery unknown');
+    await expect(page.locator('#application-notices')).toBeHidden();
     await expect(prompt).toBeFocused(); await expect(prompt).toHaveValue('');
     await expect(page.locator(visible('submission-notice'))).toBeHidden();
     await expect(page.locator('.session-view:not([hidden]) .tab-notice')).toBeHidden();
     await expect(page.getByRole('button', { name: 'Write a new message', exact: true })).toHaveCount(0);
-    await page.getByRole('button', { name: /Dismiss .*Message delivery unknown/ }).click();
+    await page.getByRole('button', { name: 'Dismiss Message delivery unknown', exact: true }).click();
     await expect(prompt).toHaveValue('');
     await expect(page.locator('#application-notices')).toBeHidden();
+    await expect(sessionNotice).toBeHidden();
     await prompt.fill('New draft after disconnect');
     await expect(page.locator(visible('send'))).toBeDisabled();
     await expect(prompt).toHaveValue('New draft after disconnect');

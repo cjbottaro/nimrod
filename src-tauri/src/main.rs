@@ -156,12 +156,16 @@ async fn start_pi(
     if app.state::<ExitState>().closing.load(Ordering::SeqCst) {
         return Err("Nimrod is shutting down".into());
     }
-    if app
-        .state::<session_deletion::SessionDeletion>()
-        .snapshot()
-        .pending
-    {
-        return Err("Session deletion is pending; new launches are blocked".into());
+    // A pending deletion is not a global launch restriction. Corrupt persisted
+    // safety state still prevents saved resumes, not fresh conversations.
+    if matches!(config.mode, LaunchMode::Resume) {
+        if let Some(error) = app
+            .state::<session_deletion::SessionDeletion>()
+            .snapshot()
+            .error
+        {
+            return Err(error);
+        }
     }
     if token.is_empty() || token.len() > 128 {
         return Err("Invalid session token".into());

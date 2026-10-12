@@ -6,7 +6,7 @@
 
 The transcript is its own scroll pane above the in-flow Status area/composer. Transcript, status content, submission notices and composer use fluid width with 20 CSS-pixel side gutters, not inherited 920/960px caps. Status background/separators remain full-width; launch forms/modals retain independent compact sizing.
 
-Preserve live follow versus older-history reading through incremental updates, card/content resizing, composer growth, native zoom and hidden-session switching. Routine snapshots never steal focus or rebuild connected disclosure/spinner nodes. Each mounted session owns geometry, nodes and draft selection.
+Preserve live follow versus older-history reading through incremental updates, card/content resizing, composer growth, native zoom and hidden-session switching. Routine snapshots never steal focus or rebuild connected disclosure/spinner nodes. Each mounted session owns geometry, nodes and draft selection. Session notices occupy a bounded in-flow row above and outside the transcript pane, aligned with its gutters; application notices reserve shell space separately. Notice appearance/disclosure uses existing resize/follow ownership, never forced bottom navigation. See [error presentation](error-presentation.md).
 
 ## Code map
 
