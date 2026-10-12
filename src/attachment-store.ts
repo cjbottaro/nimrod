@@ -55,7 +55,7 @@ export class AttachmentStore {
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(new Error('Could not read image draft storage.'));
     });
-    if (!entry || entry.bytes.byteLength !== image.size || entry.mimeType !== image.mimeType) throw new Error(`Image draft is missing: ${image.name}. Remove it or paste it again; nothing was sent.`);
+    if (!entry || entry.bytes.byteLength !== image.size || entry.mimeType !== image.mimeType) throw new Error(`Image draft is missing: ${image.name}. Nothing was sent. Compose a new message.`);
     const blob = new Blob([entry.bytes], { type: entry.mimeType });
     validateImageBlob(blob); return blob;
   }

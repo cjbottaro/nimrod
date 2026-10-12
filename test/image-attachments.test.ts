@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { attachmentArray, referencedAttachments, validateImageBlob, validateImageContents, validateAttachments, MAX_IMAGE_BYTES, type ImageAttachment } from '../src/pi/image-attachments';
-import { beginSubmission, initialComposerState, settleSubmission, restoreRecoveredQueueItem } from '../src/pi/composer-state';
+import { beginSubmission, initialComposerState, settleSubmission, dismissUnknownSubmission, updateDraft } from '../src/pi/composer-state';
 import { persistWebviewState, restoreComposerState } from '../src/pi/webview-state';
 import { SteeringTranscript } from '../src/pi/steering-transcript';
 
@@ -25,10 +25,12 @@ test('image-only acknowledgement removes submitted references but preserves new 
   const accepted = settleSubmission(newer, 'one', 'accepted');
   assert.equal(accepted.draft, 'new');
   assert.deepEqual(accepted.attachments, [image('b')]);
-  assert.deepEqual(accepted.imageRecovery?.[0].attachments, [image('a')]);
-  const rejected = settleSubmission({ ...sending, attachments: [image('b')] }, 'one', 'rejected');
-  assert.deepEqual(rejected.recovered[0].attachments, [image('a')]);
-  assert.deepEqual(restoreRecoveredQueueItem(rejected, rejected.recovered[0].id).attachments, [image('b'), image('a')]);
+  assert.deepEqual(accepted.recovered, []);
+  assert.equal(Object.hasOwn(accepted, 'imageRecovery'), false);
+  const rejected = settleSubmission(newer, 'one', 'rejected');
+  assert.deepEqual(rejected.attachments, [image('b')]);
+  assert.equal(rejected.draft, 'new');
+  assert.deepEqual(rejected.recovered, []);
 });
 
 test('reload persists references only and leaves pending image sends unknown', () => {

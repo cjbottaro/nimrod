@@ -45,7 +45,7 @@ Without installation, use `./bin/nimrod .`. The launcher opens or focuses a proj
 - [Drafts](docs/drafts.md) — native per-session storage, debounced saves and recovery.
 - [Writing messages](docs/writing-messages.md) — send, steer, queue, Stop, slash commands and recovery.
 - [Reading conversations](docs/reading-conversations.md) — tool/reasoning cards, code actions, links and auto-follow.
-- [Paste images](docs/image-paste.md) — image attachments and image-send recovery.
+- [Paste images](docs/image-paste.md) — image attachments and delivery behavior.
 - [Model and thinking preferences](docs/model-thinking.md) — change upcoming-request configuration during work.
 - [Pop-outs](docs/pop-outs.md) — persistent reference windows for code and rendered Markdown.
 - [Notifications](docs/notifications.md) — background-session alerts and delivery troubleshooting.
@@ -61,4 +61,4 @@ macOS is the current development platform; Linux is next, and Windows is a possi
 
 There is no background process continuity, integrated diff editor, fork/tree-navigation UI, Pi `/reload`, other harness integration, automatic update system or production installer. macOS local bundles use ad-hoc signing, not Developer ID signing/notarization. Opening a project does not start Pi; selecting an inactive saved session loads and reconnects it without sending a prompt. Closing a project stops its owned agents.
 
-Nimrod preserves drafts on rejected or uncertain sends and never automatically replays a prompt. Pi owns conversation history; Nimrod cannot coordinate external applications writing the same session file.
+Definitively rejected sends show an error and discard the attempted message, preserving newer drafts. Uncertain sends are explicitly marked and never automatically replayed. Pi owns conversation history; Nimrod cannot coordinate external applications writing the same session file.

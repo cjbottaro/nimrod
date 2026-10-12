@@ -33,8 +33,10 @@ export class SteeringTranscript {
   }
 
   receipt(id: string, outcome: SubmissionOutcome): void {
-    const entry = this.pending.find(item => item.submissionId === id);
-    if (entry) entry.status = outcome === 'accepted' ? 'pending' : outcome;
+    const index = this.pending.findIndex(item => item.submissionId === id);
+    if (index < 0) return;
+    if (outcome === 'rejected' || outcome === 'cancelled') { this.pending.splice(index, 1); return; }
+    this.pending[index].status = outcome === 'accepted' ? 'pending' : 'unknown';
   }
 
   disconnect(): void {

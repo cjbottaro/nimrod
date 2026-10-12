@@ -443,15 +443,17 @@ test('coalesced queue removal and clear_queue recovery do not recreate pending s
   } finally { f.dom.window.close(); }
 });
 
-for (const outcome of ['rejected', 'unknown'] as const) test(`steering ${outcome} stays visibly marked without clearing or replaying the draft`, () => {
+for (const outcome of ['rejected', 'unknown'] as const) test(`steering ${outcome} discards a definite failure or retains uncertainty without replay`, () => {
   const f = fixture();
   try {
     f.snapshot({ busy: true, messages: [] });
     f.draft('uncertain steer'); f.send();
     const submission = f.sent.find(m => m.type === 'prompt')!;
     f.receive({ type: 'submissionReceipt', id: submission.id, outcome }); f.flush();
-    assert.match(f.win.document.querySelector('#messages .user')!.textContent!, outcome === 'unknown' ? /Acceptance unknown/ : /Not sent/);
-    assert.equal(f.prompt.value, 'uncertain steer');
+    if (outcome === 'unknown') assert.match(f.win.document.querySelector('#messages .user')!.textContent!, /Acceptance unknown/);
+    else assert.equal(f.win.document.querySelector('#messages .user'), null);
+    assert.equal(f.prompt.value, outcome === 'unknown' ? 'uncertain steer' : '');
+    assert.equal(f.win.document.querySelector('[data-recovery-id]'), null);
     assert.equal(f.sent.filter(m => m.type === 'prompt').length, 1);
     f.receive({ type: 'sessionReset' }); f.flush();
     assert.equal(f.win.document.querySelectorAll('#messages .user').length, 0);
@@ -495,7 +497,8 @@ test('paste uses event images once, preserves newer attachments on ack, and neve
     assert.equal(f.prompt.value, 'newer');
     assert.equal(f.win.document.querySelectorAll('.composer-attachments img').length, 1);
     assert.equal(JSON.stringify(f.state()).includes('YWJj'), false);
-    assert.match(f.win.document.querySelector('.image-recovery')!.textContent!, /1 image/);
+    assert.equal(f.win.document.querySelector('.image-recovery'), null);
+    assert.equal(Object.hasOwn(f.state() as object, 'imageRecovery'), false);
   } finally { f.dom.window.close(); }
 });
 
@@ -512,7 +515,30 @@ test('native fallback reads only empty composer pastes; missing image data block
     f.send(); await tickImages();
     assert.equal(f.sent.some(message => message.type === 'prompt'), false);
     assert.match(f.win.document.querySelector('#submission-notice')!.textContent!, /missing/);
-    assert.equal(f.win.document.querySelectorAll('.composer-attachments img').length, 1);
+    assert.equal(f.win.document.querySelectorAll('.composer-attachments img').length, 0);
+    assert.equal(f.prompt.value, '');
+    assert.equal(f.win.document.querySelector('#queue-activity')!.textContent, '');
+  } finally { f.dom.window.close(); }
+});
+
+for (const outcome of ['rejected', 'unknown'] as const) test(`image send ${outcome} has no backup UI and never replays the attempt`, async () => {
+  const f = fixture({ images: true });
+  try {
+    f.snapshot({ sessionUnavailable: false, messages: [] }); f.draft('caption'); f.paste(); await tickImages(); f.send(); await tickImages();
+    const submission = f.sent.find(message => message.type === 'prompt')!;
+    f.receive({ type: 'submissionReceipt', id: submission.id, outcome, error: 'Fixture error' });
+    assert.equal(f.win.document.querySelector('.image-recovery'), null);
+    assert.equal(f.win.document.querySelector('[data-recovery-id]'), null);
+    assert.equal(f.prompt.value, outcome === 'unknown' ? 'caption' : '');
+    if (outcome === 'unknown') {
+      assert.match(f.win.document.querySelector('#submission-notice')!.textContent!, /did not confirm/);
+      f.send(); assert.equal(f.sent.filter(message => message.type === 'prompt').length, 1);
+      const proceed = f.win.document.querySelector<HTMLButtonElement>("[data-action='dismiss-unknown']")!;
+      assert.equal(proceed.textContent, 'Write a new message'); proceed.click();
+      assert.equal(f.prompt.value, ''); assert.equal(f.win.document.activeElement, f.prompt);
+    } else assert.match(f.win.document.querySelector('#submission-notice')!.textContent!, /Not sent/);
+    assert.equal(f.win.document.querySelectorAll('.composer-attachments img').length, 0);
+    f.send(); assert.equal(f.sent.filter(message => message.type === 'prompt').length, 1);
   } finally { f.dom.window.close(); }
 });
 

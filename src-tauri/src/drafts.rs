@@ -255,7 +255,22 @@ impl Drafts {
         }
         let mut ids = Vec::new();
         for value in values {
-            visit(&value, &mut ids);
+            // Only the current draft and unresolved submission own image bytes.
+            // Retired imageRecovery / recovered-unsent copies must not keep old
+            // blobs alive, including scopes that have not been reopened yet.
+            if let Some(attachments) = value.get("attachments") {
+                visit(attachments, &mut ids);
+            }
+            if let Some(submission) = value.get("submission") {
+                if matches!(
+                    submission.get("status").and_then(Value::as_str),
+                    Some("pending" | "unknown")
+                ) {
+                    if let Some(attachments) = submission.get("attachments") {
+                        visit(attachments, &mut ids);
+                    }
+                }
+            }
         }
         Ok(ids)
     }
@@ -389,6 +404,32 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn retired_backups_do_not_protect_images_but_pending_and_unknown_submissions_do() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Drafts::new(dir.path().join("drafts"));
+        let image = |id| json!({"id":id,"mimeType":"image/png","size":1});
+        store.stage("/a", Record {
+            key: "file:/fixture".into(), revision: 1,
+            value: json!({"attachments":[image("draft")], "submission":{"status":"pending","attachments":[image("pending")]},
+                "imageRecovery":[{"attachments":[image("accepted-backup")]}], "recovered":[{"kind":"unsent","attachments":[image("failed-backup")]}]}),
+        }).unwrap();
+        store.flush(None, false).unwrap();
+        let mut ids = store.references().unwrap();
+        ids.sort();
+        assert_eq!(ids, vec!["draft", "pending"]);
+        store.stage("/a", Record {
+            key: "file:/fixture".into(), revision: 2,
+            value: json!({"submission":{"status":"unknown","attachments":[image("unknown")]}}),
+        }).unwrap();
+        assert_eq!(store.references().unwrap(), vec!["unknown"]);
+        store.stage("/a", Record {
+            key: "file:/fixture".into(), revision: 3,
+            value: json!({"submission":{"status":"accepted","attachments":[image("resolved")]}}),
+        }).unwrap();
+        assert!(store.references().unwrap().is_empty());
+    }
+
     #[test]
     fn failure_retains_pending_state_and_tombstones_remove_references() {
         let dir = tempfile::tempdir().unwrap();

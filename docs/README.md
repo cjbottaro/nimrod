@@ -8,7 +8,7 @@
 - [Drafts](drafts.md) — native storage, debounce, recovery and ignored legacy drafts.
 - [Writing messages](writing-messages.md) — send, steer, queue, Stop, slash commands and recovery.
 - [Reading conversations](reading-conversations.md) — cards, code actions, links and auto-follow.
-- [Paste images](image-paste.md) — attachments, drafts and image-send recovery.
+- [Paste images](image-paste.md) — attachments, drafts and send outcomes.
 - [Model and thinking preferences](model-thinking.md) — change configuration for upcoming requests.
 - [Pop-outs](pop-outs.md) — keep captured code or Markdown visible in reference windows.
 - [Notifications](notifications.md) — background alerts, click navigation and troubleshooting.
