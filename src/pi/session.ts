@@ -22,8 +22,6 @@ export interface SessionUi {
   copy(text: string): Promise<void>;
   changed(state: ConversationState): void;
   attention?(kind: 'completed' | 'input' | 'failed', response?: string): void;
-  /** Only a successful prompt RPC is conversational use; metadata/control RPCs aren't. */
-  promptAccepted?(): void;
   notice?(message: string, severity?: 'error' | 'warning' | 'info', cause?: string): void;
   disconnected?(message?: string): void;
   identity?(file: string | undefined, id: string | undefined): Promise<void>;
@@ -265,7 +263,6 @@ export class PiSession {
       const streamingBehavior = message.mode === 'followUp' && this.state.busy ? 'followUp' : 'steer';
       await this.rpc.request('prompt', { message: text, ...(images.length ? { images } : {}), streamingBehavior });
       receipt('accepted');
-      this.ui.promptAccepted?.();
     } catch (error) { receipt(error instanceof RpcResponseError ? 'rejected' : 'unknown', errorText(error)); }
   }
 

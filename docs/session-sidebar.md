@@ -24,9 +24,9 @@ Empty Unread shows **N sessions working…** while agents are busy, otherwise **
 
 ## Ordering and navigation
 
-New sessions start at the top. Resumed sessions insert using remembered recency or their latest saved user-message time. Only Pi-acknowledged messages subsequently advance recency—including steering and queued follow-ups. Selecting, reading, renaming, changing models, compaction and background output do not reorder All.
+New sessions start at the top. Resumed sessions insert using remembered recency or their latest saved user-message time. Sending a message immediately moves its session to the top—including steering, queued follow-ups and image-only messages—without waiting for Pi. A later send error does not undo that ordering. Selecting, reading, renaming, changing models, compaction and background output do not reorder All.
 
-Recency survives Close/reopening for saved sessions. Rows show **relative time · date**; unknown timestamps show **No message time**. Time labels refresh without reordering. When a row moves, the sidebar preserves your reading position rather than chasing it.
+Recency survives Close/reopening for saved sessions. Rows show **relative time · date**; unknown timestamps show **No message time**. Time labels refresh without reordering. Sending in the current session scrolls All or Working to the top with its row, without moving focus or changing transcript reading position. Unread keeps its arrival order and list position. Later Pi responses, errors and activity updates do not move the list; routine updates preserve your reading position.
 
 **Switch session…** / **⌘/Ctrl+T** and previous/next **⌘/Ctrl+Shift+[ / ]** share All's order, wrapping at the ends. They reach every open session even when hidden or filtered. Choosing a filtered-out session switches to All. Sidebar arrow keys navigate the currently displayed rows; Left/Right on view tabs switch views, and Home/End choose All/Working.
 

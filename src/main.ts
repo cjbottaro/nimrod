@@ -459,6 +459,8 @@ function touchTab(tab: Tab): void {
   tab.lastUsed = navigation.nextRecency();
   refreshTime(tab);
   renderSidebar(tab.rowNode);
+  // All/Working use recency order; Unread keeps its independent arrival order.
+  if (presented === tab && sidebarView !== 'unread') required('sidebar-session-panel').scrollTop = 0;
   persistTabs();
 }
 function renderSidebar(moved?: HTMLElement): void {
@@ -855,6 +857,9 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
       if (tab.mode !== 'temporary' && (previous?.recovered !== next?.recovered || previous?.attachments !== next?.attachments || (previous?.draft && !next?.draft))) void nativeDrafts?.flush().catch(draftPersistenceError);
     },
     onMessage: receive => { tab.receive = receive; },
+    promptSubmitted: () => {
+      if (!unloading && tabs.includes(tab) && tab.session && !tab.ended && !tab.closing && !tab.restarting && !tab.deleting) touchTab(tab);
+    },
     postMessage: message => {
       if (message.type === 'deletionState') return;
       if (tab.deleting) return;
@@ -988,7 +993,6 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
     notice: (message, severity, cause) => {
       if (currentToken() && !tab.closing && !tab.restarting && !tab.deleting) notices.report({ id: `${tab.id}:pi:${++noticeSequence}`, owner: tab.id, cause, operation: 'Pi operation', message, severity });
     },
-    promptAccepted: () => { if (!unloading && currentToken() && !tab.closing && !tab.restarting && !tab.deleting) touchTab(tab); },
     attention: (kind, response) => {
       if (unloading || !currentToken() || tab.closing || tab.restarting || tab.deleting) return;
       if (kind === 'completed' && (presented !== tab || settings.isOpen)) tab.unread = true;

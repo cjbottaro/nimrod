@@ -10,6 +10,7 @@ function fixture(options: { images?: boolean; clipboard?: boolean; missing?: boo
   const win = dom.window;
   let persisted: unknown;
   let clipboardReads = 0;
+  let submittedPrompts = 0;
   const blobs = new Map<string, Blob>();
   let imageId = 0;
   Object.assign(win.URL, { createObjectURL: () => `blob:fixture-${imageId}`, revokeObjectURL: () => {} });
@@ -22,7 +23,7 @@ function fixture(options: { images?: boolean; clipboard?: boolean; missing?: boo
   win.requestAnimationFrame = cb => { frames.push(cb); return frames.length; };
   const sent: Record<string, unknown>[] = [];
   let receive: (message: unknown) => void = () => {};
-  Object.assign(win, { testHost: { attachments, cardRenderer: options.cardRenderer, cardActions: options.cardActions, getState: () => undefined, setState: (state: unknown) => { persisted = state; if (options.releaseOnClear) { const images = (state as { attachments?: { id: string }[] }).attachments ?? []; for (const id of blobs.keys()) if (!images.some(image => image.id === id)) blobs.delete(id); } }, postMessage: (message: Record<string, unknown>) => sent.push(message), onMessage: (listener: typeof receive) => { receive = listener; } } });
+  Object.assign(win, { testHost: { promptSubmitted: () => { submittedPrompts++; }, attachments, cardRenderer: options.cardRenderer, cardActions: options.cardActions, getState: () => undefined, setState: (state: unknown) => { persisted = state; if (options.releaseOnClear) { const images = (state as { attachments?: { id: string }[] }).attachments ?? []; for (const id of blobs.keys()) if (!images.some(image => image.id === id)) blobs.delete(id); } }, postMessage: (message: Record<string, unknown>) => sent.push(message), onMessage: (listener: typeof receive) => { receive = listener; } } });
   win.eval(rendererBundle() + '\nwindow.testView = PiView.mountPiView(window.testHost);');
   const flush = () => { while (frames.length) frames.shift()!(0); };
   const snapshot = (state: Record<string, unknown>) => { receive({ type: 'snapshot', state }); flush(); };
@@ -34,7 +35,7 @@ function fixture(options: { images?: boolean; clipboard?: boolean; missing?: boo
     Object.defineProperty(event, 'clipboardData', { value: { items: image ? [{ kind: 'file', type: 'image/png', getAsFile: () => new win.File(['abc'], 'Screenshot.png', { type: 'image/png' }) }] : [], types: text ? ['text/plain'] : [], files: [], getData: () => text } });
     prompt.dispatchEvent(event); return event;
   };
-  return { dom, win, sent, receive, snapshot, prompt, draft, send, flush, paste, state: () => persisted, clipboardReads: () => clipboardReads };
+  return { dom, win, sent, receive, snapshot, prompt, draft, send, flush, paste, state: () => persisted, clipboardReads: () => clipboardReads, submittedPrompts: () => submittedPrompts };
 }
 
 test('bundled native bridge clears immediately and isolates new drafts from pending/unknown/late receipts', () => {
@@ -42,6 +43,7 @@ test('bundled native bridge clears immediately and isolates new drafts from pend
   try {
     f.snapshot({ sessionUnavailable: false, status: 'Ready', messages: [] });
     f.draft('original'); f.send();
+    assert.equal(f.submittedPrompts(), 1, 'local Send effects run before any RPC result');
     const submission = f.sent.find(m => m.type === 'prompt')!;
     assert.equal(f.prompt.value, '');
     assert.equal(Object.hasOwn(f.state() as object, 'submission'), false);
@@ -60,8 +62,30 @@ test('bundled native bridge clears immediately and isolates new drafts from pend
     f.draft('new draft');
     f.receive({ type: 'submissionReceipt', id: second.id, outcome: 'accepted' });
     assert.equal(f.prompt.value, 'new draft');
+    assert.equal(f.submittedPrompts(), 3, 'late RPC results never repeat local Send effects');
     f.send();
     assert.equal(f.sent.filter(m => m.type === 'prompt').length, 4, 'late old receipt does not gate new sends');
+  } finally { f.dom.window.close(); }
+});
+
+test('local Send intent covers ordinary, steering and follow-up messages but excludes controls and validation failures', () => {
+  const f = fixture();
+  try {
+    f.snapshot({ sessionUnavailable: false, messages: [] });
+    f.draft('normal'); f.send();
+    assert.equal(f.submittedPrompts(), 1);
+    f.snapshot({ sessionUnavailable: false, busy: true, messages: [] });
+    f.draft('steering'); f.send();
+    f.draft('follow-up');
+    f.prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true, cancelable: true }));
+    assert.equal(f.submittedPrompts(), 3, 'all message delivery kinds mark local use');
+    f.snapshot({ sessionUnavailable: false, busy: false, messages: [] });
+    for (const text of ['/name Inline', '/name', '/compact', '/delete', '']) { f.draft(text); f.send(); }
+    f.snapshot({ sessionUnavailable: true, messages: [] }); f.draft('unavailable'); f.send();
+    f.snapshot({ sessionUnavailable: false, compacting: true, messages: [] }); f.draft('compacting'); f.send();
+    f.receive({ type: 'deletionLock', locked: true });
+    f.snapshot({ sessionUnavailable: false, messages: [] }); f.draft('deletion'); f.send();
+    assert.equal(f.submittedPrompts(), 3, 'controls and locally blocked sends never mark use');
   } finally { f.dom.window.close(); }
 });
 
@@ -636,6 +660,7 @@ test('image sends capture bytes before cleared drafts release temporary storage,
   try {
     f.snapshot({ sessionUnavailable: false, messages: [] });
     f.draft('caption'); f.paste(); await tickImages(); f.send();
+    assert.equal(f.submittedPrompts(), 1, 'image Send intent is immediate, not delayed by byte preparation');
     assert.equal(f.prompt.value, '');
     assert.equal(f.win.document.querySelectorAll('.composer-attachments img').length, 0);
     assert.equal(f.sent.filter(message => message.type === 'prompt').length, 0);

@@ -14,7 +14,7 @@ Pi is the only implemented harness. Integrate a concrete second harness before i
 | --- | --- | --- |
 | Project shell (`src/main.ts`) | Mounted session views and effect coordination | [Projects/sessions](projects-and-sessions.md) |
 | Navigation/connection | Shared projections, activation and connection deferral | [Session navigation](session-navigation.md) |
-| Pi coordinator/transport | Ordered RPC, identity and acknowledgement | [Pi transport](pi-transport.md) |
+| Pi coordinator/transport | Ordered RPC, identity and result correlation | [Pi transport](pi-transport.md) |
 | Transcript/composer | Incremental presentation and user intent | [Cards](transcript-cards.md), [scroll/focus](transcript-interaction.md), [composer](composer.md) |
 | Rust host | Window/token ownership, pipes, shutdown and file validation | [Projects/sessions](projects-and-sessions.md), [Pi transport](pi-transport.md) |
 | Settings/state | JSONC preferences and separate app-managed bookkeeping | [Preferences](preferences.md) |
@@ -22,16 +22,24 @@ Pi is the only implemented harness. Integrate a concrete second harness before i
 
 There is no extra Node backend; Pi itself requires Node. The reducer and request correlation remain TypeScript so response snapshots apply synchronously in the ordered channel before later events. Rust validates the outer framing/record, TypeScript validates relevant Pi payload content. Small TS/Rust launch/packet shapes are hand-maintained; Pi's open-ended payload remains JSON.
 
+## Optimistic interaction policy
+
+User intent drives local UI immediately after local validation; do not make RPC acknowledgement a general prerequisite for interaction feedback. Dispatch work without waiting for prior prompt results. For Send, clear the composer, preview the message (images after local byte preparation), update session recency and follow the current recency-ordered sidebar row to the top. Image preparation must not delay recency or sidebar feedback.
+
+RPC results correlate errors to the originating operation and supply specific authoritative results; successful replies do not repeat local interaction effects. Harness events/history reconcile optimistic presentation in place. Late failures or uncertainty annotate the affected message and report its error without restoring the composer, rolling back Send recency, reordering/selecting sessions again, changing a newer draft or automatically replaying work. No persisted submission lifecycle or acceptance-driven UI gate.
+
+Pi remains authoritative for history, queue consumption, configuration, identity and process state. Narrow result-dependent behavior (for example, a confirmed Queued label, canonical identity verification, operation-in-flight lifecycle guards or destructive-operation completion) must have a documented concrete requirement; it is not precedent for delaying ordinary user feedback. Preserve transcript reader/follow intent and focus; Send's sidebar-to-top effect is not permission to force-scroll the transcript or switch filters.
+
 ## Cross-cutting contracts
 
 - One ordered channel carries all stdout events and responses. Synchronous snapshot application is required; Promise continuations alone can overwrite newer streaming state.
-- Unknown acceptance is not rejection. Never replay a prompt; only Pi acknowledgement establishes acceptance. The composer clears immediately on submission; runtime receipts never mutate a newer draft. Failures/uncertainty report a notice without restoring the attempt, persisting submission recovery or adding a new-message gate.
+- Apply the [optimistic interaction policy](#optimistic-interaction-policy). Unknown delivery is not rejection; never replay a prompt. RPC results never mutate a newer draft or repeat Send's navigation effects.
 - Native ownership is window/token scoped. Shutdown must observe owned-child exit before replacement launch; failed shutdown retains reservations. No OS-wide process scans or external-writer exclusion guarantee.
 - Shared navigation decides membership/order/replacement; the shell owns DOM, focus, persistence and native effects. All activations request connection through the single connection coordinator.
 - Routine updates preserve mounted nodes, disclosures, focus and scroll intent. Explicit resume/restart is a distinct reset boundary.
 - Nimrod-generated errors share one notice store/renderer, with ownership-based placement: session notices stay in their conversation area; window/application notices use the shell strip, including Settings/dialogs. Background-session errors are not displayed or announced elsewhere. Placement, wording, deduplication and lifecycle follow the [error presentation policy](error-presentation.md); remaining producer metadata cleanup is not precedent for new surfaces.
 - Preferences and bookkeeping are separate from Pi history and scoped draft storage.
-- Delivery/completion never navigates itself. Explicit user navigation can connect a saved session without sending a prompt.
+- RPC results and background delivery/completion never navigate themselves. Explicit user navigation can connect a saved session without sending a prompt.
 - Platform direction is macOS first, Linux next, Windows possibly later. Narrow native integrations must not turn macOS conventions into portable product requirements. See [verification](verification.md) for actual acceptance.
 
 ## Source provenance

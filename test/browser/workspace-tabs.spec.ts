@@ -64,7 +64,7 @@ test('sidebar sessions keep independent drafts and a background agent live witho
   } finally { await demo.close(); }
 });
 
-test('All, Switch and next/previous share one order through creation and acknowledged prompts', async ({ page }) => {
+test('All, Switch and next/previous share one order through creation and optimistic Send', async ({ page }) => {
   const demo = await demoFixture(page);
   try {
     await newOfflineDemo(page); await newOfflineDemo(page);
@@ -91,7 +91,7 @@ test('All, Switch and next/previous share one order through creation and acknowl
     await checkConsumers();
     const before = await order();
     await page.locator(`${sessions}[aria-controls="${before[2]}"]`).click();
-    await page.locator(visible('prompt')).fill('Acknowledged recency changes every navigation consumer');
+    await page.locator(visible('prompt')).fill('Optimistic Send recency changes every navigation consumer');
     await page.locator(visible('prompt')).press('Enter');
     await expect(page.locator(sessions).first()).toHaveAttribute('aria-controls', before[2]);
     await expect(page.locator(visible('send'))).toHaveAttribute('title', /Send/);

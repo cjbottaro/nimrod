@@ -730,6 +730,8 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       queueRender(pendingState || displayedState);
     }
     updateComposer(clearDraft(composer));
+    // Local interaction effects belong to Send, never to a late RPC result.
+    if (!compact && !/^\/name(?:\s|$)/.test(text)) host.promptSubmitted?.();
     if (compact) post("compact", { id, customInstructions: compact[1]?.trim() || undefined });
     else if (imagesReady) {
       preparing++; renderComposer();

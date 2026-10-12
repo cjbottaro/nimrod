@@ -9,24 +9,21 @@ function fixture() {
   const sent: JsonRecord[] = [], published: HostMessage[] = [];
   const attention: string[] = [];
   const previews: (string | undefined)[] = [];
-  const usage = { acceptedPrompts: 0 };
   const rpc = new PiTransport(async message => { sent.push(message); });
-  const ui: SessionUi = { promptAccepted: () => { usage.acceptedPrompts++; }, attention: (kind, response) => { attention.push(kind); previews.push(response); }, publish: m => published.push(m), changed: () => {}, choose: async () => undefined, input: async () => undefined, confirm: async () => false, openLink: async () => {}, copy: async () => {} };
+  const ui: SessionUi = { attention: (kind, response) => { attention.push(kind); previews.push(response); }, publish: m => published.push(m), changed: () => {}, choose: async () => undefined, input: async () => undefined, confirm: async () => false, openLink: async () => {}, copy: async () => {} };
   const session = new PiSession(rpc, ui);
   session.state.sessionUnavailable = false;
   const respond = (success: boolean, data?: unknown) => rpc.receive({ kind: 'rpc', value: { type: 'response', id: sent.at(-1)!.id, success, data } });
-  return { session, rpc, sent, published, respond, attention, previews, ui, usage };
+  return { session, rpc, sent, published, respond, attention, previews, ui };
 }
 
-test('ordinary submissions include steering fallback and wait for Pi acknowledgement', async () => {
+test('ordinary prompt RPC results report outcomes independently of local UI', async () => {
   const f = fixture();
   const pending = f.session.handle({ type: 'prompt', id: 's1', text: 'hello' });
   assert.equal(f.sent[0].streamingBehavior, 'steer');
-  assert.equal(f.usage.acceptedPrompts, 0);
   assert.equal(f.published.filter(m => m.type === 'submissionReceipt').length, 0);
   f.respond(true); await pending;
   assert.equal(f.published.at(-1)?.outcome, 'accepted');
-  assert.equal(f.usage.acceptedPrompts, 1);
   f.rpc.disconnect('done');
 });
 
@@ -44,7 +41,6 @@ test('multiple sends reach Pi before acknowledgement and correlate out-of-order 
   await first;
   assert.equal(f.rpc.hasPendingRequest('prompt'), false);
   assert.deepEqual(f.published.filter(message => message.type === 'submissionReceipt').map(message => [message.id, message.outcome]), [['second', 'accepted'], ['first', 'rejected']]);
-  assert.equal(f.usage.acceptedPrompts, 1);
   f.rpc.disconnect('done');
 });
 
@@ -64,27 +60,24 @@ test('image-only prompts forward Pi image blocks and reject malformed/slash atta
   f.rpc.disconnect('done');
 });
 
-test('rename acknowledgement updates the name and composer receipt but never prompt recency', async () => {
+test('rename results update the name and report the result', async () => {
   for (const text of ['/name Inline name', '/name']) {
     const f = fixture();
     f.ui.input = async () => 'Dialog name';
     const pending = f.session.handle({ type: 'prompt', id: 'rename', text });
     await Promise.resolve(); await Promise.resolve();
     assert.equal(f.sent[0].type, 'set_session_name');
-    assert.equal(f.usage.acceptedPrompts, 0);
     f.respond(true); await pending;
     assert.equal(f.session.state.sessionName, text === '/name' ? 'Dialog name' : 'Inline name');
     assert.equal(f.published.at(-1)?.outcome, 'accepted');
-    assert.equal(f.usage.acceptedPrompts, 0, 'accepted metadata is not a sent prompt');
     const message = f.session.handle({ type: 'prompt', id: 'message', text: 'Actual message after rename' });
     assert.equal(f.sent.at(-1)?.type, 'prompt');
     f.respond(true); await message;
-    assert.equal(f.usage.acceptedPrompts, 1, 'the next actual prompt still advances recency');
     f.rpc.disconnect('done');
   }
 });
 
-test('canceled, rejected and uncertain renames never advance prompt recency', async () => {
+test('canceled, rejected and uncertain renames report their own outcomes', async () => {
   for (const outcome of ['cancelled', 'rejected', 'unknown']) {
     const f = fixture();
     const pending = f.session.handle({ type: 'prompt', id: 'rename', text: outcome === 'cancelled' ? '/name' : '/name Changed' });
@@ -92,7 +85,6 @@ test('canceled, rejected and uncertain renames never advance prompt recency', as
     if (outcome === 'unknown') f.rpc.disconnect('Lost rename acknowledgement');
     await pending;
     assert.equal(f.published.at(-1)?.outcome, outcome);
-    assert.equal(f.usage.acceptedPrompts, 0);
     f.rpc.disconnect('done');
   }
 });
@@ -104,10 +96,8 @@ test('explicit queue submissions use followUp only while the main agent is worki
     const pending = f.session.handle({ type: 'prompt', id: 'queued', text: 'next task', mode: 'followUp' });
     assert.equal(f.sent[0].streamingBehavior, busy ? 'followUp' : 'steer');
     assert.equal(f.published.filter(m => m.type === 'submissionReceipt').length, 0);
-    assert.equal(f.usage.acceptedPrompts, 0);
     f.respond(true); await pending;
     assert.equal(f.published.at(-1)?.outcome, 'accepted');
-    assert.equal(f.usage.acceptedPrompts, 1);
     f.rpc.disconnect('done');
   }
 });
@@ -134,7 +124,6 @@ test('manual compaction uses Pi RPC only while idle and retains optional instruc
   assert.equal(f.sent.length, 1);
   f.respond(true); await pending;
   assert.equal(f.published.at(-1)?.outcome, 'accepted');
-  assert.equal(f.usage.acceptedPrompts, 0, 'accepted compaction is not a sent prompt');
   f.rpc.disconnect('done');
 });
 
@@ -145,7 +134,6 @@ test('disconnect reports unknown acceptance, not a rejected or replayed prompt',
   assert.equal(f.published.at(-1)?.outcome, 'unknown');
   assert.equal(f.sent.length, 1);
   assert.equal(f.session.state.sessionUnavailable, true);
-  assert.equal(f.usage.acceptedPrompts, 0);
 });
 
 test('stop restores the authoritative cleared queue before abort', async () => {
