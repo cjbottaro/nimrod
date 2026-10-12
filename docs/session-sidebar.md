@@ -6,6 +6,8 @@ Click a row to select it. **⌘/Ctrl+B** hides/shows the sidebar without closing
 
 ## Views
 
+The New session button and All / Unread / Working controls stay fixed; only the session list scrolls.
+
 | View | Shows | Order |
 | --- | --- | --- |
 | **All** | Every open session | Most recently used first |
