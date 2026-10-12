@@ -24,6 +24,7 @@
 ## Card customization
 
 - [Card plugins](card-plugins.md) — bundled renderers, edit previews, automatic cached personal TypeScript, compiled-JS compatibility and optional declarative tool customization.
+- [Pi Web Access cards](pi-web-access-plugin.md) — optional external search/fetch/source renderer with read-only controls.
 - [Authoring card plugins](card-plugin-api.md) — mounted DOM lifecycle, host capabilities and TypeScript API.
 
 For development, see [Contributing](../CONTRIBUTING.md). Specifications and implementation details are indexed by the internal [features skill](../.agents/skills/features/SKILL.md).
