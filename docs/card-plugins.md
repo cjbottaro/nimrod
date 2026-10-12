@@ -39,6 +39,10 @@ The complete [command-summary example](../examples/card-plugins/command-summary/
 
 **Placing code in this dedicated personal directory installs and trusts it**, like personal Pi extensions. It executes in Nimrod's webview, **not Node and not a sandbox**. Keep module initialization side-effect-free; manage per-card resources in mount/dispose. No project-level discovery or implicit project trust is introduced. To disable all personal autoloading, set `"cards.autoLoad": false` and reload/reopen the window. Manifest packages retain their separate trust rules.
 
+### Ready-made external plugin
+
+[Pi Web Access cards](pi-web-access-plugin.md) is a normal personal TS plugin for `pi-web-access` search, fetch, stored content and source checking, with source links and read-only Copy/Open/Pop out controls. It is optional and not registered as a built-in.
+
 ## Startup, reload and caching
 
 Plugins load in the background at window startup; unrelated boot, draft restoration and session controls do not wait for compilation. Before a plugin finishes loading, new cards may use bundled rendering. Those already-mounted cards keep their renderer; later cards use the refreshed catalog.

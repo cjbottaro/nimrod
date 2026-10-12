@@ -54,6 +54,10 @@ Keep the installed CLI pointing to the primary checkout. Requested publications 
 
 Cargo asset preparation copies a target-matching esbuild binary/license from the installed npm dependency into an ignored staging directory; Tauri packages it as a compiler sidecar. No compiler is downloaded at runtime. Native same-platform builds use `npm ci`; cross builds require the matching target dependency installed locally. Requested macOS verification includes the helper signature. Compiler packaging/execution still needs native acceptance; no app build is part of checks.
 
+## Maintained external card plugins
+
+`plugins/` holds real optional external renderer sources, not production imports. They are type-checked with the app and exercised through synthetic/offline fixtures. [Pi Web Access cards](docs/pi-web-access-plugin.md) documents the first plugin's compatibility, limitations and personal installation. Keep its source self-contained except for type-only SDK imports so a regular copy works without installing dependencies or altering upstream Pi extensions.
+
 ## Card plugin examples
 
 The supported type-only SDK is `src/card-plugin-api.ts`; it has no runtime dependencies and may be copied into a separate plugin project. API usage/ownership is documented in [Authoring card plugins](docs/card-plugin-api.md). The example is included in normal TypeScript checking.
