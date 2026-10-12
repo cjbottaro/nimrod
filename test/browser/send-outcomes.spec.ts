@@ -38,7 +38,7 @@ async function paste(page: Page) {
 }
 const attempts = (page: Page) => page.evaluate(() => (window as unknown as HeldWindow).__promptAttempts);
 
-test('definitive rejection shows an error and discards the attempted message without recovery controls', async ({ page }) => {
+test('definitive rejection marks the retained transcript turn without composer recovery controls', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {
     await holdPrompt(page); await page.locator(visible('prompt')).fill('Failed caption'); await paste(page);
@@ -46,8 +46,15 @@ test('definitive rejection shows an error and discards the attempted message wit
     await page.locator(visible('prompt')).press('Enter'); await expect.poll(() => attempts(page)).toBe(1);
     await expect(page.locator(visible('prompt'))).toHaveValue('');
     await expect(page.locator('.session-view:not([hidden]) .composer-attachments')).toBeHidden();
+    const turn = page.locator(visible('messages')).locator('.message.user').filter({ hasText: 'Failed caption' });
+    await expect(turn).toHaveCount(1);
+    await expect(turn.locator('.steering-status')).toHaveCount(0);
+    await turn.evaluate(node => { (node as HTMLElement).dataset.testIdentity = 'failed-turn'; });
     await rejectPrompt(page);
     await expect(page.locator('#application-notices')).toContainText('Offline fixture rejected');
+    await expect(turn.locator('.steering-status')).toHaveText('Not sent');
+    await expect(turn).toHaveAttribute('data-test-identity', 'failed-turn');
+    await expect(turn.locator('.transcript-image img')).toHaveCount(1);
     await expect(page.locator(visible('prompt'))).toHaveValue('');
     await expect(page.locator('.session-view:not([hidden]) .composer-attachments')).toBeHidden();
     await expect(page.locator('.image-recovery, [data-recovery-id]')).toHaveCount(0);
@@ -76,7 +83,7 @@ test('sending another message does not wait for the first acknowledgement; failu
   } finally { await fixture.close(); }
 });
 
-test('rejection preserves newer text and images instead of restoring or retaining the failed message', async ({ page }) => {
+test('rejection preserves newer text and images while marking the failed transcript turn', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {
     await holdPrompt(page); await page.locator(visible('prompt')).fill('Old caption'); await paste(page);
@@ -86,6 +93,8 @@ test('rejection preserves newer text and images instead of restoring or retainin
     await page.locator(visible('prompt')).fill('New caption'); await paste(page); await expect(tray.locator('img')).toHaveCount(1);
     await rejectPrompt(page);
     await expect(page.locator(visible('prompt'))).toHaveValue('New caption'); await expect(tray.locator('img')).toHaveCount(1);
+    const turn = page.locator(visible('messages')).locator('.message.user').filter({ hasText: 'Old caption' });
+    await expect(turn).toHaveCount(1); await expect(turn.locator('.steering-status')).toHaveText('Not sent');
     await expect(page.locator('.image-recovery, [data-recovery-id]')).toHaveCount(0);
     expect(await attempts(page)).toBe(1); expect(fixture.errors).toEqual([]);
   } finally { await fixture.close(); }
@@ -102,6 +111,8 @@ test('unknown delivery reports an error without composer recovery or replay', as
       state.__fixtureChannels[state.__heldPrompt!.token].onmessage({ kind: 'disconnected', message: 'Offline fixture connection lost before acknowledgement' });
     });
     await expect(page.locator('#application-notices')).toContainText('did not confirm');
+    const turn = page.locator(visible('messages')).locator('.message.user').filter({ hasText: 'Maybe received' });
+    await expect(turn).toHaveCount(1); await expect(turn.locator('.steering-status')).toHaveText('Acceptance unknown');
     await page.locator(visible('prompt')).press('Enter'); expect(await attempts(page)).toBe(1);
     await expect(page.getByRole('button', { name: 'Write a new message', exact: true })).toHaveCount(0);
     await expect(page.locator(visible('prompt'))).toHaveValue(''); await expect(page.locator(visible('prompt'))).toBeFocused();

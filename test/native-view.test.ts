@@ -402,6 +402,35 @@ test('pop-out rendering preserves raw code without interpreting Markdown or HTML
   } finally { dom.window.close(); }
 });
 
+for (const eventFirst of [false, true]) test(`idle send previews immediately and reconciles in place with ${eventFirst ? 'event' : 'receipt'} first`, () => {
+  const f = fixture();
+  try {
+    const old = { key: 'old', role: 'user', content: 'repeat **message**' };
+    f.snapshot({ busy: false, messages: [old] });
+    f.prompt.focus();
+    f.draft('repeat **message**'); f.send(); f.flush();
+    const submission = f.sent.find(m => m.type === 'prompt')!;
+    const pending = f.win.document.querySelectorAll<HTMLElement>('#messages .user')[1];
+    assert.equal(f.win.document.querySelectorAll('#messages .user').length, 2);
+    assert.equal(pending.querySelector('.steering-status'), null);
+    assert.equal(pending.querySelector('strong')?.textContent, 'message');
+    f.draft('new draft');
+    const actual = { key: 'actual', role: 'user', content: [{ type: 'text', text: submission.text }] };
+    const reconcile = () => f.snapshot({ busy: true, messages: [old, actual, { key: 'assistant', role: 'assistant', content: 'Working' }] });
+    if (eventFirst) reconcile();
+    f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' }); f.flush();
+    if (!eventFirst) {
+      assert.equal(pending.querySelector('.steering-status'), null);
+      reconcile();
+    }
+    assert.equal(f.win.document.querySelectorAll('#messages .user')[1], pending);
+    assert.equal(pending.querySelector('.steering-status'), null);
+    assert.equal(f.win.document.querySelectorAll('#messages .user').length, 2);
+    assert.equal(f.prompt.value, 'new draft');
+    assert.equal(f.win.document.activeElement, f.prompt);
+  } finally { f.dom.window.close(); }
+});
+
 test('steering appears before acknowledgement, remains after live output, and reconciles in place', () => {
   const f = fixture();
   try {
@@ -411,7 +440,7 @@ test('steering appears before acknowledgement, remains after live output, and re
     f.draft('Please **change direction**'); f.send(); f.flush();
     const submission = f.sent.find(m => m.type === 'prompt')!;
     const pending = f.win.document.querySelector<HTMLElement>('#messages .user')!;
-    assert.match(pending.textContent!, /Sending…/);
+    assert.equal(pending.querySelector('.steering-status'), null);
     assert.equal(pending.querySelector('strong')?.textContent, 'change direction');
     assert.equal(f.prompt.value, '');
     assert.equal(f.win.document.activeElement, f.prompt);
@@ -422,7 +451,7 @@ test('steering appears before acknowledgement, remains after live output, and re
     f.draft('new draft');
     f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' }); f.flush();
     assert.equal(f.prompt.value, 'new draft');
-    assert.match(pending.textContent!, /Pending steering/);
+    assert.equal(pending.querySelector('.steering-status'), null);
     f.snapshot({ busy: true, messages: [assistant, { key: 'tool', role: 'tool', toolCallId: 't', toolName: 'bash', toolStatus: 'running' }], queue: { authoritative: true, steering: [], followUp: [] } });
     assert.equal(f.win.document.querySelector('#messages')!.lastElementChild, pending);
     f.snapshot({ busy: true, messages: [assistant, { key: 'user', role: 'user', content: [{ type: 'text', text: submission.text }] }] });
@@ -452,15 +481,15 @@ test('coalesced queue removal and clear_queue recovery do not recreate pending s
   } finally { f.dom.window.close(); }
 });
 
-for (const outcome of ['rejected', 'unknown'] as const) test(`steering ${outcome} discards a definite failure or retains uncertainty without replay`, () => {
+for (const busy of [false, true]) for (const outcome of ['rejected', 'unknown'] as const) test(`${busy ? 'steering' : 'idle send'} ${outcome} marks the retained turn without replay`, () => {
   const f = fixture();
   try {
-    f.snapshot({ busy: true, messages: [] });
+    f.snapshot({ busy, messages: [] });
     f.draft('uncertain steer'); f.send();
     const submission = f.sent.find(m => m.type === 'prompt')!;
     f.receive({ type: 'submissionReceipt', id: submission.id, outcome }); f.flush();
     if (outcome === 'unknown') assert.match(f.win.document.querySelector('#messages .user')!.textContent!, /Acceptance unknown/);
-    else assert.equal(f.win.document.querySelector('#messages .user'), null);
+    else assert.match(f.win.document.querySelector('#messages .user')!.textContent!, /Not sent/);
     assert.equal(f.prompt.value, '');
     assert.equal(f.win.document.querySelector('[data-recovery-id]'), null);
     assert.equal(f.sent.filter(m => m.type === 'prompt').length, 1);
@@ -528,6 +557,14 @@ test('image sends capture bytes before cleared drafts release temporary storage,
     const sent = f.sent.find(message => message.type === 'prompt')!;
     assert.ok(sent);
     assert.deepEqual(JSON.parse(JSON.stringify(sent.images)), [{ type: 'image', mimeType: 'image/png', data: 'YWJj' }]);
+    f.flush();
+    const preview = f.win.document.querySelector('#messages .user')!;
+    assert.equal(preview.querySelector('.steering-status'), null);
+    assert.ok(preview.querySelector('.transcript-image img'));
+    f.snapshot({ messages: [{ key: 'actual-image', role: 'user', content: [{ type: 'text', text: 'caption' }, ...(sent.images as object[])] }] });
+    assert.equal(f.win.document.querySelector('#messages .user'), preview);
+    assert.equal(preview.querySelector('.steering-status'), null);
+    assert.equal(f.win.document.querySelectorAll('#messages .user').length, 1);
     assert.equal(f.prompt.value, 'next message');
     f.send();
     assert.equal(f.sent.filter(message => message.type === 'prompt').length, 2, 'image acknowledgement does not block the next send');

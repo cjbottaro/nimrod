@@ -345,7 +345,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
 
   function renderSteeringStatus(node: HTMLElement, message: DisplayMessage): void {
     let label = node.querySelector<HTMLElement>(".steering-status");
-    if (!message.steeringStatus) { label?.remove(); return; }
+    if (!message.steeringStatus || message.steeringStatus === "sending" || message.steeringStatus === "pending") { label?.remove(); return; }
     if (!label) {
       label = element("div", "steering-status");
       node.prepend(label);
@@ -680,7 +680,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       return imageContent(await host.attachments.get(image));
     })) : undefined;
     // Slash commands may be controls or expand into different content.
-    if (!imagesReady && displayedState.busy && mode !== "followUp" && !text.startsWith("/")) {
+    if (!imagesReady && mode !== "followUp" && !text.startsWith("/")) {
       steeringTranscript.begin(id, submittedText);
       queueRender(pendingState || displayedState);
     }
@@ -694,7 +694,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
           if (disposed || generation !== composerGeneration) return;
           const state = pendingState || displayedState;
           if (deletionLocked || state.compacting || state.sessionUnavailable) throw new Error('Session became unavailable while preparing images. Nothing was sent.');
-          if (state.busy && mode !== 'followUp') { steeringTranscript.begin(id, submittedText, 'sending', images); queueRender(state); }
+          if (mode !== 'followUp') { steeringTranscript.begin(id, submittedText, 'sending', images); queueRender(state); }
           post('prompt', { id, text: submittedText, mode, images });
         } catch (error) { if (!disposed && generation === composerGeneration) updateComposer({ ...composer, lastError: String(error) }); }
         finally { if (!disposed && generation === composerGeneration) { preparing--; renderComposer(); } }

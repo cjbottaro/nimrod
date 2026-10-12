@@ -74,7 +74,7 @@ Mounted IDs are unique per session; anchors above are semantic template names wi
 - **Pop-out** — separate captured-code/rendered-Markdown reference window. **Copy source** means Markdown's whole-document source action, distinct from nested code Copy.
 - **Parallel-tools overview** — temporary summary of overlapping invocations, not replacement tool cards.
 - **Skill disclosure** — collapsed skill body inside a user turn; user arguments remain outside.
-- **Pending steering turn** — user-turn preview awaiting acknowledgement/consumption.
+- **Pending user turn** — local user-turn preview awaiting acknowledgement/authoritative user event; includes ordinary sends and **pending steering turns**.
 - **Queue entries / recovered messages** — authoritative pending work versus text retained for explicit Restore.
 
 A **card** needn't have a visible rectangle. A **disclosure** expands/collapses; it is not a dialog. [Cards](../features/references/transcript-cards.md), [composer](../features/references/composer.md) and [pop-outs](../features/references/pop-outs.md) own behavior.

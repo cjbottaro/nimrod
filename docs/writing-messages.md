@@ -12,13 +12,21 @@ Focus the **prompt field** in the composer, write a message and press Enter. Pi 
 
 Background subagent activity alone does not enable follow-up queueing. Composer delivery keys are not part of the [keybinding editor](keybindings.md).
 
+### Immediate transcript feedback
+
+Ordinary messages appear in the transcript immediately, without waiting for Pi and without a sending/pending label. Image messages appear after their local image preparation finishes. Pi’s actual user message reconciles in place, without a duplicate turn. This preserves your reading position and does not steal focus or change a newer draft.
+
+Rejected local turns remain marked **Not sent**; cancelled ones show **Cancelled**, and uncertain ones show **Acceptance unknown**. An acknowledged message disconnected before its actual user event shows **Delivery unconfirmed**. Previews are not saved as conversation history, and nothing retries automatically.
+
+Slash commands do not create literal previews because Pi may handle them as controls or expand their content. Explicit queued follow-ups remain in the Status area.
+
 ### Steering messages
 
-A steer immediately appears at the bottom of the transcript after live output. **Sending…** becomes **Pending steering** when Pi acknowledges it; the label disappears when Pi emits the actual user message, without a duplicate turn. Visible or acknowledged does not mean the agent has consumed it.
+A steer immediately appears at the bottom of the transcript after live output, with no sending/pending label. Pi’s actual user message reconciles in place without a duplicate turn. Visible or acknowledged does not mean the agent has consumed it.
 
 The Status area shows the authoritative steering count. Explicit follow-up text stays in its queue there.
 
-Rejected local steering previews are removed; the error appears near the composer. Uncertain previews remain labeled **Acceptance unknown**. An acknowledged steer disconnected before confirmed consumption shows **Delivery unconfirmed**. Nothing retries automatically.
+Rejected local steering turns remain marked **Not sent**; the error also appears in the notice strip. Uncertain previews remain labeled **Acceptance unknown**. An acknowledged steer disconnected before confirmed consumption shows **Delivery unconfirmed**. Nothing retries automatically.
 
 ## Stop and recover
 

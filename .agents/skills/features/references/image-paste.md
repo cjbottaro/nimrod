@@ -4,7 +4,7 @@
 
 ## Specification and acceptance criteria
 
-Explicit focused paste attaches bounded original image bytes to the originating session. Image-only prompts clear the editable composer immediately; receipts preserve newer drafts. Successful sends retain no image backup UI or draft copies; definitive failures discard the attempted message, and uncertainty is explicit with no replay. Never infer image consumption from text-only queues.
+Explicit focused paste attaches bounded original image bytes to the originating session. Image-only prompts clear the editable composer immediately; receipts preserve newer drafts. Successful sends retain no image backup UI or draft copies; definitive failures retain a renderer-local Not sent turn, and uncertainty is explicit with no replay. Never infer image consumption from text-only queues.
 
 ## Code map
 
@@ -15,7 +15,7 @@ Explicit focused paste attaches bounded original image bytes to the originating 
 - `src/pi/composer-state.ts`, `webview-state.ts`: draft-only immediate text/image clearing, receipt isolation and retired-submission/backup filtering.
 - `src/pi/webview-client.ts`: paste scope, removable thumbnail tray/object URL lifecycle, asynchronous preparation/generation guards, slash exclusion, safe image blocks and explicit send notices; no image recovery section.
 - `src/pi/session.ts`: validates images before RPC, supports image-only prompts, includes original steering/followUp fallback.
-- `src/pi/steering-transcript.ts`: pending image turns reconcile only on equal text plus ordered image MIME/base64 blocks; never caption-only history or text-only clear_queue recovery.
+- `src/pi/steering-transcript.ts`: idle and steering image turns preview after local byte preparation, before Pi dispatch; pending image turns reconcile only on equal text plus ordered image MIME/base64 blocks; never caption-only history or text-only clear_queue recovery.
 - `src-tauri/capabilities/main.json`: clipboard read-image permission only on project windows. `tauri.conf.json`: blob image sources (not script/connect sources).
 - `src-tauri/src/process.rs`: requests bounded at 13 MB (8 MiB binary base64 + 1M text); aggregated stdout histories bounded at 256 MiB. Individual session JSONL records remain bounded at 16 MiB.
 - `src-tauri/resources/demo.mjs`: offline image-aware user turns/queues only; no models.
@@ -29,7 +29,7 @@ Explicit focused paste attaches bounded original image bytes to the originating 
 - Paste may finish after selection changes: it belongs to its originating mounted session. Reset/disposal/Stop generation invalidation blocks late insertion or sends. Preparation blocks submission. Revalidate readiness/deletion/compaction immediately before posting.
 - Pi RPC acknowledgement alone establishes acceptance, but Send clears text/images immediately before asynchronous preparation. Send-local payload preparation finishes independently of RPC acknowledgement. Receipts never touch newer text/images. Failed/unknown outcomes show a notice without restoring attachments, a recovery gate or automatic retry.
 - Stop cancels unposted image preparation; posted requests retain existing unknown/acknowledgement rules. No automatic retry.
-- Pi queue_update/clear_queue report text, not image identity. Keep only authoritative nonempty text for Stop restoration; no image restoration or blank image-only rows. Do not infer consumption from snapshots, count, idle, caption or normalized Pi image content. Pending image previews may remain unconfirmed after Pi normalization. Definitively failed local previews are discarded; authoritative Pi turns remain unchanged.
+- Pi queue_update/clear_queue report text, not image identity. Keep only authoritative nonempty text for Stop restoration; no image restoration or blank image-only rows. Do not infer consumption from snapshots, count, idle, caption or normalized Pi image content. Pending image previews may remain unconfirmed after Pi normalization. Definitively failed local turns remain marked Not sent and cannot consume authoritative Pi turns; authoritative Pi turns remain unchanged.
 - IndexedDB writes use one readwrite transaction to check 128 MiB quota across windows. On each write, query Rust persisted/staged draft references (legacy localStorage references ignored); delete only unreferenced entries >24h old. Failed/corrupt native-reference queries never authorize GC. Grace protects other windows/in-flight drafts. Confirmed session deletion removes draft references; orphan blobs expire on subsequent saves rather than immediate deletion, preserving copied recovery references.
 - Temporary images never touch IndexedDB; bounded window-local map releases IDs no longer referenced by that session's editable draft; reads started before clearing retain bytes locally, and the rest on owning-session disposal. Temporary drafts remain excluded from library serialization.
 - Object URLs revoked on removal/reset/disposal; reuse unchanged transcript image elements to preserve load/scroll stability. Existing TranscriptScroll resize/follow handling owns geometry, never force-focus or scroll on load.
