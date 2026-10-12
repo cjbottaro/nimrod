@@ -7,7 +7,7 @@ description: Nimrod feature specifications and implementation guidance. Load for
 
 Read repository `AGENTS.md`, [architecture](references/architecture.md) and the relevant references below before changes. For UI work, load the [shared vocabulary](../nimrod-ui-vocabulary/SKILL.md). Implement directly unless delegation is approved.
 
-When adding or changing error paths, notices, banners, flash messages or operational notifications, load the [error presentation policy](references/error-presentation.md). It owns the single shared application-error surface, routing, wording, deduplication and lifecycle. Settings/dialogs are not placement exceptions; do not invent another error surface.
+When adding or changing error paths, notices, banners, flash messages or operational notifications, load the [error presentation policy](references/error-presentation.md). It owns ownership-based placement (session conversation notices versus the application notice strip), shared routing, wording, deduplication and lifecycle. Do not invent additional error surfaces.
 
 ## Feature index
 
@@ -21,7 +21,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Shared sidebar resize mechanics | [Sidebar resizing](references/sidebar-resize.md) | [Resize](../../../docs/session-sidebar.md#resize) |
 | Deletion preview, transactions, reconciliation and recovery | [Session deletion](references/session-deletion.md) | [Deletion](../../../docs/sessions.md#delete-session-tree) |
 | CLI forwarding and native instance ownership | [Single instance](references/single-instance.md) | [Terminal launches](../../../docs/projects.md#terminal-launches) |
-| Single application-error surface across all screens/modals, routing, deduplication, wording and lifecycle (implementation in progress) | [Error presentation](references/error-presentation.md) | [Error messages](../../../docs/error-messages.md) |
+| Session-local notices and window/application strip, routing, deduplication, wording and lifecycle | [Error presentation](references/error-presentation.md) | [Error messages](../../../docs/error-messages.md) |
 | Pi framing, response order and acknowledgement | [Pi transport](references/pi-transport.md) | [Writing messages](../../../docs/writing-messages.md) |
 | Native per-session drafts, debounced saves and submission durability | [Native drafts](references/native-drafts.md) | [Drafts](../../../docs/drafts.md) |
 | Send/steer/queue, pending turns and recovery | [Composer](references/composer.md) | [Writing messages](../../../docs/writing-messages.md) |

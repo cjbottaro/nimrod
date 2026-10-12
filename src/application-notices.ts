@@ -7,6 +7,9 @@ export interface ApplicationNotice {
   id: string;
   operation: string;
   message: string;
+  /** Optional diagnostics, kept out of the primary summary. */
+  details?: string;
+  /** Session runtime ID; absent for window/application operations. */
   owner?: string;
   cause?: string;
   priority?: number;
@@ -32,7 +35,7 @@ export class NoticeStore {
   }
   subscribe(callback: () => void): () => void { this.subscribers.add(callback); return () => { this.subscribers.delete(callback); }; }
   report(notice: ApplicationNotice): void {
-    const signature = JSON.stringify([notice.operation, notice.message, notice.owner, notice.cause, notice.priority, notice.severity, notice.dismissible, notice.actions?.map(action => [action.label, action.enabled?.() !== false])]);
+    const signature = JSON.stringify([notice.operation, notice.message, notice.details, notice.owner, notice.cause, notice.priority, notice.severity, notice.dismissible, notice.actions?.map(action => [action.label, action.enabled?.() !== false])]);
     if (this.dismissed.get(notice.id)?.signature === signature) return;
     this.dismissed.delete(notice.id);
     this.entries.set(notice.id, notice); // Always refresh guarded action closures.
@@ -48,6 +51,7 @@ export class NoticeStore {
   }
   resolveOwner(owner: string): void {
     for (const [id, entry] of this.entries) if (entry.owner === owner) this.resolve(id);
+    for (const [id, entry] of this.dismissed) if (entry.owner === owner) this.dismissed.delete(id);
   }
   resolveCause(cause: string, owner?: string): void {
     for (const [id, entry] of this.entries) if (entry.cause === cause && entry.owner === owner) this.resolve(id);
@@ -65,21 +69,31 @@ export class NoticeStore {
   }
 }
 
-/** One strip, portalled into the actual active dialog so its actions are not inert.
- * Its viewport position is unchanged; matching shell/dialog space avoids overlays.
+/** Shared presentation and store, scoped by operation ownership.
+ * Only window notices portal into dialogs. Session notices stay with their pane.
  */
-export function installApplicationNotices(win: Window, store = new NoticeStore()) {
+export function installApplicationNotices(win: Window, store = new NoticeStore(), session?: { owner: string; container: HTMLElement }) {
   const document = win.document;
-  document.body.classList.add('application-notice-shell');
-  const strip = document.createElement('section'); strip.id = 'application-notices';
-  strip.setAttribute('role', 'region'); strip.setAttribute('aria-label', 'Application notices'); strip.hidden = true;
+  if (!session) document.body.classList.add('application-notice-shell');
+  const strip = document.createElement('section');
+  if (session) { strip.className = 'session-notices'; strip.dataset.piId = 'session-notices'; strip.dataset.noticeOwner = session.owner; }
+  else strip.id = 'application-notices';
+  strip.setAttribute('role', 'region'); strip.setAttribute('aria-label', session ? 'Session notices' : 'Application notices'); strip.hidden = true;
   const announcement = document.createElement('span'); announcement.className = 'notice-announcement';
   announcement.setAttribute('role', 'status'); announcement.setAttribute('aria-live', 'polite'); announcement.setAttribute('aria-atomic', 'true');
-  strip.append(announcement);
+  const group = document.createElement('details'); group.className = 'notice-group';
+  const summary = document.createElement('summary'); summary.className = 'notice-group-summary';
+  const list = document.createElement('div'); list.className = 'notice-list';
+  group.append(summary, list);
+  strip.append(announcement, group);
+  let active = !session;
   const slot = document.createElement('div'); slot.id = 'application-notice-slot'; slot.setAttribute('aria-hidden', 'true');
   const bar = document.getElementById('workspace-bar');
-  if (bar) bar.after(slot); else document.body.prepend(slot);
-  document.body.append(strip);
+  if (session) session.container.prepend(strip);
+  else {
+    if (bar) bar.after(slot); else document.body.prepend(slot);
+    document.body.append(strip);
+  }
   const rows = new Map<string, { node: HTMLElement; signature: string }>();
   const dialogs: HTMLDialogElement[] = [];
   const focus = new Map<Element, HTMLElement>();
@@ -90,20 +104,23 @@ export function installApplicationNotices(win: Window, store = new NoticeStore()
   const realm = win as Window & typeof globalThis;
   const focused = (event: FocusEvent) => {
     if (!(event.target instanceof realm.HTMLElement) || event.target instanceof realm.HTMLDialogElement || strip.contains(event.target)) return;
-    focus.set(event.target.closest('dialog[open]') ?? document.body, event.target);
+    if (session && !session.container.contains(event.target)) return;
+    focus.set(session?.container ?? event.target.closest('dialog[open]') ?? document.body, event.target);
   };
   document.addEventListener('focusin', focused);
-  const owner = () => dialogs.filter(dialog => dialog.open && dialog.isConnected).at(-1) ?? document.body;
+  const owner = () => session?.container ?? dialogs.filter(dialog => dialog.open && dialog.isConnected).at(-1) ?? document.body;
   const measure = () => {
+    if (session) return;
     const height = strip.hidden ? 0 : strip.offsetHeight;
     const next = `${Math.ceil(height)}px`;
     if (document.documentElement.style.getPropertyValue('--application-notice-height') !== next) document.documentElement.style.setProperty('--application-notice-height', next);
   };
   const scheduleMeasure = () => {
-    if (disposed || measureFrame !== undefined) return;
+    if (session || disposed || measureFrame !== undefined) return;
     measureFrame = win.requestAnimationFrame(() => { measureFrame = undefined; if (!disposed) measure(); });
   };
   const restoreFocus = (wasInStrip: boolean) => {
+    if (session && !active) return;
     const parent = owner();
     if (!wasInStrip || strip.contains(document.activeElement) || (document.activeElement !== document.body && document.activeElement !== parent)) return;
     const previous = focus.get(parent);
@@ -130,45 +147,64 @@ export function installApplicationNotices(win: Window, store = new NoticeStore()
     position(); scheduleMeasure();
   });
   for (const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]')) dialogs.push(dialog);
-  modalObserver.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['open'] });
+  if (!session) modalObserver.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['open'] });
   const resize = 'ResizeObserver' in win ? new realm.ResizeObserver(scheduleMeasure) : undefined;
   resize?.observe(strip);
   const render = () => {
     if (disposed) return;
     const wasInStrip = strip.contains(document.activeElement);
-    const notices = store.notices;
+    const notices = store.notices.filter(notice => notice.owner === session?.owner);
     let changed = false;
     for (const [id, row] of rows) if (!notices.some(notice => notice.id === id)) { row.node.remove(); rows.delete(id); changed = true; }
     for (const notice of notices) {
       let row = rows.get(notice.id);
       const enabled = notice.actions?.map(action => action.enabled?.() !== false) ?? [];
-      const signature = JSON.stringify([notice.operation, notice.message, notice.severity, notice.dismissible, notice.actions?.map(action => action.label), enabled]);
+      const signature = JSON.stringify([notice.operation, notice.message, notice.details, notice.severity, notice.dismissible, notice.actions?.map(action => action.label), enabled]);
       if (!row) {
         const node = document.createElement('div'); node.className = 'application-notice'; node.dataset.noticeId = notice.id;
-        row = { node, signature: '' }; rows.set(notice.id, row); strip.append(node);
+        row = { node, signature: '' }; rows.set(notice.id, row); list.append(node);
       }
       if (signature === row.signature) continue;
       changed = true;
       row.signature = signature; row.node.dataset.severity = notice.severity ?? 'error';
       const text = document.createElement('div'); text.className = 'application-notice-text';
       const title = document.createElement('strong'); title.textContent = notice.operation;
-      const body = document.createElement('span'); body.textContent = notice.message;
+      const body = document.createElement('span'); body.className = 'notice-message';
+      // Long/raw producer messages remain available verbatim, without dominating
+      // the conversation. Explicit diagnostics do not require text classification.
+      const firstLine = notice.message.split('\n')[0];
+      const compact = firstLine.length > 160 ? `${firstLine.slice(0, 157)}…` : firstLine;
+      body.textContent = compact;
       text.append(title, body);
+      const diagnostics = notice.details || (compact !== notice.message ? notice.message : undefined);
+      if (diagnostics) {
+        const detail = document.createElement('details'); detail.className = 'notice-details';
+        const label = document.createElement('summary'); label.textContent = 'Details';
+        const content = document.createElement('div'); content.textContent = diagnostics;
+        detail.append(label, content); text.append(detail);
+      }
+      const icon = document.createElement('span'); icon.className = 'notice-icon'; icon.textContent = notice.severity === 'info' ? 'ⓘ' : '⚠'; icon.setAttribute('aria-hidden', 'true');
       const actions = document.createElement('div'); actions.className = 'application-notice-actions';
       notice.actions?.forEach((action, index) => {
         const button = document.createElement('button'); button.type = 'button'; button.textContent = action.label; button.disabled = !enabled[index];
         button.dataset.actionIndex = String(index); actions.append(button);
       });
       if (notice.dismissible !== false) {
-        const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.textContent = 'Dismiss'; dismiss.dataset.dismiss = 'true';
+        const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.textContent = '×'; dismiss.dataset.dismiss = 'true';
         dismiss.setAttribute('aria-label', `Dismiss ${notice.operation}`); actions.append(dismiss);
       }
-      row.node.replaceChildren(text, actions);
+      row.node.replaceChildren(icon, text, actions);
     }
     if (strip.hidden !== !notices.length) changed = true;
     strip.hidden = !notices.length;
-    const signature = JSON.stringify(notices.map(notice => [notice.id, notice.operation, notice.message]));
-    if (signature !== announced) { announced = signature; announcement.textContent = notices.map(notice => `${notice.operation}. ${notice.message}`).join(' '); }
+    const multiple = notices.length > 1;
+    if (group.classList.contains('notice-group-multiple') !== multiple) { changed = true; group.open = !multiple || wasInStrip; }
+    if (!multiple) group.open = true;
+    group.classList.toggle('notice-group-multiple', multiple);
+    const heading = `${notices.length} ${session ? 'session' : 'application'} issues`;
+    if (summary.textContent !== heading) summary.textContent = heading;
+    const signature = active ? JSON.stringify(notices.map(notice => [notice.id, notice.operation, notice.message])) : '';
+    if (signature !== announced) { announced = signature; announcement.textContent = active ? notices.map(notice => `${notice.operation}. ${notice.message}`).join(' ') : ''; }
     position(); if (changed) scheduleMeasure(); restoreFocus(wasInStrip);
   };
   const click = (event: MouseEvent) => {
@@ -182,20 +218,29 @@ export function installApplicationNotices(win: Window, store = new NoticeStore()
     if (!action || action.enabled?.() === false) return;
     button.disabled = true;
     void Promise.resolve().then(() => {
+      if (disposed) return;
       const current = store.notices.find(entry => entry.id === id);
       const guarded = current?.actions?.[Number(button.dataset.actionIndex)];
       if (guarded?.label === action.label && guarded.enabled?.() !== false) return guarded.run();
     }).catch(error => {
-      store.report({ id: `notice-action-${++sequence}`, operation: `${notice!.operation}: ${action.label}`, message: String(error), owner: notice!.owner });
-    }).finally(() => { if (!disposed) { const row = rows.get(id); if (row) row.signature = ''; render(); restoreFocus(true); } });
+      if (!disposed) store.report({ id: `notice-action:${session?.owner ?? 'application'}:${++sequence}`, operation: `${notice!.operation}: ${action.label}`, message: String(error), owner: notice!.owner });
+    }).finally(() => {
+      if (!disposed) {
+        const current = store.notices.find(entry => entry.id === id);
+        button.disabled = current?.actions?.[Number(button.dataset.actionIndex)]?.enabled?.() === false;
+        render(); restoreFocus(true);
+      }
+    });
   };
   strip.addEventListener('click', click);
+  strip.addEventListener('toggle', scheduleMeasure, true);
   const unsubscribe = store.subscribe(render);
   render();
   return {
     store, strip,
+    setActive(value: boolean) { active = value; render(); },
     report(notice: ApplicationNotice) { store.report(notice); },
     resolve(id: string) { store.resolve(id); },
-    dispose() { disposed = true; if (measureFrame !== undefined) win.cancelAnimationFrame(measureFrame); unsubscribe(); modalObserver.disconnect(); resize?.disconnect(); document.removeEventListener('focusin', focused); strip.removeEventListener('click', click); strip.remove(); slot.remove(); document.body.classList.remove('application-notice-shell'); document.documentElement.style.removeProperty('--application-notice-height'); },
+    dispose() { disposed = true; if (measureFrame !== undefined) win.cancelAnimationFrame(measureFrame); unsubscribe(); modalObserver.disconnect(); resize?.disconnect(); document.removeEventListener('focusin', focused); strip.removeEventListener('click', click); strip.removeEventListener('toggle', scheduleMeasure, true); strip.remove(); slot.remove(); if (!session) { document.body.classList.remove('application-notice-shell'); document.documentElement.style.removeProperty('--application-notice-height'); } },
   };
 }
