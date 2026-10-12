@@ -1,5 +1,5 @@
 import type { ImageContent } from './image-attachments';
-import type { SubmissionOutcome } from './composer-state';
+import type { SubmissionMode, SubmissionOutcome } from './composer-state';
 
 export type SteeringStatus = 'sending' | 'pending' | 'unknown' | 'interrupted' | 'rejected' | 'cancelled';
 export interface SteeringMessage {
@@ -7,6 +7,7 @@ export interface SteeringMessage {
   role?: string;
   content?: unknown;
   steeringStatus?: SteeringStatus;
+  steering?: boolean;
   queued?: boolean;
   sticky?: boolean;
 }
@@ -17,10 +18,11 @@ interface PendingSteering {
   submissionId?: string;
   status: SteeringStatus;
   kind: 'steering' | 'followUp';
+  steering?: boolean;
 }
 
 export const steeringStatusLabel = (status: SteeringStatus): string => ({
-  sending: 'Sending…', pending: 'Pending steering', unknown: 'Acceptance unknown',
+  sending: 'Steering…', pending: 'Steering…', unknown: 'Acceptance unknown',
   interrupted: 'Delivery unconfirmed', rejected: 'Not sent', cancelled: 'Cancelled',
 })[status];
 
@@ -31,8 +33,10 @@ export class SteeringTranscript {
   private aliases = new Map<string, string>();
   private nextKey = 0;
 
-  begin(id: string, text: string, status: SteeringStatus = 'sending', images?: ImageContent[], kind: 'steering' | 'followUp' = 'steering'): void {
-    this.pending.push({ key: `steering:${id}`, submissionId: id, text, status, images, kind });
+  begin(id: string, text: string, status: SteeringStatus = 'sending', images?: ImageContent[], mode: SubmissionMode = 'steer'): void {
+    this.pending.push({ key: `steering:${id}`, submissionId: id, text, status, images,
+      kind: mode === 'followUp' ? 'followUp' : 'steering', steering: mode === 'steer',
+    });
   }
 
   receipt(id: string, outcome: SubmissionOutcome): void {
@@ -92,7 +96,7 @@ export class SteeringTranscript {
       ...messages.map(message => this.aliases.has(message.key || '')
         ? { ...message, key: this.aliases.get(message.key!) } : message),
       ...this.pending.map(entry => ({ key: entry.key, role: 'user', content: entry.images?.length ? [{ type: 'text', text: entry.text }, ...entry.images] : entry.text, steeringStatus: entry.status,
-        ...(entry.kind === 'followUp' ? { queued: true, sticky: entry.status === 'sending' || entry.status === 'pending' } : {}),
+        ...(entry.kind === 'followUp' ? { queued: true, sticky: entry.status === 'sending' || entry.status === 'pending' } : entry.steering ? { steering: true } : {}),
       })),
     ];
   }

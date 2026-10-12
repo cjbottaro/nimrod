@@ -24,7 +24,7 @@ Preserve live follow versus older-history reading through incremental updates, c
 - Resize uses previously settled geometry; don't combine new viewport dimensions with old offsets. Bottom clamping after collapse is layout, not upward navigation.
 - Hidden views suspend scroll bookkeeping, retaining follow intent or reader offset. Reveal geometry before reactivating; don't interpret zero hidden dimensions as navigation.
 - Per-tool output inspection is independent from transcript follow and other tool outputs.
-- Queued follow-up turns share one bottom-sticky transcript stack, with bounded independent overflow. They stay visible during older-history reading without enabling auto-follow. Stack additions, streaming growth, consumption/error unpinning and recovery use the same capture/request path; never force-scroll or rebuild the adopted user article. [Composer](composer.md#pending-user-turns-in-the-transcript) owns delivery lifecycle.
+- Queued follow-up turns share one bottom-sticky transcript stack, with bounded independent overflow, no separator/extra gap and ordinary user-turn styling/spacing. They stay visible during older-history reading without enabling auto-follow. Steering…/Queued… text shimmer never changes layout; reduced-motion labels are static and inactive/hidden presentation pauses it. Stack additions, streaming growth, consumption/error unpinning and recovery use the same capture/request path; never force-scroll or rebuild the adopted user article. [Composer](composer.md#pending-user-turns-in-the-transcript) owns delivery lifecycle.
 - Only an explicit bottom-navigation action (currently valid notification click) overrides reading position/re-enables follow. Ordinary switching preserves it.
 
 ## Focus, reset and zoom

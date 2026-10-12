@@ -57,15 +57,30 @@ for (const readingHistory of [false, true]) test(`steering reconciles without du
     await prompt.fill('Start work before steering'); await prompt.press('Enter');
     await expect(page.locator(visible('keyboard-hint'))).toContainText('Enter to steer');
     await expect(prompt).toHaveValue('');
+    await page.evaluate(() => {
+      const state = window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown> }; __releaseSteer?: () => void };
+      const invoke = state.__TAURI_INTERNALS__.invoke;
+      const gate = new Promise<void>(resolve => { state.__releaseSteer = resolve; });
+      state.__TAURI_INTERNALS__.invoke = async (command, args) => {
+        if (command === 'write_pi' && (args?.message as { type?: string })?.type === 'prompt') await gate;
+        return invoke(command, args);
+      };
+    });
     await prompt.fill('Change direction now'); await prompt.press('Enter');
     const turn = page.locator(visible('messages')).locator('.message.user').filter({ hasText: 'Change direction now' });
     await expect(turn).toHaveCount(1);
-    await expect(turn.locator('.steering-status')).toHaveCount(0);
+    const label = turn.locator('.delivery-status-shimmer');
+    await expect(label).toHaveText('Steering…');
+    const position = await label.evaluate(node => getComputedStyle(node).backgroundPositionX);
+    await expect.poll(() => label.evaluate(node => getComputedStyle(node).backgroundPositionX)).not.toBe(position);
     await turn.evaluate(node => { (node as HTMLElement).dataset.testIdentity = 'pending-steer'; });
     await expect(page.locator(visible('queue-activity'))).not.toContainText('Change direction now');
     await expect(prompt).toHaveValue('');
     if (readingHistory) expect(Math.abs((await demo.metrics()).top - readingTop)).toBeLessThanOrEqual(2);
     else await expect.poll(async () => (await demo.metrics()).gap).toBeLessThanOrEqual(2);
+    await page.evaluate(() => (window as unknown as { __releaseSteer: () => void }).__releaseSteer());
+    await expect(turn.locator('.steering-status')).toHaveCount(0);
+    await expect(turn).toHaveAttribute('data-test-identity', 'pending-steer');
     await page.waitForFunction(() => (window as unknown as { __fixtureSettled: number }).__fixtureSettled >= 3);
     await expect(turn).toHaveCount(1);
     await expect(turn.locator('.steering-status')).toHaveCount(0);

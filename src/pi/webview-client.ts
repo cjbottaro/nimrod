@@ -73,6 +73,9 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   const expanded = new Map<string, boolean>();
   const toolCards = new Map<string, HTMLDetailsElement>();
   const transcriptScroll = new TranscriptScroll(window, transcriptViewport);
+  const updateMotion = () => messages.classList.toggle('transcript-motion-paused', !active || document.hidden);
+  document.addEventListener('visibilitychange', updateMotion, { signal: listeners.signal });
+  updateMotion();
   const toolDisclosure = new ToolDisclosureController(expanded, undefined, () => {
     transcriptScroll.request(transcriptScroll.capture());
   });
@@ -365,13 +368,19 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     let label = node.querySelector<HTMLElement>(".steering-status");
     node.classList.toggle('queued-turn', message.queued === true);
     node.classList.toggle('sticky-turn', message.sticky === true);
-    if (!message.steeringStatus || (!message.queued && (message.steeringStatus === "sending" || message.steeringStatus === "pending"))) { label?.remove(); return; }
+    const pending = message.steeringStatus === 'sending' || message.steeringStatus === 'pending';
+    const showSteering = message.steering && message.steeringStatus === 'sending';
+    if (!message.steeringStatus || (pending && !message.queued && !showSteering)) { label?.remove(); return; }
     if (!label) {
       label = element("div", "steering-status");
+      label.append(element('span', 'delivery-status-text'));
       node.prepend(label);
     }
-    label.textContent = message.queued && message.steeringStatus === 'pending' ? 'Queued' : steeringStatusLabel(message.steeringStatus);
-    node.setAttribute("aria-label", `User message: ${label.textContent}`);
+    const text = label.firstElementChild as HTMLElement;
+    const status = pending ? message.queued ? 'Queued…' : 'Steering…' : steeringStatusLabel(message.steeringStatus);
+    if (text.textContent !== status) text.textContent = status;
+    text.classList.toggle('delivery-status-shimmer', pending);
+    node.setAttribute("aria-label", `User message: ${status}`);
   }
 
   function disposeMessageCards(node: HTMLElement): void {
@@ -717,7 +726,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     })) : undefined;
     // Slash commands may be controls or expand into different content.
     if (!imagesReady && !text.startsWith("/")) {
-      steeringTranscript.begin(id, submittedText, 'sending', undefined, mode === 'followUp' ? 'followUp' : 'steering');
+      steeringTranscript.begin(id, submittedText, 'sending', undefined, mode);
       queueRender(pendingState || displayedState);
     }
     updateComposer(clearDraft(composer));
@@ -730,7 +739,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
           if (disposed || generation !== composerGeneration) return;
           const state = pendingState || displayedState;
           if (deletionLocked || state.compacting || state.sessionUnavailable) throw new Error('Session became unavailable while preparing images. Nothing was sent.');
-          steeringTranscript.begin(id, submittedText, 'sending', images, mode === 'followUp' ? 'followUp' : 'steering'); queueRender(state);
+          steeringTranscript.begin(id, submittedText, 'sending', images, mode); queueRender(state);
           post('prompt', { id, text: submittedText, mode, images });
         } catch (error) { if (!disposed && generation === composerGeneration) updateComposer({ ...composer, lastError: String(error) }); }
         finally { if (!disposed && generation === composerGeneration) { preparing--; renderComposer(); } }
@@ -929,6 +938,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     scrollToBottom: () => { if (!disposed) transcriptScroll.scrollToBottom(); },
     setActive(value) {
       active = value;
+      updateMotion();
       transcriptScroll.setActive(value);
       if (value) resizePrompt();
       else if (composerResizeFrame !== undefined) {
@@ -1017,6 +1027,7 @@ interface ContentBlock {
 
 interface DisplayMessage {
   steeringStatus?: SteeringStatus;
+  steering?: boolean;
   queued?: boolean;
   sticky?: boolean;
   uiPhase?: "thinking" | "stopped";

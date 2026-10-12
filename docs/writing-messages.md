@@ -22,7 +22,7 @@ Slash commands do not create literal previews because Pi may handle them as cont
 
 ### Steering messages
 
-A steer immediately appears at the bottom of the transcript after live output, with no sending/pending label. Pi’s actual user message reconciles in place without a duplicate turn. Visible or acknowledged does not mean the agent has consumed it.
+A steer immediately appears at the bottom of the transcript after live output, with a **Steering…** status. The status disappears when Pi accepts it; there are no intermediate sending/accepted/consumed labels. Pi’s actual user message reconciles in place without a duplicate turn. Visible or acknowledged does not mean the agent has consumed it.
 
 The Status area shows the authoritative steering and queued follow-up counts; message text appears in the transcript.
 
@@ -30,9 +30,11 @@ Rejected local steering turns remain marked **Not sent**; the error also appears
 
 ### Queued messages
 
-Queued follow-ups appear as user turns pinned to the bottom of the transcript pane, even while you read older history. New assistant/tool output continues above them. Multiple queued turns stack in order; a long stack scrolls independently.
+Queued follow-ups appear as normal user turns pinned to the bottom of the transcript pane, even while you read older history. They use the same styling and spacing as other user turns, with no queue separator. New assistant/tool output continues above them. Multiple queued turns stack in order; a long stack scrolls independently.
 
-Their indicator changes from **Sending…** to **Queued** when Pi accepts the request. They stay pinned until Pi consumes them as actual user turns, then become ordinary transcript messages in place, without a duplicate. Accepting a message into Pi’s queue is not the same as consuming it.
+Their status is simply **Queued…** throughout the wait. They stay pinned until Pi consumes them as actual user turns, then lose the status and stickiness in place, without a duplicate. Accepting a message into Pi’s queue is not the same as consuming it.
+
+**Steering…** and **Queued…** have a subtle highlight that sweeps across the text from left to right. With reduced motion enabled, the labels remain static. Outcome/error labels do not animate.
 
 Rejected, cancelled or uncertain queued sends become non-sticky turns with the same outcome labels as other sends. Disconnect also unpins them with an **Acceptance unknown** or **Delivery unconfirmed** label. Nothing retries automatically, and newer drafts remain unchanged.
 

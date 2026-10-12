@@ -66,7 +66,18 @@ for (const readingHistory of [false, true]) test(`queued turns pin and reconcile
     const first = messages.locator('.message.user').filter({ hasText: 'Queued first' });
     const second = messages.locator('.message.user').filter({ hasText: 'Queued second' });
     await expect(messages.locator('.queued-turns .message')).toHaveCount(2);
-    await expect(first.locator('.steering-status')).toHaveText('Queued');
+    await expect(first.locator('.steering-status')).toHaveText('Queued…');
+    const label = first.locator('.delivery-status-shimmer');
+    const position = await label.evaluate(node => getComputedStyle(node).backgroundPositionX);
+    await expect.poll(() => label.evaluate(node => getComputedStyle(node).backgroundPositionX)).not.toBe(position);
+    const styles = await messages.evaluate(root => {
+      const ordinary = getComputedStyle(root.querySelector(':scope > .message.user')!);
+      const queued = getComputedStyle(root.querySelector('.queued-turns .message.user')!);
+      const properties = ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'borderLeftWidth', 'borderLeftColor', 'backgroundColor', 'fontSize'] as const;
+      return properties.map(property => ({ property, ordinary: ordinary[property], queued: queued[property] }));
+    });
+    for (const style of styles) expect(style.queued, style.property).toBe(style.ordinary);
+    await expect(messages.locator('.queued-turns')).toHaveCSS('border-top-width', '0px');
     await first.evaluate(node => { (node as HTMLElement).dataset.testIdentity = 'queued-first'; });
     await expect(page.locator(visible('queue-activity'))).not.toContainText('Queued first');
     await prompt.fill('Newer draft');

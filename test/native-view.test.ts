@@ -440,7 +440,8 @@ test('steering appears before acknowledgement, remains after live output, and re
     f.draft('Please **change direction**'); f.send(); f.flush();
     const submission = f.sent.find(m => m.type === 'prompt')!;
     const pending = f.win.document.querySelector<HTMLElement>('#messages .user')!;
-    assert.equal(pending.querySelector('.steering-status'), null);
+    const label = pending.querySelector('.delivery-status-shimmer')!;
+    assert.equal(label.textContent, 'Steering…');
     assert.equal(pending.querySelector('strong')?.textContent, 'change direction');
     assert.equal(f.prompt.value, '');
     assert.equal(f.win.document.activeElement, f.prompt);
@@ -449,6 +450,7 @@ test('steering appears before acknowledgement, remains after live output, and re
     assert.doesNotMatch(f.win.document.querySelector('#queue-activity')!.textContent!, /change direction/);
     assert.match(f.win.document.querySelector('#queue-activity')!.textContent!, /queued.*1 pending/);
     assert.doesNotMatch(f.win.document.querySelector('#queue-activity')!.textContent!, /Later/);
+    assert.equal(pending.querySelector('.delivery-status-shimmer'), label, 'queue observation cannot acknowledge steering');
     f.draft('new draft');
     f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' }); f.flush();
     assert.equal(f.prompt.value, 'new draft');
@@ -461,6 +463,44 @@ test('steering appears before acknowledgement, remains after live output, and re
     assert.equal(pending.getAttribute('aria-label'), 'User message');
     assert.equal(f.win.document.querySelectorAll('#messages .user').length, 2);
     assert.equal(f.win.document.activeElement, f.prompt);
+  } finally { f.dom.window.close(); }
+});
+
+for (const eventFirst of [false, true]) test(`steering status is removed by ${eventFirst ? 'user event before receipt' : 'acceptance before consumption'} without replacing the turn`, () => {
+  const f = fixture();
+  try {
+    f.snapshot({ busy: true, messages: [] });
+    f.draft('change course'); f.send(); f.flush();
+    const submission = f.sent.find(m => m.type === 'prompt')!;
+    const turn = f.win.document.querySelector('#messages .user')!;
+    assert.equal(turn.querySelector('.delivery-status-shimmer')?.textContent, 'Steering…');
+    f.draft('newer draft');
+    const actual = { key: 'actual', role: 'user', content: 'change course' };
+    if (eventFirst) f.snapshot({ busy: true, messages: [actual] });
+    f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' }); f.flush();
+    assert.equal(turn.querySelector('.steering-status'), null);
+    if (!eventFirst) f.snapshot({ busy: true, messages: [actual] });
+    assert.equal(f.win.document.querySelector('#messages .user'), turn);
+    assert.equal(f.prompt.value, 'newer draft');
+  } finally { f.dom.window.close(); }
+});
+
+test('steering status shimmers only after local image preparation and stops on acceptance', async () => {
+  const f = fixture({ images: true });
+  try {
+    f.snapshot({ busy: true, messages: [] });
+    f.draft('caption'); f.paste(); await tickImages(); f.send();
+    const deadline = Date.now() + 2000;
+    while (!f.sent.some(m => m.type === 'prompt') && Date.now() < deadline) await tickImages();
+    f.flush();
+    const submission = f.sent.find(m => m.type === 'prompt')!;
+    assert.ok(submission);
+    const turn = f.win.document.querySelector('#messages .user')!;
+    assert.ok(turn.querySelector('.transcript-image'));
+    assert.equal(turn.querySelector('.delivery-status-shimmer')?.textContent, 'Steering…');
+    f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' }); f.flush();
+    assert.equal(turn.querySelector('.steering-status'), null);
+    assert.equal(f.win.document.querySelector('#messages .user'), turn);
   } finally { f.dom.window.close(); }
 });
 
@@ -491,6 +531,7 @@ for (const busy of [false, true]) for (const outcome of ['rejected', 'unknown'] 
     f.receive({ type: 'submissionReceipt', id: submission.id, outcome }); f.flush();
     if (outcome === 'unknown') assert.match(f.win.document.querySelector('#messages .user')!.textContent!, /Acceptance unknown/);
     else assert.match(f.win.document.querySelector('#messages .user')!.textContent!, /Not sent/);
+    assert.equal(f.win.document.querySelector('.delivery-status-shimmer'), null, 'errors do not animate');
     assert.equal(f.prompt.value, '');
     assert.equal(f.win.document.querySelector('[data-recovery-id]'), null);
     assert.equal(f.sent.filter(m => m.type === 'prompt').length, 1);
@@ -509,9 +550,11 @@ test('follow-ups stay pinned through acceptance and dequeue, then reconcile in p
     assert.equal(submission.mode, 'followUp');
     const pending = f.win.document.querySelector('#messages .user')!;
     assert.ok(pending.closest('.queued-turns'));
-    assert.match(pending.textContent!, /Sending….*Later/);
+    assert.match(pending.textContent!, /Queued….*Later/);
+    const label = pending.querySelector('.delivery-status-shimmer')!;
     f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' }); f.flush();
-    assert.match(pending.textContent!, /Queued.*Later/);
+    assert.match(pending.textContent!, /Queued….*Later/);
+    assert.equal(pending.querySelector('.delivery-status-shimmer'), label, 'receipt retains the same label/animation');
     f.snapshot({ busy: true, messages: [], queue: { authoritative: true, steering: [], followUp: ['Later'] } });
     assert.equal(f.win.document.querySelectorAll('#messages .user').length, 1);
     f.snapshot({ busy: true, messages: [], queue: { authoritative: true, steering: [], followUp: [] } });

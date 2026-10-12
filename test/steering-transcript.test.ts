@@ -39,6 +39,18 @@ test('idle sends retain FIFO identity and handle disconnect', () => {
   assert.equal(transcript.project([old, actual])[2].steeringStatus, 'interrupted');
 });
 
+test('presentation distinguishes explicit steering from ordinary sends without changing queue matching', () => {
+  const transcript = new SteeringTranscript();
+  transcript.begin('ordinary', 'idle race', 'sending', undefined, 'normal');
+  transcript.begin('steer', 'change course', 'sending', undefined, 'steer');
+  transcript.snapshot([], ['idle race', 'change course']);
+  assert.equal(transcript.project([])[0].steering, undefined);
+  assert.equal(transcript.project([])[1].steering, true);
+  assert.equal(transcript.project([]).length, 2);
+  transcript.receipt('steer', 'accepted');
+  assert.equal(transcript.project([])[1].steeringStatus, 'pending');
+});
+
 test('idle-to-busy race adopts authoritative steering queue without duplicates', () => {
   const transcript = new SteeringTranscript();
   transcript.begin('send', 'racing');
