@@ -46,7 +46,8 @@ function scale(container: HTMLElement): number {
   return container.offsetHeight ? container.getBoundingClientRect().height / container.offsetHeight || 1 : 1;
 }
 /** Preserve a visible row, not merely scrollTop, when rows move above the viewport.
- * Exclude the deliberately moved row so sending never chases it to the top.
+ * Exclude the deliberately moved row while anchoring. Local Send may explicitly
+ * reset the current recency-ordered panel to the top after rendering.
  * Rects are normalized to layout pixels for native zoom and fixture CSS zoom.
  */
 export function captureSidebarScroll(container: HTMLElement, rows: readonly HTMLElement[], moved?: HTMLElement): () => void {

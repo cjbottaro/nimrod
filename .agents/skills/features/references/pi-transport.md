@@ -1,4 +1,4 @@
-# Pi transport and acknowledgement
+# Pi transport and RPC results
 
 **Status: implemented.** User behavior: [Writing messages](../../../../docs/writing-messages.md). Related: [projects/sessions](projects-and-sessions.md), [composer](composer.md), [scroll/focus](transcript-interaction.md).
 
@@ -8,7 +8,7 @@ Pi remains authoritative for request acceptance, queues, active history and mode
 
 Every stdout response/event travels over one ordered Tauri channel. State/history response callbacks execute synchronously during delivery so later streaming events cannot be overwritten by stale snapshots. Request promises may resolve afterward, but are not the snapshot ordering mechanism.
 
-Ordinary acknowledgement timeout is 20 seconds. Explicit rejection, acknowledged acceptance and unknown acceptance are distinct states. Only acknowledgement establishes acceptance. Composer clearing occurs on submission, not acknowledgement. Transport correlation is the only pending-request state; no composer submission state or shell callback is involved. Multiple prompt requests can be outstanding, with Pi authoritative for acceptance. Each response settles its own RPC without touching the editable draft; failed/unknown outcomes report a notice, with no recovery copy or explicit new-message gate. History, queue counts, idle state and user-message events never substitute for a receipt. No timeout/disconnect automatic retry or prompt replay.
+Ordinary RPC result timeout is 20 seconds. Explicit rejection, successful result and unknown delivery are distinct transport outcomes, not an overarching UI submission lifecycle. Apply the [optimistic interaction policy](architecture.md#optimistic-interaction-policy): composer clearing, message previews and sidebar recency/scroll effects originate at local Send, never the result. Transport correlation is the only pending-request state; there is no persisted composer submission record. The renderer's synchronous `ViewHost.promptSubmitted` notification supplies local shell effects outside transport. Multiple prompt requests can be outstanding, with Pi authoritative for their actual results. Each response settles its own RPC without touching the editable draft; failed/unknown outcomes report a notice, with no recovery copy or explicit new-message gate. History, queue counts and idle state never synthesize an RPC result. Actual user-message events reconcile transcript previews independently of result timing. No timeout/disconnect automatic retry or prompt replay.
 
 `agent_end` is not the idle boundary; `agent_settled` is. Manual/automatic compaction locks submission. Stop first obtains authoritative `clear_queue` recovery then aborts, except during compaction. RPC abort can remain stuck awaiting acknowledgement; exact-file Restart uses native owned-child stop, not another RPC.
 

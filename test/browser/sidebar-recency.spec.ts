@@ -7,24 +7,22 @@ type RecencyFixture = Window & {
   __heldReceipts: { count(): number; release(): void };
 };
 
-test('All reorders only on accepted sends, preserves its visible anchor at zoom and reveals explicit navigation', async ({ page }) => {
+test('Send immediately promotes the current session and scrolls to top; late results preserve background reading', async ({ page }) => {
   await page.setViewportSize({ width: 1100, height: 500 });
   const demo = await demoFixture(page);
   try {
-    const first = (await page.locator('.session-row').getAttribute('id'))!;
+    const target = (await page.locator('.session-row').getAttribute('id'))!;
     for (let i = 0; i < 14; i++) {
       await page.keyboard.press('Meta+Shift+P'); await page.locator('#palette-input').fill('new temporary session'); await page.locator('#palette-input').press('Enter');
       await expect(page.locator('.session-row')).toHaveCount(i + 2);
       await expect(page.locator(visible('send'))).toBeEnabled();
     }
     const background = (await page.locator('.session-row[aria-current="true"]').getAttribute('id'))!;
-    const target = first;
     const originalOrder = await page.locator('.session-row').evaluateAll(rows => rows.map(row => row.id));
-    expect(originalOrder[0]).toBe(background); // New sessions insert at their creation time.
+    expect(originalOrder[0]).toBe(background);
     expect(originalOrder.at(-1)).toBe(target);
     await page.locator(`#${target}`).click();
-    // Hold only the oldest offline child's explicit prompt receipt; streaming and
-    // completion still arrive, proving neither can stand in for acknowledgement.
+    // Hold the oldest offline child's result, while its streaming/history still arrive.
     await page.evaluate(() => {
       const state = window as unknown as RecencyFixture;
       const channel = Object.values(state.__fixtureChannels)[0], original = channel.onmessage;
@@ -35,48 +33,53 @@ test('All reorders only on accepted sends, preserves its visible anchor at zoom 
       };
       state.__heldReceipts = { count: () => held.length, release: () => { for (const packet of held.splice(0)) original(packet); } };
     });
-    await page.locator(visible('prompt')).fill('Accepted later'); await page.locator(visible('prompt')).press('Enter');
-    await page.waitForFunction(() => (window as unknown as RecencyFixture).__heldReceipts.count() === 1);
-    await page.locator(`#${background}`).click();
-    expect(await page.locator('.session-row').evaluateAll(rows => rows.map(row => row.id))).toEqual(originalOrder);
-    const prompt = page.locator(visible('prompt')); await prompt.fill('Keep my other session draft'); await prompt.focus();
     const sidebar = page.locator('#sidebar-session-panel');
     const fixedControls = page.locator('#sidebar-new, #sidebar-views');
     const controlBounds = await fixedControls.evaluateAll(nodes => nodes.map(node => ({ top: node.getBoundingClientRect().top, height: node.getBoundingClientRect().height })));
+    const prompt = page.locator(visible('prompt'));
+    await prompt.fill('Optimistic Send'); await prompt.focus();
+    await sidebar.evaluate(node => { node.scrollTop = 250; });
+    expect(await sidebar.evaluate(node => node.scrollTop)).toBeGreaterThan(100);
+    await prompt.press('Enter');
+    await expect(page.locator('.session-row').first()).toHaveAttribute('id', target);
+    expect(await sidebar.evaluate(node => node.scrollTop)).toBe(0);
+    await expect(prompt).toBeFocused(); await expect(prompt).toHaveValue('');
+    await page.waitForFunction(() => (window as unknown as RecencyFixture).__heldReceipts.count() === 1);
+    const sentOrder = [target, ...originalOrder.filter(id => id !== target)];
+    expect(await page.locator('.session-row').evaluateAll(rows => rows.map(row => row.id))).toEqual(sentOrder);
+    expect(await fixedControls.evaluateAll(nodes => nodes.map(node => ({ top: node.getBoundingClientRect().top, height: node.getBoundingClientRect().height })))).toEqual(controlBounds);
+    expect(await page.locator('#session-sidebar').evaluate(node => node.scrollTop)).toBe(0);
+
+    // Once the user switches away, even a successful late result must do nothing
+    // to the sidebar's current order, reading position, draft or focus.
+    await page.locator(`#${background}`).click();
+    const nextPrompt = page.locator(visible('prompt'));
+    await nextPrompt.fill('Keep my other session draft'); await nextPrompt.focus();
     const snapshot = await sidebar.evaluate(node => {
       node.scrollTop = 250;
       const bounds = node.getBoundingClientRect();
       const row = [...node.querySelectorAll<HTMLElement>('.open-session')].find(row => row.getBoundingClientRect().top >= bounds.top)!;
       return { id: row.querySelector('.session-row')!.id, top: row.getBoundingClientRect().top, scroll: node.scrollTop };
     });
-    expect(snapshot.scroll).toBeGreaterThan(100);
-    expect(await fixedControls.evaluateAll(nodes => nodes.map(node => ({ top: node.getBoundingClientRect().top, height: node.getBoundingClientRect().height })))).toEqual(controlBounds);
-    expect(await page.locator('#session-sidebar').evaluate(node => node.scrollTop)).toBe(0);
     await expect(page.locator(`#${target}`)).toHaveAttribute('aria-label', /Unread/);
-    expect(await page.locator('.session-row').evaluateAll(rows => rows.map(row => row.id))).toEqual(originalOrder);
     await page.evaluate(() => (window as unknown as RecencyFixture).__heldReceipts.release());
-    await expect(page.locator('.session-row').first()).toHaveAttribute('id', target);
-    await expect.poll(async () => Math.abs((await page.locator(`#${snapshot.id}`).evaluate(row => row.parentElement!.getBoundingClientRect().top)) - snapshot.top)).toBeLessThanOrEqual(2);
-    expect(await sidebar.evaluate(node => node.scrollTop)).toBeGreaterThan(100);
+    expect(await page.locator('.session-row').evaluateAll(rows => rows.map(row => row.id))).toEqual(sentOrder);
+    expect(await sidebar.evaluate(node => node.scrollTop)).toBe(snapshot.scroll);
+    expect(await page.locator(`#${snapshot.id}`).evaluate(row => row.parentElement!.getBoundingClientRect().top)).toBe(snapshot.top);
     await expect(page.locator(`#${background}`)).toHaveAttribute('aria-current', 'true');
-    await expect(prompt).toBeFocused(); await expect(prompt).toHaveValue('Keep my other session draft');
+    await expect(nextPrompt).toBeFocused(); await expect(nextPrompt).toHaveValue('Keep my other session draft');
 
-    // Clicking a visible row leaves the entire order and scroll position intact.
     const beforeClick = await page.locator('.session-row').evaluateAll(rows => rows.map(row => row.id));
-    const scroll = await sidebar.evaluate(node => node.scrollTop);
     await page.locator(`#${snapshot.id}`).click();
     expect(await page.locator('.session-row').evaluateAll(rows => rows.map(row => row.id))).toEqual(beforeClick);
-    expect(Math.abs(await sidebar.evaluate(node => node.scrollTop) - scroll)).toBeLessThanOrEqual(2);
-    // Rename is metadata: even its accepted receipt must preserve order/scroll.
+    expect(Math.abs(await sidebar.evaluate(node => node.scrollTop) - snapshot.scroll)).toBeLessThanOrEqual(2);
     await page.locator(visible('prompt')).fill('/name Renamed without activity'); await page.locator(visible('prompt')).press('Enter');
-    await expect(page.locator(visible('prompt'))).toHaveValue('');
     await expect(page.locator(`#${snapshot.id}`)).toHaveAttribute('aria-label', /Renamed without activity/);
     expect(await page.locator('.session-row').evaluateAll(rows => rows.map(row => row.id))).toEqual(beforeClick);
-    expect(Math.abs(await sidebar.evaluate(node => node.scrollTop) - scroll)).toBeLessThanOrEqual(2);
-    // A normal accepted prompt, unlike selection or rename, moves it to the top.
+    expect(Math.abs(await sidebar.evaluate(node => node.scrollTop) - snapshot.scroll)).toBeLessThanOrEqual(2);
     await page.locator(visible('prompt')).fill('Now actually use this session'); await page.locator(visible('prompt')).press('Enter');
     await expect(page.locator('.session-row').first()).toHaveAttribute('id', snapshot.id);
-    expect(await sidebar.evaluate(node => node.scrollTop)).toBeGreaterThan(100);
+    expect(await sidebar.evaluate(node => node.scrollTop)).toBe(0);
     await page.getByRole('tab', { name: /Unread/ }).click();
     await page.getByRole('tab', { name: /^All \(\d+\)$/ }).click();
     const selectedBounds = await page.locator(`#${snapshot.id}`).boundingBox(), bounds = await sidebar.boundingBox();

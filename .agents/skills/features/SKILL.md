@@ -9,6 +9,10 @@ Read repository `AGENTS.md`, [architecture](references/architecture.md) and the 
 
 When adding or changing error paths, notices, banners, flash messages or operational notifications, load the [error presentation policy](references/error-presentation.md). It owns ownership-based placement (session conversation notices versus the application notice strip), shared routing, wording, deduplication and lifecycle. Do not invent additional error surfaces.
 
+## Interaction policy
+
+Apply the [optimistic interaction policy](references/architecture.md#optimistic-interaction-policy) to all UI work: local user actions drive immediate feedback; RPC success is not a general UI gate. Late errors annotate the affected operation, and authoritative harness events reconcile data without replay, draft restoration or repeat navigation. Any result-gated exception must have a concrete authoritative-state or destructive-operation requirement documented in its feature reference.
+
 ## Feature index
 
 References own specifications, acceptance criteria, code maps, state/lifecycle, invariants and tests. Labels below route work; they do not duplicate specifications.
@@ -22,7 +26,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Deletion preview, transactions, reconciliation and recovery | [Session deletion](references/session-deletion.md) | [Deletion](../../../docs/sessions.md#delete-session-tree) |
 | CLI forwarding and native instance ownership | [Single instance](references/single-instance.md) | [Terminal launches](../../../docs/projects.md#terminal-launches) |
 | Session-local notices and window/application strip, routing, deduplication, wording and lifecycle | [Error presentation](references/error-presentation.md) | [Error messages](../../../docs/error-messages.md) |
-| Pi framing, response order and acknowledgement | [Pi transport](references/pi-transport.md) | [Writing messages](../../../docs/writing-messages.md) |
+| Pi framing, response order and result correlation | [Pi transport](references/pi-transport.md) | [Writing messages](../../../docs/writing-messages.md) |
 | Native per-session drafts, debounced saves and submission durability | [Native drafts](references/native-drafts.md) | [Drafts](../../../docs/drafts.md) |
 | Send/steer/queue, pending turns and recovery | [Composer](references/composer.md) | [Writing messages](../../../docs/writing-messages.md) |
 | Image paste, draft bytes and send outcomes | [Image paste](references/image-paste.md) | [Paste images](../../../docs/image-paste.md) |

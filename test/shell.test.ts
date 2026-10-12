@@ -738,7 +738,7 @@ test('Settings sidebar width synchronizes app-wide independently of project widt
   } finally { f.win.close(); other.win.close(); }
 });
 
-test('new sessions use creation time, update only after prompt acknowledgement and timer refresh is text-only', async () => {
+test('new sessions use creation time, Send updates recency immediately and timer refresh is text-only', async () => {
   let now = new Date(2026, 6, 17, 12).getTime();
   const refresh: (() => void)[] = [];
   const f = await fixture(undefined, { windowWorkspace: '/project', clock: () => now, timeRefresh: refresh, holdPrompts: true });
@@ -757,12 +757,16 @@ test('new sessions use creation time, update only after prompt acknowledgement a
     assert.deepEqual(order(), [rows[1], rows[0]]); assert.equal(rows[0].getAttribute('aria-current'), selected);
     assert.equal(f.win.document.activeElement, prompt); assert.equal(prompt.value, 'Keep newer draft');
     assert.equal(f.calls.length, calls); assert.equal(JSON.stringify(f.preferences.value.state), state);
-    prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
-    assert.deepEqual(times(), [now - 120_000, now - 120_000 + 1], 'pending send is not recency');
+    f.element('sidebar-session-panel').scrollTop = 150;
+    prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    assert.deepEqual(order(), [rows[0], rows[1]], 'Send moves the row synchronously');
+    assert.equal(f.element('sidebar-session-panel').scrollTop, 0, 'current recency-ordered view follows Send to the top');
+    await f.tick();
+    assert.deepEqual(times(), [now, now - 120_000 + 1], 'Send, not its result, advances recency');
     assert.equal(rows[0].querySelector<HTMLElement>('.session-indicator')!.dataset.state, 'sending');
     const request = f.calls.find(call => (call.args.message as JsonRecord)?.type === 'prompt')!.args.message as JsonRecord;
     [...f.sessions.values()][0].channel.onmessage({ kind: 'rpc', value: { type: 'response', id: request.id, success: true } }); await f.tick();
-    assert.deepEqual(order(), [rows[0], rows[1]]); assert.equal(times()[0], now);
+    assert.deepEqual(order(), [rows[0], rows[1]]); assert.equal(times()[0], now, 'success does not mark use a second time');
     assert.match(timestamp.textContent!, /^Just now · /);
   } finally { f.win.close(); }
 });
@@ -867,15 +871,15 @@ test('All uses persisted user recency, preserves legacy ties and does not mark r
     prompt.value = '/name Renamed C'; prompt.dispatchEvent(new f.win.Event('input'));
     prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
     assert.match(rows[2].getAttribute('aria-label')!, /Renamed C/);
-    assert.equal(prompt.value, '', 'rename acceptance still clears its unchanged composer draft');
+    assert.equal(prompt.value, '', 'local rename submission clears its composer immediately');
     assert.deepEqual(visible(), [rows[1], rows[2], rows[0], rows[3]], 'renaming must not reorder All');
     assert.deepEqual((f.preferences.value.state[key] as typeof layout).tabs.map(tab => tab.lastUsed), [50, 100, 75, 0]);
     assert.equal(f.calls.filter(call => (call.args.message as JsonRecord)?.type === 'set_session_name').length, 1);
     prompt.value = 'Use C by sending'; prompt.dispatchEvent(new f.win.Event('input'));
     prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
-    assert.deepEqual(visible(), [rows[2], rows[1], rows[0], rows[3]], 'acknowledged send moves C to the top');
+    assert.deepEqual(visible(), [rows[2], rows[1], rows[0], rows[3]], 'Send moves C to the top');
     await cycle(']');
-    assert.equal(rows[1].getAttribute('aria-current'), 'true', 'cycling uses the latest acknowledged-message order');
+    assert.equal(rows[1].getAttribute('aria-current'), 'true', 'cycling uses the latest Send order');
     await cycle('[');
     assert.equal(rows[2].getAttribute('aria-current'), 'true');
     saved = JSON.parse(JSON.stringify(f.preferences.value.state[key]));
@@ -890,33 +894,73 @@ test('All uses persisted user recency, preserves legacy ties and does not mark r
   } finally { reopened.win.close(); }
 });
 
-test('only explicit prompt acknowledgement updates background session recency, never snapshots or uncertain outcomes', async () => {
+test('Send updates recency once; background results and snapshots never reorder, scroll or select', async () => {
   for (const outcome of ['accepted', 'rejected', 'unknown']) {
     const f = await fixture(undefined, { windowWorkspace: '/project', holdPrompts: true });
     try {
       for (let i = 0; i < 2; i++) { f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick(); }
-      const rows = f.rows(), target = [...f.sessions.values()][1].channel;
+      const rows = f.rows(), target = [...f.sessions.values()][0].channel;
       const visible = () => [...f.win.document.querySelectorAll('.session-row')];
       const timestamps = () => (f.preferences.value.state['nimrod.tabs.v1:/project'] as { tabs: { lastUsed: number }[] }).tabs.map(tab => tab.lastUsed);
-      rows[1].click(); await f.tick();
-      const used = timestamps()[1];
+      rows[0].click(); await f.tick();
+      const used = timestamps()[0];
       const prompt = f.element<HTMLTextAreaElement>('prompt');
       prompt.value = 'Pending prompt'; prompt.dispatchEvent(new f.win.Event('input'));
       prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
-      rows[0].click(); await f.tick();
+      assert.deepEqual(visible(), [rows[0], rows[1]], 'Send immediately promotes the older selected session');
+      rows[1].click(); await f.tick();
       const before = timestamps();
-      assert.equal(before[1], used);
-      assert.deepEqual(visible(), [rows[1], rows[0]], 'new sessions start at the top, selection does not move them');
+      assert.ok(before[0] > used);
+      f.element('sidebar-session-panel').scrollTop = 120;
+      const siblingPrompt = f.element<HTMLTextAreaElement>('prompt');
+      siblingPrompt.value = 'Newer draft'; siblingPrompt.dispatchEvent(new f.win.Event('input')); siblingPrompt.focus();
       for (const event of [{ type: 'agent_start' }, { type: 'message_end', message: { role: 'user', content: 'Pending prompt', timestamp: 1 } }, { type: 'agent_settled' }]) target.onmessage({ kind: 'rpc', value: event });
       assert.deepEqual(timestamps(), before);
       const request = f.calls.find(call => (call.args.message as JsonRecord)?.type === 'prompt')!.args.message as JsonRecord;
       if (outcome === 'unknown') target.onmessage({ kind: 'disconnected', message: 'Acceptance unknown' });
       else target.onmessage({ kind: 'rpc', value: { type: 'response', id: request.id, success: outcome === 'accepted', error: outcome === 'rejected' ? 'Rejected' : undefined } });
       await f.tick();
-      assert.deepEqual(visible(), [rows[1], rows[0]]);
-      assert.equal(rows[0].getAttribute('aria-current'), 'true', 'background acceptance never selects its conversation');
-      assert.equal(timestamps()[1] > before[1], outcome === 'accepted');
+      assert.deepEqual(visible(), [rows[0], rows[1]]);
+      assert.equal(rows[1].getAttribute('aria-current'), 'true', 'background results never select their conversation');
+      assert.deepEqual(timestamps(), before, 'success/failure/uncertainty never repeats or rolls back recency');
+      assert.equal(f.element('sidebar-session-panel').scrollTop, 120);
+      assert.equal(siblingPrompt.value, 'Newer draft'); assert.equal(f.win.document.activeElement, siblingPrompt);
       assert.equal(f.calls.filter(call => (call.args.message as JsonRecord)?.type === 'prompt').length, 1);
+    } finally { f.win.close(); }
+  }
+});
+
+test('Send follows Working recency to the top but preserves Unread arrival order and scroll', async () => {
+  for (const view of ['working', 'unread']) {
+    const f = await fixture(undefined, { windowWorkspace: '/project', holdPrompts: true });
+    try {
+      for (let i = 0; i < 3; i++) { f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick(); }
+      const rows = f.rows(), channels = [...f.sessions.values()].map(s => s.channel);
+      for (const channel of channels) {
+        channel.onmessage({ kind: 'rpc', value: { type: 'agent_start' } });
+        if (view === 'unread') channel.onmessage({ kind: 'rpc', value: { type: 'agent_settled' } });
+      }
+      f.element<HTMLButtonElement>(`sidebar-${view}`).click();
+      rows[0].click(); await f.tick();
+      const displayed = () => [...f.win.document.querySelectorAll<HTMLElement>('.open-session')].filter(row => !row.hidden);
+      const before = displayed();
+      f.element('sidebar-session-panel').scrollTop = 120;
+      const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Send in filtered view'; prompt.dispatchEvent(new f.win.Event('input')); prompt.focus();
+      prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      assert.equal(f.element(`sidebar-${view}`).getAttribute('aria-selected'), 'true');
+      assert.equal(rows[0].getAttribute('aria-current'), 'true');
+      assert.equal(f.win.document.activeElement, prompt);
+      if (view === 'working') {
+        assert.equal(displayed()[0], rows[0].parentElement);
+        assert.equal(f.element('sidebar-session-panel').scrollTop, 0);
+      } else {
+        assert.deepEqual(displayed(), before);
+        assert.equal(f.element('sidebar-session-panel').scrollTop, 120);
+      }
+      await f.tick();
+      const request = f.calls.find(call => (call.args.message as JsonRecord)?.type === 'prompt')!.args.message as JsonRecord;
+      channels[0].onmessage({ kind: 'rpc', value: { type: 'response', id: request.id, success: true } });
+      await f.tick();
     } finally { f.win.close(); }
   }
 });
@@ -1182,9 +1226,9 @@ test('Close and Delete share connected-first selection and reconnect an inactive
       const disconnect = (i: number) => channels[i].onmessage({ kind: 'disconnected', message: 'Fixture inactive' });
       let expected = 3, view = 'all';
       if (scenario === 'all') {
-        // An acknowledged prompt, not connection time or selection, makes the oldest entry latest-used.
+        // Send, not connection time, selection or a result, makes the oldest entry latest-used.
         rows[0].click(); now += 1000;
-        const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Fixture acknowledged prompt'; prompt.dispatchEvent(new f.win.Event('input'));
+        const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Fixture optimistic prompt'; prompt.dispatchEvent(new f.win.Event('input'));
         f.element<HTMLButtonElement>('send').click(); await f.tick(); await f.tick();
         disconnect(2); expected = 0;
       } else if (scenario.startsWith('unread')) {

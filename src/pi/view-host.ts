@@ -14,6 +14,8 @@ export interface ViewHost {
   reportNotice?(notice: import('../application-notices').ApplicationNotice): void;
   resolveNotice?(id: string): void;
   resolveNoticeCause?(cause: string): void;
+  /** Synchronous local Send intent, before image preparation/RPC; no receipt or submission state. */
+  promptSubmitted?(): void;
   postMessage(message: JsonRecord): void;
   onMessage(listener: (message: HostMessage) => void): void;
   getState(): unknown;
