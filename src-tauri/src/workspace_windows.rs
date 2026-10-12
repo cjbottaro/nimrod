@@ -113,8 +113,9 @@ pub fn open_initial_window(app: &tauri::AppHandle, cwd: Option<PathBuf>) -> Resu
             .iter()
             .find(|window| window.label == "main")
             .ok_or("Missing welcome window configuration")?;
-        let window = tauri::WebviewWindowBuilder::from_config(app, config)
-            .map_err(|e| e.to_string())?
+        let builder =
+            tauri::WebviewWindowBuilder::from_config(app, config).map_err(|e| e.to_string())?;
+        let window = crate::webview_navigation::guard(builder, app, "main")
             .build()
             .map_err(|e| e.to_string())?;
         crate::window_state::restore(&window, None);
@@ -168,12 +169,13 @@ pub fn route_workspace(
         workspaces.next.fetch_add(1, Ordering::SeqCst)
     );
     directories.insert(label.clone(), cwd.clone());
-    let result =
-        tauri::WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App("index.html".into()))
-            .title(format!("Nimrod — {}", cwd.display()))
-            .inner_size(1100.0, 800.0)
-            .min_inner_size(560.0, 420.0)
-            .build();
+    let builder =
+        tauri::WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App("index.html".into()));
+    let result = crate::webview_navigation::guard(builder, app, &label)
+        .title(format!("Nimrod — {}", cwd.display()))
+        .inner_size(1100.0, 800.0)
+        .min_inner_size(560.0, 420.0)
+        .build();
     let window = match result {
         Ok(window) => window,
         Err(e) => {

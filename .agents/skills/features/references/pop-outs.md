@@ -111,6 +111,7 @@ Immutable source captures deduplicate per session/content/language. Saved snapsh
 - Intercept Markdown links; never navigate the app webview. `open_popout_link`
   derives cwd from the native entry and reuses `open_link_at` validation/editor or
   browser handoff. Stored cwd remains available independently of source history.
+- New/restored references also install the shared [native navigation guard](transcript-interaction.md#native-link-navigation), covering context-menu URL opening and new-window requests that bypass DOM interception. Browser failures target only the originating reference's notice strip; unsupported native navigation cannot replace the snapshot.
 - ⌘W / Ctrl+W calls native Close. Do not replace that with direct `destroy()`, which
   bypasses persistence deletion semantics.
 

@@ -157,6 +157,9 @@ const popouts = installSessionPopouts({
   error: popoutError,
 });
 const unlistenPopoutErrors = await listen<string>('nimrod-popout-error', event => popoutError(event.payload));
+const unlistenLinkErrors = await listen<string>('nimrod-link-error', event => {
+  notices.report({ id: `link:${++noticeSequence}`, operation: 'Open link', message: event.payload });
+}, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
 function syncPopouts(): void {
   if (!workspace) return;
   popouts.sync(tabs.map(tab => ({ runtimeId: tab.id, pi: tab.file?.exists && tab.mode !== 'temporary'
@@ -367,7 +370,7 @@ window.addEventListener('unload', () => {
   notices.dispose();
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
   pluginLoading.dispose();
-  sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
+  sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); unlistenLinkErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
   for (const tab of tabs) { tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.session?.rpc.disconnect('Window closed'); }
   keybindingDispatch.dispose(); keybindingEditor.dispose(); settingsNavigation.dispose(); settingsSidebarResize.dispose();
   unlistenProjectPicker(); palette.dispose(); zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose();

@@ -19,7 +19,7 @@ Code blocks have **Pop out** and **Copy** icons. Copy returns source text and br
 
 Use a language label after a Markdown fence for reliable [syntax highlighting](syntax-highlighting.md). Unlabeled user code uses conservative detection; unlabeled agent/reasoning code stays plain.
 
-Linked files open in VS Code, with supported line/column forms such as `path:line:column`, `path#Lline` and `file:///…#Lline`. File targets must exist. Plain path-looking text is not automatically linked. HTTP(S) links open your default browser, not the app's conversation window.
+Linked files open in VS Code, with supported line/column forms such as `path:line:column`, `path#Lline` and `file:///…#Lline`. File targets must exist. Plain path-looking text is not automatically linked. HTTP(S) links open your default browser, not the app's conversation window, including **Open Link / Open URL** from the link's native right-click menu. External navigation and new-window requests cannot replace Nimrod with a webpage. If the browser cannot be opened, Nimrod reports the failure without loading the page itself.
 
 ## Auto-follow and reading older output
 
