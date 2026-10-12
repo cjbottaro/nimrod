@@ -66,7 +66,7 @@ Absolute `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the roots. Empty/relati
 }
 ```
 
-Local [card plugins](card-plugins.md#install-an-executable-plugin) use `cards.plugins` (ordered manifests), `cards.trustedPlugins` (explicit executable-code trust) and `cards.renderers` (tool-to-renderer overrides). Declarative packages need no executable trust. They are configured in this file, not a dedicated Settings category. Package load errors appear in Settings; catalog changes affect newly mounted cards without restarting agents.
+Personal [card plugins](card-plugins.md#personal-typescript-plugins) are discovered/compiled automatically from the dedicated user directory; `cards.autoLoad: false` disables this directory-trusted workflow. Existing manifests use `cards.plugins` / `cards.trustedPlugins`; `cards.renderers` overrides tool matching. Declarative manifests need no executable trust. They are configured in this file, not a dedicated Settings category. Package load errors appear in Settings; catalog changes affect newly mounted cards without restarting agents.
 
 Omitted keys use defaults or runtime discovery. Imported themes live in `appearance.importedThemes`; [keybinding overrides](keybindings.md#configuration-file) live in `keybindings`. Pi's settings remain Pi-owned. [Drafts](drafts.md) use separate Rust-managed per-session files with debounced asynchronous saves; legacy webview drafts are ignored without migration.
 

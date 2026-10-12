@@ -1,12 +1,12 @@
 # Authoring TypeScript card plugins
 
-Executable plugins use **API v2**, a JSON manifest plus a self-contained browser ES module. The standalone type-only SDK is [`src/card-plugin-api.ts`](../src/card-plugin-api.ts); import its types from your Nimrod checkout or copy that file into your plugin project. There is no separately published SDK package yet.
+Executable plugins use **API v2**. Personal `.ts`/`.tsx` entries export their own ID/tool metadata and are automatically bundled/cached by Nimrod; a separate compiled-JS manifest is optional for compatibility/distribution. The standalone type-only SDK is [`src/card-plugin-api.ts`](../src/card-plugin-api.ts); import its types from your Nimrod checkout or copy that file into your plugin project. There is no separately published SDK package yet.
 
-See [installation and trust](card-plugins.md#install-an-executable-plugin). Bundling instructions live in [Contributing](../CONTRIBUTING.md#card-plugin-examples). The complete [command-summary example](../examples/card-plugins/command-summary/plugin.ts) demonstrates custom DOM, a local input, incremental output and Copy through the supported host API.
+See [installation and trust](card-plugins.md#personal-typescript-plugins). Bundling instructions live in [Contributing](../CONTRIBUTING.md#card-plugin-examples). The complete [command-summary example](../examples/card-plugins/command-summary/plugin.ts) demonstrates custom DOM, a local input, incremental output and Copy through the supported host API.
 
 ## Entry point
 
-Default-export a renderer object whose version and ID match its manifest:
+Default-export a renderer object; personal sources also supply `tools` in that export (manifest packages may keep matching in their manifest):
 
 ```ts
 import type { CardPlugin, ToolCardData } from '../path/to/card-plugin-api';
@@ -14,6 +14,7 @@ import type { CardPlugin, ToolCardData } from '../path/to/card-plugin-api';
 const plugin: CardPlugin<ToolCardData> = {
   apiVersion: 2,
   id: 'example.my-tool',
+  tools: ['my_tool'],
   supports: () => true,
   mount(context) {
     const title = context.document.createElement('span');
@@ -33,7 +34,9 @@ const plugin: CardPlugin<ToolCardData> = {
 export default plugin;
 ```
 
-The module must be self-contained: bundle dependencies and use type-only SDK imports. Nimrod does not compile TypeScript at runtime, resolve npm dependencies, load sibling asset files or fetch remote modules. Keep module initialization side-effect-free; acquire per-card resources in `mount` and release them in `dispose`.
+Nimrod automatically bundles personal TypeScript sources, static local imports and already-installed browser-compatible dependencies. No runtime npm install/download, Node builtins, external module fetch or additional CSS/asset output is supported. Compiler target/options are fixed (browser ESM/ES2022, no implicit tsconfig/aliases), and it does not type-check. Compiled manifest packages must still supply self-contained JS.
+
+Use type-only SDK imports: they are erased before runtime resolution, so copying the complete example works without installing a runtime SDK package. For editor checking, you can copy `src/card-plugin-api.ts` into a local `.d.ts` file (declarations are not autoloaded) and adjust the type import. Keep module initialization side-effect-free; acquire per-card resources in `mount` and release them in `dispose`.
 
 ## Lifecycle and ownership
 

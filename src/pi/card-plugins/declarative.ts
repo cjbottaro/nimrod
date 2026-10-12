@@ -1,7 +1,7 @@
 import type { CardRenderer, CardPresentation, CardSection } from '../card-renderer';
 import type { ToolCardBlock } from '../tool-card';
 
-export interface PluginSettings { files: string[]; overrides: Record<string, string>; trusted?: string[]; }
+export interface PluginSettings { files: string[]; overrides: Record<string, string>; trusted?: string[]; autoLoad?: boolean; }
 export interface PluginPackage {
   apiVersion: 1;
   id: string;
@@ -16,13 +16,15 @@ const fileName = /^[a-zA-Z0-9][a-zA-Z0-9._-]*\.json$/;
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 
 export function readPluginSettings(settings: Record<string, unknown>): PluginSettings {
+  const autoLoad = settings['cards.autoLoad'] ?? true;
+  if (typeof autoLoad !== 'boolean') throw new Error('cards.autoLoad must be a boolean.');
   const files = settings['cards.plugins'] ?? [];
   const overrides = settings['cards.renderers'] ?? {};
   const trusted = settings['cards.trustedPlugins'] ?? [];
   if (!Array.isArray(trusted) || trusted.length > 50 || trusted.some(file => typeof file !== 'string' || file.length > 128 || !fileName.test(file)) || new Set(trusted).size !== trusted.length) throw new Error('cards.trustedPlugins must contain at most 50 unique manifest filenames.');
   if (!Array.isArray(files) || files.length > 50 || files.some(file => typeof file !== 'string' || file.length > 128 || !fileName.test(file)) || new Set(files).size !== files.length) throw new Error('cards.plugins must contain at most 50 unique JSON filenames (no paths).');
   if (!object(overrides) || Object.keys(overrides).length > 100 || Object.entries(overrides).some(([name, id]) => !toolName.test(name) || typeof id !== 'string' || !identifier.test(id))) throw new Error('cards.renderers must map normalized tool names to renderer IDs.');
-  return { files: [...files], overrides: { ...overrides } as Record<string, string>, trusted: [...trusted] };
+  return { files: [...files], overrides: { ...overrides } as Record<string, string>, trusted: [...trusted], autoLoad };
 }
 
 function keys(value: Record<string, unknown>, allowed: string[]): void {

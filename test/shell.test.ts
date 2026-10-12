@@ -49,6 +49,7 @@ interface ShellOptions {
   modelFixture?: boolean;
   popout?: { session: string; title: string; text: string; language: string };
   popoutSyncGate?: Promise<void>;
+  personalGate?: Promise<import('../src/pi/card-plugins/catalog').PersonalBundles>;
   deletionSnapshot?: DeletionSnapshot;
   deleteTree?: (emit: (event: DeletionEvent) => void, args: JsonRecord) => Promise<unknown>;
   confirmReview?: (args: JsonRecord) => void;
@@ -139,6 +140,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       if (command === 'acknowledge_deletion' || command === 'recover_deletion_session') return;
       if (command === 'confirm_session_deletion') { options.confirmReview?.(args); return; }
       if (command === 'delete_session_tree') return options.deleteTree ? options.deleteTree(event => deletionEvent?.(event), args) : [];
+      if (command === 'load_personal_card_plugins') return options.personalGate ?? { entries: [], plugins: [], warnings: [] };
       if (command === 'runtime_defaults') return { cwd: '/project', pi: '/bin/pi', node: '/bin/node', home: options.homeDirectory };
       if (command === 'window_workspace') {
         await options.windowWorkspaceGate;
@@ -289,7 +291,7 @@ test('palette commands have registered shortcuts (theme intentionally unbound) a
     f.openPalette();
     const rows = [...f.element('palette-list').querySelectorAll('[role=option]')];
     assert.ok(rows.length > 0);
-    for (const row of rows) if (!row.textContent?.includes('Select theme')) assert.ok(row.querySelector('kbd')?.textContent, row.textContent!);
+    for (const row of rows) if (!/Select theme|Reload card plugins/.test(row.textContent || '')) assert.ok(row.querySelector('kbd')?.textContent, row.textContent!);
     assert.doesNotMatch(f.element('palette-list').textContent!, /offline demo|session file/i);
     f.element<HTMLDialogElement>('command-palette').close(); await f.tick();
     f.preferences.external('{"keybindings":{"demo":["primary+d"],"file":["primary+f"]}}'); await f.tick();
@@ -311,6 +313,29 @@ test('palette commands have registered shortcuts (theme intentionally unbound) a
     f.preferences.external('{"keybindings":{"keybindings":["primary+j"]}}'); await f.tick();
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'j', metaKey: true, bubbles: true, cancelable: true }));
     assert.equal(f.win.document.activeElement, f.element('keybinding-search'));
+  } finally { f.win.close(); }
+});
+
+test('personal compilation does not gate shell/session boot and Reload card plugins is bindable without Pi restart', async () => {
+  let release!: (value: import('../src/pi/card-plugins/catalog').PersonalBundles) => void;
+  const gate = new Promise<import('../src/pi/card-plugins/catalog').PersonalBundles>(resolve => { release = resolve; });
+  const f = await fixture(undefined, { windowWorkspace: '/project', personalGate: gate });
+  try {
+    assert.match(f.element('card-plugin-status').textContent || '', /Loading/);
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'keep draft'; prompt.dispatchEvent(new f.win.Event('input')); prompt.focus();
+    assert.equal(f.calls.filter(call => call.command === 'start_pi').length, 1);
+    release({ entries: [], plugins: [], warnings: [] }); await f.tick(); await f.tick();
+    assert.match(f.element('card-plugin-status').textContent || '', /0 personal/); assert.equal(prompt.value, 'keep draft'); assert.equal(f.win.document.activeElement, prompt);
+    f.preferences.external('{"keybindings":{"reload-card-plugins":["primary+alt+l"]}}'); await f.tick();
+    const before = f.calls.filter(call => call.command === 'load_personal_card_plugins').length;
+    const starts = f.calls.filter(call => call.command === 'start_pi' || call.command === 'stop_pi').length;
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'l', metaKey: true, altKey: true, bubbles: true, cancelable: true })); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'load_personal_card_plugins').length, before + 1);
+    assert.equal(f.calls.filter(call => call.command === 'start_pi' || call.command === 'stop_pi').length, starts); assert.equal(prompt.value, 'keep draft');
+    f.preferences.external('{"keybindings":{"reload-card-plugins":[]}}'); await f.tick();
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'l', metaKey: true, altKey: true, bubbles: true, cancelable: true })); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'load_personal_card_plugins').length, before + 1);
   } finally { f.win.close(); }
 });
 
@@ -1954,7 +1979,7 @@ test('external settings edits synchronize Appearance and saved Runtime while pre
 test('shell boots without Pi and Settings holds application preferences, not session controls', async () => {
   const f = await fixture(); const { win, calls, element } = f;
   try {
-    assert.deepEqual(calls.filter(c => !(c.command === 'plugin:event|listen' && ['nimrod-draft-error', 'tauri://close-requested'].includes(String(c.args.event)))).map(c => c.command), ['plugin:event|listen', 'preferences_snapshot', 'preferences_migrate', 'plugin:event|listen', 'plugin:event|listen', 'plugin:webview|set_webview_zoom', 'plugin:event|listen', 'plugin:event|listen', 'stop_pi', 'runtime_defaults', 'window_workspace', 'deletion_snapshot', 'take_project_picker_request']);
+    assert.deepEqual(calls.filter(c => !(c.command === 'plugin:event|listen' && ['nimrod-draft-error', 'tauri://close-requested'].includes(String(c.args.event)))).map(c => c.command), ['plugin:event|listen', 'preferences_snapshot', 'preferences_migrate', 'load_personal_card_plugins', 'plugin:event|listen', 'plugin:event|listen', 'plugin:webview|set_webview_zoom', 'plugin:event|listen', 'plugin:event|listen', 'stop_pi', 'runtime_defaults', 'window_workspace', 'deletion_snapshot', 'take_project_picker_request']);
     assert.equal(calls.find(c => c.command === 'plugin:webview|set_webview_zoom')!.args.value, 1.25);
     assert.equal(element<HTMLSelectElement>('zoom-level').value, '125');
     const page = element<HTMLDialogElement>('settings-page');

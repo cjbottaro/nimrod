@@ -199,6 +199,35 @@ async fn compiler_never_evaluates_source_and_rejects_node_remote_and_additional_
     assert!(compiler.compile(&root, "entry.ts").await.is_err());
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn app_shutdown_stops_only_its_owned_compiler_and_observes_exit() {
+    use std::os::unix::fs::PermissionsExt;
+    let (directory, root, _compiler) = fixture();
+    write(&root.join("entry.ts"), "export default {};");
+    let helper = directory.path().join("helper.sh");
+    write(
+        &helper,
+        "#!/bin/sh\necho $$ > started.pid\nexec /bin/sleep 30\n",
+    );
+    fs::set_permissions(&helper, fs::Permissions::from_mode(0o755)).unwrap();
+    let compiler = Compiler::new(helper, directory.path().join("cache"));
+    let task_compiler = compiler.clone();
+    let task_root = root.clone();
+    let task = tokio::spawn(async move { task_compiler.compile(&task_root, "entry.ts").await });
+    let marker = root.join("started.pid");
+    for _ in 0..200 {
+        if marker.is_file() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    let pid: i32 = fs::read_to_string(marker).unwrap().trim().parse().unwrap();
+    compiler.shutdown().await;
+    assert!(task.await.unwrap().unwrap_err().contains("shutdown"));
+    assert!(nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), None).is_err());
+}
+
 #[tokio::test]
 async fn same_entry_requests_share_atomic_cache_publication_and_missing_root_needs_no_helper() {
     let (_dir, root, compiler) = fixture();

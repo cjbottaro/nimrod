@@ -388,7 +388,9 @@ fn request_exit(app: &tauri::AppHandle) {
         {
             eprintln!("Draft shutdown flush: {error}");
         }
-        let result = app.state::<WorkspaceHost>().shutdown().await;
+        let host = app.state::<WorkspaceHost>();
+        let compiler = app.state::<plugin_compiler::Compiler>();
+        let (result, ()) = tokio::join!(host.shutdown(), compiler.shutdown());
         if let Err(error) = result {
             eprintln!("Nimrod shutdown: {error}");
         }

@@ -58,7 +58,9 @@ Cargo asset preparation copies a target-matching esbuild binary/license from the
 
 The supported type-only SDK is `src/card-plugin-api.ts`; it has no runtime dependencies and may be copied into a separate plugin project. API usage/ownership is documented in [Authoring card plugins](docs/card-plugin-api.md). The example is included in normal TypeScript checking.
 
-Compile the self-contained browser ESM example explicitly (this is not an app build):
+Personal source installation needs no manual compiler step: copy `examples/card-plugins/command-summary/plugin.ts` as `command-summary.ts` or `command-summary/index.ts` into your personal `card-plugins/` directory. Metadata is in the TS export. Nimrod compiles/caches it automatically on startup/reload. This is trusted browser code, not a Pi/Node extension.
+
+For an optional legacy/distribution manifest, compile the self-contained browser ESM explicitly (this is not an app build):
 
 ```sh
 npx esbuild examples/card-plugins/command-summary/plugin.ts \
@@ -66,7 +68,7 @@ npx esbuild examples/card-plugins/command-summary/plugin.ts \
   --outfile=src-tauri/target/card-plugin-examples/command-summary.js
 ```
 
-Copy the compiled `command-summary.js` and `examples/card-plugins/command-summary/plugin.json` (named `command-summary.json`) into your config-adjacent `card-plugins/` directory, then configure explicit enablement/trust as described in [Card plugins](docs/card-plugins.md#install-an-executable-plugin). These are manual development/install steps; tests compile only disposable/in-memory fixture modules and never write the user's config or trust settings.
+Copy the compiled `command-summary.js` and `examples/card-plugins/command-summary/plugin.json` (named `command-summary.json`) into your config-adjacent `card-plugins/` directory, then configure explicit enablement/trust as described in [Card plugins](docs/card-plugins.md#existing-manifest-packages). These are manual development/install steps; tests compile only disposable/in-memory fixture modules and never write the user's config or trust settings.
 
 ## Documentation ownership
 

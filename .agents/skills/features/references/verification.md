@@ -31,7 +31,7 @@ Detailed provenance is retained in [history](history/verification.md#evidence-bo
 | Sessions | Real first-save/exact-file resume, Close/Restart cancellation and failure, independent multi-window shutdown, no replay |
 | Deletion | Native multi-window review/idle locks, recovery after partial filesystem failure, external mutation limits |
 | Transcript/sidebar | Native zoom/trackpad/keyboard, follow/pause, disclosure animation, narrow/ultrawide geometry and view selection |
-| Executable card plugins | Native Tauri ESM/blob CSP, explicit trust/load failures, custom DOM/update/focus/reading intent, clipboard/editor/pop-out actions and Linux delivery. Browser CSP/fixture success is not packaged-app acceptance. |
+| Executable card plugins | Native compiler sidecar packaging/signing/execution, personal discovery/cache warm starts/reload, Tauri ESM/blob CSP, directory versus legacy explicit trust/load failures, custom DOM/update/focus/reading intent, clipboard/editor/pop-out actions and Linux delivery. Browser CSP/fixture success is not packaged-app acceptance. |
 | Settings/keybindings/themes | Native menus, alternative keyboard layouts, file chooser, live import/preview focus and cross-window preferences |
 | Images | Native macOS screenshot paste, Linux/Wayland clipboard, reload/quota and real Pi image normalization |
 | Pop-outs/window state | Quit/relaunch persistence, automatic versus explicit focus, own-window Close, minimization and multi-display/DPI geometry |
