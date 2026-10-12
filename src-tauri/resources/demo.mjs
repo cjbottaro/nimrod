@@ -17,7 +17,9 @@ async function run(prompt, images = []) {
   emit({ type: 'message_update', assistantMessageEvent: { type: 'thinking_start', contentIndex: 0 } });
   emit({ type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', contentIndex: 0, delta: 'Exercising the real Rust transport with synthetic events.' } });
   await delay(400); if (run !== generation) return;
-  const tool = { type: 'toolCall', id: `demo-${run}`, name: 'bash', arguments: { command: 'demo: stream fixture output (not executed)' } };
+  const tool = process.env.NIMROD_DEMO_TOOL === 'edit'
+    ? { type: 'toolCall', id: `demo-${run}`, name: 'edit', arguments: { path: 'fixture.ts', oldText: 'const count = 1;', newText: 'const count = 2;' } }
+    : { type: 'toolCall', id: `demo-${run}`, name: 'bash', arguments: { command: 'demo: stream fixture output (not executed)' } };
   emit({ type: 'message_update', assistantMessageEvent: { type: 'toolcall_start', contentIndex: 1, id: tool.id, toolName: tool.name } });
   emit({ type: 'message_update', assistantMessageEvent: { type: 'toolcall_end', contentIndex: 1, toolCall: tool } });
   emit({ type: 'tool_execution_start', toolCallId: tool.id, toolName: tool.name, args: tool.arguments });

@@ -6,7 +6,7 @@ Pi extensions define agent capabilities; Nimrod card plugins define their transc
 
 ## Requested edit previews
 
-Edit tool cards show **Requested edit** previews when structured inputs contain `oldText`/`newText` substitutions. Removed and added text is highlighted; raw inputs and Pi's result remain available. These are requested substitutions, **not an applied-file diff**: failed or interrupted edits do not imply any file change. Single-edit and multi-edit inputs are supported; partial/unsupported inputs keep the normal presentation.
+Edit tool cards show **Requested edit** previews when structured inputs contain `oldText`/`newText` substitutions. Removed and added text is highlighted; **Copy requested diff** copies the requested substitutions without executing anything. Raw inputs and Pi's result remain available. These are requested substitutions, **not an applied-file diff**: failed or interrupted edits do not imply any file change. Single-edit and multi-edit inputs are supported; partial/unsupported inputs keep the normal presentation.
 
 ## Install a local plugin
 

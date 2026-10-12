@@ -711,8 +711,22 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
   let imagesDisposed = false;
   let pendingNativeSubmission: string | undefined;
   root.addEventListener('nimrod-dispose-images', () => { imagesDisposed = true; for (const id of ephemeralImages) temporaryImages.delete(id); });
+  function guardCardAction(): void {
+    if (!ready || !workspace || presented !== tab || !tabs.includes(tab) || tab.closing || tab.restarting || tab.deleting || document.querySelector('dialog[open]')) throw new Error('Card action is no longer available');
+  }
   tab.view = mountPiView({
     cardRenderer: data => cardPlugins.select(data),
+    cardActions: {
+      copy: async text => { guardCardAction(); await writeText(text); },
+      openLink: async href => { guardCardAction(); await invoke('open_card_link', { href }); },
+      popOutCode: async (text, language) => {
+        guardCardAction();
+        popouts.open({ session: tab.id, title: tab.title, text, language }, () => {
+          try { guardCardAction(); return true; } catch { return false; }
+        });
+        await popouts.settled();
+      },
+    },
     attachments: {
       readClipboard: readClipboardImage,
       put: async (blob, name) => {

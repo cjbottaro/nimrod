@@ -1,3 +1,4 @@
+import { isSafeLink } from './safe-markdown';
 import { validatePresentation, type CardPresentation, type CardRenderer } from './card-renderer';
 
 export interface CardUpdateState { streaming: boolean; }
@@ -7,6 +8,11 @@ export interface CardPluginContext {
   readonly summary: HTMLElement;
   readonly body: HTMLElement;
   readonly signal: AbortSignal;
+  readonly capabilities: Readonly<{ copy: boolean; openLink: boolean; popOutCode: boolean }>;
+  copy(text: string): Promise<void>;
+  openLink(href: string): Promise<void>;
+  popOutCode(text: string, language?: string): Promise<void>;
+  code(source: string, language?: string): HTMLElement;
   renderPresentation(presentation: CardPresentation): void;
   markdown(source: string): HTMLElement;
   registerOutput(key: string, element: HTMLElement): () => void;
@@ -25,6 +31,10 @@ export interface DomCardRenderer<Data> {
 }
 export interface CardDomHost {
   markdown?: (source: string) => HTMLElement;
+  code?: (source: string, language?: string) => HTMLElement;
+  copy?: (text: string) => Promise<void>;
+  openLink?: (href: string) => Promise<void>;
+  popOutCode?: (text: string, language: string) => Promise<void>;
   beforeChange?: () => void;
   afterChange?: () => void;
   canInteract?: () => boolean;
@@ -60,6 +70,14 @@ export class DomCardController<Data> {
     this.context = {
       document: body.ownerDocument, summary, body,
       get signal() { return owner.resources.signal; },
+      capabilities: Object.freeze({ copy: !!host.copy, openLink: !!host.openLink, popOutCode: !!host.popOutCode }),
+      copy: text => this.action(() => { this.validateText(text); if (!host.copy) throw new Error('Copy capability unavailable'); return host.copy(text); }),
+      openLink: href => this.action(() => { this.validateText(href); if (!isSafeLink(href)) throw new Error('Unsupported card link'); if (!host.openLink) throw new Error('Link capability unavailable'); return host.openLink(href); }),
+      popOutCode: (text, language = '') => this.action(() => {
+        this.validateText(text); if (typeof language !== 'string' || language.length > 128 || /[\r\n\0]/.test(language)) throw new Error('Invalid code language');
+        if (!host.popOutCode) throw new Error('Pop-out capability unavailable'); return host.popOutCode(text, language);
+      }),
+      code: (source, language = '') => this.host.code?.(source, language) ?? this.literal(source),
       renderPresentation: value => { if (this.alive()) this.renderPresentation(validatePresentation(value)); },
       markdown: source => this.host.markdown?.(source) ?? this.literal(source),
       registerOutput: (key, element) => {
@@ -83,6 +101,7 @@ export class DomCardController<Data> {
         if (!this.alive()) return () => {};
         const listener = (event: Event) => {
           if (!this.alive() || !this.body.isConnected || this.host.canInteract?.() === false) return;
+          if (target instanceof this.body.ownerDocument.defaultView!.Node && !target.isConnected) return;
           try { void Promise.resolve(handler(event)).catch(error => this.fail(error)); } catch (error) { this.fail(error); }
         };
         target.addEventListener(type, listener);
@@ -124,6 +143,13 @@ export class DomCardController<Data> {
     this.disposed = true; this.release();
   }
 
+  private validateText(text: string): void {
+    if (typeof text !== 'string' || text.length > 8 * 1024 * 1024) throw new Error('Invalid or oversized card action text');
+  }
+  private async action(run: () => Promise<void>): Promise<void> {
+    if (!this.alive() || !this.body.isConnected || this.host.canInteract?.() === false) throw new Error('Card actions are unavailable for an inactive, modal or disposed view');
+    await run();
+  }
   private alive(): boolean { return !this.disposed && !this.failed; }
   private literal(text: string): HTMLElement { const node = this.body.ownerDocument.createElement('pre'); node.textContent = text; return node; }
   private applyOutputPolicy(output: HTMLElement): void {

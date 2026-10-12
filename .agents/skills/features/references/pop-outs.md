@@ -98,9 +98,7 @@ Immutable source captures deduplicate per session/content/language. Saved snapsh
 - `.popout-markdown` reserves 38 CSS pixels on the right so the source Copy icon
   never obscures scrolled content. Content otherwise has the standard 20px gutters.
 - Markdown's whole-document Copy returns original source, not rendered text.
-  Nested Copy returns only its own `pre > code` text. The pop-out uses native
-  clipboard writes; transcript Copy tries the browser clipboard first and falls
-  back through its correlated host request/result path.
+  Nested Copy returns only its own `pre > code` text. The pop-out and Nimrod's injected transcript presentation capability use native clipboard writes. Renderer fixtures/hosts without that capability retain browser clipboard plus the correlated host request/result fallback. Neither path submits prompts or needs a connected Pi child.
 - Title generation reads the first non-empty heading from the sanitized Markdown
   DOM; code uses its first non-empty source line. Empty/heading-free content falls
   back to a language name. Normalize controls/whitespace and cap at 80 Unicode code
@@ -115,6 +113,10 @@ Immutable source captures deduplicate per session/content/language. Saved snapsh
   browser handoff. Stored cwd remains available independently of source history.
 - ⌘W / Ctrl+W calls native Close. Do not replace that with direct `destroy()`, which
   bypasses persistence deletion semantics.
+
+### Card-plugin presentation capabilities
+
+The [DOM card-plugin API](card-plugins.md#presentation-capabilities-and-interactive-proof-milestone-c) can request read-only Copy/Pop out and validated links. `main.ts` supplies selected-session/window guards; Pop out uses this same serialized session binding/open path, not plugin-supplied owner IDs. `open_card_link` derives cwd from the registered native project window rather than a child token, so historical cards do not need Pi connectivity. Hidden/modal/closing/disposed action requests are suppressed or rejected; core ownership/persistence remains unchanged.
 
 ## Identity and storage
 
