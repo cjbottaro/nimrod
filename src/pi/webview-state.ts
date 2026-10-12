@@ -1,5 +1,5 @@
 import { attachmentArray } from './image-attachments';
-import { ComposerState, initialComposerState, markPendingSubmissionUnknownAfterReload } from "./composer-state";
+import { ComposerState, initialComposerState } from "./composer-state";
 
 export function restoreComposerState(value: unknown): ComposerState {
   if (!isRecord(value)) return initialComposerState();
@@ -13,22 +13,17 @@ export function restoreComposerState(value: unknown): ComposerState {
         : [];
     });
   }
-  if (isRecord(value.submission)) {
-    const pending = value.submission;
-    if (typeof pending.id === "string" && typeof pending.text === "string" && (pending.mode === "normal" || pending.mode === "steer" || pending.mode === "followUp") && (pending.status === "pending" || pending.status === "unknown")) {
-      restored.submission = { id: pending.id, text: pending.text, attachments: attachmentArray(pending.attachments), mode: pending.mode, status: pending.status, error: string(pending.error) || undefined };
-    }
-  }
-  return markPendingSubmissionUnknownAfterReload(restored);
+  // Old unresolved attempts are not drafts and must never be restored or replayed.
+  return restored;
 }
 
 /** Keeps host-owned recovery metadata and future state fields across composer writes. */
 export function persistWebviewState(previous: unknown, composer: ComposerState): Record<string, unknown> {
   const retained = isRecord(previous) ? { ...previous } : {};
-  // Retire old successful/failed-send backup copies while preserving unrelated
-  // host metadata. Pending/unknown submissions remain intact and never replay.
+  // Submission tracking is runtime-only, not draft persistence or recovery.
   delete retained.imageRecovery;
-  return { ...retained, draft: composer.draft, attachments: composer.attachments, submission: composer.submission, recovered: composer.recovered };
+  delete retained.submission;
+  return { ...retained, draft: composer.draft, attachments: composer.attachments, recovered: composer.recovered };
 }
 
 function string(value: unknown): string { return typeof value === "string" ? value : ""; }

@@ -12,23 +12,23 @@ test("composer primary action is Send while idle or background-only, and Stop on
   const document = documentWithComposer();
   const send = document.getElementById("send") as HTMLButtonElement;
 
-  renderPrimaryAction(send, { mainBusy: false, submissionPending: false, sessionUnavailable: false });
+  renderPrimaryAction(send, { mainBusy: false, preparing: false, sessionUnavailable: false });
   assert.equal(send.dataset.action, "send");
   assert.equal(send.disabled, false);
   assert.equal(send.getAttribute("aria-label"), "Send message");
   assert.ok(send.querySelector("svg"));
 
-  renderPrimaryAction(send, { mainBusy: true, submissionPending: true, sessionUnavailable: false });
+  renderPrimaryAction(send, { mainBusy: true, preparing: true, sessionUnavailable: false });
   assert.equal(send.dataset.action, "stop");
-  assert.equal(send.disabled, false, "a pending submission must not disable Stop");
+  assert.equal(send.disabled, false, "image preparation must not disable Stop");
   assert.equal(send.getAttribute("aria-label"), "Stop Pi");
 
-  renderPrimaryAction(send, { mainBusy: false, submissionPending: false, sessionUnavailable: false });
+  renderPrimaryAction(send, { mainBusy: false, preparing: false, sessionUnavailable: false });
   assert.equal(send.dataset.action, "send", "background activity does not replace Send with Stop");
   assert.equal(send.disabled, false);
 
-  renderPrimaryAction(send, { mainBusy: false, submissionPending: true, sessionUnavailable: false });
-  assert.equal(send.disabled, true, "normal sends remain protected while acceptance is pending or unknown");
+  renderPrimaryAction(send, { mainBusy: false, preparing: true, sessionUnavailable: false });
+  assert.equal(send.disabled, true, "image preparation temporarily disables Send");
 });
 
 test("Enter steers and Option-Enter queues only while working, preserving newline and IME input", () => {

@@ -19,7 +19,7 @@ test('provisional drafts promote to exact files without importing legacy text', 
   assert.throws(() => store.bind('/sessions/unexpected.jsonl'), /Unexpected session file change/);
 });
 
-test('reload keeps pending originals and recovered queues, never treating history as acknowledgement', () => {
+test('reload ignores retired submissions and keeps editable drafts and recovered queues', () => {
   let saved: unknown;
   const store = new SessionDrafts(null, null, value => { saved = structuredClone(value); });
   store.select('unassigned:new');
@@ -29,19 +29,18 @@ test('reload keeps pending originals and recovered queues, never treating histor
   const restored = new SessionDrafts(saved, null, () => {});
   const composer = restoreComposerState(restored.select('file:/sessions/a.jsonl'));
   assert.equal(composer.draft, 'newer');
-  assert.equal(composer.submission?.text, 'original');
-  assert.equal(composer.submission?.status, 'unknown');
+  assert.equal(Object.hasOwn(composer, 'submission'), false);
   assert.equal(composer.recovered[0].text, 'queue text');
   assert.deepEqual(composer.queue, { steering: [], followUp: [], authoritative: false });
   assert.equal(restored.last?.path, '/sessions/a.jsonl');
 });
 
-test('unassigned recovery explicitly copies intact uncertainty and preserves its source', () => {
+test('unassigned recovery copies the editable draft, ignoring retired uncertainty', () => {
   let saved: any;
   const store = new SessionDrafts({ drafts: { 'unassigned:old': { draft: 'keep', submission: { id: 's', text: 'keep', mode: 'normal', status: 'unknown' } } } }, null, value => { saved = value; });
   const chosen = store.recoverable()[0];
   const state = restoreComposerState(store.select('unassigned:new', chosen.key));
-  assert.equal(state.submission?.status, 'unknown');
+  assert.equal(Object.hasOwn(state, 'submission'), false);
   store.write(state);
   assert.equal(saved.drafts['unassigned:old'].draft, 'keep');
   assert.equal(saved.drafts['unassigned:new'].draft, 'keep');

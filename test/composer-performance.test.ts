@@ -59,10 +59,10 @@ test('unchanged primary actions retain their icon across snapshots', () => {
   const dom = new JSDOM('<button></button>');
   try {
     const button = dom.window.document.querySelector('button')!;
-    const ready = { mainBusy: false, submissionPending: false, sessionUnavailable: false };
+    const ready = { mainBusy: false, preparing: false, sessionUnavailable: false };
     renderPrimaryAction(button, ready);
     const icon = button.firstChild;
-    renderPrimaryAction(button, { ...ready, submissionPending: true });
+    renderPrimaryAction(button, { ...ready, preparing: true });
     assert.equal(button.firstChild, icon);
     assert.equal(button.disabled, true);
     renderPrimaryAction(button, { ...ready, mainBusy: true });

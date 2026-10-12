@@ -61,4 +61,4 @@ macOS is the current development platform; Linux is next, and Windows is a possi
 
 There is no background process continuity, integrated diff editor, fork/tree-navigation UI, Pi `/reload`, other harness integration, automatic update system or production installer. macOS local bundles use ad-hoc signing, not Developer ID signing/notarization. Opening a project does not start Pi; selecting an inactive saved session loads and reconnects it without sending a prompt. Closing a project stops its owned agents.
 
-Definitively rejected sends show an error and discard the attempted message, preserving newer drafts. Uncertain sends are explicitly marked and never automatically replayed. Pi owns conversation history; Nimrod cannot coordinate external applications writing the same session file.
+Send clears the composer immediately. Failed or uncertain sends show an error without restoring the message or blocking a new draft; nothing is automatically replayed. Pi owns conversation history; Nimrod cannot coordinate external applications writing the same session file.

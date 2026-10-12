@@ -71,7 +71,7 @@ Each deletion includes descendants, not just the listed row.
 
 ## Drafts and recovery
 
-[Saved-session drafts](drafts.md) are Rust-managed Nimrod state, separate from Pi history. Legacy webview drafts are ignored without migration. Only Pi acknowledgement clears an unchanged submitted draft; newer edits survive. Rejected/uncertain submissions remain available for explicit recovery and are never automatically resent.
+[Saved-session drafts](drafts.md) are Rust-managed Nimrod state, separate from Pi history. Legacy webview drafts are ignored without migration. Send clears the composer immediately; acknowledgement tracking is separate and never changes newer edits. Failed or uncertain sends show an error without submission recovery or automatic resend.
 
 **Recover unattached draft…** copies a newly created unfinished draft into a new session without submitting it or consuming the source. Temporary drafts are not recoverable after disposal. Storage failures are reported; abrupt termination is not a durable-draft guarantee.
 

@@ -302,7 +302,7 @@ const deletion = new SessionDeletion({
     refresh: async () => { if (tab.session && !tab.ended) await tab.session.refreshDeletionState(); },
     report: () => {
       const composer = restoreComposerState(tab.drafts.read());
-      return { file: tab.file!.path, token: tab.token, title: tab.title, busy: deletionBusy(tab), hasDraft: !!(composer.draft.trim() || composer.attachments?.length || composer.submission || composer.recovered.length) };
+      return { file: tab.file!.path, token: tab.token, title: tab.title, busy: deletionBusy(tab), hasDraft: !!(composer.draft.trim() || composer.attachments?.length || composer.recovered.length) };
     },
     deleted: () => removeDeletedSessions([tab.file!.path]),
     failed: message => {
@@ -480,15 +480,12 @@ function presentConversation(tab: Tab | undefined): void {
   badge.title = tab?.file?.path || '';
   restartControl();
 }
-function submissionPending(tab: Tab): boolean {
-  // restoreComposerState intentionally marks pending submissions unknown on reload;
-  // live action eligibility must inspect the actual persisted-in-memory status.
-  const composer = tab.drafts.read() as { submission?: { status?: unknown } } | undefined;
-  return composer?.submission?.status === 'pending';
+function promptPending(tab: Tab): boolean {
+  return tab.session?.rpc.hasPendingRequest('prompt', 'set_session_name') ?? false;
 }
 function deletionBusy(tab: Tab): boolean {
   const state = tab.session?.state;
-  return tab.starting || tab.closing || tab.restarting || !!tab.inputCount || submissionPending(tab) || !!(state && !tab.ended && (state.busy || state.compacting || state.modelControls.changing || state.sessionUnavailable || state.queue.pendingCount || state.queue.steering.length || state.queue.followUp.length || presentActivity(false, '', state.extensionStatuses).subagents));
+  return tab.starting || tab.closing || tab.restarting || !!tab.inputCount || promptPending(tab) || !!(state && !tab.ended && (state.busy || state.compacting || state.modelControls.changing || state.sessionUnavailable || state.queue.pendingCount || state.queue.steering.length || state.queue.followUp.length || presentActivity(false, '', state.extensionStatuses).subagents));
 }
 function restartable(tab: Tab): boolean { return !!tab.file?.exists && tab.mode !== 'temporary'; }
 function deletable(tab: Tab | undefined): boolean {
@@ -746,7 +743,11 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
   tab.drafts.select(file ? `file:${file.path}` : mode === 'temporary' ? `temporary:${workspace}:${id}` : `unassigned:${id}`);
   const ephemeralImages = new Set<string>();
   let imagesDisposed = false;
-  let pendingNativeSubmission: string | undefined;
+  function releaseTemporaryImages(): void {
+    if (tab.mode !== 'temporary') return;
+    const retained = referencedAttachments(tab.drafts.read());
+    for (const id of ephemeralImages) if (!retained.has(id)) { temporaryImages.delete(id); ephemeralImages.delete(id); }
+  }
   root.addEventListener('nimrod-dispose-images', () => { imagesDisposed = true; for (const id of ephemeralImages) temporaryImages.delete(id); });
   function guardCardAction(): void {
     if (!ready || !workspace || presented !== tab || !tabs.includes(tab) || tab.closing || tab.restarting || tab.deleting || document.querySelector('dialog[open]')) throw new Error('Card action is no longer available');
@@ -790,17 +791,12 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
     },
     getState: () => tab.drafts.read(),
     setState: value => {
-      const pending = submissionPending(tab);
-      const previous = tab.drafts.read() as { submission?: unknown; recovered?: unknown; attachments?: unknown } | undefined;
+      const previous = tab.drafts.read() as { draft?: string; recovered?: unknown; attachments?: unknown } | undefined;
       try { tab.drafts.write(value); } catch (e) { persistenceError(e); }
       const next = value as typeof previous;
-      if (tab.mode === 'temporary' && (previous?.submission !== next?.submission || previous?.attachments !== next?.attachments)) {
-        const retained = referencedAttachments(value);
-        for (const id of referencedAttachments(previous)) if (!retained.has(id)) { temporaryImages.delete(id); ephemeralImages.delete(id); }
-      }
-      if (tab.mode !== 'temporary' && (previous?.submission !== next?.submission || previous?.recovered !== next?.recovered || previous?.attachments !== next?.attachments)) void nativeDrafts?.flush().catch(draftPersistenceError);
-      // A receipt can be pending before Pi publishes any state/activity event.
-      if (pending !== submissionPending(tab)) updateTab(tab);
+      releaseTemporaryImages();
+      // Best-effort durability of cleared drafts, not a gate on prompt dispatch.
+      if (tab.mode !== 'temporary' && (previous?.recovered !== next?.recovered || previous?.attachments !== next?.attachments || (previous?.draft && !next?.draft))) void nativeDrafts?.flush().catch(draftPersistenceError);
     },
     onMessage: receive => { tab.receive = receive; },
     postMessage: message => {
@@ -814,30 +810,12 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
         return;
       }
       if (!tab.session || tab.closing || tab.restarting) return;
-      if (message.type === 'stop' && pendingNativeSubmission) {
-        const id = pendingNativeSubmission; pendingNativeSubmission = undefined;
-        tab.receive?.({ type: 'submissionReceipt', id, outcome: 'rejected', error: 'Submission cancelled by Stop before persistence completed. Nothing was sent.' });
-      }
       if (message.type === 'selectModel' || message.type === 'selectThinking') void pickPreference(tab, message.type === 'selectModel' ? 'model' : 'thinking');
-      else if (message.type === 'prompt' && tab.mode !== 'temporary') {
-        // Submission state is staged synchronously by the renderer before this
-        // callback. Require durable recovery before handing the prompt to Pi.
-        const session = tab.session, token = tab.token;
-        pendingNativeSubmission = String(message.id);
-        const currentSubmission = () => (tab.drafts.read() as { submission?: { id?: string; status?: string } })?.submission;
-        const current = () => tab.session === session && tab.token === token && !tab.closing && !tab.restarting && !tab.deleting && !tab.ended
-          && currentSubmission()?.id === message.id && currentSubmission()?.status === 'pending';
-        void nativeDrafts!.flush().then(() => {
-          if (current()) { pendingNativeSubmission = undefined; return session.handle(message); }
-          // Stop/restart/disconnect may already have settled or replaced this
-          // draft. Never deliver or apply an old receipt to a new generation.
-          if (tab.session === session && tab.token === token && currentSubmission()?.id === message.id) tab.receive?.({ type: 'submissionReceipt', id: String(message.id), outcome: 'rejected', error: 'Session changed before submission. Nothing was sent.' });
-        }).catch(failure => {
-          pendingNativeSubmission = undefined;
-          draftPersistenceError(failure);
-          if (current()) tab.receive?.({ type: 'submissionReceipt', id: String(message.id), outcome: 'rejected', noticeCause: 'draft-storage', error: `Could not save the message before sending: ${String(failure)}. Nothing was sent.` });
-        });
-      } else void tab.session.handle(message);
+      else {
+        const session = tab.session;
+        void session.handle(message).finally(() => { if (tabs.includes(tab) && tab.session === session) updateTab(tab); });
+        updateTab(tab);
+      }
     },
   }, root);
   tab.receive?.({ type: 'snapshot', state: { sessionUnavailable: true } });
@@ -871,7 +849,7 @@ function indicator(tab: Tab) {
   // A preview lock is not activity; show Deleting only after confirmation.
   return sessionIndicator({ ...tab, deleting: tab.deletionExecuting, blocked: deletion.blocked(tab.file?.path),
     inactive: tab.ended || !state || state.sessionUnavailable, compacting: state?.compacting,
-    busy: state?.busy || !!(state && presentActivity(false, '', state.extensionStatuses).subagents), pending: submissionPending(tab) });
+    busy: state?.busy || !!(state && presentActivity(false, '', state.extensionStatuses).subagents), pending: promptPending(tab) });
 }
 function sessionRow(tab: Tab) { return { timestamp: tab.lastUsed, indicator: indicator(tab) }; }
 function updateTab(tab: Tab): void {
@@ -1071,8 +1049,7 @@ async function openSession(info: Pick<SessionSummary, 'path' | 'sessionId' | 'na
 }
 async function restartSession(tab: Tab): Promise<void> {
   if (!ready || deletion.pending || deletion.blocked(tab.file?.path) || !tabs.includes(tab) || !restartable(tab) || tab.starting || tab.closing || tab.restarting || settings.isOpen) return;
-  const composer = restoreComposerState(tab.drafts.read());
-  const needsConfirmation = !!tab.session && !tab.ended && (tab.session.state.busy || !!composer.submission || !!tab.inputCount || !!tab.session.state.queue?.pendingCount);
+  const needsConfirmation = !!tab.session && !tab.ended && (tab.session.state.busy || promptPending(tab) || !!tab.inputCount || !!tab.session.state.queue?.pendingCount);
   tab.restarting = true; updateTab(tab);
   let resumed = false;
   try {
@@ -1161,9 +1138,8 @@ function detachTab(tab: Tab): void {
 }
 async function closeTab(tab: Tab): Promise<void> {
   if (deletion.pending || tab.closing || tab.starting || tab.restarting || settings.isOpen) return;
-  const composer = restoreComposerState(tab.drafts.read());
   const running = tab.session && !tab.ended;
-  if ((tab.mode === 'temporary' || (running && (tab.session!.state.busy || composer.submission || tab.inputCount || tab.session!.state.queue?.pendingCount))) && !await dialogs.confirm(`Close ${tab.title}?`, tab.mode === 'temporary' ? 'This stops its agent and discards this temporary session, including its draft, queued messages and pop-outs.' : 'This stops only this session’s agent. Written history and your draft remain; queued and in-flight work will not continue.', undefined, tab.mode === 'temporary' ? 'Close temporary session' : 'Close session')) return;
+  if ((tab.mode === 'temporary' || (running && (tab.session!.state.busy || promptPending(tab) || tab.inputCount || tab.session!.state.queue?.pendingCount))) && !await dialogs.confirm(`Close ${tab.title}?`, tab.mode === 'temporary' ? 'This stops its agent and discards this temporary session, including its draft, queued messages and pop-outs.' : 'This stops only this session’s agent. Written history and your draft remain; queued and in-flight work will not continue.', undefined, tab.mode === 'temporary' ? 'Close temporary session' : 'Close session')) return;
   if (tab.closing || !tabs.includes(tab)) return;
   tab.closing = true; updateTab(tab);
   try {

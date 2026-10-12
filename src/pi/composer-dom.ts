@@ -1,6 +1,6 @@
 export interface PrimaryActionState {
   mainBusy: boolean;
-  submissionPending: boolean;
+  preparing: boolean;
   sessionUnavailable: boolean;
 }
 
@@ -32,7 +32,7 @@ export function renderPrimaryAction(button: HTMLButtonElement, state: PrimaryAct
   const action = stopping ? "stop" : "send";
   const changed = button.dataset.action !== action;
   button.dataset.action = action;
-  button.disabled = stopping ? false : state.submissionPending || state.sessionUnavailable;
+  button.disabled = stopping ? false : state.preparing || state.sessionUnavailable;
   button.setAttribute("aria-label", stopping ? "Stop Pi" : "Send message");
   button.title = stopping ? "Stop Pi" : "Send message";
   if (changed) button.replaceChildren(icon(button.ownerDocument, action));

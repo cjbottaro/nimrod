@@ -42,7 +42,7 @@ test('runtime validation uses the strip, not an inline error or native validatio
   } finally { await fixture.close(); }
 });
 
-test('connection loss before acceptance has one actionable uncertainty notice without changing focus', async ({ page }) => {
+test('connection loss before acceptance has one dismissible uncertainty notice without draft recovery or focus changes', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {
     await page.evaluate(() => {
@@ -58,12 +58,16 @@ test('connection loss before acceptance has one actionable uncertainty notice wi
     const prompt = page.locator(visible('prompt')); await prompt.fill('Maybe received'); await prompt.press('Enter');
     await expect(page.locator('#application-notices .application-notice')).toHaveCount(1);
     await expect(page.locator('#application-notices')).toContainText('Message delivery unknown');
-    await expect(prompt).toBeFocused(); await expect(prompt).toHaveValue('Maybe received');
+    await expect(prompt).toBeFocused(); await expect(prompt).toHaveValue('');
     await expect(page.locator(visible('submission-notice'))).toBeHidden();
     await expect(page.locator('.session-view:not([hidden]) .tab-notice')).toBeHidden();
-    await page.getByRole('button', { name: 'Write a new message', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Write a new message', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: /Dismiss .*Message delivery unknown/ }).click();
     await expect(prompt).toHaveValue('');
-    await expect(page.locator('#application-notices')).toContainText('Session connection');
+    await expect(page.locator('#application-notices')).toBeHidden();
+    await prompt.fill('New draft after disconnect');
+    await expect(page.locator(visible('send'))).toBeDisabled();
+    await expect(prompt).toHaveValue('New draft after disconnect');
     expect(fixture.errors).toEqual([]);
   } finally { await fixture.close(); }
 });

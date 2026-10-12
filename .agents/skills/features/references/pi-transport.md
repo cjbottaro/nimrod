@@ -8,16 +8,16 @@ Pi remains authoritative for request acceptance, queues, active history and mode
 
 Every stdout response/event travels over one ordered Tauri channel. State/history response callbacks execute synchronously during delivery so later streaming events cannot be overwritten by stale snapshots. Request promises may resolve afterward, but are not the snapshot ordering mechanism.
 
-Ordinary acknowledgement timeout is 20 seconds. Explicit rejection, acknowledged acceptance and unknown acceptance are distinct states. Only acknowledgement establishes acceptance. Accepted or definitively rejected/cancelled attempts are discarded without preserving backup copies; newer drafts survive. Unknown attempts remain blocked until the explicit new-message action. History, queue counts, idle state and user-message events never substitute for a receipt. No timeout/disconnect automatic retry or prompt replay.
+Ordinary acknowledgement timeout is 20 seconds. Explicit rejection, acknowledged acceptance and unknown acceptance are distinct states. Only acknowledgement establishes acceptance. Composer clearing occurs on submission, not acknowledgement. Transport correlation is the only pending-request state; no composer submission state or shell callback is involved. Multiple prompt requests can be outstanding, with Pi authoritative for acceptance. Each response settles its own RPC without touching the editable draft; failed/unknown outcomes report a notice, with no recovery copy or explicit new-message gate. History, queue counts, idle state and user-message events never substitute for a receipt. No timeout/disconnect automatic retry or prompt replay.
 
 `agent_end` is not the idle boundary; `agent_settled` is. Manual/automatic compaction locks submission. Stop first obtains authoritative `clear_queue` recovery then aborts, except during compaction. RPC abort can remain stuck awaiting acknowledgement; exact-file Restart uses native owned-child stop, not another RPC.
 
 ## Code map
 
-- `src/pi/transport.ts`: correlation, synchronous response callbacks, deadlines and disconnect invalidation.
+- `src/pi/transport.ts`: correlation, synchronous response callbacks, deadlines, disconnect invalidation and hasPendingRequest queries over the existing RPC map for lifecycle/model/compaction guards.
 - `src/pi/session.ts`: launch metadata, history, queue/control semantics, Pi capabilities and identity guards.
 - `src/pi/reducer.ts`: validated event state.
-- `src/pi/webview-client.ts`: ordered snapshots before coalesced paint; selective draft receipts.
+- `src/pi/webview-client.ts`: ordered snapshots before coalesced paint; receipts update steering presentation/report errors but never mutate drafts.
 - `src-tauri/src/process.rs`: bounded LF framing, pipes, ordered `Channel<Packet>`, observed shutdown.
 - `src-tauri/src/workspaces.rs`: window/token ownership and file reservations.
 - `src-tauri/src/sessions.rs`: exact-file validation and literal launch arguments.

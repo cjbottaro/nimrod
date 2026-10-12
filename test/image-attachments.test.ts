@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { attachmentArray, referencedAttachments, validateImageBlob, validateImageContents, validateAttachments, MAX_IMAGE_BYTES, type ImageAttachment } from '../src/pi/image-attachments';
-import { beginSubmission, initialComposerState, settleSubmission, dismissUnknownSubmission, updateDraft } from '../src/pi/composer-state';
+import { clearDraft, initialComposerState } from '../src/pi/composer-state';
 import { persistWebviewState, restoreComposerState } from '../src/pi/webview-state';
 import { SteeringTranscript } from '../src/pi/steering-transcript';
 
@@ -17,30 +17,24 @@ test('image validation bounds formats, encoding, count and total bytes', () => {
   assert.deepEqual(attachmentArray([{ ...image('bad'), id: '../file' }]), []);
 });
 
-test('image-only acknowledgement removes submitted references but preserves new text/images', () => {
+test('image-only sends clear editable attachments without changing a captured payload', () => {
   const original = { ...initialComposerState(), attachments: [image('a')] };
-  const sending = beginSubmission(original, 'one', 'normal');
-  assert.equal(sending.submission?.text, '');
-  const newer = { ...sending, draft: 'new', attachments: [image('a'), image('b')] };
-  const accepted = settleSubmission(newer, 'one', 'accepted');
-  assert.equal(accepted.draft, 'new');
-  assert.deepEqual(accepted.attachments, [image('b')]);
-  assert.deepEqual(accepted.recovered, []);
-  assert.equal(Object.hasOwn(accepted, 'imageRecovery'), false);
-  const rejected = settleSubmission(newer, 'one', 'rejected');
-  assert.deepEqual(rejected.attachments, [image('b')]);
-  assert.equal(rejected.draft, 'new');
-  assert.deepEqual(rejected.recovered, []);
+  const captured = original.attachments;
+  const cleared = clearDraft(original);
+  assert.deepEqual(cleared.attachments, []);
+  assert.deepEqual(captured, [image('a')]);
+  assert.deepEqual(cleared.recovered, []);
+  assert.equal(Object.hasOwn(cleared, 'submission'), false);
 });
 
-test('reload persists references only and leaves pending image sends unknown', () => {
-  const sending = beginSubmission({ ...initialComposerState(), attachments: [image('a')] }, 'one', 'steer');
+test('reload never restores submitted images or an in-flight request', () => {
+  const sending = clearDraft({ ...initialComposerState(), attachments: [image('a')] });
   const saved = persistWebviewState({ restore: { path: '/fixture' } }, sending);
   assert.equal(JSON.stringify(saved).includes(wire.data), false);
   const restored = restoreComposerState(JSON.parse(JSON.stringify(saved)));
-  assert.equal(restored.submission?.status, 'unknown');
-  assert.deepEqual(restored.attachments, [image('a')]);
-  assert.deepEqual([...referencedAttachments(saved)], ['a']);
+  assert.equal(Object.hasOwn(restored, 'submission'), false);
+  assert.deepEqual(restored.attachments, []);
+  assert.deepEqual([...referencedAttachments(saved)], []);
 });
 
 test('image steering never reconciles against caption-only user messages or text-only recovery', () => {

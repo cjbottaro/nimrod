@@ -12,12 +12,11 @@ be combined with slash commands; nothing is sent and the draft remains intact.
 
 ## Drafts and recovery
 
-Successful sends clear the submitted text/images without keeping an extra recovery
-copy. Definitively rejected sends show an error and discard that attempted message;
-write a new message if needed. Text or images added while a send was pending remain.
-If Pi does not confirm acceptance, the message is marked uncertain and sending stays
-blocked. **Write a new message** explicitly discards the uncertain attempt while
-preserving newer edits; it does not retry it or prove it failed.
+Send immediately clears the submitted text/images, before image preparation or Pi
+acknowledgement finishes. No submission recovery copy is saved. Failed or uncertain
+sends show an error; type or paste a new message if needed. Receipts never change
+text/images added afterward. Uncertainty does not add a recovery action or block a
+new submission once the session is connected and available.
 Saved-session image drafts are stored locally, separate from Pi history. Temporary
 session images stay in memory and are lost when that session closes or the app
 reloads/quits. If an image cannot be read when Send is attempted, nothing is sent:

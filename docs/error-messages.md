@@ -32,7 +32,7 @@ dismissed issue does not immediately bring it back; a new or changed failure can
 
 If one failure propagates through several layers, its most actionable notice is
 shown once. For example, unknown delivery takes precedence over a generic
-connection error. Resolving the delivery gate does not imply reconnection; the
+connection error. Dismissing the delivery error does not imply reconnection; the
 underlying connection notice can remain. Notices do not switch sessions on arrival.
 
 The current [send-outcome behavior](writing-messages.md#send-outcomes) already

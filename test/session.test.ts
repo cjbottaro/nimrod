@@ -30,6 +30,24 @@ test('ordinary submissions include steering fallback and wait for Pi acknowledge
   f.rpc.disconnect('done');
 });
 
+test('multiple sends reach Pi before acknowledgement and correlate out-of-order outcomes independently', async () => {
+  const f = fixture();
+  const first = f.session.handle({ type: 'prompt', id: 'first', text: 'one' });
+  const second = f.session.handle({ type: 'prompt', id: 'second', text: 'two' });
+  assert.equal(f.sent.length, 2);
+  assert.equal(f.rpc.hasPendingRequest('prompt'), true);
+  await assert.rejects(f.session.refreshDeletionState(), /operation is pending/);
+  f.rpc.receive({ kind: 'rpc', value: { type: 'response', id: f.sent[1].id, success: true } });
+  await second;
+  assert.equal(f.rpc.hasPendingRequest('prompt'), true, 'the first transport request is still pending');
+  f.rpc.receive({ kind: 'rpc', value: { type: 'response', id: f.sent[0].id, success: false, error: 'Rejected one' } });
+  await first;
+  assert.equal(f.rpc.hasPendingRequest('prompt'), false);
+  assert.deepEqual(f.published.filter(message => message.type === 'submissionReceipt').map(message => [message.id, message.outcome]), [['second', 'accepted'], ['first', 'rejected']]);
+  assert.equal(f.usage.acceptedPrompts, 1);
+  f.rpc.disconnect('done');
+});
+
 test('image-only prompts forward Pi image blocks and reject malformed/slash attachments before writing', async () => {
   const f = fixture();
   const images = [{ type: 'image', mimeType: 'image/png', data: 'YWJj' }];
@@ -94,7 +112,7 @@ test('explicit queue submissions use followUp only while the main agent is worki
   }
 });
 
-test('unavailable, blocking compaction, duplicate and unsupported submissions never go to Pi', async () => {
+test('unavailable, blocking compaction and unsupported submissions never go to Pi', async () => {
   const f = fixture();
   f.session.state.sessionUnavailable = true;
   await f.session.handle({ type: 'prompt', id: 's1', text: 'hello' });
@@ -105,10 +123,7 @@ test('unavailable, blocking compaction, duplicate and unsupported submissions ne
   await f.session.handle({ type: 'prompt', id: 's3', text: '/delete' });
   assert.equal(f.sent.length, 0);
   assert.equal(f.published.filter(m => m.outcome === 'rejected').length, 3);
-  const pending = f.session.handle({ type: 'prompt', id: 's5', text: 'one' });
-  await f.session.handle({ type: 'prompt', id: 's6', text: 'two' });
-  assert.equal(f.sent.length, 1);
-  f.respond(true); await pending; f.rpc.disconnect('done');
+  f.rpc.disconnect('done');
 });
 
 test('manual compaction uses Pi RPC only while idle and retains optional instructions', async () => {

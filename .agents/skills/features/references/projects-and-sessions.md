@@ -19,7 +19,7 @@ One canonical directory per window with independently owned sessions. New is per
 | `src/command-palette.ts` | Cmd/Ctrl+Shift+P, modal navigation, asynchronous pickers, name step and focus restoration |
 | `src/pi/session.ts` | Pi startup/history/identity, authoritative RPC semantics and disconnect handling |
 | `src/pi/transport.ts` | Ordered response callbacks, uncertain acknowledgements, disconnected transport invalidation |
-| `src/pi/webview-client.ts` | Mounted renderer; explicit sessionReset; pending-submission settlement on disconnect |
+| `src/pi/webview-client.ts` | Mounted renderer; explicit sessionReset; send-local preparation cancellation and receipt error reporting |
 | `src/pi/session-drafts.ts` | Shared project-local library, per-session selection, provisional promotion and recovery |
 | `src-tauri/src/native_menu.rs` | Native File → Open project; preserve editing/window menus and app-owned macOS Quit |
 | `src-tauri/src/main.rs` | Native menu dispatch, launch validation, close/quit serialization |
@@ -102,16 +102,16 @@ The user-facing action is **Restart session**; “reload” refers to its Projec
 `restartSession(tab)`:
 
 1. Revalidate session presence, saved identity, settings modality and lifecycle guards. Capture the target session, not an active-session pointer across awaits.
-2. Set `restarting` before any confirmation/stop await. This disables duplicate restarts/Close, marks the row Restarting, blocks automatic launch on reselection, and locks session input. Stop confirmation is needed for busy/compacting state, submission state, extension input, or pending queue work. Cancel is a no-op except clearing the guard.
+2. Set `restarting` before any confirmation/stop await. This disables duplicate restarts/Close, marks the row Restarting, blocks automatic launch on reselection, and locks session input. Stop confirmation is needed for busy/compacting state, pending prompt/rename RPCs, extension input, or pending queue work. Cancel is a no-op except clearing the guard.
 3. Call `stopOwned` for its exact token. This is native IPC, NOT an RPC abort/get_state request, so a stuck RPC does not prevent termination. Do not start a replacement until native stop resolves. Preserve file reservations on native failure.
-4. Cancel preference/extension dialogs, settle pending submissions through `sessionDisconnected`, disconnect the old transport and mark it ended. Suppress generic disconnected notices while restarting.
+4. Cancel preference/extension dialogs, cancel send-local preparation through `sessionDisconnected`, reject pending RPCs by disconnecting the old transport and mark it ended. Suppress generic disconnected notices while restarting.
 5. Reuse `launch` with exact saved file/ID, runtime's next-launch preferences and a new token. Native launch revalidates disk identity/cwd; Pi's identity must match before submission is enabled. No fresh-session fallback.
 6. Preserve mounted session ID, sidebar row, renderer root and draft identity. Reuse the normal explicit sessionReset/history path: disclosure state resets; this is not a webview reload. Pop-out ownership remains attached to the same mounted session and saved identity. Do not retire/close the source session.
 7. Clear the restart guard in finally. The pane stays inert through restart startup, so the ordinary launch focus is deferred until the restart lock is cleared; focus the composer only if that session is still selected, startup succeeded and no dialog is open. Errors retain the entry/draft, with explicit retry. A stopped child with invalid history remains inactive; no automatic resend.
 
 `stopOwned` coalesces concurrent cleanup requests for a token. Clear only the matching cached promise on rejection so another explicit attempt can actually retry stop. Keep successful stops cached until `launch` allocates a new token, preventing delayed old cleanup from stopping the new child.
 
-No automatic prompt or queue replay. Renderer `sessionDisconnected` turns pending submissions into unknown; only actual Pi acknowledgement establishes acceptance. Definitive failure discards the attempted message; unknown delivery remains blocked until the explicit new-message action. Newer drafts remain. Token/generation guards reject old channel events, late receipts, identity callbacks and startup failures after another launch. Sibling transport/drafts/processes remain independent.
+No automatic prompt or queue replay. Renderer `sessionDisconnected` cancels send-local preparation; transport rejection reports unknown delivery for posted requests; only actual Pi acknowledgement establishes acceptance. Send already cleared the composer. No submission recovery or uncertainty gate is persisted; newer drafts remain. Token/generation guards reject old channel events, late receipts, identity callbacks and startup failures after another launch. Sibling transport/drafts/processes remain independent.
 
 Do not call `clear_queue` before restart: that would require a responsive Pi and defeat the escape hatch. Existing locally retained recovery text survives; remote in-flight/queue state is not a process-continuity guarantee.
 

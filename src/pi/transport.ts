@@ -4,6 +4,7 @@ export type Packet = { kind: 'rpc'; value: JsonRecord } | { kind: 'disconnected'
 export class RpcResponseError extends Error {}
 export class RpcTransportError extends Error {}
 interface Pending {
+  type: string;
   resolve(value: JsonRecord): void;
   reject(error: Error): void;
   onResponse?: (value: JsonRecord) => void;
@@ -38,6 +39,10 @@ export class PiTransport {
     } catch (error) { pending.reject(error instanceof Error ? error : new Error(String(error))); }
   }
 
+  hasPendingRequest(...types: string[]): boolean {
+    return [...this.pending.values()].some(request => types.includes(request.type));
+  }
+
   request(type: string, fields: JsonRecord = {}, timeoutMs = 20_000, onResponse?: (value: JsonRecord) => void): Promise<JsonRecord> {
     if (this.failure) return Promise.reject(this.failure);
     const id = `nimrod-${++this.sequence}`;
@@ -46,7 +51,7 @@ export class PiTransport {
         this.pending.delete(id);
         reject(new RpcTransportError(`Pi did not acknowledge ${type}; acceptance may be unknown. Nothing was retried.`));
       }, timeoutMs) : undefined;
-      this.pending.set(id, { resolve, reject, timer, onResponse });
+      this.pending.set(id, { type, resolve, reject, timer, onResponse });
       void this.write({ ...fields, id, type }).catch(error => this.disconnect(String(error)));
     });
   }

@@ -2094,7 +2094,7 @@ test('saved launch waits for a written Pi file before remembering exact resume i
   } finally { f.dom.window.close(); }
 });
 
-test('resume last is explicit, restores exact-file history and scoped uncertain draft without replay', async () => {
+test('resume last is explicit, restores history and editable draft without retired submission recovery', async () => {
   const last = { path: '/sessions/exact.jsonl', cwd: '/project', sessionId: 'fixture-id' };
   const f = await fixture(undefined, { appState: { 'nimrod.last-session.v1': last }, nativeDrafts: {
     [`file:${last.path}`]: { draft: 'newer draft', submission: { id: 'old-send', text: 'possibly accepted', mode: 'steer', status: 'pending' } },
@@ -2108,9 +2108,9 @@ test('resume last is explicit, restores exact-file history and scoped uncertain 
     assert.equal(config.mode, 'resume'); assert.equal(config.sessionFile, last.path); assert.equal(config.sessionId, last.sessionId);
     assert.match(f.element('messages').textContent!, /restored history/);
     assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'newer draft');
-    assert.equal(f.saved().drafts[`file:${last.path}`].submission.status, 'unknown');
-    assert.equal(f.element<HTMLButtonElement>('send').disabled, true);
-    assert.match(f.element('application-notices').textContent!, /did not confirm/i);
+    assert.equal(f.saved().drafts[`file:${last.path}`].submission, undefined);
+    assert.equal(f.element<HTMLButtonElement>('send').disabled, false);
+    assert.doesNotMatch(f.element('application-notices').textContent!, /did not confirm/i);
     assert.equal(f.calls.filter(c => (c.args.message as JsonRecord)?.type === 'prompt').length, 0);
     f.disconnect();
   } finally { f.dom.window.close(); }
@@ -2317,7 +2317,7 @@ test('restart reaps only the selected child and resumes the exact file in the sa
   } finally { f.dom.window.close(); }
 });
 
-test('restart confirmation can cancel, serializes shutdown, preserves uncertain submission and ignores late old receipts', async () => {
+test('restart confirmation can cancel, serializes shutdown, preserves newer draft and ignores late old receipts', async () => {
   let release!: () => void;
   const f = await fixture(undefined, { holdPrompts: true, stopGate: new Promise<void>(resolve => { release = resolve; }) });
   try {
@@ -2342,12 +2342,12 @@ test('restart confirmation can cancel, serializes shutdown, preserves uncertain 
     release(); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 2);
     assert.equal(f.element('prompt'), prompt); assert.equal(prompt.value, 'Newer draft');
-    assert.equal(f.saved().drafts['file:/sessions/new.jsonl'].submission.status, 'unknown');
+    assert.equal(f.saved().drafts['file:/sessions/new.jsonl'].submission, undefined);
     oldChannel.onmessage({ kind: 'rpc', value: { type: 'response', id: oldRequest.id, success: true } });
     oldChannel.onmessage({ kind: 'rpc', value: { type: 'message_start', message: { role: 'assistant', content: 'Stale output' } } });
     await f.tick();
     assert.equal(prompt.value, 'Newer draft');
-    assert.equal(f.saved().drafts['file:/sessions/new.jsonl'].submission.status, 'unknown');
+    assert.equal(f.saved().drafts['file:/sessions/new.jsonl'].submission, undefined);
     assert.equal(f.calls.filter(c => (c.args.message as JsonRecord)?.type === 'prompt').length, 1);
     assert.doesNotMatch(f.element('messages').textContent!, /Stale output/);
     f.disconnect();
@@ -2591,7 +2591,7 @@ test('closing one idle tab stops only its token, preserves history and leaves it
   } finally { f.dom.window.close(); }
 });
 
-test('the selected restored tab loads automatically without replaying its scoped uncertain draft', async () => {
+test('the selected restored tab loads its editable draft without replaying a retired submission', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project', appState: {
     'nimrod.tabs.v1:/project': { tabs: [{ path: '/sessions/a.jsonl', sessionId: 'fixture-id', name: 'Earlier work' }], active: '/sessions/a.jsonl' },
   }, nativeDrafts: { 'file:/sessions/a.jsonl': { draft: 'retained', submission: { id: 'old', text: 'uncertain', mode: 'steer', status: 'pending' } } } });
@@ -2600,7 +2600,8 @@ test('the selected restored tab loads automatically without replaying its scoped
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
     assert.equal(f.win.document.querySelectorAll('#open-sessions .session-row').length, 1);
     assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'retained');
-    assert.equal(f.saved().drafts['file:/sessions/a.jsonl'].submission.status, 'unknown');
+    assert.equal(f.saved().drafts['file:/sessions/a.jsonl'].submission, undefined);
+    assert.equal(f.element<HTMLButtonElement>('send').disabled, false);
     assert.equal(f.win.document.querySelector('.tab-notice button'), null);
     assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
     f.disconnect();
@@ -2875,7 +2876,7 @@ test('palette command history restores app-wide, persists acceptance and does no
 });
 
 
-test('native draft persistence failure prevents a saved prompt and discards the attempted message', async () => {
+test('native draft persistence failure reports storage error but does not gate prompt dispatch', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project', draftFlushError: 'fixture disk failure' });
   try {
     f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
@@ -2883,18 +2884,20 @@ test('native draft persistence failure prevents a saved prompt and discards the 
     prompt.value = 'Do not lose this'; prompt.dispatchEvent(new f.win.Event('input'));
     prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await f.tick(); await f.tick();
-    assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
+    assert.equal(f.calls.filter(call => (call.args.message as JsonRecord)?.type === 'prompt').length, 1);
     assert.equal(prompt.value, '');
+    assert.equal(f.saved().drafts['file:/sessions/new.jsonl'].submission, undefined);
     assert.equal(f.element('queue-activity').querySelector('[data-recovery-id]'), null);
     assert.equal(f.element('storage-error').textContent, '');
     assert.equal(f.element('submission-notice').hidden, true);
-    assert.match(f.element('application-notices').textContent!, /fixture disk failure.*Nothing was sent/);
+    assert.match(f.element('application-notices').textContent!, /fixture disk failure/);
+    assert.doesNotMatch(f.element('application-notices').textContent!, /Nothing was sent/);
     f.disconnect();
   } finally { f.dom.window.close(); }
 });
 
 
-test('Stop cancels a saved steer waiting for native persistence without later sending it', async () => {
+test('native persistence never delays a steer, and finishing a flush after Stop never replays it', async () => {
   let release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
   const f = await fixture(undefined, { windowWorkspace: '/project', draftFlushGate: gate });
@@ -2907,10 +2910,10 @@ test('Stop cancels a saved steer waiting for native persistence without later se
     prompt.value = 'New draft'; prompt.dispatchEvent(new f.win.Event('input'));
     f.element<HTMLButtonElement>('send').click(); await f.tick();
     release(); await f.tick(); await f.tick();
-    assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
+    assert.equal(f.calls.filter(call => (call.args.message as JsonRecord)?.type === 'prompt').length, 1);
     assert.equal(prompt.value, 'New draft');
-    assert.equal(f.element('queue-activity').querySelector('[data-recovery-id]'), null);
-    assert.equal(f.element('messages').querySelector('.user'), null);
+    assert.equal(f.saved().drafts['file:/sessions/new.jsonl'].submission, undefined);
+    assert.ok(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'clear_queue'));
     f.disconnect();
   } finally { release(); f.dom.window.close(); }
 });

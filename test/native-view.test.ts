@@ -5,7 +5,7 @@ import { webviewHtml, rendererBundle } from './view-fixture';
 import { createSafeMarkdownRenderer } from '../src/pi/safe-markdown';
 import { initialConversationState, reduceRpcEvent } from '../src/pi/reducer';
 
-function fixture(options: { images?: boolean; clipboard?: boolean; missing?: boolean; cardRenderer?: import('../src/pi/view-host').ViewHost['cardRenderer']; cardActions?: import('../src/pi/view-host').ViewHost['cardActions'] } = {}) {
+function fixture(options: { images?: boolean; clipboard?: boolean; missing?: boolean; imageGate?: Promise<void>; releaseOnClear?: boolean; cardRenderer?: import('../src/pi/view-host').ViewHost['cardRenderer']; cardActions?: import('../src/pi/view-host').ViewHost['cardActions'] } = {}) {
   const dom = new JSDOM(webviewHtml(), { runScripts: 'outside-only', pretendToBeVisual: true });
   const win = dom.window;
   let persisted: unknown;
@@ -15,14 +15,14 @@ function fixture(options: { images?: boolean; clipboard?: boolean; missing?: boo
   Object.assign(win.URL, { createObjectURL: () => `blob:fixture-${imageId}`, revokeObjectURL: () => {} });
   const attachments = options.images ? {
     put: async (blob: Blob, name: string) => { const image = { id: `image-${++imageId}`, name, mimeType: blob.type, size: blob.size }; blobs.set(image.id, blob); return image; },
-    get: async (image: { id: string }) => { if (options.missing) throw new Error('Image draft is missing'); return blobs.get(image.id)!; },
+    get: async (image: { id: string }) => { if (options.missing) throw new Error('Image draft is missing'); const blob = blobs.get(image.id)!; await options.imageGate; return blob; },
     readClipboard: options.clipboard ? async () => { clipboardReads++; return new win.Blob(['abc'], { type: 'image/png' }); } : undefined,
   } : undefined;
   const frames: FrameRequestCallback[] = [];
   win.requestAnimationFrame = cb => { frames.push(cb); return frames.length; };
   const sent: Record<string, unknown>[] = [];
   let receive: (message: unknown) => void = () => {};
-  Object.assign(win, { testHost: { attachments, cardRenderer: options.cardRenderer, cardActions: options.cardActions, getState: () => undefined, setState: (state: unknown) => { persisted = state; }, postMessage: (message: Record<string, unknown>) => sent.push(message), onMessage: (listener: typeof receive) => { receive = listener; } } });
+  Object.assign(win, { testHost: { attachments, cardRenderer: options.cardRenderer, cardActions: options.cardActions, getState: () => undefined, setState: (state: unknown) => { persisted = state; if (options.releaseOnClear) { const images = (state as { attachments?: { id: string }[] }).attachments ?? []; for (const id of blobs.keys()) if (!images.some(image => image.id === id)) blobs.delete(id); } }, postMessage: (message: Record<string, unknown>) => sent.push(message), onMessage: (listener: typeof receive) => { receive = listener; } } });
   win.eval(rendererBundle() + '\nwindow.testView = PiView.mountPiView(window.testHost);');
   const flush = () => { while (frames.length) frames.shift()!(0); };
   const snapshot = (state: Record<string, unknown>) => { receive({ type: 'snapshot', state }); flush(); };
@@ -37,22 +37,31 @@ function fixture(options: { images?: boolean; clipboard?: boolean; missing?: boo
   return { dom, win, sent, receive, snapshot, prompt, draft, send, flush, paste, state: () => persisted, clipboardReads: () => clipboardReads };
 }
 
-test('bundled native bridge preserves drafts through pending/unknown/late acknowledgements', () => {
+test('bundled native bridge clears immediately and isolates new drafts from pending/unknown/late receipts', () => {
   const f = fixture();
   try {
     f.snapshot({ sessionUnavailable: false, status: 'Ready', messages: [] });
     f.draft('original'); f.send();
     const submission = f.sent.find(m => m.type === 'prompt')!;
-    assert.equal(f.prompt.value, 'original');
+    assert.equal(f.prompt.value, '');
+    assert.equal(Object.hasOwn(f.state() as object, 'submission'), false);
+    f.draft('new draft'); f.send();
+    assert.equal(f.sent.filter(m => m.type === 'prompt').length, 2, 'send the next message without waiting for acknowledgement');
     f.draft('new draft');
     f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' });
     assert.equal(f.prompt.value, 'new draft');
-    f.send();
     const second = f.sent.filter(m => m.type === 'prompt').at(-1)!;
     f.receive({ type: 'submissionReceipt', id: second.id, outcome: 'unknown' });
-    f.send();
-    assert.equal(f.sent.filter(m => m.type === 'prompt').length, 2);
     assert.equal(f.prompt.value, 'new draft');
+    f.send();
+    assert.equal(f.sent.filter(m => m.type === 'prompt').length, 3);
+    assert.equal(f.prompt.value, '');
+    assert.equal(f.win.document.querySelector("[data-action='dismiss-unknown']"), null);
+    f.draft('new draft');
+    f.receive({ type: 'submissionReceipt', id: second.id, outcome: 'accepted' });
+    assert.equal(f.prompt.value, 'new draft');
+    f.send();
+    assert.equal(f.sent.filter(m => m.type === 'prompt').length, 4, 'late old receipt does not gate new sends');
   } finally { f.dom.window.close(); }
 });
 
@@ -404,7 +413,7 @@ test('steering appears before acknowledgement, remains after live output, and re
     const pending = f.win.document.querySelector<HTMLElement>('#messages .user')!;
     assert.match(pending.textContent!, /Sending…/);
     assert.equal(pending.querySelector('strong')?.textContent, 'change direction');
-    assert.equal(f.prompt.value, 'Please **change direction**');
+    assert.equal(f.prompt.value, '');
     assert.equal(f.win.document.activeElement, f.prompt);
     f.snapshot({ busy: true, messages: [assistant], queue: { authoritative: true, steering: [submission.text], followUp: ['Later'] } });
     assert.equal(f.win.document.querySelectorAll('#messages .user').length, 1);
@@ -452,7 +461,7 @@ for (const outcome of ['rejected', 'unknown'] as const) test(`steering ${outcome
     f.receive({ type: 'submissionReceipt', id: submission.id, outcome }); f.flush();
     if (outcome === 'unknown') assert.match(f.win.document.querySelector('#messages .user')!.textContent!, /Acceptance unknown/);
     else assert.equal(f.win.document.querySelector('#messages .user'), null);
-    assert.equal(f.prompt.value, outcome === 'unknown' ? 'uncertain steer' : '');
+    assert.equal(f.prompt.value, '');
     assert.equal(f.win.document.querySelector('[data-recovery-id]'), null);
     assert.equal(f.sent.filter(m => m.type === 'prompt').length, 1);
     f.receive({ type: 'sessionReset' }); f.flush();
@@ -485,6 +494,7 @@ test('paste uses event images once, preserves newer attachments on ack, and neve
     assert.equal(f.clipboardReads(), 0);
     assert.equal(f.win.document.querySelectorAll('.composer-attachments img').length, 1);
     f.send();
+    assert.equal(f.win.document.querySelectorAll('.composer-attachments img').length, 0, 'clear the tray before image preparation completes');
     // FileReader completion is asynchronous and may exceed a fixed 30ms while
     // the full suite/build is running. Wait for the actual fixture submission.
     const deadline = Date.now() + 2000;
@@ -500,6 +510,44 @@ test('paste uses event images once, preserves newer attachments on ack, and neve
     assert.equal(f.win.document.querySelector('.image-recovery'), null);
     assert.equal(Object.hasOwn(f.state() as object, 'imageRecovery'), false);
   } finally { f.dom.window.close(); }
+});
+
+test('image sends capture bytes before cleared drafts release temporary storage, without waiting for receipts', async () => {
+  let release!: () => void;
+  const f = fixture({ images: true, releaseOnClear: true, imageGate: new Promise<void>(resolve => { release = resolve; }) });
+  try {
+    f.snapshot({ sessionUnavailable: false, messages: [] });
+    f.draft('caption'); f.paste(); await tickImages(); f.send();
+    assert.equal(f.prompt.value, '');
+    assert.equal(f.win.document.querySelectorAll('.composer-attachments img').length, 0);
+    assert.equal(f.sent.filter(message => message.type === 'prompt').length, 0);
+    f.draft('next message');
+    release();
+    const deadline = Date.now() + 2000;
+    while (!f.sent.some(message => message.type === 'prompt') && Date.now() < deadline) await tickImages();
+    const sent = f.sent.find(message => message.type === 'prompt')!;
+    assert.ok(sent);
+    assert.deepEqual(JSON.parse(JSON.stringify(sent.images)), [{ type: 'image', mimeType: 'image/png', data: 'YWJj' }]);
+    assert.equal(f.prompt.value, 'next message');
+    f.send();
+    assert.equal(f.sent.filter(message => message.type === 'prompt').length, 2, 'image acknowledgement does not block the next send');
+  } finally { release(); f.dom.window.close(); }
+});
+
+for (const boundary of ['stop', 'sessionReset', 'sessionDisconnected'] as const) test(`image preparation cannot post across ${boundary}`, async () => {
+  let release!: () => void;
+  const f = fixture({ images: true, imageGate: new Promise<void>(resolve => { release = resolve; }) });
+  try {
+    f.snapshot({ sessionUnavailable: false, busy: true, messages: [] });
+    f.paste(); await tickImages(); f.send();
+    if (boundary === 'stop') f.win.document.querySelector<HTMLButtonElement>('#send')!.click();
+    else f.receive({ type: boundary });
+    f.draft('new draft');
+    release(); await tickImages(); await tickImages();
+    assert.equal(f.sent.filter(message => message.type === 'prompt').length, 0);
+    assert.equal(f.prompt.value, 'new draft');
+    assert.equal(f.win.document.querySelector('[data-recovery-id]'), null);
+  } finally { release(); f.dom.window.close(); }
 });
 
 test('native fallback reads only empty composer pastes; missing image data blocks submission', async () => {
@@ -529,14 +577,9 @@ for (const outcome of ['rejected', 'unknown'] as const) test(`image send ${outco
     f.receive({ type: 'submissionReceipt', id: submission.id, outcome, error: 'Fixture error' });
     assert.equal(f.win.document.querySelector('.image-recovery'), null);
     assert.equal(f.win.document.querySelector('[data-recovery-id]'), null);
-    assert.equal(f.prompt.value, outcome === 'unknown' ? 'caption' : '');
-    if (outcome === 'unknown') {
-      assert.match(f.win.document.querySelector('#submission-notice')!.textContent!, /did not confirm/);
-      f.send(); assert.equal(f.sent.filter(message => message.type === 'prompt').length, 1);
-      const proceed = f.win.document.querySelector<HTMLButtonElement>("[data-action='dismiss-unknown']")!;
-      assert.equal(proceed.textContent, 'Write a new message'); proceed.click();
-      assert.equal(f.prompt.value, ''); assert.equal(f.win.document.activeElement, f.prompt);
-    } else assert.match(f.win.document.querySelector('#submission-notice')!.textContent!, /Not sent/);
+    assert.equal(f.prompt.value, '');
+    assert.match(f.win.document.querySelector('#submission-notice')!.textContent!, outcome === 'unknown' ? /did not confirm/ : /Fixture error/);
+    assert.equal(f.win.document.querySelector("[data-action='dismiss-unknown']"), null);
     assert.equal(f.win.document.querySelectorAll('.composer-attachments img').length, 0);
     f.send(); assert.equal(f.sent.filter(message => message.type === 'prompt').length, 1);
   } finally { f.dom.window.close(); }

@@ -11,7 +11,8 @@ test('native provisional promotion stages the saved draft and tombstones the old
   const state = { draft: 'newer', submission: { id: 's', text: 'original', mode: 'steer', status: 'pending' } };
   drafts.write(state); drafts.bind('/session');
   assert.deepEqual(changes, [['unassigned:fixture', state], ['file:/session', state], ['unassigned:fixture', null]]);
-  assert.equal(restoreComposerState(drafts.read()).submission?.status, 'unknown');
+  assert.equal(Object.hasOwn(restoreComposerState(drafts.read()), 'submission'), false);
+  assert.equal(restoreComposerState(drafts.read()).draft, 'newer');
   drafts.deleteFile('/session');
   assert.deepEqual(changes.at(-1), ['file:/session', null]);
 });

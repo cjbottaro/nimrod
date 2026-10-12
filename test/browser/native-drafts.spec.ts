@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { demoFixture, visible } from './demo-fixture';
 
-test('persistent prompts stage and flush recovery before offline Pi submission; legacy drafts stay ignored', async ({ page }) => {
+test('persistent sends clear native drafts without persisting a submission or recovery copy', async ({ page }) => {
   const demo = await demoFixture(page, {}, [], { persistent: true, drafts: {} });
   try {
     const prompt = page.locator(visible('prompt'));
@@ -10,10 +10,11 @@ test('persistent prompts stage and flush recovery before offline Pi submission; 
     await prompt.press('Enter');
     await expect(prompt).toHaveValue('');
     const promptCall = demo.calls.findIndex(call => call.command === 'write_pi' && (call.args.message as { type: string }).type === 'prompt');
-    const submissionStage = demo.calls.findIndex(call => call.command === 'drafts_stage' && !!((call.args.record as { value: { submission?: unknown } }).value.submission));
-    expect(submissionStage).toBeGreaterThanOrEqual(0);
-    expect(demo.calls.slice(submissionStage, promptCall).some(call => call.command === 'drafts_flush')).toBe(true);
-    expect(promptCall).toBeGreaterThan(submissionStage);
+    expect(promptCall).toBeGreaterThanOrEqual(0);
+    await expect.poll(() => [...demo.nativeDrafts.values()].some(record => (record.value as { draft?: string }).draft === '')).toBe(true);
+    const staged = demo.calls.filter(call => call.command === 'drafts_stage').map(call => (call.args.record as { value: Record<string, unknown> }).value);
+    expect(staged.some(value => Object.hasOwn(value, 'submission'))).toBe(false);
+    expect([...demo.nativeDrafts.values()].some(record => (record.value as { draft?: string }).draft === 'Native saved draft')).toBe(false);
     expect(demo.errors).toEqual([]);
   } finally { await demo.close(); }
 });

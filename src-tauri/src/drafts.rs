@@ -255,21 +255,10 @@ impl Drafts {
         }
         let mut ids = Vec::new();
         for value in values {
-            // Only the current draft and unresolved submission own image bytes.
-            // Retired imageRecovery / recovered-unsent copies must not keep old
-            // blobs alive, including scopes that have not been reopened yet.
+            // Only editable drafts own persisted image references. Retired
+            // submissions and backup copies do not protect old blobs.
             if let Some(attachments) = value.get("attachments") {
                 visit(attachments, &mut ids);
-            }
-            if let Some(submission) = value.get("submission") {
-                if matches!(
-                    submission.get("status").and_then(Value::as_str),
-                    Some("pending" | "unknown")
-                ) {
-                    if let Some(attachments) = submission.get("attachments") {
-                        visit(attachments, &mut ids);
-                    }
-                }
             }
         }
         Ok(ids)
@@ -405,7 +394,7 @@ mod tests {
         }
     }
     #[test]
-    fn retired_backups_do_not_protect_images_but_pending_and_unknown_submissions_do() {
+    fn only_editable_drafts_protect_persisted_images() {
         let dir = tempfile::tempdir().unwrap();
         let store = Drafts::new(dir.path().join("drafts"));
         let image = |id| json!({"id":id,"mimeType":"image/png","size":1});
@@ -417,12 +406,12 @@ mod tests {
         store.flush(None, false).unwrap();
         let mut ids = store.references().unwrap();
         ids.sort();
-        assert_eq!(ids, vec!["draft", "pending"]);
+        assert_eq!(ids, vec!["draft"]);
         store.stage("/a", Record {
             key: "file:/fixture".into(), revision: 2,
             value: json!({"submission":{"status":"unknown","attachments":[image("unknown")]}}),
         }).unwrap();
-        assert_eq!(store.references().unwrap(), vec!["unknown"]);
+        assert!(store.references().unwrap().is_empty());
         store.stage("/a", Record {
             key: "file:/fixture".into(), revision: 3,
             value: json!({"submission":{"status":"accepted","attachments":[image("resolved")]}}),

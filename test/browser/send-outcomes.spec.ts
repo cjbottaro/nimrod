@@ -44,12 +44,34 @@ test('definitive rejection shows an error and discards the attempted message wit
     await holdPrompt(page); await page.locator(visible('prompt')).fill('Failed caption'); await paste(page);
     await expect(page.locator('.session-view:not([hidden]) .composer-attachments img')).toHaveCount(1);
     await page.locator(visible('prompt')).press('Enter'); await expect.poll(() => attempts(page)).toBe(1);
+    await expect(page.locator(visible('prompt'))).toHaveValue('');
+    await expect(page.locator('.session-view:not([hidden]) .composer-attachments')).toBeHidden();
     await rejectPrompt(page);
     await expect(page.locator('#application-notices')).toContainText('Offline fixture rejected');
     await expect(page.locator(visible('prompt'))).toHaveValue('');
     await expect(page.locator('.session-view:not([hidden]) .composer-attachments')).toBeHidden();
     await expect(page.locator('.image-recovery, [data-recovery-id]')).toHaveCount(0);
     await page.locator(visible('prompt')).press('Enter'); expect(await attempts(page)).toBe(1);
+    expect(fixture.errors).toEqual([]);
+  } finally { await fixture.close(); }
+});
+
+test('sending another message does not wait for the first acknowledgement; failure never edits the next draft', async ({ page }) => {
+  const fixture = await demoFixture(page);
+  try {
+    await holdPrompt(page);
+    const prompt = page.locator(visible('prompt'));
+    await prompt.fill('First message'); await prompt.press('Enter');
+    await expect.poll(() => attempts(page)).toBe(1);
+    await expect(prompt).toHaveValue('');
+    await expect(page.locator(visible('send'))).toBeEnabled();
+    await prompt.fill('Second message'); await prompt.press('Enter');
+    await expect.poll(() => attempts(page)).toBe(2);
+    await prompt.fill('Second message');
+    await rejectPrompt(page);
+    await expect(page.locator('#application-notices')).toContainText('Offline fixture rejected');
+    await expect(prompt).toHaveValue('Second message');
+    await expect(page.locator(visible('send'))).toBeEnabled();
     expect(fixture.errors).toEqual([]);
   } finally { await fixture.close(); }
 });
@@ -61,7 +83,7 @@ test('rejection preserves newer text and images instead of restoring or retainin
     const tray = page.locator('.session-view:not([hidden]) .composer-attachments');
     await expect(tray.locator('img')).toHaveCount(1); await page.locator(visible('prompt')).press('Enter');
     await expect.poll(() => attempts(page)).toBe(1);
-    await page.locator(visible('prompt')).fill('New caption'); await paste(page); await expect(tray.locator('img')).toHaveCount(2);
+    await page.locator(visible('prompt')).fill('New caption'); await paste(page); await expect(tray.locator('img')).toHaveCount(1);
     await rejectPrompt(page);
     await expect(page.locator(visible('prompt'))).toHaveValue('New caption'); await expect(tray.locator('img')).toHaveCount(1);
     await expect(page.locator('.image-recovery, [data-recovery-id]')).toHaveCount(0);
@@ -69,7 +91,7 @@ test('rejection preserves newer text and images instead of restoring or retainin
   } finally { await fixture.close(); }
 });
 
-test('unknown delivery is explicit and Write a new message cannot replay the old draft', async ({ page }) => {
+test('unknown delivery reports an error without composer recovery or replay', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {
     await holdPrompt(page); await page.locator(visible('prompt')).fill('Maybe received'); await paste(page);
@@ -81,7 +103,7 @@ test('unknown delivery is explicit and Write a new message cannot replay the old
     });
     await expect(page.locator('#application-notices')).toContainText('did not confirm');
     await page.locator(visible('prompt')).press('Enter'); expect(await attempts(page)).toBe(1);
-    await page.getByRole('button', { name: 'Write a new message', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Write a new message', exact: true })).toHaveCount(0);
     await expect(page.locator(visible('prompt'))).toHaveValue(''); await expect(page.locator(visible('prompt'))).toBeFocused();
     await expect(page.locator('.session-view:not([hidden]) .composer-attachments')).toBeHidden();
     await page.locator(visible('prompt')).press('Enter'); expect(await attempts(page)).toBe(1);

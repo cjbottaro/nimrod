@@ -28,11 +28,13 @@ Returned nonempty queue text appears with **Restore** controls in the Status are
 
 ## Send outcomes
 
-- **Accepted:** clear the submitted text and images. No extra image recovery copy is kept.
-- **Definitely not sent:** show the error and discard that attempted message. Write a new message if needed; nothing is restored or retried.
-- **Acceptance unknown:** show the uncertainty and block further sends. Check the transcript/queue, then use **Write a new message** to discard the uncertain attempt and continue. This action does not prove the previous message failed.
+Send immediately clears the submitted text and images from the composer, including while images are being prepared. You can write and send another message without waiting for Pi's acknowledgement. Image preparation briefly delays another send until its payload is ready, not until acknowledgement.
 
-Newer text/images entered while waiting survive every outcome. Only Pi's response establishes acceptance; later model/provider failures leave accepted messages in the transcript. Disconnect, reload and Restart never replay a prompt.
+- **Accepted:** no additional composer change or recovery copy.
+- **Definitely not sent:** show the error. The message is not restored; type a new message if needed.
+- **Acceptance unknown:** show an error explaining that Pi may have received the message. No restore/retry action or extra submission gate is added. Sending still requires a connected, available session.
+
+Receipts never change newer text/images, even if you retype exactly the same message. Only Pi's response establishes acceptance; later model/provider failures leave accepted messages in the transcript. Disconnect, reload and Restart never replay a prompt. Submission tracking is not saved as draft recovery.
 
 Stop keeps the process alive. Use [Restart session](sessions.md#restart-session) for a stuck saved session, or Close for temporary/unsaved sessions.
 

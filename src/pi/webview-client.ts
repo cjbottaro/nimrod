@@ -4,7 +4,7 @@ import { installSlashCompletion } from "./slash-completion";
 
 import { reconcileContentBlock } from "./content-dom";
 import { informationalExtensionStatuses, presentActivity } from "./activity-state";
-import { beginSubmission, ComposerState, dismissUnknownSubmission, recoverClearedQueue, restoreRecoveredQueueItem, settleSubmission, SubmissionMode, updateDraft } from "./composer-state";
+import { clearDraft, ComposerState, recoverClearedQueue, restoreRecoveredQueueItem, SubmissionMode, updateDraft } from "./composer-state";
 import { keyboardHint, keyboardSubmissionMode, renderPrimaryAction, resizeComposer } from "./composer-dom";
 import { codeBlockSource, createSafeMarkdownRenderer, isSafeLink } from "./safe-markdown";
 import { showCopyResult, setCodeIcon } from './code-actions';
@@ -37,9 +37,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   const attachmentUrls = new Map<string, string>();
   let composerGeneration = 0;
   let preparing = 0;
-  let preparingSubmission: string | undefined;
   let attachmentSignature = '';
-  let uncertainNoticeId: string | undefined;
   let errorNoticeText: string | undefined;
   let errorNoticeSequence = 0;
   let composerNoticeCause: string | undefined;
@@ -147,14 +145,14 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
 
   function updateComposer(next: ComposerState): void {
     const draftOnly = next.attachments === composer.attachments
-      && next.submission === composer.submission && next.lastError === composer.lastError
+      && next.lastError === composer.lastError
       && next.recovered === composer.recovered && next.queue === composer.queue;
     const recoveryChanged = next.recovered !== composer.recovered;
     composer = next;
     if (prompt.value !== composer.draft) prompt.value = composer.draft;
     if (draftOnly) schedulePromptResize();
     else resizePrompt();
-    // Recovery durability and pending-submission eligibility remain synchronous.
+    // Only editable drafts and authoritative queue recovery are persisted.
     persistComposer();
     if (recoveryChanged) renderActivity(displayedState);
     if (!draftOnly) renderComposer();
@@ -197,7 +195,6 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
 
   function renderComposer(): void {
     renderAttachments();
-    const submission = composer.submission;
     const mainBusy = displayedState.busy === true;
     const compacting = displayedState.compacting === true;
     const wasLocked = prompt.readOnly;
@@ -208,7 +205,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     }
     renderPrimaryAction(send, {
       mainBusy,
-      submissionPending: !!submission || preparing > 0,
+      preparing: preparing > 0,
       sessionUnavailable: displayedState.sessionUnavailable === true,
     });
     keyboardHintNode.textContent = compacting ? "Compacting context… · Stop to cancel" : keyboardHint(mainBusy);
@@ -218,21 +215,8 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     }
     if (host.reportNotice) {
       submissionNotice.hidden = true; submissionNotice.replaceChildren();
-      const uncertain = submission?.status === 'unknown' ? `delivery:${submission.id}` : undefined;
-      if (uncertainNoticeId && uncertainNoticeId !== uncertain) host.resolveNotice?.(uncertainNoticeId);
-      uncertainNoticeId = uncertain;
-      if (uncertain && submission) {
-        const id = submission.id;
-        host.reportNotice({ id: uncertain, cause: 'connection', priority: 100, operation: 'Message delivery unknown', severity: 'warning', dismissible: false,
-          message: 'Pi did not confirm whether this message was received. Check the transcript or queue before writing a new message. Nothing was retried automatically.',
-          actions: [{ label: 'Write a new message', enabled: () => !disposed && composer.submission?.id === id && composer.submission.status === 'unknown', run: () => {
-            if (disposed || composer.submission?.id !== id || composer.submission.status !== 'unknown') return;
-            updateComposer(dismissUnknownSubmission(composer));
-            if (active && !prompt.readOnly && !document.querySelector('dialog[open]')) prompt.focus({ preventScroll: true });
-          } }],
-        });
-      } else if (composer.lastError && composer.lastError !== errorNoticeText) {
-        host.reportNotice({ id: `composer:${++errorNoticeSequence}`, operation: composerNoticeOperation || 'Send message', message: composer.lastError, cause: composerNoticeCause, priority: composerNoticeCause ? 20 : undefined });
+      if (composer.lastError && composer.lastError !== errorNoticeText) {
+        host.reportNotice({ id: `composer:${++errorNoticeSequence}`, operation: composerNoticeOperation || 'Send message', message: composer.lastError, cause: composerNoticeCause, priority: composerNoticeOperation === 'Message delivery unknown' ? 100 : composerNoticeCause ? 20 : undefined });
         composerNoticeCause = undefined; composerNoticeOperation = undefined;
       }
       errorNoticeText = composer.lastError;
@@ -245,21 +229,9 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       submissionNotice.textContent = displayedState.recoveryNotice;
       return;
     }
-    if (submission?.status === "unknown") {
-      submissionNotice.hidden = false;
-      submissionNotice.replaceChildren();
-      const text = element("span");
-      text.textContent = "Pi did not confirm whether this message was received. Check the transcript or queue before writing a new message. Nothing was retried automatically.";
-      const allow = element("button");
-      allow.type = "button";
-      allow.dataset.action = "dismiss-unknown";
-      allow.textContent = "Write a new message";
-      submissionNotice.append(text, allow);
-      return;
-    }
     if (composer.lastError) {
       submissionNotice.hidden = false;
-      submissionNotice.textContent = `Not sent: ${composer.lastError}`;
+      submissionNotice.textContent = composer.lastError;
       return;
     }
     submissionNotice.hidden = true;
@@ -694,44 +666,40 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     if (/^\/(?:resume|delete|new|fork|clone|tree|reload|quit)(?:\s|$)/.test(text)) {
       updateComposer({ ...composer, lastError: 'Use the project session controls for session management. This slash operation is not supported; nothing was sent.' }); return;
     }
-    if (compact && (displayedState.sessionUnavailable || displayedState.busy || displayedState.compacting || composer.submission)) {
+    if (compact && (displayedState.sessionUnavailable || displayedState.busy || displayedState.compacting)) {
       updateComposer({ ...composer, lastError: 'Manual compaction is available only while Pi is idle. Your draft was kept.' }); return;
     }
-    if (displayedState.sessionUnavailable || displayedState.compacting || composer.submission || (!text && !composer.attachments?.length)) return;
+    if (displayedState.sessionUnavailable || displayedState.compacting || (!text && !composer.attachments?.length)) return;
     const id = `submission-${Date.now()}-${++nextSubmissionId}`;
-    const next = beginSubmission(composer, id, mode);
-    if (next === composer) return;
-    // Slash commands may be controls or expand into different content. Only plain
-    // busy sends get an optimistic turn; Pi's authoritative queue still displays all steers.
-    if (!next.submission!.attachments?.length && displayedState.busy && mode !== "followUp" && !text.startsWith("/")) {
-      steeringTranscript.begin(id, next.submission!.text);
+    const submittedText = composer.draft;
+    const generation = composerGeneration;
+    // Start every image read before clearing the draft releases temporary storage.
+    // These promises own the bytes locally; no submission state survives dispatch.
+    const imagesReady = composer.attachments?.length ? Promise.all(composer.attachments.map(async image => {
+      if (!host.attachments) throw new Error('Image storage is unavailable.');
+      return imageContent(await host.attachments.get(image));
+    })) : undefined;
+    // Slash commands may be controls or expand into different content.
+    if (!imagesReady && displayedState.busy && mode !== "followUp" && !text.startsWith("/")) {
+      steeringTranscript.begin(id, submittedText);
       queueRender(pendingState || displayedState);
     }
-    // Compaction is a control operation, not a user turn: consume its slash text immediately.
-    updateComposer(compact ? { ...next, draft: "" } : next);
+    updateComposer(clearDraft(composer));
     if (compact) post("compact", { id, customInstructions: compact[1]?.trim() || undefined });
-    else if (next.submission!.attachments?.length) {
-      const submitted = next.submission!;
-      const generation = composerGeneration;
-      preparingSubmission = id;
+    else if (imagesReady) {
       preparing++; renderComposer();
       void (async () => {
         try {
-          if (!host.attachments) throw new Error('Image storage is unavailable.');
-          validateAttachments(submitted.attachments!);
-          const images = await Promise.all(submitted.attachments!.map(async image => {
-            try { return await imageContent(await host.attachments!.get(image)); }
-            catch (error) { composerNoticeCause = `image:${image.id}`; throw error; }
-          }));
-          if (disposed || generation !== composerGeneration || composer.submission?.id !== id) return;
-          if (deletionLocked || displayedState.compacting || displayedState.sessionUnavailable) throw new Error('Session became unavailable while preparing images. Nothing was sent.');
-          if (displayedState.busy && mode !== 'followUp') { steeringTranscript.begin(id, submitted.text, 'sending', images); queueRender(pendingState || displayedState); }
-          preparingSubmission = undefined;
-          post('prompt', { id, text: submitted.text, mode, images });
-        } catch (error) { if (!disposed && generation === composerGeneration) updateComposer(settleSubmission(composer, id, 'rejected', String(error))); }
-        finally { if (!disposed && generation === composerGeneration) { preparingSubmission = undefined; preparing--; renderComposer(); } }
+          const images = await imagesReady;
+          if (disposed || generation !== composerGeneration) return;
+          const state = pendingState || displayedState;
+          if (deletionLocked || state.compacting || state.sessionUnavailable) throw new Error('Session became unavailable while preparing images. Nothing was sent.');
+          if (state.busy && mode !== 'followUp') { steeringTranscript.begin(id, submittedText, 'sending', images); queueRender(state); }
+          post('prompt', { id, text: submittedText, mode, images });
+        } catch (error) { if (!disposed && generation === composerGeneration) updateComposer({ ...composer, lastError: String(error) }); }
+        finally { if (!disposed && generation === composerGeneration) { preparing--; renderComposer(); } }
       })();
-    } else post("prompt", { id, text: next.submission!.text, mode });
+    } else post("prompt", { id, text: submittedText, mode });
   }
 
   const updateTopScrollEdge = (): void => {
@@ -743,8 +711,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   send.addEventListener("click", () => {
     if (send.dataset.action === "stop") {
       composerGeneration++; preparing = 0;
-      if (preparingSubmission) updateComposer(settleSubmission(composer, preparingSubmission, 'cancelled', 'Image preparation cancelled by Stop. Nothing was sent.'));
-      preparingSubmission = undefined; renderComposer(); post('stop');
+      renderComposer(); post('stop');
     }
     else submit();
   });
@@ -779,13 +746,6 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     })();
   }, { signal: listeners.signal });
   prompt.addEventListener("input", () => updateComposer(updateDraft(composer, prompt.value)));
-  submissionNotice.addEventListener("click", (event) => {
-    const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button[data-action='dismiss-unknown']") : undefined;
-    if (target) {
-      updateComposer(dismissUnknownSubmission(composer));
-      if (active && !prompt.readOnly && !document.querySelector('dialog[open]')) prompt.focus({ preventScroll: true });
-    }
-  });
   queueActivity.addEventListener("click", (event) => {
     const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button[data-recovery-id]") : undefined;
     const id = target?.dataset.recoveryId;
@@ -839,7 +799,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   host.onMessage((data: HostMessage) => {
     if (disposed) return;
     if (data.type === "sessionReset") {
-      composerGeneration++; preparing = 0; preparingSubmission = undefined; attachmentSignature = '';
+      composerGeneration++; preparing = 0; attachmentSignature = '';
       // An explicit launch boundary only; ordinary snapshots retain all live UI state.
       toolDisclosure.dispose();
       for (const card of toolCards.values()) disposeToolCard(card);
@@ -858,15 +818,13 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     }
     if (data.type === "sessionDisconnected") {
       steeringTranscript.disconnect();
-      if (composer.submission?.status === "pending") {
-        updateComposer(settleSubmission(composer, composer.submission.id, "unknown", "Pi disconnected before confirming this submission. It will not be sent again automatically."));
-      }
+      composerGeneration++; preparing = 0; renderComposer();
       queueRender(pendingState || displayedState);
     }
     if (data.type === "deletionLock") {
       deletionLocked = data.locked === true;
       renderComposer();
-      if (deletionLocked) { persistComposer(); post("deletionState", { id: data.id, hasDraft: !!(composer.draft.trim() || composer.attachments?.length || preparing || composer.submission || composer.recovered.length) }); }
+      if (deletionLocked) { persistComposer(); post("deletionState", { id: data.id, hasDraft: !!(composer.draft.trim() || composer.attachments?.length || preparing || composer.recovered.length) }); }
     }
     if (data.type === "snapshot") {
       if (typeof data.state?.deletionLocked === "boolean") deletionLocked = data.state.deletionLocked;
@@ -886,10 +844,16 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     if (data.type === "submissionReceipt" && typeof data.id === "string" && (data.outcome === "accepted" || data.outcome === "rejected" || data.outcome === "cancelled" || data.outcome === "unknown")) {
       steeringTranscript.receipt(data.id, data.outcome);
       queueRender(pendingState || displayedState);
-      composerNoticeCause = typeof data.noticeCause === 'string' ? data.noticeCause : undefined;
-      composerNoticeOperation = typeof data.operation === 'string' ? data.operation : undefined;
-      if (data.outcome === 'accepted' && composerNoticeCause) host.resolveNoticeCause?.(composerNoticeCause);
-      updateComposer(settleSubmission(composer, data.id, data.outcome, safeText(data.error) || undefined));
+      if (data.outcome === 'accepted') {
+        if (typeof data.noticeCause === 'string') host.resolveNoticeCause?.(data.noticeCause);
+      } else if (data.outcome !== 'cancelled') {
+        const unknown = data.outcome === 'unknown';
+        const error = safeText(data.error);
+        const message = unknown ? `Pi did not confirm whether this message was received. Nothing was retried automatically.${error ? ` ${error}` : ""}` : error || 'Pi rejected this message.';
+        if (host.reportNotice) host.reportNotice({ id: `send:${data.id}`, operation: unknown ? 'Message delivery unknown' : safeText(data.operation) || 'Send message', message,
+          cause: unknown ? 'connection' : safeText(data.noticeCause) || undefined, priority: unknown ? 100 : undefined });
+        else updateComposer({ ...composer, lastError: message });
+      }
     }
     if (data.type === "queueRecovery") {
       steeringTranscript.recover(stringArray(data.steering));

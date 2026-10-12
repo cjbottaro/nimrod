@@ -37,7 +37,6 @@ export class PiSession {
   state: ConversationState = { ...initialConversationState(), sessionUnavailable: true, temporary: true };
   private commands: unknown[] = [];
   private scope?: ModelReference[];
-  private submission?: string;
   private compactionRequest = false;
   private compactionNoticeId?: string;
   private disconnected = false;
@@ -55,7 +54,7 @@ export class PiSession {
     this.state.temporary = temporary;
     rpc.onEvent = event => this.event(event);
     this.model = new ModelThinkingController(rpc, {
-      isChangeBlocked: () => !!this.state.sessionUnavailable || !!this.submission,
+      isChangeBlocked: () => !!this.state.sessionUnavailable || this.rpc.hasPendingRequest('prompt', 'set_session_name'),
       onRpcState: data => this.applyState(data),
       onState: modelControls => { this.state = { ...this.state, modelControls }; this.publish(); },
       chooseModel: (models, current) => this.chooseModel(models, current, (title, options) => ui.choose(title, options)),
@@ -123,13 +122,13 @@ export class PiSession {
 
   async refreshDeletionState(): Promise<void> {
     if (this.disconnected) return;
-    if (this.compactionRequest || this.submission) throw new Error('A session operation is pending');
+    if (this.compactionRequest || this.rpc.hasPendingRequest('prompt', 'set_session_name')) throw new Error('A session operation is pending');
     await this.rpc.request('get_state', {}, 20_000, response => {
       const data = record(response.data); this.applyState(data);
       if (typeof data.pendingMessageCount === 'number') this.state = { ...this.state, queue: { ...this.state.queue, pendingCount: data.pendingMessageCount } };
     });
     this.publish();
-    if (this.compactionRequest || this.submission) throw new Error('A session operation is pending');
+    if (this.compactionRequest || this.rpc.hasPendingRequest('prompt', 'set_session_name')) throw new Error('A session operation is pending');
   }
 
   publish(): void {
@@ -245,13 +244,12 @@ export class PiSession {
     let images;
     try { images = validateImageContents(message.images); } catch (error) { receipt('rejected', String(error)); return; }
     if (images.length && text.trim().startsWith('/')) { receipt('rejected', 'Image attachments cannot be sent with slash commands.'); return; }
-    if (!id || (!text.trim() && !images.length) || text.length > 1_000_000 || this.submission || this.state.sessionUnavailable || this.state.compacting || this.state.modelControls.changing) {
+    if (!id || (!text.trim() && !images.length) || text.length > 1_000_000 || this.state.sessionUnavailable || this.state.compacting || this.state.modelControls.changing) {
       receipt('rejected', 'Pi is not ready for this submission. Nothing was sent.'); return;
     }
     if (/^\/(?:resume|delete|new|fork|clone|tree|reload|quit)(?:\s|$)/.test(text.trim())) {
       receipt('rejected', 'That operation is not implemented in this PoC.'); return;
     }
-    this.submission = id;
     try {
       const rename = /^\/name(?:\s+([\s\S]*))?$/.exec(text.trim());
       if (rename) {
@@ -269,7 +267,6 @@ export class PiSession {
       receipt('accepted');
       this.ui.promptAccepted?.();
     } catch (error) { receipt(error instanceof RpcResponseError ? 'rejected' : 'unknown', errorText(error)); }
-    finally { this.submission = undefined; }
   }
 
   private async rename(name: string): Promise<void> {
@@ -284,7 +281,7 @@ export class PiSession {
     const id = typeof message.id === 'string' ? message.id : '';
     const customInstructions = typeof message.customInstructions === 'string' ? message.customInstructions.trim() : undefined;
     const receipt = (outcome: 'accepted' | 'rejected' | 'unknown', error?: string) => this.ui.publish({ type: 'submissionReceipt', id, outcome, error, noticeCause: `compaction:${id}`, operation: 'Compact context' });
-    if (!id || (message.customInstructions !== undefined && typeof message.customInstructions !== 'string') || (customInstructions?.length ?? 0) > 1_000_000 || this.compactionRequest || this.submission || this.state.sessionUnavailable || this.state.busy || this.state.compacting) {
+    if (!id || (message.customInstructions !== undefined && typeof message.customInstructions !== 'string') || (customInstructions?.length ?? 0) > 1_000_000 || this.compactionRequest || this.rpc.hasPendingRequest('prompt', 'set_session_name') || this.state.sessionUnavailable || this.state.busy || this.state.compacting) {
       receipt('rejected', 'Manual compaction is available only while Pi is idle. Nothing was sent.'); return;
     }
     this.compactionRequest = true; this.compactionNoticeId = `compaction:${id}`;

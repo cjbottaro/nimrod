@@ -18,7 +18,11 @@ test('history callbacks run synchronously in wire order before later events', as
 test('timeout is unknown, never retried, and late acknowledgements are ignored', async () => {
   const requests: JsonRecord[] = [];
   const rpc = new PiTransport(async message => { requests.push(message); });
-  await assert.rejects(rpc.request('prompt', { message: 'once' }, 10), RpcTransportError);
+  const result = rpc.request('prompt', { message: 'once' }, 10);
+  assert.equal(rpc.hasPendingRequest('prompt'), true);
+  assert.equal(rpc.hasPendingRequest('set_session_name'), false);
+  await assert.rejects(result, RpcTransportError);
+  assert.equal(rpc.hasPendingRequest('prompt'), false);
   rpc.receive({ kind: 'rpc', value: { type: 'response', id: requests[0].id, success: true } });
   assert.equal(requests.length, 1);
 });
@@ -29,7 +33,9 @@ test('disconnect rejects every pending request and ignores subsequent events', a
   rpc.onEvent = e => events.push(e);
   const a = rpc.request('get_state'), b = rpc.request('prompt');
   const checks = Promise.all([assert.rejects(a, RpcTransportError), assert.rejects(b, RpcTransportError)]);
+  assert.equal(rpc.hasPendingRequest('prompt', 'get_state'), true);
   rpc.receive({ kind: 'disconnected', message: 'process exited' });
+  assert.equal(rpc.hasPendingRequest('prompt', 'get_state'), false);
   rpc.receive({ kind: 'rpc', value: { type: 'agent_start' } });
   await checks;
   assert.equal(events.length, 1);

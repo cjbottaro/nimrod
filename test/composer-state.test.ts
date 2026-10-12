@@ -1,23 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyQueuePendingCount, applyQueueUpdate, beginSubmission, initialComposerState, recoverClearedQueue, restoreRecoveredQueueItem, settleSubmission, updateDraft } from "../src/pi/composer-state";
+import { applyQueuePendingCount, applyQueueUpdate, clearDraft, initialComposerState, recoverClearedQueue, restoreRecoveredQueueItem, updateDraft } from "../src/pi/composer-state";
 
-test("definitive rejection discards the submitted draft and settles the sender", () => {
-  let state = initialComposerState("fix the test");
-  state = beginSubmission(state, "one", "normal");
-  state = settleSubmission(state, "one", "rejected", "Pi prompt failed: busy");
+test("sending clears the editable draft without recording a submission", () => {
+  const state = clearDraft(initialComposerState("fix the test"));
   assert.equal(state.draft, "");
+  assert.deepEqual(state.attachments, []);
   assert.deepEqual(state.recovered, []);
-  assert.equal(state.submission, undefined);
-  assert.match(state.lastError || "", /Pi prompt failed/);
-});
-
-test("rejected sends preserve newer edits without creating an unsent recovery copy", () => {
-  let state = beginSubmission(initialComposerState("original prompt"), "send1", "normal");
-  state = updateDraft(state, "new draft");
-  state = settleSubmission(state, "send1", "rejected", "unavailable");
-  assert.equal(state.draft, "new draft");
-  assert.deepEqual(state.recovered, []);
+  assert.equal(Object.hasOwn(state, "submission"), false);
 });
 
 test("recovering more queue text after restoring one item does not reuse another item's ID", () => {
@@ -29,13 +19,9 @@ test("recovering more queue text after restoring one item does not reuse another
   assert.deepEqual(state.recovered.map(item => item.text), ["three"]);
 });
 
-test("successful acknowledgement never clears edits made while the submission is pending", () => {
-  let state = initialComposerState("first version");
-  state = beginSubmission(state, "one", "steer");
-  state = updateDraft(state, "first version, edited");
-  state = settleSubmission(state, "one", "accepted");
-  assert.equal(state.draft, "first version, edited");
-  assert.equal(state.submission, undefined);
+test("a cleared composer is immediately available for the next draft", () => {
+  const state = updateDraft(clearDraft(initialComposerState("first version")), "first version");
+  assert.equal(state.draft, "first version");
 });
 
 test("queue_update replaces queue text authoritatively while get_state only supplies a fallback count", () => {
@@ -47,14 +33,6 @@ test("queue_update replaces queue text authoritatively while get_state only supp
   assert.deepEqual(state.queue, { steering: ["steer now"], followUp: ["later"], authoritative: true, pendingCount: 2 });
   state = applyQueuePendingCount(state, 99);
   assert.equal(state.queue.pendingCount, 2);
-});
-
-test("unknown acceptance remains unsettled rather than inviting an automatic resend", () => {
-  let state = initialComposerState("do the thing");
-  state = beginSubmission(state, "one", "followUp");
-  state = settleSubmission(state, "one", "unknown", "Pi did not respond within 20 seconds");
-  assert.equal(state.submission?.status, "unknown");
-  assert.equal(beginSubmission(state, "two", "normal"), state);
 });
 
 test("clear_queue recovery preserves returned text and restores without overwriting a newer draft", () => {
