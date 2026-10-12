@@ -1,19 +1,32 @@
 :root { --application-notice-height:0px; }
 body.application-notice-shell { grid-template-rows:48px var(--application-notice-height) minmax(0,1fr); }
 #application-notice-slot { height:var(--application-notice-height); min-height:0; }
-#application-notices { position:fixed; inset:48px 0 auto; z-index:100; box-sizing:border-box; width:100%; max-height:min(25dvh,180px); overflow:auto; padding:6px 20px; border-bottom:1px solid var(--vscode-panel-border); background:var(--vscode-editorWidget-background); color:var(--vscode-foreground); font:12px var(--vscode-font-family, sans-serif); }
-#application-notices[hidden] { display:none; }
-.application-notice { display:flex; align-items:center; gap:12px; padding:5px 0; }
-.application-notice + .application-notice { border-top:1px solid var(--vscode-panel-border); }
+#application-notices, .session-notices { box-sizing:border-box; max-height:min(25dvh,180px); overflow:auto; color:var(--vscode-foreground); font:12px var(--vscode-font-family, sans-serif); }
+#application-notices { position:fixed; inset:48px 0 auto; z-index:100; width:100%; padding:6px 20px; background:var(--vscode-editorWidget-background); border-bottom:1px solid color-mix(in srgb, var(--vscode-descriptionForeground) 20%, transparent); }
+.session-view:has(> .session-notices:not([hidden])) { grid-template-rows:auto minmax(0,1fr) auto; }
+.session-notices { margin:10px 20px 0; padding:2px 10px; border-radius:5px; background:color-mix(in srgb, var(--vscode-descriptionForeground) 6%, var(--vscode-editor-background)); }
+#application-notices[hidden], .session-notices[hidden] { display:none; }
+.notice-group-summary { padding:7px 0; cursor:pointer; color:var(--vscode-descriptionForeground); }
+.notice-group:not(.notice-group-multiple) > .notice-group-summary { display:none; }
+.application-notice { display:flex; align-items:flex-start; gap:10px; padding:7px 0; }
+.application-notice + .application-notice { border-top:1px solid color-mix(in srgb, var(--vscode-descriptionForeground) 15%, transparent); }
 .application-notice-text { display:grid; gap:3px; flex:1; min-width:0; overflow-wrap:anywhere; }
-.application-notice[data-severity=error] strong { color:var(--vscode-errorForeground); }
-.application-notice[data-severity=warning] strong { color:var(--vscode-editorWarning-foreground); }
-.application-notice-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:6px; flex:none; }
-.application-notice-actions button { padding:4px 8px; font-size:11px; }
+.application-notice-text strong { font-weight:600; }
+.notice-message { color:var(--vscode-descriptionForeground); line-height:1.5; }
+.notice-icon { flex:none; line-height:1.4; color:var(--vscode-descriptionForeground); }
+.application-notice[data-severity=error] .notice-icon { color:var(--vscode-errorForeground); }
+.application-notice[data-severity=warning] .notice-icon { color:var(--vscode-editorWarning-foreground); }
+.notice-details { color:var(--vscode-descriptionForeground); }
+.notice-details > summary { cursor:pointer; font-size:11px; padding:3px 0; }
+.notice-details > div { white-space:pre-wrap; line-height:1.5; padding:4px 0; }
+.application-notice-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:6px; flex:none; }
+.application-notice-actions button { padding:3px 6px; font-size:11px; color:var(--vscode-descriptionForeground); background:transparent; }
+.application-notice-actions button:hover { color:var(--vscode-foreground); background:var(--vscode-toolbar-hoverBackground); }
+.application-notice-actions button[data-dismiss] { font-size:16px; line-height:1; }
 body.code-popout-window #application-notice-slot { flex:none; }
 body.code-popout-window:has(#application-notices:not([hidden])) #application-notice-slot { margin-top:48px; }
 .notice-announcement { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
 #settings-page { height:100%; }
 #settings-layout { margin-top:var(--application-notice-height); }
 body.application-notice-shell:has(#application-notices:not([hidden])) dialog.nimrod-modal { top:max(var(--modal-top),calc(48px + var(--application-notice-height) + 8px)); max-height:min(var(--modal-max-height),calc(100dvh - 64px - var(--application-notice-height))); }
-@media (max-width:600px) { .application-notice { align-items:flex-start; flex-wrap:wrap; gap:6px; } .application-notice-actions { margin-left:auto; } }
+@media (max-width:600px) { .application-notice { flex-wrap:wrap; gap:6px; } .application-notice-actions { margin-left:auto; } }

@@ -47,6 +47,7 @@ interface ShellOptions {
   windowWorkspaceGate?: Promise<void>;
   windowWorkspaceError?: string;
   modelFixture?: boolean;
+  modelChangeError?: string;
   popout?: { session: string; title: string; text: string; language: string };
   popoutSyncGate?: Promise<void>;
   personalGate?: Promise<import('../src/pi/card-plugins/catalog').PersonalBundles>;
@@ -181,6 +182,9 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         if (request.type === 'prompt' && options.holdPrompts) return;
         if (request.type === 'set_session_name') target.name = String(request.name);
         if (options.modelFixture) {
+          if (request.type === 'set_model' && options.modelChangeError) {
+            channel.onmessage({ kind: 'rpc', value: { type: 'response', id: request.id, success: false, error: options.modelChangeError } }); return;
+          }
           if (request.type === 'set_model') selectedModel = { provider: request.provider, id: request.modelId };
           if (request.type === 'set_thinking_level') thinkingLevel = String(request.level);
           const preferenceData = request.type === 'get_available_models' ? { models: [{ provider: 'fixture', id: 'reasoner' }, { provider: 'outside-scope', id: 'hidden' }] }
@@ -219,6 +223,34 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     disconnect: () => channel.onmessage({ kind: 'disconnected', message: 'fixture closed' }),
   };
 }
+
+test('operational notices stay with their session without cross-session sidebar or shell feedback', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    const first = f.captureChannel(), firstRoot = f.win.document.querySelector<HTMLElement>('.session-view')!;
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const currentRoot = f.win.document.querySelector<HTMLElement>('.session-view:not([hidden])')!;
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Keep current draft'; prompt.focus();
+    const sidebar = f.element('open-sessions').innerHTML;
+    first.onmessage({ kind: 'rpc', value: { type: 'extension_ui_request', method: 'notify', id: 'background', notifyType: 'error', message: 'First session MCP failure' } }); await f.tick();
+    assert.equal(f.element('application-notices').hidden, true);
+    assert.equal(f.element('session-notices').hidden, true);
+    assert.equal(currentRoot.hidden, false); assert.equal(f.win.document.activeElement, prompt);
+    assert.equal(prompt.value, 'Keep current draft');
+    assert.equal(firstRoot.querySelector('.notice-announcement')!.textContent, '');
+    assert.equal(f.element('open-sessions').innerHTML, sidebar, 'notice reporting adds no sidebar attention');
+    f.rows()[0].click(); await f.tick();
+    assert.match(f.element('session-notices').textContent!, /First session MCP failure/);
+    assert.equal(f.element('application-notices').hidden, true);
+    f.rows()[1].click(); await f.tick(); assert.equal(f.element('session-notices').hidden, true);
+    f.rows()[0].click(); await f.tick();
+    f.element('session-notices').querySelector<HTMLButtonElement>('[data-dismiss]')!.click();
+    assert.equal(f.element('session-notices').hidden, true);
+    f.rows()[1].click(); f.rows()[0].click(); await f.tick();
+    assert.equal(f.element('session-notices').hidden, true, 'navigation does not resurrect a dismissed issue');
+  } finally { f.win.close(); }
+});
 
 test('native browser failures stay in the originating project or reference notice strip without navigation or Pi work', async () => {
   for (const popout of [undefined, { session: 'source', title: 'Source', text: 'Captured source', language: 'text' }]) {
@@ -1941,7 +1973,7 @@ test('unconfirmed launch name fails startup without a rename RPC or prompt fallb
   try {
     await chooseNamedSession(f);
     await submitSessionName(f, 'Planned work');
-    assert.match(f.element('application-notices').textContent!, /Pi did not confirm the selected session name/);
+    assert.match(f.element('session-notices').textContent!, /Pi did not confirm the selected session name/);
     assert.equal(f.element<HTMLButtonElement>('send').disabled, true);
     assert.equal(f.calls.filter(c => (c.args.message as JsonRecord)?.type === 'set_session_name').length, 0);
     assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
@@ -2206,7 +2238,7 @@ test('resume last is explicit, restores history and editable draft without retir
     assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'newer draft');
     assert.equal(f.saved().drafts[`file:${last.path}`].submission, undefined);
     assert.equal(f.element<HTMLButtonElement>('send').disabled, false);
-    assert.doesNotMatch(f.element('application-notices').textContent!, /did not confirm/i);
+    assert.doesNotMatch(f.element('session-notices').textContent!, /did not confirm/i);
     assert.equal(f.calls.filter(c => (c.args.message as JsonRecord)?.type === 'prompt').length, 0);
     f.disconnect();
   } finally { f.dom.window.close(); }
@@ -2229,7 +2261,7 @@ test('resume picker cancellation starts nothing and identity mismatch disables s
     f.element<HTMLInputElement>('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await f.tick(); await f.tick();
     assert.equal(f.element('welcome').hidden, true);
-    assert.match(f.element('application-notices').textContent!, /exact selected session/);
+    assert.match(f.element('session-notices').textContent!, /exact selected session/);
     assert.equal(f.element<HTMLButtonElement>('send').disabled, true);
     assert.equal(f.saved().last, undefined);
     assert.ok(f.calls.filter(c => c.command === 'stop_pi').length > 1);
@@ -2310,11 +2342,11 @@ test('invalid native resume does not fall back to a new session or overwrite rem
     f.element<HTMLButtonElement>('resume-last').click(); await f.confirm();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
     assert.equal(f.calls.filter(c => c.command === 'write_pi').length, 0);
-    assert.match(f.element('application-notices').textContent!, /Session file unavailable/);
+    assert.match(f.element('session-notices').textContent!, /Session file unavailable/);
     assert.equal(f.saved().drafts[`file:${last.path}`].draft, 'keep me');
     assert.deepEqual(f.saved().last, last);
     assert.equal(f.element('welcome').hidden, true);
-    assert.match(f.element('application-notices').textContent!, /Session file unavailable/);
+    assert.match(f.element('session-notices').textContent!, /Session file unavailable/);
   } finally { f.dom.window.close(); }
 });
 
@@ -2497,7 +2529,7 @@ test('failed restart shutdown never launches a replacement and a second attempt 
     const restart = f.element<HTMLButtonElement>('restart-session'); restart.click(); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
     assert.equal(f.win.document.querySelectorAll('.session-row').length, 1);
-    assert.match(f.element('application-notices').textContent!, /Could not restart Pi.*fixture shutdown failure/);
+    assert.match(f.element('session-notices').textContent!, /Could not restart Pi.*fixture shutdown failure/);
     assert.equal(restart.disabled, false);
     stopError = undefined; restart.click(); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'stop_pi' && c.args.token).length, 2);
@@ -2518,7 +2550,7 @@ test('restart resume failure keeps the saved session and draft without falling b
     assert.equal(starts.length, 2); assert.equal((starts[1].args.config as JsonRecord).mode, 'resume');
     assert.equal(f.win.document.querySelectorAll('.session-row').length, 1);
     assert.equal(prompt.value, 'Retained after failed resume');
-    assert.match(f.element('application-notices').textContent!, /Session file unavailable/);
+    assert.match(f.element('session-notices').textContent!, /Session file unavailable/);
     assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
   } finally { f.dom.window.close(); }
 });
@@ -2765,6 +2797,23 @@ test('Pi dialogs retain focus priority above the palette without dismissing it',
   } finally { f.dom.window.close(); }
 });
 
+test('model apply failure after picker acceptance remains session-local and preserves the draft', async () => {
+  const f = await fixture(undefined, { modelFixture: true, modelChangeError: 'Fixture model change rejected' });
+  try {
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Keep draft'; prompt.focus();
+    f.element<HTMLButtonElement>('model').click(); await f.tick();
+    f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+    assert.match(f.element('session-notices').textContent!, /Fixture model change rejected/);
+    assert.equal(f.element('application-notices').hidden, true);
+    assert.equal(prompt.value, 'Keep draft'); assert.equal(f.win.document.activeElement, prompt);
+    assert.equal(f.calls.filter(call => (call.args.message as JsonRecord)?.type === 'set_model').length, 1);
+    assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
+  } finally { f.win.close(); }
+});
+
 test('brand-new unwritten session can select its first model and effort through the palette', async () => {
   const f = await fixture(undefined, { modelFixture: true, fileExists: () => false });
   try {
@@ -2772,8 +2821,8 @@ test('brand-new unwritten session can select its first model and effort through 
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Unsent draft'; prompt.dispatchEvent(new f.win.Event('input'));
     assert.equal(f.element('mode-badge').textContent, 'Pi · awaiting first save');
     f.element<HTMLButtonElement>('thinking').click(); await f.tick();
-    assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
-    assert.match(f.element('application-notices').textContent!, /Select a model/);
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, false, 'failed session picker returns to its owning conversation');
+    assert.match(f.element('session-notices').textContent!, /Select a model/);
     const key = (key: string) => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
     key('Escape'); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
     f.element<HTMLButtonElement>('model').click(); await f.tick();

@@ -237,22 +237,33 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     }
     if (dialog.open && generation === request) { loading = false; draw(); }
   }
-  function startSelection(heading: string, onRetry: () => void): SelectionRequest | undefined {
+  function startSelection(heading: string, onRetry: () => void, onError?: (message: string) => void): SelectionRequest | undefined {
     const request = beginPage('selection', heading, 'Type to filter…', onRetry);
     if (request === undefined) return;
     const current = () => dialog.open && generation === request && mode === 'selection';
+    let accepted = false;
+    const selectionFailure = (message: string) => {
+      loading = false;
+      if (onError) { closeInteraction(); onError(message); }
+      else { failure(message); draw(); }
+    };
     return {
       choose(values, selectedValue) {
         if (!current()) return Promise.resolve(undefined);
         return new Promise(resolve => {
           cancelChoice(); resolveChoice = resolve;
-          items = values.map(value => ({ id: value, label: value, current: value === selectedValue, keywords: value === selectedValue ? 'Current' : undefined, run: () => resolve(value) }));
+          items = values.map(value => ({ id: value, label: value, current: value === selectedValue, keywords: value === selectedValue ? 'Current' : undefined, run: () => { accepted = true; resolve(value); } }));
           matches = items; selected = Math.max(0, items.findIndex(item => item.id === selectedValue));
           loading = false; notice = ''; draw();
         });
       },
-      error(message) { if (current()) { loading = false; failure(message); draw(); } },
-      finish() { if (current() && loading) { loading = false; failure('Pi did not provide choices. Retry when the session is ready.'); draw(); } },
+      error(message) {
+        if (current()) selectionFailure(message);
+        // Applying an explicitly chosen value happens after the picker closes.
+        // Report to its owner, without closing any newer interaction.
+        else if (accepted) onError?.(message);
+      },
+      finish() { if (current() && loading) selectionFailure('Pi did not provide choices. Retry when the session is ready.'); },
       cancel() { if (current()) closeInteraction(); },
     };
   }

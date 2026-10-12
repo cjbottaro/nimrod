@@ -174,6 +174,7 @@ interface Tab {
   root: HTMLElement; view: PiView; drafts: SessionDrafts; receive?: (message: HostMessage) => void;
   session?: PiSession; starting: boolean; closing: boolean; restarting: boolean; deleting: boolean; deletionExecuting: boolean; ended: boolean; stopTask?: Promise<void>;
   inputCount: number; unread: boolean; failed: boolean; focus?: HTMLElement; notice: HTMLElement;
+  notices: ReturnType<typeof installApplicationNotices>;
   cancelPreference?: () => void;
   preferenceTask?: Promise<void>;
   closeButton: HTMLButtonElement; deleteButton: HTMLButtonElement;
@@ -371,7 +372,7 @@ window.addEventListener('unload', () => {
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
   pluginLoading.dispose();
   sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); unlistenLinkErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
-  for (const tab of tabs) { tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.session?.rpc.disconnect('Window closed'); }
+  for (const tab of tabs) { tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.session?.rpc.disconnect('Window closed'); }
   keybindingDispatch.dispose(); keybindingEditor.dispose(); settingsNavigation.dispose(); settingsSidebarResize.dispose();
   unlistenProjectPicker(); palette.dispose(); zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose();
 }, { once: true });
@@ -467,11 +468,11 @@ function presentConversation(tab: Tab | undefined): void {
         presented.focus = focused;
         if (!tab && !document.querySelector('dialog[open]')) required(`sidebar-${sidebarView}`).focus({ preventScroll: true });
       }
-      presented.view.setActive(false); presented.root.hidden = true; presented.root.inert = true;
+      presented.notices.setActive(false); presented.view.setActive(false); presented.root.hidden = true; presented.root.inert = true;
     }
     presented = tab;
     conversation.hidden = !tab;
-    if (tab) { tab.root.hidden = false; tab.view.setActive(true); }
+    if (tab) { tab.root.hidden = false; tab.view.setActive(true); tab.notices.setActive(true); }
     syncPopouts();
   }
   for (const item of tabs) {
@@ -731,6 +732,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
   for (const node of root.querySelectorAll<HTMLElement>('[id]')) { node.dataset.piId = node.id; node.id = `${id}-${node.id}`; }
   const notice = document.createElement('div'); notice.className = 'tab-notice'; notice.hidden = true; root.append(notice);
   conversation.append(root);
+  const sessionNotices = installApplicationNotices(window, notices.store, { owner: id, container: root });
   const rowNode = document.createElement('div'); rowNode.className = 'open-session';
   const row = button('', () => activate(tab, 'row')); row.className = 'session-row'; row.id = `session-${id}`; row.setAttribute('aria-controls', root.id);
   root.setAttribute('aria-labelledby', row.id);
@@ -739,7 +741,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
   deleteButton.append(required('delete-session').querySelector('svg')!.cloneNode(true));
   const closeButton = button('×', () => { void closeTab(tab); }); closeButton.className = 'session-close';
   rowNode.append(row, deleteButton, closeButton); required('open-sessions').append(rowNode);
-  const tab: Tab = { id, mode, file, title, lastUsed: Math.max(lastUsed(used), file ? recency.get(file) : 0), root, notice, closeButton, deleteButton, row, rowLabel, rowIndicator, rowTime, rowNode,
+  const tab: Tab = { id, mode, file, title, lastUsed: Math.max(lastUsed(used), file ? recency.get(file) : 0), root, notice, notices: sessionNotices, closeButton, deleteButton, row, rowLabel, rowIndicator, rowTime, rowNode,
     drafts: drafts.fork(), starting: false, closing: false, restarting: false, deleting: false, deletionExecuting: false, ended: false, inputCount: 0, unread: false, failed: deletion.blocked(file?.path),
     view: { setActive() {}, scrollToBottom() {}, dispose() {} } };
   root.addEventListener('focusin', event => { if (event.target instanceof HTMLElement) tab.focus = event.target; });
@@ -758,7 +760,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
   tab.view = mountPiView({
     reportNotice: notice => {
       if (unloading || tab.closing || !tabs.includes(tab)) return;
-      notices.report({ ...notice, id: `${tab.id}:${notice.id}`, owner: notice.cause === 'draft-storage' ? undefined : tab.id, operation: `${tab.title}: ${notice.operation}` });
+      notices.report({ ...notice, id: `${tab.id}:${notice.id}`, owner: notice.cause === 'draft-storage' ? undefined : tab.id, operation: notice.operation });
     },
     resolveNotice: id => notices.resolve(`${tab.id}:${id}`),
     resolveNoticeCause: cause => notices.store.resolveCause(cause, tab.id),
@@ -867,9 +869,8 @@ function updateTab(tab: Tab): void {
   renderSidebar();
 }
 function showNotice(tab: Tab, text: string, retry = false): void {
-  tab.failed = true;
   tab.notice.hidden = true; tab.notice.replaceChildren();
-  notices.report({ id: `${tab.id}:connection`, owner: tab.id, cause: 'connection', priority: 10, operation: `${tab.title}: Session connection`, message: text,
+  notices.report({ id: `${tab.id}:connection`, owner: tab.id, cause: 'connection', priority: 10, operation: 'Session connection', message: text,
     actions: retry && !deletion.blocked(tab.file?.path) ? [{ label: 'Retry connection', enabled: () => tabs.includes(tab) && !tab.closing && !tab.restarting && !tab.deleting && !deletion.locked(tab.file?.path), run: () => launch(tab) }] : undefined,
   });
   updateTab(tab);
@@ -880,7 +881,10 @@ async function withTabDialog<T>(tab: Tab, action: (title: string) => Promise<T>,
   finally { tab.inputCount--; if (tabs.includes(tab)) updateTab(tab); }
 }
 async function pickPreference(tab: Tab, kind: 'model' | 'thinking'): Promise<void> {
-  const request = palette.startSelection(kind === 'model' ? 'Select model' : 'Select thinking level', () => { void pickPreference(tab, kind); });
+  const operation = kind === 'model' ? 'Select model' : 'Select thinking level';
+  const request = palette.startSelection(operation, () => { void pickPreference(tab, kind); }, message => {
+    if (tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:preference:${++noticeSequence}`, owner: tab.id, operation, message });
+  });
   if (!request) return;
   const session = tab.session;
   if (!session || tab.ended || tab.closing || tab.restarting || tab.deleting || deletion.blocked(tab.file?.path)) { request.error('Resume this session before changing its model or thinking level.'); return; }
@@ -894,8 +898,8 @@ async function pickPreference(tab: Tab, kind: 'model' | 'thinking'): Promise<voi
       choose: (_title, options, current) => request.choose(options, current),
       error: message => {
         request.error(message);
-        // The palette's error callback routes this failure to the shared strip;
-        // do not add a second project-level copy of the same operation.
+        // The selection's owned callback returns the failure to this session,
+        // never to the window's application notice strip.
       },
     });
   })();
@@ -931,7 +935,7 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
   const current = new PiSession(rpc, {
     publish: message => { if (currentToken()) tab.receive?.(message); },
     notice: (message, severity, cause) => {
-      if (currentToken() && !tab.closing && !tab.restarting && !tab.deleting) notices.report({ id: `${tab.id}:pi:${++noticeSequence}`, owner: tab.id, cause, operation: `${tab.title}: Pi operation`, message, severity });
+      if (currentToken() && !tab.closing && !tab.restarting && !tab.deleting) notices.report({ id: `${tab.id}:pi:${++noticeSequence}`, owner: tab.id, cause, operation: 'Pi operation', message, severity });
     },
     promptAccepted: () => { if (!unloading && currentToken() && !tab.closing && !tab.restarting && !tab.deleting) touchTab(tab); },
     attention: (kind, response) => {
@@ -1010,7 +1014,7 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
     if (presented === tab && !tab.restarting && !document.querySelector('dialog[open]')) tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true });
   } catch (e) {
     startupPackets = undefined; rpc.disconnect(String(e));
-    try { await stopOwned(tab); } catch (stopError) { notices.report({ id: `${tab.id}:stop:${++noticeSequence}`, owner: tab.id, operation: `${tab.title}: Stop Pi`, message: String(stopError) }); }
+    try { await stopOwned(tab); } catch (stopError) { notices.report({ id: `${tab.id}:stop:${++noticeSequence}`, owner: tab.id, operation: 'Stop Pi', message: String(stopError) }); }
     showNotice(tab, String(e), !!tab.file?.exists); tab.ended = true;
   } finally { tab.starting = false; updateTab(tab); controls(); }
 }
@@ -1116,7 +1120,7 @@ function disposeTab(tab: Tab): void {
   if (!tabs.includes(tab)) return;
   tab.closing = true;
   tab.root.dispatchEvent(new Event('nimrod-dispose-images'));
-  notices.store.resolveOwner(tab.id);
+  tab.notices.dispose(); notices.store.resolveOwner(tab.id);
   navigation.remove(tab);
   if (active === tab) active = undefined;
   if (presented === tab) { tab.view.setActive(false); presented = undefined; conversation.hidden = true; }
@@ -1129,7 +1133,7 @@ function disposeTab(tab: Tab): void {
 function detachTab(tab: Tab): void {
   if (!tabs.includes(tab)) return;
   tab.closing = true;
-  notices.store.resolveOwner(tab.id);
+  tab.notices.dispose(); notices.store.resolveOwner(tab.id);
   if (tab.token) dialogs.cancel(tab.token);
   tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' }); tab.session?.rpc.disconnect('Session closed');
   const before = navigationSnapshot();
