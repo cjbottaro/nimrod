@@ -469,6 +469,9 @@ test('performance capture is opt-in, bindable, timing-only and preserves the mou
     const prompted = f.calls.filter(c => c.command === 'write_pi' && (c.args.message as JsonRecord).type === 'prompt').length;
     f.preferences.external('{"diagnostics.performance":true,"keybindings":{"capture-performance":["primary+alt+p"]}}'); await f.tick();
     assert.equal(f.element<HTMLButtonElement>('performance-capture').disabled, false);
+    // The Settings surface owns diagnostics; mounted views must use its same probe.
+    prompt.dispatchEvent(new f.win.Event('input'));
+    f.emit({ type: 'agent_start' }); await f.tick();
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'p', metaKey: true, altKey: true, bubbles: true, cancelable: true }));
     assert.equal(control.after.length, 1);
     assert.equal(f.element<HTMLButtonElement>('performance-capture').disabled, true);
@@ -476,6 +479,10 @@ test('performance capture is opt-in, bindable, timing-only and preserves the mou
     control.after.shift()!(); await f.tick();
     const saved = f.calls.find(c => c.command === 'write_performance_report')!;
     assert.ok(saved); assert.doesNotMatch(JSON.stringify(saved.args), /private draft|\/project|\/sessions/);
+    const report = saved.args.report as unknown as import('../src/performance-diagnostics').PerformanceReport;
+    for (const kind of ['input-handler', 'composer-layout', 'snapshot', 'transcript-render']) {
+      assert.ok(report.samples.some(sample => sample.kind === kind && sample.active === true), `${kind} reaches the window-owned capture through the renderer probe`);
+    }
     assert.match(f.element('performance-status').textContent!, /Report saved:.*performance-report.json/);
     assert.equal(prompt.closest('.session-view'), view); assert.equal(prompt.value, 'private draft');
     assert.equal(f.win.document.activeElement, prompt);

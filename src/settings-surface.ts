@@ -252,6 +252,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     settings, settingsNavigation, themes, zoom, runtime,
     initializeRuntime(defaults: { pi: string; node: string }) { runtimeDefaults = defaults; runtime.initialize(defaults); },
     notificationError, notificationProgress, capturePerformance,
+    performanceProbe: performanceDiagnostics.probe,
     get capturingPerformance() { return capturingPerformance; },
     get performancePath() { return performancePath; },
     openKeybindings() { settings.open(); if (settings.isOpen && settingsNavigation.select('keybindings')) keybindingEditor?.focus(); },

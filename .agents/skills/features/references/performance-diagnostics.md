@@ -35,6 +35,7 @@ Writes run on a blocking worker, serialize through a report-writer mutex, stage 
 
 - `src/performance-diagnostics.ts`: fixed ring, samplers, visibility lifecycle, ordered metric probes, frozen capture and cancellation.
 - `src/pi/view-host.ts`, `webview-client.ts`: optional timing probes only; no harness protocol additions.
+- `src/settings-surface.ts` owns the window-local diagnostics instance and exposes only its `performanceProbe` for renderer instrumentation; `src/main.ts` supplies that same probe to every mounted view. Keep sampling, capture, preference synchronization and disposal on the owning instance—do not create a second sampler or reference a retired shell-local instance after extraction.
 - `src/main.ts`, `src/settings-surface.ts`, `index.html`, `settings-navigation.ts`, `keybindings.ts`: Settings controls, synchronized enablement, bindable capture, local result path and shared errors.
 - `src/preferences.ts`, `src-tauri/src/preferences.rs`: boolean schema/CAS synchronization.
 - `src-tauri/src/performance_diagnostics.rs`, `main.rs`: native typed validation, environment, bounded private report storage and command registration.
@@ -43,7 +44,7 @@ Writes run on a blocking worker, serialize through a report-writer mutex, stage 
 
 - `test/performance-diagnostics.test.ts`: fake-clock offline sampler cadence/stalls, cap/overwrite visibility, time-window filtering, content exclusion, hidden suspension, cancellation/disposal and disabled no-work path.
 - Preferences/keybinding tests: default-off schema, last-valid settings, comment preservation, binding overrides/unbinding.
-- `test/shell.test.ts`: actual bundled shell/renderer against mock IPC; bindable opt-in capture, report path, no content/session paths, failures through the shared strip, cancellation and retained draft/focus/session nodes with no prompts/restarts.
+- `test/shell.test.ts`: actual bundled shell/renderer against mock IPC; bindable opt-in capture, report path, no content/session paths, failures through the shared strip, cancellation and retained draft/focus/session nodes with no prompts/restarts. Added integration assertions require input-handler, composer-layout, snapshot and transcript-render metrics from mounted views in the owning window's report; these assertions have not been run for the probe-wiring fix.
 - Native fixture tests: typed content/unknown-metric rejection, size/negative/unordered timing validation, private report writes, 20-report retention and unrelated-file preservation.
 - Offline WebKit capture regression: real Settings/palette flow, content exclusion, retained draft/focus/disclosure/reading position and error/cancellation routing. Native IPC/storage is mocked; no user session/model work.
 

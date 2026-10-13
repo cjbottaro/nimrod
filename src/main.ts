@@ -665,7 +665,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
   }
   tab.view = mountPiView({
     sendAutoFollow: () => preferences.sendAutoFollow(),
-    performance: performanceDiagnostics.probe,
+    performance: settingsSurface.performanceProbe,
     reportNotice: notice => {
       if (unloading || tab.closing || !tabs.includes(tab)) return;
       notices.report({ ...notice, id: `${tab.id}:${notice.id}`, owner: notice.cause === 'draft-storage' ? undefined : tab.id, operation: notice.operation });
