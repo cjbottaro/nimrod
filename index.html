@@ -6,7 +6,7 @@
     <div id="project-identity"><span id="project-name">Choose a project</span><span id="workspace-label"></span><span id="project-session" hidden><span id="project-session-separator" aria-hidden="true">·</span><span id="project-session-name"></span></span></div><span id="mode-badge">PoC</span>
     <button id="restart-session" type="button" class="secondary" aria-label="Restart session" title="Restart session — available after the first save" disabled><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M20 12a8 8 0 1 0-2.3 5.7M20 7v5"/></svg></button>
     <button id="delete-session" type="button" aria-label="Delete session tree" title="Delete session tree… — available after the first save" disabled><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button>
-    <button id="open-settings" type="button" aria-label="Project settings" aria-haspopup="dialog" aria-controls="settings-page" title="Project settings · ⌘/Ctrl ⇧ ,"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M10 2h4v3l2 1 2-2 2 2-2 2 1 2h3v4h-3l-1 2 2 2-2 2-2-2-2 1v3h-4v-3l-2-1-2 2-2-2 2-2-1-2H2v-4h3l1-2-2-2 2-2 2 2 2-1Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    <button id="open-settings" type="button" aria-label="Project settings" aria-haspopup="dialog" aria-controls="settings-page" title="Project settings · ⌘/Ctrl ⇧ ,"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
   </header>
   <p id="storage-error" role="alert" hidden></p>
   <div id="workspace-layout" class="sidebar-layout">
@@ -69,13 +69,17 @@
         <input id="theme-file" type="file" accept=".json,.jsonc,application/json" aria-label="Import VS Code color theme" hidden>
         <p class="settings-hint">Choose “Import color theme…” to add a VS Code JSON/JSONC theme. Select an imported theme to remove its local copy.</p>
         <div id="theme-notice" role="status" hidden><span id="theme-notice-text"></span><button id="theme-notice-dismiss" type="button" aria-label="Dismiss theme notice">×</button></div>
+        <div id="settings-zoom">
         <label for="zoom-level">Zoom</label>
         <select id="zoom-level" aria-label="App zoom" title="App zoom · ⌘/Ctrl +, −, 0" disabled><option>100%</option></select>
         <p id="zoom-shortcut-hint" class="settings-hint">⌘/Ctrl + / − anywhere in the app. ⌘/Ctrl 0 resets to 100%.</p>
         <p id="zoom-error" role="status" hidden></p>
+        </div>
+        <div id="settings-send-auto-follow">
         <label for="send-auto-follow">Auto-follow after sending</label>
         <select id="send-auto-follow" aria-describedby="send-auto-follow-hint"><option value="always">Always</option><option value="whenIdle" selected>When idle (default)</option><option value="never">Never</option></select>
         <p id="send-auto-follow-hint" class="settings-hint">Jump to the bottom and follow new output after sending. When idle preserves your reading position for steering and queued follow-ups. Never preserves current scroll intent, including active auto-follow. Scrolling upward always pauses auto-follow.</p>
+        </div>
       </section>
       <section id="settings-panel-notifications" class="settings-panel" data-category="notifications" role="tabpanel" aria-labelledby="settings-category-notifications" tabindex="0" hidden>
         <h2 id="notifications-title">Notifications</h2>

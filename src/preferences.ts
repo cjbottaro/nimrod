@@ -27,16 +27,19 @@ export interface PreferencesHost {
   migrate(text: string, entries: Record<string, unknown>): Promise<PreferencesSnapshot>;
   listen(receive: (snapshot: PreferencesSnapshot) => void): Promise<() => void>;
 }
-export const PROJECT_SETTING_KEYS = ['appearance.theme', 'appearance.zoom', 'appearance.autoFollowAfterSending', 'runtime.piPath', 'runtime.nodePath'] as const;
+export const PROJECT_SETTING_KEYS = ['appearance.theme', 'runtime.piPath', 'runtime.nodePath'] as const;
+// Retain these old project-file entries without applying or migrating them.
+const LEGACY_PROJECT_SETTING_KEYS = ['appearance.zoom', 'appearance.autoFollowAfterSending'];
 export type ProjectSettingKey = typeof PROJECT_SETTING_KEYS[number];
 
 export function parseProjectSettings(text: string, global: Record<string, unknown>): Record<string, unknown> {
   const errors: ParseError[] = [];
   const project = parse(text, errors, { allowTrailingComma: true, disallowComments: false });
   if (errors.length || !project || typeof project !== 'object' || Array.isArray(project)) throw new Error('Project settings must be a valid JSON/JSONC object.');
-  for (const key of Object.keys(project)) if (!(PROJECT_SETTING_KEYS as readonly string[]).includes(key)) throw new Error(`${key} is global-only; edit global Settings instead.`);
-  if (Object.keys(project).length) parseSettings(JSON.stringify({ ...global, ...project }));
-  return project;
+  for (const key of Object.keys(project)) if (!(PROJECT_SETTING_KEYS as readonly string[]).includes(key) && !LEGACY_PROJECT_SETTING_KEYS.includes(key)) throw new Error(`${key} is global-only; edit global Settings instead.`);
+  const overrides = Object.fromEntries(Object.entries(project).filter(([key]) => (PROJECT_SETTING_KEYS as readonly string[]).includes(key)));
+  if (Object.keys(overrides).length) parseSettings(JSON.stringify({ ...global, ...overrides }));
+  return overrides;
 }
 
 export function parseSettings(text: string): Record<string, unknown> {
@@ -255,10 +258,10 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
     savePerformance(enabled: boolean) { return patch({ 'diagnostics.performance': enabled }, false); },
     notificationsEnabled() { return globalSettings['notifications.enabled'] !== false; },
     saveNotifications(enabled: boolean) { return patch({ 'notifications.enabled': enabled }, false); },
-    sendAutoFollow(): SendAutoFollow { return settings['appearance.autoFollowAfterSending'] as SendAutoFollow ?? DEFAULT_SEND_AUTO_FOLLOW; },
-    saveSendAutoFollow(mode: SendAutoFollow) { return patch({ 'appearance.autoFollowAfterSending': mode }); },
-    zoom() { return settings['appearance.zoom'] ?? DEFAULT_ZOOM; },
-    saveZoom(percent: number) { return patch({ 'appearance.zoom': percent }); },
+    sendAutoFollow(): SendAutoFollow { return globalSettings['appearance.autoFollowAfterSending'] as SendAutoFollow ?? DEFAULT_SEND_AUTO_FOLLOW; },
+    saveSendAutoFollow(mode: SendAutoFollow) { return patch({ 'appearance.autoFollowAfterSending': mode }, false); },
+    zoom() { return globalSettings['appearance.zoom'] ?? DEFAULT_ZOOM; },
+    saveZoom(percent: number) { return patch({ 'appearance.zoom': percent }, false); },
     recordCommandUsage(id: string) {
       return enqueue(async () => { receive(await host.commandUsage(id)); });
     },

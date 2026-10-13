@@ -2056,35 +2056,46 @@ test('native notification timeouts can be dismissed in Settings without retrying
   } finally { f.dom.window.close(); }
 });
 
-test('send auto-follow saves and synchronizes without moving readers or restarting sessions', async () => {
+test('global auto-follow saves and synchronizes without moving readers or restarting sessions', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
+  const global = await fixture(undefined, { globalSettings: true });
   try {
     f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
     const pane = f.element('transcript-viewport');
     pane.scrollTop = 200; pane.dispatchEvent(new f.win.WheelEvent('wheel', { deltaY: -50 }));
     const before = f.calls.filter(c => ['start_pi', 'stop_pi', 'write_pi'].includes(c.command)).length;
     f.openSettings();
-    const picker = f.element<HTMLSelectElement>('send-auto-follow');
+    assert.equal(f.element('settings-send-auto-follow').hidden, true);
+    assert.equal(f.element('settings-zoom').hidden, true);
+    const picker = global.element<HTMLSelectElement>('send-auto-follow');
     assert.equal(picker.value, 'whenIdle');
-    picker.value = 'never'; picker.dispatchEvent(new f.win.Event('change')); await f.tick();
-    assert.equal(JSON.parse(f.preferences.value.projectText!)['appearance.autoFollowAfterSending'], 'never');
+    picker.value = 'never'; picker.dispatchEvent(new global.win.Event('change')); await global.tick();
+    assert.equal(parseSettings(global.preferences.value.text)['appearance.autoFollowAfterSending'], 'never');
+    f.preferences.external(global.preferences.value.text);
+    assert.equal(JSON.parse(f.preferences.value.projectText!)['appearance.autoFollowAfterSending'], undefined);
+    assert.equal(f.element<HTMLSelectElement>('send-auto-follow').value, 'never');
     assert.equal(picker.disabled, false);
-    f.preferences.external('{"appearance.autoFollowAfterSending":"always"}');
-    assert.equal(picker.value, 'never', 'an explicit project override does not follow global changes');
-    f.element('send-auto-follow').nextElementSibling!.querySelector<HTMLButtonElement>('button')!.click(); await f.tick();
+    global.preferences.external('{"appearance.autoFollowAfterSending":"always"}');
+    f.preferences.external(global.preferences.value.text);
     assert.equal(picker.value, 'always');
+    assert.equal(f.element<HTMLSelectElement>('send-auto-follow').value, 'always');
     assert.equal(pane.scrollTop, 200);
     assert.equal(f.calls.filter(c => ['start_pi', 'stop_pi', 'write_pi'].includes(c.command)).length, before);
-    f.preferences.external('{"appearance.autoFollowAfterSending":"invalid"}');
-    assert.equal(picker.value, 'always', 'invalid external edits retain the last valid setting');
-    f.preferences.external('{}');
+    global.preferences.external('{"appearance.autoFollowAfterSending":"invalid"}');
+    assert.equal(picker.value, 'always', 'invalid global edits retain the last valid setting');
+    global.preferences.external('{}');
     assert.equal(picker.value, 'whenIdle');
-    f.preferences.projectSettings = async () => { throw new Error('Fixture save failure'); };
-    picker.value = 'never'; picker.dispatchEvent(new f.win.Event('change')); await f.tick();
+    global.preferences.settings = async () => { throw new Error('Fixture save failure'); };
+    picker.value = 'never'; picker.dispatchEvent(new global.win.Event('change')); await global.tick();
     assert.equal(picker.value, 'whenIdle', 'failed saves restore the committed value');
     assert.equal(picker.disabled, false);
-    assert.match(f.element('application-notices').textContent!, /Fixture save failure/);
-  } finally { f.dom.window.close(); }
+    assert.match(global.element('application-notices').textContent!, /Fixture save failure/);
+    const projectBefore = f.preferences.value.projectText;
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: '+', metaKey: true, bubbles: true, cancelable: true }));
+    await f.tick();
+    assert.equal(f.preferences.value.projectText, projectBefore);
+    assert.equal(parseSettings(f.preferences.value.text)['appearance.zoom'], 150);
+  } finally { global.win.close(); f.dom.window.close(); }
 });
 
 test('notification settings save, synchronize and suppress alerts without interrupting sessions', async () => {

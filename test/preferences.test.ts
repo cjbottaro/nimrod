@@ -279,21 +279,21 @@ test('state writes merge keys and do not alter settings or draft storage', async
 test('project overrides merge over global defaults and reset removes keys rather than copying values', async () => {
   const f = fixture();
   f.host.value.state.legacyMigrated = true;
-  f.host.value.text = '// Global\n{"appearance.zoom":150,"appearance.autoFollowAfterSending":"never","runtime.nodePath":"/global/node"}';
+  f.host.value.text = '// Global\n{"appearance.theme":"dracula","appearance.zoom":150,"appearance.autoFollowAfterSending":"never","runtime.nodePath":"/global/node"}';
   f.host.value.projectPath = '/fixture/project/.nimrod/settings.json';
   f.host.value.projectText = '// Project\n{}';
   const p = await f.install();
   try {
-    assert.equal(p.zoom(), 150); assert.equal(p.isOverridden('appearance.zoom'), false);
-    await p.saveZoom(150);
-    assert.equal(p.isOverridden('appearance.zoom'), true, 'same-valued explicit choice remains an override');
-    f.host.external('// Global\n{"appearance.zoom":175,"appearance.autoFollowAfterSending":"always","runtime.nodePath":"/new/node"}');
-    assert.equal(p.zoom(), 150); assert.equal(p.sendAutoFollow(), 'always');
+    assert.equal(p.zoom(), 150); assert.equal(p.isOverridden('appearance.theme'), false);
+    await p.selectTheme('dracula');
+    assert.equal(p.isOverridden('appearance.theme'), true, 'same-valued explicit choice remains an override');
+    f.host.external('// Global\n{"appearance.theme":"tokyo-night","appearance.zoom":175,"appearance.autoFollowAfterSending":"always","runtime.nodePath":"/new/node"}');
+    assert.equal(p.theme().selected, 'dracula'); assert.equal(p.zoom(), 175); assert.equal(p.sendAutoFollow(), 'always');
     await p.saveRuntime({ pi: '/project/pi', node: '/new/node' }, ['pi']);
     assert.deepEqual(p.runtime({ pi: 'pi', node: 'node' }), { version: 1, pi: '/project/pi', node: '/new/node' });
     assert.equal(p.isOverridden('runtime.nodePath'), false);
-    await p.useGlobal('appearance.zoom');
-    assert.equal(p.zoom(), 175); assert.equal(p.isOverridden('appearance.zoom'), false);
+    await p.useGlobal('appearance.theme');
+    assert.equal(p.theme().selected, 'tokyo-night'); assert.equal(p.isOverridden('appearance.theme'), false);
     assert.match(f.host.value.projectText!, /Project/); assert.match(f.host.value.text, /Global/);
     f.host.externalProject('{}');
     assert.equal(p.runtime({ pi: 'pi', node: 'node' }).pi, 'pi');
@@ -305,27 +305,53 @@ test('global-only preferences stay global from a project and project revisions r
   const f = fixture();
   f.host.value.state.legacyMigrated = true;
   f.host.value.projectPath = '/fixture/project/.nimrod/settings.json';
-  f.host.value.projectText = '{"appearance.zoom":110}';
+  f.host.value.projectText = '{"appearance.theme":"dracula","appearance.zoom":110,"appearance.autoFollowAfterSending":"always"}';
   const p = await f.install();
   try {
     const before = f.host.value.projectText;
     await p.saveNotifications(false); await p.savePerformance(true); await p.resetKeybindings();
+    await p.saveZoom(175); await p.saveSendAutoFollow('never');
     assert.equal(f.host.value.projectText, before);
     assert.equal(parseSettings(f.host.value.text)['notifications.enabled'], false);
+    assert.equal(p.zoom(), 175); assert.equal(p.sendAutoFollow(), 'never');
     const old = await f.host.snapshot();
-    f.host.externalProject('{"appearance.zoom":175}');
+    f.host.externalProject('{"appearance.theme":"tokyo-night"}');
     f.host.receive?.(old);
-    assert.equal(p.zoom(), 175);
+    assert.equal(p.theme().selected, 'tokyo-night');
     f.host.externalProject('{broken}');
-    assert.equal(p.zoom(), 175);
-    await assert.rejects(p.saveZoom(125));
-    f.host.externalProject('{}');
-    assert.equal(p.zoom(), 125);
+    assert.equal(p.theme().selected, 'tokyo-night');
+    await assert.rejects(p.selectTheme('nimrod'));
     await p.saveZoom(90);
+    assert.equal(p.zoom(), 90, 'a malformed project cannot block an independent global edit');
+    assert.equal(f.host.value.projectText, '{broken}');
+    f.host.externalProject('{}');
+    assert.equal(p.theme().selected, 'nimrod');
+    await p.selectTheme('osaka-jade');
     const saved = f.host.value.projectText;
     f.host.projectSettings = async () => { throw new Error('Fixture conflict'); };
-    await assert.rejects(p.saveZoom(150), /Fixture conflict/);
-    assert.equal(f.host.value.projectText, saved); assert.equal(p.zoom(), 90);
+    await assert.rejects(p.selectTheme('dracula'), /Fixture conflict/);
+    assert.equal(f.host.value.projectText, saved); assert.equal(p.theme().selected, 'osaka-jade');
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
+test('obsolete project zoom and auto-follow entries are ignored without rewriting or promoting them', async () => {
+  const f = fixture();
+  f.host.value.state.legacyMigrated = true;
+  f.host.value.projectPath = '/fixture/project/.nimrod/settings.json';
+  const original = '// Retain comments and obsolete keys\n{"appearance.zoom":75,"appearance.autoFollowAfterSending":"always"}';
+  f.host.value.projectText = original;
+  const p = await f.install();
+  try {
+    assert.equal(p.zoom(), 125); assert.equal(p.sendAutoFollow(), 'whenIdle');
+    assert.equal(f.host.value.projectText, original); assert.equal(f.host.value.text, '{}\n');
+    f.host.external('{"appearance.zoom":150,"appearance.autoFollowAfterSending":"never"}');
+    assert.equal(p.zoom(), 150); assert.equal(p.sendAutoFollow(), 'never');
+    await p.selectTheme('dracula');
+    assert.match(f.host.value.projectText!, /Retain comments/);
+    assert.equal(parseSettings(f.host.value.projectText!)['appearance.zoom'], 75);
+    f.host.externalProject('{"appearance.theme":"dracula","appearance.zoom":null,"appearance.autoFollowAfterSending":"obsolete"}');
+    assert.equal(p.theme().selected, 'dracula'); assert.equal(p.zoom(), 150); assert.equal(p.sendAutoFollow(), 'never');
+    assert.equal(f.errors.at(-1), undefined);
   } finally { p.dispose(); f.dom.window.close(); }
 });
 

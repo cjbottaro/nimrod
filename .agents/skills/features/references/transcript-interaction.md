@@ -29,7 +29,7 @@ Preserve live follow versus older-history reading through incremental updates, c
 
 ## Auto-follow after sending
 
-**Settings → Appearance → Auto-follow after sending** is an app-wide synchronized preference, stored as `appearance.autoFollowAfterSending`: `always`, `whenIdle` (default), or `never`. TypeScript and Rust reject other values; omitted/deleted settings use the default. Existing installations without the key also receive the new default.
+**Global Settings → Appearance → Auto-follow after sending** is a global-only, app-wide synchronized preference, stored as `appearance.autoFollowAfterSending`: `always`, `whenIdle` (default), or `never`. TypeScript and Rust reject other values; omitted/deleted settings use the default. Existing installations without the key also receive the new default. Older project-file copies of this key are ignored and preserved without promotion; [Preferences](preferences.md#project-layering) owns compatibility and scope.
 
 - Always: every locally validated message submission jumps to bottom and enables auto-follow, including steering and explicit queued follow-ups.
 - When idle: only submissions made while the main agent is idle jump/follow. Busy steering and follow-ups preserve scroll intent; idle Option/Alt+Enter is an ordinary send. Background subagents do not count as main-agent work.
@@ -39,7 +39,7 @@ Preserve live follow versus older-history reading through incremental updates, c
 - Supported prompt slash expansions count as messages; `/name`, `/compact`, empty/blocked submissions and Stop do not navigate. Errors, receipts, authoritative user events and image readiness never repeat or undo the local jump.
 - Preference edits/broadcasts alone never move a transcript, disable active following, mutate drafts or restart sessions. Failed saves restore the committed picker value and use the application notice strip.
 
-Code: `src/preferences.ts` / `src-tauri/src/preferences.rs` validate/persist; `index.html` / `src/main.ts` own the picker, synchronization and live renderer getter; `src/pi/view-host.ts` / `webview-client.ts` apply local intent using the existing scroll owner.
+Code: `src/preferences.ts` / `src-tauri/src/preferences.rs` validate/persist; `index.html` / `src/settings-surface.ts` own the global-only picker, synchronization and live renderer getter; `src/pi/view-host.ts` / `webview-client.ts` apply local intent using the existing scroll owner.
 
 Coverage added in preferences/native validation, shell Settings synchronization/failure and bundled renderer mode/delivery matrix, upward cancellation, late acknowledgement, slash/control exclusion and gated image-preparation fixtures. Offline browser idle-send cases cover all modes from bottom/history; default busy steering/queue cases retain reading, and idle image cases now expect follow. These changes have **not been run or natively verified** as part of this task; validation/build require explicit request.
 
@@ -49,7 +49,7 @@ Routine state/history refresh never focuses the composer. Explicit launch focuse
 
 Explicit resume/restart resets session-local disclosure/composer presentation through the established boundary, without resetting siblings or replaying prompts. Settings uses HTML modality over unchanged underlying layout and restores prior focus; startup cannot focus through it.
 
-Whole-app native webview page zoom is 75–200%, default 125%; reset is 100%. Never use font-size or CSS transforms as replacement. Requests serialize and only successful changes persist. Zoom doesn't refocus, mutate drafts or change harness state; resize/follow owns resulting geometry. [Keybindings](keybindings.md) owns dispatch/modal policy.
+Whole-app native webview page zoom is global-only (including shortcuts invoked in a project window), 75–200%, default 125%; reset is 100%. Never use font-size or CSS transforms as replacement. Requests serialize and only successful changes persist. Zoom doesn't refocus, mutate drafts or change harness state; resize/follow owns resulting geometry. [Keybindings](keybindings.md) owns dispatch/modal policy.
 
 ## Native link navigation
 

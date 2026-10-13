@@ -12,7 +12,7 @@ Project settings shows effective values, not a second independent configuration.
 
 Overrides stay explicit even if they match the global value. Global edits update inheriting projects, but never replace explicit project values. The Appearance pane in global Settings links to open projects with overrides.
 
-Project overrides currently cover **theme, zoom, auto-follow after sending, and Pi/Node runtime paths**. Notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration remain global-only. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
+Project overrides cover **theme and Pi/Node runtime paths** only. **Zoom and auto-follow after sending are global-only**, along with notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration. Project settings contains only the theme picker under Appearance and runtime paths under Runtime. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
 
 This layering applies only to Nimrod preferences. Pi retains its own configuration and precedence.
 
@@ -29,8 +29,8 @@ Escape during a drag cancels resizing; the next Escape closes Settings.
 ## Appearance
 
 - **Theme:** global changes update inheriting windows; project changes apply only to that project. See [Themes](themes.md) for live previews, bundled themes and imports.
-- **Zoom:** scales the whole app, default **125%**, range **75–200%**. Use the picker or **⌘/Ctrl + / −**; **⌘/Ctrl+0** resets to 100%. Zoom is remembered and doesn't change drafts.
-- **Auto-follow after sending:** **When idle** (default) jumps to the bottom and follows new output for idle sends, but preserves your position for steering and queued follow-ups. **Always** does this for every message submission; **Never** preserves current scroll intent, including auto-follow if already active. Scrolling upward always pauses following. Global changes update inheriting projects; project overrides affect only that project. Changes affect subsequent sends without moving your current view. See [Reading conversations](reading-conversations.md#auto-follow-and-reading-older-output).
+- **Zoom (global only):** scales every project, Settings and reference window, default **125%**, range **75–200%**. Use the picker in global Settings or **⌘/Ctrl + / −** in a project window; shortcuts change the same global value. **⌘/Ctrl+0** resets to 100%. Zoom is remembered and doesn't change drafts.
+- **Auto-follow after sending (global only):** **When idle** (default) jumps to the bottom and follows new output for idle sends, but preserves your position for steering and queued follow-ups. **Always** does this for every message submission; **Never** preserves current scroll intent, including auto-follow if already active. Scrolling upward always pauses following. Changes synchronize across all projects. Changes affect subsequent sends without moving your current view. See [Reading conversations](reading-conversations.md#auto-follow-and-reading-older-output).
 - Theme/import/zoom errors use the shared [notice strip](error-messages.md). Non-error progress and import details stay alongside the controls.
 
 ## Notifications
@@ -72,7 +72,7 @@ Resolved paths appear under Runtime. Defaults are:
 
 Absolute `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the roots. Empty/relative overrides fall back to home defaults. Windows uses the user's home directory, normally `%USERPROFILE%`.
 
-`settings.json` accepts comments and trailing commas:
+The global `settings.json` accepts comments and trailing commas:
 
 ```jsonc
 {
@@ -87,7 +87,7 @@ Absolute `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the roots. Empty/relati
 
 Personal [card plugins](card-plugins.md#personal-typescript-plugins) are discovered/compiled automatically from the dedicated user directory; `cards.autoLoad: false` disables this directory-trusted workflow. Existing manifests use `cards.plugins` / `cards.trustedPlugins`; `cards.renderers` overrides tool matching. Declarative manifests need no executable trust. They are configured in this file, not a dedicated Settings category. Package load errors use the shared notice strip, including while Settings is open; catalog changes affect newly mounted cards without restarting agents.
 
-The project file accepts only the five project-overridable keys listed above. Nimrod creates it only on an explicit override save, not when opening a project or Settings. There is no ancestor-directory discovery: the canonical project directory is the only project scope. You can choose whether to version-control `.nimrod/settings.json`; imported theme IDs refer to your global theme library.
+The project file applies only `appearance.theme`, `runtime.piPath`, and `runtime.nodePath`. Earlier project entries for `appearance.zoom` and `appearance.autoFollowAfterSending` are ignored; their bytes/comments are preserved on unrelated saves, never copied into global preferences, and you can remove those obsolete entries manually. Other unsupported project keys still report a configuration error. Nimrod creates it only on an explicit override save, not when opening a project or Settings. There is no ancestor-directory discovery: the canonical project directory is the only project scope. You can choose whether to version-control `.nimrod/settings.json`; imported theme IDs refer to your global theme library.
 
 Omitted project keys inherit global settings; omitted global keys use defaults or runtime discovery. Imported themes live in `appearance.importedThemes`; [keybinding overrides](keybindings.md#configuration-file) live in `keybindings`. Pi's settings remain Pi-owned. [Drafts](drafts.md) use separate Rust-managed per-session files with debounced asynchronous saves; legacy webview drafts are ignored without migration.
 

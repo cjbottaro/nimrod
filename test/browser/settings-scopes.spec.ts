@@ -11,6 +11,9 @@ test('project provenance and global defaults reconcile across independent Settin
     await expect(page.locator('#settings-title')).toContainText('Project settings');
     await expect(page.locator('#settings-category-notifications')).toBeHidden();
     await expect(page.locator('#settings-category-keybindings')).toBeHidden();
+    await expect(page.locator('#settings-zoom')).toBeHidden();
+    await expect(page.locator('#settings-send-auto-follow')).toBeHidden();
+    await expect(page.locator('.settings-source')).toHaveCount(3);
     await expect(page.locator('#theme-picker-source')).toHaveText('Global default');
     await page.locator('#theme-picker').selectOption('dracula');
     await expect(page.locator('#theme-picker-source')).toHaveText('Project override');
@@ -18,6 +21,12 @@ test('project provenance and global defaults reconcile across independent Settin
     const settingsPage = await fixture.settingsWindow();
     await expect(settingsPage.locator('#settings-title')).toHaveText('Settings');
     await expect(settingsPage.locator('#workspace-layout')).toBeHidden();
+    await expect(settingsPage.locator('#settings-zoom')).toBeVisible();
+    await expect(settingsPage.locator('#settings-send-auto-follow')).toBeVisible();
+    await settingsPage.locator('#zoom-level').selectOption('150');
+    await expect(page.locator('#zoom-level')).toHaveValue('150');
+    await settingsPage.locator('#send-auto-follow').selectOption('never');
+    await expect(page.locator('#send-auto-follow')).toHaveValue('never');
     await expect(settingsPage.locator('#theme-picker')).toHaveValue('nimrod');
     await expect(settingsPage.locator('.settings-project-links')).toContainText('Theme');
     await settingsPage.locator('#theme-picker').selectOption('tokyo-night');
