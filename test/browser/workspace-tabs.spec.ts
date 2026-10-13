@@ -181,8 +181,11 @@ test('temporary Close uses Escape to cancel and Enter to confirm without replayi
     await expect(confirm).toHaveText('Close temporary session');
     await expect(page.locator('#host-dialog button[value="cancel"]')).toHaveText('Cancel');
     await expect(page.locator('#host-dialog button svg, #host-dialog button kbd')).toHaveCount(0);
-    // WebKit on macOS needs Option+Tab to include buttons in native tab order.
-    await page.keyboard.press('Alt+Shift+Tab');
+    await page.keyboard.press('ArrowLeft');
+    await expect(page.locator('#host-dialog button[value="cancel"]')).toBeFocused();
+    await page.keyboard.press('ArrowRight');
+    await expect(confirm).toBeFocused();
+    await page.keyboard.press('ArrowUp');
     await expect(page.locator('#host-dialog button[value="cancel"]')).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page.locator('#host-dialog')).not.toBeVisible();

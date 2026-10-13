@@ -4,7 +4,7 @@
 
 ## Specification and acceptance criteria
 
-Ordinary dialogs share a shell, not identical content. Confirmation labels remain plain, Enter follows focused action/Cancel, Escape cancels, and loading review retains Cancel focus after late population.
+Ordinary dialogs share a shell, not identical content. Confirmation labels remain plain, arrow keys navigate enabled footer actions, Enter follows focused action/Cancel, Escape cancels, and loading review retains Cancel focus after late population.
 
 ## Contract and code map
 
@@ -20,11 +20,13 @@ Ordinary dialogs share a shell, not identical content. Confirmation labels remai
 
 `src/dialog-actions.ts` shares plain action labels and non-visual `aria-keyshortcuts`. Buttons contain label text only; no Enter SVG, Esc text or hint-specific styling. Picker-row hints are unchanged. `Dialogs.confirm` accepts an optional action label after owner; shell Close/Restart provide explicit labels, Pi retains Confirm. Input/select calls clear shortcut metadata and reset the generic label.
 
+`navigateDialogActions` shares footer-button navigation across host input/select/confirm dialogs, deletion review, keybinding recorder/reset dialogs and Pi's editor overlay. Unmodified Left/Up move backward and Right/Down move forward in DOM order, wrapping between enabled, non-hidden/non-inert Cancel and accept buttons. Navigation changes focus only, with no activation or scrolling; disabled Delete is skipped during loading. Repeated arrows can move focus; composing/keyCode-229 arrows are consumed without movement. Arrows from text fields, selects, the shortcut-recording input and other content retain their existing behavior; modified arrows are untouched. Palette pickers retain their existing list navigation (they have no Cancel/accept footer pair).
+
 Host confirmations, populated deletion reviews and eligible keybinding resets focus the confirmation action. Enter honors Cancel focus (including descendant nodes), otherwise activates the enabled confirmation; Escape cancels. Repeated/composing/keyCode-229 Enter is consumed without activation. Native form return values/request correlation and close-time focus restoration remain unchanged. Key recording still captures shortcuts rather than treating Enter as Save. During async reset saving the existing click guards prevent duplicate save/cancel.
 
 Deletion loading disables Delete, clears its Enter shortcut metadata and focuses Cancel. A visible loading-to-review transition preserves focus rather than moving it after the user has begun interacting; Enter on Cancel cancels both loading and populated review. Fresh ready-only reviews focus Delete. See session-deletion reference.
 
-Unit tests cover default/Cancel focus, plain labels/shortcut metadata, IME/repeats and cleanup before input; offline WebKit tests cover actual Shift+Tab/Enter, default focus, absence of button hints, close restoration and retained drafts. Native visual acceptance and Linux verification remain pending.
+Unit fixtures cover all four arrow directions/wrapping, reversed DOM order, disabled/hidden/inert actions, modifiers, IME/repeats, editing controls, default/Cancel focus, plain labels/shortcut metadata and cleanup before input. Offline WebKit fixtures cover arrow navigation followed by Enter in temporary Close, deletion review and keybinding reset dialogs, default focus, absence of button hints, close restoration and retained drafts. The arrow-navigation additions have not been executed yet. Native visual acceptance and Linux verification remain pending.
 
 ## Command rows
 
@@ -32,6 +34,7 @@ Unit tests cover default/Cancel focus, plain labels/shortcut metadata, IME/repea
 
 ## Verification
 
+- `test/dialog-actions.test.ts`, `test/dialogs.test.ts`, `test/deletion-review.test.ts`: shared arrow navigation, editing-control preservation and disabled/loading actions (arrow additions not yet run).
 - `test/command-palette.test.ts`: two-line command structure, heading shortcuts, unbound absence and description search.
 - `test/browser/modal-layout.spec.ts`: actual WebKit right alignment/secondary descriptions; all six ordinary shells share computed geometry/surfaces at desktop and narrow sizes; changing shared width/padding tokens updates all consumers.
 - Existing browser deletion/keybinding/ranking tests cover footer reachability, tree scrolling, focus, cancellation and retained drafts.

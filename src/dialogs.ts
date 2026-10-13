@@ -1,4 +1,4 @@
-import { confirmationKey, labelDialogAction } from './dialog-actions';
+import { confirmationKey, labelDialogAction, navigateDialogActions } from './dialog-actions';
 
 export class Dialogs {
   private queue = Promise.resolve();
@@ -34,8 +34,10 @@ export class Dialogs {
       labelDialogAction(cancel, 'Cancel', message !== undefined ? 'Escape' : undefined);
       labelDialogAction(confirm, action, message !== undefined ? 'Enter' : undefined);
       const onKey = (event: KeyboardEvent) => {
-        // Input/select dialogs retain their existing editing/selection behavior.
+        // Editing/selection controls keep arrows; footer buttons share navigation.
+        if (!this.dialog.open) return;
         if (message !== undefined) confirmationKey(event, this.dialog, cancel, confirm);
+        else navigateDialogActions(event, cancel, confirm);
       };
       this.dialog.addEventListener('keydown', onKey);
       this.dialog.addEventListener('close', () => {

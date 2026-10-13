@@ -1,4 +1,4 @@
-import { confirmationKey, labelDialogAction } from './dialog-actions';
+import { confirmationKey, labelDialogAction, navigateDialogActions } from './dialog-actions';
 import { ACTIONS, bindingsFor, bindingConflicts, isMac, recordBinding, shortcutLabel, type ActionId, type KeyOverrides } from './keybindings';
 
 /** Settings-only editor. Host commits against a fresh snapshot, not this UI's stale copy. */
@@ -115,6 +115,7 @@ export function installKeybindingEditor(window: Window, content: HTMLElement, ho
       confirmationKey(event, recorder, get<HTMLButtonElement>('keybinding-cancel'), save);
       return;
     }
+    if (recorder.open && navigateDialogActions(event, get<HTMLButtonElement>('keybinding-cancel'), save)) return;
     if (event.isComposing || event.keyCode === 229) return;
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (!saving) recorder.close(); return; }
     if (event.target !== input) return;

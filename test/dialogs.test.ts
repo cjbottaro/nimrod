@@ -38,7 +38,8 @@ test('confirmation focus, labels and Enter agree; Cancel focus and Escape cancel
     await Promise.resolve(); key('Escape');
     assert.equal(await next, false);
     const cancelled = dialogs.confirm('Close?', 'Discard?');
-    await Promise.resolve(); cancel.focus(); key('Enter');
+    await Promise.resolve(); key('ArrowLeft');
+    assert.equal(document.activeElement, cancel); key('Enter');
     assert.equal(await cancelled, false);
     // Closing a confirmation removes its listener before the next queued input.
     const input = dialogs.input('Extension input', 'Keep multiline behavior');
@@ -49,6 +50,11 @@ test('confirmation focus, labels and Enter agree; Cancel focus and Escape cancel
     const enter = new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
     document.querySelector('#host-dialog-input')!.dispatchEvent(enter);
     assert.equal(enter.defaultPrevented, false); assert.equal(dialog.open, true);
+    const field = document.querySelector<HTMLTextAreaElement>('#host-dialog-input')!;
+    field.focus(); assert.equal(key('ArrowLeft').defaultPrevented, false);
+    assert.equal(document.activeElement, field);
+    cancel.focus(); assert.equal(key('ArrowRight').defaultPrevented, true);
+    assert.equal(document.activeElement, confirm);
     dialog.close('ok'); assert.equal(await input, 'Keep multiline behavior');
   } finally { globalThis.document = previous; dom.window.close(); }
 });

@@ -30,8 +30,8 @@ History-save failures are reported without blocking or retrying the action.
 
 ## Confirmation dialogs
 
-Confirmation buttons use plain action labels. The enabled confirmation action normally has focus; Enter activates it unless you move focus to Cancel, where Enter cancels. Escape cancels.
+Confirmation buttons use plain action labels. The enabled confirmation action normally has focus. Use **Left/Up** or **Right/Down** to move between Cancel and the action button, wrapping and skipping disabled buttons. **Enter** activates the focused button; **Escape** cancels. Arrow navigation also works when a footer button has focus in input/select dialogs, keybinding dialogs and Pi editor dialogs; text fields, pickers and shortcut recording keep their normal arrow-key behavior.
 
-Deletion loading initially focuses Cancel while Delete is disabled. If that loading dialog is already visible when the tree arrives, focus stays where you left it; Tab to Delete or click it to proceed.
+Deletion loading initially focuses Cancel while Delete is disabled. If that loading dialog is already visible when the tree arrives, focus stays where you left it; use an arrow key or Tab to focus Delete, then Enter to proceed, or click Delete.
 
 Settings is a separate full-window page; native file/directory choosers remain OS-controlled. Customize command shortcuts in [Keybindings](keybindings.md).

@@ -1,3 +1,4 @@
+import { navigateDialogActions } from "../dialog-actions";
 import { createMainActivityDom, createSubagentActivityDom, renderMainActivity, renderSubagentActivity } from "./activity-dom";
 import { formatNativeSessionStats } from "./session-stats";
 import { installSlashCompletion } from "./slash-completion";
@@ -876,6 +877,11 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     if (href) {
       if (host.cardActions) { if (isSafeLink(href)) void host.cardActions.openLink(href).catch(reportRenderError); }
       else post('openLink', { href });
+    }
+  });
+  dialog.addEventListener("keydown", event => {
+    if (active && !disposed && dialog.classList.contains("open") && !document.querySelector('dialog[open]')) {
+      navigateDialogActions(event, required<HTMLButtonElement>("dialog-cancel"), required<HTMLButtonElement>("dialog-save"));
     }
   });
   required("dialog-save").addEventListener("click", () => {

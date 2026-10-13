@@ -187,10 +187,13 @@ test('Enter confirms from Delete focus; Cancel focus and Escape cancel', async (
     f.doc.activeElement!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     assert.equal(await next, false);
     const cancelled = f.controller.review({ id: 'cancel-enter', sessions });
-    f.doc.querySelector<HTMLButtonElement>('#deletion-cancel')!.focus();
+    f.doc.activeElement!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true }));
+    assert.equal(f.doc.activeElement?.id, 'deletion-cancel');
     f.doc.activeElement!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     assert.equal(await cancelled, false);
     f.controller.loading(); f.advance(150);
+    f.doc.activeElement!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+    assert.equal(f.doc.activeElement?.id, 'deletion-cancel', 'Disabled Delete is skipped');
     f.doc.activeElement!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     assert.equal(f.dialog.open, false, 'Enter on focused Cancel cancels a loading preview');
     f.doc.activeElement!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
