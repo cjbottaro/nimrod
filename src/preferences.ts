@@ -113,6 +113,24 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
     work = result.catch(() => {});
     return result;
   };
+  // Track the latest queued value per key, not merely the last received snapshot:
+  // A → B → A must enqueue the final A even while the snapshot still contains A.
+  const stateWrites = new Map<string, { signature: string | undefined }>();
+  const saveState = (key: string, value: unknown): Promise<void> => {
+    let signature: string | undefined;
+    try {
+      signature = JSON.stringify(value);
+      // Capture the requested JSON value now; callers may mutate their objects
+      // while an earlier preferences operation is still in flight.
+      if (signature !== undefined) value = JSON.parse(signature);
+    } catch (error) { return Promise.reject(error); }
+    const pending = { signature };
+    stateWrites.set(key, pending);
+    const result = enqueue(async () => { receive(await host.state({ [key]: value })); });
+    const settled = () => { if (stateWrites.get(key) === pending) stateWrites.delete(key); };
+    void result.then(settled, settled);
+    return result;
+  };
   const patch = (values: Record<string, unknown>) => enqueue(async () => {
     // Read immediately before editing: unrelated changes in another window survive.
     receive(await host.snapshot());
@@ -184,8 +202,16 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
       return enqueue(async () => { receive(await host.commandUsage(id)); });
     },
     readState(key: string) { return snapshot?.state[key]; },
-    saveState(key: string, value: unknown) {
-      return enqueue(async () => { receive(await host.state({ [key]: value })); });
+    saveState,
+    // No request means no Promise/error handler for repeated streaming snapshots.
+    // A failed write is removed from stateWrites, never cached as durable success.
+    saveStateIfChanged(key: string, value: unknown): Promise<void> | undefined {
+      let signature: string | undefined;
+      try { signature = JSON.stringify(value); } catch (error) { return Promise.reject(error); }
+      const pending = stateWrites.get(key);
+      if (pending ? pending.signature === signature
+        : snapshot && !snapshot.error && JSON.stringify(snapshot.state[key]) === signature) return;
+      return saveState(key, value);
     },
     get paths() { return { settings: snapshot!.settingsPath, state: snapshot!.statePath }; },
     dispose() { disposed = true; unlisten(); subscribers.clear(); },

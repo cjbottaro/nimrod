@@ -153,6 +153,93 @@ test('compare-and-swap conflicts are not retried or reported as saved', async ()
   } finally { p.dispose(); f.dom.window.close(); }
 });
 
+test('unchanged state requests skip IPC both while queued and after success', async () => {
+  const f = fixture(), p = await f.install();
+  try {
+    const key = 'nimrod.tabs.v1:/project';
+    let writes = 0;
+    const state = f.host.state;
+    f.host.state = async entries => { writes++; return state(entries); };
+    const layout = { tabs: [{ path: '/session', sessionId: 'fixture', name: 'Session', lastUsed: 1 }], active: '/session' };
+    const first = p.saveStateIfChanged(key, layout);
+    assert.ok(first);
+    for (let i = 0; i < 200; i++) assert.equal(p.saveStateIfChanged(key, structuredClone(layout)), undefined);
+    await first;
+    assert.equal(writes, 1);
+    for (let i = 0; i < 200; i++) assert.equal(p.saveStateIfChanged(key, structuredClone(layout)), undefined);
+    assert.equal(writes, 1);
+    const changed = { ...layout, active: undefined };
+    await p.saveStateIfChanged(key, changed);
+    assert.equal(writes, 2);
+    assert.equal(p.saveStateIfChanged(key, { tabs: layout.tabs }), undefined, 'equality uses persisted JSON, not undefined object fields');
+    assert.deepEqual(p.readState(key), { tabs: layout.tabs });
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
+test('state no-op suppression preserves A → B → A order and tracks explicit writes too', async () => {
+  const f = fixture(), p = await f.install();
+  try {
+    await p.saveState('selected', 'A');
+    const state = f.host.state;
+    const writes: unknown[] = [];
+    f.host.state = async entries => { writes.push(entries.selected); return state(entries); };
+    const b = p.saveStateIfChanged('selected', 'B');
+    const a = p.saveStateIfChanged('selected', 'A');
+    assert.ok(b); assert.ok(a);
+    assert.equal(p.saveStateIfChanged('selected', 'A'), undefined);
+    await Promise.all([b, a]);
+    assert.deepEqual(writes, ['B', 'A']);
+    assert.equal(p.readState('selected'), 'A');
+    writes.length = 0;
+    const explicit = p.saveState('selected', 'B');
+    const restore = p.saveStateIfChanged('selected', 'A');
+    assert.ok(restore, 'a queued explicit B cannot be hidden by the old A snapshot');
+    await Promise.all([explicit, restore]);
+    assert.deepEqual(writes, ['B', 'A']);
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
+test('failed state requests are not cached as successful and are not automatically retried', async () => {
+  const f = fixture(), p = await f.install();
+  try {
+    let writes = 0;
+    const state = f.host.state;
+    f.host.state = async () => { writes++; throw new Error('fixture disk full'); };
+    const failed = p.saveStateIfChanged('layout', { tabs: ['a'] });
+    assert.ok(failed);
+    assert.equal(p.saveStateIfChanged('layout', { tabs: ['a'] }), undefined);
+    await assert.rejects(failed, /fixture disk full/);
+    assert.equal(writes, 1);
+    assert.equal(p.readState('layout'), undefined);
+    f.host.state = async entries => { writes++; return state(entries); };
+    const next = p.saveStateIfChanged('layout', { tabs: ['a'] });
+    assert.ok(next, 'a later request can actually save the value that failed');
+    await next;
+    assert.equal(writes, 2);
+    assert.deepEqual(p.readState('layout'), { tabs: ['a'] });
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
+test('state comparisons follow external updates/deletion and queued values are captured before mutation', async () => {
+  const f = fixture(), p = await f.install();
+  try {
+    const original = { tabs: ['a'] };
+    const saving = p.saveStateIfChanged('layout', original);
+    original.tabs.push('b');
+    await saving;
+    assert.deepEqual(p.readState('layout'), { tabs: ['a'] });
+    await f.host.state({ layout: { tabs: ['external'] }, unrelated: true });
+    const restoring = p.saveStateIfChanged('layout', { tabs: ['a'] });
+    assert.ok(restoring); await restoring;
+    assert.equal(p.readState('unrelated'), true);
+    f.host.value.state = { version: 1 }; f.host.value.revision++;
+    f.host.receive?.(await f.host.snapshot());
+    const recreate = p.saveStateIfChanged('layout', { tabs: ['a'] });
+    assert.ok(recreate); await recreate;
+    assert.deepEqual(p.readState('layout'), { tabs: ['a'] });
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
 test('state writes merge keys and do not alter settings or draft storage', async () => {
   const f = fixture(); const p = await f.install();
   try {

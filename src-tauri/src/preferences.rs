@@ -455,6 +455,11 @@ impl Preferences {
         let mut state = snapshot.state.clone();
         change(&mut state)?;
         state.insert("version".into(), Value::from(1));
+        // Refresh/validate first: identical patches must still respect external
+        // edits and malformed-file guards. Do not rewrite unchanged bookkeeping.
+        if state == snapshot.state {
+            return Ok(snapshot.clone());
+        }
         write_atomic(
             &snapshot.state_path,
             &serde_json::to_string_pretty(&state).map_err(|e| e.to_string())?,
@@ -661,6 +666,11 @@ mod tests {
         let path = p.snapshot().state_path;
         fs::write(&path, "broken").unwrap();
         assert!(p.update_state(Map::new()).is_err());
+        assert!(
+            p.update_state(serde_json::from_str("{\"keep\":true}").unwrap())
+                .is_err(),
+            "even a semantically unchanged patch must respect malformed-file guards"
+        );
         assert_eq!(fs::read_to_string(path).unwrap(), "broken");
     }
     #[cfg(unix)]
@@ -707,6 +717,60 @@ mod tests {
         );
         fs::write(restored.snapshot().state_path, "broken").unwrap();
         assert!(restored.record_command_usage("new").is_err());
+    }
+
+    #[test]
+    fn identical_state_changes_keep_revision_and_do_not_replace_the_file() {
+        let (_dir, p) = fixture();
+        let first = p
+            .update_state(serde_json::from_str("{\"a\":1}").unwrap())
+            .unwrap();
+        let compact = "{\"version\":1,\"a\":1}";
+        fs::write(&first.state_path, compact).unwrap();
+        let before = p.snapshot();
+        let same = p
+            .update_state(serde_json::from_str("{\"a\":1}").unwrap())
+            .unwrap();
+        assert_eq!(same.revision, before.revision);
+        assert_eq!(fs::read_to_string(&same.state_path).unwrap(), compact);
+        assert_eq!(p.remove_state("missing").unwrap().revision, same.revision);
+        assert_eq!(
+            p.update_existing_state("a".into(), Value::from(1))
+                .unwrap()
+                .revision,
+            same.revision
+        );
+        assert!(
+            p.update_existing_state("missing".into(), Value::from(1))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn no_op_comparison_refreshes_external_edits_and_preserves_their_bytes() {
+        let (_dir, p) = fixture();
+        let first = p
+            .update_state(serde_json::from_str("{\"a\":1}").unwrap())
+            .unwrap();
+        let external = "{\"version\":1,\"a\":1,\"b\":2}";
+        fs::write(&first.state_path, external).unwrap();
+        let same = p
+            .update_state(serde_json::from_str("{\"a\":1}").unwrap())
+            .unwrap();
+        assert_eq!(same.state["b"], Value::from(2));
+        assert_eq!(
+            same.revision,
+            first.revision + 1,
+            "external edit alone advances revision"
+        );
+        assert_eq!(fs::read_to_string(&same.state_path).unwrap(), external);
+        fs::remove_file(&same.state_path).unwrap();
+        let recreated = p
+            .update_state(serde_json::from_str("{\"a\":1}").unwrap())
+            .unwrap();
+        assert!(recreated.state_path.exists());
+        assert_eq!(recreated.state["a"], Value::from(1));
+        assert!(!recreated.state.contains_key("b"));
     }
 
     #[test]
