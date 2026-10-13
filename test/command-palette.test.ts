@@ -41,6 +41,40 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }),
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
+test('inspection shares palette focus/cancellation, shows safe details and ignores stale reports', async () => {
+  const f = fixture();
+  try {
+    let refreshes = 0, runs = 0;
+    const request = f.palette.startInspection('MCP servers', () => { refreshes++; })!;
+    request.show({ items: [
+      { id: 'failed', label: 'Playwright', detail: 'codemode', badge: 'failed', inspection: { fields: [['Connection', 'failed']], text: '<script>not markup</script>\nsecond line' }, run() { runs++; } },
+      { id: 'ready', label: 'ADO', detail: '40 tools · codemode', inspection: { fields: [['Tools', '40']] }, run() { runs++; } },
+    ], notice: 'Read-only snapshot' });
+    const details = () => f.win.document.querySelector('#palette-inspection')!;
+    assert.match(details().textContent!, /Playwright/);
+    assert.equal(details().querySelector('script'), null);
+    assert.match(details().querySelector('pre')!.textContent!, /\nsecond line/);
+    f.key('ArrowDown');
+    assert.match(details().textContent!, /ADO/);
+    f.key('Enter');
+    assert.equal(f.dialog.open, true);
+    assert.equal(runs, 0, 'inspection never executes row actions');
+    f.query('Playwright');
+    assert.match(details().textContent!, /Playwright/);
+    f.win.document.querySelector<HTMLButtonElement>('#palette-refresh')!.click();
+    assert.equal(refreshes, 1);
+    f.key('Escape'); await tick();
+    assert.equal(f.win.document.activeElement, f.opener);
+    assert.equal(request.isCurrent(), false);
+    request.show({ items: [], notice: 'stale' });
+    assert.equal(f.dialog.open, false);
+    f.palette.open();
+    assert.equal((details() as HTMLElement).hidden, true);
+    assert.equal(details().textContent, '');
+    f.palette.close(); await tick();
+  } finally { f.dispose(); }
+});
+
 test('preview selection shares cancellation lifecycle, mouse/arrow highlight and post-close acceptance', async () => {
   for (const cancel of ['escape', 'native', 'back', 'api', 'dispose'] as const) {
     const f = fixture(), previews: (string | undefined)[] = []; let restored = 0, accepted = 0;

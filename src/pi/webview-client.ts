@@ -752,6 +752,11 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       updateComposer({ ...composer, lastError: 'Manual compaction is available only while Pi is idle. Your draft was kept.' }); return;
     }
     if (displayedState.sessionUnavailable || displayedState.compacting || (!text && !composer.attachments?.length)) return;
+    if (text === '/mcp') {
+      updateComposer(clearDraft(composer));
+      post('inspectMcp');
+      return;
+    }
     const id = `submission-${Date.now()}-${++nextSubmissionId}`;
     const submittedText = composer.draft;
     const generation = composerGeneration;

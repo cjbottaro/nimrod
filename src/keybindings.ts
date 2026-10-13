@@ -8,6 +8,7 @@ export const ACTIONS = [
   { id: 'capture-performance', label: 'Capture performance report', scope: 'project', defaults: [] },
   { id: 'reload-card-plugins', label: 'Reload card plugins', scope: 'project', defaults: [] },
   { id: 'select-theme', label: 'Select theme…', scope: 'project', defaults: [] },
+  { id: 'mcp', label: 'MCP servers…', scope: 'project', defaults: [] },
   { id: 'model', label: 'Select model…', scope: 'project', defaults: ['primary+m'] },
   { id: 'thinking', label: 'Select thinking level…', keywords: 'effort reasoning', scope: 'project', defaults: ['primary+e'] },
   { id: 'palette', label: 'Command palette', scope: 'project', defaults: ['primary+shift+p'] },

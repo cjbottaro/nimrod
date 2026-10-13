@@ -49,6 +49,7 @@ Without installation, use `./bin/nimrod .`. The launcher opens or focuses a proj
 - [Model and thinking preferences](docs/model-thinking.md) — change upcoming-request configuration during work.
 - [Pop-outs](docs/pop-outs.md) — persistent reference windows for code and rendered Markdown.
 - [Notifications](docs/notifications.md) — background-session alerts and delivery troubleshooting.
+- [MCP inspector](docs/mcp.md) — read-only session server status, exposure, counts and reported errors.
 - [Command palette](docs/command-palette.md) and [Keybindings](docs/keybindings.md) — searchable commands and customizable shortcuts.
 - [Performance reports](docs/performance-diagnostics.md) — opt-in local timing captures for sluggish typing/scrolling.
 - [Settings](docs/settings.md) — appearance, zoom, runtime paths and local configuration.

@@ -29,6 +29,7 @@ interface ShellOptions {
   selectedId?: string;
   filePath?: string | null;
   holdPrompts?: boolean;
+  mcpReport?: string;
   focused?: () => boolean;
   performanceControl?: { after: (() => void)[]; writeError?: string };
   notificationError?: string;
@@ -196,6 +197,11 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         const { channel, config: activeConfig } = target;
         const request = args.message as JsonRecord;
         if (request.type === 'prompt' && options.holdPrompts) return;
+        if (request.type === 'prompt' && request.message === '/mcp' && options.mcpReport) {
+          channel.onmessage({ kind: 'rpc', value: { type: 'extension_ui_request', id: 'mcp-status', method: 'notify', notifyType: 'info', message: options.mcpReport } });
+          channel.onmessage({ kind: 'rpc', value: { type: 'response', id: request.id, success: true, data: { disposition: 'handled' } } });
+          return;
+        }
         if (request.type === 'set_session_name') target.name = String(request.name);
         if (options.modelFixture) {
           if (request.type === 'set_model' && options.modelChangeError) {
@@ -211,7 +217,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
           ...(target.name !== undefined ? { sessionName: target.name } : {}),
           ...(activeConfig.mode !== 'temporary' ? options.state?.() ?? { sessionFile: activeConfig.sessionFile || target.file, sessionId: 'fixture-id' } : {}) }
           : request.type === 'get_messages' ? { messages: options.history || [] }
-          : request.type === 'get_commands' ? { commands: [] } : {};
+          : request.type === 'get_commands' ? { commands: options.mcpReport ? [{ name: 'mcp', source: 'extension', sourceInfo: { path: 'builtin:mcp' } }] : [] } : {};
         channel.onmessage({ kind: 'rpc', value: { type: 'response', id: request.id, success: true, data } });
       }
     },
@@ -3005,6 +3011,38 @@ test('Pi dialogs retain focus priority above the palette without dismissing it',
     assert.equal(f.win.document.activeElement, prompt);
     f.disconnect();
   } finally { f.dom.window.close(); }
+});
+
+test('MCP inspector routes palette and composer entries to the same session without status notices', async () => {
+  const f = await fixture(undefined, { mcpReport: 'ado: connected, 40 tools (codemode)\nplaywright: failed (codemode)\n    spawn playwright ENOENT' });
+  try {
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt');
+    prompt.value = 'Keep this draft'; prompt.dispatchEvent(new f.win.Event('input')); prompt.focus();
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'P', metaKey: true, shiftKey: true, cancelable: true }));
+    const input = f.element<HTMLInputElement>('palette-input');
+    input.value = 'MCP servers'; input.dispatchEvent(new f.win.Event('input'));
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.equal(f.element('palette-title').textContent, 'MCP servers');
+    assert.match(f.element('palette-inspection').textContent!, /playwright.*failed/s);
+    assert.match(f.element('palette-inspection').textContent!, /ENOENT/);
+    assert.equal(prompt.value, 'Keep this draft');
+    assert.equal(f.element('session-notices').hidden, true);
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await f.tick();
+    assert.equal(f.win.document.activeElement, prompt);
+    prompt.value = '/mcp'; prompt.dispatchEvent(new f.win.Event('input'));
+    prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.equal(prompt.value, '');
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
+    assert.equal(f.element('session-notices').hidden, true);
+    const prompts = f.calls.filter(call => (call.args.message as JsonRecord)?.type === 'prompt');
+    assert.equal(prompts.length, 2);
+    assert.ok(prompts.every(call => (call.args.message as JsonRecord).message === '/mcp'));
+    f.disconnect(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+  } finally { f.win.close(); }
 });
 
 test('model apply failure after picker acceptance remains session-local and preserves the draft', async () => {

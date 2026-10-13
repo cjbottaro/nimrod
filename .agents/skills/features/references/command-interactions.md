@@ -14,6 +14,8 @@ One interaction owns every palette page and entry point. Escape cancels the whol
 
 Color-theme preview uses `startPreviewSelection()` with lifecycle-owned rollback; see [themes](themes.md#bundled-catalog-and-command-palette-picker). Its hover handling is preview-only and leaves other picker behavior unchanged.
 
+Read-only MCP inspection uses `startInspection()` in the same lifecycle: details follow the selected row, Enter does not execute a row action, Refresh replaces the page generation, and Escape/Back/cancellation suppress stale presentation. See [MCP inspector](mcp-inspector.md).
+
 Add a picker through `startSelection()` or the existing page lifecycle, not a feature-specific dialog key handler. `beginPage()` owns query reset, Back/Retry controls and request generation. Page content may differ; dismissal must not branch on page mode or entry point. There is no new generic harness or global modal framework.
 
 Repeated deletion is the deliberate nested-dialog exception: the shared deletion session page stays mounted and visible while its tree review owns focus and Escape. Only that executing page authorizes review coverage; all other dialogs retain priority. Cancel leaves the picker unchanged; successful tombstones prune cached rows in place after settlement without rediscovery or rebuilding survivors. Escape from the picker dismisses the interaction. Generation/disposal guards reject stale completions after API closure or newer pages; no automatic reopening. See [deletion picker](session-deletion.md#repeated-deletion-picker).

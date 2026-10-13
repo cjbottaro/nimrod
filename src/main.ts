@@ -177,6 +177,7 @@ interface Tab {
   inputCount: number; unread: boolean; failed: boolean; focus?: HTMLElement; notice: HTMLElement;
   notices: ReturnType<typeof installApplicationNotices>;
   cancelPreference?: () => void;
+  cancelInspector?: () => void;
   preferenceTask?: Promise<void>;
   closeButton: HTMLButtonElement; deleteButton: HTMLButtonElement;
   row: HTMLButtonElement; rowLabel: HTMLElement; rowIndicator: HTMLElement; rowTime: HTMLTimeElement; rowNode: HTMLElement;
@@ -736,6 +737,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     { id: 'new-named', label: 'New named session…', detail: 'Choose a name before starting', next: true, run: newNamedSession },
     ...(tabs.length ? [{ id: 'switch-session', label: 'Switch session…', detail: 'All open sessions, regardless of sidebar view', next: true, run: () => palette.openSessions() }] : []),
     ...(active ? [
+      { id: 'mcp', label: 'MCP servers…', detail: 'Inspect this session’s MCP connections, exposure and reported errors', next: true, run: () => inspectMcp(active!) },
       { id: 'model', label: 'Select model…', detail: 'Choose the model for this session', next: true, run: () => pickPreference(active!, 'model') },
       { id: 'thinking', label: 'Select thinking level…', keywords: 'effort reasoning', detail: 'Choose reasoning effort for this session', next: true, run: () => pickPreference(active!, 'thinking') },
     ] : []),
@@ -888,6 +890,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
         return;
       }
       if (!tab.session || tab.closing || tab.restarting) return;
+      if (message.type === 'inspectMcp') { void inspectMcp(tab); return; }
       if (message.type === 'selectModel' || message.type === 'selectThinking') void pickPreference(tab, message.type === 'selectModel' ? 'model' : 'thinking');
       else {
         const session = tab.session;
@@ -952,6 +955,45 @@ async function withTabDialog<T>(tab: Tab, action: (title: string) => Promise<T>,
   tab.inputCount++; updateTab(tab);
   try { return await action(`${tab.title} — ${title}`); }
   finally { tab.inputCount--; if (tabs.includes(tab)) updateTab(tab); }
+}
+async function inspectMcp(tab: Tab): Promise<void> {
+  const request = palette.startInspection('MCP servers', () => { void inspectMcp(tab); });
+  if (!request) return;
+  tab.cancelInspector = request.cancel;
+  const session = tab.session;
+  const valid = () => tabs.includes(tab) && tab.session === session && !tab.ended && !tab.closing && !tab.restarting && !tab.deleting && !deletion.blocked(tab.file?.path);
+  if (!session || !valid()) {
+    request.cancel();
+    if (tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:mcp-inspection`, owner: tab.id, operation: 'Inspect MCP servers', message: 'Connect this session before inspecting MCP servers.' });
+    return;
+  }
+  try {
+    const report = await session.inspectMcp();
+    if (!request.isCurrent()) return;
+    if (!valid()) { request.cancel(); return; }
+    notices.resolve(`${tab.id}:mcp-inspection`);
+    const attention = new Set(['failed', 'needs sign-in', 'disconnected']);
+    request.show({
+      items: [
+        ...[...report.servers].sort((a, b) => Number(attention.has(b.state)) - Number(attention.has(a.state))).map(server => ({
+          id: server.name, label: server.name, badge: server.state,
+          detail: `${server.toolCount === undefined ? 'Tool count unavailable' : `${server.toolCount} tools`} · ${server.exposure}`,
+          keywords: server.details,
+          inspection: { fields: [
+            ['Connection', server.state], ['Exposure', server.exposure],
+            ['Tools', server.toolCount === undefined ? 'Not reported' : String(server.toolCount)],
+          ] as [string, string][], text: server.details || (server.state === 'disconnected' ? 'Pi reconnects this server on its next call.' : undefined) },
+          run() {},
+        })),
+        ...(report.diagnostics.length ? [{ id: ':diagnostics', label: 'Configuration diagnostics', detail: `${report.diagnostics.length} reported entries`, inspection: { fields: [] as [string, string][], text: report.diagnostics.join('\n\n') }, run() {} }] : []),
+      ],
+      notice: report.empty || 'Read-only snapshot from Pi · Refresh to update. Tool details and configuration sources are not exposed by this status API.',
+    });
+  } catch (error) {
+    if (!request.isCurrent()) return;
+    request.cancel();
+    if (valid()) notices.report({ id: `${tab.id}:mcp-inspection`, owner: tab.id, operation: 'Inspect MCP servers', message: String(error) });
+  }
 }
 async function pickPreference(tab: Tab, kind: 'model' | 'thinking'): Promise<void> {
   const operation = kind === 'model' ? 'Select model' : 'Select thinking level';
@@ -1030,7 +1072,7 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
     copy: writeText, openLink: href => invoke('open_link', { token, href }),
     disconnected: reason => {
       if (!currentToken()) return;
-      tab.ended = true; tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' }); dialogs.cancel(token);
+      tab.ended = true; tab.cancelPreference?.(); tab.cancelInspector?.(); tab.receive?.({ type: 'sessionDisconnected' }); dialogs.cancel(token);
       void stopOwned(tab).catch(e => { if (currentToken()) showNotice(tab, `Could not stop Pi: ${e}`); });
       if (!tab.closing && !tab.restarting && !tab.deleting) showNotice(tab, `${reason || 'Session disconnected'}. Nothing will be sent automatically.`, !!tab.file?.exists);
       updateTab(tab); controls();
@@ -1141,7 +1183,7 @@ async function restartSession(tab: Tab): Promise<void> {
     if (!tabs.includes(tab)) return;
     // Stop is a native lifecycle operation, not an RPC request to a stuck agent.
     await stopOwned(tab);
-    tab.cancelPreference?.();
+    tab.cancelPreference?.(); tab.cancelInspector?.();
     if (tab.token) dialogs.cancel(tab.token);
     tab.receive?.({ type: 'sessionDisconnected' }); tab.session?.rpc.disconnect('Session restarted');
     tab.ended = true;
@@ -1197,7 +1239,7 @@ function disposeTab(tab: Tab): void {
   if (active === tab) active = undefined;
   if (presented === tab) { tab.view.setActive(false); presented = undefined; conversation.hidden = true; }
   if (tab.token) dialogs.cancel(tab.token);
-  tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' }); tab.session?.rpc.disconnect('Session closed');
+  tab.cancelPreference?.(); tab.cancelInspector?.(); tab.receive?.({ type: 'sessionDisconnected' }); tab.session?.rpc.disconnect('Session closed');
   tab.view.dispose();
   try { tab.drafts.discardTemporary(); } catch (e) { persistenceError(e); }
   tab.root.remove(); tab.rowNode.remove();
@@ -1207,7 +1249,7 @@ function detachTab(tab: Tab): void {
   tab.closing = true;
   tab.notices.dispose(); notices.store.resolveOwner(tab.id);
   if (tab.token) dialogs.cancel(tab.token);
-  tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' }); tab.session?.rpc.disconnect('Session closed');
+  tab.cancelPreference?.(); tab.cancelInspector?.(); tab.receive?.({ type: 'sessionDisconnected' }); tab.session?.rpc.disconnect('Session closed');
   const before = navigationSnapshot();
   navigation.remove(tab); tab.view.dispose();
   try { tab.drafts.discardTemporary(); } catch (e) { persistenceError(e); }
@@ -1296,7 +1338,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
     if (['settings', 'zoom-in', 'zoom-out', 'zoom-reset'].includes(id)) return true;
     if (!ready) return false;
     if (id === 'capture-performance') return preferences.performanceEnabled() && !capturingPerformance;
-    if (['close', 'model', 'thinking', 'restart', 'delete'].includes(id)) return !!presented;
+    if (['close', 'mcp', 'model', 'thinking', 'restart', 'delete'].includes(id)) return !!presented;
     return true;
   },
   run: (id: ActionId) => {
@@ -1309,6 +1351,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'capture-performance': return capturePerformance();
       case 'reload-card-plugins': return reloadCardPlugins(true);
       case 'select-theme': return pickTheme();
+      case 'mcp': return presented ? inspectMcp(presented) : undefined;
       case 'model': return presented ? pickPreference(presented, 'model') : undefined;
       case 'thinking': return presented ? pickPreference(presented, 'thinking') : undefined;
       case 'palette': palette.open(); return;

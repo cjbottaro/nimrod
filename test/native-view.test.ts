@@ -309,13 +309,34 @@ test('local Send intent covers ordinary, steering and follow-up messages but exc
     f.prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true, cancelable: true }));
     assert.equal(f.submittedPrompts(), 3, 'all message delivery kinds mark local use');
     f.snapshot({ sessionUnavailable: false, busy: false, messages: [] });
-    for (const text of ['/name Inline', '/name', '/compact', '/delete', '']) { f.draft(text); f.send(); }
+    for (const text of ['/name Inline', '/name', '/compact', '/mcp', '/delete', '']) { f.draft(text); f.send(); }
     f.snapshot({ sessionUnavailable: true, messages: [] }); f.draft('unavailable'); f.send();
     f.snapshot({ sessionUnavailable: false, compacting: true, messages: [] }); f.draft('compacting'); f.send();
     f.receive({ type: 'deletionLock', locked: true });
     f.snapshot({ sessionUnavailable: false, messages: [] }); f.draft('deletion'); f.send();
     assert.equal(f.submittedPrompts(), 3, 'controls and locally blocked sends never mark use');
   } finally { f.dom.window.close(); }
+});
+
+test('/mcp opens inspection without a prompt, turn, recency or transcript navigation', () => {
+  for (const busy of [false, true]) {
+    const f = fixture({ sendAutoFollow: () => 'always' });
+    try {
+      const scroll = scrollFixture(f);
+      f.snapshot({ sessionUnavailable: false, busy, messages: [] });
+      scroll.readHistory();
+      const top = scroll.pane.scrollTop;
+      f.draft('/mcp'); f.send(); f.flush();
+      assert.equal(f.prompt.value, '');
+      assert.equal(f.sent.at(-1)?.type, 'inspectMcp');
+      assert.equal(f.sent.some(message => message.type === 'prompt'), false);
+      assert.equal(f.submittedPrompts(), 0);
+      assert.equal(scroll.pane.scrollTop, top);
+      assert.equal(f.win.document.querySelectorAll('[data-message-key]').length, 0);
+      f.draft('new draft');
+      assert.equal(f.prompt.value, 'new draft');
+    } finally { f.win.close(); }
+  }
 });
 
 test('model and thinking controls stay available during work but respect readiness and lifecycle', () => {

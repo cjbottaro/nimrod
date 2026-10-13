@@ -61,6 +61,7 @@ Stop keeps the process alive. Use [Restart session](sessions.md#restart-session)
 Type `/` for suggestions discovered from Pi.
 
 - `/name` names the session.
+- Bare `/mcp` opens the read-only [MCP inspector](mcp.md), without a model request, conversation turn, sidebar-recency bump or transcript navigation. Explicit subcommands still go to Pi.
 - `/compact` is available only while idle and may include optional instructions.
 - Automatic and manual compaction are visible and lock the composer until complete.
 - Session-management commands such as `/resume` and Pi's `/reload` are unavailable; use Nimrod's session actions instead. Unsupported commands are rejected rather than silently sent as chat.

@@ -17,6 +17,7 @@
 ## Commands and preferences
 
 - [Command palette](command-palette.md) — search, selection, cancellation and ordering.
+- [MCP inspector](mcp.md) — read-only session server status and reported diagnostics.
 - [Keybindings](keybindings.md) — shortcuts, reassignment and configuration syntax.
 - [Performance reports](performance-diagnostics.md) — opt-in timing diagnostics and local slowdown captures.
 - [Settings](settings.md) — categories, zoom, runtime paths and local files.
