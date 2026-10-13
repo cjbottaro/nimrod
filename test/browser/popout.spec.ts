@@ -13,7 +13,7 @@ async function popoutFixture(page: Page, text: string, language: string) {
       builder.onLoad({ filter: /.*/, namespace: 'raw' }, args => ({ contents: readFileSync(args.path, 'utf8'), loader: 'text' }));
     } }],
   });
-  const css = ['src/pi/transcript.css', 'src/theme.css', 'src/workspace.css', 'src/modal.css', 'src/popout.css', 'src/application-notices.css'].map(file => readFileSync(file, 'utf8')).join('\n');
+  const css = ['src/pi/transcript.css', 'src/theme.css', 'src/workspace.css', 'src/modal.css', 'src/popout.css', 'src/application-notices.css', 'src/window-appearance.css'].map(file => readFileSync(file, 'utf8')).join('\n');
   const html = readFileSync('index.html', 'utf8').replace('<script type="module" src="/src/main.ts"></script>', '').replace('</head>', `<style>${css}</style></head>`);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(String(error)));
@@ -25,6 +25,7 @@ async function popoutFixture(page: Page, text: string, language: string) {
       invoke: async (command: string, args: Record<string, unknown> = {}) => {
         if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 1;
         if (command === 'scoped_preferences_snapshot') return { text: '{}', state: {}, settingsPath: '/fixture/settings.json', statePath: '/fixture/state.json', revision: 1 };
+        if (command === 'window_appearance_capabilities' || command === 'apply_window_appearance') return { platform: 'macos', transparency: true, frost: true, reducedTransparency: false };
         if (command === 'code_popout_snapshot') return { session: 'fixture', title: 'Unused source session name', text, language };
         if (command === 'plugin:webview|set_webview_zoom') return;
         if (command === 'plugin:window|set_title') { state.__popoutTitle = String(args.value); return; }

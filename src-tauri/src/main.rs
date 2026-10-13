@@ -25,6 +25,7 @@ mod settings_window;
 #[cfg(any(target_os = "macos", all(test, unix)))]
 mod single_instance;
 mod webview_navigation;
+mod window_appearance;
 mod window_state;
 mod workspace_windows;
 mod workspaces;
@@ -505,6 +506,8 @@ fn main() {
             drafts::drafts_flush,
             drafts::drafts_references,
             runtime_defaults,
+            window_appearance::window_appearance_capabilities,
+            window_appearance::apply_window_appearance,
             card_plugins::read_card_plugin,
             card_plugins::read_card_plugin_module,
             card_plugins::load_personal_card_plugins,

@@ -87,6 +87,7 @@ pub fn guard<'a>(
     app: &tauri::AppHandle,
     label: &str,
 ) -> tauri::WebviewWindowBuilder<'a, tauri::Wry, tauri::AppHandle> {
+    let builder = crate::window_appearance::prepare(builder);
     // Match Tauri's local protocol defaults. This app does not use
     // use_https_scheme or a remote frontendDist. Development also permits its
     // exact configured dev server; production never trusts that HTTP origin.

@@ -15,6 +15,7 @@ import type { DeletionEvent, DeletionSnapshot } from '../src/session-deletion';
 // Real shell/renderer/controller bundle, mocked native boundary—not native WebKit acceptance.
 interface ShellOptions {
   globalSettings?: boolean;
+  appearanceCapabilities?: import('../src/window-appearance').AppearanceCapabilities;
   storage?: Record<string, unknown>;
   nativeDrafts?: Record<string, unknown>;
   draftFlushError?: string;
@@ -115,6 +116,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     transformCallback: (callback: (event: unknown) => void) => { const id = callbacks.size + 1; callbacks.set(id, callback); return id; }, unregisterCallback: () => {},
     invoke: async (command: string, args: JsonRecord = {}) => {
       calls.push({ command, args });
+      if (command === 'window_appearance_capabilities' || command === 'apply_window_appearance') return options.appearanceCapabilities ?? { platform: 'macos', transparency: true, frost: true, reducedTransparency: false };
       if (command === 'drafts_load') return [...nativeDrafts.values()];
       if (command === 'drafts_stage') { const record = args.record as { key: string; value: unknown; revision: number }; nativeDrafts.set(record.key, record); return; }
       if (command === 'drafts_flush') { await options.draftFlushGate; if (options.draftFlushError) throw new Error(options.draftFlushError); return; }
@@ -3188,6 +3190,37 @@ test('brand-new unwritten session can select its first model and effort through 
   } finally { f.dom.window.close(); }
 });
 
+
+test('global Appearance exposes native-supported controls and applies immediately across preference snapshots', async () => {
+  const f = await fixture(undefined, { globalSettings: true });
+  try {
+    await f.tick();
+    assert.equal(f.element('settings-translucency').hidden, false);
+    assert.equal(f.element('settings-frosted-background').hidden, false);
+    const slider = f.element<HTMLInputElement>('background-opacity');
+    const writes = f.calls.filter(call => call.command === 'preferences_settings').length;
+    slider.value = '60'; slider.dispatchEvent(new f.win.Event('input', { bubbles: true }));
+    assert.equal(f.win.document.documentElement.dataset.translucency, 'window');
+    assert.equal(f.calls.filter(call => call.command === 'preferences_settings').length, writes);
+    slider.dispatchEvent(new f.win.Event('change', { bubbles: true })); await f.tick(); await f.tick();
+    assert.equal(parseSettings(f.preferences.value.text)['appearance.backgroundOpacity'], 60);
+    f.preferences.external('{"appearance.backgroundOpacity":70,"appearance.translucencyArea":"chrome"}'); await f.tick();
+    assert.equal(f.win.document.documentElement.dataset.translucency, 'chrome');
+    assert.equal(slider.value, '70');
+    assert.equal(f.calls.some(call => ['start_pi', 'stop_pi', 'write_pi'].includes(call.command)), false);
+  } finally { f.win.close(); }
+});
+
+test('Linux Appearance hides frosting and performs no native blur operations', async () => {
+  const f = await fixture(undefined, { globalSettings: true, appearanceCapabilities: { platform: 'linux', transparency: true, frost: false, reducedTransparency: false } });
+  try {
+    await f.tick(); assert.equal(f.element('settings-frosted-background').hidden, true);
+    assert.match(f.element('translucency-hint').textContent!, /compositor/);
+    f.preferences.external('{"appearance.backgroundOpacity":50}'); await f.tick();
+    assert.equal(f.win.document.documentElement.dataset.translucency, 'window');
+    assert.equal(f.calls.some(call => call.command === 'apply_window_appearance'), false);
+  } finally { f.win.close(); }
+});
 
 test('pop-out route mounts only read-only code, copies exact text and follows theme changes without Pi', async () => {
   const snapshot = { session: 'source', title: 'Source session', text: 'const x = "<tag>";\n', language: 'ts' };

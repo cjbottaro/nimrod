@@ -57,6 +57,7 @@ Source report basenames (local files, not checked into this repository; retentio
 | Error presentation | Native macOS scoped-notice visuals, reader/focus preservation, announcements, dialog layering and page zoom; Linux/WebKitGTK remains unverified. Offline fixtures are not native acceptance. |
 | MCP inspector | Native macOS appearance/focus, installed-Pi status compatibility, busy-session inspection and cancellation; fixtures added but not run. Linux behavior unverified. [Inspector specification](mcp-inspector.md) |
 | Settings/keybindings/themes | Native menus, alternative keyboard layouts, file chooser, live import/preview focus and cross-window preferences |
+| Translucency | Implementation/fixtures present but not run. Packaged macOS tint/blur removal, Reduce Transparency, theme previews, resize/full-screen and streaming performance need acceptance; Linux alpha/compositor integration unverified. [Specification](translucency.md) |
 | Images | Native macOS screenshot paste, Linux/Wayland clipboard, reload/quota and real Pi image normalization |
 | Pop-outs/window state | Quit/relaunch persistence, automatic versus explicit focus, own-window Close, minimization and multi-display/DPI geometry |
 | Notifications | Native macOS session click, real input/failure delivery, Linux compilation/delivery/action/Wayland focus; Windows delivery remains unverified |

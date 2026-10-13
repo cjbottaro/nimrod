@@ -8,6 +8,8 @@ import { parseSettings, parseProjectSettings, type PreferencesSnapshot } from '.
 import { applyTheme, readLibrary } from './themes/theme';
 import { selectedTheme } from './themes/builtins';
 import { DEFAULT_ZOOM } from './zoom';
+import { readWindowAppearance } from './window-appearance';
+import { installNativeWindowAppearance } from './native-window-appearance';
 import { installKeybindingDispatch, readKeyOverrides } from './keybindings';
 import { codeBlockSource, createSafeMarkdownRenderer } from './pi/safe-markdown';
 import { setCodeIcon, showCopyResult } from './pi/code-actions';
@@ -31,6 +33,11 @@ export async function mountPopout(): Promise<void> {
   let globalSettings: Record<string, unknown> = {};
   let zoomTask = Promise.resolve();
   const report = (message: unknown) => { notices.report({ id: `reference:${++noticeSequence}`, operation: 'Reference window', message: String(message) }); };
+  const appearance = installNativeWindowAppearance({
+    read: () => readWindowAppearance(globalSettings),
+    report: (message, cause = 'native') => { const id = 'window-appearance:' + cause; if (message) notices.report({ id, operation: 'Window appearance', message }); else notices.resolve(id); },
+  });
+  window.addEventListener('unload', () => appearance.dispose(), { once: true });
   const settingsDispatch = installKeybindingDispatch(window, {
     actions: ['settings'], read: () => readKeyOverrides(globalSettings.keybindings), enabled: () => true,
     run: () => invoke('open_global_settings'), error: report,
@@ -40,6 +47,7 @@ export async function mountPopout(): Promise<void> {
     if (snapshot.revision < revision || (snapshot.projectRevision ?? 0) < projectRevision) return;
     try {
       const global = parseSettings(snapshot.text); globalSettings = global;
+      appearance.reload(); // Global appearance still updates if the project's theme is invalid.
       const scale = (global['appearance.zoom'] as number | undefined ?? DEFAULT_ZOOM) / 100;
       zoomTask = zoomTask.then(() => getCurrentWebview().setZoom(scale)).catch(report);
       revision = snapshot.revision; projectRevision = snapshot.projectRevision ?? 0;

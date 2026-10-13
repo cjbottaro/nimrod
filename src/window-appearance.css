@@ -1,0 +1,42 @@
+/* Surface-only alpha: never fade foregrounds or filter streaming transcript nodes.
+   Native vibrancy/compositor blur lives behind the webview, not in this CSS. */
+.appearance-opacity { display:flex; align-items:center; gap:16px; max-width:480px; }
+.appearance-opacity input[type=range] { flex:1; min-width:0; width:auto; padding:0; accent-color:var(--vscode-focusBorder); }
+.appearance-opacity output { flex:none; min-width:110px; font-size:12px; color:var(--vscode-descriptionForeground); text-align:right; font-variant-numeric:tabular-nums; }
+.settings-content label.appearance-toggle { display:flex; align-items:center; gap:8px; }
+.appearance-toggle input[type=checkbox] { width:auto; margin:0; padding:0; accent-color:var(--vscode-focusBorder); }
+
+:root:is([data-translucency=chrome], [data-translucency=window]) {
+  background:transparent;
+  --nimrod-surface-chrome:color-mix(in srgb, var(--vscode-editorWidget-background) var(--nimrod-background-opacity), transparent);
+  --nimrod-surface-project-bar:color-mix(in srgb, var(--vscode-editor-background) var(--nimrod-background-opacity), transparent);
+  --nimrod-surface-content:var(--vscode-editor-background);
+  --nimrod-surface-controls:var(--vscode-editor-background);
+}
+:root[data-translucency=window] {
+  --nimrod-surface-content:color-mix(in srgb, var(--vscode-editor-background) var(--nimrod-background-opacity), transparent);
+  --nimrod-surface-controls:color-mix(in srgb, var(--vscode-editor-background) var(--nimrod-control-opacity), transparent);
+}
+:root:is([data-translucency=chrome], [data-translucency=window]) #workspace-bar,
+:root:is([data-translucency=chrome], [data-translucency=window]) .settings-header { background:var(--nimrod-surface-project-bar); }
+:root:is([data-translucency=chrome], [data-translucency=window]) .layout-sidebar { background:var(--nimrod-surface-chrome); }
+:root:is([data-translucency=chrome], [data-translucency=window]) #workspace-content,
+:root:is([data-translucency=chrome], [data-translucency=window]) .settings-content,
+:root:is([data-translucency=chrome], [data-translucency=window]) body.code-popout-window { background:var(--nimrod-surface-content); }
+:root[data-translucency=window] :is(#composer-area, [data-pi-id="composer-area"]) { background:var(--nimrod-surface-controls); }
+/* Keep code, suggestions, selections, notices and ordinary dialogs opaque.
+   Settings is a full-window surface: reveal the desktop, not the conversation
+   beneath the modal. Visibility retains underlying layout/scroll/mounted nodes. */
+:root:is([data-translucency=chrome], [data-translucency=window]) #settings-page,
+:root:is([data-translucency=chrome], [data-translucency=window]) #settings-page::backdrop { background:transparent; }
+:root:is([data-translucency=chrome], [data-translucency=window]) body:has(#settings-page[open]) > :is(#workspace-bar, #workspace-layout) { visibility:hidden; }
+
+@media (prefers-reduced-transparency: reduce) {
+  :root:is([data-translucency=chrome], [data-translucency=window]) {
+    background:var(--vscode-editor-background);
+    --nimrod-surface-chrome:var(--vscode-editorWidget-background);
+    --nimrod-surface-project-bar:var(--vscode-editor-background);
+    --nimrod-surface-content:var(--vscode-editor-background);
+    --nimrod-surface-controls:var(--vscode-editor-background);
+  }
+}

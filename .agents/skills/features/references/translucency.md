@@ -1,0 +1,52 @@
+# Window translucency
+
+**Status: implemented; fixtures authored, not executed; native acceptance pending.** User guide: [Translucency](../../../../docs/translucency.md). Related: [Themes](themes.md), [Preferences](preferences.md), [Settings layout](settings-layout.md), [Verification](verification.md).
+
+## Contract and schema
+
+Global-only paint preferences, separate from color-theme selection:
+
+| JSONC key | Values | Default |
+| --- | --- | --- |
+| `appearance.backgroundOpacity` | integer 0–100 | 100 (opaque) |
+| `appearance.frostedBackground` | boolean | true |
+| `appearance.translucencyArea` | `window` / `chrome` | `window` |
+
+TypeScript and Rust validate all three. Explicit nulls are invalid. Project files reject these keys as global-only; no migration or automatic writes. Existing comment-preserving queued/CAS preference writes and revision-ordered broadcasts own persistence. Opaque remains visually unchanged; true frosting at opacity 100 does not install a material.
+
+Global Settings exposes the opacity slider, area selector and (only with native frost capability) frosting checkbox. Project settings hides the entire control group, while its window still follows the global appearance. Opacity `input` previews that window immediately and `change` commits once; area/toggle edits apply immediately and save. Pending per-field previews survive older broadcasts/save completions; a failure discards only its matching local edit, never a newer one. No automatic save retry, window recreation, harness calls or navigation.
+
+`chrome` means Project bar/Session sidebar, or Settings header/category sidebar. Conversation, empty/welcome content, Settings content and pop-outs remain opaque. `window` makes those base surfaces translucent too. Pop-outs have no application chrome, so `chrome` keeps their entire content background opaque. Code, menus, suggestions, notices, user-turn backgrounds and Status-area widgets remain solid. The interaction-area background has a minimum 85% theme tint over the window tint. Text/icon/syntax opacity is never changed.
+
+The full-window Settings dialog/backdrop is transparent in either translucent mode; underlying Project bar/workspace are `visibility:hidden` only while that Settings dialog is open, retaining layout, scroll geometry and mounted controllers. Each Settings surface paints its own tint exactly once; the modal must expose the native backing, not the conversation under it. Ordinary dialogs retain existing solid backgrounds/backdrops.
+
+## Native boundary and platform scope
+
+- `src-tauri/src/window_appearance.rs::prepare` is called by the shared navigation-guard builder boundary; all welcome/project/Settings/pop-out constructors pass it. macOS/Linux backings are transparent from creation, but opaque CSS remains the initial/default state. No runtime window replacement, geometry mutation or focus action.
+- Native commands report `{platform, transparency, frost, reducedTransparency}` and apply only to the invoking `WebviewWindow`, never a frontend-provided label. No process/session privileges or OS/compositor configuration.
+- macOS uses the already-locked `window-vibrancy` 0.6 helper directly: semantic `Sidebar` material, `BehindWindow` blending (helper-owned), `Active` state, theme-selected native dark/light appearance. Theme tint is CSS; material blur strength is OS-owned. Remove the tagged helper view before reapplying, so theme previews cannot stack materials. Disabling frosting/opaque mode calls actual `clear_vibrancy` and restores system native appearance.
+- Do not replace this with Tauri 2.11.6 `set_effects(None)`: its macOS clear branch is missing, and its apply path discards native helper errors. Main-thread apply/remove work is awaited via oneshot; errors return to the frontend. Raw native handles never cross threads.
+- Pinned Tauri 2.11.6 requires the `macos-private-api` feature / `macOSPrivateApi` configuration for transparent WKWebView backing. This is a distribution constraint if a future Mac App Store target is considered; no Tauri upgrade or signing-policy change is included here.
+- Read `NSWorkspace.accessibilityDisplayShouldReduceTransparency` on the main thread. Enforce it before installing native frosting; frontend capability replies keep all surfaces opaque while retaining preferences. Refresh capabilities on native window focus (not a polling timer), including after visiting OS Settings. Also honor the browser's reduced-transparency media query where available.
+- Linux exposes alpha and area controls, sends no native effect calls, and leaves blur to the compositor. Static native capability expresses our transparent-backing implementation, not a detected guarantee of desktop compositor support. No universal blur protocol or desktop-specific settings mutation.
+- Windows/other targets keep opaque windows and disabled transparency controls. No parity commitment.
+
+## Code map and performance/lifecycle
+
+- `src/window-appearance.ts`: shared schema/defaults and injectable paint/controls controller. Native effects serialize/coalesce to the newest desired frosting/theme pair. A paint signature skips unchanged root/control mutations; unchanged routine preference/state broadcasts never enqueue more effects or repeat surface writes. A failed pair is reported once and not automatically replayed; changing the desired effect enables an independent attempt. Theme mode is observed window-locally, with system dark/light media changes; previews are not persisted/broadcast.
+- `src/native-window-appearance.ts`: native IPC/focus adapter and shared CSS import. Install in `src/settings-surface.ts` for project/welcome/global Settings, and `src/popout.ts` for references. Startup capability reads do not gate session/plugin boot. Dispose observers, media listeners, native focus listeners and stale replies on unload.
+- `src/window-appearance.css`: Nimrod-specific alpha surface tokens derived from original theme tokens. No palette rewrite, container `opacity`, CSS `backdrop-filter`, per-card blur, transcript mutation or new scroll owner. Minimum-density interaction surfaces are separate from base tint; native frosting at zero theme opacity still retains OS material tint.
+- `src/preferences.ts` / native `preferences.rs`: global getters/saves and matching validation; reuse the established preference writer rather than direct file edits or state writes. Theme-mode observation excludes the controller's own style/dataset mutations to avoid loops.
+- Appearance errors are application-owned, routed through the existing notice strip with separate cause IDs for capabilities, native effects, focus observation and each setting's save. An unrelated success does not clear another failed operation. No field-error bubble or new notification surface.
+
+## Tests and acceptance
+
+Authored/extended, not run:
+
+- `test/window-appearance.test.ts`: schema/null/bounds, opaque defaults, capability-driven controls, Linux no-effect path, immediate input preview versus change save, macOS toggle/theme/opacity reconciliation, 200 unchanged reloads without root mutations or extra native work, main-thread-work serialization/coalescing, newer-edit preservation after old failure, failed-effect no-retry, mounted-node/draft/disclosure/focus preservation.
+- `test/preferences.test.ts` / Rust preferences fixtures: typed bounded JSONC, global-only saving from project contexts, comments/unrelated keys/project theme preservation, last-valid external values/default reset.
+- `test/shell.test.ts`: global Settings control installation/persistence, Linux hidden frosting/no native effect calls; all mock native boundaries understand the new commands. Existing scoped Settings tests assert the group stays hidden in project Settings.
+- `test/browser/translucency.spec.ts`: offline WebKit alpha-surface distinction, independent Settings/project sync, modal backing isolation, retained draft/node identity, native effect requests through mocks and reset to opaque. Reference/demo fixtures include the new CSS and mocked capability boundary.
+- Rust appearance source fixture ensures all constructors retain the shared transparent-backing boundary. It is not native-material acceptance.
+
+No tests, checks, builds or native window launches were performed for this implementation. On explicit validation request run `mise run check` and offline browser coverage; build only on request. Ask the user to accept opaque regression, bright/dark wallpaper, both areas, opacity endpoints, repeated frosting on/off, theme preview/cancel including system scheme, Reduce Transparency + return focus, resizing/full-screen/minimization, cross-window/pop-out propagation and streaming/scroll/input performance on packaged macOS. Linux/WebKitGTK alpha/compositor integration remains unverified.

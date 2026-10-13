@@ -10,6 +10,7 @@ import { installKeybindingEditor } from './keybinding-editor';
 import { isMac } from './keybindings';
 import { installThemes } from './themes/picker';
 import { installZoom } from './zoom';
+import { installNativeWindowAppearance } from './native-window-appearance';
 import { installPerformanceDiagnostics } from './performance-diagnostics';
 import type { NotificationDispatch } from './notifications';
 
@@ -33,6 +34,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   }) : undefined;
   if (!global) {
     for (const category of ['notifications', 'diagnostics', 'keybindings']) required('settings-category-' + category).hidden = true;
+    required('settings-translucency').hidden = true;
     required('settings-zoom').hidden = true;
     required('settings-send-auto-follow').hidden = true;
   }
@@ -73,6 +75,15 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     libraryEdits: global,
   });
   if (!global) required('theme-picker').parentElement!.querySelector<HTMLElement>('.settings-hint')!.textContent = 'Choose a global-library theme for this project. Import or remove themes in global Settings.';
+  const appearance = installNativeWindowAppearance({
+    read: () => preferences.windowAppearance(),
+    save: patch => preferences.saveWindowAppearance(patch),
+    report: (message, cause = 'native') => feedback('window-appearance:' + cause, 'Window appearance')(message),
+  }, global ? {
+    opacity: required<HTMLInputElement>('background-opacity'), value: required<HTMLOutputElement>('background-opacity-value'),
+    area: required<HTMLSelectElement>('translucency-area'), frosted: required<HTMLInputElement>('frosted-background'),
+    frostGroup: required('settings-frosted-background'), hint: required('translucency-hint'),
+  } : undefined);
   const zoom = installZoom(window, required<HTMLSelectElement>('zoom-level'), required('zoom-error'), {
     read: () => preferences.zoom(), save: percent => preferences.saveZoom(percent),
     apply: scale => getCurrentWebview().setZoom(scale),
@@ -246,7 +257,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   const unsubscribe = preferences.subscribe(() => {
     const width = preferences.readState(settingsSidebarWidthKey);
     if (!Object.is(width, settingsSidebarWidth)) { settingsSidebarWidth = width; settingsSidebarResize.reload(); }
-    runtime.reload(); themes.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadSendAutoFollow(); keybindingEditor?.reload(); reloadSources();
+    runtime.reload(); themes.reload(); appearance.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadSendAutoFollow(); keybindingEditor?.reload(); reloadSources();
   });
   reloadSources();
   return {
@@ -260,7 +271,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     dispose() {
       unloading = true; unsubscribe(); performanceDiagnostics.dispose();
       keybindingEditor?.dispose(); settingsNavigation.dispose(); settingsSidebarResize.dispose();
-      zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose();
+      appearance.dispose(); zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose();
     },
   };
 }

@@ -6,6 +6,7 @@
     "beforeBuildCommand": "npm run build", "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [{ "create": false, "label": "main", "title": "Nimrod", "width": 1000, "height": 800, "minWidth": 560, "minHeight": 420 }],
     "security": {
       "csp": "default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost; img-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'",
