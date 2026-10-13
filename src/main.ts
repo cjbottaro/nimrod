@@ -192,7 +192,7 @@ function draftPersistenceError(e: unknown): void {
 }
 function save(key: string, value: unknown): void {
   localState.set(key, value);
-  void preferences.saveState(key, value).catch(persistenceError);
+  void preferences.saveStateIfChanged(key, value)?.catch(persistenceError);
 }
 let nativeDrafts: NativeDrafts | undefined;
 function makeDrafts(values: Record<string, unknown> = {}): SessionDrafts {

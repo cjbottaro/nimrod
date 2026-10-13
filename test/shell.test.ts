@@ -240,6 +240,48 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   };
 }
 
+test('foreground/background streaming does not persist unchanged session layout; selection and rename still save', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
+    const first = f.captureChannel();
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const second = f.captureChannel();
+    const key = 'nimrod.tabs.v1:/project';
+    const layout = () => f.preferences.value.state[key] as { tabs: { path: string; name: string; lastUsed: number }[]; active?: string };
+    assert.equal(layout().tabs.length, 2);
+    const persisted = structuredClone(layout());
+    const prompt = f.element<HTMLTextAreaElement>('prompt');
+    prompt.value = 'Keep my draft'; prompt.dispatchEvent(new f.win.Event('input')); prompt.focus();
+    await f.tick();
+    const writes = () => f.calls.filter(call => call.command === 'preferences_state').length;
+    const before = writes();
+    for (const [index, channel] of [first, second].entries()) {
+      channel.onmessage({ kind: 'rpc', value: { type: 'agent_start' } });
+      channel.onmessage({ kind: 'rpc', value: { type: 'message_start', message: { role: 'assistant', timestamp: index + 1, content: [{ type: 'text', text: '' }] } } });
+    }
+    for (let i = 0; i < 100; i++) {
+      first.onmessage({ kind: 'rpc', value: { type: 'message_update', assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'b' } } });
+      second.onmessage({ kind: 'rpc', value: { type: 'message_update', assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'v' } } });
+    }
+    await f.tick(); await f.tick();
+    assert.equal(writes(), before, '200 real fixture streaming deltas enqueue zero state IPC calls');
+    assert.deepEqual(layout(), persisted);
+    assert.match(f.element('messages').textContent!, new RegExp('v'.repeat(100)));
+    assert.equal(prompt.value, 'Keep my draft'); assert.equal(f.win.document.activeElement, prompt);
+    const firstRoot = f.win.document.querySelector('.session-view')!;
+    assert.match(firstRoot.querySelector('[data-pi-id="messages"]')!.textContent!, new RegExp('b'.repeat(100)));
+    f.rows()[0].click(); await f.tick(); await f.tick();
+    assert.equal(layout().active, '/sessions/new.jsonl'); assert.ok(writes() > before);
+    const renamed = f.element<HTMLTextAreaElement>('prompt');
+    renamed.value = '/name Renamed'; renamed.dispatchEvent(new f.win.Event('input'));
+    renamed.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.equal(layout().tabs.find(tab => tab.path === '/sessions/new.jsonl')!.name, 'Renamed');
+    assert.equal(f.calls.some(call => call.command === 'write_pi' && (call.args.message as JsonRecord).type === 'prompt'), false);
+  } finally { f.win.close(); }
+});
+
 test('operational notices stay with their session without cross-session sidebar or shell feedback', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   try {
