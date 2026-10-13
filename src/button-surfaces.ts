@@ -2,6 +2,7 @@ import { titlebarTint } from './window-appearance';
 
 type RGB = [number, number, number];
 export const BUTTON_CONTRAST = 4.5;
+export const BUTTON_TINT_DISCOUNT = .05;
 const black: RGB = [0, 0, 0], white: RGB = [255, 255, 255];
 function rgb(hex: string): RGB | undefined {
   const color = titlebarTint(hex, 100);
@@ -18,11 +19,16 @@ function contrast(a: number, b: number) { return (Math.max(a, b) + .05) / (Math.
  * A fill's composited luminance lies between its black/white underlay bounds.
  * If the foreground lies inside that interval, an underlay can give contrast 1.
  */
-export function buttonContrast(foreground: string, background: string, alpha: number): number {
+export function buttonContrast(foreground: string, background: string, alpha: number, underlay?: { color: string; opacity: number }): number {
   const text = rgb(foreground), fill = rgb(background);
   if (!text || !fill) return 1;
   const foregroundLuminance = luminance(text);
-  const composite = (underlay: RGB): RGB => fill.map((channel, index) => channel * alpha + underlay[index] * (1 - alpha)) as RGB;
+  const parent = underlay && titlebarTint(underlay.color, 100);
+  const parentAlpha = parent ? underlay!.opacity * parent[3] / 255 : 0;
+  const composite = (desktop: RGB): RGB => fill.map((channel, index) => {
+    const below = parent ? parent[index] * parentAlpha + desktop[index] * (1 - parentAlpha) : desktop[index];
+    return channel * alpha + below * (1 - alpha);
+  }) as RGB;
   const low = luminance(composite(black)), high = luminance(composite(white));
   if (foregroundLuminance >= low && foregroundLuminance <= high) return 1;
   return Math.min(contrast(foregroundLuminance, low), contrast(foregroundLuminance, high));
@@ -58,6 +64,36 @@ export function primaryButtonSurfaces(foreground: string, background: string, ho
   // hue with stronger hover density, rather than making its label unreadable.
   if (hover && hover.foreground !== normal?.foreground) hover = normal;
   return { normal, hover };
+}
+
+/** Credit only tint that is actually beneath a control. Channel-wise bounds
+ * conservatively replace part of the fill's black/white-underlay protection;
+ * arbitrary hues and palette alpha remain safe without sampling the desktop.
+ */
+export function buttonUnderlayCredit(surface: ReturnType<typeof buttonSurface>, underlay: string): number {
+  const parent = titlebarTint(underlay, 100);
+  if (!surface || !parent) return 0;
+  const fill = rgb(surface.background)!, text = rgb(surface.foreground)!;
+  const darkText = luminance(text) < luminance(fill);
+  const ratios = fill.map((channel, index) => {
+    const distance = darkText ? channel : 255 - channel;
+    const contribution = darkText ? parent[index] : 255 - parent[index];
+    return distance === 0 ? 1 : contribution / distance;
+  });
+  return Math.max(0, Math.min(1, ...ratios)) * parent[3] / 255;
+}
+
+/** Overlay alpha may decrease as its parent gains tint, but the composited
+ * density p + (1-p)*a remains monotonic. Keep the role floor, opaque endpoint
+ * and the existing 4.5:1 bound; never credit an unknown/untinted parent.
+ */
+export function tintedButtonDensity(density: number, opacity: number, credit: number, roleMinimum: number, endpoint = opacity ** 8): number {
+  if (opacity >= 1) return 1;
+  const contribution = opacity * credit;
+  const safe = (density - contribution) / (1 - contribution);
+  const discounted = Math.max(safe, density - BUTTON_TINT_DISCOUNT * (1 - endpoint));
+  const role = buttonDensity(0, endpoint, roleMinimum);
+  return Math.min(1, Math.ceil(Math.max(role, discounted) * 1_000_000) / 1_000_000);
 }
 
 export function buttonDensity(minimum: number, endpoint: number, roleMinimum: number) {

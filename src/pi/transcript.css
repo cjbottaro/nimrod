@@ -1,5 +1,5 @@
 
-#resume-modal input { box-sizing:border-box; width:100%; padding:8px; color:var(--vscode-input-foreground); background:var(--vscode-input-background); border:1px solid var(--vscode-input-border, var(--vscode-panel-border)); }
+#resume-modal input { box-sizing:border-box; width:100%; padding:8px; color:var(--vscode-input-foreground); background:var(--modal-field-surface, var(--vscode-input-background)); border:1px solid var(--vscode-input-border, var(--vscode-panel-border)); }
 #resume-modal input:focus { outline:1px solid var(--vscode-focusBorder); }
 #resume-modal [role=tree] { min-height:0; overflow:auto; }
 #resume-modal [role=treeitem] { display:flex; gap:6px; padding:7px 12px; cursor:pointer; }

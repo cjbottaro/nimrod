@@ -42,7 +42,7 @@ test('buttons, Status area and notices use translucent overlays rather than stac
       const hoverDensity = await page.locator('html').evaluate(root => parseFloat(getComputedStyle(root).getPropertyValue('--nimrod-button-hover-opacity')) / 100);
       expect(alpha(await send.evaluate(node => getComputedStyle(node).backgroundColor))).toBeCloseTo(hoverDensity, 3);
       await page.locator('#toggle-sidebar').hover();
-      const secondaryHoverDensity = await page.locator('html').evaluate(root => parseFloat(getComputedStyle(root).getPropertyValue('--nimrod-secondary-hover-opacity')) / 100);
+      const secondaryHoverDensity = await page.locator('html').evaluate(root => parseFloat(getComputedStyle(root).getPropertyValue('--nimrod-sidebar-secondary-hover-opacity')) / 100);
       expect(alpha(await page.locator('#toggle-sidebar').evaluate(node => getComputedStyle(node).backgroundColor))).toBeCloseTo(secondaryHoverDensity, 3);
       // The notice's error outline/icon and foreground opacity remain untouched.
       expect(await notices.evaluate(node => getComputedStyle(node).opacity)).toBe('1');
@@ -50,7 +50,7 @@ test('buttons, Status area and notices use translucent overlays rather than stac
       await expect(page.locator('html')).toHaveAttribute('data-translucency', 'chrome');
       expect(alpha(await send.evaluate(node => getComputedStyle(node).backgroundColor))).toBe(1);
       expect(alpha(await notices.evaluate(node => getComputedStyle(node).backgroundColor))).toBe(1);
-      const primaryDensity = await page.locator('html').evaluate(root => parseFloat(getComputedStyle(root).getPropertyValue('--nimrod-button-opacity')) / 100);
+      const primaryDensity = await page.locator('html').evaluate(root => parseFloat(getComputedStyle(root).getPropertyValue('--nimrod-sidebar-button-opacity')) / 100);
       expect(alpha(await page.locator('#sidebar-new').evaluate(node => getComputedStyle(node).backgroundColor))).toBeCloseTo(primaryDensity, 3);
     }
     await fixture.editPreferences('{}');
@@ -87,11 +87,17 @@ test('Status area, notices and buttons retain hierarchy across the slider, inclu
             context.clearRect(0, 0, 1, 1); context.fillStyle = value; context.fillRect(0, 0, 1, 1);
             return '#' + [...context.getImageData(0, 0, 1, 1).data].slice(0, 3).map(channel => channel.toString(16).padStart(2, '0')).join('');
           };
-          return { foreground: hex(style.color), background: hex(style.backgroundColor), opacity: style.opacity };
+          return { foreground: hex(style.color), background: hex(style.backgroundColor), opacity: style.opacity,
+            underlay: getComputedStyle(document.getElementById('session-sidebar')!).getPropertyValue('--vscode-editorWidget-background').trim() };
         });
         expect(primary.opacity).toBe('1');
+        if (theme === 'nimrod' && opacity === 65) {
+          const conservative = await page.locator('html').evaluate(root => parseFloat(getComputedStyle(root).getPropertyValue('--nimrod-button-opacity')) / 100);
+          expect(button).toBeLessThan(conservative);
+          expect(conservative - button).toBeLessThanOrEqual(.050001);
+        }
         // Canvas readback quantizes alpha/unpremultiplied channels to 8-bit.
-        expect(buttonContrast(primary.foreground, primary.background, button)).toBeGreaterThan(4.4);
+        expect(buttonContrast(primary.foreground, primary.background, button, { color: primary.underlay, opacity: opacity / 100 })).toBeGreaterThan(4.4);
         expect(panel).toBeGreaterThanOrEqual(lastPanel); lastPanel = panel;
         if (opacity < 100) {
           expect(panel).toBeGreaterThan(interaction);

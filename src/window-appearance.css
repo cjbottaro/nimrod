@@ -28,6 +28,10 @@
   --nimrod-surface-notice:color-mix(in srgb, var(--vscode-descriptionForeground) 6%, var(--vscode-editor-background));
 }
 :root[data-translucency=window] {
+  --nimrod-surface-modal:color-mix(in srgb, var(--vscode-editorWidget-background) var(--nimrod-modal-opacity), transparent);
+  --nimrod-surface-modal-field:color-mix(in srgb, var(--vscode-input-background) var(--nimrod-control-overlay-opacity), transparent);
+  --nimrod-surface-modal-inset:color-mix(in srgb, var(--vscode-editor-background) var(--nimrod-control-overlay-opacity), transparent);
+  --nimrod-modal-backdrop:rgb(0 0 0 / var(--nimrod-modal-backdrop-opacity));
   --nimrod-surface-content:color-mix(in srgb, var(--vscode-editor-background) var(--nimrod-background-opacity), transparent);
   --nimrod-surface-controls:color-mix(in srgb, var(--vscode-editor-background) var(--nimrod-control-overlay-opacity), transparent);
   --nimrod-surface-status:color-mix(in srgb, var(--vscode-editorWidget-background) var(--nimrod-panel-overlay-opacity), transparent);
@@ -47,7 +51,8 @@
    Chrome-only inherits them just inside the chrome; the conversation is unchanged.
    Foregrounds, focus rings and attention borders never receive container opacity. */
 :root[data-translucency=window],
-:root[data-translucency=chrome] :is(#workspace-bar, .settings-header, .layout-sidebar) {
+:root:is([data-translucency=window], [data-translucency=chrome]) :is(#workspace-bar, .settings-header, .layout-sidebar),
+:root[data-translucency=window] .nimrod-modal {
   --nimrod-button-background:color-mix(in srgb, var(--nimrod-primary-background, var(--vscode-button-background)) var(--nimrod-button-opacity), transparent);
   --nimrod-button-hover-background:color-mix(in srgb, var(--nimrod-primary-hover-background, var(--vscode-button-hoverBackground)) var(--nimrod-button-hover-opacity), transparent);
   --nimrod-button-secondary-background:color-mix(in srgb, var(--nimrod-secondary-background, var(--vscode-button-secondaryBackground, var(--vscode-button-background))) var(--nimrod-secondary-opacity), transparent);
@@ -60,7 +65,31 @@
   --nimrod-suggestion-selection-background:color-mix(in srgb, var(--vscode-editorSuggestWidget-selectedBackground, var(--vscode-list-activeSelectionBackground)) var(--nimrod-selection-opacity), transparent);
   --nimrod-danger-background:color-mix(in srgb, var(--nimrod-danger-fill, var(--vscode-errorForeground)) var(--nimrod-danger-opacity), transparent);
 }
-/* Keep code, suggestions and ordinary dialogs opaque.
+/* Known tinted parents contribute to contrast; root/unknown contexts retain
+   the conservative density. Re-declare semantic fills above at each context so
+   inherited custom properties resolve against the local density, not the root. */
+:root:is([data-translucency=window], [data-translucency=chrome]) .layout-sidebar {
+  --nimrod-button-opacity:var(--nimrod-sidebar-button-opacity);
+  --nimrod-button-hover-opacity:var(--nimrod-sidebar-button-hover-opacity);
+  --nimrod-secondary-opacity:var(--nimrod-sidebar-secondary-opacity);
+  --nimrod-secondary-hover-opacity:var(--nimrod-sidebar-secondary-hover-opacity);
+  --nimrod-danger-opacity:var(--nimrod-sidebar-danger-opacity);
+}
+:root:is([data-translucency=window], [data-translucency=chrome]) :is(#workspace-bar, .settings-header) {
+  --nimrod-button-opacity:var(--nimrod-project-bar-button-opacity);
+  --nimrod-button-hover-opacity:var(--nimrod-project-bar-button-hover-opacity);
+  --nimrod-secondary-opacity:var(--nimrod-project-bar-secondary-opacity);
+  --nimrod-secondary-hover-opacity:var(--nimrod-project-bar-secondary-hover-opacity);
+  --nimrod-danger-opacity:var(--nimrod-project-bar-danger-opacity);
+}
+:root[data-translucency=window] .nimrod-modal {
+  --nimrod-button-opacity:var(--nimrod-modal-button-opacity);
+  --nimrod-button-hover-opacity:var(--nimrod-modal-button-hover-opacity);
+  --nimrod-secondary-opacity:var(--nimrod-modal-secondary-opacity);
+  --nimrod-secondary-hover-opacity:var(--nimrod-modal-secondary-hover-opacity);
+  --nimrod-danger-opacity:var(--nimrod-modal-danger-opacity);
+}
+/* Keep code and suggestions opaque.
    Settings is a full-window surface: reveal the desktop, not the conversation
    beneath the modal. Visibility retains underlying layout/scroll/mounted nodes. */
 :root:is([data-translucency=chrome], [data-translucency=window]) #settings-page,
@@ -76,10 +105,15 @@
     --nimrod-surface-controls:var(--vscode-editor-background);
     --nimrod-surface-status:var(--vscode-editorWidget-background);
     --nimrod-surface-notice:color-mix(in srgb, var(--vscode-descriptionForeground) 6%, var(--vscode-editor-background));
+    --nimrod-surface-modal:var(--vscode-editorWidget-background);
+    --nimrod-surface-modal-field:var(--vscode-input-background);
+    --nimrod-surface-modal-inset:var(--vscode-editor-background);
+    --nimrod-modal-backdrop:initial;
   }
   :root[data-translucency=window] #application-notices { background:var(--vscode-editorWidget-background); }
   :root[data-translucency=window],
-  :root[data-translucency=chrome] :is(#workspace-bar, .settings-header, .layout-sidebar) {
+  :root:is([data-translucency=window], [data-translucency=chrome]) :is(#workspace-bar, .settings-header, .layout-sidebar),
+  :root[data-translucency=window] .nimrod-modal {
     --nimrod-button-background:var(--nimrod-primary-background, var(--vscode-button-background));
     --nimrod-button-hover-background:var(--nimrod-primary-hover-background, var(--vscode-button-hoverBackground));
     --nimrod-button-secondary-background:var(--nimrod-secondary-background, var(--vscode-button-secondaryBackground));

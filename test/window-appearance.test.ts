@@ -156,9 +156,13 @@ test('surface density is continuous, role-ordered and converges exactly to the o
     if (opacity < 100) { assert.ok(status > composer); assert.ok(notice > base); }
     previous = current;
   }
-  for (const value of Object.values(windowSurfaceOpacities(100))) assert.equal(value, 1);
-  for (const value of Object.values(windowSurfaceOpacities(99))) assert.ok(1 - value < .08);
-  for (const value of Object.values(windowSurfaceOpacities(99.999))) assert.ok(1 - value < .0001);
+  const opaque = windowSurfaceOpacities(100);
+  for (const key of Object.keys(opaque) as (keyof typeof opaque)[]) {
+    assert.equal(opaque[key], key === 'modalBackdrop' ? 1 / 3 : 1);
+    assert.ok(opaque[key] - windowSurfaceOpacities(99)[key] < .08);
+    assert.ok(opaque[key] - windowSurfaceOpacities(99.999)[key] < .0001);
+  }
+  assert.equal(zero.modal, .72); assert.equal(zero.modalBackdrop, .20);
   const middle = windowSurfaceOpacities(65);
   assert.ok(middle.control < .15); assert.ok(middle.panel > .25 && middle.panel < .30);
 });

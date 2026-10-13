@@ -36,7 +36,7 @@ export function windowSurfaceOpacities(opacity: number) {
   const blend = (minimum: number) => minimum + (1 - minimum) * endpoint;
   const panel = blend(.25);
   return {
-    endpoint, control: blend(.10), panel,
+    endpoint, control: blend(.10), panel, modal: blend(.72), modalBackdrop: .20 + (1 / 3 - .20) * endpoint,
     button: blend(.35), buttonHover: blend(.45), state: blend(.30),
     selection: blend(.45), danger: blend(.45),
     // A fixed-position application strip has no tinted parent beneath it.
