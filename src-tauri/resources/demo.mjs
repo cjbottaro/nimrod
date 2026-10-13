@@ -71,7 +71,7 @@ createInterface({ input: process.stdin }).on('line', line => {
     case 'set_model': reply(request, model); break;
     case 'set_thinking_level': thinking = request.level; reply(request); break;
     case 'prompt':
-      reply(request);
+      reply(request, { disposition: active ? 'queued' : 'started' });
       if (active) { queue.push({ message: request.message, images: request.images ?? [], kind: request.streamingBehavior === 'followUp' ? 'followUp' : 'steer' }); emitQueue(); }
       else void run(request.message, request.images);
       break;

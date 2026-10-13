@@ -45,6 +45,15 @@ export class SteeringTranscript {
     this.pending[index].status = outcome === 'accepted' ? 'pending' : outcome === 'rejected' || outcome === 'cancelled' ? outcome : 'unknown';
   }
 
+  /** Explicit live Pi correlation; content may have been normalized by the harness. */
+  reconcile(id: string, userKey: string): void {
+    const index = this.pending.findIndex(item => item.submissionId === id && eligible(item) && !!item.images?.length);
+    if (index < 0) return;
+    const [entry] = this.pending.splice(index, 1);
+    this.aliases.set(userKey, entry.key);
+    this.seen.add(userKey);
+  }
+
   disconnect(): void {
     for (const entry of this.pending) {
       if (entry.status === 'sending') entry.status = 'unknown';

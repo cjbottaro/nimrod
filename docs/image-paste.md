@@ -10,6 +10,18 @@ Images use the existing delivery controls: Enter sends/steers, and Option-Enter
 appear in user turns, including history restored from Pi. Image attachments cannot
 be combined with slash commands; nothing is sent and the draft remains intact.
 
+## Transcript feedback
+
+Images appear in a local user turn after their bytes are prepared. When Pi starts
+that prompt, its actual user turn replaces the preview in place—even if Pi resizes
+or re-encodes the image or adds an image-processing note. Assistant output follows
+that single turn; ordinary idle sends are never pinned. Explicit queued follow-ups
+retain their [usual sticky behavior](writing-messages.md#queued-messages) until consumed.
+
+This uses Pi's prompt-preflight metadata. Older Pi versions without that metadata,
+or extensions that rewrite queued image content, can leave a preview unconfirmed;
+Nimrod does not guess delivery from a caption or automatically send it again.
+
 ## Drafts and recovery
 
 Send immediately clears the submitted text/images, before image preparation or Pi

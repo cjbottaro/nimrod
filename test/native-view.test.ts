@@ -678,6 +678,39 @@ test('paste uses event images once, preserves newer attachments on ack, and neve
   } finally { f.dom.window.close(); }
 });
 
+for (const eventFirst of [false, true]) for (const queuedFallback of [false, true]) test(`normalized image Send reconciles once with ${eventFirst ? 'event before receipt' : 'receipt before event'} (${queuedFallback ? 'queue-to-idle fallback' : 'idle'})`, async () => {
+  const f = fixture({ images: true });
+  try {
+    f.snapshot({ busy: queuedFallback, sessionUnavailable: false, messages: [] });
+    f.draft('caption'); f.paste(); await tickImages();
+    if (queuedFallback) f.prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true, cancelable: true }));
+    else f.send();
+    const deadline = Date.now() + 2000;
+    while (!f.sent.some(message => message.type === 'prompt') && Date.now() < deadline) await tickImages();
+    const submission = f.sent.find(message => message.type === 'prompt')!; assert.ok(submission);
+    f.flush();
+    const preview = f.win.document.querySelector('#messages .user')!;
+    assert.ok(preview.querySelector('.transcript-image'));
+    assert.equal(!!preview.closest('.queued-turns'), queuedFallback);
+    f.draft('newer draft');
+    if (!eventFirst) f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' });
+    f.receive({ type: 'submissionMessage', id: submission.id, key: 'normalized-image' });
+    const actual = { key: 'normalized-image', role: 'user', content: [{ type: 'text', text: 'caption\n\nPi normalization hint' }, { type: 'image', mimeType: 'image/jpeg', data: 'ZGVm' }] };
+    f.snapshot({ busy: true, messages: [actual] });
+    if (eventFirst) { f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' }); f.flush(); }
+    assert.equal(f.win.document.querySelector('#messages .user'), preview);
+    assert.equal(f.win.document.querySelectorAll('#messages .transcript-image img').length, 1);
+    assert.equal(preview.closest('.queued-turns'), null);
+    assert.equal(preview.querySelector('.steering-status'), null);
+    assert.match(preview.textContent!, /Pi normalization hint/);
+    f.snapshot({ busy: true, messages: [actual, { key: 'assistant', role: 'assistant', content: 'Continuing work' }] });
+    assert.equal(f.win.document.querySelectorAll('#messages .transcript-image img').length, 1);
+    assert.equal(f.win.document.querySelector('#messages')!.lastElementChild?.textContent?.trim(), 'Continuing work');
+    assert.equal(f.prompt.value, 'newer draft');
+    assert.equal(f.sent.filter(message => message.type === 'prompt').length, 1);
+  } finally { f.dom.window.close(); }
+});
+
 test('image sends capture bytes before cleared drafts release temporary storage, without waiting for receipts', async () => {
   let release!: () => void;
   const f = fixture({ images: true, releaseOnClear: true, imageGate: new Promise<void>(resolve => { release = resolve; }) });

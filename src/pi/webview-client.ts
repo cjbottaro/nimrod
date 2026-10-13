@@ -895,6 +895,10 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       queueRender(state);
     }
     if (data.type === "setEditorText") updateComposer(updateDraft(composer, safeText(data.text)));
+    if (data.type === 'submissionMessage' && typeof data.id === 'string' && typeof data.key === 'string' && data.key) {
+      steeringTranscript.reconcile(data.id, data.key);
+      // The following ordered snapshot supplies the authoritative content/position.
+    }
     if (data.type === "submissionReceipt" && typeof data.id === "string" && (data.outcome === "accepted" || data.outcome === "rejected" || data.outcome === "cancelled" || data.outcome === "unknown")) {
       steeringTranscript.receipt(data.id, data.outcome);
       queueRender(pendingState || displayedState);
@@ -989,6 +993,7 @@ interface State {
 
 export interface HostMessage {
   type?: string;
+  key?: string;
   build?: string;
   locked?: boolean;
   commands?: unknown;

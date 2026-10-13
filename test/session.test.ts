@@ -60,6 +60,41 @@ test('image-only prompts forward Pi image blocks and reject malformed/slash atta
   f.rpc.disconnect('done');
 });
 
+test('started image responses correlate the next live user event synchronously, before snapshots/receipt continuations', async () => {
+  const f = fixture();
+  const images = [{ type: 'image', mimeType: 'image/png', data: 'YWJj' }];
+  const pending = f.session.handle({ type: 'prompt', id: 'image', text: 'caption', images });
+  f.respond(true, { disposition: 'started' });
+  const actual = { role: 'user', timestamp: 42, content: [{ type: 'text', text: 'caption\n\nNormalized image hint' }, { type: 'image', mimeType: 'image/jpeg', data: 'ZGVm' }] };
+  f.rpc.receive({ kind: 'rpc', value: { type: 'agent_start' } });
+  f.rpc.receive({ kind: 'rpc', value: { type: 'message_start', message: actual } });
+  const correlation = f.published.find(message => message.type === 'submissionMessage')!;
+  assert.equal(correlation.id, 'image');
+  assert.equal(correlation.key, f.session.state.messages[0].key);
+  assert.ok(f.published.indexOf(correlation) < f.published.findIndex(message => message.state?.messages?.some(user => user.key === correlation.key)));
+  assert.equal(f.published.filter(message => message.type === 'submissionReceipt').length, 0, 'correlation precedes the Promise continuation');
+  f.rpc.receive({ kind: 'rpc', value: { type: 'message_end', message: actual } });
+  assert.equal(f.published.filter(message => message.type === 'submissionMessage').length, 1);
+  await pending;
+  assert.equal(f.published.at(-1)?.outcome, 'accepted');
+  f.rpc.disconnect('done');
+});
+
+for (const boundary of ['agent_end', 'agent_settled', 'another-started-prompt', 'queued', 'legacy'] as const) test(`image correlation does not claim unrelated user events after ${boundary}`, async () => {
+  const f = fixture();
+  const pending = f.session.handle({ type: 'prompt', id: 'image', text: 'caption', images: [{ type: 'image', mimeType: 'image/png', data: 'YWJj' }] });
+  f.respond(true, boundary === 'legacy' ? undefined : { disposition: boundary === 'queued' ? 'queued' : 'started' });
+  await pending;
+  if (boundary === 'agent_end' || boundary === 'agent_settled') f.rpc.receive({ kind: 'rpc', value: { type: boundary } });
+  if (boundary === 'another-started-prompt') {
+    const next = f.session.handle({ type: 'prompt', id: 'text', text: 'unrelated' });
+    f.respond(true, { disposition: 'started' }); await next;
+  }
+  f.rpc.receive({ kind: 'rpc', value: { type: 'message_end', message: { role: 'user', content: 'unrelated', timestamp: 43 } } });
+  assert.equal(f.published.filter(message => message.type === 'submissionMessage').length, 0);
+  f.rpc.disconnect('done');
+});
+
 test('rename results update the name and report the result', async () => {
   for (const text of ['/name Inline name', '/name']) {
     const f = fixture();

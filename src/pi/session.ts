@@ -41,6 +41,7 @@ export class PiSession {
   private initialized = false;
   private contextRefreshNeeded = false;
   private contextRefreshing = false;
+  private startedImageSubmission?: string;
   private dialogQueue = Promise.resolve();
   private notificationRun = false;
   private notificationResponse?: string;
@@ -180,6 +181,17 @@ export class PiSession {
     if (event.type === 'extension_error') this.notice(`Extension error: ${errorText(event.error)}`);
     if (event.type === 'compaction_end' && typeof event.errorMessage === 'string') this.notice(`Compaction: ${event.errorMessage}`, 'error', this.compactionNoticeId);
     this.state = reduceRpcEvent(this.state, event);
+    // Pi's prompt preflight emits disposition=started before its first live user
+    // event, after image normalization. Correlate by that ordered boundary, never
+    // by transformed bytes/caption or a history refresh.
+    if (this.startedImageSubmission && (event.type === 'message_start' || event.type === 'message_end') && record(event.message).role === 'user') {
+      const user = this.state.messages.at(-1);
+      if (user?.role === 'user' && user.timestamp === record(event.message).timestamp) {
+        this.ui.publish({ type: 'submissionMessage', id: this.startedImageSubmission, key: user.key });
+        this.startedImageSubmission = undefined;
+      }
+    }
+    if (event.type === 'agent_end' || event.type === 'agent_settled' || event.type === 'process_error') this.startedImageSubmission = undefined;
     this.publish();
     if (event.type === 'agent_settled' && this.notificationRun && !this.state.busy) {
       this.notificationRun = false;
@@ -261,7 +273,11 @@ export class PiSession {
       }
       // Queue only during main-agent work; all other sends retain fallback steering.
       const streamingBehavior = message.mode === 'followUp' && this.state.busy ? 'followUp' : 'steer';
-      await this.rpc.request('prompt', { message: text, ...(images.length ? { images } : {}), streamingBehavior });
+      await this.rpc.request('prompt', { message: text, ...(images.length ? { images } : {}), streamingBehavior }, 20_000, response => {
+        // Must run synchronously before subsequent user events on the channel.
+        // Ordinary started prompts also supersede any abandoned image boundary.
+        if (record(response.data).disposition === 'started') this.startedImageSubmission = images.length ? id : undefined;
+      });
       receipt('accepted');
     } catch (error) { receipt(error instanceof RpcResponseError ? 'rejected' : 'unknown', errorText(error)); }
   }
