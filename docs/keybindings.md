@@ -23,8 +23,8 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 | Delete session tree… | Cmd/Ctrl+Backspace |
 | Delete sessions… | Cmd/Ctrl+Shift+Backspace |
 | Select theme… | Unbound by default |
-| Select model… | Cmd/Ctrl+M |
-| Select thinking level… (“effort”) | Cmd/Ctrl+E |
+| Select model… | Cmd/Ctrl+Shift+M |
+| Select thinking level… (“effort”) | Cmd/Ctrl+Shift+E |
 | Command palette | Cmd/Ctrl+Shift+P |
 | Switch session… | Cmd/Ctrl+T |
 | Resume session… | Cmd/Ctrl+K |
@@ -73,6 +73,6 @@ Valid external edits apply automatically. Conflicting file-authored shortcuts ex
 
 This editor covers Nimrod’s project-shell actions and zoom, not Pi’s internal keymap, composer Send/Queue/Newline behavior, native text editing, or pop-out window shortcuts. Multi-step chords, macros, arbitrary context expressions, and per-project overrides are not included.
 
-Unshifted Cmd/Ctrl+O remains reserved for the native directory chooser; Shift+O is configurable. Other native menu/text-editing keys such as Q, H, A, C, V, X, Z and Tab combinations are reserved. On macOS, **Minimize** remains in the Window menu without Cmd+M, freeing that shortcut for Select model. **Close Window** remains available in the native menu without Cmd/Ctrl+W, which belongs to Close session. OS-reserved shortcuts can still be intercepted before Nimrod receives them.
+Unshifted Cmd/Ctrl+O remains reserved for the native directory chooser; Shift+O is configurable. Other native menu/text-editing keys such as Q, H, A, C, V, X, Z and Tab combinations are reserved. On macOS, **Cmd+M minimizes the focused project window** through the native Window menu, including while a picker or Settings is open. Cmd/Ctrl+E has no Nimrod default action. Existing Cmd+M overrides are retained in settings, but the native accelerator can intercept them; reset or rebind those actions to use another shortcut. **Close Window** remains available in the native menu without Cmd/Ctrl+W, which belongs to Close session. OS-reserved shortcuts can still be intercepted before Nimrod receives them.
 
 Native menu delivery and alternate keyboard layouts remain incompletely verified on macOS. Linux behavior is intended but not platform-verified; Windows remains a possible future target.

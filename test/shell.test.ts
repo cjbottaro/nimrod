@@ -588,9 +588,13 @@ test('customizable requested shortcuts use normal session/model/effort actions w
     key('n'); await f.tick(); await f.tick();
     assert.equal((f.calls.find(call => call.command === 'start_pi')!.args.config as JsonRecord).mode, 'saved');
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Retain this draft'; prompt.dispatchEvent(new f.win.Event('input'));
-    key('m'); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Select model');
+    for (const name of ['m', 'e']) {
+      assert.equal(key(name), true, 'unshifted shortcuts are not consumed by the project shell');
+      await f.tick(); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+    }
+    key('M', { shiftKey: true }); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Select model');
     f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
-    key('e'); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Select thinking level'); escape();
+    key('E', { shiftKey: true }); await f.tick(); assert.equal(f.element('palette-title').textContent, 'Select thinking level'); escape();
     assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
     const before = f.calls.filter(call => call.command === 'start_pi').length;
     key('n', { repeat: true }); key('n', { isComposing: true }); await f.tick(); assert.equal(f.calls.filter(call => call.command === 'start_pi').length, before);

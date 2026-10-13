@@ -19,6 +19,10 @@ pub const QUIT_ID: &str = "nimrod.quit";
 pub const OPEN_PROJECT_ID: &str = "nimrod.open-project";
 pub const OPEN_RECENT_PROJECT_ID: &str = "nimrod.open-recent-project";
 pub const MINIMIZE_ID: &str = "nimrod.minimize";
+#[cfg(target_os = "macos")]
+const MINIMIZE_ACCELERATOR: Option<&str> = Some("Cmd+M");
+#[cfg(not(target_os = "macos"))]
+const MINIMIZE_ACCELERATOR: Option<&str> = None;
 pub const CLOSE_WINDOW_ID: &str = "nimrod.close-window";
 
 pub fn is_quit(id: &str) -> bool {
@@ -50,7 +54,7 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
     #[cfg(target_os = "macos")]
     let quit_text = PredefinedMenuItem::quit(app, None)?.text()?;
     let minimize_text = PredefinedMenuItem::minimize(app, None)?.text()?;
-    let minimize = MenuItem::with_id(app, MINIMIZE_ID, &minimize_text, true, None::<&str>)?;
+    let minimize = MenuItem::with_id(app, MINIMIZE_ID, &minimize_text, true, MINIMIZE_ACCELERATOR)?;
     let close_text = PredefinedMenuItem::close_window(app, None)?.text()?;
     let close = MenuItem::with_id(app, CLOSE_WINDOW_ID, &close_text, true, None::<&str>)?;
     #[cfg(target_os = "macos")]
@@ -65,9 +69,8 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
             }
             for (index, item) in submenu.items()?.into_iter().enumerate() {
                 if let MenuItemKind::Predefined(item) = item {
-                    // Keep Minimize in the menu, but free Cmd-M for Select model.
-                    // Custom items without accelerators keep native menus from
-                    // consuming keys before the webview applies user overrides.
+                    // Minimize owns the standard macOS Cmd-M accelerator.
+                    // Other platforms retain their existing menu-only action.
                     if item.text()? == minimize_text {
                         submenu.remove(&item)?;
                         submenu.insert(&minimize, index)?;
@@ -179,6 +182,13 @@ mod tests {
         assert!(!is_quit("quit"));
         assert!(!is_quit("nimrod.close-session"));
         assert!(!is_quit(OPEN_PROJECT_ID));
+    }
+    #[test]
+    fn minimize_accelerator_preserves_platform_conventions() {
+        #[cfg(target_os = "macos")]
+        assert_eq!(MINIMIZE_ACCELERATOR, Some("Cmd+M"));
+        #[cfg(not(target_os = "macos"))]
+        assert_eq!(MINIMIZE_ACCELERATOR, None);
     }
     #[test]
     fn project_navigation_has_a_distinct_native_action() {

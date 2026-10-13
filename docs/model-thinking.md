@@ -1,6 +1,6 @@
 # Model and thinking preferences
 
-Click the model or thinking-level button in the **Status area**, or use **Select model…** / **Select thinking level…** in the command palette. Default shortcuts are **⌘/Ctrl M** for model and **⌘/Ctrl E** for thinking level (also searchable as “effort”).
+Click the model or thinking-level button in the **Status area**, or use **Select model…** / **Select thinking level…** in the command palette. Default shortcuts are **⌘/Ctrl Shift+M** for model and **⌘/Ctrl Shift+E** for thinking level (also searchable as “effort”).
 
 Both pickers work while Pi is working, including during compaction. Changing a selection does not stop or restart the agent:
 
