@@ -5,6 +5,7 @@ import { ModelThinkingController, type ModelIdentity } from './model-thinking-co
 import { SessionStatsController } from './session-stats-controller';
 import { MODEL_SCOPE_STATUS, parseModelScope, scopedModels, type ModelReference } from './pi-model-scope';
 import { projectToolTimeline } from './tool-progress';
+import { isBuiltinMcpCommand, parseMcpStatus, type McpStatusReport } from './mcp-status';
 import type { AgentMessage, ConversationState, JsonRecord } from './types';
 import type { HostMessage } from './webview-client';
 
@@ -34,6 +35,9 @@ const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 export class PiSession {
   state: ConversationState = { ...initialConversationState(), sessionUnavailable: true, temporary: true };
   private commands: unknown[] = [];
+  private mcpTask?: Promise<McpStatusReport>;
+  private mcpCapture?: { report?: McpStatusReport };
+  private mcpUncertain = false;
   private scope?: ModelReference[];
   private compactionRequest = false;
   private compactionNoticeId?: string;
@@ -117,6 +121,38 @@ export class PiSession {
       this.rpc.disconnect(`Startup failed: ${errorText(error)}`);
       throw error;
     }
+  }
+
+  /** Read-only built-in command; shared while in flight, never automatically retried. */
+  inspectMcp(): Promise<McpStatusReport> {
+    if (this.mcpTask) return this.mcpTask;
+    const task = this.readMcpStatus();
+    this.mcpTask = task;
+    void task.finally(() => { if (this.mcpTask === task) this.mcpTask = undefined; }).catch(() => {});
+    return task;
+  }
+
+  private async readMcpStatus(): Promise<McpStatusReport> {
+    if (this.disconnected || this.state.sessionUnavailable) throw new Error('Connect this session before inspecting MCP servers.');
+    if (this.mcpUncertain) throw new Error('The previous MCP status request did not finish reliably. Restart this session before requesting status again.');
+    const response = await this.rpc.request('get_commands');
+    if (!Array.isArray(record(response.data).commands)) throw new Error('Pi did not provide its commands.');
+    if (!(record(response.data).commands as unknown[]).some(isBuiltinMcpCommand)) {
+      throw new Error('Pi’s built-in MCP integration is unavailable or replaced by another extension. This inspector supports only the built-in integration.');
+    }
+    if (this.disconnected || this.state.sessionUnavailable) throw new Error('The session disconnected before MCP inspection.');
+    const capture: { report?: McpStatusReport } = {};
+    this.mcpCapture = capture;
+    try {
+      const result = await this.rpc.request('prompt', { message: '/mcp', streamingBehavior: 'steer' });
+      if (record(result.data).disposition !== 'handled' || !capture.report) {
+        throw new Error('Pi did not return a recognized MCP status report. No status was inferred and nothing will be retried automatically.');
+      }
+      return capture.report;
+    } catch (error) {
+      if (!(error instanceof RpcResponseError)) this.mcpUncertain = true;
+      throw error;
+    } finally { if (this.mcpCapture === capture) this.mcpCapture = undefined; }
   }
 
   async refreshDeletionState(): Promise<void> {
@@ -328,6 +364,10 @@ export class PiSession {
     if (method === 'setWidget' && typeof event.widgetKey === 'string') {
       this.state = setExtensionWidget(this.state, event.widgetKey, event.widgetLines === undefined ? undefined : { lines: strings(event.widgetLines).slice(0, 50).map(sanitizeExtensionUiText) });
       this.publish(); return;
+    }
+    if (method === 'notify' && this.mcpCapture && !this.mcpCapture.report && event.notifyType === 'info' && typeof event.message === 'string') {
+      const report = parseMcpStatus(event.message.split('\n').map(sanitizeExtensionUiText).join('\n'));
+      if (report) { this.mcpCapture.report = report; return; }
     }
     if (method === 'notify') { this.notice(sanitizeExtensionUiText(String(event.message || 'Pi notification')), event.notifyType === 'error' ? 'error' : event.notifyType === 'warning' ? 'warning' : 'info'); return; }
     if (method === 'set_editor_text') { this.ui.publish({ type: 'setEditorText', text: event.text }); return; }

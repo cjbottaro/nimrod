@@ -23,6 +23,7 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 | Delete session tree… | Cmd/Ctrl+Backspace |
 | Delete sessions… | Cmd/Ctrl+Shift+Backspace |
 | Select theme… | Unbound by default |
+| MCP servers… | Unbound by default |
 | Select model… | Cmd/Ctrl+Shift+M |
 | Select thinking level… (“effort”) | Cmd/Ctrl+Shift+E |
 | Command palette | Cmd/Ctrl+Shift+P |
