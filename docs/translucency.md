@@ -16,7 +16,7 @@ With **Whole window** translucency, the command palette, session pickers, deleti
 
 At **100%**, in **Sidebar and Project bar** mode, or with **Reduce Transparency**, dialogs keep their solid appearance. Theme-picker previews still leave the conversation visible without dimming it.
 
-Filled buttons on known tinted surfaces are slightly glassier: their parent tint contributes to contrast, with a reduction capped at five opacity points. Text stays readable through the same cross-theme policy—no special-case styling for New session.
+Filled buttons on known tinted surfaces are glassier: their parent tint contributes to contrast, and readability sets a minimum fill rather than adding another opacity ramp. This avoids unnecessarily dense buttons around 90%. Text stays readable through the same cross-theme policy—no special-case styling for New session.
 
 ## Platform behavior
 

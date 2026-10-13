@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { BUTTON_CONTRAST, BUTTON_TINT_DISCOUNT, buttonContrast, buttonDensity, buttonSurface, primaryButtonSurfaces, buttonUnderlayCredit, tintedButtonDensity } from '../src/button-surfaces';
+import { BUTTON_CONTRAST, buttonContrast, buttonDensity, buttonSurface, primaryButtonSurfaces, buttonUnderlayCredit, tintedButtonDensity } from '../src/button-surfaces';
 import { BUILTIN_THEMES, CATALOG_THEMES } from '../src/themes/builtins';
 import { themeProperties } from '../src/themes/theme';
 
-const opacities = [0, 25, 50, 65, 85, 95, 99, 100];
+const opacities = [0, 25, 50, 65, 85, 90, 95, 99, 100];
 test('Nimrod mint buttons keep dark text and derive enough fill density at every opacity', () => {
   const { normal, hover } = primaryButtonSurfaces('#102921', '#77d8bd', '#99e7d1');
   assert.equal(normal!.foreground, '#102921'); assert.equal(hover!.foreground, '#102921');
@@ -21,6 +21,17 @@ test('Nimrod mint buttons keep dark text and derive enough fill density at every
   }
   assert.equal(last, 1);
   assert.equal(buttonDensity(normal!.minimum, .999999 ** 8, .35) > .9999, true);
+});
+
+test('90% does not ramp opacity upward from an already sufficient contrast floor', () => {
+  const surface = buttonSurface('#102921', '#77d8bd')!;
+  const p = .9, density = buttonDensity(surface.minimum, p ** 8, .35);
+  assert.equal(density, surface.minimum);
+  const fill = tintedButtonDensity(density, p, buttonUnderlayCredit(surface, '#182126'), .35);
+  assert.ok(fill > .60 && fill < .68);
+  assert.ok(buttonContrast(surface.foreground, surface.background, fill, { color: '#182126', opacity: p }) >= BUTTON_CONTRAST);
+  assert.ok(p + (1 - p) * fill < .97);
+  assert.equal(buttonDensity(surface.minimum, 1, .35), 1);
 });
 
 test('all bundled palettes use the same primary, hover and danger contrast policy', () => {
@@ -47,7 +58,6 @@ test('known tinted parents permit modestly glassier buttons without reducing con
   const credit = buttonUnderlayCredit(normal, '#182126');
   const tinted = tintedButtonDensity(density, .65, credit, .35);
   assert.ok(tinted < density);
-  assert.ok(density - tinted <= BUTTON_TINT_DISCOUNT);
   assert.ok(buttonContrast(normal.foreground, normal.background, tinted, { color: '#182126', opacity: .65 }) >= BUTTON_CONTRAST);
   assert.equal(buttonUnderlayCredit(normal, 'unknown'), 0);
   assert.equal(buttonUnderlayCredit(normal, '#18212600'), 0);
@@ -74,7 +84,6 @@ test('all palettes retain contrast and monotonic composited density over tinted 
             const density = buttonDensity(surface.minimum, endpoint, role);
             const tinted = tintedButtonDensity(density, parent, credit, role, endpoint);
             assert.ok(tinted <= density + .000001, theme.id);
-            assert.ok(density - tinted <= BUTTON_TINT_DISCOUNT + .000001, theme.id);
             assert.ok(buttonContrast(surface.foreground, surface.background, tinted, { color, opacity: parent }) >= BUTTON_CONTRAST, `${theme.id} at ${p}`);
             const effective = parent + (1 - parent) * tinted;
             assert.ok(effective >= last - .000001, `${theme.id} density at ${p}`); last = effective;

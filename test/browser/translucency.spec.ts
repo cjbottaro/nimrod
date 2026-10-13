@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { demoFixture, visible } from './demo-fixture';
-import { buttonContrast } from '../../src/button-surfaces';
+import { buttonContrast, buttonSurface } from '../../src/button-surfaces';
 import { windowSurfaceOpacities } from '../../src/window-appearance';
 
 function alpha(color: string): number {
@@ -70,7 +70,7 @@ test('Status area, notices and buttons retain hierarchy across the slider, inclu
     }, token);
     for (const theme of ['nimrod', 'dracula', 'catalog-atom-one-light-vscode-atom-one-light']) {
       let lastPanel = 0;
-      for (const opacity of [0, 25, 50, 65, 85, 95, 99, 100]) {
+      for (const opacity of [0, 25, 50, 65, 85, 90, 95, 99, 100]) {
         await fixture.editPreferences(JSON.stringify({ 'appearance.theme': theme, 'appearance.backgroundOpacity': opacity, 'appearance.frostedBackground': false }));
         await expect(page.locator('html')).toHaveAttribute('data-translucency', opacity === 100 ? 'off' : 'window');
         const color = async (selector: string) => page.locator(selector).evaluate(node => getComputedStyle(node).backgroundColor);
@@ -91,10 +91,10 @@ test('Status area, notices and buttons retain hierarchy across the slider, inclu
             underlay: getComputedStyle(document.getElementById('session-sidebar')!).getPropertyValue('--vscode-editorWidget-background').trim() };
         });
         expect(primary.opacity).toBe('1');
-        if (theme === 'nimrod' && opacity === 65) {
+        if (theme === 'nimrod' && opacity === 90) {
           const conservative = await page.locator('html').evaluate(root => parseFloat(getComputedStyle(root).getPropertyValue('--nimrod-button-opacity')) / 100);
           expect(button).toBeLessThan(conservative);
-          expect(conservative - button).toBeLessThanOrEqual(.050001);
+          expect(button).toBeLessThan(.71);
         }
         // Canvas readback quantizes alpha/unpremultiplied channels to 8-bit.
         expect(buttonContrast(primary.foreground, primary.background, button, { color: primary.underlay, opacity: opacity / 100 })).toBeGreaterThan(4.4);
@@ -125,6 +125,48 @@ test('Status area, notices and buttons retain hierarchy across the slider, inclu
             return { opaque, limit };
           });
           expect(endpoint.limit).toEqual(endpoint.opaque);
+        }
+      }
+    }
+    expect(fixture.errors).toEqual([]);
+  } finally { await fixture.close(); }
+});
+
+test('normal and hovered primary fills do not exceed the pre-glass recipe at matching settings', async ({ page }) => {
+  const fixture = await demoFixture(page);
+  try {
+    for (const scheme of ['dark', 'light'] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      for (const theme of ['nimrod', 'dracula', 'catalog-atom-one-light-vscode-atom-one-light']) {
+        for (const area of ['window', 'chrome']) {
+          for (const opacity of [0, 25, 50, 65, 85, 90, 95, 99, 100]) {
+            await fixture.editPreferences(JSON.stringify({ 'appearance.theme': theme, 'appearance.backgroundOpacity': opacity, 'appearance.translucencyArea': area }));
+            for (const hovered of [false, true]) {
+              if (hovered) await page.locator('#sidebar-new').hover(); else await page.mouse.move(799, 1);
+              const palette = await page.locator('html').evaluate(root => {
+                const style = getComputedStyle(root);
+                return ['--nimrod-primary-foreground', '--nimrod-primary-background', '--nimrod-primary-hover-background'].map(key => style.getPropertyValue(key).trim());
+              });
+              const normal = buttonSurface(palette[0], palette[1])!;
+              const hover = buttonSurface(palette[0], palette[2])!;
+              const floor = hovered ? Math.max(normal.minimum, hover.minimum, .45) : Math.max(normal.minimum, .35);
+              const previousDensity = floor + (1 - floor) * (opacity / 100) ** 8;
+              const comparison = await page.locator('#sidebar-new').evaluate((button: HTMLElement, { hovered, previousDensity }) => {
+                const root = getComputedStyle(document.documentElement);
+                const current = getComputedStyle(button).backgroundColor;
+                const saved = button.style.background;
+                const color = root.getPropertyValue(hovered ? '--nimrod-primary-hover-background' : '--nimrod-primary-background');
+                const density = `${previousDensity * 100}%`;
+                // The previous implementation resolved this fill at the root,
+                // with no local parent-tint credit. Compare on the actual node.
+                button.style.background = document.documentElement.dataset.translucency === 'off' ? color : `color-mix(in srgb, ${color} ${density}, transparent)`;
+                const previous = getComputedStyle(button).backgroundColor;
+                button.style.background = saved;
+                return { current, previous };
+              }, { hovered, previousDensity });
+              expect(alpha(comparison.current), `${scheme}/${theme}/${area}/${opacity}/${hovered}`).toBeLessThanOrEqual(alpha(comparison.previous) + .000001);
+            }
+          }
         }
       }
     }
