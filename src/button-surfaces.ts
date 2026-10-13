@@ -2,7 +2,6 @@ import { titlebarTint } from './window-appearance';
 
 type RGB = [number, number, number];
 export const BUTTON_CONTRAST = 4.5;
-export const BUTTON_TINT_DISCOUNT = .05;
 const black: RGB = [0, 0, 0], white: RGB = [255, 255, 255];
 function rgb(hex: string): RGB | undefined {
   const color = titlebarTint(hex, 100);
@@ -90,13 +89,14 @@ export function buttonUnderlayCredit(surface: ReturnType<typeof buttonSurface>, 
 export function tintedButtonDensity(density: number, opacity: number, credit: number, roleMinimum: number, endpoint = opacity ** 8): number {
   if (opacity >= 1) return 1;
   const contribution = opacity * credit;
-  const safe = (density - contribution) / (1 - contribution);
-  const discounted = Math.max(safe, density - BUTTON_TINT_DISCOUNT * (1 - endpoint));
+  const discounted = (density - contribution) / (1 - contribution);
   const role = buttonDensity(0, endpoint, roleMinimum);
   return Math.min(1, Math.ceil(Math.max(role, discounted) * 1_000_000) / 1_000_000);
 }
 
 export function buttonDensity(minimum: number, endpoint: number, roleMinimum: number) {
-  const floor = Math.max(minimum, roleMinimum);
-  return floor + (1 - floor) * endpoint;
+  // Contrast is a lower bound, not a second opacity ramp. Easing upward from
+  // the contrast floor made already-readable controls almost solid at 90%.
+  const role = roleMinimum + (1 - roleMinimum) * endpoint;
+  return Math.max(minimum, role);
 }
