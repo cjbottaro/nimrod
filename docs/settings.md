@@ -18,6 +18,7 @@ Escape during a drag cancels resizing; the next Escape closes Settings.
 
 - **Theme:** changes apply immediately and synchronize across windows. See [Themes](themes.md) for live previews, bundled themes and imports.
 - **Zoom:** scales the whole app, default **125%**, range **75–200%**. Use the picker or **⌘/Ctrl + / −**; **⌘/Ctrl+0** resets to 100%. Zoom is remembered and doesn't change drafts.
+- **Auto-follow after sending:** **When idle** (default) jumps to the bottom and follows new output for idle sends, but preserves your position for steering and queued follow-ups. **Always** does this for every message submission; **Never** preserves current scroll intent, including auto-follow if already active. Scrolling upward always pauses following. Changes synchronize across windows and affect subsequent sends without moving your current view. See [Reading conversations](reading-conversations.md#auto-follow-and-reading-older-output).
 - Theme/import/zoom errors use the shared [notice strip](error-messages.md). Non-error progress and import details stay alongside the controls.
 
 ## Notifications
@@ -64,6 +65,7 @@ Absolute `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the roots. Empty/relati
 {
   "appearance.theme": "nimrod",
   "appearance.zoom": 125,
+  "appearance.autoFollowAfterSending": "whenIdle",
   "notifications.enabled": true,
   "runtime.piPath": "/path/to/pi",
   "runtime.nodePath": "/path/to/node"

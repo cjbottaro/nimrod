@@ -51,6 +51,31 @@ test('catalog acceptance preserves fresh external imports and never replaces an 
   } finally { p.dispose(); f.dom.window.close(); }
 });
 
+test('send auto-follow defaults to whenIdle, preserves JSONC and synchronizes valid modes', async () => {
+  const f = fixture(), p = await f.install();
+  try {
+    assert.equal(p.sendAutoFollow(), 'whenIdle');
+    f.host.external('// keep me\n{"custom":true}');
+    for (const mode of ['always', 'never', 'whenIdle'] as const) {
+      await p.saveSendAutoFollow(mode);
+      assert.equal(p.sendAutoFollow(), mode);
+      assert.equal(parseSettings(f.host.value.text)['appearance.autoFollowAfterSending'], mode);
+      assert.match(f.host.value.text, /keep me/);
+      assert.equal(parseSettings(f.host.value.text).custom, true);
+    }
+    f.host.external('{"appearance.autoFollowAfterSending":"never"}');
+    assert.equal(p.sendAutoFollow(), 'never');
+    for (const mode of [null, true, 1, 'idle', {}, ['always']]) {
+      const text = JSON.stringify({ 'appearance.autoFollowAfterSending': mode });
+      assert.throws(() => parseSettings(text));
+      f.host.external(text);
+      assert.equal(p.sendAutoFollow(), 'never');
+    }
+    f.host.external('{}');
+    assert.equal(p.sendAutoFollow(), 'whenIdle');
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
 test('notifications default on, persist through JSONC edits, and retain last valid values', async () => {
   const f = fixture(); const p = await f.install();
   try {

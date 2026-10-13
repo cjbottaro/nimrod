@@ -25,7 +25,23 @@ Preserve live follow versus older-history reading through incremental updates, c
 - Hidden views suspend scroll bookkeeping, retaining follow intent or reader offset. Reveal geometry before reactivating; don't interpret zero hidden dimensions as navigation.
 - Per-tool output inspection is independent from transcript follow and other tool outputs.
 - Queued follow-up turns share one bottom-sticky transcript stack, with bounded independent overflow, no separator/extra gap and ordinary user-turn styling/spacing. They stay visible during older-history reading without enabling auto-follow. Steering/Queued text shimmer never changes layout; reduced-motion labels are static and inactive/hidden presentation pauses it. Stack additions, streaming growth, consumption/error unpinning and recovery use the same capture/request path; never force-scroll or rebuild the adopted user article. [Composer](composer.md#pending-user-turns-in-the-transcript) owns delivery lifecycle.
-- Only an explicit bottom-navigation action (currently valid notification click) overrides reading position/re-enables follow. Ordinary switching preserves it.
+- Explicit bottom-navigation actions (valid notification click and qualifying local message submission under the preference below) override reading position/re-enable follow. Ordinary switching preserves it.
+
+## Auto-follow after sending
+
+**Settings → Appearance → Auto-follow after sending** is an app-wide synchronized preference, stored as `appearance.autoFollowAfterSending`: `always`, `whenIdle` (default), or `never`. TypeScript and Rust reject other values; omitted/deleted settings use the default. Existing installations without the key also receive the new default.
+
+- Always: every locally validated message submission jumps to bottom and enables auto-follow, including steering and explicit queued follow-ups.
+- When idle: only submissions made while the main agent is idle jump/follow. Busy steering and follow-ups preserve scroll intent; idle Option/Alt+Enter is an ordinary send. Background subagents do not count as main-agent work.
+- Never: preserve current reader/follow intent, not disable existing auto-follow.
+- Read the live preference and latest observed main-agent activity at local submission, after validation/clearing the draft and before dispatch/image preparation. Plain-text previews render through the same deferred follow owner; image preparation later respects the resulting intent and any intervening upward navigation.
+- Reuse `TranscriptScroll.scrollToBottom()`; do not introduce a second scroll owner, smooth-scroll animation, focus change or acknowledgement gate. Upward navigation cancels follow immediately.
+- Supported prompt slash expansions count as messages; `/name`, `/compact`, empty/blocked submissions and Stop do not navigate. Errors, receipts, authoritative user events and image readiness never repeat or undo the local jump.
+- Preference edits/broadcasts alone never move a transcript, disable active following, mutate drafts or restart sessions. Failed saves restore the committed picker value and use the application notice strip.
+
+Code: `src/preferences.ts` / `src-tauri/src/preferences.rs` validate/persist; `index.html` / `src/main.ts` own the picker, synchronization and live renderer getter; `src/pi/view-host.ts` / `webview-client.ts` apply local intent using the existing scroll owner.
+
+Coverage added in preferences/native validation, shell Settings synchronization/failure and bundled renderer mode/delivery matrix, upward cancellation, late acknowledgement, slash/control exclusion and gated image-preparation fixtures. Offline browser idle-send cases cover all modes from bottom/history; default busy steering/queue cases retain reading, and idle image cases now expect follow. These changes have **not been run or natively verified** as part of this task; validation/build require explicit request.
 
 ## Focus, reset and zoom
 

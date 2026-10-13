@@ -1,3 +1,6 @@
+export type SendAutoFollow = 'always' | 'whenIdle' | 'never';
+export const DEFAULT_SEND_AUTO_FOLLOW: SendAutoFollow = 'whenIdle';
+
 /** One owner for deferred transcript following; layout growth is not user intent. */
 export class TranscriptScroll {
   private frame: number | undefined;

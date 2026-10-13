@@ -37,7 +37,7 @@ test('paste previews, removes and sends image-only turns', async ({ page }) => {
   } finally { await fixture.close(); }
 });
 
-for (const readingHistory of [false, true]) test(`idle image Send adopts Pi-normalized content once and preserves ${readingHistory ? 'history reading' : 'bottom follow'}`, async ({ page }) => {
+for (const readingHistory of [false, true]) test(`idle image Send adopts Pi-normalized content once and follows from ${readingHistory ? 'history reading' : 'bottom follow'}`, async ({ page }) => {
   const fixture = await demoFixture(page);
   try {
     await fixture.turn(1); await fixture.turn(2);
@@ -46,7 +46,6 @@ for (const readingHistory of [false, true]) test(`idle image Send adopts Pi-norm
       await page.mouse.wheel(0, -180);
       await expect.poll(async () => (await fixture.metrics()).gap).toBeGreaterThan(100);
     }
-    const top = (await fixture.metrics()).top;
     // Simulate Pi's preflight normalization in the offline transport fixture,
     // not by matching captions or launching a real harness/model.
     await page.evaluate(() => {
@@ -93,8 +92,7 @@ for (const readingHistory of [false, true]) test(`idle image Send adopts Pi-norm
     await expect(messages.locator('.transcript-image img')).toHaveCount(1);
     await expect(messages.locator('.queued-turns .message')).toHaveCount(0);
     await expect(prompt).toHaveValue('Newer draft'); await expect(prompt).toBeFocused();
-    if (readingHistory) expect(Math.abs((await fixture.metrics()).top - top)).toBeLessThanOrEqual(2);
-    else await expect.poll(async () => (await fixture.metrics()).gap).toBeLessThanOrEqual(2);
+    await expect.poll(async () => (await fixture.metrics()).gap).toBeLessThanOrEqual(2);
     expect(fixture.errors).toEqual([]);
   } finally { await fixture.close(); }
 });

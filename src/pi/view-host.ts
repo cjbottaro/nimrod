@@ -16,6 +16,8 @@ export interface ViewHost {
   resolveNoticeCause?(cause: string): void;
   /** Synchronous local Send intent, before image preparation/RPC; no receipt or submission state. */
   promptSubmitted?(): void;
+  /** Read live preferences at local submission; changes never navigate on their own. */
+  sendAutoFollow?(): import('./transcript-scroll').SendAutoFollow;
   postMessage(message: JsonRecord): void;
   onMessage(listener: (message: HostMessage) => void): void;
   getState(): unknown;

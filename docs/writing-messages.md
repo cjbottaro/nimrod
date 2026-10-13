@@ -14,7 +14,7 @@ Background subagent activity alone does not enable follow-up queueing. Composer 
 
 ### Immediate transcript feedback
 
-Ordinary messages appear in the transcript immediately, without waiting for Pi and without a sending/pending label. Image messages appear after their local image preparation finishes. Pi’s actual user message reconciles in place, without a duplicate turn. This preserves your transcript reading position and does not steal focus or change a newer draft. Send also immediately moves the session to the top of All/Working and scrolls that session list to the top; it does not wait for image preparation or Pi's response. Unread keeps its arrival order and list position.
+Ordinary messages appear in the transcript immediately, without waiting for Pi and without a sending/pending label. Image messages appear after their local image preparation finishes. Pi’s actual user message reconciles in place, without a duplicate turn. Reconciliation does not steal focus, change a newer draft or repeat submission navigation. By default, idle Send jumps to the bottom and enables auto-follow; busy steering and queued follow-ups preserve reading position. Configure **Auto-follow after sending** in [Settings → Appearance](settings.md#appearance). Send also immediately moves the session to the top of All/Working and scrolls that session list to the top; it does not wait for image preparation or Pi's response. Unread keeps its arrival order and list position.
 
 Rejected local turns remain marked **Not sent**; cancelled ones show **Cancelled**, and uncertain ones show **Acceptance unknown**. An acknowledged message disconnected before its actual user event shows **Delivery unconfirmed**. Previews are not saved as conversation history, and nothing retries automatically.
 
@@ -52,7 +52,7 @@ Send immediately clears the submitted text and images from the composer, includi
 - **Definitely not sent:** show the error. The message is not restored; type a new message if needed.
 - **Acceptance unknown:** show an error explaining that Pi may have received the message. No restore/retry action or extra submission gate is added. Sending still requires a connected, available session.
 
-Results never change newer text/images, even if you retype exactly the same message, and never repeat or undo Send's sidebar ordering/scroll effects. Only Pi's response establishes acceptance; later model/provider failures leave accepted messages in the transcript. Disconnect, reload and Restart never replay a prompt. Submission tracking is not saved as draft recovery.
+Results never repeat the submission's transcript jump or change newer text/images, even if you retype exactly the same message, and never repeat or undo Send's sidebar ordering/scroll effects. Only Pi's response establishes acceptance; later model/provider failures leave accepted messages in the transcript. Disconnect, reload and Restart never replay a prompt. Submission tracking is not saved as draft recovery.
 
 Stop keeps the process alive. Use [Restart session](sessions.md#restart-session) for a stuck saved session, or Close for temporary/unsaved sessions.
 

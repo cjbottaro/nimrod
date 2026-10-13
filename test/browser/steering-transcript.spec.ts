@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { demoFixture, visible } from './demo-fixture';
 
-for (const readingHistory of [false, true]) test(`idle send previews before dispatch and preserves ${readingHistory ? 'history reading' : 'bottom follow'}`, async ({ page }) => {
+for (const mode of ['whenIdle', 'always', 'never'] as const)
+for (const readingHistory of [false, true]) test(`idle send previews before dispatch with ${mode} and ${readingHistory ? 'history reading' : 'bottom follow'}`, async ({ page }) => {
   const demo = await demoFixture(page);
   try {
     await demo.turn(1); await demo.turn(2);
@@ -10,6 +11,9 @@ for (const readingHistory of [false, true]) test(`idle send previews before disp
       await page.mouse.wheel(0, -180);
       await expect.poll(async () => (await demo.metrics()).gap).toBeGreaterThan(100);
     }
+    await demo.editPreferences(JSON.stringify({ 'appearance.autoFollowAfterSending': mode }));
+    await expect(page.locator('#send-auto-follow')).toHaveValue(mode);
+    const preserveReading = readingHistory && mode === 'never';
     const readingTop = (await demo.metrics()).top;
     // Hold native dispatch: the renderer must show a turn before any Pi event/receipt.
     await page.evaluate(() => {
@@ -28,7 +32,7 @@ for (const readingHistory of [false, true]) test(`idle send previews before disp
     await expect(turn.locator('.steering-status')).toHaveCount(0);
     await turn.evaluate(node => { (node as HTMLElement).dataset.testIdentity = 'idle-preview'; });
     await expect(prompt).toHaveValue(''); await expect(prompt).toBeFocused();
-    if (readingHistory) expect(Math.abs((await demo.metrics()).top - readingTop)).toBeLessThanOrEqual(2);
+    if (preserveReading) expect(Math.abs((await demo.metrics()).top - readingTop)).toBeLessThanOrEqual(2);
     else await expect.poll(async () => (await demo.metrics()).gap).toBeLessThanOrEqual(2);
     await prompt.fill('Newer draft');
     await page.evaluate(() => (window as unknown as { __releasePrompt: () => void }).__releasePrompt());
@@ -37,7 +41,7 @@ for (const readingHistory of [false, true]) test(`idle send previews before disp
     await expect(turn.locator('.steering-status')).toHaveCount(0);
     await expect(turn).toHaveAttribute('data-test-identity', 'idle-preview');
     await expect(prompt).toHaveValue('Newer draft'); await expect(prompt).toBeFocused();
-    if (readingHistory) expect(Math.abs((await demo.metrics()).top - readingTop)).toBeLessThanOrEqual(2);
+    if (preserveReading) expect(Math.abs((await demo.metrics()).top - readingTop)).toBeLessThanOrEqual(2);
     else await expect.poll(async () => (await demo.metrics()).gap).toBeLessThanOrEqual(2);
     expect(demo.errors).toEqual([]);
   } finally { await demo.close(); }
@@ -52,11 +56,17 @@ for (const readingHistory of [false, true]) test(`steering reconciles without du
       await page.mouse.wheel(0, -180);
       await expect.poll(async () => (await demo.metrics()).gap).toBeGreaterThan(100);
     }
-    const readingTop = (await demo.metrics()).top;
     const prompt = page.locator(visible('prompt'));
     await prompt.fill('Start work before steering'); await prompt.press('Enter');
     await expect(page.locator(visible('keyboard-hint'))).toContainText('Enter to steer');
     await expect(prompt).toHaveValue('');
+    // Idle Send now follows by default; choose history reading again during work.
+    if (readingHistory) {
+      await page.locator(visible('transcript-viewport')).hover({ position: { x: 20, y: 30 } });
+      await page.mouse.wheel(0, -180);
+      await expect.poll(async () => (await demo.metrics()).gap).toBeGreaterThan(100);
+    }
+    const readingTop = (await demo.metrics()).top;
     await page.evaluate(() => {
       const state = window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown> }; __releaseSteer?: () => void };
       const invoke = state.__TAURI_INTERNALS__.invoke;
