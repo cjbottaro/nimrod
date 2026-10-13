@@ -4,21 +4,24 @@ body.application-notice-shell { grid-template-rows:48px var(--application-notice
 #application-notices, .session-notices { box-sizing:border-box; max-height:min(25dvh,180px); overflow:auto; color:var(--vscode-foreground); font:12px var(--vscode-font-family, sans-serif); }
 #application-notices { position:fixed; inset:48px 0 auto; z-index:100; width:100%; padding:6px 20px; background:var(--vscode-editorWidget-background); border-bottom:1px solid color-mix(in srgb, var(--vscode-descriptionForeground) 20%, transparent); }
 .session-view:has(> .session-notices:not([hidden])) { grid-template-rows:auto minmax(0,1fr) auto; }
-.session-notices { margin:10px 20px 0; padding:2px 10px; border:1px solid color-mix(in srgb, var(--vscode-errorForeground) 60%, transparent); border-radius:5px; background:color-mix(in srgb, var(--vscode-descriptionForeground) 6%, var(--vscode-editor-background)); }
+.session-notices { --notice-line-height:24px; margin:12px 20px; padding:8px 12px; border:1px solid color-mix(in srgb, var(--vscode-errorForeground) 60%, transparent); border-radius:5px; background:color-mix(in srgb, var(--vscode-descriptionForeground) 6%, var(--vscode-editor-background)); }
 #application-notices[hidden], .session-notices[hidden] { display:none; }
 .notice-group-summary { padding:7px 0; cursor:pointer; color:var(--vscode-descriptionForeground); }
 .notice-group:not(.notice-group-multiple) > .notice-group-summary { display:none; }
 .application-notice { display:flex; align-items:flex-start; gap:10px; padding:7px 0; }
 .application-notice + .application-notice { border-top:1px solid color-mix(in srgb, var(--vscode-descriptionForeground) 15%, transparent); }
+.session-notices .application-notice { gap:8px; padding:0; }
+.session-notices .application-notice + .application-notice { margin-top:8px; padding-top:8px; }
 .application-notice-text { display:grid; gap:3px; flex:1; min-width:0; overflow-wrap:anywhere; }
 .application-notice-text strong { font-weight:600; }
-.session-notices .application-notice-text strong { font-weight:500; line-height:1.5; }
+.session-notices .application-notice-text strong { font-weight:500; line-height:var(--notice-line-height); }
 .notice-message { color:var(--vscode-descriptionForeground); line-height:1.5; }
 .notice-icon { flex:none; line-height:1.4; color:var(--vscode-descriptionForeground); }
 .application-notice[data-severity=error] .notice-icon { color:var(--vscode-errorForeground); }
 .application-notice[data-severity=warning] .notice-icon { color:var(--vscode-editorWarning-foreground); }
 /* Session feedback shares one attention treatment, not a severity taxonomy. */
-.session-notices .application-notice .notice-icon { color:var(--vscode-errorForeground); }
+.session-notices .application-notice .notice-icon { display:grid; place-items:center; width:18px; height:var(--notice-line-height); color:var(--vscode-errorForeground); }
+.session-notices svg { display:block; width:14px; height:14px; }
 .notice-details { color:var(--vscode-descriptionForeground); }
 .notice-details > summary { cursor:pointer; font-size:11px; padding:3px 0; }
 .notice-details > div { white-space:pre-wrap; line-height:1.5; padding:4px 0; }
@@ -26,6 +29,9 @@ body.application-notice-shell { grid-template-rows:48px var(--application-notice
 .application-notice-actions button { padding:3px 6px; font-size:11px; color:var(--vscode-descriptionForeground); background:transparent; }
 .application-notice-actions button:hover { color:var(--vscode-foreground); background:var(--vscode-toolbar-hoverBackground); }
 .application-notice-actions button[data-dismiss] { font-size:16px; line-height:1; }
+.session-notices .application-notice-actions { align-items:flex-start; }
+.session-notices .application-notice-actions button { box-sizing:border-box; min-height:var(--notice-line-height); padding:2px 6px; line-height:18px; }
+.session-notices .application-notice-actions button[data-dismiss] { display:grid; place-items:center; width:var(--notice-line-height); height:var(--notice-line-height); padding:0; line-height:1; }
 body.code-popout-window #application-notice-slot { flex:none; }
 body.code-popout-window:has(#application-notices:not([hidden])) #application-notice-slot { margin-top:48px; }
 .notice-announcement { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }

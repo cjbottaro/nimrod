@@ -69,6 +69,22 @@ export class NoticeStore {
   }
 }
 
+/** Fixed SVG geometry avoids font-dependent symbol baselines in session rows. */
+function sessionNoticeIcon(document: Document, kind: 'warning' | 'info' | 'dismiss'): SVGSVGElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none'); svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '1.8'); svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('focusable', 'false');
+  const paths = {
+    warning: '<path d="M12 3 2 21h20L12 3Z"/><path d="M12 9v5m0 3h.01"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10h.01"/>',
+    dismiss: '<path d="m6 6 12 12M6 18 18 6"/>',
+  };
+  svg.innerHTML = paths[kind];
+  return svg;
+}
+
 /** Shared presentation and store, scoped by operation ownership.
  * Only window notices portal into dialogs. Session notices stay with their pane.
  */
@@ -190,14 +206,17 @@ export function installApplicationNotices(win: Window, store = new NoticeStore()
         const content = document.createElement('div'); content.textContent = diagnostics;
         detail.append(label, content); text.append(detail);
       }
-      const icon = document.createElement('span'); icon.className = 'notice-icon'; icon.textContent = notice.severity === 'info' ? 'ⓘ' : '⚠'; icon.setAttribute('aria-hidden', 'true');
+      const icon = document.createElement('span'); icon.className = 'notice-icon'; icon.setAttribute('aria-hidden', 'true');
+      if (session) icon.append(sessionNoticeIcon(document, notice.severity === 'info' ? 'info' : 'warning'));
+      else icon.textContent = notice.severity === 'info' ? 'ⓘ' : '⚠';
       const actions = document.createElement('div'); actions.className = 'application-notice-actions';
       notice.actions?.forEach((action, index) => {
         const button = document.createElement('button'); button.type = 'button'; button.textContent = action.label; button.disabled = !enabled[index];
         button.dataset.actionIndex = String(index); actions.append(button);
       });
       if (notice.dismissible !== false) {
-        const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.textContent = '×'; dismiss.dataset.dismiss = 'true';
+        const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.dataset.dismiss = 'true';
+        if (session) dismiss.append(sessionNoticeIcon(document, 'dismiss')); else dismiss.textContent = '×';
         dismiss.setAttribute('aria-label', hasOperationContext(notice) ? `Dismiss ${notice.operation}` : 'Dismiss notice'); actions.append(dismiss);
       }
       row.node.replaceChildren(icon, text, actions);

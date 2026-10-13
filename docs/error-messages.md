@@ -39,6 +39,11 @@ warning/error categories. The message itself leads; useful operation context is
 secondary, and generic labels such as "Pi operation" are omitted. Application
 notices retain their operation heading and severity icon.
 
+Session notices have even internal padding and breathing room above and below the
+border. The gap before the transcript stays visible while you scroll. The icon
+and Dismiss control align with the first message line, including when the message
+wraps or Details is expanded.
+
 Multiple issues collapse into an expandable count/list, with a bounded scrollable
 area so they do not keep shrinking the transcript. Long messages have a shortened
 preview with the complete original text under **Details**. Separately supplied

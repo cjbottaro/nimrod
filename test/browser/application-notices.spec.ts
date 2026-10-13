@@ -100,6 +100,56 @@ test('session notices use the theme error outline, message-first text and preser
   } finally { await fixture.close(); }
 });
 
+for (const wrapped of [false, true]) test(`session notice first-line alignment and transcript gap survive ${wrapped ? 'wrapped text and expanded Details' : 'a single-line message'}`, async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height: 800 });
+  const fixture = await demoFixture(page);
+  try {
+    const token = String(fixture.calls.find(call => call.command === 'start_pi')!.args.token);
+    const message = wrapped ? 'MCP servers need attention. ' + 'Playwright could not start. '.repeat(10) : 'MCP server needs attention.';
+    const prompt = page.locator(visible('prompt')); await prompt.fill('Keep alignment draft'); await prompt.focus();
+    await page.evaluate(({ token, message }) => {
+      const state = window as unknown as { __fixtureChannels: Record<string, { onmessage(packet: unknown): void }> };
+      state.__fixtureChannels[token].onmessage({ kind: 'rpc', value: { type: 'extension_ui_request', method: 'notify', notifyType: 'error', id: 'alignment', message } });
+    }, { token, message });
+    const notice = page.locator(visible('session-notices'));
+    await expect(notice).toBeVisible(); await expect(prompt).toBeFocused();
+    const geometry = () => notice.evaluate(node => {
+      const title = node.querySelector<HTMLElement>('strong')!, slot = node.querySelector<HTMLElement>('.notice-icon')!;
+      const icon = slot.querySelector('svg')!.getBoundingClientRect();
+      const close = node.querySelector('[data-dismiss] svg')!.getBoundingClientRect();
+      const titleBounds = title.getBoundingClientRect(), bounds = node.getBoundingClientRect();
+      const style = getComputedStyle(node), line = Number.parseFloat(getComputedStyle(title).lineHeight);
+      const scale = slot.getBoundingClientRect().height / Number.parseFloat(getComputedStyle(slot).height);
+      const firstLineCenter = titleBounds.y + line * scale / 2;
+      const viewport = node.closest('.session-view')!.querySelector('[data-pi-id="transcript-viewport"]')!.getBoundingClientRect();
+      return { iconOffset: (icon.y + icon.height / 2 - firstLineCenter) / scale,
+        closeOffset: (close.y + close.height / 2 - firstLineCenter) / scale,
+        lines: titleBounds.height / (line * scale), gap: (viewport.y - bounds.bottom) / scale,
+        topInset: (titleBounds.y - bounds.y) / scale, bottomInset: (bounds.bottom - titleBounds.bottom) / scale,
+        paddingTop: style.paddingTop, paddingBottom: style.paddingBottom };
+    });
+    const before = await geometry();
+    expect(Math.abs(before.iconOffset)).toBeLessThanOrEqual(.5); expect(Math.abs(before.closeOffset)).toBeLessThanOrEqual(.5);
+    expect(before.gap).toBeCloseTo(12, 0); expect(before.paddingTop).toBe('8px'); expect(before.paddingBottom).toBe('8px');
+    if (wrapped) {
+      expect(before.lines).toBeGreaterThan(1);
+      await notice.locator('.notice-details > summary').click();
+      await expect(notice.locator('.notice-details > div')).toHaveText(message);
+      const expanded = await geometry();
+      expect(Math.abs(expanded.iconOffset)).toBeLessThanOrEqual(.5); expect(Math.abs(expanded.closeOffset)).toBeLessThanOrEqual(.5);
+      expect(expanded.gap).toBeCloseTo(12, 0);
+    } else {
+      expect(before.lines).toBeCloseTo(1, 0);
+      expect(Math.abs(before.topInset - before.bottomInset)).toBeLessThanOrEqual(.5);
+    }
+    await page.locator(visible('transcript-viewport')).evaluate(node => { node.scrollTop = node.scrollHeight; });
+    expect((await geometry()).gap).toBeCloseTo(12, 0);
+    await notice.getByRole('button', { name: 'Dismiss notice', exact: true }).click();
+    await expect(notice).toBeHidden(); await expect(prompt).toHaveValue('Keep alignment draft');
+    expect(fixture.errors).toEqual([]);
+  } finally { await fixture.close(); }
+});
+
 test('window strip keeps its position and remains actionable through Settings and nested native dialogs', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {
