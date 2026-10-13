@@ -4,6 +4,7 @@ import { applyEdits, modify, parse, type ParseError } from 'jsonc-parser';
 import { runtimePaths, RUNTIME_STORAGE_KEY } from './settings';
 import { readLibrary, THEME_STORAGE_KEY, MAX_IMPORTED_THEMES, type ColorTheme, type ThemeLibrary } from './themes/theme';
 import { DEFAULT_ZOOM, ZOOM_LEVELS, ZOOM_STORAGE_KEY } from './zoom';
+import { readWindowAppearance, APPEARANCE_KEYS, type WindowAppearance } from './window-appearance';
 import { KEYBINDINGS_SETTING, readKeyOverrides, changeBinding, bindingsFor, type ActionId } from './keybindings';
 
 export interface PreferencesSnapshot {
@@ -48,6 +49,7 @@ export function parseSettings(text: string): Record<string, unknown> {
   if (errors.length || !settings || typeof settings !== 'object' || Array.isArray(settings)) throw new Error('Settings must be a valid JSON/JSONC object.');
   if (settings['notifications.enabled'] !== undefined && typeof settings['notifications.enabled'] !== 'boolean') throw new Error('notifications.enabled must be a boolean.');
   if (settings['diagnostics.performance'] !== undefined && typeof settings['diagnostics.performance'] !== 'boolean') throw new Error('diagnostics.performance must be a boolean.');
+  readWindowAppearance(settings);
   readKeyOverrides(settings[KEYBINDINGS_SETTING]);
   readPluginSettings(settings);
   const sendAutoFollow = settings['appearance.autoFollowAfterSending'];
@@ -260,6 +262,10 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
     saveNotifications(enabled: boolean) { return patch({ 'notifications.enabled': enabled }, false); },
     sendAutoFollow(): SendAutoFollow { return globalSettings['appearance.autoFollowAfterSending'] as SendAutoFollow ?? DEFAULT_SEND_AUTO_FOLLOW; },
     saveSendAutoFollow(mode: SendAutoFollow) { return patch({ 'appearance.autoFollowAfterSending': mode }, false); },
+    windowAppearance() { return readWindowAppearance(globalSettings); },
+    saveWindowAppearance(values: Partial<WindowAppearance>) {
+      return patch(Object.fromEntries(Object.entries(values).map(([key, value]) => [APPEARANCE_KEYS[key as keyof WindowAppearance], value])), false);
+    },
     zoom() { return globalSettings['appearance.zoom'] ?? DEFAULT_ZOOM; },
     saveZoom(percent: number) { return patch({ 'appearance.zoom': percent }, false); },
     recordCommandUsage(id: string) {

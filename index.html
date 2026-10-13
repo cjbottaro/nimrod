@@ -69,6 +69,15 @@
         <input id="theme-file" type="file" accept=".json,.jsonc,application/json" aria-label="Import VS Code color theme" hidden>
         <p class="settings-hint">Choose “Import color theme…” to add a VS Code JSON/JSONC theme. Select an imported theme to remove its local copy.</p>
         <div id="theme-notice" role="status" hidden><span id="theme-notice-text"></span><button id="theme-notice-dismiss" type="button" aria-label="Dismiss theme notice">×</button></div>
+        <div id="settings-translucency">
+          <label for="background-opacity">Background opacity</label>
+          <div class="appearance-opacity"><input id="background-opacity" type="range" min="0" max="100" step="1" value="100" aria-describedby="translucency-hint" disabled><output id="background-opacity-value" for="background-opacity">100% · Opaque</output></div>
+          <label for="translucency-area">Apply translucency to</label>
+          <select id="translucency-area" aria-describedby="translucency-area-hint" disabled><option value="window">Whole window</option><option value="chrome">Sidebar and Project bar</option></select>
+          <p id="translucency-area-hint" class="settings-hint">Whole window includes the conversation background. Code blocks, menus and controls keep stronger backgrounds for readability.</p>
+          <div id="settings-frosted-background" hidden><label class="appearance-toggle" for="frosted-background"><input id="frosted-background" type="checkbox" checked> Frosted background</label></div>
+          <p id="translucency-hint" class="settings-hint">Reading window appearance support…</p>
+        </div>
         <div id="settings-zoom">
         <label for="zoom-level">Zoom</label>
         <select id="zoom-level" aria-label="App zoom" title="App zoom · ⌘/Ctrl +, −, 0" disabled><option>100%</option></select>

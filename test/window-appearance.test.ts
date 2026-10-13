@@ -1,0 +1,143 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { JSDOM } from 'jsdom';
+import { DEFAULT_WINDOW_APPEARANCE, installWindowAppearance, readWindowAppearance, type AppearanceCapabilities, type WindowAppearance } from '../src/window-appearance';
+
+const mac: AppearanceCapabilities = { platform: 'macos', transparency: true, frost: true, reducedTransparency: false };
+const linux: AppearanceCapabilities = { platform: 'linux', transparency: true, frost: false, reducedTransparency: false };
+const tick = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
+function fixture(support = mac, initial: Partial<WindowAppearance> = {}) {
+  const dom = new JSDOM('<input id="opacity" type="range" min="0" max="100"><output></output><select><option value="window">Whole window</option><option value="chrome">Sidebar and Project bar</option></select><div id="frost"><input type="checkbox"></div><p></p><textarea>draft</textarea><details open>Retained card</details>', { pretendToBeVisual: true });
+  const window = dom.window as unknown as Window;
+  const root = dom.window.document.documentElement;
+  root.dataset.themeMode = 'dark';
+  let value = { ...DEFAULT_WINDOW_APPEARANCE, ...initial };
+  const saves: Partial<WindowAppearance>[] = [];
+  const effects: { frosted: boolean; dark: boolean }[] = [];
+  const reports: { message?: string; cause?: string }[] = [];
+  const controls = {
+    opacity: root.querySelector<HTMLInputElement>('#opacity')!, value: root.querySelector<HTMLOutputElement>('output')!,
+    area: root.querySelector<HTMLSelectElement>('select')!, frosted: root.querySelector<HTMLInputElement>('#frost input')!,
+    frostGroup: root.querySelector<HTMLElement>('#frost')!, hint: root.querySelector<HTMLElement>('p')!,
+  };
+  let save = async (patch: Partial<WindowAppearance>) => { value = { ...value, ...patch }; };
+  let apply = async (_frosted: boolean, _dark: boolean) => support;
+  const controller = installWindowAppearance(window, root, {
+    read: () => value,
+    save: patch => { saves.push(patch); return save(patch); },
+    capabilities: async () => support,
+    apply: (frosted, dark) => { effects.push({ frosted, dark }); return apply(frosted, dark); },
+    report: (message, cause) => reports.push({ message, cause }),
+  }, controls);
+  const event = (target: HTMLElement, type: string) => target.dispatchEvent(new dom.window.Event(type, { bubbles: true }));
+  return { dom, root, controls, saves, effects, reports, controller, event,
+    external(patch: Partial<WindowAppearance>) { value = { ...value, ...patch }; controller.reload(); },
+    setSave(next: typeof save) { save = next; }, setApply(next: typeof apply) { apply = next; },
+    close() { controller.dispose(); dom.window.close(); },
+  };
+}
+
+test('appearance schema uses opaque defaults and rejects invalid values including explicit null', () => {
+  assert.deepEqual(readWindowAppearance({}), DEFAULT_WINDOW_APPEARANCE);
+  for (const [key, values] of Object.entries({
+    'appearance.backgroundOpacity': [-1, 101, 50.5, '80', true, null],
+    'appearance.frostedBackground': [1, 'false', null],
+    'appearance.translucencyArea': ['whole', 'sidebar', true, null],
+  })) for (const value of values) assert.throws(() => readWindowAppearance({ [key]: value }));
+  assert.equal(readWindowAppearance({ 'appearance.backgroundOpacity': 0 }).opacity, 0);
+});
+
+test('Linux exposes opacity and area without frosting or any native effect work; input previews before saving', async () => {
+  const f = fixture(linux);
+  try {
+    await tick(); assert.equal(f.root.dataset.translucency, 'off'); assert.equal(f.controls.frostGroup.hidden, true);
+    assert.match(f.controls.hint.textContent!, /compositor/);
+    f.controls.opacity.value = '65'; f.event(f.controls.opacity, 'input');
+    assert.equal(f.root.dataset.translucency, 'window'); assert.equal(f.controls.value.value, '65%');
+    assert.equal(f.saves.length, 0);
+    f.event(f.controls.opacity, 'change'); await tick();
+    assert.deepEqual(f.saves, [{ opacity: 65 }]);
+    f.controls.area.value = 'chrome'; f.event(f.controls.area, 'change');
+    assert.equal(f.root.dataset.translucency, 'chrome'); await tick();
+    f.controller.reload(); f.controller.reload(); await tick(); assert.equal(f.effects.length, 0);
+  } finally { f.close(); }
+});
+
+test('macOS frosting follows opacity, toggle and local dark/light theme previews without repeated effect work', async () => {
+  const f = fixture(mac, { opacity: 70 });
+  try {
+    await tick(); assert.equal(f.controls.frostGroup.hidden, false);
+    assert.deepEqual(f.effects, [{ frosted: true, dark: true }]);
+    let rootMutations = 0;
+    const observer = new f.dom.window.MutationObserver(records => { rootMutations += records.length; });
+    observer.observe(f.root, { attributes: true });
+    for (let i = 0; i < 200; i++) f.controller.reload();
+    await tick(); assert.equal(f.effects.length, 1); assert.equal(rootMutations, 0); observer.disconnect();
+    f.root.dataset.themeMode = 'light'; await tick();
+    assert.deepEqual(f.effects.at(-1), { frosted: true, dark: false });
+    f.controls.frosted.checked = false; f.event(f.controls.frosted, 'change');
+    assert.equal(f.root.dataset.translucency, 'window'); await tick();
+    assert.deepEqual(f.effects.at(-1), { frosted: false, dark: false });
+    f.external({ opacity: 100 }); assert.equal(f.root.dataset.translucency, 'off');
+  } finally { f.close(); }
+});
+
+test('native capability enforcement keeps Reduce Transparency and unsupported platforms opaque', async () => {
+  for (const support of [{ ...mac, reducedTransparency: true }, { platform: 'windows', transparency: false, frost: false, reducedTransparency: false }]) {
+    const f = fixture(support, { opacity: 40 });
+    try {
+      await tick(); assert.equal(f.root.dataset.translucency, 'off');
+      assert.equal(f.controls.opacity.value, '40'); // retain requested value, not a destructive preference rewrite
+      assert.equal(f.effects.some(effect => effect.frosted), false);
+      if (support.transparency) assert.match(f.controls.hint.textContent!, /Reduce Transparency/);
+      else assert.equal(f.controls.opacity.disabled, true);
+    } finally { f.close(); }
+  }
+});
+
+test('native operations serialize/coalesce to the latest request while preserving mounted nodes and focus', async () => {
+  const f = fixture(mac, { opacity: 60 });
+  try {
+    await tick();
+    let release!: (support: AppearanceCapabilities) => void;
+    const pending = new Promise<AppearanceCapabilities>(resolve => { release = resolve; });
+    let inFlight = 0, max = 0;
+    f.setApply(async () => { max = Math.max(max, ++inFlight); const result = await pending; --inFlight; return result; });
+    const prompt = f.root.querySelector('textarea')!, card = f.root.querySelector('details')!;
+    prompt.focus();
+    f.root.dataset.themeMode = 'light'; await tick();
+    f.external({ opacity: 100 }); f.external({ opacity: 55 }); f.external({ frosted: false });
+    release(mac); await tick();
+    assert.equal(max, 1); assert.deepEqual(f.effects.at(-1), { frosted: false, dark: false });
+    assert.equal(f.root.ownerDocument.activeElement, prompt);
+    assert.equal(f.root.querySelector('textarea'), prompt); assert.equal(prompt.value, 'draft');
+    assert.equal(f.root.querySelector('details'), card); assert.equal(card.open, true);
+  } finally { f.close(); }
+});
+
+test('a failed older save cannot roll back a newer local edit and no save is automatically replayed', async () => {
+  const f = fixture(linux);
+  try {
+    await tick();
+    let reject!: (error: Error) => void;
+    f.setSave(() => new Promise<void>((_resolve, fail) => { reject = fail; }));
+    f.controls.opacity.value = '80'; f.event(f.controls.opacity, 'change');
+    const rejectOld = reject;
+    f.controls.opacity.value = '50'; f.event(f.controls.opacity, 'input');
+    rejectOld(new Error('CAS conflict')); await tick();
+    assert.equal(f.controls.opacity.value, '50'); assert.equal(f.root.style.getPropertyValue('--nimrod-background-opacity'), '50%');
+    assert.equal(f.saves.length, 1); assert.match(f.reports.at(-1)!.message!, /CAS conflict/);
+  } finally { f.close(); }
+});
+
+test('failed native effects are reported once, not retried on unrelated broadcasts', async () => {
+  const f = fixture(mac);
+  try {
+    await tick(); f.setApply(async () => { throw new Error('native unavailable'); });
+    f.external({ opacity: 70 }); await tick();
+    const calls = f.effects.length;
+    for (let i = 0; i < 200; i++) f.controller.reload();
+    await tick(); assert.equal(f.effects.length, calls);
+    assert.equal(f.reports.filter(report => report.message?.includes('native unavailable')).length, 1);
+  } finally { f.close(); }
+});

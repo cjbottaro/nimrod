@@ -176,6 +176,25 @@ pub(crate) fn validate(text: &str) -> Result<(), String> {
     {
         return Err("diagnostics.performance must be a boolean".into());
     }
+    if let Some(opacity) = object.get("appearance.backgroundOpacity") {
+        if !opacity
+            .as_f64()
+            .is_some_and(|value| value.fract() == 0.0 && (0.0..=100.0).contains(&value))
+        {
+            return Err("appearance.backgroundOpacity must be an integer from 0 to 100".into());
+        }
+    }
+    if object
+        .get("appearance.frostedBackground")
+        .is_some_and(|value| !value.is_boolean())
+    {
+        return Err("appearance.frostedBackground must be a boolean".into());
+    }
+    if let Some(area) = object.get("appearance.translucencyArea") {
+        if !matches!(area.as_str(), Some("chrome" | "window")) {
+            return Err("appearance.translucencyArea must be chrome or window".into());
+        }
+    }
     if let Some(mode) = object.get("appearance.autoFollowAfterSending") {
         if !matches!(mode.as_str(), Some("always" | "whenIdle" | "never")) {
             return Err(
@@ -597,6 +616,20 @@ mod tests {
             directory(Path::new("/home/test"), Some("/custom".into()), ".config"),
             Path::new("/custom/nimrod")
         );
+    }
+    #[test]
+    fn window_appearance_settings_are_bounded_and_typed() {
+        for opacity in ["0", "65", "100", "50.0"] {
+            validate(&format!(r#"{{"appearance.backgroundOpacity":{opacity}}}"#)).unwrap();
+        }
+        for opacity in ["-1", "101", "50.5", "null", "true", r#""50""#] {
+            assert!(validate(&format!(r#"{{"appearance.backgroundOpacity":{opacity}}}"#)).is_err());
+        }
+        validate(r#"{"appearance.frostedBackground":false,"appearance.translucencyArea":"chrome"}"#)
+            .unwrap();
+        validate(r#"{"appearance.translucencyArea":"window"}"#).unwrap();
+        assert!(validate(r#"{"appearance.frostedBackground":null}"#).is_err());
+        assert!(validate(r#"{"appearance.translucencyArea":"sidebar"}"#).is_err());
     }
     #[test]
     fn jsonc_strings_comments_and_trailing_commas() {

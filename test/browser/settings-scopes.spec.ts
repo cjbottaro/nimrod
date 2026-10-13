@@ -11,6 +11,7 @@ test('project provenance and global defaults reconcile across independent Settin
     await expect(page.locator('#settings-title')).toContainText('Project settings');
     await expect(page.locator('#settings-category-notifications')).toBeHidden();
     await expect(page.locator('#settings-category-keybindings')).toBeHidden();
+    await expect(page.locator('#settings-translucency')).toBeHidden();
     await expect(page.locator('#settings-zoom')).toBeHidden();
     await expect(page.locator('#settings-send-auto-follow')).toBeHidden();
     await expect(page.locator('.settings-source')).toHaveCount(3);

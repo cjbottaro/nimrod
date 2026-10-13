@@ -7,7 +7,7 @@ Human guide: [Themes](../../../../docs/themes.md). Maintenance guide:
 
 ## Specification and acceptance criteria
 
-Theme application changes CSS colors only. Theme selection in a project window (Settings or palette) creates a project override; global Settings edits the default. Inheriting projects follow global changes; explicit overrides do not. Imports/removal remain global-only, and project pickers use the shared global library without copying palettes. [Preferences](preferences.md#project-layering) owns precedence/reset semantics. Window-local previews never persist/broadcast; cancellation restores the latest committed theme. Imports remain bounded standalone files, catalog IDs stay stable, and no runtime networking occurs.
+Theme application changes palette CSS colors only. The separate [window-translucency controller](translucency.md) observes theme mode to synchronize an enabled native material, including window-local previews, without rewriting palettes. Theme selection in a project window (Settings or palette) creates a project override; global Settings edits the default. Inheriting projects follow global changes; explicit overrides do not. Imports/removal remain global-only, and project pickers use the shared global library without copying palettes. [Preferences](preferences.md#project-layering) owns precedence/reset semantics. Window-local previews never persist/broadcast; cancellation restores the latest committed theme. Imports remain bounded standalone files, catalog IDs stay stable, and no runtime networking occurs.
 
 ## Code map and invariants
 

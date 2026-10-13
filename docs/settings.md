@@ -12,7 +12,7 @@ Project settings shows effective values, not a second independent configuration.
 
 Overrides stay explicit even if they match the global value. Global edits update inheriting projects, but never replace explicit project values. The Appearance pane in global Settings links to open projects with overrides.
 
-Project overrides cover **theme and Pi/Node runtime paths** only. **Zoom and auto-follow after sending are global-only**, along with notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration. Project settings contains only the theme picker under Appearance and runtime paths under Runtime. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
+Project overrides cover **theme and Pi/Node runtime paths** only. **Translucency, zoom and auto-follow after sending are global-only**, along with notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration. Project settings contains only the theme picker under Appearance and runtime paths under Runtime. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
 
 This layering applies only to Nimrod preferences. Pi retains its own configuration and precedence.
 
@@ -29,6 +29,7 @@ Escape during a drag cancels resizing; the next Escape closes Settings.
 ## Appearance
 
 - **Theme:** global changes update inheriting windows; project changes apply only to that project. See [Themes](themes.md) for live previews, bundled themes and imports.
+- **Translucency (global only):** background opacity (default **100% / Opaque**), **Whole window / Sidebar and Project bar**, and a macOS-only **Frosted background** toggle. Linux blur is configured in the desktop compositor. See [Translucency](translucency.md) for preview, accessibility and platform limitations.
 - **Zoom (global only):** scales every project, Settings and reference window, default **125%**, range **75–200%**. Use the picker in global Settings or **⌘/Ctrl + / −** in a project window; shortcuts change the same global value. **⌘/Ctrl+0** resets to 100%. Zoom is remembered and doesn't change drafts.
 - **Auto-follow after sending (global only):** **When idle** (default) jumps to the bottom and follows new output for idle sends, but preserves your position for steering and queued follow-ups. **Always** does this for every message submission; **Never** preserves current scroll intent, including auto-follow if already active. Scrolling upward always pauses following. Changes synchronize across all projects. Changes affect subsequent sends without moving your current view. See [Reading conversations](reading-conversations.md#auto-follow-and-reading-older-output).
 - Theme/import/zoom errors use the shared [notice strip](error-messages.md). Non-error progress and import details stay alongside the controls.
@@ -78,6 +79,9 @@ The global `settings.json` accepts comments and trailing commas:
 {
   "appearance.theme": "nimrod",
   "appearance.zoom": 125,
+  "appearance.backgroundOpacity": 100,
+  "appearance.frostedBackground": true,
+  "appearance.translucencyArea": "window",
   "appearance.autoFollowAfterSending": "whenIdle",
   "notifications.enabled": true,
   "runtime.piPath": "/path/to/pi",
