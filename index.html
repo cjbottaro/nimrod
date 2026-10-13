@@ -6,7 +6,7 @@
     <div id="project-identity"><span id="project-name">Choose a project</span><span id="workspace-label"></span><span id="project-session" hidden><span id="project-session-separator" aria-hidden="true">·</span><span id="project-session-name"></span></span></div><span id="mode-badge">PoC</span>
     <button id="restart-session" type="button" class="secondary" aria-label="Restart session" title="Restart session — available after the first save" disabled><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M20 12a8 8 0 1 0-2.3 5.7M20 7v5"/></svg></button>
     <button id="delete-session" type="button" aria-label="Delete session tree" title="Delete session tree… — available after the first save" disabled><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button>
-    <button id="open-settings" type="button" aria-label="Open Settings" aria-haspopup="dialog" aria-controls="settings-page" title="Settings · ⌘/Ctrl ,"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-1 3-3 1-2 3 2 2-1 3 3 2 3-1 2 3 3-1 1-3 3-1 2-3-2-2 1-3-3-2-3 1-2-3Z"/><circle cx="12" cy="11" r="3"/></svg></button>
+    <button id="open-settings" type="button" aria-label="Project settings" aria-haspopup="dialog" aria-controls="settings-page" title="Project settings · ⌘/Ctrl ⇧ ,"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M10 2h4v3l2 1 2-2 2 2-2 2 1 2h3v4h-3l-1 2 2 2-2 2-2-2-2 1v3h-4v-3l-2-1-2 2-2-2 2-2-1-2H2v-4h3l1-2-2-2 2-2 2 2 2-1Z"/><circle cx="12" cy="12" r="3"/></svg></button>
   </header>
   <p id="storage-error" role="alert" hidden></p>
   <div id="workspace-layout" class="sidebar-layout">
@@ -46,7 +46,7 @@
 
   <!-- Full-window page in the native dialog top layer: the workspace stays laid out and mounted. -->
   <dialog id="settings-page" aria-labelledby="settings-title">
-    <header class="settings-header"><button id="settings-back" type="button" class="secondary" title="Back · Escape">← Back</button><h1 id="settings-title">Settings</h1></header>
+    <header class="settings-header"><button id="settings-back" type="button" class="secondary" title="Back · Escape">← Back</button><div class="settings-heading"><h1 id="settings-title">Project settings</h1><p id="settings-scope-description" class="settings-hint">Uses global settings unless overridden here.</p></div><button id="settings-global-link" type="button" class="secondary">Open global settings</button></header>
     <div id="settings-layout" class="sidebar-layout">
       <aside id="settings-sidebar" class="layout-sidebar" aria-label="Settings categories">
         <div id="settings-categories" role="tablist" aria-label="Settings categories" aria-orientation="vertical">
@@ -71,7 +71,7 @@
         <div id="theme-notice" role="status" hidden><span id="theme-notice-text"></span><button id="theme-notice-dismiss" type="button" aria-label="Dismiss theme notice">×</button></div>
         <label for="zoom-level">Zoom</label>
         <select id="zoom-level" aria-label="App zoom" title="App zoom · ⌘/Ctrl +, −, 0" disabled><option>100%</option></select>
-        <p class="settings-hint">⌘/Ctrl + / − anywhere in the app. ⌘/Ctrl 0 resets to 100%.</p>
+        <p id="zoom-shortcut-hint" class="settings-hint">⌘/Ctrl + / − anywhere in the app. ⌘/Ctrl 0 resets to 100%.</p>
         <p id="zoom-error" role="status" hidden></p>
         <label for="send-auto-follow">Auto-follow after sending</label>
         <select id="send-auto-follow" aria-describedby="send-auto-follow-hint"><option value="always">Always</option><option value="whenIdle" selected>When idle (default)</option><option value="never">Never</option></select>

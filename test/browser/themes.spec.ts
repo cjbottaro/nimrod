@@ -33,7 +33,7 @@ test('offline bundled VS Code themes preview by keyboard/hover and persist witho
     await expect(page.locator('html')).toHaveAttribute('data-theme-mode', 'light');
     await page.locator('#palette-list .palette-item-label').getByText('Night Owl', { exact: true }).hover();
     await expect(page.locator('html')).toHaveAttribute('data-theme-mode', 'dark');
-    expect(demo.calls.filter(call => call.command === 'preferences_settings')).toHaveLength(0);
+    expect(demo.calls.filter(call => call.command === 'project_preferences_settings')).toHaveLength(0);
     await page.keyboard.press('Escape');
     await expect(page.locator('html')).toHaveAttribute('data-theme', initial!);
     await expect(prompt).toBeFocused(); await expect(prompt).toHaveValue('Keep theme preview draft');
@@ -41,7 +41,7 @@ test('offline bundled VS Code themes preview by keyboard/hover and persist witho
     await page.locator('#palette-input').press('Enter');
     await expect(page.locator('#command-palette')).not.toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'catalog-nord-vscode-nord');
-    await expect.poll(() => demo.calls.filter(call => call.command === 'preferences_settings').length).toBe(1);
+    await expect.poll(() => demo.calls.filter(call => call.command === 'project_preferences_settings').length).toBe(1);
     await open(); await page.locator('#palette-input').fill('Nimrod');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'nimrod');
     await page.locator('#palette-back').click();

@@ -66,14 +66,19 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
       children.delete(id);
     }
   }
-  await page.exposeFunction('__fixtureHost', async (command: string, args: JsonRecord) => {
+  const host = async (command: string, args: JsonRecord) => {
     calls.push({ command, args });
     if (command === 'drafts_load') return [...nativeDrafts.values()];
     if (command === 'drafts_stage') { const record = args.record as { key: string; value: unknown; revision: number }; nativeDrafts.set(record.key, record); return; }
     if (command === 'drafts_flush') return;
     if (command === 'drafts_references') return [];
     if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 1;
-    if (command.startsWith('preferences_') || command === 'record_command_usage') return preferences.invoke(command, args);
+    if (command === 'scoped_preferences_snapshot') return preferences.snapshot();
+    if (command === 'open_global_settings') { await openSettingsWindow(typeof args.category === 'string' ? args.category : undefined); return; }
+    if (command === 'open_owned_project_settings') { await page.bringToFront(); return; }
+    if (command === 'list_project_overrides') { const keys = Object.keys(parse(preferences.value.projectText ?? '{}')); return keys.length ? [{ cwd: process.cwd(), keys }] : []; }
+    if (command === 'take_project_settings_request' || command === 'take_settings_category') return false;
+    if (command.startsWith('preferences_') || command === 'project_preferences_settings' || command === 'record_command_usage') return preferences.invoke(command, args);
     if (command === 'plugin:clipboard-manager|write_text' || command === 'open_card_link' || command === 'open_code_popout') return; // Recorded presentation actions, no OS side effects.
     if (command === 'load_personal_card_plugins') return pluginOptions?.personal?.() ?? { entries: [], plugins: [], warnings: [] };
     if (command === 'read_card_plugin_module') {
@@ -97,7 +102,10 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'open_project_directory') return { cwd: args.cwd, current: false };
     if (command === 'plugin:dialog|open') return null; // Canceled chooser fixture only.
     if (command === 'window_workspace') return null;
-    if (command === 'open_workspace') return { cwd: process.cwd(), current: true };
+    if (command === 'open_workspace') {
+      preferences.value.projectPath = process.cwd() + '/.nimrod/settings.json'; preferences.value.projectText ??= '{}\n';
+      return { cwd: process.cwd(), current: true };
+    }
     if (command === 'sync_popout_sessions') return { warnings: [] };
     if (command === 'deletion_snapshot') return { pending: false, quarantine: [], files: [] };
     if (command === 'confirm_session_deletion' || command === 'acknowledge_deletion') return; // Recorded only, no native file deletion.
@@ -126,19 +134,23 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'stop_pi') { await stopChildren(typeof args.token === 'string' ? args.token : undefined); return; }
     if (command === 'plugin:webview|set_webview_zoom') return;
     throw new Error(`Unexpected native operation ${command}`);
-  });
+  };
   if (typingOptions) await page.addInitScript(({ cwd, drafts }) => {
     localStorage.setItem(`nimrod.sessions.v1:${cwd}`, JSON.stringify({ version: 1, drafts }));
   }, { cwd: process.cwd(), drafts: typingOptions.drafts });
-  await page.addInitScript(() => {
+  const installHost = (global: boolean) => {
     const state = window as unknown as TestWindow;
     state.__fixtureSettled = 0; state.__fixtureChannels = {};
     const callbacks = new Map<number, (event: unknown) => void>();
+    const preferenceCallbacks = new Set<number>();
     Object.assign(window, { __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener() {} }, __TAURI_INTERNALS__: {
-      metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
+      metadata: { currentWindow: { label: global ? 'settings' : 'main' }, currentWebview: { label: global ? 'settings' : 'main' } },
       transformCallback: (callback: (event: unknown) => void) => { const id = callbacks.size + 1; callbacks.set(id, callback); return id; }, unregisterCallback: () => {},
       invoke: async (command: string, args: JsonRecord = {}) => {
-        if (command === 'plugin:event|listen' && args.event === 'nimrod-preferences') state.__fixturePreferenceReceive = payload => callbacks.get(Number(args.handler))?.({ payload });
+        if (command === 'plugin:event|listen' && args.event === 'nimrod-preferences') {
+          preferenceCallbacks.add(Number(args.handler));
+          state.__fixturePreferenceReceive = payload => { for (const handler of preferenceCallbacks) callbacks.get(handler)?.({ payload }); };
+        }
         if (command === 'plugin:event|listen' && args.event === 'nimrod-session-deletion') state.__fixtureDeletionReceive = payload => callbacks.get(Number(args.handler))?.({ payload });
         if (command === 'plugin:event|listen' && args.event === 'nimrod-notification-click') state.__fixtureNotificationClick = payload => callbacks.get(Number(args.handler))?.({ payload });
         if (command === 'plugin:event|unlisten') state.__fixturePreferenceReceive = undefined;
@@ -149,7 +161,40 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
         return state.__fixtureHost(command, args);
       },
     } });
-  });
+  };
+  await page.addInitScript(installHost, false);
+  let settingsPage: Page | undefined;
+  const globalSnapshot = (snapshot: PreferencesSnapshot) => ({ ...snapshot, projectText: null, projectPath: null, projectError: null, projectRevision: 0 });
+  async function broadcast() {
+    const snapshot = await preferences.snapshot();
+    for (const [target, scoped] of [[page, snapshot], [settingsPage, globalSnapshot(snapshot)]] as const) {
+      if (target && !target.isClosed()) await target.evaluate(snapshot => (window as unknown as TestWindow).__fixturePreferenceReceive?.(snapshot), scoped);
+    }
+  }
+  const projectHost = async (command: string, args: JsonRecord) => {
+    const result = await host(command, args);
+    if (['preferences_settings', 'project_preferences_settings', 'preferences_state'].includes(command)) await broadcast();
+    return result;
+  };
+  await page.exposeFunction('__fixtureHost', projectHost);
+  async function openSettingsWindow(category = 'appearance'): Promise<Page> {
+    if (settingsPage && !settingsPage.isClosed()) { await settingsPage.bringToFront(); return settingsPage; }
+    const target = settingsPage = await page.context().newPage();
+    target.on('pageerror', error => errors.push(String(error)));
+    await target.exposeFunction('__fixtureHost', async (command: string, args: JsonRecord) => {
+      if (command === 'plugin:window|close') { await target.close(); await page.bringToFront(); return; }
+      if (['start_pi', 'stop_pi', 'write_pi', 'drafts_load', 'sync_popout_sessions', 'load_personal_card_plugins'].includes(command)) throw new Error('Global Settings must not initialize project services');
+      const result = await projectHost(command, args);
+      return command === 'scoped_preferences_snapshot' ? globalSnapshot(result as PreferencesSnapshot) : result;
+    });
+    await target.addInitScript(installHost, true);
+    const url = 'https://nimrod.test/?settings=' + category;
+    await target.route('**/*', route => route.request().url() === url ? route.fulfill({ contentType: 'text/html', body: html }) : route.abort());
+    await target.goto(url); await target.addScriptTag({ content: result.outputFiles![0].text });
+    await expect(target.locator('#settings-page')).toBeVisible();
+    await target.evaluate(() => { document.documentElement.style.zoom = '1.25'; document.body.style.height = 'calc(100dvh / 1.25)'; });
+    return target;
+  }
   await page.route('**/*', route => route.request().url() === 'https://nimrod.test/'
     ? route.fulfill({ contentType: 'text/html', body: html }) : route.request().url().startsWith('blob:') ? route.continue() : route.abort());
   try {
@@ -171,12 +216,13 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
   }));
   return {
     errors, metrics, calls, children, nativeDrafts,
+    settingsWindow: openSettingsWindow,
     async notificationClick(target: { session: string; token: string }) { await page.evaluate(payload => (window as unknown as TestWindow).__fixtureNotificationClick?.(payload), target); },
     state: () => structuredClone(preferences.value.state),
     async deletionEvent(event: DeletionEvent) { await page.evaluate(payload => (window as unknown as TestWindow).__fixtureDeletionReceive?.(payload), event); },
     async editPreferences(text: string) {
       preferences.external(text);
-      await page.evaluate(snapshot => (window as unknown as TestWindow).__fixturePreferenceReceive?.(snapshot), await preferences.snapshot());
+      await broadcast();
     },
     async turn(number: number) {
       await page.locator(visible('prompt')).fill(`Offline fixture message ${number}`);
@@ -185,6 +231,6 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       expect(errors).toEqual([]);
     },
-    async close() { closing = true; await stopChildren(); await delivery; },
+    async close() { closing = true; if (settingsPage && !settingsPage.isClosed()) await settingsPage.close(); await stopChildren(); await delivery; },
   };
 }

@@ -4,10 +4,11 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
-import { parseSettings, type PreferencesSnapshot } from './preferences';
+import { parseSettings, parseProjectSettings, type PreferencesSnapshot } from './preferences';
 import { applyTheme, readLibrary } from './themes/theme';
 import { selectedTheme } from './themes/builtins';
 import { DEFAULT_ZOOM } from './zoom';
+import { installKeybindingDispatch, readKeyOverrides } from './keybindings';
 import { codeBlockSource, createSafeMarkdownRenderer } from './pi/safe-markdown';
 import { setCodeIcon, showCopyResult } from './pi/code-actions';
 import { isMarkdownLanguage, popoutTitle } from './popout-presentation';
@@ -26,22 +27,30 @@ export async function mountPopout(): Promise<void> {
   const notices = installApplicationNotices(window);
   window.addEventListener('unload', () => notices.dispose(), { once: true });
   let noticeSequence = 0;
-  let revision = -1;
+  let revision = -1, projectRevision = -1;
+  let globalSettings: Record<string, unknown> = {};
   let zoomTask = Promise.resolve();
   const report = (message: unknown) => { notices.report({ id: `reference:${++noticeSequence}`, operation: 'Reference window', message: String(message) }); };
+  const settingsDispatch = installKeybindingDispatch(window, {
+    actions: ['settings'], read: () => readKeyOverrides(globalSettings.keybindings), enabled: () => true,
+    run: () => invoke('open_global_settings'), error: report,
+  });
+  window.addEventListener('unload', () => settingsDispatch.dispose(), { once: true });
   const applyPreferences = (snapshot: PreferencesSnapshot) => {
-    if (snapshot.revision < revision) return;
+    if (snapshot.revision < revision || (snapshot.projectRevision ?? 0) < projectRevision) return;
     try {
-      const settings = parseSettings(snapshot.text);
+      const global = parseSettings(snapshot.text); globalSettings = global;
+      const settings = { ...global, ...(snapshot.projectText ? parseProjectSettings(snapshot.projectText, global) : {}) };
       const library = readLibrary({ version: 1, selected: settings['appearance.theme'] ?? 'nimrod', imports: settings['appearance.importedThemes'] ?? [] });
       applyTheme(document.documentElement, selectedTheme(library));
       const scale = (settings['appearance.zoom'] as number | undefined ?? DEFAULT_ZOOM) / 100;
       zoomTask = zoomTask.then(() => getCurrentWebview().setZoom(scale)).catch(report);
-      revision = snapshot.revision;
+      revision = snapshot.revision; projectRevision = snapshot.projectRevision ?? 0;
     } catch (e) { report(e); }
   };
   try {
-    const unlisten = await listen<PreferencesSnapshot>('nimrod-preferences', event => applyPreferences(event.payload));
+    const refreshPreferences = () => invoke<PreferencesSnapshot>('scoped_preferences_snapshot').then(applyPreferences).catch(report);
+    const unlisten = await listen('nimrod-preferences', () => { void refreshPreferences(); });
     window.addEventListener('unload', unlisten, { once: true });
     const unlistenErrors = await listen<string>('nimrod-popout-error', event => report(event.payload));
     window.addEventListener('unload', unlistenErrors, { once: true });
@@ -49,7 +58,7 @@ export async function mountPopout(): Promise<void> {
       notices.report({ id: `link:${++noticeSequence}`, operation: 'Open link', message: event.payload });
     }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
     window.addEventListener('unload', unlistenLinkErrors, { once: true });
-    applyPreferences(await invoke<PreferencesSnapshot>('preferences_snapshot'));
+    await refreshPreferences();
     const snapshot = await invoke<CodeSnapshot>('code_popout_snapshot');
     const renderer = createSafeMarkdownRenderer(window);
     const isMarkdown = isMarkdownLanguage(snapshot.language);

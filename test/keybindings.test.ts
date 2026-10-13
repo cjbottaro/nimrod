@@ -26,7 +26,9 @@ test('defaults distinguish creation, named creation, open-session switching and 
   assert.equal(ACTIONS.some(action => action.defaults.some(binding => String(binding) === 'primary+p')), false);
   assert.deepEqual(bindingsFor('resume', {}), ['primary+k']);
   assert.deepEqual(bindingsFor('restart', {}), ['primary+r']);
-  assert.deepEqual(bindingsFor('keybindings', {}), ['primary+shift+,']);
+  assert.deepEqual(bindingsFor('keybindings', {}), []);
+  assert.deepEqual(bindingsFor('project-settings', {}), ['primary+shift+,']);
+  assert.deepEqual(bindingsFor('settings', {}), ['primary+,']);
   assert.ok(ACTIONS.filter(action => !['select-theme', 'reload-card-plugins', 'capture-performance'].includes(action.id)).every(action => action.defaults.length > 0));
   assert.deepEqual(bindingsFor('select-theme', {}), []);
   assert.deepEqual(bindingsFor('capture-performance', {}), []);
@@ -241,4 +243,16 @@ test('editor searches, records without dispatch, requires explicit reassignment,
     assert.equal(f.get<HTMLDialogElement>('keybinding-recorder').open, false);
     f.get<HTMLButtonElement>('keybinding-reset-all').click(); f.get('keybinding-save').dispatchEvent(f.event('Enter')); await tick(); assert.deepEqual(overrides, {});
   } finally { dispatch.dispose(); editor.dispose(); f.dom.window.close(); }
+});
+
+test('shifted comma native events match and record the project settings shortcut', () => {
+  const f = fixture();
+  try {
+    const event = new f.dom.window.KeyboardEvent('keydown', { key: '<', code: 'Comma', metaKey: true, shiftKey: true });
+    assert.equal(matchesBinding(event, 'primary+shift+,', true), true);
+    assert.equal(matchesBinding(event, 'primary+,', true), false);
+    assert.equal(recordBinding(event, true), 'primary+shift+,');
+    const otherLayout = new f.dom.window.KeyboardEvent('keydown', { key: ';', code: 'Comma', metaKey: true, shiftKey: true });
+    assert.equal(matchesBinding(otherLayout, 'primary+shift+,', true), false);
+  } finally { f.dom.window.close(); }
 });

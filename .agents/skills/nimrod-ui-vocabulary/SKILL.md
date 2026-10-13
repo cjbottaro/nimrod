@@ -53,7 +53,9 @@ Resume and other saved-history actions live in the command palette, not a sideba
 | --- | --- | --- |
 | **Project bar** | Top project identity/action strip | `#workspace-bar` |
 | **Session sidebar** | Collapsible open-session navigation | `#session-sidebar` |
-| **Settings page** | Full-window preferences surface | `#settings-page` |
+| **Global Settings window** | Singleton app-owned window for global defaults and global-only preferences | Native `settings` window |
+| **Project settings page** | Full-window project override surface inside its owning project window | `#settings-page` |
+| **Settings page** | Shared preferences layout used by both scopes | `#settings-page` |
 | **Category sidebar** | Settings category navigation | `#settings-sidebar` |
 | **Settings content pane** | Independently scrolling selected category | `.settings-panel` |
 | **Transcript** | User/assistant history | `#messages` |
@@ -92,9 +94,10 @@ A **card** needn't have a visible rectangle. A **disclosure** expands/collapses;
 - **Slash suggestions** — autocomplete above the composer.
 - **Keybinding editor / key recorder** — action shortcut list and nested combination-capture dialog.
 - **Open project / Open recent project** — native directory chooser versus searchable recent-directory picker.
-- **Settings gear / Runtime paths / Zoom picker** — Settings entry, next-launch executable preferences and whole-webview scale selector.
+- **Settings gear / Runtime paths / Zoom picker** — Project settings entry in the Project bar, next-launch executable preferences and whole-webview scale selector.
+- **Global default / Project override / Use global default** — Setting provenance and the action that removes a project override, not a copied value.
 - **Desktop notification** — OS-level background alert, distinct from Pi in-app notices. **Background session alerts**, **Send test notification** and **Refresh notification diagnostics** are Settings controls.
-- **Dialog / modal shell** — choice/editing overlay versus its shared outer geometry/style. Settings is the full-window exception.
+- **Dialog / modal shell** — choice/editing overlay versus its shared outer geometry/style. Project settings is the full-window exception; Global Settings has its own native window.
 
 [Command interactions](../features/references/command-interactions.md), [keybindings](../features/references/keybindings.md), [Settings](../features/references/settings-layout.md), [notifications](../features/references/notifications.md) and [modal layout](../features/references/modal-layout.md) own specifications.
 

@@ -51,7 +51,15 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 #settings-page { box-sizing:border-box; position:fixed; inset:0; width:100%; height:100vh; height:100dvh; max-width:none; max-height:none; margin:0; padding:0; border:0; color:var(--vscode-foreground); background:var(--vscode-editor-background); }
 #settings-page[open] { display:flex; flex-direction:column; }
 #settings-page::backdrop { background:var(--vscode-editor-background); }
-.settings-header { display:flex; align-items:center; gap:18px; flex:none; min-height:48px; padding:0 20px; border-bottom:1px solid var(--vscode-panel-border); }
+.settings-header { box-sizing:border-box; display:flex; align-items:center; gap:12px; flex:none; height:48px; padding:0 20px; border-bottom:1px solid var(--vscode-panel-border); }
+.settings-heading { flex:1; min-width:0; }
+#settings-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#settings-scope-description { margin:3px 0 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; line-height:1.2; }
+#settings-global-link { flex:none; }
+.settings-source { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 16px; margin-top:6px; font-size:12px; color:var(--vscode-descriptionForeground); }
+.settings-reset { padding:2px 0; background:transparent; text-decoration:underline; text-underline-offset:3px; font-size:12px; }
+.settings-project-links { display:flex; flex-direction:column; align-items:start; gap:8px; }
+.settings-project-links button { max-width:100%; text-align:left; overflow-wrap:anywhere; }
 #settings-title { margin:0; font-size:17px; letter-spacing:0; }
 .settings-content { overflow:hidden; }
 .settings-panel { box-sizing:border-box; flex:1; min-width:0; min-height:0; padding:20px 20px 32px; overflow:auto; }

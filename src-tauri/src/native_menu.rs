@@ -15,6 +15,8 @@ pub fn take_project_picker_request(
     requests.0.lock().unwrap().remove(window.label())
 }
 
+pub const SETTINGS_ID: &str = "nimrod.settings";
+pub const PROJECT_SETTINGS_ID: &str = "nimrod.project-settings";
 pub const QUIT_ID: &str = "nimrod.quit";
 pub const OPEN_PROJECT_ID: &str = "nimrod.open-project";
 pub const OPEN_RECENT_PROJECT_ID: &str = "nimrod.open-recent-project";
@@ -46,7 +48,16 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
         true,
         None::<&str>,
     )?;
+    let settings = MenuItem::with_id(app, SETTINGS_ID, "Settings…", true, None::<&str>)?;
+    let project_settings = MenuItem::with_id(
+        app,
+        PROJECT_SETTINGS_ID,
+        "Project Settings…",
+        true,
+        None::<&str>,
+    )?;
     let mut inserted = false;
+    let mut settings_inserted = false;
     #[cfg(target_os = "macos")]
     let quit_text = PredefinedMenuItem::quit(app, None)?.text()?;
     let minimize_text = PredefinedMenuItem::minimize(app, None)?.text()?;
@@ -60,8 +71,26 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
     for item in menu.items()? {
         if let MenuItemKind::Submenu(submenu) = item {
             if submenu.text()? == "File" {
-                submenu.insert_items(&[&open, &recent, &PredefinedMenuItem::separator(app)?], 0)?;
+                submenu.insert_items(
+                    &[
+                        &open,
+                        &recent,
+                        &project_settings,
+                        &PredefinedMenuItem::separator(app)?,
+                    ],
+                    0,
+                )?;
+                #[cfg(not(target_os = "macos"))]
+                {
+                    submenu.insert(&settings, 3)?;
+                    settings_inserted = true;
+                }
                 inserted = true;
+            }
+            #[cfg(target_os = "macos")]
+            if !settings_inserted && submenu.items()?.iter().any(|item| matches!(item, MenuItemKind::Predefined(item) if item.text().ok().as_deref() == Some(quit_text.as_str()))) {
+                submenu.insert_items(&[&settings, &PredefinedMenuItem::separator(app)?], 1)?;
+                settings_inserted = true;
             }
             for (index, item) in submenu.items()?.into_iter().enumerate() {
                 if let MenuItemKind::Predefined(item) = item {
@@ -91,7 +120,12 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
     if !inserted {
         // Tauri's Linux default has no File submenu.
         menu.insert(
-            &Submenu::with_items(app, "File", true, &[&open, &recent])?,
+            &Submenu::with_items(
+                app,
+                "File",
+                true,
+                &[&open, &recent, &project_settings, &settings],
+            )?,
             0,
         )?;
     }
@@ -101,8 +135,23 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
             "Expected exactly one macOS Quit item in Tauri's default menu",
         )));
     }
+    let _ = settings_inserted;
     app.set_menu(menu)?;
     Ok(())
+}
+
+pub fn open_project_settings(app: &tauri::AppHandle) {
+    let directories = app
+        .state::<crate::WorkspaceWindows>()
+        .directories
+        .lock()
+        .unwrap()
+        .clone();
+    if let Some(window) = app.webview_windows().values().find(|window| {
+        directories.contains_key(window.label()) && window.is_focused().unwrap_or(false)
+    }) {
+        let _ = crate::settings_window::open_project(app, window.label());
+    }
 }
 
 pub fn open_project(app: &tauri::AppHandle) {
@@ -140,12 +189,18 @@ fn request_project_picker(app: &tauri::AppHandle) -> Result<(), String> {
         .as_ref()
         .and_then(|label| windows.get(label))
         .or_else(|| {
-            windows
-                .values()
-                .find(|w| !w.label().starts_with("popout-") && w.is_focused().unwrap_or(false))
+            windows.values().find(|w| {
+                !w.label().starts_with("popout-")
+                    && w.label() != crate::settings_window::LABEL
+                    && w.is_focused().unwrap_or(false)
+            })
         })
         .or_else(|| windows.get("main"))
-        .or_else(|| windows.values().find(|w| !w.label().starts_with("popout-")))
+        .or_else(|| {
+            windows.values().find(|w| {
+                !w.label().starts_with("popout-") && w.label() != crate::settings_window::LABEL
+            })
+        })
         .cloned();
     let window = match window {
         Some(window) => window,

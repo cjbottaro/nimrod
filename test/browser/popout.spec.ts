@@ -24,7 +24,7 @@ async function popoutFixture(page: Page, text: string, language: string) {
       transformCallback: () => 1, unregisterCallback() {},
       invoke: async (command: string, args: Record<string, unknown> = {}) => {
         if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 1;
-        if (command === 'preferences_snapshot') return { text: '{}', state: {}, settingsPath: '/fixture/settings.json', statePath: '/fixture/state.json', revision: 1 };
+        if (command === 'scoped_preferences_snapshot') return { text: '{}', state: {}, settingsPath: '/fixture/settings.json', statePath: '/fixture/state.json', revision: 1 };
         if (command === 'code_popout_snapshot') return { session: 'fixture', title: 'Unused source session name', text, language };
         if (command === 'plugin:webview|set_webview_zoom') return;
         if (command === 'plugin:window|set_title') { state.__popoutTitle = String(args.value); return; }

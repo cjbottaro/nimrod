@@ -36,8 +36,8 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Snapshot storage, visibility and native reference focus | [Pop-outs](references/pop-outs.md) | [Pop-outs](../../../docs/pop-outs.md) |
 | Background alerts, previews and native click routing | [Notifications](references/notifications.md) | [Notifications](../../../docs/notifications.md) |
 | Live model/thinking configuration | [Model/thinking](references/model-thinking.md) | [Model/thinking](../../../docs/model-thinking.md) |
-| JSONC preferences, migration and window state | [Preferences](references/preferences.md) | [Settings](../../../docs/settings.md) |
-| Settings categories and independent width | [Settings layout](references/settings-layout.md) | [Settings](../../../docs/settings.md) |
+| Global defaults, project JSONC overrides, migration and window state | [Preferences](references/preferences.md) | [Settings](../../../docs/settings.md) |
+| Global Settings window, Project settings page, categories and independent width | [Settings layout](references/settings-layout.md) | [Settings](../../../docs/settings.md) |
 | Bindable actions, recorder and conflicts | [Keybindings](references/keybindings.md) | [Keybindings](../../../docs/keybindings.md) |
 | Palette page lifecycle and cancellation | [Command interactions](references/command-interactions.md) | [Command palette](../../../docs/command-palette.md) |
 | Palette command ranking and usage storage | [Command ranking](references/command-ranking.md) | [Ordering](../../../docs/command-palette.md#ordering) |

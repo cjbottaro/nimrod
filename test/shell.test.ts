@@ -14,6 +14,7 @@ import type { DeletionEvent, DeletionSnapshot } from '../src/session-deletion';
 
 // Real shell/renderer/controller bundle, mocked native boundary—not native WebKit acceptance.
 interface ShellOptions {
+  globalSettings?: boolean;
   storage?: Record<string, unknown>;
   nativeDrafts?: Record<string, unknown>;
   draftFlushError?: string;
@@ -64,7 +65,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       build.onLoad({ filter: /.*/, namespace: 'raw' }, args => ({ contents: readFileSync(args.path, 'utf8'), loader: 'text' }));
     } }],
   });
-  const dom = new JSDOM(readFileSync('index.html', 'utf8'), { url: options.popout ? 'http://tauri.localhost/?popout' : 'http://tauri.localhost', runScripts: 'outside-only', pretendToBeVisual: true });
+  const dom = new JSDOM(readFileSync('index.html', 'utf8'), { url: options.popout ? 'http://tauri.localhost/?popout' : options.globalSettings ? 'http://tauri.localhost/?settings=appearance' : 'http://tauri.localhost', runScripts: 'outside-only', pretendToBeVisual: true });
   const win = dom.window;
   stubDialogs(win);
   if (options.clock) win.Date.now = options.clock;
@@ -102,6 +103,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   const preferences = new MemoryPreferences();
   Object.assign(preferences.value.state, options.appState);
   const callbacks = new Map<number, (event: unknown) => void>();
+  const preferenceCallbacks = new Set<number>();
   let deletionEvent: ((event: DeletionEvent, target?: string) => void) | undefined;
   let notificationClick: ((event: unknown, target?: string) => void) | undefined;
   let projectPicker: ((target?: string) => void) | undefined;
@@ -127,7 +129,10 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
           const listenerTarget = args.target as { kind: string; label?: string };
           if (!target || listenerTarget.kind === 'Any' || listenerTarget.label === target) callbacks.get(Number(args.handler))?.({ payload });
         };
-        if (args.event === 'nimrod-preferences') preferences.receive = payload => callbacks.get(Number(args.handler))?.({ payload });
+        if (args.event === 'nimrod-preferences') {
+          preferenceCallbacks.add(Number(args.handler));
+          preferences.receive = payload => { for (const handler of preferenceCallbacks) callbacks.get(handler)?.({ payload }); };
+        }
         if (args.event === 'nimrod-session-deletion') deletionEvent = (payload, target) => {
           const listenerTarget = args.target as { kind: string; label?: string };
           // Tauri Any listeners receive even events emitted to a different label.
@@ -140,7 +145,15 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         return 1;
       }
       if (command === 'plugin:event|unlisten') return 1;
-      if (command.startsWith('preferences_') || command === 'record_command_usage') return preferences.invoke(command, args);
+      if (command === 'scoped_preferences_snapshot') {
+        preferences.value.projectPath = workspace ? workspace + '/.nimrod/settings.json' : undefined;
+        preferences.value.projectText ??= '{}\n';
+        return preferences.snapshot();
+      }
+      if (command.startsWith('preferences_') || command === 'project_preferences_settings' || command === 'record_command_usage') return preferences.invoke(command, args);
+      if (command === 'open_global_settings' || command === 'open_owned_project_settings') return;
+      if (command === 'take_project_settings_request' || command === 'take_settings_category') return false;
+      if (command === 'list_project_overrides') return [];
       if (command === 'plugin:window|is_focused') return options.focused?.() ?? true;
       if (command === 'write_performance_report') {
         if (options.performanceControl?.writeError) throw new Error(options.performanceControl.writeError);
@@ -349,14 +362,14 @@ test('bundled picker previews locally, restores on cancellation, commits offline
     assert.equal(f.element<HTMLButtonElement>('palette-refresh').hidden, true);
     key('Escape'); await f.tick(); assert.equal(root.dataset.theme, 'nimrod'); assert.equal(f.win.document.activeElement, prompt);
     await open(); query('Dracula'); key('Enter'); await f.tick(); await f.tick();
-    assert.equal(parseSettings(f.preferences.value.text)['appearance.theme'], 'dracula');
+    assert.equal(JSON.parse(f.preferences.value.projectText!)['appearance.theme'], 'dracula');
     await open(); query('Nord'); key('Enter'); key('Enter'); await f.tick(); await f.tick();
-    const selected = String(parseSettings(f.preferences.value.text)['appearance.theme']);
+    const selected = String(JSON.parse(f.preferences.value.projectText!)['appearance.theme']);
     assert.match(selected, /^catalog-/); assert.equal(root.dataset.theme, selected);
-    assert.equal((parseSettings(f.preferences.value.text)['appearance.importedThemes'] as unknown[]).length, 0);
+    assert.equal((parseSettings(f.preferences.value.text)['appearance.importedThemes'] as unknown[] ?? []).length, 0);
     assert.equal(f.calls.filter(c => c.command === 'fetch_gogh_catalog').length, 0);
     await open(); query('Nimrod'); assert.equal(root.dataset.theme, 'nimrod');
-    f.preferences.external(f.preferences.value.text.replace(selected, 'dracula')); await f.tick();
+    f.preferences.externalProject(f.preferences.value.projectText!.replace(selected, 'dracula')); await f.tick();
     key('Escape'); await f.tick(); assert.equal(root.dataset.theme, 'dracula', 'cancel restores latest committed selection');
     assert.equal(f.win.document.querySelector('.session-view'), conversation); assert.equal(prompt.value, 'Keep theme draft');
     f.preferences.external('{"keybindings":{"select-theme":["primary+j"]}}'); await f.tick();
@@ -376,7 +389,7 @@ test('theme persistence failure restores committed colors without replaying acce
   const key = (key: string) => input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
   try {
     let saves = 0;
-    f.preferences.settings = async () => { saves++; throw new Error('fixture disk full'); };
+    f.preferences.projectSettings = async () => { saves++; throw new Error('fixture disk full'); };
     f.openPalette(); query('Select theme'); key('Enter'); await f.tick(); await f.tick();
     query('Nord'); assert.equal(f.win.document.documentElement.dataset.themeMode, 'dark');
     key('Enter'); await f.tick(); await f.tick();
@@ -409,7 +422,7 @@ test('palette commands have registered shortcuts (theme intentionally unbound) a
     f.openPalette();
     const rows = [...f.element('palette-list').querySelectorAll('[role=option]')];
     assert.ok(rows.length > 0);
-    for (const row of rows) if (!/Select theme|Reload card plugins|Capture performance report/.test(row.textContent || '')) assert.ok(row.querySelector('kbd')?.textContent, row.textContent!);
+    for (const row of rows) if (!/Select theme|Reload card plugins|Capture performance report|Edit keybindings/.test(row.textContent || '')) assert.ok(row.querySelector('kbd')?.textContent, row.textContent!);
     assert.doesNotMatch(f.element('palette-list').textContent!, /offline demo|session file/i);
     f.element<HTMLDialogElement>('command-palette').close(); await f.tick();
     f.preferences.external('{"keybindings":{"demo":["primary+d"],"file":["primary+f"]}}'); await f.tick();
@@ -422,15 +435,16 @@ test('palette commands have registered shortcuts (theme intentionally unbound) a
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: ',', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
     await f.tick();
     assert.equal(f.element<HTMLDialogElement>('settings-page').open, true);
-    assert.equal(f.win.document.activeElement, f.element('keybinding-search'));
-    assert.equal(f.win.document.querySelector('.keybinding-row[data-action="demo"], .keybinding-row[data-action="file"]'), null);
+    assert.equal(f.win.document.activeElement, f.element('settings-back'));
+    assert.equal(f.element('settings-category-keybindings').hidden, true);
     f.back();
-    f.preferences.external('{"keybindings":{"keybindings":[]}}'); await f.tick();
+    f.preferences.external('{"keybindings":{"project-settings":[]}}'); await f.tick();
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: ',', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
     assert.equal(f.element<HTMLDialogElement>('settings-page').open, false);
     f.preferences.external('{"keybindings":{"keybindings":["primary+j"]}}'); await f.tick();
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'j', metaKey: true, bubbles: true, cancelable: true }));
-    assert.equal(f.win.document.activeElement, f.element('keybinding-search'));
+    await f.tick();
+    assert.ok(f.calls.some(call => call.command === 'open_global_settings' && call.args.category === 'keybindings'));
   } finally { f.win.close(); }
 });
 
@@ -606,7 +620,7 @@ test('customizable requested shortcuts use normal session/model/effort actions w
     f.openPalette(); assert.equal(f.element<HTMLDialogElement>('command-palette').open, false, 'old palette binding is disabled');
     key('l'); assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
     assert.match(f.element('palette-list').textContent!, /Ctrl\+J/);
-    escape(); f.openSettings(); assert.ok(f.element('keybindings-section')); assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
+    escape(); f.openSettings(); assert.equal(f.element('settings-category-keybindings').hidden, true); assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
   } finally { f.win.close(); }
 });
 
@@ -1981,9 +1995,11 @@ test('send auto-follow saves and synchronizes without moving readers or restarti
     const picker = f.element<HTMLSelectElement>('send-auto-follow');
     assert.equal(picker.value, 'whenIdle');
     picker.value = 'never'; picker.dispatchEvent(new f.win.Event('change')); await f.tick();
-    assert.equal(parseSettings(f.preferences.value.text)['appearance.autoFollowAfterSending'], 'never');
+    assert.equal(JSON.parse(f.preferences.value.projectText!)['appearance.autoFollowAfterSending'], 'never');
     assert.equal(picker.disabled, false);
     f.preferences.external('{"appearance.autoFollowAfterSending":"always"}');
+    assert.equal(picker.value, 'never', 'an explicit project override does not follow global changes');
+    f.element('send-auto-follow').nextElementSibling!.querySelector<HTMLButtonElement>('button')!.click(); await f.tick();
     assert.equal(picker.value, 'always');
     assert.equal(pane.scrollTop, 200);
     assert.equal(f.calls.filter(c => ['start_pi', 'stop_pi', 'write_pi'].includes(c.command)).length, before);
@@ -1991,7 +2007,7 @@ test('send auto-follow saves and synchronizes without moving readers or restarti
     assert.equal(picker.value, 'always', 'invalid external edits retain the last valid setting');
     f.preferences.external('{}');
     assert.equal(picker.value, 'whenIdle');
-    f.preferences.settings = async () => { throw new Error('Fixture save failure'); };
+    f.preferences.projectSettings = async () => { throw new Error('Fixture save failure'); };
     picker.value = 'never'; picker.dispatchEvent(new f.win.Event('change')); await f.tick();
     assert.equal(picker.value, 'whenIdle', 'failed saves restore the committed value');
     assert.equal(picker.disabled, false);
@@ -2288,7 +2304,7 @@ test('empty workspace actions work and closing the last session does not return 
 });
 
 test('external settings edits synchronize Appearance and saved Runtime while preserving unsaved fields', async () => {
-  const f = await fixture();
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
   try {
     f.openSettings();
     const pi = f.element<HTMLInputElement>('pi-path');
@@ -2315,10 +2331,12 @@ test('external settings edits synchronize Appearance and saved Runtime while pre
   } finally { f.dom.window.close(); }
 });
 
-test('shell boots without Pi and Settings holds application preferences, not session controls', async () => {
-  const f = await fixture(); const { win, calls, element } = f;
+test('project shell boots without Pi and Settings holds layered preferences, not session controls', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' }); const { win, calls, element } = f;
   try {
-    assert.deepEqual(calls.filter(c => !(c.command === 'plugin:event|listen' && ['nimrod-draft-error', 'nimrod-link-error', 'tauri://close-requested'].includes(String(c.args.event)))).map(c => c.command), ['plugin:event|listen', 'preferences_snapshot', 'preferences_migrate', 'load_personal_card_plugins', 'plugin:event|listen', 'plugin:event|listen', 'plugin:webview|set_webview_zoom', 'plugin:event|listen', 'plugin:event|listen', 'stop_pi', 'runtime_defaults', 'window_workspace', 'deletion_snapshot', 'take_project_picker_request']);
+    assert.ok(calls.some(c => c.command === 'scoped_preferences_snapshot'));
+    assert.ok(calls.some(c => c.command === 'runtime_defaults'));
+    assert.equal(calls.some(c => c.command === 'start_pi' || c.command === 'write_pi'), false);
     assert.equal(calls.find(c => c.command === 'plugin:webview|set_webview_zoom')!.args.value, 1.25);
     assert.equal(element<HTMLSelectElement>('zoom-level').value, '125');
     const page = element<HTMLDialogElement>('settings-page');
@@ -2332,7 +2350,7 @@ test('shell boots without Pi and Settings holds application preferences, not ses
     themes.value = 'dracula'; themes.dispatchEvent(new win.Event('change')); await f.tick();
     assert.equal(win.document.documentElement.dataset.theme, 'dracula');
     assert.equal(win.document.documentElement.style.getPropertyValue('--vscode-editor-background'), '#282a36');
-    assert.equal(JSON.parse(f.preferences.value.text.replace(/^\/\/[^\n]*\n/, ''))['appearance.theme'], 'dracula');
+    assert.equal(JSON.parse(f.preferences.value.projectText!)['appearance.theme'], 'dracula');
     // Even a synthetic launch request while Settings is open cannot start a process.
     element<HTMLButtonElement>('start-temporary').click();
     assert.equal(calls.filter(c => c.command === 'start_pi').length, 0);
@@ -2367,13 +2385,13 @@ test('Settings preserves a live conversation and saving paths does not mutate it
     Object.defineProperties(pane, { scrollHeight: { configurable: true, value: 2000 }, clientHeight: { configurable: true, value: 500 } });
     pane.scrollTop = 200;
     const prompt = element<HTMLTextAreaElement>('prompt'); prompt.value = 'keep my draft'; prompt.dispatchEvent(new win.Event('input')); prompt.focus();
-    win.dispatchEvent(new win.KeyboardEvent('keydown', { key: ',', metaKey: true, cancelable: true }));
+    win.dispatchEvent(new win.KeyboardEvent('keydown', { key: ',', metaKey: true, shiftKey: true, cancelable: true }));
     assert.equal(element<HTMLDialogElement>('settings-page').open, true);
     assert.equal(element('conversation').hidden, false);
     element<HTMLInputElement>('pi-path').value = '/new/pi'; element<HTMLInputElement>('node-path').value = '/new/node';
     element('runtime-settings').dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true }));
     await f.tick();
-    assert.equal(JSON.parse(f.preferences.value.text.replace(/^\/\/[^\n]*\n/, ''))['runtime.piPath'], '/new/pi');
+    assert.equal(JSON.parse(f.preferences.value.projectText!)['runtime.piPath'], '/new/pi');
     assert.equal(JSON.stringify(calls.find(c => c.command === 'start_pi')!.args.config), original);
     f.emit({ type: 'tool_execution_update', toolCallId: 'tool', toolName: 'bash', partialResult: { content: [{ type: 'text', text: 'still streaming' }] } });
     await f.tick();
@@ -3271,4 +3289,47 @@ test('native persistence never delays a steer, and finishing a flush after Stop 
     assert.ok(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'clear_queue'));
     f.disconnect();
   } finally { release(); f.dom.window.close(); }
+});
+
+test('global Settings boots without any project services', async () => {
+  const f = await fixture(undefined, { globalSettings: true });
+  try {
+    await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('settings-page').open, true);
+    assert.equal(f.element('workspace-bar').hidden, true);
+    assert.equal(f.element('settings-category-keybindings').hidden, false);
+    assert.equal(f.element('settings-global-link').hidden, true);
+    assert.equal(f.element('performance-capture').hidden, true);
+    assert.equal(f.win.document.querySelector('.settings-source'), null);
+    assert.equal(f.calls.some(call => ['start_pi', 'stop_pi', 'write_pi', 'drafts_load', 'sync_popout_sessions', 'load_personal_card_plugins'].includes(call.command)), false);
+    const theme = f.element<HTMLSelectElement>('theme-picker');
+    theme.value = 'dracula'; theme.dispatchEvent(new f.win.Event('change')); await f.tick();
+    assert.equal(parseSettings(f.preferences.value.text)['appearance.theme'], 'dracula');
+    assert.equal(f.calls.some(call => call.command === 'project_preferences_settings'), false);
+  } finally { f.win.close(); }
+});
+
+test('project settings routes scope shortcuts and removes overrides rather than copying defaults', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    const shortcut = (shiftKey: boolean) => f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: ',', metaKey: true, shiftKey, bubbles: true, cancelable: true }));
+    shortcut(false);
+    assert.ok(f.calls.some(call => call.command === 'open_global_settings'));
+    assert.equal(f.element<HTMLDialogElement>('settings-page').open, false);
+    shortcut(true);
+    assert.equal(f.element<HTMLDialogElement>('settings-page').open, true);
+    assert.match(f.element('settings-title').textContent!, /Project settings — project/);
+    const picker = f.element<HTMLSelectElement>('theme-picker');
+    assert.equal(f.element('theme-picker-source').textContent, 'Global default');
+    assert.equal([...picker.options].some(option => option.value === '$import'), false);
+    picker.value = 'dracula'; picker.dispatchEvent(new f.win.Event('change')); await f.tick();
+    assert.equal(f.element('theme-picker-source').textContent, 'Project override');
+    f.preferences.external('{"appearance.theme":"tokyo-night"}'); await f.tick();
+    assert.equal(picker.value, 'dracula');
+    picker.nextElementSibling!.querySelector<HTMLButtonElement>('button')!.click(); await f.tick();
+    assert.equal(picker.value, 'tokyo-night');
+    assert.equal(f.element('theme-picker-source').textContent, 'Global default');
+    assert.equal(JSON.parse(f.preferences.value.projectText!)['appearance.theme'], undefined);
+    assert.equal(f.calls.some(call => call.command === 'start_pi' || call.command === 'write_pi'), false);
+  } finally { f.win.close(); }
 });

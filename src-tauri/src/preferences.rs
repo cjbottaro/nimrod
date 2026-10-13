@@ -32,7 +32,7 @@ pub fn directory(home: &Path, override_path: Option<PathBuf>, fallback: &str) ->
         .join("nimrod")
 }
 
-fn read(path: &Path) -> Result<Option<String>, String> {
+pub(crate) fn read(path: &Path) -> Result<Option<String>, String> {
     match fs::metadata(path) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(e.to_string()),
@@ -115,7 +115,7 @@ pub(crate) fn jsonc(text: &str) -> Result<Value, String> {
     serde_json::from_slice(&bytes).map_err(|e| e.to_string())
 }
 
-fn validate(text: &str) -> Result<(), String> {
+pub(crate) fn validate(text: &str) -> Result<(), String> {
     let value = jsonc(text)?;
     let object = value.as_object().ok_or("Settings must be a JSON object")?;
     if object
@@ -178,7 +178,9 @@ fn validate(text: &str) -> Result<(), String> {
     }
     if let Some(mode) = object.get("appearance.autoFollowAfterSending") {
         if !matches!(mode.as_str(), Some("always" | "whenIdle" | "never")) {
-            return Err("appearance.autoFollowAfterSending must be always, whenIdle or never".into());
+            return Err(
+                "appearance.autoFollowAfterSending must be always, whenIdle or never".into(),
+            );
         }
     }
     if let Some(zoom) = object.get("appearance.zoom") {
@@ -242,7 +244,7 @@ fn validate(text: &str) -> Result<(), String> {
 }
 
 // Same-directory replacement; never delete the last good file before replacement.
-fn write_atomic(path: &Path, text: &str) -> Result<(), String> {
+pub(crate) fn write_atomic(path: &Path, text: &str) -> Result<(), String> {
     let target = if fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink()) {
         path.canonicalize().map_err(|e| e.to_string())?
     } else {
@@ -530,12 +532,17 @@ pub fn watch(app: &tauri::AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         let mut previous = String::new();
+        let mut previous_projects = String::new();
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             let snapshot = app.state::<Preferences>().snapshot();
             let fingerprint = serde_json::to_string(&snapshot).unwrap_or_default();
-            if fingerprint != previous {
+            let projects = app
+                .state::<crate::project_preferences::ProjectPreferences>()
+                .refresh_all(&snapshot.text);
+            if fingerprint != previous || projects != previous_projects {
                 previous = fingerprint;
+                previous_projects = projects;
                 let _ = app.emit("nimrod-preferences", snapshot);
             }
         }
@@ -600,11 +607,17 @@ mod tests {
         assert!(validate("{\"notifications.enabled\":\"yes\"}").is_err());
         validate("{\"notifications.enabled\":false}").unwrap();
         for mode in ["always", "whenIdle", "never"] {
-            validate(&format!(r#"{{"appearance.autoFollowAfterSending":"{mode}"}}"#)).unwrap();
+            validate(&format!(
+                r#"{{"appearance.autoFollowAfterSending":"{mode}"}}"#
+            ))
+            .unwrap();
         }
         for mode in ["null", "true", "1", r#""idle""#, "{}", r#"["always"]"#] {
             assert!(
-                validate(&format!(r#"{{"appearance.autoFollowAfterSending":{mode}}}"#)).is_err()
+                validate(&format!(
+                    r#"{{"appearance.autoFollowAfterSending":{mode}}}"#
+                ))
+                .is_err()
             );
         }
         validate("{\"diagnostics.performance\":true}").unwrap();

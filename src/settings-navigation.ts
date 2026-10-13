@@ -4,7 +4,7 @@ export type SettingsCategory = 'appearance' | 'notifications' | 'diagnostics' | 
 export function installSettingsNavigation(page: HTMLDialogElement) {
   const document = page.ownerDocument;
   const list = page.querySelector<HTMLElement>('#settings-categories')!;
-  const tabs = [...list.querySelectorAll<HTMLButtonElement>('[role=tab]')];
+  const tabs = [...list.querySelectorAll<HTMLButtonElement>('[role=tab]')].filter(tab => !tab.hidden);
   const panels = [...page.querySelectorAll<HTMLElement>('.settings-panel')];
   let selected: SettingsCategory = 'appearance';
   const blocked = () => !page.open || [...document.querySelectorAll('dialog[open], #dialog.open')].some(dialog => dialog !== page);

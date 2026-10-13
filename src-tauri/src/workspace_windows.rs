@@ -130,6 +130,9 @@ pub fn route_workspace(
     source: Option<&str>,
     cwd: PathBuf,
 ) -> Result<WorkspaceOpened, String> {
+    if source.is_some_and(|label| label != "main" && !label.starts_with("workspace-")) {
+        return Err("This auxiliary window cannot be rebound to a project".into());
+    }
     let workspaces = app.state::<WorkspaceWindows>();
     let cwd = cwd
         .canonicalize()

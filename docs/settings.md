@@ -1,12 +1,24 @@
 # Settings
 
-Open the Project bar's gear or **⌘/Ctrl+,**. Choose Appearance, Notifications, Diagnostics, Keybindings or Runtime in the category sidebar. **Back** or **Escape** returns to your project.
+**Global Settings** opens in its own reusable window through **⌘/Ctrl+,**, the native **Settings…** menu item, or the command palette. It contains Appearance, Notifications, Diagnostics, Keybindings and Runtime. Opening it again focuses the existing window; Close or Escape closes that window. No project is required.
 
-Pi keeps running while Settings is open. Returning preserves your draft, conversation and reading position and restores prior focus when available. Pi extension dialogs retain priority.
+**Project settings** opens inside the current project window through the Project bar's gear, **⌘/Ctrl+Shift+,**, or the command palette. The header names the project. **Back** or **Escape** returns to its conversation; **Open global settings** opens the separate defaults window.
+
+Pi keeps running. Project settings preserves your draft, conversation and reading position and restores prior focus when available. Pi extension dialogs retain priority. Global Settings does not launch, resume, stop or restart agents.
+
+## Global defaults and project overrides
+
+Project settings shows effective values, not a second independent configuration. **Global default** means the project follows the global value (or the built-in default/runtime discovery when omitted globally). Changing a control creates a **Project override**. **Use global default** removes that override and immediately follows the current global value again—it does not copy that value into the project file.
+
+Overrides stay explicit even if they match the global value. Global edits update inheriting projects, but never replace explicit project values. The Appearance pane in global Settings links to open projects with overrides.
+
+Project overrides currently cover **theme, zoom, auto-follow after sending, and Pi/Node runtime paths**. Notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration remain global-only. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
+
+This layering applies only to Nimrod preferences. Pi retains its own configuration and precedence.
 
 ## Categories and width
 
-Category selection, unsaved Runtime fields, Keybindings search and each category's reading position survive navigation and reopening Settings in the same window, not app restart. **Edit keybindings…** / **⌘/Ctrl+Shift+,** opens Keybindings and focuses search.
+Category selection, unsaved Runtime fields and each category's reading position survive navigation and reopening Project settings in the same window, not app restart. In global Settings, these values and Keybindings search survive category changes while the Settings window remains open. **Edit keybindings…** in the command palette opens global Settings at Keybindings and focuses search; it has no default shortcut.
 
 Use Up/Down in the category sidebar to cycle categories, Home/End for first/last, and Tab to enter the pane.
 
@@ -16,9 +28,9 @@ Escape during a drag cancels resizing; the next Escape closes Settings.
 
 ## Appearance
 
-- **Theme:** changes apply immediately and synchronize across windows. See [Themes](themes.md) for live previews, bundled themes and imports.
+- **Theme:** global changes update inheriting windows; project changes apply only to that project. See [Themes](themes.md) for live previews, bundled themes and imports.
 - **Zoom:** scales the whole app, default **125%**, range **75–200%**. Use the picker or **⌘/Ctrl + / −**; **⌘/Ctrl+0** resets to 100%. Zoom is remembered and doesn't change drafts.
-- **Auto-follow after sending:** **When idle** (default) jumps to the bottom and follows new output for idle sends, but preserves your position for steering and queued follow-ups. **Always** does this for every message submission; **Never** preserves current scroll intent, including auto-follow if already active. Scrolling upward always pauses following. Changes synchronize across windows and affect subsequent sends without moving your current view. See [Reading conversations](reading-conversations.md#auto-follow-and-reading-older-output).
+- **Auto-follow after sending:** **When idle** (default) jumps to the bottom and follows new output for idle sends, but preserves your position for steering and queued follow-ups. **Always** does this for every message submission; **Never** preserves current scroll intent, including auto-follow if already active. Scrolling upward always pauses following. Global changes update inheriting projects; project overrides affect only that project. Changes affect subsequent sends without moving your current view. See [Reading conversations](reading-conversations.md#auto-follow-and-reading-older-output).
 - Theme/import/zoom errors use the shared [notice strip](error-messages.md). Non-error progress and import details stay alongside the controls.
 
 ## Notifications
@@ -27,7 +39,7 @@ Escape during a drag cancels resizing; the next Escape closes Settings.
 
 ## Diagnostics
 
-**Performance diagnostics** are off by default. Enable timing-only in-memory history, then choose **Capture performance report** when typing or scrolling feels slow. The saved path appears here; capture is also available through the command palette and can be bound to a shortcut. See [Performance reports](performance-diagnostics.md) for privacy, local storage and limitations.
+**Performance diagnostics** are off by default. Enable timing-only in-memory history in global Settings, then choose **Capture performance report** in the affected project window’s command palette when typing or scrolling feels slow. Capture can also be bound to a shortcut. The project window’s notice strip shows capture progress and the saved path; the command’s detail also retains that path. See [Performance reports](performance-diagnostics.md) for privacy, local storage and limitations.
 
 ## Keybindings
 
@@ -39,7 +51,7 @@ Pi and Node paths are discovered automatically; override them here if needed.
 
 1. Wait for initial detection.
 2. Edit executable names or paths.
-3. Click **Save runtime paths**, or press Enter in the form.
+3. Click **Save runtime paths**, or press Enter in the form. In Project settings, only edited fields become overrides; untouched fields keep inheriting.
 4. Start a new session to use the saved paths.
 
 Saving never changes an already-running process. Unsaved fields survive navigation in this window, not restart, and aren't used for launch. External settings edits update saved launch paths without replacing dirty fields; Save then replaces those corresponding values. Invalid/failed saves retain the prior saved paths.
@@ -51,7 +63,8 @@ On Windows, choose Pi's JS entry point and `node.exe` explicitly; npm `.cmd` wra
 Resolved paths appear under Runtime. Defaults are:
 
 ```text
-~/.config/nimrod/settings.json     # User-editable JSONC preferences
+<project>/.nimrod/settings.json   # Optional project overrides (JSONC)
+~/.config/nimrod/settings.json     # Global defaults (JSONC)
 ~/.local/state/nimrod/state.json   # App-managed bookkeeping
 ~/.local/state/nimrod/drafts/      # Native per-session draft records
 ~/.local/state/nimrod/popouts/     # Saved reference snapshots
@@ -74,12 +87,14 @@ Absolute `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the roots. Empty/relati
 
 Personal [card plugins](card-plugins.md#personal-typescript-plugins) are discovered/compiled automatically from the dedicated user directory; `cards.autoLoad: false` disables this directory-trusted workflow. Existing manifests use `cards.plugins` / `cards.trustedPlugins`; `cards.renderers` overrides tool matching. Declarative manifests need no executable trust. They are configured in this file, not a dedicated Settings category. Package load errors use the shared notice strip, including while Settings is open; catalog changes affect newly mounted cards without restarting agents.
 
-Omitted keys use defaults or runtime discovery. Imported themes live in `appearance.importedThemes`; [keybinding overrides](keybindings.md#configuration-file) live in `keybindings`. Pi's settings remain Pi-owned. [Drafts](drafts.md) use separate Rust-managed per-session files with debounced asynchronous saves; legacy webview drafts are ignored without migration.
+The project file accepts only the five project-overridable keys listed above. Nimrod creates it only on an explicit override save, not when opening a project or Settings. There is no ancestor-directory discovery: the canonical project directory is the only project scope. You can choose whether to version-control `.nimrod/settings.json`; imported theme IDs refer to your global theme library.
+
+Omitted project keys inherit global settings; omitted global keys use defaults or runtime discovery. Imported themes live in `appearance.importedThemes`; [keybinding overrides](keybindings.md#configuration-file) live in `keybindings`. Pi's settings remain Pi-owned. [Drafts](drafts.md) use separate Rust-managed per-session files with debounced asynchronous saves; legacy webview drafts are ignored without migration.
 
 Valid external edits update open windows. Invalid files keep the last valid values and show an error in the shared notice strip; correcting the file clears it. UI saves preserve comments and unrelated keys, refuse malformed files and report detected conflicts rather than silently retrying. External editors aren't locked.
 
-Removing settings resets preferences. Removing state clears remembered disk bookkeeping without closing live sessions and can allow legacy migration again on next startup. Existing configuration takes precedence during legacy migration; source data is retained.
+Removing a project settings file returns that project to global defaults. Removing global settings resets global defaults without removing project overrides. Removing state clears remembered disk bookkeeping without closing live sessions and can allow legacy migration again on next startup. Existing configuration takes precedence during legacy migration; source data is retained.
 
 Window size, placement and maximized state are saved per project on orderly close/quit. Missing-display fallback is supported, but abrupt termination can lose recent geometry and native multi-display/DPI behavior remains unverified.
 
-Project-specific settings/ancestor-directory discovery and cloud sync are not implemented.
+Ancestor-directory discovery and cloud sync are not implemented. Native acceptance of the separate Settings window, shortcuts and multi-window behavior still needs verification on macOS; Linux behavior remains unverified.

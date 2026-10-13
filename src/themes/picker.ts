@@ -5,6 +5,7 @@ interface ThemeHost {
   read(): unknown;
   save(library: ThemeLibrary): void | Promise<void>;
   newId(): string;
+  libraryEdits?: boolean;
   error?(message?: string): void;
 }
 interface ThemeElements {
@@ -47,8 +48,8 @@ export function installThemes(elements: ThemeElements, host: ThemeHost): {
     const imported = document.createElement('optgroup'); imported.label = 'Imported';
     imported.append(...state.imports.map(theme => option(theme.id, theme.name)));
     const actions = document.createElement('optgroup'); actions.label = 'Themes';
-    actions.append(option('$import', 'Import color theme…'));
-    if (state.imports.some(theme => theme.id === state.selected)) actions.append(option('$remove', 'Remove current imported theme'));
+    if (host.libraryEdits !== false) actions.append(option('$import', 'Import color theme…'));
+    if (host.libraryEdits !== false && state.imports.some(theme => theme.id === state.selected)) actions.append(option('$remove', 'Remove current imported theme'));
     select.replaceChildren(builtins, bundled, ...(state.imports.length ? [imported] : []), actions);
     select.value = state.selected;
     select.title = `Color theme: ${state.selected === 'nimrod' ? 'Nimrod scheme (follows system appearance)' : selectedTheme(state)?.name}`;
@@ -66,7 +67,7 @@ export function installThemes(elements: ThemeElements, host: ThemeHost): {
   apply(); options();
 
   async function importFile(input: Pick<File, 'name' | 'size' | 'text'>): Promise<void> {
-    if (disposed) return;
+    if (disposed || host.libraryEdits === false) return;
     const request = ++generation;
     select.disabled = true;
     try {
@@ -91,9 +92,9 @@ export function installThemes(elements: ThemeElements, host: ThemeHost): {
     const selected = select.value;
     select.value = state.selected;
     notice.hidden = true;
-    if (selected === '$import') { file.value = ''; file.click(); return; }
+    if (selected === '$import' && host.libraryEdits !== false) { file.value = ''; file.click(); return; }
     try {
-      if (selected === '$remove') await commit({ ...state, selected: 'nimrod', imports: state.imports.filter(theme => theme.id !== state.selected) });
+      if (selected === '$remove' && host.libraryEdits !== false) await commit({ ...state, selected: 'nimrod', imports: state.imports.filter(theme => theme.id !== state.selected) });
       else if (['nimrod', ...BUILTIN_THEMES.map(theme => theme.id), ...CATALOG_THEMES.map(entry => entry.theme.id), ...state.imports.map(theme => theme.id)].includes(selected)) await commit({ ...state, selected });
     } catch (error) { options(); tell(`Could not save theme settings: ${String(error)}`, true); }
   };

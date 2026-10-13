@@ -15,8 +15,9 @@ export const ACTIONS = [
   { id: 'sidebar', label: 'Toggle session sidebar', scope: 'project', defaults: ['primary+b'] },
   { id: 'previous', label: 'Previous open session', scope: 'project', defaults: ['primary+shift+['] },
   { id: 'next', label: 'Next open session', scope: 'project', defaults: ['primary+shift+]'] },
-  { id: 'settings', label: 'Settings', scope: 'app', defaults: ['primary+,'] },
-  { id: 'keybindings', label: 'Edit keybindings…', scope: 'project', defaults: ['primary+shift+,'] },
+  { id: 'settings', label: 'Global Settings…', scope: 'app', defaults: ['primary+,'] },
+  { id: 'project-settings', label: 'Project settings…', scope: 'app', defaults: ['primary+shift+,'] },
+  { id: 'keybindings', label: 'Edit keybindings…', scope: 'app', defaults: [] },
   { id: 'zoom-in', label: 'Zoom in', scope: 'app', defaults: ['primary+plus'] },
   { id: 'zoom-out', label: 'Zoom out', scope: 'app', defaults: ['primary+-'] },
   { id: 'zoom-reset', label: 'Reset zoom to 100%', scope: 'app', defaults: ['primary+0'] },
@@ -74,6 +75,7 @@ function optionBaseKey(event: KeyboardEvent, mac?: boolean): string | undefined 
 function eventKey(event: KeyboardEvent, mac?: boolean): string {
   const optionKey = optionBaseKey(event, mac);
   if (optionKey) return optionKey;
+  if (event.code === 'Comma' && [',', '<'].includes(event.key)) return ',';
   if (event.code === 'BracketLeft') return '[';
   if (event.code === 'BracketRight') return ']';
   if (event.key === '+' || event.key === '=') return 'plus';
@@ -118,6 +120,8 @@ export function changeBinding(overrides: KeyOverrides, id: ActionId, bindings: r
 
 export function installKeybindingDispatch(window: Window, host: {
   read(): KeyOverrides;
+  settingsWindow?: boolean;
+  actions?: readonly ActionId[];
   enabled(id: ActionId): boolean;
   run(id: ActionId): void | Promise<unknown>;
   error(error: unknown): void;
@@ -128,7 +132,7 @@ export function installKeybindingDispatch(window: Window, host: {
     if (!event.metaKey && !event.ctrlKey && !/^f\d+$/i.test(event.key)) return;
     const overrides = host.read();
     const dialogs = [...window.document.querySelectorAll('dialog[open], #dialog.open')];
-    const candidates = ACTIONS.filter(action => (!dialogs.length || action.scope === 'app' && dialogs.every(dialog => dialog.id === 'settings-page')) && bindingsFor(action.id, overrides).some(binding => matchesBinding(event, binding, mac)));
+    const candidates = ACTIONS.filter(action => (!host.actions || host.actions.includes(action.id)) && (!dialogs.length || (action.scope === 'app' || host.settingsWindow && action.id === 'close') && dialogs.every(dialog => dialog.id === 'settings-page')) && bindingsFor(action.id, overrides).some(binding => matchesBinding(event, binding, mac)));
     if (!candidates.length) return;
     // Consume a configured shortcut even when unavailable/repeated; never fall
     // through to a destructive native editing default such as Cmd-Backspace.
