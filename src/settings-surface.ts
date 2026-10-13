@@ -33,6 +33,8 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   }) : undefined;
   if (!global) {
     for (const category of ['notifications', 'diagnostics', 'keybindings']) required('settings-category-' + category).hidden = true;
+    required('settings-zoom').hidden = true;
+    required('settings-send-auto-follow').hidden = true;
   }
   const settingsNavigation = installSettingsNavigation(required<HTMLDialogElement>('settings-page'));
   const settingsSidebarWidthKey = 'nimrod.settings.sidebar.width';
@@ -187,8 +189,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   const sources = new Map<ProjectSettingKey, { status: HTMLElement; reset: HTMLButtonElement }>();
   if (!global) {
     const controls: [ProjectSettingKey, string][] = [
-      ['appearance.theme', 'theme-picker'], ['appearance.zoom', 'zoom-level'],
-      ['appearance.autoFollowAfterSending', 'send-auto-follow'],
+      ['appearance.theme', 'theme-picker'],
       ['runtime.piPath', 'pi-path'], ['runtime.nodePath', 'node-path'],
     ];
     const editVersions = new Map<string, number>();

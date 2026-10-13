@@ -8,13 +8,7 @@ use std::{
 };
 use tauri::{Emitter, Manager};
 
-pub const KEYS: &[&str] = &[
-    "appearance.theme",
-    "appearance.zoom",
-    "appearance.autoFollowAfterSending",
-    "runtime.piPath",
-    "runtime.nodePath",
-];
+pub const KEYS: &[&str] = &["appearance.theme", "runtime.piPath", "runtime.nodePath"];
 
 #[derive(Clone, Default, PartialEq)]
 struct Document {
@@ -40,26 +34,39 @@ fn path(cwd: &Path) -> PathBuf {
     cwd.join(".nimrod/settings.json")
 }
 
-fn validate(text: &str, global: &str) -> Result<(), String> {
+// Earlier Nimrod versions allowed these as overrides. Preserve their source
+// bytes/comments, but never apply them or copy them into global preferences.
+const LEGACY_KEYS: &[&str] = &["appearance.zoom", "appearance.autoFollowAfterSending"];
+
+fn overrides(text: &str) -> Result<serde_json::Map<String, serde_json::Value>, String> {
     let project = crate::preferences::jsonc(text)?;
     let object = project
         .as_object()
         .ok_or("Project settings must be a JSON/JSONC object")?;
     for key in object.keys() {
-        if !KEYS.contains(&key.as_str()) {
+        if !KEYS.contains(&key.as_str()) && !LEGACY_KEYS.contains(&key.as_str()) {
             return Err(format!(
                 "{key} is not a project setting; edit global Settings instead"
             ));
         }
     }
-    if object.is_empty() {
+    Ok(object
+        .iter()
+        .filter(|(key, _)| KEYS.contains(&key.as_str()))
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect())
+}
+
+fn validate(text: &str, global: &str) -> Result<(), String> {
+    let project = overrides(text)?;
+    if project.is_empty() {
         return Ok(());
     }
     let mut merged = crate::preferences::jsonc(global)?;
     merged
         .as_object_mut()
         .ok_or("Global settings must be an object")?
-        .extend(object.clone());
+        .extend(project);
     crate::preferences::validate(&merged.to_string())
 }
 
@@ -235,12 +242,8 @@ pub fn list_project_overrides(app: tauri::AppHandle) -> Vec<ProjectOverride> {
         let keys: Vec<_> = snapshot
             .project_text
             .as_deref()
-            .and_then(|text| crate::preferences::jsonc(text).ok())
-            .and_then(|value| {
-                value
-                    .as_object()
-                    .map(|object| object.keys().cloned().collect())
-            })
+            .and_then(|text| overrides(text).ok())
+            .map(|object| object.keys().cloned().collect())
             .unwrap_or_default();
         if !keys.is_empty() {
             result.push(ProjectOverride { cwd, keys });
@@ -262,7 +265,17 @@ mod tests {
         .unwrap();
         assert!(validate(r#"{"keybindings":{}}"#, "{}").is_err());
         assert!(validate(r#"{"notifications.enabled":false}"#, "{}").is_err());
-        assert!(validate(r#"{"appearance.zoom":126}"#, "{}").is_err());
+        assert!(validate(r#"{"appearance.zoom":126}"#, "{}").is_ok());
+        assert!(validate(r#"{"runtime.piPath":""}"#, "{}").is_err());
+        let obsolete = r#"{"appearance.zoom":null,"appearance.autoFollowAfterSending":"obsolete","appearance.theme":"dracula"}"#;
+        validate(obsolete, "{}").unwrap();
+        assert_eq!(
+            overrides(obsolete).unwrap(),
+            serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(
+                r#"{"appearance.theme":"dracula"}"#
+            )
+            .unwrap()
+        );
         validate(
             r#"{"appearance.theme":"import-example"}"#,
             r#"{"appearance.importedThemes":[{"id":"import-example"}]}"#,
@@ -289,12 +302,12 @@ mod tests {
                 dir.path(),
                 &global,
                 first.project_text.as_deref().unwrap(),
-                "{\"appearance.zoom\":125}",
+                "{\"appearance.theme\":\"dracula\"}",
             )
             .unwrap();
         assert!(projects.update(dir.path(), &global, "{}\n", "{}").is_err());
         let before = projects.refresh_all(&global.text);
-        std::fs::write(path(dir.path()), "{\"appearance.zoom\":150}").unwrap();
+        std::fs::write(path(dir.path()), "{\"appearance.theme\":\"tokyo-night\"}").unwrap();
         projects.snapshot(global.clone(), Some(dir.path()));
         let observed = projects.refresh_all(&global.text);
         assert_ne!(
@@ -307,7 +320,7 @@ mod tests {
         assert!(invalid.project_error.is_some());
         assert_eq!(
             invalid.project_text.as_deref(),
-            Some("{\"appearance.zoom\":150}")
+            Some("{\"appearance.theme\":\"tokyo-night\"}")
         );
         assert!(
             projects

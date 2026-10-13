@@ -151,3 +151,17 @@ test('runtime Save retains newer inherited fields from its authoritative result'
     assert.equal(pi.value, '/project/pi');
   } finally { finish(); runtime.dispose(); f.close(); }
 });
+
+test('Project bar uses the classic Lucide settings gear geometry and a centered hub', () => {
+  const f = fixture();
+  try {
+    const icon = f.get('open-settings').querySelector('svg')!;
+    assert.equal(icon.getAttribute('viewBox'), '0 0 24 24');
+    assert.equal(icon.getAttribute('stroke-linecap'), 'round');
+    assert.equal(icon.getAttribute('stroke-linejoin'), 'round');
+    assert.match(icon.querySelector('path')!.getAttribute('d')!, /^M12\.22 2h-\.44/);
+    const hub = icon.querySelector('circle')!;
+    assert.equal(hub.getAttribute('cx'), '12'); assert.equal(hub.getAttribute('cy'), '12');
+    assert.equal(hub.getAttribute('r'), '3');
+  } finally { f.close(); }
+});

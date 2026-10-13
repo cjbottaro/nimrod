@@ -40,12 +40,12 @@ export async function mountPopout(): Promise<void> {
     if (snapshot.revision < revision || (snapshot.projectRevision ?? 0) < projectRevision) return;
     try {
       const global = parseSettings(snapshot.text); globalSettings = global;
+      const scale = (global['appearance.zoom'] as number | undefined ?? DEFAULT_ZOOM) / 100;
+      zoomTask = zoomTask.then(() => getCurrentWebview().setZoom(scale)).catch(report);
+      revision = snapshot.revision; projectRevision = snapshot.projectRevision ?? 0;
       const settings = { ...global, ...(snapshot.projectText ? parseProjectSettings(snapshot.projectText, global) : {}) };
       const library = readLibrary({ version: 1, selected: settings['appearance.theme'] ?? 'nimrod', imports: settings['appearance.importedThemes'] ?? [] });
       applyTheme(document.documentElement, selectedTheme(library));
-      const scale = (settings['appearance.zoom'] as number | undefined ?? DEFAULT_ZOOM) / 100;
-      zoomTask = zoomTask.then(() => getCurrentWebview().setZoom(scale)).catch(report);
-      revision = snapshot.revision; projectRevision = snapshot.projectRevision ?? 0;
     } catch (e) { report(e); }
   };
   try {

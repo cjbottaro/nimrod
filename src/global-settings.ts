@@ -22,7 +22,7 @@ export async function mountGlobalSettings() {
     const links = document.createElement('div'); links.className = 'settings-project-links';
     section.append(heading, description, links); document.getElementById('settings-panel-appearance')!.append(section);
     let generation = 0, disposed = false, projectSignature: string | undefined;
-    const labels: Record<string, string> = { 'appearance.theme': 'Theme', 'appearance.zoom': 'Zoom', 'appearance.autoFollowAfterSending': 'Auto-follow', 'runtime.piPath': 'Pi path', 'runtime.nodePath': 'Node path' };
+    const labels: Record<string, string> = { 'appearance.theme': 'Theme', 'runtime.piPath': 'Pi path', 'runtime.nodePath': 'Node path' };
     async function reloadProjects() {
       const request = ++generation;
       try {
