@@ -64,6 +64,14 @@ details { margin:8px 0; border:0; border-radius:0; padding:0; }
 .tool-card .tool-raw-inputs > pre { margin-left:14px; }
 .card-plugin-summary { display:contents; }
 .card-plugin-copy { margin:4px 0; padding:3px 7px; font-size:.8em; }
+.edit-card-preview { display:flex; flex:1; align-items:baseline; gap:12px; }
+.edit-card-filename { flex:none; max-width:70%; overflow:hidden; text-overflow:ellipsis; color:var(--vscode-foreground); }
+.edit-card-directory { min-width:0; overflow:hidden; text-overflow:ellipsis; direction:rtl; text-align:left; }
+.edit-card-toolbar { display:flex; align-items:center; gap:8px; margin-top:8px; }
+.edit-card-toolbar .tool-label { margin:0 auto 0 0; font-family:var(--vscode-editor-font-family, monospace), monospace; }
+.edit-card-toolbar :is(.card-plugin-copy, .edit-card-wrap) { margin:0; padding:3px 7px; font-size:.8em; color:var(--vscode-descriptionForeground); background:transparent; }
+.edit-card-toolbar :is(.card-plugin-copy, .edit-card-wrap):hover, .edit-card-wrap[aria-pressed=true] { color:var(--vscode-foreground); background:var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground)); }
+.edit-card-body .edit-diff-wrapped { white-space:pre-wrap; overflow-wrap:anywhere; }
 .card-plugin-copy-status { margin-left:8px; font-size:.8em; color:var(--vscode-descriptionForeground); }
 .tool-card > .reasoning-body, .tool-card > .tool-section, .tool-card > .skill-body, .card-plugin-body > .tool-section { margin-left:14px; }
 .skill-invocation > :first-child { margin-top:0; } .skill-invocation > :last-child { margin-bottom:0; }

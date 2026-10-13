@@ -195,6 +195,7 @@ export class DomCardController<Data> {
 
   private renderPresentation(value: CardPresentation): void {
     const doc = this.body.ownerDocument;
+    this.body.dataset.rawInputsPlacement = value.rawInputsPlacement ?? 'before';
     let title = this.summary.querySelector<HTMLElement>('.tool-card-title');
     if (!title) { title = doc.createElement('span'); title.className = 'tool-card-title'; this.summary.append(title); }
     title.textContent = value.title;

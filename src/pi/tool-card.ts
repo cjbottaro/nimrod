@@ -67,6 +67,11 @@ function updateInputs(document: Document, root: HTMLDetailsElement, value: unkno
 function syncRawRecovery(document: Document, details: HTMLDetailsElement, block: ToolCardBlock): void {
   const expected = rawToolPresentation(block).sections;
   const body = details.querySelector<HTMLElement>('.card-plugin-body')!;
+  const inputs = directChild<HTMLDetailsElement>(details, 'details.tool-raw-inputs:not(.tool-raw-output)');
+  if (inputs) {
+    if (body.dataset.rawInputsPlacement === 'after') { if (body.nextElementSibling !== inputs) body.after(inputs); }
+    else if (inputs.nextElementSibling !== body) body.before(inputs);
+  }
   const provided = expected.every(part => Array.from(body.querySelectorAll<HTMLElement>('.tool-section')).some(section =>
     section.dataset.outputKind === part.key && section.querySelector('.tool-output')?.textContent === part.text));
   let recovery = directChild<HTMLDetailsElement>(details, '.tool-raw-output');

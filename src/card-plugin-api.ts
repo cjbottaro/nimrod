@@ -12,6 +12,8 @@ export interface CardSection { key: string; label: string; text: string; format?
 export interface CardPresentation {
   title: string;
   preview?: string;
+  /** Core-owned raw inputs default before the body; renderers may request them below it. */
+  rawInputsPlacement?: 'before' | 'after';
   sections: readonly CardSection[];
   members?: readonly { key: string; title: string; preview?: string }[];
 }

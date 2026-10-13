@@ -89,7 +89,9 @@ API-v1 declarative JSON remains an optional no-executable-code adapter: `id`, `t
 
 ## Requested edits and recovery
 
-Bundled edit cards show **Requested edit** previews and **Copy requested diff** from structured `oldText`/`newText` substitutions. They are **not applied-file diffs**: rejected/interrupted calls imply no file changes.
+Bundled edit cards emphasize the filename, with a muted directory path. Expanded cards show a line diff from structured `oldText`/`newText` substitutions: unchanged lines remain context, and a compact toolbar shows added/removed line counts, **Wrap** and **Copy**. Multiple substitutions also show their position (for example, **1 of 3**). Wrap is local to each preview; Copy copies the diff text, unaffected by visual wrapping.
+
+Raw inputs sit below the preview, with the full path available there. Routine completed output is kept in a collapsed **Raw output** disclosure; running, failed and interrupted output remains in the main card body. These previews are **not applied-file diffs**: they describe the requested substitutions, not verified file contents. Rejected/interrupted calls do not establish which changes, if any, reached the file. Very large replacement regions may show a literal removal/addition rather than matching every internal unchanged line, to bound rendering work.
 
 Core retains raw inputs and execution/final output independently of custom DOM. Missing/incompatible/failed renderers recover within the affected card without rebuilding healthy siblings. Historical results remain readable. Registered output viewports retain core caps/reading intent; later layout changes should use managed mutation.
 
