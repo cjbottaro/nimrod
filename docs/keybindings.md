@@ -1,6 +1,6 @@
 # Keybindings
 
-Open **Settings → Keybindings**, or use **Edit keybindings…** in the command palette.
+Open **global Settings → Keybindings**, or use **Edit keybindings…** in the command palette.
 
 Search by action name, shortcut, or “modified.” Click a shortcut to change it, or **Add** to assign another. Press the desired combination in the recorder, then **Save**. Escape cancels; recording never executes the shortcut. Changes are saved and synchronized across project windows.
 
@@ -31,8 +31,9 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 | Close session | Cmd/Ctrl+W |
 | Toggle session sidebar | Cmd/Ctrl+B |
 | Previous / next open session | Cmd/Ctrl+Shift+[ / ] |
-| Settings | Cmd/Ctrl+, |
-| Edit keybindings… | Cmd/Ctrl+Shift+, |
+| Global Settings… | Cmd/Ctrl+, |
+| Project settings… | Cmd/Ctrl+Shift+, |
+| Edit keybindings… | Unbound |
 | Restart session | Cmd/Ctrl+R |
 | Zoom in / out / reset to 100% | Cmd/Ctrl+Plus / Minus / 0 |
 
@@ -73,6 +74,6 @@ Valid external edits apply automatically. Conflicting file-authored shortcuts ex
 
 This editor covers Nimrod’s project-shell actions and zoom, not Pi’s internal keymap, composer Send/Queue/Newline behavior, native text editing, or pop-out window shortcuts. Multi-step chords, macros, arbitrary context expressions, and per-project overrides are not included.
 
-Unshifted Cmd/Ctrl+O remains reserved for the native directory chooser; Shift+O is configurable. Other native menu/text-editing keys such as Q, H, A, C, V, X, Z and Tab combinations are reserved. On macOS, **Cmd+M minimizes the focused project window** through the native Window menu, including while a picker or Settings is open. Cmd/Ctrl+E has no Nimrod default action. Existing Cmd+M overrides are retained in settings, but the native accelerator can intercept them; reset or rebind those actions to use another shortcut. **Close Window** remains available in the native menu without Cmd/Ctrl+W, which belongs to Close session. OS-reserved shortcuts can still be intercepted before Nimrod receives them.
+Unshifted Cmd/Ctrl+O remains reserved for the native directory chooser; Shift+O is configurable. Other native menu/text-editing keys such as Q, H, A, C, V, X, Z and Tab combinations are reserved. On macOS, **Cmd+M minimizes the focused project window** through the native Window menu, including while a picker or Settings is open. Cmd/Ctrl+E has no Nimrod default action. Existing Cmd+M overrides are retained in settings, but the native accelerator can intercept them; reset or rebind those actions to use another shortcut. **Close Window** remains available in the native menu without Cmd/Ctrl+W, which belongs to Close session in project windows and closes the global Settings window when focused. OS-reserved shortcuts can still be intercepted before Nimrod receives them.
 
 Native menu delivery and alternate keyboard layouts remain incompletely verified on macOS. Linux behavior is intended but not platform-verified; Windows remains a possible future target.

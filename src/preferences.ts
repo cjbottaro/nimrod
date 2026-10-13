@@ -13,15 +13,32 @@ export interface PreferencesSnapshot {
   statePath: string;
   error?: string | null;
   revision: number;
+  projectText?: string | null;
+  projectPath?: string | null;
+  projectError?: string | null;
+  projectRevision?: number;
 }
 export interface PreferencesHost {
   snapshot(): Promise<PreferencesSnapshot>;
   settings(expected: string, text: string): Promise<PreferencesSnapshot>;
+  projectSettings?(expected: string, text: string): Promise<PreferencesSnapshot>;
   state(entries: Record<string, unknown>): Promise<PreferencesSnapshot>;
   commandUsage(id: string): Promise<PreferencesSnapshot>;
   migrate(text: string, entries: Record<string, unknown>): Promise<PreferencesSnapshot>;
   listen(receive: (snapshot: PreferencesSnapshot) => void): Promise<() => void>;
 }
+export const PROJECT_SETTING_KEYS = ['appearance.theme', 'appearance.zoom', 'appearance.autoFollowAfterSending', 'runtime.piPath', 'runtime.nodePath'] as const;
+export type ProjectSettingKey = typeof PROJECT_SETTING_KEYS[number];
+
+export function parseProjectSettings(text: string, global: Record<string, unknown>): Record<string, unknown> {
+  const errors: ParseError[] = [];
+  const project = parse(text, errors, { allowTrailingComma: true, disallowComments: false });
+  if (errors.length || !project || typeof project !== 'object' || Array.isArray(project)) throw new Error('Project settings must be a valid JSON/JSONC object.');
+  for (const key of Object.keys(project)) if (!(PROJECT_SETTING_KEYS as readonly string[]).includes(key)) throw new Error(`${key} is global-only; edit global Settings instead.`);
+  if (Object.keys(project).length) parseSettings(JSON.stringify({ ...global, ...project }));
+  return project;
+}
+
 export function parseSettings(text: string): Record<string, unknown> {
   const errors: ParseError[] = [];
   const settings = parse(text, errors, { allowTrailingComma: true, disallowComments: false });
@@ -85,16 +102,30 @@ export function legacyPreferences(storage: Storage): { text: string; entries: Re
 export async function installPreferences(host: PreferencesHost, storage: Storage, report: (error?: string) => void) {
   let snapshot: PreferencesSnapshot | undefined;
   let settings: Record<string, unknown> = {};
+  let globalSettings: Record<string, unknown> = {};
+  let projectSettings: Record<string, unknown> = {};
   let disposed = false;
   let work = Promise.resolve();
   const subscribers = new Set<() => void>();
   const receive = (next: PreferencesSnapshot) => {
-    if (disposed || (snapshot && next.revision < snapshot.revision)) return;
+    if (disposed || (snapshot && (next.revision < snapshot.revision || next.projectPath === snapshot.projectPath && (next.projectRevision ?? 0) < (snapshot.projectRevision ?? 0)))) return;
     try {
       const parsed = parseSettings(next.text);
-      const changed = !snapshot || snapshot.text !== next.text || JSON.stringify(snapshot.state) !== JSON.stringify(next.state);
-      snapshot = next; settings = parsed;
-      report(next.error ?? undefined);
+      let project: Record<string, unknown>;
+      try { project = next.projectText ? parseProjectSettings(next.projectText, parsed) : {}; }
+      catch (error) {
+        // A removed global import can invalidate an otherwise unchanged project
+        // theme. Keep the last effective appearance, but let Use global default
+        // remove that key through the same native source-CAS boundary.
+        globalSettings = parsed;
+        snapshot = { ...next, projectError: `${next.projectPath}: ${String(error)}. Keeping the last valid project settings.` };
+        report(snapshot.projectError ?? undefined);
+        for (const subscriber of subscribers) subscriber();
+        return;
+      }
+      const changed = !snapshot || snapshot.text !== next.text || snapshot.projectText !== next.projectText || snapshot.projectPath !== next.projectPath || snapshot.projectError !== next.projectError || snapshot.error !== next.error || JSON.stringify(snapshot.state) !== JSON.stringify(next.state);
+      snapshot = next; globalSettings = parsed; projectSettings = project; settings = { ...parsed, ...project };
+      report(next.error ?? next.projectError ?? undefined);
       if (changed) for (const subscriber of subscribers) subscriber();
     } catch (error) {
       const message = `${next.settingsPath}: ${String(error)}. Keeping the last valid settings.`;
@@ -134,28 +165,53 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
     void result.then(settled, settled);
     return result;
   };
-  const patch = (values: Record<string, unknown>) => enqueue(async () => {
+  const patch = (values: Record<string, unknown>, project = !!snapshot?.projectPath) => enqueue(async () => {
     // Read immediately before editing: unrelated changes in another window survive.
     receive(await host.snapshot());
     if (!snapshot) throw new Error('Preferences unavailable.');
     if (snapshot.error) throw new Error(snapshot.error);
-    const text = editSettings(snapshot.text, values);
-    if (text === snapshot.text) return;
-    try { receive(await host.settings(snapshot.text, text)); }
-    catch (error) { receive(await host.snapshot()); throw error; }
+    if (project) {
+      if (!snapshot.projectPath || !host.projectSettings) throw new Error('Open a project before editing project settings.');
+      const expected = snapshot.projectText ?? '{}\n';
+      let text = expected;
+      for (const [key, value] of Object.entries(values)) {
+        if (!(PROJECT_SETTING_KEYS as readonly string[]).includes(key)) throw new Error(`${key} is a global-only setting.`);
+        text = applyEdits(text, modify(text, [key], value, { formattingOptions: { insertSpaces: true, tabSize: 2 } }));
+      }
+      parseProjectSettings(text, globalSettings);
+      if (text === expected) return;
+      try { receive(await host.projectSettings(expected, text)); }
+      catch (error) { receive(await host.snapshot()); throw error; }
+    } else {
+      const text = editSettings(snapshot.text, values);
+      if (text === snapshot.text) return;
+      try { receive(await host.settings(snapshot.text, text)); }
+      catch (error) { receive(await host.snapshot()); throw error; }
+    }
   });
   return {
+    refresh: async () => { receive(await host.snapshot()); },
+    get projectPath() { return snapshot?.projectPath ?? undefined; },
+    isOverridden(key: ProjectSettingKey) { return Object.hasOwn(projectSettings, key); },
+    useGlobal(key: ProjectSettingKey) { return patch({ [key]: undefined }, true); },
     subscribe(callback: () => void) { subscribers.add(callback); return () => { subscribers.delete(callback); }; },
     runtime(defaults: { pi: string; node: string }) { return { version: 1 as const, pi: settings['runtime.piPath'] as string ?? defaults.pi, node: settings['runtime.nodePath'] as string ?? defaults.node }; },
-    saveRuntime(paths: { pi: string; node: string }) { return patch({ 'runtime.piPath': paths.pi, 'runtime.nodePath': paths.node }); },
+    saveRuntime(paths: { pi: string; node: string }, fields: ('pi' | 'node')[] = ['pi', 'node']) {
+      return patch(Object.fromEntries(fields.map(key => [key === 'pi' ? 'runtime.piPath' : 'runtime.nodePath', paths[key]])));
+    },
     theme(): ThemeLibrary { return readLibrary({ version: 1, selected: settings['appearance.theme'] ?? 'nimrod', imports: settings['appearance.importedThemes'] ?? [] }); },
     saveTheme(library: ThemeLibrary) {
+      if (snapshot?.projectPath) {
+        if (JSON.stringify(library.imports) !== JSON.stringify(globalSettings['appearance.importedThemes'] ?? [])) return Promise.reject(new Error('Import and remove themes in global Settings.'));
+        return patch({ 'appearance.theme': library.selected });
+      }
       // Don't rewrite the import library on a simple selection change.
       const values: Record<string, unknown> = { 'appearance.theme': library.selected };
       if (JSON.stringify(library.imports) !== JSON.stringify(settings['appearance.importedThemes'] ?? [])) values['appearance.importedThemes'] = library.imports;
       return patch(values);
     },
     selectTheme(id: string, theme?: ColorTheme) {
+      if (snapshot?.projectPath) return patch({ 'appearance.theme': id });
       return enqueue(async () => {
         receive(await host.snapshot());
         if (!snapshot || snapshot.error) throw new Error(snapshot?.error || 'Preferences unavailable.');
@@ -170,16 +226,16 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
         catch (error) { receive(await host.snapshot()); throw error; }
       });
     },
-    keybindings() { return readKeyOverrides(settings[KEYBINDINGS_SETTING]); },
+    keybindings() { return readKeyOverrides(globalSettings[KEYBINDINGS_SETTING]); },
     saveKeybinding(id: ActionId, bindings: readonly string[] | undefined, reassign: boolean, mac: boolean) {
-      const before = readKeyOverrides(settings[KEYBINDINGS_SETTING]);
+      const before = readKeyOverrides(globalSettings[KEYBINDINGS_SETTING]);
       const reviewed = changeBinding(before, id, bindings, reassign, mac);
       return enqueue(async () => {
         receive(await host.snapshot());
         if (!snapshot || snapshot.error) throw new Error(snapshot?.error || 'Preferences unavailable.');
         // Compute reassignment against the latest source and edit only affected action
         // properties, preserving unrelated action edits and JSONC comments.
-        const latest = readKeyOverrides(settings[KEYBINDINGS_SETTING]);
+        const latest = readKeyOverrides(globalSettings[KEYBINDINGS_SETTING]);
         if (JSON.stringify(bindingsFor(id, latest)) !== JSON.stringify(bindingsFor(id, before))) throw new Error('This action changed. Review its updated shortcuts and save again.');
         const changes = changeBinding(latest, id, bindings, reassign, mac);
         if (JSON.stringify(changes) !== JSON.stringify(reviewed)) throw new Error('Keybinding conflicts changed. Review the updated shortcuts and save again.');
@@ -193,12 +249,12 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
         catch (error) { receive(await host.snapshot()); throw error; }
       });
     },
-    resetKeybindings() { return patch({ [KEYBINDINGS_SETTING]: {} }); },
-    cardPlugins() { return readPluginSettings(settings); },
-    performanceEnabled() { return settings['diagnostics.performance'] === true; },
-    savePerformance(enabled: boolean) { return patch({ 'diagnostics.performance': enabled }); },
-    notificationsEnabled() { return settings['notifications.enabled'] !== false; },
-    saveNotifications(enabled: boolean) { return patch({ 'notifications.enabled': enabled }); },
+    resetKeybindings() { return patch({ [KEYBINDINGS_SETTING]: {} }, false); },
+    cardPlugins() { return readPluginSettings(globalSettings); },
+    performanceEnabled() { return globalSettings['diagnostics.performance'] === true; },
+    savePerformance(enabled: boolean) { return patch({ 'diagnostics.performance': enabled }, false); },
+    notificationsEnabled() { return globalSettings['notifications.enabled'] !== false; },
+    saveNotifications(enabled: boolean) { return patch({ 'notifications.enabled': enabled }, false); },
     sendAutoFollow(): SendAutoFollow { return settings['appearance.autoFollowAfterSending'] as SendAutoFollow ?? DEFAULT_SEND_AUTO_FOLLOW; },
     saveSendAutoFollow(mode: SendAutoFollow) { return patch({ 'appearance.autoFollowAfterSending': mode }); },
     zoom() { return settings['appearance.zoom'] ?? DEFAULT_ZOOM; },

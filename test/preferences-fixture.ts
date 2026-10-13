@@ -12,6 +12,16 @@ export class MemoryPreferences implements PreferencesHost {
     this.value.text = text; this.value.revision++; this.receive?.(structuredClone(this.value));
     return this.snapshot();
   };
+  projectSettings = async (expected: string, text: string) => {
+    if (!this.value.projectPath) throw new Error('No project scope');
+    if (expected !== (this.value.projectText ?? '{}\n')) throw new Error('Project settings changed on disk');
+    this.value.projectText = text; this.value.projectRevision = (this.value.projectRevision ?? 0) + 1;
+    this.receive?.(structuredClone(this.value)); return this.snapshot();
+  };
+  externalProject(text: string, error?: string) {
+    this.value.projectText = text; this.value.projectError = error; this.value.projectRevision = (this.value.projectRevision ?? 0) + 1;
+    this.receive?.(structuredClone(this.value));
+  }
   state = async (entries: Record<string, unknown>) => {
     Object.assign(this.value.state, structuredClone(entries)); this.value.revision++; this.receive?.(structuredClone(this.value));
     return this.snapshot();
@@ -35,7 +45,8 @@ export class MemoryPreferences implements PreferencesHost {
     this.receive?.(structuredClone(this.value));
   }
   async invoke(command: string, args: Record<string, unknown>) {
-    if (command === 'preferences_snapshot') return this.snapshot();
+    if (command === 'project_preferences_settings') return this.projectSettings(String(args.expected), String(args.text));
+    if (command === 'scoped_preferences_snapshot' || command === 'preferences_snapshot') return this.snapshot();
     if (command === 'preferences_migrate') return this.migrate(String(args.text), args.entries as Record<string, unknown>);
     if (command === 'preferences_settings') return this.settings(String(args.expected), String(args.text));
     if (command === 'record_command_usage') return this.commandUsage(String(args.id));

@@ -2,7 +2,7 @@ export const RUNTIME_STORAGE_KEY = 'nimrod.runtime.v1';
 export interface RuntimePaths { pi: string; node: string; }
 
 /** A full-window settings page, using native modality to keep the workspace inert but laid out. */
-export function installSettings(window: Window, page: HTMLDialogElement, openButton: HTMLButtonElement, backButton: HTMLButtonElement, shortcuts = true): {
+export function installSettings(window: Window, page: HTMLDialogElement, openButton: HTMLButtonElement, backButton: HTMLButtonElement, shortcuts = true, options: { canOpen?(): boolean; unavailable?(): void; closeWindow?(): void } = {}): {
   readonly isOpen: boolean;
   open(): void;
   close(): void;
@@ -12,11 +12,13 @@ export function installSettings(window: Window, page: HTMLDialogElement, openBut
   const anotherDialog = () => [...document.querySelectorAll('dialog[open], #dialog.open')].some(dialog => dialog !== page);
   const open = () => {
     if (page.open || anotherDialog()) return;
+    if (options.canOpen && !options.canOpen()) { options.unavailable?.(); return; }
     page.showModal();
     backButton.focus({ preventScroll: true });
   };
   const close = () => {
     if (!page.open || anotherDialog()) return;
+    if (options.closeWindow) { options.closeWindow(); return; }
     // Native dialog.close() restores the preceding focus target without touching workspace DOM.
     page.close();
     // A startup transition can hide the original launch control while Settings is open.
@@ -24,7 +26,7 @@ export function installSettings(window: Window, page: HTMLDialogElement, openBut
   };
   const cancel = (event: Event) => { event.preventDefault(); close(); };
   const keydown = (event: KeyboardEvent) => {
-    if (event.defaultPrevented || event.isComposing || event.altKey || !(event.metaKey || event.ctrlKey) || event.key !== ',' || anotherDialog()) return;
+    if (event.defaultPrevented || event.isComposing || event.altKey || event.shiftKey || !(event.metaKey || event.ctrlKey) || event.key !== ',' || anotherDialog()) return;
     event.preventDefault(); open();
   };
   openButton.addEventListener('click', open);
@@ -51,14 +53,16 @@ export function runtimePaths(value: unknown): RuntimePaths {
 /** Runtime fields have an explicit Save boundary; unsaved edits never affect a launch. */
 export function installRuntimeSettings(elements: {
   form: HTMLFormElement; fields: HTMLFieldSetElement; pi: HTMLInputElement; node: HTMLInputElement; status: HTMLElement;
-}, host: { read(): unknown; save(paths: RuntimePaths & { version: 1 }): void | Promise<void>; error?(message?: string): void }): {
+}, host: { read(): unknown; save(paths: RuntimePaths & { version: 1 }, changed: ('pi' | 'node')[]): void | RuntimePaths | Promise<void | RuntimePaths>; error?(message?: string): void }): {
   initialize(defaults: RuntimePaths, legacy?: unknown): void;
   current(): RuntimePaths;
+  resetField(key: 'pi' | 'node'): void;
   reload(): void;
   dispose(): void;
 } {
   const { form, fields, pi, node, status } = elements;
   let committed: RuntimePaths | undefined;
+  const edited = new Set<'pi' | 'node'>();
   fields.disabled = true;
   if (host.error) form.noValidate = true;
   const message = (text: string, error = false) => {
@@ -72,14 +76,17 @@ export function installRuntimeSettings(elements: {
     try {
       const next = runtimePaths({ pi: pi.value, node: node.value });
       fields.disabled = true;
-      const saving = host.save({ version: 1, ...next });
-      if (saving) await saving;
-      committed = next; show(); host.error?.();
+      const changed = (['pi', 'node'] as const).filter(key => edited.has(key) || next[key] !== committed![key]);
+      const saving = host.save({ version: 1, ...next }, changed);
+      const authoritative = saving ? await saving : undefined;
+      committed = authoritative ? runtimePaths(authoritative) : next; edited.clear(); show(); host.error?.();
       message('Saved. These paths will be used for the next session.');
     } catch (error) { message(`Not saved: ${String(error)}`, true); }
     finally { fields.disabled = false; }
   };
-  const input = () => {
+  const input = (event: Event) => {
+    if (event.target === pi) edited.add('pi');
+    if (event.target === node) edited.add('node');
     if (!committed) return;
     message(pi.value !== committed.pi || node.value !== committed.node ? 'Unsaved changes. Save to use these paths for the next session.' : '');
   };
@@ -105,14 +112,23 @@ export function installRuntimeSettings(elements: {
     },
     reload() {
       if (!committed) return;
-      const dirty = pi.value !== committed.pi || node.value !== committed.node;
+      const dirtyPi = pi.value !== committed.pi || edited.has('pi');
+      const dirtyNode = node.value !== committed.node || edited.has('node');
       const saved = host.read();
       if (saved == null) return;
       const next = runtimePaths(saved);
       if (next.pi === committed.pi && next.node === committed.node) return;
       committed = next;
-      if (!dirty) { show(); message('Updated from settings.json. Applies to the next session.'); }
+      if (!dirtyPi) pi.value = next.pi;
+      if (!dirtyNode) node.value = next.node;
+      if (!dirtyPi && !dirtyNode) message('Updated from settings.json. Applies to the next session.');
       else message('Saved paths changed in settings.json. Your unsaved edits are retained; Save replaces the corresponding saved paths.');
+    },
+    resetField(key) {
+      if (!committed) return;
+      (key === 'pi' ? pi : node).value = committed[key];
+      edited.delete(key);
+      message(pi.value !== committed.pi || node.value !== committed.node ? 'Unsaved changes. Save to use these paths for the next session.' : '');
     },
     current() {
       if (!committed) throw new Error('Runtime paths are not ready.');

@@ -11,12 +11,21 @@ Missing keys use defaults; malformed external files retain the last valid snapsh
 ## Code map
 
 - `src/preferences.ts`: JSONC patches, validation, legacy migration, revision ordering, pending state-write comparison and native bridge.
-- `src/settings.ts`: Runtime dirty fields, explicit Save, page modality and focus.
+- `src/settings.ts`: Runtime per-field dirty state, explicit Save, page modality and focus.
+- `src/settings-surface.ts`, `src/global-settings.ts`, `src-tauri/src/settings_window.rs`: shared scoped controls, isolated global Settings boot and singleton native window.
 - `src/settings-navigation.ts`, `src/sidebar-resize.ts`: layout-only policies; [Settings layout](settings-layout.md) owns these contracts.
 - `src/main.ts`: boot initialization, committed next-launch preferences and focus guards.
 - `src-tauri/src/preferences.rs`: XDG paths, polling, serialized same-directory replacement and broadcasts.
 - `src-tauri/src/window_state.rs`, `native_menu.rs`: geometry capture/restore and app-owned macOS Quit.
 - `index.html`, `src/theme.css`, `src/workspace.css`: mounted page surfaces and error presentation.
+
+## Project layering
+
+Effective Nimrod preferences are built-in defaults → global JSONC → canonical-project JSONC; Pi configuration remains Pi-owned and unmodified. The optional project file is `<canonical cwd>/.nimrod/settings.json`, created only by an explicit override write. No ancestor discovery or automatic project-file migration. Keys allowed at project scope: `appearance.theme`, `appearance.zoom`, `appearance.autoFollowAfterSending`, `runtime.piPath`, `runtime.nodePath`. Other settings are global-only and rejected in project files; imported palettes remain in the global library.
+
+`src-tauri/src/project_preferences.rs` validates project files against global configuration, uses the existing bounded JSONC reader/symlink-preserving atomic writer and CAS rules, and derives every file path from native window ownership (not frontend-provided paths). Independent project revisions reject late snapshots; watcher fingerprints include project revision/membership, so external edits first observed by scoped reads cannot suppress later broadcasts; native polling invalidates all windows, each of which fetches only its owned scope through `src/native-preferences.ts`. Invalid project files retain the last valid override document and report a project-path error; UI writes do not overwrite malformed sources. Invalid effective snapshots retain the frontend's last valid effective settings. Global and project deletion reset their own layer only. Project watcher entries retire when their owning window closes. No UI file creation, harness RPC, process restarts or transcript reconstruction during preference synchronization.
+
+`src/preferences.ts` preserves presence as provenance: equal-valued explicit overrides remain overrides. `useGlobal` deletes a JSONC key, never copies a global value. Runtime Save creates overrides only for edited fields; untouched fields continue inheriting. Runtime reload updates untouched fields independently while preserving dirty fields and authoritative launch defaults; Save consumes its authoritative effective-path result so an inherited field changing during the write cannot be replaced by a stale form snapshot. Override reset likewise preserves newer per-field edits made while its write was pending; reset-button focus returns to the corresponding control only when focus is vacant and the owning pane is still active. Project theme selection uses the global library without copying imports; import/remove controls are global-only. Removing an imported palette still referenced by a project can make that project's configuration invalid; Use global default removes the now-invalid theme override safely when its unchanged JSONC source still matches the expected bytes. Restore the palette or correct the project file explicitly for other invalid sources; malformed/changed disk files are never overwritten by this recovery path.
 
 ## Storage and synchronization
 
@@ -51,6 +60,8 @@ Runtime Save validates nonempty single-line executable names/paths; actual exist
 Geometry is project scoped: cache normal physical placement/size/maximized state and save on orderly close/quit, not every drag. Bound restoration and missing-display fallback. Predefined AppKit Quit bypasses cancellable exit, so macOS Quit/⌘Q must stay app-owned through save and observed shutdown. Final-exit fallback flushes cached geometry synchronously without querying terminating windows. Abrupt death can lose recent geometry.
 
 ## Tests and platform pitfalls
+
+New project-layer fixtures in `test/preferences.test.ts` and `src-tauri/src/project_preferences.rs` cover inheritance, equal-valued overrides, reset-by-deletion, global-only writes, per-project revisions, imported-library selection, malformed files/deletion and CAS refusal. Authored for this change; no tests/checks/builds or native acceptance were run unless separately requested.
 
 `test/preferences.test.ts`, `test/settings.test.ts`, `test/shell.test.ts` and native preferences/window-state tests cover JSONC preservation, migration, external changes, revision order, conflict/failure, dirty fields, startup focus and scoped geometry validation. No-op fixtures additionally cover queued/committed equality, A → B → A and mixed explicit/conditional requests, caller mutation, failed-write recovery, external edit/deletion invalidation, and native file-byte/revision preservation with malformed-file validation intact. A bundled shell regression feeds 200 foreground/background streaming deltas without state IPC while preserving output, draft/focus, selection persistence and rename persistence. These fixtures establish avoided work, not native responsiveness improvement under CPU contention. Subsequent user feedback and supplied packaged macOS reports show limited observed recovery under reported load; [verification](verification.md#performance-observation) owns that evidence and its attribution limits. Browser Settings sync/layout fixtures cover real HTML modality and unchanged conversation state; [Settings layout](settings-layout.md) maps them.
 

@@ -59,6 +59,15 @@ pub struct Popouts {
     operations: tokio::sync::Mutex<()>,
 }
 impl Popouts {
+    pub fn reference_project(&self, label: &str) -> Option<PathBuf> {
+        let id = label.strip_prefix("popout-")?;
+        self.registry
+            .lock()
+            .unwrap()
+            .entries
+            .get(id)
+            .map(|entry| entry.cwd.clone())
+    }
     pub fn focused_owner(&self) -> Option<String> {
         self.registry
             .lock()

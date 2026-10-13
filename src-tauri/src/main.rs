@@ -14,12 +14,14 @@ mod popout_windows;
 mod popouts;
 mod preferences;
 mod process;
+mod project_preferences;
 mod session_catalog;
 mod session_deletion;
 mod session_files;
 #[cfg(test)]
 mod session_smoke;
 mod sessions;
+mod settings_window;
 #[cfg(any(target_os = "macos", all(test, unix)))]
 mod single_instance;
 mod webview_navigation;
@@ -375,6 +377,9 @@ fn request_exit(app: &tauri::AppHandle) {
         return;
     }
     for window in app.webview_windows().values() {
+        if window.label() == settings_window::LABEL {
+            continue;
+        }
         if window.label().starts_with("popout-") {
             window_state::capture(&window.as_ref().window());
         } else {
@@ -433,6 +438,8 @@ fn main() {
     let builder = tauri::Builder::default()
         .manage(WorkspaceHost::default())
         .manage(WorkspaceWindows::default())
+        .manage(project_preferences::ProjectPreferences::default())
+        .manage(settings_window::SettingsWindow::default())
         .manage(window_state::WindowStates::default())
         .manage(ExitState::default())
         .manage(popouts::Popouts::default())
@@ -517,6 +524,13 @@ fn main() {
             popouts::open_popout_link,
             performance_diagnostics::write_performance_report,
             preferences::preferences_snapshot,
+            project_preferences::scoped_preferences_snapshot,
+            project_preferences::project_preferences_settings,
+            settings_window::open_global_settings,
+            settings_window::open_owned_project_settings,
+            settings_window::take_project_settings_request,
+            settings_window::take_settings_category,
+            project_preferences::list_project_overrides,
             preferences::preferences_settings,
             preferences::preferences_state,
             preferences::record_command_usage,
@@ -538,6 +552,12 @@ fn main() {
         .on_menu_event(|app, event| {
             if native_menu::is_quit(event.id().as_ref()) {
                 request_exit(app);
+            } else if event.id().as_ref() == native_menu::SETTINGS_ID {
+                if let Err(error) = settings_window::open(app, None) {
+                    eprintln!("Open Settings: {error}");
+                }
+            } else if event.id().as_ref() == native_menu::PROJECT_SETTINGS_ID {
+                native_menu::open_project_settings(app);
             } else if native_menu::is_open_project(event.id().as_ref()) {
                 native_menu::open_project(app);
             } else if event.id().as_ref() == native_menu::OPEN_RECENT_PROJECT_ID {
@@ -561,6 +581,11 @@ fn main() {
             }
         })
         .on_window_event(|window, event| {
+            if window.label() == settings_window::LABEL {
+                // Settings is app-owned: native close must not run project teardown
+                // or save its geometry under the welcome/project window's key.
+                return;
+            }
             if let tauri::WindowEvent::Focused(focused) = event {
                 let app = window.app_handle();
                 if app
@@ -645,11 +670,16 @@ fn main() {
                     {
                         eprintln!("Final draft window flush: {error}");
                     }
-                    app.state::<WorkspaceWindows>()
+                    if let Some(cwd) = app
+                        .state::<WorkspaceWindows>()
                         .directories
                         .lock()
                         .unwrap()
-                        .remove(window.label());
+                        .remove(window.label())
+                    {
+                        app.state::<project_preferences::ProjectPreferences>()
+                            .forget(&cwd);
+                    }
                     window_state::forget(&window);
                     let _ = window.destroy();
                 });

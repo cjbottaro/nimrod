@@ -2,8 +2,8 @@ import { expect, test } from '@playwright/test';
 import { demoFixture, visible } from './demo-fixture';
 import type { PerformanceReport } from '../../src/performance-diagnostics';
 
-// Offline WebKit, mock native report storage. No user's app/session or provider work.
-test('opt-in capture retains the session, reading position and draft; failures/cancellation use existing surfaces', async ({ page }) => {
+// Offline WebKit, separate mocked Settings window and local report storage.
+test('global opt-in captures only the project and preserves reading, draft and disclosure state', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {
     await fixture.turn(1); await fixture.turn(2);
@@ -18,18 +18,23 @@ test('opt-in capture retains the session, reading position and draft; failures/c
     const viewId = await page.locator('.session-view:not([hidden])').getAttribute('id');
     const starts = fixture.calls.filter(c => c.command === 'start_pi').length;
     const sends = fixture.calls.filter(c => c.command === 'write_pi' && (c.args.message as { type?: string })?.type === 'prompt').length;
-    await prompt.focus();
     const primary = await page.evaluate(() => /Mac/.test(navigator.platform) ? 'Meta' : 'Control');
-    await page.keyboard.press(primary + '+,'); await page.locator('#settings-category-diagnostics').click();
-    await expect(page.locator('#performance-mode')).toHaveValue('off');
-    await expect(page.locator('#performance-capture')).toBeDisabled();
-    await page.locator('#performance-mode').selectOption('on');
-    await expect(page.locator('#performance-capture')).toBeEnabled();
-    await page.locator('#settings-back').click(); await expect(prompt).toBeFocused();
-    await page.keyboard.press(primary + '+Shift+P');
-    await page.locator('#palette-input').fill('Capture performance report');
-    await page.locator('#palette-input').press('Enter');
-    await expect(page.locator('#command-palette')).not.toBeVisible();
+    await prompt.focus();
+    await page.keyboard.press(primary + '+,');
+    const settingsPage = await fixture.settingsWindow();
+    await settingsPage.locator('#settings-category-diagnostics').click();
+    await expect(settingsPage.locator('#performance-mode')).toHaveValue('off');
+    await expect(settingsPage.locator('#performance-capture')).toBeHidden();
+    await settingsPage.locator('#performance-mode').selectOption('on');
+    await settingsPage.locator('#settings-back').click();
+    await expect(prompt).toBeFocused();
+    async function capture() {
+      await page.keyboard.press(primary + '+Shift+P');
+      await page.locator('#palette-input').fill('Capture performance report');
+      await page.locator('#palette-input').press('Enter');
+      await expect(page.locator('#command-palette')).not.toBeVisible();
+    }
+    await capture();
     await expect(prompt).toBeFocused();
     await expect.poll(() => fixture.calls.filter(c => c.command === 'write_performance_report').length, { timeout: 10_000 }).toBe(1);
     const report = fixture.calls.find(c => c.command === 'write_performance_report')!.args.report as unknown as PerformanceReport;
@@ -37,14 +42,13 @@ test('opt-in capture retains the session, reading position and draft; failures/c
     expect(report.endMs - report.markerMs).toBeGreaterThanOrEqual(4900);
     expect(JSON.stringify(report)).not.toMatch(/Private draft|never record this|\/sessions|fixture-only/);
     expect(report.environment.fieldSizing).toBe(await page.evaluate(() => CSS.supports('field-sizing', 'content')));
+    await expect(page.locator('#application-notices')).toContainText('Report saved: /fixture/');
     await expect(prompt).toHaveValue('Private draft: never record this text'); await expect(prompt).toBeFocused();
     expect(await page.locator('.session-view:not([hidden])').getAttribute('id')).toBe(viewId);
     expect(await card.evaluate(node => (node as HTMLDetailsElement).open)).toBe(open);
     expect(await viewport.evaluate(node => node.scrollTop)).toBe(0);
     expect(fixture.calls.filter(c => c.command === 'start_pi').length).toBe(starts);
     expect(fixture.calls.filter(c => c.command === 'write_pi' && (c.args.message as { type?: string })?.type === 'prompt').length).toBe(sends);
-    await page.locator('#open-settings').click();
-    await expect(page.locator('#performance-status')).toContainText('Report saved: /fixture/');
     await page.evaluate(() => {
       const state = window as unknown as { __TAURI_INTERNALS__: { invoke(command: string, args?: Record<string, unknown>): Promise<unknown> } };
       const original = state.__TAURI_INTERNALS__.invoke;
@@ -53,16 +57,14 @@ test('opt-in capture retains the session, reading position and draft; failures/c
         return original(command, args);
       };
     });
-    await page.locator('#performance-capture').click();
-    await expect(page.locator('#performance-capture')).toBeDisabled();
+    await capture();
     await expect(page.locator('#application-notices')).toContainText('fixture report disk full', { timeout: 10_000 });
-    await expect(page.locator('#performance-status')).toBeEmpty();
-    await expect(page.locator('#performance-capture')).toBeEnabled();
-    await page.locator('#performance-capture').click();
-    await page.locator('#performance-mode').selectOption('off');
-    await expect(page.locator('#performance-capture')).toBeDisabled();
-    await expect(page.locator('#performance-status')).toContainText('off');
-    await page.locator('#settings-back').click();
+    await capture();
+    const reopened = await fixture.settingsWindow();
+    await reopened.locator('#settings-category-diagnostics').click();
+    await reopened.locator('#performance-mode').selectOption('off');
+    await expect(page.locator('#application-notices')).not.toContainText('Capturing five more seconds');
+    await reopened.locator('#settings-back').click();
     await expect(prompt).toHaveValue('Private draft: never record this text');
     expect(fixture.errors).toEqual([]);
   } finally { await fixture.close(); }

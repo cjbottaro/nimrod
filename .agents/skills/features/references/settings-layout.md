@@ -4,16 +4,23 @@
 
 ## Specification and acceptance criteria
 
+Global Settings is one app-owned native window (`settings`), reused/focused on repeated opens and available without a project. It has an independent frontend bootstrap with no session controllers, plugin loading, drafts, harness calls or project teardown. Closing it uses the ordinary native close path, not project shutdown/geometry persistence. Project settings remains a full-window modal page in the owning project window, preserving the underlying conversation. Both share the same mounted controls/category layout and app-wide sidebar width.
+
+Global Settings exposes Appearance, Notifications, Diagnostics, Keybindings and Runtime; Project settings exposes Appearance and Runtime only. Global-only categories are hidden and excluded from category keyboard navigation. Global Settings links to open projects with explicit overrides; links focus the owned project and use a native queued request consumed after frontend boot. The Project bar gear opens Project settings (or global Settings from the welcome window). `settings` / `primary+,` opens/focuses global Settings; `project-settings` / `primary+shift+,` opens the active project's page; `keybindings` has no default and opens global Settings directly at its Keybindings pane. Explicit stored bindings are untouched.
+
+Each project control shows its effective value and source (`Global default` / `Project override`). `Use global default` deletes the project key. The header names the project and offers `Open global settings`. The header remains 48 CSS pixels high to preserve application-notice-strip placement; long identity/scope text ellipsizes rather than changing that contract. [Preferences](preferences.md#project-layering) owns merge, provenance and storage semantics.
+
 Settings categories remain mounted with independent reading/dirty-control state. Its app-wide sidebar width is independent of project widths; browser modality and resize guards preserve the underlying conversation and nested-dialog focus.
 
 ## Code map
 
+- `src/global-settings.ts`, `src/native-preferences.ts`, `src-tauri/src/settings_window.rs`: independent global boot, scoped snapshot adapter, native singleton and queued project-link requests.
 - `index.html`: full-viewport native `#settings-page` dialog; fixed `.settings-header` above `#settings-layout`. Category sidebar buttons are vertical ARIA tabs controlling mounted `.settings-panel` tabpanels. Appearance initially shown; Notifications/Diagnostics/Runtime initially hidden. Keybindings is inserted before Runtime by `src/keybinding-editor.ts` before navigation initializes.
 - `src/workspace.css`: shared `.sidebar-layout`, `.layout-sidebar`, `.layout-content` and `.sidebar-resizer` primitives used by both Settings and the project. Each layout aliases its own width variable into `--sidebar-width`. Session-only overlays, filters, recency and activity styles stay separate.
 - `src/theme.css`: category selection/hover styling, full-width panel overflow and 20px interior side/top gutters (32px bottom). The content wrapper does not scroll: each panel independently owns overflow. Do not center/cap the scroll owner or put its gutter outside it. Global preference errors remain above the selected panel; file paths live under Runtime.
-- `src/settings-navigation.ts`: category selection, vertical Up/Down wrapping, Home/End, roving tabindex and hidden-panel projection. It guards closed pages and nested dialog ownership, and never recreates controls. Selection survives reopening only within that window. It is not persisted or synchronized.
+- `src/settings-navigation.ts`: category selection, vertical Up/Down wrapping, Home/End, roving tabindex and hidden-panel projection. It guards closed pages and nested dialog ownership, and never recreates controls. Selection survives reopening Project settings within that project window; global Settings retains it while its native window remains open. It is not persisted or synchronized.
 - `src/sidebar-resize.ts`: same controller for both sidebars; optional width property, bounds/default, available-width cap, active predicate and allowed owner dialog. Defaults preserve existing Session sidebar behavior. Native dialog `open` changes trigger immediate drag cancellation/visibility refresh. Escape cancels a drag without propagating to close the owner page.
-- `src/main.ts`: installs navigation after the Keybindings editor; Open keybindings explicitly selects its panel before focusing search. Separate Settings width callbacks read/write through `preferences`, not the project's `localState` cache. Subscription reloads only when the width key changes, avoiding cancellation on unrelated updates. Existing `src/settings.ts` retains page modality/Back/Escape and Runtime Save semantics.
+- `src/settings-surface.ts`: installs shared controls and navigation (after the Keybindings editor in global Settings); Open keybindings explicitly selects its panel before focusing search. Separate Settings width callbacks read/write through `preferences`, not the project's `localState` cache. Subscription reloads only when the width key changes, avoiding cancellation on unrelated updates. Existing `src/settings.ts` retains page modality/Back/Escape and Runtime Save semantics.
 
 ## State and sizing
 
@@ -24,12 +31,14 @@ Successful release saves once; keyboard/reset saves immediately via the existing
 ## Invariants
 
 - Category hover styles apply only to unselected tabs (`:hover:not([aria-selected=true])`); hover must never override the selected background/foreground. `test/browser/settings-hover.spec.ts` checks selected hover stability and unselected hover feedback before and after switching categories.
-- Keep all panels mounted. Category switches preserve unsaved Runtime fields, Keybindings queries and per-panel offsets; reopen preserves the last category in that window. Restart loses transient navigation/editing state.
+- Keep all exposed panels mounted. Category switches preserve unsaved Runtime fields, Keybindings queries and per-panel offsets; reopen preserves the last category in that window. Restart loses transient navigation/editing state.
 - Session and Settings widths are independent. Never share session membership, recency/filter controllers, project-local caches or native process semantics merely to share layout.
 - Allow resize interaction within Settings only while that exact owner dialog is open. Nested Pi/Keybindings dialogs block navigation/resizing; opening one, closing Settings, blur or viewport changes cancel an unfinished drag without saving. Closed/hidden handles cannot mutate state.
 - Keep browser modality, nested-dialog priority, prior-focus restoration and underlying project geometry. No transcript/controller replacement, harness IPC, prompts, session teardown or draft mutation from category selection/resizing.
 
 ## Tests and acceptance
+
+Scoped Settings regressions are authored but not executed for this change: `test/preferences.test.ts`, `test/settings.test.ts`, `test/shell.test.ts`, native project-preferences fixtures, and `test/browser/settings-scopes.spec.ts`. Existing browser Settings/layout/keybinding/notification fixtures now model the independent global window. No tests, checks, builds or native acceptance have been run for the scoped implementation unless separately requested. Native singleton/menu shortcuts, window focus/close, file editing, project links and cross-window overrides need macOS acceptance; Linux remains unverified.
 
 - `test/settings-navigation.test.ts`: vertical tab wrapping, mounted dirty controls/offsets, owner/nested modality and disposal.
 - `test/shell.test.ts`: app-wide width restore/save/broadcast across two project windows, independent project widths/categories and no harness/settings operations.

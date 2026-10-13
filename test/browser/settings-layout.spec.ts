@@ -16,18 +16,19 @@ for (const width of [1440, 800, 480]) {
     await page.setViewportSize({ width, height: 520 });
     const fixture = await demoFixture(page);
     try {
-      await page.locator('#open-settings').click();
-      await expect(page.locator('#settings-panel-appearance')).toBeVisible();
-      await expect(page.locator('#settings-panel-runtime')).toBeHidden();
-      await page.locator('#settings-category-keybindings').click();
-      const body = page.locator('#keybindings-section');
-      const headerBounds = await page.locator('.settings-header').boundingBox();
-      const sidebarBounds = (await page.locator('#settings-sidebar').boundingBox())!;
+      const settingsPage = await fixture.settingsWindow();
+      await settingsPage.setViewportSize({ width, height: 520 });
+      await expect(settingsPage.locator('#settings-panel-appearance')).toBeVisible();
+      await expect(settingsPage.locator('#settings-panel-runtime')).toBeHidden();
+      await settingsPage.locator('#settings-category-keybindings').click();
+      const body = settingsPage.locator('#keybindings-section');
+      const headerBounds = await settingsPage.locator('.settings-header').boundingBox();
+      const sidebarBounds = (await settingsPage.locator('#settings-sidebar').boundingBox())!;
       const bounds = (await body.boundingBox())!;
       expect(Math.abs(bounds.x - sidebarBounds.x - sidebarBounds.width)).toBeLessThanOrEqual(1);
-      const pageBounds = (await page.locator('#settings-page').boundingBox())!;
+      const pageBounds = (await settingsPage.locator('#settings-page').boundingBox())!;
       expect(Math.abs(bounds.x + bounds.width - pageBounds.width)).toBeLessThanOrEqual(1);
-      expect(await page.locator('#settings-page').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+      expect(await settingsPage.locator('#settings-page').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
       const geometry = await body.evaluate(element => ({
         left: getComputedStyle(element).paddingLeft, right: getComputedStyle(element).paddingRight,
         client: element.clientWidth, scroll: element.scrollWidth, overflows: element.scrollHeight > element.clientHeight,
@@ -36,24 +37,24 @@ for (const width of [1440, 800, 480]) {
       expect(geometry.scroll).toBeLessThanOrEqual(geometry.client); expect(geometry.overflows).toBe(true);
       for (const x of [bounds.x + 8, bounds.x + bounds.width - 8]) {
         await body.evaluate(element => { element.scrollTop = 0; });
-        await page.mouse.move(x, bounds.y + 80); await page.mouse.wheel(0, 240);
+        await settingsPage.mouse.move(x, bounds.y + 80); await settingsPage.mouse.wheel(0, 240);
         await expect.poll(() => body.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
-        expect(await page.locator('.settings-header').boundingBox()).toEqual(headerBounds);
-        expect(await page.locator('#settings-sidebar').boundingBox()).toEqual(sidebarBounds);
+        expect(await settingsPage.locator('.settings-header').boundingBox()).toEqual(headerBounds);
+        expect(await settingsPage.locator('#settings-sidebar').boundingBox()).toEqual(sidebarBounds);
       }
       const scroll = await body.evaluate(node => node.scrollTop);
-      await page.locator('#settings-category-runtime').click(); await page.locator('#pi-path').fill('/unsaved/pi');
-      await page.locator('#settings-category-keybindings').click();
+      await settingsPage.locator('#settings-category-runtime').click(); await settingsPage.locator('#pi-path').fill('/unsaved/pi');
+      await settingsPage.locator('#settings-category-keybindings').click();
       expect(await body.evaluate(node => node.scrollTop)).toBe(scroll);
-      await page.locator('#keybinding-search').fill('effort');
-      await page.locator('#settings-category-runtime').click(); await expect(page.locator('#pi-path')).toHaveValue('/unsaved/pi');
-      await page.locator('#settings-back').click(); await page.locator('#open-settings').click();
-      await expect(page.locator('#settings-panel-runtime')).toBeVisible();
-      await page.locator('#settings-category-keybindings').click(); await expect(page.locator('#keybinding-search')).toHaveValue('effort');
-      await page.locator('#settings-category-keybindings').focus(); await page.keyboard.press('Home');
-      await expect(page.locator('#settings-category-appearance')).toBeFocused();
-      await page.keyboard.press('ArrowUp'); await expect(page.locator('#settings-panel-runtime')).toBeVisible();
-      await page.keyboard.press('Escape'); await expect(page.locator('#settings-page')).not.toBeVisible();
+      await settingsPage.locator('#keybinding-search').fill('effort');
+      await settingsPage.locator('#settings-category-runtime').click(); await expect(settingsPage.locator('#pi-path')).toHaveValue('/unsaved/pi');
+      await settingsPage.locator('#settings-category-appearance').click(); await settingsPage.locator('#settings-category-runtime').click();
+      await expect(settingsPage.locator('#settings-panel-runtime')).toBeVisible();
+      await settingsPage.locator('#settings-category-keybindings').click(); await expect(settingsPage.locator('#keybinding-search')).toHaveValue('effort');
+      await settingsPage.locator('#settings-category-keybindings').focus(); await settingsPage.keyboard.press('Home');
+      await expect(settingsPage.locator('#settings-category-appearance')).toBeFocused();
+      await settingsPage.keyboard.press('ArrowUp'); await expect(settingsPage.locator('#settings-panel-runtime')).toBeVisible();
+      await settingsPage.keyboard.press('Escape'); await expect.poll(() => settingsPage.isClosed()).toBe(true);
       expect(fixture.errors).toEqual([]);
     } finally { await fixture.close(); }
   });
@@ -84,12 +85,15 @@ test('Settings shares zoom-aware resize mechanics with independent persisted wid
     await handle.press('Home'); await expect.poll(() => sidebarWidth(page)).toBe(160);
     await handle.press('End'); await expect.poll(() => sidebarWidth(page)).toBe(360);
     await handle.dblclick(); await expect.poll(() => fixture.state()[widthKey]).toBe(null); await expect.poll(() => sidebarWidth(page)).toBe(220);
-    await page.locator('#settings-category-keybindings').click();
-    await page.locator('.keybinding-row[data-action="sidebar"]').getByRole('button', { name: /^Add/ }).click();
-    await handle.evaluate(node => node.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true })));
+    const settingsPage = await fixture.settingsWindow('keybindings');
+    const globalHandle = settingsPage.locator('#settings-resizer');
+    await settingsPage.locator('.keybinding-row[data-action="sidebar"]').getByRole('button', { name: /^Add/ }).click();
+    await globalHandle.evaluate(node => node.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true })));
     expect(fixture.state()[widthKey]).toBe(null);
-    await page.keyboard.press('Escape'); await expect(page.locator('#settings-page')).toBeVisible();
-    await handle.focus(); await handle.press('ArrowRight'); await expect.poll(() => fixture.state()[widthKey]).toBe(230);
+    await settingsPage.keyboard.press('Escape'); await expect(settingsPage.locator('#settings-page')).toBeVisible();
+    await globalHandle.focus(); await globalHandle.press('ArrowRight'); await expect.poll(() => fixture.state()[widthKey]).toBe(230);
+    await expect.poll(() => sidebarWidth(page)).toBe(230);
+    await settingsPage.locator('#settings-back').click(); await page.bringToFront();
     const reopened = await context.newPage(); await reopened.setViewportSize({ width: 1200, height: 800 });
     const restored = await demoFixture(reopened, fixture.state());
     try {

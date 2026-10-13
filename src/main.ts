@@ -1,6 +1,5 @@
 import { installApplicationNotices } from './application-notices';
 import { Channel, invoke } from '@tauri-apps/api/core';
-import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { notificationPreview, sessionNotifications, type NotificationDispatch, type NotificationClick } from './notifications';
 import { SessionNavigation, SESSION_VIEWS, type SessionView, type SelectionIntent, type NavigationSnapshot } from './session-navigation';
@@ -14,13 +13,12 @@ import { presentActivity } from './pi/activity-state';
 import { listen } from '@tauri-apps/api/event';
 import { CardPluginCatalog, type PersonalBundles } from './pi/card-plugins/catalog';
 import { installCardPluginLoading } from './card-plugin-loading';
-import { installPreferences, type PreferencesSnapshot } from './preferences';
+import { installNativePreferences } from './native-preferences';
+import { installSettingsSurface } from './settings-surface';
 import { open } from '@tauri-apps/plugin-dialog';
 import { AttachmentStore } from './attachment-store';
 import { readClipboardImage } from './clipboard-image';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
-import { installZoom } from './zoom';
-import { installThemes } from './themes/picker';
 import { BUILTIN_THEMES, CATALOG_THEMES } from './themes/builtins';
 import type { ColorTheme } from './themes/theme';
 import { mountPiView, type HostMessage, type PiView } from './pi/webview-client';
@@ -34,11 +32,7 @@ import { Dialogs } from './dialogs';
 import { COMMAND_USAGE_KEY, readCommandUsage } from './command-ranking';
 import { abbreviateHome, projectPathParts } from './project-path';
 import { installCommandPalette, type PalettePage } from './command-palette';
-import { installSettings, installRuntimeSettings } from './settings';
-import { installPerformanceDiagnostics } from './performance-diagnostics';
-import { installSettingsNavigation } from './settings-navigation';
 import { ACTIONS, bindingsFor, installKeybindingDispatch, isMac, shortcutLabel, type ActionId } from './keybindings';
-import { installKeybindingEditor } from './keybinding-editor';
 import { installSessionPopouts } from './session-popouts';
 import transcript from './pi/transcript.html?raw';
 import './pi/transcript.css';
@@ -53,9 +47,6 @@ let applicationNotices: ReturnType<typeof installApplicationNotices> | undefined
 async function main(): Promise<void> {
 const notices = applicationNotices = installApplicationNotices(window);
 let noticeSequence = 0;
-const feedback = (id: string, operation: string) => (message?: string) => {
-  if (message) notices.report({ id: `${id}:${++noticeSequence}`, cause: `feedback:${id}`, operation, message }); else notices.store.resolveCause(`feedback:${id}`);
-};
 let projectErrorText = '';
 // Transitional producer channel: legacy writers no longer own a visible node.
 const projectErrors = {
@@ -65,21 +56,16 @@ const projectErrors = {
     if (projectErrorText) notices.report({ id: `project-operation:${++noticeSequence}`, operation: 'Project action', message: projectErrorText });
   },
 };
-const preferences = await installPreferences({
-  snapshot: () => invoke<PreferencesSnapshot>('preferences_snapshot'),
-  settings: (expected, text) => invoke<PreferencesSnapshot>('preferences_settings', { expected, text }),
-  state: entries => invoke<PreferencesSnapshot>('preferences_state', { entries }),
-  commandUsage: id => invoke<PreferencesSnapshot>('record_command_usage', { id }),
-  migrate: (text, entries) => invoke<PreferencesSnapshot>('preferences_migrate', { text, entries }),
-  listen: receive => listen<PreferencesSnapshot>('nimrod-preferences', event => receive(event.payload)),
-}, localStorage, message => {
+const preferences = await installNativePreferences(message => {
   required('preferences-error').hidden = true;
   if (message) notices.report({ id: 'preferences', operation: 'Read settings', message });
   else notices.resolve('preferences');
   const button = required('open-settings');
   button.classList.toggle('error', !!message);
-  button.title = message ? 'Settings file error — open Settings for details' : 'Settings · ⌘/Ctrl ,';
-  button.setAttribute('aria-label', message ? 'Open Settings — settings file error' : 'Open Settings');
+  if (message) {
+    button.title = 'Settings file error — open Settings for details';
+    button.setAttribute('aria-label', 'Settings — settings file error');
+  }
 });
 required('settings-file-path').textContent = preferences.paths.settings;
 required('state-file-path').textContent = preferences.paths.state;
@@ -107,27 +93,8 @@ const dialogs = new Dialogs();
 const deletionReview = installDeletionReview(required<HTMLDialogElement>('deletion-review'), {
   canCover: other => other.id === 'command-palette' && palette.isDeleting,
 });
-const settings = installSettings(window, required<HTMLDialogElement>('settings-page'), required<HTMLButtonElement>('open-settings'), required<HTMLButtonElement>('settings-back'), false);
-const keybindingEditor = installKeybindingEditor(window, required('settings-page').querySelector<HTMLElement>('.settings-content')!, {
-  read: () => preferences.keybindings(),
-  save: (id, bindings, reassign) => preferences.saveKeybinding(id, bindings, reassign, isMac(window)),
-  resetAll: () => preferences.resetKeybindings(),
-  error: feedback('keybindings', 'Edit keybindings'),
-});
-const settingsNavigation = installSettingsNavigation(required<HTMLDialogElement>('settings-page'));
-const settingsSidebarWidthKey = 'nimrod.settings.sidebar.width';
-let settingsSidebarWidth = preferences.readState(settingsSidebarWidthKey);
-const settingsSidebarResize = installSidebarResize(window, {
-  layout: required('settings-layout'), sidebar: required('settings-sidebar'),
-  handle: required('settings-resizer'), toggle: required('settings-back'),
-}, {
-  read: () => preferences.readState(settingsSidebarWidthKey),
-  save: width => { void preferences.saveState(settingsSidebarWidthKey, width).catch(persistenceError); },
-}, {
-  widthProperty: '--settings-sidebar-width', minWidth: 160, maxWidth: 360,
-  defaultWidth: () => 220, maxAvailableWidth: available => Math.min(available * .45, Math.max(0, available - 240)),
-  active: () => settings.isOpen, allowedDialog: required<HTMLDialogElement>('settings-page'),
-});
+const settingsSurface = installSettingsSurface(preferences, notices);
+const { settings, themes, zoom, runtime, notificationError, notificationProgress, capturePerformance } = settingsSurface;
 const settingsKey = 'nimrod.poc.launch';
 const recentKey = 'nimrod.workspaces.v1';
 const lastKey = 'nimrod.last-session.v1';
@@ -211,135 +178,6 @@ function lastSession(): LastSession | undefined {
   const last = stored(lastKey) as Partial<LastSession> | null;
   return last && typeof last.path === 'string' && typeof last.cwd === 'string' && typeof last.sessionId === 'string' ? last as LastSession : drafts.last;
 }
-let runtimeDefaults: { pi: string; node: string } | undefined;
-const runtime = installRuntimeSettings({
-  form: required<HTMLFormElement>('runtime-settings'), fields: required<HTMLFieldSetElement>('runtime-fields'),
-  pi: required<HTMLInputElement>('pi-path'), node: required<HTMLInputElement>('node-path'), status: required('runtime-status'),
-}, {
-  read: () => runtimeDefaults ? preferences.runtime(runtimeDefaults) : null,
-  save: paths => preferences.saveRuntime(paths),
-  error: feedback('runtime', 'Save runtime paths'),
-});
-const themes = installThemes({
-  root: document.documentElement,
-  select: required<HTMLSelectElement>('theme-picker'), file: required<HTMLInputElement>('theme-file'),
-  notice: required('theme-notice'), noticeText: required('theme-notice-text'), dismiss: required<HTMLButtonElement>('theme-notice-dismiss'),
-}, {
-  read: () => preferences.theme(),
-  save: library => preferences.saveTheme(library), newId: () => `import-${crypto.randomUUID()}`,
-  error: feedback('themes', 'Color theme'),
-});
-const zoom = installZoom(window, required<HTMLSelectElement>('zoom-level'), required('zoom-error'), {
-  read: () => preferences.zoom(), save: percent => preferences.saveZoom(percent),
-  apply: scale => getCurrentWebview().setZoom(scale),
-  error: feedback('zoom', 'App zoom'),
-}, false);
-const performanceDiagnostics = installPerformanceDiagnostics(window, () => ({
-  userAgent: navigator.userAgent.slice(0, 512), fieldSizing: window.CSS?.supports('field-sizing', 'content') ?? false,
-  zoom: Number(preferences.zoom()), devicePixelRatio: window.devicePixelRatio, hardwareConcurrency: navigator.hardwareConcurrency || 0,
-}));
-const performancePicker = required<HTMLSelectElement>('performance-mode');
-const performanceCapture = required<HTMLButtonElement>('performance-capture');
-const performanceStatus = required('performance-status');
-let capturingPerformance = false;
-let performancePath: string | undefined;
-function reloadPerformance(): void {
-  const enabled = preferences.performanceEnabled();
-  const changed = enabled !== performanceDiagnostics.enabled;
-  performanceDiagnostics.setEnabled(enabled);
-  performancePicker.value = enabled ? 'on' : 'off';
-  performanceCapture.disabled = !enabled || capturingPerformance;
-  if (changed || !enabled) performanceStatus.textContent = enabled ? 'Timing diagnostics enabled. Capture when the app feels slow.' : 'Performance diagnostics are off.';
-}
-async function capturePerformance(): Promise<void> {
-  if (capturingPerformance) return;
-  capturingPerformance = true; reloadPerformance();
-  performanceStatus.textContent = 'Capturing five more seconds of timing data…';
-  try {
-    const report = await performanceDiagnostics.capture();
-    if (!report) { if (!unloading) performanceStatus.textContent = 'Capture cancelled; timing buffer cleared.'; return; }
-    performanceStatus.textContent = 'Saving performance report…';
-    const path = await invoke<string>('write_performance_report', { report });
-    if (unloading) return;
-    performancePath = path;
-    performanceStatus.textContent = `Report saved: ${path}`;
-    notices.resolve('performance-capture');
-  } catch (error) {
-    if (!unloading) {
-      performanceStatus.textContent = '';
-      notices.report({ id: 'performance-capture', operation: 'Capture performance report', message: String(error) });
-    }
-  } finally { capturingPerformance = false; if (!unloading) reloadPerformance(); }
-}
-performanceCapture.addEventListener('click', () => { void capturePerformance(); });
-performancePicker.addEventListener('change', () => {
-  performancePicker.disabled = true;
-  void preferences.savePerformance(performancePicker.value === 'on').then(() => {
-    notices.resolve('performance-settings');
-  }).catch(error => {
-    notices.report({ id: 'performance-settings', operation: 'Save performance diagnostics setting', message: String(error) });
-  }).finally(() => { reloadPerformance(); performancePicker.disabled = false; });
-});
-reloadPerformance();
-const sendAutoFollowPicker = required<HTMLSelectElement>('send-auto-follow');
-const reloadSendAutoFollow = () => { sendAutoFollowPicker.value = preferences.sendAutoFollow(); };
-sendAutoFollowPicker.addEventListener('change', () => {
-  sendAutoFollowPicker.disabled = true;
-  void preferences.saveSendAutoFollow(sendAutoFollowPicker.value as import('./pi/transcript-scroll').SendAutoFollow).then(() => {
-    notices.resolve('send-auto-follow-settings');
-  }).catch(error => {
-    notices.report({ id: 'send-auto-follow-settings', operation: 'Save auto-follow setting', message: String(error) });
-  }).finally(() => { reloadSendAutoFollow(); sendAutoFollowPicker.disabled = false; });
-});
-reloadSendAutoFollow();
-const notificationPicker = required<HTMLSelectElement>('notification-mode');
-const notificationStatus = required('notification-status');
-const notificationTest = required<HTMLButtonElement>('notification-test');
-const notificationDiagnostics = required<HTMLButtonElement>('notification-diagnostics');
-let testingNotification = false, readingNotificationDiagnostics = false;
-const reloadNotifications = () => {
-  notificationPicker.value = preferences.notificationsEnabled() ? 'on' : 'off';
-  notificationTest.disabled = testingNotification || readingNotificationDiagnostics || !preferences.notificationsEnabled();
-  notificationDiagnostics.disabled = testingNotification || readingNotificationDiagnostics;
-};
-const notificationProgress = (message: string) => { notificationStatus.textContent = message; };
-const notificationError = (message: string) => {
-  notificationStatus.textContent = '';
-  notices.report({ id: `notifications:${++noticeSequence}`, cause: 'notifications', operation: 'Desktop notifications', message });
-};
-async function refreshNotificationDiagnostics(prefix = 'Notification diagnostics.') {
-  try { notificationProgress(`${prefix} ${await invoke<string>('notification_diagnostics')}`); }
-  catch (error) { notificationError(`${prefix} Could not read diagnostics: ${String(error)}`); }
-}
-notificationDiagnostics.addEventListener('click', () => {
-  if (testingNotification || readingNotificationDiagnostics) return;
-  readingNotificationDiagnostics = true; reloadNotifications();
-  notificationProgress('Reading notification diagnostics…');
-  void refreshNotificationDiagnostics().finally(() => { readingNotificationDiagnostics = false; reloadNotifications(); });
-});
-notificationTest.addEventListener('click', () => {
-  if (testingNotification || readingNotificationDiagnostics || !preferences.notificationsEnabled()) return;
-  testingNotification = true; reloadNotifications();
-  notificationProgress('Test notification: checking OS authorization and submitting…');
-  void invoke<NotificationDispatch>('test_notification').then(async outcome => {
-    if (outcome === 'suppressed') notificationProgress('Test notification was suppressed because the app is closing or alerts were disabled.');
-    else {
-      if (outcome === 'submitted') notices.store.resolveCause('notifications');
-      await refreshNotificationDiagnostics('Test notification submitted to the OS.');
-    }
-  }).catch(error => notificationError(`Notifications: ${String(error)}`)).finally(() => {
-    testingNotification = false; reloadNotifications();
-  });
-});
-reloadNotifications();
-notificationPicker.addEventListener('change', () => {
-  notificationPicker.disabled = true;
-  void preferences.saveNotifications(notificationPicker.value === 'on').then(() => {
-    notificationStatus.textContent = 'Saved. System notification settings still apply.'; notices.resolve('notification-settings');
-  }).catch(error => { notificationStatus.textContent = ''; notices.report({ id: 'notification-settings', operation: 'Save notification settings', message: String(error) }); }).finally(() => {
-    reloadNotifications(); notificationPicker.disabled = false;
-  });
-});
 const previewResponse = notificationPreview(window);
 const notifySession = sessionNotifications({
   focused: () => getCurrentWindow().isFocused(),
@@ -412,12 +250,7 @@ const unlistenNotificationClicks = await listen<NotificationClick>('nimrod-notif
   })();
 }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
 const unlistenDeletion = await listen<DeletionEvent>('nimrod-session-deletion', event => { void deletion.handle(event.payload); }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
-preferences.subscribe(() => {
-  const width = preferences.readState(settingsSidebarWidthKey);
-  if (!Object.is(width, settingsSidebarWidth)) { settingsSidebarWidth = width; settingsSidebarResize.reload(); }
-  void reloadCardPlugins();
-  runtime.reload(); themes.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadSendAutoFollow(); keybindingEditor.reload(); refreshShortcutHints();
-});
+preferences.subscribe(() => { void reloadCardPlugins(); refreshShortcutHints(); });
 const unlistenDraftErrors = await listen<string>('nimrod-draft-error', event => draftPersistenceError(event.payload));
 const unlistenDraftClose = await getCurrentWindow().onCloseRequested(() => {
   // Rust owns child shutdown/window destruction and flushes staged drafts.
@@ -428,13 +261,13 @@ const disposeTimeRefresh = installSessionTimeRefresh(window, () => { for (const 
 window.addEventListener('unload', () => {
   unloading = true;
   notices.dispose();
-  performanceDiagnostics.dispose();
+  settingsSurface.dispose();
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
   pluginLoading.dispose();
   sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); unlistenLinkErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
   for (const tab of tabs) { tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.session?.rpc.disconnect('Window closed'); }
-  keybindingDispatch.dispose(); keybindingEditor.dispose(); settingsNavigation.dispose(); settingsSidebarResize.dispose();
-  unlistenProjectPicker(); palette.dispose(); zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose();
+  keybindingDispatch.dispose(); unlistenProjectSettings();
+  unlistenProjectPicker(); palette.dispose();
 }, { once: true });
 
 function recoverableDrafts(): { key: string; label: string }[] {
@@ -606,6 +439,8 @@ async function openWorkspace(path: string): Promise<boolean> {
 }
 async function enterWorkspace(path: string): Promise<void> {
   workspace = path; cwd.value = path;
+  await preferences.refresh();
+  refreshShortcutHints();
   recency = new SessionRecency(stored(recencyKey()));
   if (recency.delete(Object.keys(recency.dump()).filter(file => deletion.removed(file)))) save(recencyKey(), recency.dump());
   ready = false; controls();
@@ -727,7 +562,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     const active = presented;
     return [
     { id: 'open-recent-project', label: 'Open recent project…', detail: 'Open or focus a previously opened project', next: true, run: () => palette.projects() },
-    { id: 'capture-performance', label: 'Capture performance report', detail: performancePath ? `Last report: ${performancePath}` : 'Save recent timing data; enable in Settings → Diagnostics first. Saved path appears there.', run: capturePerformance },
+    { id: 'capture-performance', label: 'Capture performance report', detail: settingsSurface.performancePath ? `Last report: ${settingsSurface.performancePath}` : 'Save this project window’s recent timing data; enable in global Settings → Diagnostics first.', run: capturePerformance },
     { id: 'reload-card-plugins', label: 'Reload card plugins', detail: 'Rescan personal sources and refresh renderers for new cards; no Pi restart', run: () => reloadCardPlugins(true) },
     { id: 'select-theme', label: 'Select theme…', detail: 'Preview bundled VS Code themes and saved imports', next: true, run: () => pickTheme() },
     { id: 'resume', label: 'Resume session…', detail: 'Open a saved conversation in this project', next: true, run: () => palette.sessions() },
@@ -746,7 +581,8 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     { id: 'temporary', label: 'New temporary session', detail: 'Start a conversation without saved history', run: () => newSession('temporary') },
     ...(active ? [{ id: 'close', label: 'Close session', detail: 'Stop its agent and remove it from the sidebar; saved history stays', run: () => closeTab(active!) }] : []),
     { id: 'sidebar', label: sidebarVisible ? 'Hide sidebar' : 'Show sidebar', detail: 'Toggle the open-session navigation pane', run: () => required<HTMLButtonElement>('toggle-sidebar').click() },
-    { id: 'settings', label: 'Settings', detail: 'Change appearance, notifications, keybindings and runtime paths', run: () => required<HTMLButtonElement>('open-settings').click() },
+    { id: 'settings', label: 'Global Settings…', detail: 'Defaults for all projects, notifications and keybindings', run: () => invoke('open_global_settings') },
+    ...(workspace ? [{ id: 'project-settings', label: 'Project settings…', detail: 'Override global appearance and runtime defaults for this project', run: () => settings.open() }] : []),
     { id: 'keybindings', label: 'Edit keybindings…', detail: 'Customize shortcuts for Nimrod commands', run: openKeybindings },
     ].map(item => ({ ...item, shortcut: ACTIONS.some(action => action.id === item.id) ? shortcutHint(item.id as ActionId) : undefined }));
   },
@@ -1279,23 +1115,33 @@ function shortcutHint(id: ActionId): string {
 }
 function refreshShortcutHints(): void {
   const settingsButton = required('open-settings');
-  if (!settingsButton.classList.contains('error')) settingsButton.title = ['Settings', shortcutHint('settings')].filter(Boolean).join(' · ');
+  if (!settingsButton.classList.contains('error')) {
+    const label = preferences.projectPath ? 'Project settings' : 'Global Settings';
+    settingsButton.title = [label, shortcutHint(preferences.projectPath ? 'project-settings' : 'settings')].filter(Boolean).join(' · ');
+    settingsButton.setAttribute('aria-label', label);
+  }
+  settingsButton.setAttribute('aria-haspopup', preferences.projectPath ? 'dialog' : 'false');
+  if (preferences.projectPath) settingsButton.setAttribute('aria-controls', 'settings-page');
+  else settingsButton.removeAttribute('aria-controls');
   required('toggle-sidebar').title = ['Toggle sidebar', shortcutHint('sidebar')].filter(Boolean).join(' · ');
   required('zoom-level').title = ['App zoom', shortcutHint('zoom-in'), shortcutHint('zoom-out'), shortcutHint('zoom-reset')].filter(Boolean).join(' · ');
-  const zoomHint = required('zoom-level').nextElementSibling;
+  const zoomHint = required('zoom-shortcut-hint');
   if (zoomHint) zoomHint.textContent = `Zoom in: ${shortcutHint('zoom-in') || 'unbound'} · Zoom out: ${shortcutHint('zoom-out') || 'unbound'} · Reset to 100%: ${shortcutHint('zoom-reset') || 'unbound'}. Shortcuts pause in other dialogs.`;
 }
-function openKeybindings(): void {
-  settings.open();
-  if (settings.isOpen && settingsNavigation.select('keybindings')) keybindingEditor.focus();
+function openKeybindings(): Promise<void> { return invoke('open_global_settings', { category: 'keybindings' }); }
+async function takeProjectSettingsRequest() {
+  const requested = await invoke<boolean>('take_project_settings_request');
+  if (requested && workspace) settings.open();
 }
+const unlistenProjectSettings = await listen('nimrod-project-settings', () => { if (ready) void takeProjectSettingsRequest().catch(persistenceError); }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
 const keybindingDispatch = installKeybindingDispatch(window, {
   read: () => preferences.keybindings(),
   enabled: id => {
     if (unloading) return false;
-    if (['settings', 'zoom-in', 'zoom-out', 'zoom-reset'].includes(id)) return true;
+    if (['settings', 'keybindings', 'zoom-in', 'zoom-out', 'zoom-reset'].includes(id)) return true;
+    if (id === 'project-settings') return !!workspace;
     if (!ready) return false;
-    if (id === 'capture-performance') return preferences.performanceEnabled() && !capturingPerformance;
+    if (id === 'capture-performance') return preferences.performanceEnabled() && !settingsSurface.capturingPerformance;
     if (['close', 'model', 'thinking', 'restart', 'delete'].includes(id)) return !!presented;
     return true;
   },
@@ -1316,8 +1162,9 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'sidebar': required<HTMLButtonElement>('toggle-sidebar').click(); return;
       case 'previous': cycleTab(-1); return;
       case 'next': cycleTab(1); return;
-      case 'settings': settings.open(); return;
-      case 'keybindings': openKeybindings(); return;
+      case 'settings': return invoke('open_global_settings');
+      case 'project-settings': settings.open(); return;
+      case 'keybindings': return openKeybindings();
       case 'zoom-in': zoom.run('in'); return;
       case 'zoom-out': zoom.run('out'); return;
       case 'zoom-reset': zoom.run('reset'); return;
@@ -1339,13 +1186,13 @@ async function boot(): Promise<void> {
     homeDirectory = defaults.home;
     const saved = stored(settingsKey) as Partial<typeof defaults> | null;
     cwd.value = typeof saved?.cwd === 'string' ? saved.cwd : defaults.cwd;
-    runtimeDefaults = defaults;
-    runtime.initialize(defaults);
+    settingsSurface.initializeRuntime(defaults);
     const path = await invoke<string | null>('window_workspace');
     deletion.load(await invoke<DeletionSnapshot>('deletion_snapshot'));
     ready = true;
     if (path) { await enterWorkspace(path); syncPopouts(); }
     controls();
+    await takeProjectSettingsRequest();
     await takeProjectPickerRequest();
   } catch (e) { error.textContent = `Could not initialize the native host: ${e}`; }
 }
@@ -1354,6 +1201,8 @@ void boot();
 if (new URLSearchParams(location.search).has('popout')) {
   document.body.replaceChildren();
   void import('./popout').then(module => module.mountPopout());
+} else if (new URLSearchParams(location.search).has('settings')) {
+  void import('./global-settings').then(module => module.mountGlobalSettings());
 } else {
   void main().catch(e => {
     applicationNotices?.report({ id: 'startup', operation: 'Start Nimrod', message: `Could not initialize preferences: ${e}` });

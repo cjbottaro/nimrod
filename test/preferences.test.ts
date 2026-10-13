@@ -275,3 +275,76 @@ test('state writes merge keys and do not alter settings or draft storage', async
     assert.equal(f.host.value.text, text); assert.equal(f.dom.window.localStorage.length, 0);
   } finally { p.dispose(); f.dom.window.close(); }
 });
+
+test('project overrides merge over global defaults and reset removes keys rather than copying values', async () => {
+  const f = fixture();
+  f.host.value.state.legacyMigrated = true;
+  f.host.value.text = '// Global\n{"appearance.zoom":150,"appearance.autoFollowAfterSending":"never","runtime.nodePath":"/global/node"}';
+  f.host.value.projectPath = '/fixture/project/.nimrod/settings.json';
+  f.host.value.projectText = '// Project\n{}';
+  const p = await f.install();
+  try {
+    assert.equal(p.zoom(), 150); assert.equal(p.isOverridden('appearance.zoom'), false);
+    await p.saveZoom(150);
+    assert.equal(p.isOverridden('appearance.zoom'), true, 'same-valued explicit choice remains an override');
+    f.host.external('// Global\n{"appearance.zoom":175,"appearance.autoFollowAfterSending":"always","runtime.nodePath":"/new/node"}');
+    assert.equal(p.zoom(), 150); assert.equal(p.sendAutoFollow(), 'always');
+    await p.saveRuntime({ pi: '/project/pi', node: '/new/node' }, ['pi']);
+    assert.deepEqual(p.runtime({ pi: 'pi', node: 'node' }), { version: 1, pi: '/project/pi', node: '/new/node' });
+    assert.equal(p.isOverridden('runtime.nodePath'), false);
+    await p.useGlobal('appearance.zoom');
+    assert.equal(p.zoom(), 175); assert.equal(p.isOverridden('appearance.zoom'), false);
+    assert.match(f.host.value.projectText!, /Project/); assert.match(f.host.value.text, /Global/);
+    f.host.externalProject('{}');
+    assert.equal(p.runtime({ pi: 'pi', node: 'node' }).pi, 'pi');
+    assert.equal(p.isOverridden('runtime.piPath'), false);
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
+test('global-only preferences stay global from a project and project revisions reject stale overrides', async () => {
+  const f = fixture();
+  f.host.value.state.legacyMigrated = true;
+  f.host.value.projectPath = '/fixture/project/.nimrod/settings.json';
+  f.host.value.projectText = '{"appearance.zoom":110}';
+  const p = await f.install();
+  try {
+    const before = f.host.value.projectText;
+    await p.saveNotifications(false); await p.savePerformance(true); await p.resetKeybindings();
+    assert.equal(f.host.value.projectText, before);
+    assert.equal(parseSettings(f.host.value.text)['notifications.enabled'], false);
+    const old = await f.host.snapshot();
+    f.host.externalProject('{"appearance.zoom":175}');
+    f.host.receive?.(old);
+    assert.equal(p.zoom(), 175);
+    f.host.externalProject('{broken}');
+    assert.equal(p.zoom(), 175);
+    await assert.rejects(p.saveZoom(125));
+    f.host.externalProject('{}');
+    assert.equal(p.zoom(), 125);
+    await p.saveZoom(90);
+    const saved = f.host.value.projectText;
+    f.host.projectSettings = async () => { throw new Error('Fixture conflict'); };
+    await assert.rejects(p.saveZoom(150), /Fixture conflict/);
+    assert.equal(f.host.value.projectText, saved); assert.equal(p.zoom(), 90);
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
+test('project theme selection uses the shared global library without duplicating imports', async () => {
+  const f = fixture();
+  const theme = importTheme('{"colors":{"editor.background":"#102030"}}', 'fixture.json', 'import-fixture').theme;
+  f.host.value.state.legacyMigrated = true;
+  f.host.value.text = JSON.stringify({ 'appearance.importedThemes': [theme] });
+  f.host.value.projectPath = '/fixture/project/.nimrod/settings.json';
+  f.host.value.projectText = '{}';
+  const p = await f.install();
+  try {
+    await p.selectTheme(theme.id);
+    assert.equal(p.theme().selected, theme.id); assert.equal(p.theme().imports.length, 1);
+    assert.equal(JSON.parse(f.host.value.projectText!)['appearance.importedThemes'], undefined);
+    await assert.rejects(p.saveTheme({ version: 1, selected: 'nimrod', imports: [] }), /global Settings/);
+    f.host.external('{}');
+    assert.equal(p.theme().selected, theme.id, 'removing a global import retains the last valid effective palette');
+    await p.useGlobal('appearance.theme');
+    assert.equal(p.theme().selected, 'nimrod');
+  } finally { p.dispose(); f.dom.window.close(); }
+});

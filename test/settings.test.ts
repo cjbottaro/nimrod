@@ -123,3 +123,31 @@ test('corrupt saved runtime preferences are recoverable without writing or chang
     assert.equal(f.document.activeElement, active); assert.match(f.get('runtime-status').textContent!, /Could not restore/);
   } finally { f.close(); }
 });
+
+test('runtime Save retains newer inherited fields from its authoritative result', async () => {
+  const f = fixture();
+  let saved = { ...defaults }, finish!: () => void;
+  const gate = new Promise<void>(resolve => { finish = resolve; });
+  const changes: string[][] = [];
+  const runtime = installRuntimeSettings({ form: f.get('runtime-settings'), fields: f.get('runtime-fields'), pi: f.get('pi-path'), node: f.get('node-path'), status: f.get('runtime-status') }, {
+    read: () => ({ version: 1, ...saved }),
+    save: async (paths, changed) => {
+      changes.push(changed);
+      await gate;
+      saved = { pi: paths.pi, node: '/new/global/node' };
+      return saved;
+    },
+  });
+  try {
+    runtime.initialize(defaults);
+    const pi = f.get<HTMLInputElement>('pi-path');
+    pi.value = '/project/pi'; pi.dispatchEvent(new f.dom.window.Event('input', { bubbles: true }));
+    f.get('runtime-settings').dispatchEvent(new f.dom.window.Event('submit', { bubbles: true, cancelable: true }));
+    assert.deepEqual(changes, [['pi']]);
+    finish(); await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(runtime.current(), { pi: '/project/pi', node: '/new/global/node' });
+    assert.equal(f.get<HTMLInputElement>('node-path').value, '/new/global/node');
+    runtime.resetField('pi');
+    assert.equal(pi.value, '/project/pi');
+  } finally { finish(); runtime.dispose(); f.close(); }
+});

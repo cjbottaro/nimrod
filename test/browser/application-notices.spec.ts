@@ -161,23 +161,28 @@ test('window strip keeps its position and remains actionable through Settings an
     await page.locator('#open-settings').click();
     await expect(page.locator('#settings-page > #application-notices')).toBeVisible();
     expect(Math.abs((await strip.boundingBox())!.y - position!.y)).toBeLessThanOrEqual(1);
-    await page.locator('#settings-category-keybindings').click();
-    await page.locator('.keybinding-row[data-action="sidebar"]').getByRole('button', { name: /^Add/ }).click();
-    await expect(page.locator('#keybinding-recorder > #application-notices')).toBeVisible();
-    expect(Math.abs((await strip.boundingBox())!.y - position!.y)).toBeLessThanOrEqual(1);
-    await page.getByRole('button', { name: 'Dismiss Read settings', exact: true }).click();
-    await expect(strip).toBeHidden(); await expect(page.locator('#keybinding-recorder')).toBeVisible();
-    await expect(page.locator('#keybinding-record')).toBeFocused();
-    await page.keyboard.press('Escape'); await page.locator('#settings-back').click();
+    await page.locator('#settings-back').click();
+    const settingsPage = await fixture.settingsWindow('keybindings');
+    const globalStrip = settingsPage.locator('#application-notices');
+    await expect(globalStrip).toContainText('Read global settings');
+    const globalPosition = await globalStrip.boundingBox();
+    await settingsPage.locator('.keybinding-row[data-action="sidebar"]').getByRole('button', { name: /^Add/ }).click();
+    await expect(settingsPage.locator('#keybinding-recorder > #application-notices')).toBeVisible();
+    expect(Math.abs((await globalStrip.boundingBox())!.y - globalPosition!.y)).toBeLessThanOrEqual(1);
+    await settingsPage.getByRole('button', { name: 'Dismiss Read global settings', exact: true }).click();
+    await expect(globalStrip).toBeHidden(); await expect(settingsPage.locator('#keybinding-recorder')).toBeVisible();
+    await expect(settingsPage.locator('#keybinding-record')).toBeFocused();
+    await settingsPage.keyboard.press('Escape'); await settingsPage.locator('#settings-back').click();
     await expect(page.locator(visible('prompt'))).toHaveValue('Keep my draft');
     expect(fixture.errors).toEqual([]);
   } finally { await fixture.close(); }
 });
 
-test('notification timeout has an accessible Dismiss control in Settings and the conversation without retrying', async ({ page }) => {
+test('notification timeout stays in global Settings with accessible dismissal and no retry', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {
-    await page.evaluate(() => {
+    const settingsPage = await fixture.settingsWindow();
+    await settingsPage.evaluate(() => {
       const state = window as unknown as { __fixtureHost(command: string, args: Record<string, unknown>): Promise<unknown> };
       const original = state.__fixtureHost;
       state.__fixtureHost = async (command, args) => {
@@ -185,31 +190,23 @@ test('notification timeout has an accessible Dismiss control in Settings and the
         return original(command, args);
       };
     });
-    const strip = page.locator('#application-notices');
+    await settingsPage.locator('#settings-category-notifications').click();
+    const strip = settingsPage.locator('#application-notices');
     const dismiss = strip.getByRole('button', { name: 'Dismiss Desktop notifications', exact: true });
-    for (const surface of ['Settings', 'conversation']) {
-      await page.locator('#open-settings').click();
-      await page.locator('#settings-category-notifications').click();
-      await page.locator('#notification-test').click();
+    for (const method of ['keyboard', 'pointer']) {
+      await settingsPage.locator('#notification-test').click();
       await expect(strip).toContainText('macOS notification settings lookup timed out');
-      if (surface === 'conversation') await page.locator('#settings-back').click();
-      await expect(dismiss).toBeInViewport();
-      await expect(dismiss).toBeEnabled();
+      await expect(dismiss).toBeInViewport(); await expect(dismiss).toBeEnabled();
       const calls = fixture.calls.length;
-      // WebKit pointer clicks need not focus buttons; exercise keyboard dismissal
-      // from a known Settings focus owner as well as pointer dismissal outside it.
-      if (surface === 'Settings') {
-        await page.locator('#notification-test').focus();
-        await dismiss.focus();
-        await page.keyboard.press('Enter');
+      if (method === 'keyboard') {
+        await settingsPage.locator('#notification-test').focus();
+        await dismiss.focus(); await settingsPage.keyboard.press('Enter');
       } else await dismiss.click();
       await expect(strip).toBeHidden();
       expect(fixture.calls.length).toBe(calls);
-      if (surface === 'Settings') {
-        await expect(page.locator('#settings-page')).toBeVisible();
-        await expect(page.locator('#notification-test')).toBeFocused();
-        await page.locator('#settings-back').click();
-      }
+      await expect(settingsPage.locator('#settings-page')).toBeVisible();
+      await expect(page.locator('#application-notices')).toBeHidden();
+      // The next explicit test is a new occurrence, never an automatic retry.
     }
     expect(fixture.errors).toEqual([]);
   } finally { await fixture.close(); }

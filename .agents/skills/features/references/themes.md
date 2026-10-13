@@ -7,7 +7,7 @@ Human guide: [Themes](../../../../docs/themes.md). Maintenance guide:
 
 ## Specification and acceptance criteria
 
-Theme application changes CSS colors only. Window-local previews never persist/broadcast; cancellation restores the latest committed theme. Imports remain bounded standalone files, catalog IDs stay stable, and no runtime networking occurs.
+Theme application changes CSS colors only. Theme selection in a project window (Settings or palette) creates a project override; global Settings edits the default. Inheriting projects follow global changes; explicit overrides do not. Imports/removal remain global-only, and project pickers use the shared global library without copying palettes. [Preferences](preferences.md#project-layering) owns precedence/reset semantics. Window-local previews never persist/broadcast; cancellation restores the latest committed theme. Imports remain bounded standalone files, catalog IDs stay stable, and no runtime networking occurs.
 
 ## Code map and invariants
 
@@ -62,8 +62,8 @@ Theme application changes CSS colors only. Window-local previews never persist/b
   overwriting a local preview. Cancel restores **latest** committed selection,
   including another window's change, not a stale opening snapshot. Failure restores
   committed colors; newer preview generations prevent old save completions from
-  overriding a newly opened picker. Accepted selection updates other project
-  windows/pop-outs normally. No preview persistence/broadcast.
+  overriding a newly opened picker. Accepted global selection updates inheriting project
+  windows/pop-outs; project selection affects its own project window and owned reference pop-outs through native scoped snapshots. No preview persistence/broadcast.
 - `select-theme` is registered and bindable via shared dispatcher, with empty
   default shortcuts. Picker entry/shortcut/modal priority are harness-independent.
 - Former `import-gogh-*` saved copies and optional `{provider:'gogh', author}`

@@ -4,11 +4,11 @@ Use local timing reports to investigate sluggish typing or scrolling. Diagnostic
 
 ## Capture a slowdown
 
-1. Open **Settings → Diagnostics** and turn **Performance diagnostics** on.
+1. Open **global Settings → Diagnostics** and turn **Performance diagnostics** on.
 2. Return to your project and use Nimrod normally. Allow about a minute if you want a full minute of preceding history.
-3. When the app feels sluggish, open the command palette and choose **Capture performance report**. The same button is available in Settings → Diagnostics.
+3. When the app feels sluggish, open the command palette and choose **Capture performance report**. Capture targets this project window, not the separate Settings window.
 4. Continue the interaction for another five seconds while capture finishes.
-5. Open **Settings → Diagnostics** to find **Report saved:** and its exact file path. Share that path with your coding assistant for local inspection, or share the JSON file yourself. No data is sent automatically.
+5. The project window’s notice strip shows **Report saved:** and the exact path. Reopening the command palette also shows the last path in **Capture performance report**’s detail. Share that path with your coding assistant for local inspection, or share the JSON file yourself. No data is sent automatically.
 
 The command has no default shortcut. You can assign one in **Settings → Keybindings** to mark a slowdown without opening the palette. Captures belong to the window where you invoke the command; enabling/disabling diagnostics synchronizes across project windows. Reference pop-outs are not sampled.
 
