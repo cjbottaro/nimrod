@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
-import { DEFAULT_WINDOW_APPEARANCE, installWindowAppearance, readWindowAppearance, windowSurfaceOpacities, titlebarTint, type TitlebarTint, type AppearanceCapabilities, type WindowAppearance } from '../src/window-appearance';
+import { DEFAULT_WINDOW_APPEARANCE, readWindowAppearance, windowSurfaceOpacities, titlebarTint, type TitlebarTint, type AppearanceCapabilities, type WindowAppearance } from '../src/window-appearance';
+
+import { installWindowAppearance } from '../src/window-appearance-controller';
+import { applyTheme } from '../src/themes/theme';
 
 const mac: AppearanceCapabilities = { platform: 'macos', transparency: true, frost: true, reducedTransparency: false };
 const linux: AppearanceCapabilities = { platform: 'linux', transparency: true, frost: false, reducedTransparency: false };
@@ -10,7 +13,10 @@ function fixture(support = mac, initial: Partial<WindowAppearance> = {}, tintTit
   const dom = new JSDOM('<input id="opacity" type="range" min="0" max="100"><output></output><select><option value="window">Whole window</option><option value="chrome">Sidebar and Project bar</option></select><div id="frost"><input type="checkbox"></div><p></p><textarea>draft</textarea><details open>Retained card</details>', { pretendToBeVisual: true });
   const window = dom.window as unknown as Window;
   const root = dom.window.document.documentElement;
-  root.dataset.themeMode = 'dark';
+  const setTheme = (mode: 'dark' | 'light' | null, background = mode === 'light' ? '#f7f9f8' : '#151c20') => {
+    applyTheme(root, mode === null ? undefined : { id: 'fixture-' + mode, name: 'Fixture', mode, colors: { 'editor.background': background }, syntax: {} });
+  };
+  setTheme('dark');
   let value = { ...DEFAULT_WINDOW_APPEARANCE, ...initial };
   const saves: Partial<WindowAppearance>[] = [];
   const effects: { frosted: boolean; dark: boolean | null }[] = [];
@@ -31,7 +37,7 @@ function fixture(support = mac, initial: Partial<WindowAppearance> = {}, tintTit
     report: (message, cause) => reports.push({ message, cause }),
   }, controls);
   const event = (target: HTMLElement, type: string) => target.dispatchEvent(new dom.window.Event(type, { bubbles: true }));
-  return { dom, root, controls, saves, effects, reports, controller, event,
+  return { dom, root, controls, saves, effects, reports, controller, event, setTheme,
     external(patch: Partial<WindowAppearance>) { value = { ...value, ...patch }; controller.reload(); },
     setSave(next: typeof save) { save = next; }, setApply(next: typeof apply) { apply = next; },
     close() { controller.dispose(); dom.window.close(); },
@@ -64,10 +70,10 @@ test('initial readiness waits for native tint and coalesces same-mode palette ch
     tints.push(color); return tints.length === 1 ? gate : Promise.resolve();
   });
   try {
-    f.root.style.setProperty('--vscode-editor-background', '#123456');
+    f.setTheme('dark', '#123456');
     let ready = false; void f.controller.ready.then(() => { ready = true; });
     await tick(); assert.equal(ready, false); assert.deepEqual(tints[0], [18, 52, 86, 128]);
-    f.root.style.setProperty('--vscode-editor-background', '#334455'); await tick();
+    f.setTheme('dark', '#334455'); await tick();
     assert.equal(tints.length, 1); release(); await f.controller.ready;
     assert.deepEqual(tints.at(-1), [51, 68, 85, 128]); assert.equal(f.effects.length, 1);
     assert.deepEqual(f.effects[0], { frosted: false, dark: true });
@@ -85,13 +91,27 @@ test('a same-colour appearance change cannot be hidden by an older title-tint re
     tints.push(color); return tints.length === 1 ? gate : Promise.resolve();
   });
   try {
-    f.root.style.setProperty('--vscode-editor-background', '#123456'); await tick();
+    f.setTheme('dark', '#123456'); await tick();
     assert.equal(tints.length, 1);
-    f.root.dataset.themeMode = 'light'; await tick();
-    assert.deepEqual(f.effects.at(-1), { frosted: false, dark: false });
+    f.setTheme('light', '#123456'); await tick();
+    assert.equal(f.effects.length, 1); // Tint and material no longer overlap.
     release(); await f.controller.ready;
+    assert.deepEqual(f.effects.at(-1), { frosted: false, dark: false });
     assert.equal(tints.length, 2); assert.deepEqual(tints[0], tints[1]);
   } finally { release(); f.close(); }
+});
+
+test('unrelated root-style mutations are not an appearance update interface', async () => {
+  const tints: TitlebarTint[] = [];
+  const f = fixture(mac, { opacity: 50 }, async color => { tints.push(color); });
+  try {
+    await f.controller.ready; const before = tints.length;
+    f.root.style.setProperty('--unrelated', 'keep');
+    f.root.style.zoom = '1.25'; await tick();
+    assert.equal(tints.length, before);
+    f.setTheme('dark', '#334455'); await f.controller.settled();
+    assert.deepEqual(tints.at(-1), [51, 68, 85, 128]);
+  } finally { f.close(); }
 });
 
 test('surface density is continuous, role-ordered and converges exactly to the opaque endpoint', () => {
@@ -149,7 +169,7 @@ test('macOS frosting follows opacity, toggle and local dark/light theme previews
     observer.observe(f.root, { attributes: true });
     for (let i = 0; i < 200; i++) f.controller.reload();
     await tick(); assert.equal(f.effects.length, 1); assert.equal(rootMutations, 0); observer.disconnect();
-    f.root.dataset.themeMode = 'light'; await tick();
+    f.setTheme('light'); await tick();
     assert.deepEqual(f.effects.at(-1), { frosted: true, dark: false });
     f.controls.frosted.checked = false; f.event(f.controls.frosted, 'change');
     assert.equal(f.root.dataset.translucency, 'window'); await tick();
@@ -161,11 +181,11 @@ test('macOS frosting follows opacity, toggle and local dark/light theme previews
 test('the system theme leaves native appearance inherited while explicit previews use window-local overrides', async () => {
   const f = fixture(mac, { opacity: 60 });
   try {
-    await tick(); delete f.root.dataset.themeMode; await tick();
+    await tick(); f.setTheme(null); await tick();
     assert.deepEqual(f.effects.at(-1), { frosted: true, dark: null });
-    f.root.dataset.themeMode = 'light'; await tick();
+    f.setTheme('light'); await tick();
     assert.deepEqual(f.effects.at(-1), { frosted: true, dark: false });
-    f.root.dataset.themeMode = 'dark'; await tick();
+    f.setTheme('dark'); await tick();
     assert.deepEqual(f.effects.at(-1), { frosted: true, dark: true });
   } finally { f.close(); }
 });
@@ -193,7 +213,7 @@ test('native operations serialize/coalesce to the latest request while preservin
     f.setApply(async () => { max = Math.max(max, ++inFlight); const result = await pending; --inFlight; return result; });
     const prompt = f.root.querySelector('textarea')!, card = f.root.querySelector('details')!;
     prompt.focus();
-    f.root.dataset.themeMode = 'light'; await tick();
+    f.setTheme('light'); await tick();
     f.external({ opacity: 100 }); f.external({ opacity: 55 }); f.external({ frosted: false });
     release(mac); await tick();
     assert.equal(max, 1); assert.deepEqual(f.effects.at(-1), { frosted: false, dark: false });

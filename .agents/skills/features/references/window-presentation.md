@@ -1,0 +1,40 @@
+# Window presentation boundaries
+
+**Status: refactored; fixture coverage authored/updated, not executed.** This reference owns code organization and the shared choke points, not the visible feature contracts. [Translucency](translucency.md), [Themes](themes.md), [Settings layout](settings-layout.md), [Pop-outs](pop-outs.md) and [Error presentation](error-presentation.md) remain authoritative for behavior. No generic harness protocol is introduced; these are Nimrod's concrete native windows and Pi integration is unchanged.
+
+## Responsibility map and change routing
+
+| Change | Canonical owner | Boundaries |
+| --- | --- | --- |
+| Surface density, role hierarchy, settings schema and native RGBA conversion | `src/window-appearance.ts`, `src/window-appearance.css` | Pure presentation policy; no IPC or lifecycle |
+| Apply/preview/restore a theme | `src/themes/theme.ts::applyTheme` | Apply all managed CSS, then publish one completed window-local presentation snapshot |
+| Theme presentation notification | `src/themes/applied-theme.ts` | WeakMap per root, explicit mode/background snapshot; not DOM mutation inference or global broadcast |
+| Appearance controls/media/preferences | `src/window-appearance-controller.ts` | Optimistic field versions, unchanged-paint signature, theme subscription, capability readiness |
+| Native material/title ordering | `src/window-appearance-effects.ts` | One typed latest-value pipeline, material before title tint, per-stage failure/cache, settlement/disposal |
+| Native frontend bridge | `src/native-window-appearance.ts` | Tauri commands/focus refresh only; no palette policy |
+| Frontend first reveal/window lifetime | `src/window-presentation.ts` | `presentWhenPrepared`, one reveal attempt, unload cancellation, reverse-order owned cleanup |
+| Native window creation composition | `src-tauri/src/window_presentation.rs::prepare` | Every constructor passes appearance and navigation policy here; owners still choose identity/URL/geometry |
+| Native explicit focus | `window_presentation::{focus, focus_existing, focus_reference}` | Standard focus sequence centralized; cold Settings eligibility preserved; reference focus does not add app activation |
+| Native delayed-reveal token | `window_presentation::PreparationGate` | One current generation/readiness state under one mutex; feature owner holds its own gate |
+| Portable native appearance command dispatch | `src-tauri/src/window_appearance.rs` | Common main-thread dispatch and capabilities; no AppKit view walking |
+| macOS material/title implementation | `src-tauri/src/macos_window_appearance.rs` | Cocoa/Quartz-only native operations, clear backing and bounded title-view tint |
+| Global Settings identity/categories/readiness authorization | `src-tauri/src/settings_window.rs`, `src/global-settings.ts` | Concrete singleton ownership and required prepared page; not another appearance engine |
+| Automatic reference-window presentation | `src-tauri/src/popout_windows.rs` | Separate passive, eligibility-checked `orderFront` path; never route automatic restore through generic explicit focus |
+
+## Contracts
+
+- Window constructors compose through `window_presentation::prepare`. `webview_navigation::guard` remains navigation security only, not a styling/lifecycle hook. Source guards cover welcome/project, global Settings and references, including all four constructors.
+- Feature owners retain directory/session identity, creation locks, geometry, persistence, shutdown and close policy. Centralizing presentation must not centralize/rewrite Pi ownership or turn reference restoration into a focused window open.
+- Theme selection, hover previews, restore/cancel and reference propagation all reach `applyTheme`. Publish after CSS is complete. The native subscriber uses the explicit background/mode snapshot; only Nimrod's inherited system palette needs computed CSS on installation/theme/system-media change. Routine state reloads and unrelated root styles never trigger a native appearance update.
+- The effect pipeline snapshots typed inputs, serializes material and tint (no overlapping independent native queues), coalesces intermediate targets and caches no-ops. A material change invalidates title tint. Native refresh can repaint successful tint but cannot replay an identical failed stage. Stage success resolves only its matching application notice cause. Disposal suppresses remaining native stages/callbacks.
+- `ready`/`settled` track the current capability request and native pipeline rather than assuming the first capability response wins. Cold Settings calls `presentWhenPrepared(surface.settled)`; readiness remains the narrow [initial presentation exception](settings-layout.md#first-native-presentation), not a gate for ordinary edits/Send/navigation.
+- The frontend lifetime owner registers cleanup as resources are acquired, including before later boot awaits. A late-acquired listener/resource after unload is disposed immediately. Reveal is latched before its native call; preparation failure can show the error fallback, but native presentation is never automatically replayed. Errors stay in the existing notice strip.
+- Native title rendering remains the existing bounded public-NSView-ancestry implementation, now isolated. A structural refactor is not evidence that every AppKit/full-screen hierarchy accepts it. Do not replace this with unverified private backdrop APIs or custom HTML title bars under an architectural-cleanup task.
+
+## Audit scope and verification
+
+The audit covered native constructors, explicit/passive focus routes, Settings boot/reveal, project/global/reference appearance installation, theme picker preview/restore, and the two native effect queues. The concrete problems were cross-responsibility hooks, implicit style observation, duplicated queue state/coordination, and late registration of global Settings cleanup. This refactor does not claim a comprehensive transport/session/transcript audit or native acceptance.
+
+Coverage: `test/themes.test.ts` checks completed root-local snapshots; `test/window-appearance.test.ts` checks appearance behavior using the actual theme publisher, unrelated-style isolation and existing density/draft/focus invariants. New `test/window-appearance-effects.test.ts` checks serialization/latest target/failure no-retry/disposal, and `test/window-presentation.test.ts` checks readiness/once-only reveal/error fallback/owned cleanup. Existing shell cold-start/error/close tests and offline theme/translucency fixtures remain the behavioral integration boundary. Rust factory/gate/navigation/platform source fixtures check composition/ownership and preserved native constraints, not pixels or actual platform focus.
+
+No tests, checks, builds or native app launches were run for this refactor. On explicit request use `mise run check` and relevant offline browser fixtures; native macOS first-frame/title/focus/full-screen acceptance and Linux remain pending per [Verification](verification.md).

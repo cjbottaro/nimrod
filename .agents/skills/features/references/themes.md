@@ -7,7 +7,7 @@ Human guide: [Themes](../../../../docs/themes.md). Maintenance guide:
 
 ## Specification and acceptance criteria
 
-Theme application changes palette CSS colors only. The separate [window-translucency controller](translucency.md) observes theme mode to synchronize an enabled native material, including window-local previews, without rewriting palettes. Theme selection in a project window (Settings or palette) creates a project override; global Settings edits the default. Inheriting projects follow global changes; explicit overrides do not. Imports/removal remain global-only, and project pickers use the shared global library without copying palettes. [Preferences](preferences.md#project-layering) owns precedence/reset semantics. Window-local previews never persist/broadcast; cancellation restores the latest committed theme. Imports remain bounded standalone files, catalog IDs stay stable, and no runtime networking occurs.
+Theme application changes palette CSS colors only. After CSS is complete, `applyTheme` publishes a root-local mode/background snapshot through `themes/applied-theme.ts`; the separate [window-presentation pipeline](window-presentation.md) consumes this explicit notification for native appearance, including previews/restoration, without rewriting palettes or observing DOM mutations. Theme selection in a project window (Settings or palette) creates a project override; global Settings edits the default. Inheriting projects follow global changes; explicit overrides do not. Imports/removal remain global-only, and project pickers use the shared global library without copying palettes. [Preferences](preferences.md#project-layering) owns precedence/reset semantics. Window-local previews never persist/broadcast; cancellation restores the latest committed theme. Imports remain bounded standalone files, catalog IDs stay stable, and no runtime networking occurs.
 
 ## Code map and invariants
 
@@ -15,6 +15,7 @@ Theme application changes palette CSS colors only. The separate [window-transluc
   mapping, fallback derivation, imported-library validation and CSS-only application.
   `BUILTIN_THEME_IDS` preserves Nimrod/Dracula/Tokyo Night/Osaka Jade;
   `CATALOG_THEME_IDS` comes directly from the generated catalog. No registry cycle.
+- `src/themes/applied-theme.ts`: root-local current snapshot and explicit subscriptions, published only after `applyTheme` finishes CSS application. Same-mode palette changes, previews and rollback reach the same presentation boundary; no persistent/global preview broadcast.
 - `src/themes/builtins.ts`: existing adaptations plus `CATALOG_THEMES` parsed by
   the normal importer. `selectedTheme` is shared by Settings, project windows and
   pop-outs. Catalog source metadata provides author text for picker search.

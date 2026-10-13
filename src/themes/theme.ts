@@ -1,4 +1,5 @@
 import catalog from './catalog.json';
+import { publishAppliedTheme } from './applied-theme';
 import { parse, printParseErrorCode, type ParseError } from 'jsonc-parser';
 
 export const MAX_THEME_BYTES = 512 * 1024;
@@ -175,12 +176,15 @@ export function applyTheme(root: HTMLElement, theme?: ColorTheme): void {
     root.style.removeProperty('color-scheme');
     delete root.dataset.themeMode;
     root.dataset.theme = 'nimrod';
+    publishAppliedTheme(root, { id: 'nimrod', mode: null });
     return;
   }
   root.dataset.theme = theme.id;
   root.dataset.themeMode = theme.mode;
   root.style.colorScheme = theme.mode;
-  for (const [key, color] of Object.entries(themeProperties(theme))) root.style.setProperty(key, color);
+  const properties = themeProperties(theme);
+  for (const [key, color] of Object.entries(properties)) root.style.setProperty(key, color);
+  publishAppliedTheme(root, { id: theme.id, mode: theme.mode, background: properties['--vscode-editor-background'] });
 }
 
 export function readLibrary(raw: unknown): ThemeLibrary {

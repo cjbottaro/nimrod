@@ -87,7 +87,6 @@ pub fn guard<'a>(
     app: &tauri::AppHandle,
     label: &str,
 ) -> tauri::WebviewWindowBuilder<'a, tauri::Wry, tauri::AppHandle> {
-    let builder = crate::window_appearance::prepare(builder);
     // Match Tauri's local protocol defaults. This app does not use
     // use_https_scheme or a remote frontendDist. Development also permits its
     // exact configured dev server; production never trusts that HTTP origin.
@@ -223,11 +222,9 @@ mod tests {
 
     #[test]
     fn every_app_window_creation_path_installs_the_native_guard() {
-        let projects = include_str!("workspace_windows.rs");
-        assert_eq!(projects.matches("WebviewWindowBuilder::").count(), 2);
-        assert_eq!(projects.matches("webview_navigation::guard(").count(), 2);
-        let popouts = include_str!("popouts.rs");
-        assert_eq!(popouts.matches("WebviewWindowBuilder::").count(), 1);
-        assert_eq!(popouts.matches("webview_navigation::guard(").count(), 1);
+        // Constructor coverage belongs to window_presentation; this module
+        // verifies the shared composition boundary still installs its guard.
+        let presentation = include_str!("window_presentation.rs");
+        assert!(presentation.contains("crate::webview_navigation::guard(builder, app, label)"));
     }
 }

@@ -105,7 +105,7 @@ pub async fn focus_notification_window(
         return Ok(());
     }
     if let Some(window) = app.get_webview_window(window.label()) {
-        crate::workspace_windows::focus_window(&app, &window)?;
+        crate::window_presentation::focus(&app, &window)?;
     }
     Ok(())
 }

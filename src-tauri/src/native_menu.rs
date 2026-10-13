@@ -218,7 +218,7 @@ fn request_project_picker(app: &tauri::AppHandle) -> Result<(), String> {
         .lock()
         .unwrap()
         .insert(window.label().into());
-    crate::workspace_windows::focus_window(app, &window)?;
+    crate::window_presentation::focus(app, &window)?;
     // Pending state also covers a newly created/not-yet-booted frontend.
     app.emit_to(
         tauri::EventTarget::webview_window(window.label()),
