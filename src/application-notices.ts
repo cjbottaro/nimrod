@@ -94,6 +94,8 @@ export function installApplicationNotices(win: Window, store = new NoticeStore()
     if (bar) bar.after(slot); else document.body.prepend(slot);
     document.body.append(strip);
   }
+  // Pi's fallback producer label adds no context; retain actual operation names.
+  const hasOperationContext = (notice: ApplicationNotice) => !session || notice.operation !== 'Pi operation';
   const rows = new Map<string, { node: HTMLElement; signature: string }>();
   const dialogs: HTMLDialogElement[] = [];
   const focus = new Map<Element, HTMLElement>();
@@ -168,15 +170,20 @@ export function installApplicationNotices(win: Window, store = new NoticeStore()
       changed = true;
       row.signature = signature; row.node.dataset.severity = notice.severity ?? 'error';
       const text = document.createElement('div'); text.className = 'application-notice-text';
-      const title = document.createElement('strong'); title.textContent = notice.operation;
+      const title = document.createElement('strong');
       const body = document.createElement('span'); body.className = 'notice-message';
       // Long/raw producer messages remain available verbatim, without dominating
       // the conversation. Explicit diagnostics do not require text classification.
       const firstLine = notice.message.split('\n')[0];
       const compact = firstLine.length > 160 ? `${firstLine.slice(0, 157)}…` : firstLine;
-      body.textContent = compact;
-      text.append(title, body);
-      const diagnostics = notice.details || (compact !== notice.message ? notice.message : undefined);
+      title.textContent = session ? compact : notice.operation;
+      text.append(title);
+      if (hasOperationContext(notice)) {
+        body.textContent = session ? notice.operation : compact;
+        text.append(body);
+      }
+      // Keep the complete message when shortened, even with explicit diagnostics.
+      const diagnostics = [compact !== notice.message ? notice.message : undefined, notice.details].filter(Boolean).join('\n\n');
       if (diagnostics) {
         const detail = document.createElement('details'); detail.className = 'notice-details';
         const label = document.createElement('summary'); label.textContent = 'Details';
@@ -191,7 +198,7 @@ export function installApplicationNotices(win: Window, store = new NoticeStore()
       });
       if (notice.dismissible !== false) {
         const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.textContent = '×'; dismiss.dataset.dismiss = 'true';
-        dismiss.setAttribute('aria-label', `Dismiss ${notice.operation}`); actions.append(dismiss);
+        dismiss.setAttribute('aria-label', hasOperationContext(notice) ? `Dismiss ${notice.operation}` : 'Dismiss notice'); actions.append(dismiss);
       }
       row.node.replaceChildren(icon, text, actions);
     }
@@ -204,7 +211,7 @@ export function installApplicationNotices(win: Window, store = new NoticeStore()
     const heading = `${notices.length} ${session ? 'session' : 'application'} issues`;
     if (summary.textContent !== heading) summary.textContent = heading;
     const signature = active ? JSON.stringify(notices.map(notice => [notice.id, notice.operation, notice.message])) : '';
-    if (signature !== announced) { announced = signature; announcement.textContent = active ? notices.map(notice => `${notice.operation}. ${notice.message}`).join(' ') : ''; }
+    if (signature !== announced) { announced = signature; announcement.textContent = active ? notices.map(notice => hasOperationContext(notice) ? `${notice.operation}. ${notice.message}` : notice.message).join(' ') : ''; }
     position(); if (changed) scheduleMeasure(); restoreFocus(wasInStrip);
   };
   const click = (event: MouseEvent) => {

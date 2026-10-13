@@ -52,6 +52,54 @@ test('session notices stay inside their conversation, preserving reader intent, 
   } finally { await fixture.close(); }
 });
 
+test('session notices use the theme error outline, message-first text and preserved Details across dark/light themes', async ({ page }) => {
+  const fixture = await demoFixture(page);
+  try {
+    const token = String(fixture.calls.find(call => call.command === 'start_pi')!.args.token);
+    const message = 'MCP servers need attention: playwright failed. ' + 'spawn /fixture/playwright ENOENT '.repeat(8) + 'Run /mcp to fix.';
+    const prompt = page.locator(visible('prompt')); await prompt.fill('Keep styling draft'); await prompt.focus();
+    await page.evaluate(({ token, message }) => {
+      const state = window as unknown as { __fixtureChannels: Record<string, { onmessage(packet: unknown): void }> };
+      for (const severity of ['warning', 'error', 'info']) state.__fixtureChannels[token].onmessage({ kind: 'rpc', value: { type: 'extension_ui_request', method: 'notify', notifyType: severity, id: severity, message } });
+    }, { token, message });
+    const notices = page.locator(visible('session-notices'));
+    await expect(notices).toBeVisible(); await expect(prompt).toBeFocused();
+    await notices.locator('.notice-group-summary').click();
+    const row = notices.locator('.application-notice').first();
+    await expect(row.locator('strong')).toHaveText(message.slice(0, 157) + '…');
+    await expect(row.locator('.notice-message')).toHaveCount(0);
+    await expect(notices).not.toContainText('Pi operation');
+    await row.locator('.notice-details > summary').click();
+    await expect(row.locator('.notice-details > div')).toHaveText(message);
+    await row.evaluate(node => { (node as HTMLElement).dataset.testIdentity = 'retained'; });
+    const colors = new Set<string>();
+    for (const theme of ['dracula', 'catalog-atom-one-light-vscode-atom-one-light']) {
+      await fixture.editPreferences(JSON.stringify({ 'appearance.theme': theme }));
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      const styling = await notices.evaluate(node => {
+        const probe = document.createElement('span'); node.append(probe);
+        const color = (value: string) => { probe.style.color = value; return getComputedStyle(probe).color; };
+        const error = color('var(--vscode-errorForeground)');
+        const border = color('color-mix(in srgb, var(--vscode-errorForeground) 60%, transparent)');
+        const foreground = color('var(--vscode-foreground)'); probe.remove();
+        const style = getComputedStyle(node);
+        return { border: style.borderTopColor, expectedBorder: border, width: style.borderTopWidth, type: style.borderTopStyle,
+          icons: [...node.querySelectorAll('.notice-icon')].map(icon => getComputedStyle(icon).color), error,
+          headline: getComputedStyle(node.querySelector('strong')!).color, foreground };
+      });
+      expect(styling.border).toBe(styling.expectedBorder); expect(styling.width).toBe('1px'); expect(styling.type).toBe('solid');
+      expect(styling.icons).toEqual([styling.error, styling.error, styling.error]);
+      expect(styling.headline).toBe(styling.foreground); colors.add(styling.border);
+      await expect(row).toHaveAttribute('data-test-identity', 'retained');
+      await expect(row.locator('.notice-details')).toHaveAttribute('open', '');
+      await expect(row.locator('.notice-details > div')).toHaveText(message);
+    }
+    expect(colors.size).toBe(2);
+    await expect(prompt).toHaveValue('Keep styling draft'); await expect(page.locator('#application-notices')).toBeHidden();
+    expect(fixture.errors).toEqual([]);
+  } finally { await fixture.close(); }
+});
+
 test('window strip keeps its position and remains actionable through Settings and nested native dialogs', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {

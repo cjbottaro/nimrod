@@ -33,10 +33,17 @@ does not cover content. Its controls remain usable while a dialog is open.
 
 ## Reading and dismissing notices
 
-Notices use a neutral surface and a small severity icon. A single issue shows its
-summary directly. Multiple issues collapse into an expandable count/list, with a
-bounded scrollable area so they do not keep shrinking the transcript. Long messages
-and diagnostics are available under **Details**.
+Session notices use a neutral surface with a thin outline and small icon in the
+theme's error color. This is one "needs attention" treatment, not separate visual
+warning/error categories. The message itself leads; useful operation context is
+secondary, and generic labels such as "Pi operation" are omitted. Application
+notices retain their operation heading and severity icon.
+
+Multiple issues collapse into an expandable count/list, with a bounded scrollable
+area so they do not keep shrinking the transcript. Long messages have a shortened
+preview with the complete original text under **Details**. Separately supplied
+diagnostics also appear there. Unstructured Pi messages are not guessed at or
+rewritten to separate a problem from its technical details.
 
 Errors remain until dismissed or their own issue resolves; they do not flash and
 disappear. Later unrelated success does not clear an earlier issue. One failure

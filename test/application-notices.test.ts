@@ -77,6 +77,50 @@ test('session ownership controls placement and announcements, not notice lifetim
   } finally { two.dispose(); one.dispose(); shell.dispose(); win.close(); }
 });
 
+test('session messages lead, generic Pi labels disappear, and useful operation context remains secondary', () => {
+  const dom = new JSDOM('<body><section id="session"><input></section></body>', { pretendToBeVisual: true });
+  const ui = installApplicationNotices(dom.window as unknown as Window, new NoticeStore(), { owner: 'session', container: dom.window.document.getElementById('session')! });
+  try {
+    ui.setActive(true);
+    const message = 'MCP servers need attention: playwright could not start. Run /mcp to fix.';
+    ui.report({ id: 'pi', owner: 'session', operation: 'Pi operation', message, severity: 'warning' });
+    assert.equal(ui.strip.querySelector('strong')!.textContent, message);
+    assert.equal(ui.strip.querySelector('.notice-message'), null);
+    assert.doesNotMatch(ui.strip.textContent!, /Pi operation/);
+    assert.equal(ui.strip.querySelector('.notice-announcement')!.textContent, message);
+    assert.equal(ui.strip.querySelector('[data-dismiss]')!.getAttribute('aria-label'), 'Dismiss notice');
+    assert.equal(ui.store.notices[0].severity, 'warning', 'styling never reclassifies producer metadata');
+    const row = ui.strip.querySelector('.application-notice');
+    ui.report({ id: 'pi', owner: 'session', operation: 'Pi operation', message, severity: 'warning' });
+    assert.equal(ui.strip.querySelector('.application-notice'), row);
+    ui.resolve('pi');
+    ui.report({ id: 'connection', owner: 'session', operation: 'Session connection', message: 'Could not connect Pi' });
+    assert.equal(ui.strip.querySelector('strong')!.textContent, 'Could not connect Pi');
+    assert.equal(ui.strip.querySelector('.notice-message')!.textContent, 'Session connection');
+    assert.equal(ui.strip.querySelector('[data-dismiss]')!.getAttribute('aria-label'), 'Dismiss Session connection');
+  } finally { ui.dispose(); dom.window.close(); }
+});
+
+test('session Details retain complete unstructured messages and explicit diagnostics without parsing them', () => {
+  const dom = new JSDOM('<body><section id="session"></section></body>', { pretendToBeVisual: true });
+  const ui = installApplicationNotices(dom.window as unknown as Window, new NoticeStore(), { owner: 'session', container: dom.window.document.getElementById('session')! });
+  try {
+    const message = 'MCP servers need attention: ' + 'unstructured diagnostic '.repeat(12);
+    const notice = { id: 'pi', owner: 'session', operation: 'Pi operation', message, details: 'Producer-supplied diagnostic' };
+    ui.report(notice);
+    assert.equal(ui.strip.querySelector('strong')!.textContent, `${message.slice(0, 157)}…`);
+    const details = ui.strip.querySelector<HTMLDetailsElement>('.notice-details')!;
+    assert.equal(details.open, false);
+    assert.equal(details.querySelector('div')!.textContent, `${message}\n\nProducer-supplied diagnostic`);
+    details.open = true; ui.report(notice);
+    assert.equal(ui.strip.querySelector('.notice-details'), details); assert.equal(details.open, true);
+    ui.resolve('pi');
+    ui.report({ id: 'structured', owner: 'session', operation: 'Pi operation', message: 'Could not start the server', details: 'spawn /fixture/server ENOENT' });
+    assert.equal(ui.strip.querySelector('strong')!.textContent, 'Could not start the server');
+    assert.equal(ui.strip.querySelector('.notice-details > div')!.textContent, 'spawn /fixture/server ENOENT');
+  } finally { ui.dispose(); dom.window.close(); }
+});
+
 test('multiple notices collapse to a bounded list; diagnostics and rows survive unchanged reports', () => {
   const dom = new JSDOM('<body><header id="workspace-bar"></header></body>', { pretendToBeVisual: true });
   const ui = installApplicationNotices(dom.window as unknown as Window);
