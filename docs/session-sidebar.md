@@ -30,6 +30,8 @@ Recency survives Close/reopening for saved sessions. Rows show **relative time �
 
 **Switch session…** / **⌘/Ctrl+T** and previous/next **⌘/Ctrl+Shift+[ / ]** share All's order, wrapping at the ends. They reach every open session even when hidden or filtered. Choosing a filtered-out session switches to All. Sidebar arrow keys navigate the currently displayed rows; Left/Right on view tabs switch views, and Home/End choose All/Working.
 
+After Close or successful deletion of the selected session, selection prefers the most recently used connected session in the current view, then across All. If none are connected, it chooses the most recently used remaining session in the current view, then across All if the view is empty. This rule uses recency even in Unread, not neighboring rows. See [session cleanup](sessions.md#close-a-session).
+
 ## Indicators
 
 | Indicator | Meaning |

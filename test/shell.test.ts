@@ -1254,9 +1254,9 @@ test('returned deletion results remove a whole subtree once and select according
 });
 
 test('Close and Delete share connected-first selection and reconnect an inactive replacement', async () => {
-  for (const action of ['close', 'delete']) for (const scenario of ['all', 'unread-visible', 'unread-hidden', 'working-hidden', 'inactive-next', 'inactive-previous', 'background']) {
+  for (const action of ['close', 'delete']) for (const scenario of ['all', 'unread-visible', 'unread-hidden', 'working-hidden', 'inactive-middle', 'inactive-oldest', 'background']) {
     let now = 1_700_000_000_000;
-    const selectedIndex = scenario === 'inactive-previous' ? 0 : 1;
+    const selectedIndex = scenario === 'inactive-oldest' ? 0 : 1;
     const file = selectedIndex ? '/sessions/new-1.jsonl' : '/sessions/new.jsonl';
     const f = await fixture(undefined, { windowWorkspace: '/project', clock: () => now,
       deleteTree: async () => [{ file, deleted: true }] });
@@ -1284,7 +1284,7 @@ test('Close and Delete share connected-first selection and reconnect an inactive
         // Selected settled row stays readable, but the connected fallback is outside Working.
       } else if (scenario.startsWith('inactive')) {
         for (const i of [0, 1, 2, 3]) if (i !== selectedIndex) disconnect(i);
-        expected = selectedIndex ? 0 : 1;
+        expected = 3;
       } else if (scenario === 'background') expected = 3;
       rows[scenario === 'background' ? 3 : selectedIndex].click(); await f.tick();
       const before = f.calls.filter(c => c.command === 'start_pi').length;
@@ -1300,7 +1300,7 @@ test('Close and Delete share connected-first selection and reconnect an inactive
       if (reconnect) {
         const config = f.calls.filter(c => c.command === 'start_pi').at(-1)!.args.config as JsonRecord;
         assert.equal(config.mode, 'resume');
-        assert.equal(config.sessionFile, expected ? '/sessions/new-1.jsonl' : '/sessions/new.jsonl');
+        assert.equal(config.sessionFile, '/sessions/new-3.jsonl');
         assert.equal(rows[expected].querySelector('.session-indicator')!.getAttribute('data-state'), 'ready');
         assert.equal(f.calls.some(c => c.command === 'write_pi' && (c.args.message as JsonRecord).type === 'prompt'), false);
       }
@@ -1328,12 +1328,13 @@ test('returning to All loads and connects its selected restored session without 
 
 test('deletion reconnects unrelated replacements immediately and respects changed selection/quarantine', async () => {
   for (const scenario of ['event', 'returned-pending', 'changed-selection', 'quarantine']) {
-    const root = '/sessions/new-1.jsonl', child = '/sessions/new-2.jsonl', fallback = '/sessions/new.jsonl';
+    const root = '/sessions/new-1.jsonl', child = '/sessions/new-2.jsonl', fallback = '/sessions/new-3.jsonl';
     const results = [{ file: root, deleted: true }, { file: child, deleted: true }];
-    const options: ShellOptions = { windowWorkspace: '/project', deleteTree: async () => results };
+    let now = 1_700_000_000_000;
+    const options: ShellOptions = { windowWorkspace: '/project', clock: () => now, deleteTree: async () => results };
     const f = await fixture(undefined, options);
     try {
-      for (let i = 0; i < 4; i++) { f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick(); }
+      for (let i = 0; i < 4; i++) { now += 1000; f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick(); }
       const rows = f.rows(), channels = [...f.sessions.values()].map(s => s.channel);
       rows[1].click();
       for (const i of [0, 2, 3]) channels[i].onmessage({ kind: 'disconnected', message: 'Fixture inactive' });
@@ -1347,19 +1348,19 @@ test('deletion reconnects unrelated replacements immediately and respects change
         f.element<HTMLButtonElement>('delete-session').click();
       } else f.deletionEvent(event);
       await f.tick(); await f.tick(); await f.tick();
-      assert.equal(rows[0].getAttribute('aria-current'), 'true', 'whole subtree removed before replacement selection');
+      assert.equal(rows[3].getAttribute('aria-current'), 'true', 'whole subtree removed before most-recent survivor selection');
       assert.equal(f.calls.filter(c => c.command === 'start_pi').length, scenario === 'quarantine' ? 4 : 5, 'unrelated replacement resumes before transaction release');
-      if (scenario === 'changed-selection') { rows[3].click(); await f.tick(); }
+      if (scenario === 'changed-selection') { rows[0].click(); await f.tick(); }
       const release: DeletionEvent = { ...event, phase: 'release', pending: false };
       f.deletionEvent(release); await f.tick(); await f.tick();
       const resumes = scenario !== 'quarantine';
       assert.equal(f.calls.filter(c => c.command === 'start_pi').length, scenario === 'changed-selection' ? 6 : resumes ? 5 : 4);
       if (resumes) {
-        const selected = scenario === 'changed-selection' ? 3 : 0;
-        assert.equal((f.calls.filter(c => c.command === 'start_pi').at(-1)!.args.config as JsonRecord).sessionFile, selected ? '/sessions/new-3.jsonl' : fallback);
+        const selected = scenario === 'changed-selection' ? 0 : 3;
+        assert.equal((f.calls.filter(c => c.command === 'start_pi').at(-1)!.args.config as JsonRecord).sessionFile, selected === 0 ? '/sessions/new.jsonl' : fallback);
         assert.equal(rows[selected].querySelector('.session-indicator')!.getAttribute('data-state'), 'ready');
       }
-      if (scenario === 'changed-selection') assert.equal(rows[3].getAttribute('aria-current'), 'true');
+      if (scenario === 'changed-selection') assert.equal(rows[0].getAttribute('aria-current'), 'true');
       f.deletionEvent({ ...event, pending: false }); f.deletionEvent(release);
       await f.tick(); await f.tick();
       assert.equal(f.calls.filter(c => c.command === 'start_pi').length, scenario === 'changed-selection' ? 6 : resumes ? 5 : 4, 'duplicate reconciliation never reconnects twice');
