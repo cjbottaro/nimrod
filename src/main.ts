@@ -541,6 +541,11 @@ function presentConversation(tab: Tab | undefined): void {
     item.root.inert = item.closing || item.restarting || item.deleting || item !== presented;
     item.row.setAttribute('aria-current', String(item === presented));
   }
+  const sessionIdentity = required('project-session'), sessionName = required('project-session-name');
+  const title = tab?.title || '';
+  sessionIdentity.hidden = !tab;
+  if (sessionName.textContent !== title) sessionName.textContent = title;
+  if (sessionIdentity.title !== title) sessionIdentity.title = title;
   const badge = required('mode-badge');
   badge.textContent = !tab ? '' : tab.mode === 'temporary' ? 'Pi · temporary' : tab.file?.exists ? 'Pi' : 'Pi · awaiting first save';
   badge.title = tab?.file?.path || '';

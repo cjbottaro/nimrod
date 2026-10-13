@@ -281,6 +281,8 @@ test('foreground/background streaming does not persist unchanged session layout;
     renamed.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await f.tick(); await f.tick();
     assert.equal(layout().tabs.find(tab => tab.path === '/sessions/new.jsonl')!.name, 'Renamed');
+    assert.equal(f.element('project-session-name').textContent, 'Renamed');
+    assert.equal(f.element('project-session').title, 'Renamed');
     assert.equal(f.calls.some(call => call.command === 'write_pi' && (call.args.message as JsonRecord).type === 'prompt'), false);
   } finally { f.win.close(); }
 });
@@ -2225,6 +2227,36 @@ test('project bar identifies the directory, abbreviates home and keeps branding 
       assert.equal(f.calls.some(c => c.command === 'start_pi'), false);
     } finally { f.dom.window.close(); }
   }
+});
+
+test('project bar follows the displayed session even with the sidebar collapsed', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    const identity = f.element('project-session'), name = f.element('project-session-name');
+    assert.equal(identity.hidden, true);
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    assert.equal(identity.hidden, false);
+    assert.equal(name.textContent, 'Temporary session');
+    const first = f.captureChannel();
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    assert.equal(name.textContent, 'Session');
+    f.element<HTMLButtonElement>('toggle-sidebar').click();
+    assert.equal(f.element('session-sidebar').hidden, true);
+    assert.equal(identity.hidden, false);
+    first.onmessage({ kind: 'rpc', value: { type: 'agent_start' } }); await f.tick();
+    assert.equal(name.textContent, 'Session', 'background updates preserve the displayed identity');
+    f.rows()[0].click();
+    assert.equal(name.textContent, 'Temporary session');
+    assert.equal(identity.title, 'Temporary session');
+    f.element<HTMLButtonElement>('sidebar-working').click();
+    assert.equal(identity.hidden, false);
+    first.onmessage({ kind: 'rpc', value: { type: 'agent_end' } }); await f.tick();
+    assert.equal(identity.hidden, true, 'empty filtered views have no stale session identity');
+    assert.equal(name.textContent, '');
+    f.element<HTMLButtonElement>('sidebar-all').click();
+    assert.equal(identity.hidden, false);
+    assert.equal(name.textContent, 'Temporary session');
+  } finally { f.win.close(); }
 });
 
 test('failed workspace initialization shows the error without flashing welcome', async () => {
