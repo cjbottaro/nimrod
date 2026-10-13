@@ -1,6 +1,6 @@
 # Make Session sidebar updates change-driven
 
-**Status: deferred candidate. Suggested priority: second; medium navigation/focus risk.**
+**Status: deferred candidate. Suggested priority: first remaining; medium navigation/focus risk.**
 
 ## Why
 

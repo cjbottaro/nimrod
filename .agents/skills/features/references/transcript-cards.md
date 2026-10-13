@@ -28,7 +28,7 @@ One mounted card per invocation survives placement/lifecycle updates, preserving
 
 - Generation, execution output, final result and result processing are distinct states; late earlier-phase updates must not rewind completion.
 - Cards start closed. Only sustained nonempty execution output qualifies for auto-open after `TOOL_AUTO_DISCLOSURE_MS` (500ms); a final result alone never qualifies.
-- Manual open/close choices override automatic lifecycle disclosure. Auto-open has a 500ms minimum dwell; preserve the existing scheduler rather than replacing it with result-driven opening.
+- Manual open/close choices override automatic lifecycle disclosure. Auto-open has a 500ms minimum visible dwell; preserve the scheduler rather than replacing it with result-driven opening. Hidden-session presentation pauses remaining qualifying delay and dwell without toggling stale cards. Catch-up supplies the latest lifecycle before timers resume; unseen still-running output starts its delay on reveal, while work that starts/finishes entirely hidden never opens from its final result. Existing manual disclosure/card identity survives switching.
 - Live/final output viewports retain their eight-line/sixteen-line visual caps; these limit viewport height, not source content. Full raw inputs/results remain readable.
 - Placement changes must reuse one call-ID-keyed mounted shell, preserving connected indicators, disclosure timers and independently inspected output offsets.
 - Safe Markdown/code rendering, accessibility, Copy/Pop out and summary tooltip policy remain unchanged.

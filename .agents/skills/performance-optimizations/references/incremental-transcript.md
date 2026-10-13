@@ -1,6 +1,6 @@
 # Make transcript updates proportional to changed content
 
-**Status: deferred candidate. Suggested priority: third; medium-to-high reconciliation risk.**
+**Status: deferred candidate. Suggested priority: second remaining; medium-to-high reconciliation risk.**
 
 ## Why
 

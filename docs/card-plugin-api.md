@@ -42,6 +42,7 @@ Use type-only SDK imports: they are erased before runtime resolution, so copying
 
 - `supports(data)` establishes compatibility, **not input completeness**. Returning false latches that mounted card to raw fallback. Handle partial streamed arguments in `update` instead.
 - `mount(context)` runs once per mounted card and returns `update(data, state)` / `dispose()`.
+- Presentation updates can be coalesced. Hidden sessions retain mounted instances and catch up with the latest data on reveal, without replaying intermediate updates. Removal cleanup waits for that catch-up; explicit session reset/view disposal still cleans up immediately. Plugin-owned timers/async work are not automatically suspended while hidden.
 - `supports`, `mount`, `update`, `dispose` and `mutate` callbacks are synchronous. Managed event handlers may be async. Rejected async lifecycle promises are errors, not a delayed rendering mechanism.
 - Update existing nodes. Keep local fields, disclosure inside your body, focused controls and reading positions intact. Local state is not automatically persisted across reset/window restart.
 - Core owns the outer card, authoritative status/indicator, disclosure, placement and transcript scroll. Modify only your summary/body content. Do not set outer `open`, recreate the shell, focus the composer or implement your own transcript following.
