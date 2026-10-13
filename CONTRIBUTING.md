@@ -13,15 +13,21 @@ mise run dev
 
 macOS needs Xcode Command Line Tools. See [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for Linux or possible Windows development. Keep the JS/Rust Tauri packages on compatible major/minor versions and update both lockfiles deliberately.
 
-Work on a dedicated branch/worktree under `.worktrees/`. Keep compiler targets, `node_modules/` and frontend output checkout-local; do not redirect Cargo targets into another checkout. Mise's shared machine-local sccache reuses compatible Rust dependency compilations; final linking and all checks are not necessarily cacheable. Inspect it with `mise exec -- sccache --show-stats`.
+## Worktree workflow
+
+Work on a dedicated branch/worktree under `.worktrees/`, never directly on `main`. After completing significant work, commit it on the task branch and merge into `main` without a separate approval step. This is a lightweight local operation: do not run tests, checks or builds unless explicitly requested. Preserve unrelated changes and report merge blockers rather than forcing or discarding work. Do not push without permission. Retain the task branch and worktree after merging; remove them only when explicitly requested. “Cleanup” after merging means removing the task's worktree with `git worktree remove` and deleting its local branch with `git branch -d`. First confirm the branch is merged into `main` and the worktree has no uncommitted changes; never force removal or branch deletion, or discard unmerged or uncommitted work.
+
+Keep compiler targets, `node_modules/` and frontend output checkout-local; do not redirect Cargo targets into another checkout. Mise's shared machine-local sccache reuses compatible Rust dependency compilations; final linking and all checks are not necessarily cacheable. Inspect it with `mise exec -- sccache --show-stats`.
 
 ## Checks
+
+Run checks and tests only when explicitly requested; they are not an automatic task-completion or merge gate.
 
 ```sh
 mise run check
 npm run check:docs
 
-# Required for scrolling changes; offline demo fixture only:
+# Include when validation of scrolling changes is requested; offline demo fixture only:
 npx playwright install webkit  # one-time setup
 npm run test:browser
 ```
@@ -45,7 +51,7 @@ Do not automatically build/package for validation, task completion or merge/clea
 mise run build
 ```
 
-This packages and verifies the current checkout. An agent-directed **build the app** request also includes staging and publishing the finished artifact to the primary checkout's CLI-visible default location. Before merge, build the task worktree's source with its own targets; after merge, build main when asked. A build request does not authorize merging or launching/quitting/restarting the user's app.
+This packages and verifies the current checkout. An agent-directed **build the app** request also includes staging and publishing the finished artifact to the primary checkout's CLI-visible default location. Before merge, build the task worktree's source with its own targets; after merge, build main when asked. Completed significant work is merged under the worktree workflow above, independently of builds. A build request does not authorize launching/quitting/restarting the user's app.
 
 - macOS: `src-tauri/target/release/bundle/macos/Nimrod.app`
 - Linux: `src-tauri/target/release/nimrod`, with the same-build `esbuild` sidecar beside it.

@@ -84,12 +84,8 @@ export class SessionNavigation<T extends NavigationSession> {
     if (target) return { target, view: after.view };
     target = after.all.find(session => this.policy.isConnected(session));
     if (target) return { target, view: 'all' };
-    const positional = (order: readonly T[], candidates: readonly T[]) => {
-      const index = before.selected ? order.indexOf(before.selected) : -1, allowed = new Set(candidates);
-      return order.slice(index + 1).find(session => allowed.has(session)) || order.slice(0, Math.max(0, index)).reverse().find(session => allowed.has(session)) || candidates[0];
-    };
-    target = positional(before.visible, after.visible);
+    target = after.all.find(session => visible.has(session));
     if (target || after.view === 'all') return { target, view: after.view };
-    return { target: positional(before.all, after.all), view: 'all' };
+    return { target: after.all[0], view: 'all' };
   }
 }

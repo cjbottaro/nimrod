@@ -112,4 +112,4 @@ The existing single-instance lock-holder fixture intermittently failed in full p
 
 No new app build/launch, user config/trust edits, real clipboard/editor/pop-out operations, live Pi/models, session mutation or upstream extension changes occurred. Native executable loading/actions and Linux/possible Windows acceptance remain outstanding.
 
-Run `mise run check`; DOM/layout/scroll changes also require `npm run test:browser`. Keep test fixtures local/offline and disposable. Actual native macOS focus/scroll/actions and Linux behavior remain platform acceptance. Build/publication requires explicit authorization per [build workflow](build-cache.md#explicit-build-and-publication-workflow).
+Run tests/checks only when explicitly requested. Requested validation uses `mise run check`; DOM/layout/scroll validation also includes `npm run test:browser`. Keep test fixtures local/offline and disposable. Actual native macOS focus/scroll/actions and Linux behavior remain platform acceptance. Build/publication requires explicit authorization per [build workflow](build-cache.md#explicit-build-and-publication-workflow).

@@ -35,7 +35,7 @@ Click its row's **Close** button or use **⌘/Ctrl+W**. Closing waits for that a
 - Cancel or failed shutdown keeps the session and draft available.
 - Closing a window stops its agents; quitting stops all Nimrod-owned agents. There is no background daemon or process continuity.
 
-After closing or deleting the selected session, Nimrod prefers the most recently used connected session in the current view, then All. With none connected, it chooses the next surviving row or the previous one at the end. An inactive saved replacement loads and connects immediately unless that specific session is still locked for deletion. Removing the last session never creates one.
+After closing or deleting the selected session, Nimrod prefers the most recently used connected session in the current view, then across All. With none connected, it chooses the most recently used remaining session in the current view, then across All if the view is empty. This uses message/creation recency, not row adjacency—even in Unread's arrival-ordered view. Deleting a background session leaves the current selection unchanged. An inactive saved replacement loads and connects immediately unless that specific session is still locked for deletion. Removing the last session never creates one.
 
 ## Restart session
 
