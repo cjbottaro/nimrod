@@ -16,6 +16,10 @@ import type { DeletionEvent, DeletionSnapshot } from '../src/session-deletion';
 interface ShellOptions {
   globalSettings?: boolean;
   appearanceCapabilities?: import('../src/window-appearance').AppearanceCapabilities;
+  appearanceGate?: Promise<void>;
+  appearanceError?: string;
+  titlebarGate?: Promise<void>;
+  runtimeDefaultsGate?: Promise<void>;
   storage?: Record<string, unknown>;
   nativeDrafts?: Record<string, unknown>;
   draftFlushError?: string;
@@ -116,7 +120,12 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     transformCallback: (callback: (event: unknown) => void) => { const id = callbacks.size + 1; callbacks.set(id, callback); return id; }, unregisterCallback: () => {},
     invoke: async (command: string, args: JsonRecord = {}) => {
       calls.push({ command, args });
-      if (command === 'window_appearance_capabilities' || command === 'apply_window_appearance') return options.appearanceCapabilities ?? { platform: 'macos', transparency: true, frost: true, reducedTransparency: false };
+      if (command === 'window_appearance_capabilities' || command === 'apply_window_appearance') {
+        if (command === 'window_appearance_capabilities') { await options.appearanceGate; if (options.appearanceError) throw new Error(options.appearanceError); }
+        return options.appearanceCapabilities ?? { platform: 'macos', transparency: true, frost: true, reducedTransparency: false };
+      }
+      if (command === 'tint_window_titlebar') { await options.titlebarGate; return; }
+      if (command === 'settings_window_ready') return;
       if (command === 'drafts_load') return [...nativeDrafts.values()];
       if (command === 'drafts_stage') { const record = args.record as { key: string; value: unknown; revision: number }; nativeDrafts.set(record.key, record); return; }
       if (command === 'drafts_flush') { await options.draftFlushGate; if (options.draftFlushError) throw new Error(options.draftFlushError); return; }
@@ -179,7 +188,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       if (command === 'confirm_session_deletion') { options.confirmReview?.(args); return; }
       if (command === 'delete_session_tree') return options.deleteTree ? options.deleteTree(event => deletionEvent?.(event), args) : [];
       if (command === 'load_personal_card_plugins') return options.personalGate ?? { entries: [], plugins: [], warnings: [] };
-      if (command === 'runtime_defaults') return { cwd: '/project', pi: '/bin/pi', node: '/bin/node', home: options.homeDirectory };
+      if (command === 'runtime_defaults') { await options.runtimeDefaultsGate; return { cwd: '/project', pi: '/bin/pi', node: '/bin/node', home: options.homeDirectory }; }
       if (command === 'window_workspace') {
         await options.windowWorkspaceGate;
         if (options.windowWorkspaceError) throw new Error(options.windowWorkspaceError);
@@ -3437,6 +3446,50 @@ test('native persistence never delays a steer, and finishing a flush after Stop 
     assert.ok(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'clear_queue'));
     f.disconnect();
   } finally { release(); f.dom.window.close(); }
+});
+
+test('cold Settings reveals after appearance/tint/zoom but never waits for runtime discovery', async () => {
+  let releaseAppearance!: () => void, releaseTitlebar!: () => void, releaseRuntime!: () => void;
+  const appearanceGate = new Promise<void>(resolve => { releaseAppearance = resolve; });
+  const titlebarGate = new Promise<void>(resolve => { releaseTitlebar = resolve; });
+  const runtimeDefaultsGate = new Promise<void>(resolve => { releaseRuntime = resolve; });
+  const f = await fixture(undefined, { globalSettings: true, appearanceGate, titlebarGate, runtimeDefaultsGate });
+  try {
+    f.win.history.replaceState(null, '', '?settings=appearance&settingsGeneration=fixture-ready');
+    f.preferences.external('{"appearance.theme":"tokyo-night","appearance.backgroundOpacity":65,"appearance.frostedBackground":false}');
+    await f.tick(); assert.equal(f.calls.some(call => call.command === 'settings_window_ready'), false);
+    releaseAppearance(); await f.tick(); await f.tick();
+    assert.ok(f.calls.some(call => call.command === 'tint_window_titlebar'));
+    assert.equal(f.calls.some(call => call.command === 'settings_window_ready'), false);
+    releaseTitlebar(); await f.tick(); await f.tick();
+    const ready = f.calls.filter(call => call.command === 'settings_window_ready');
+    assert.equal(ready.length, 1); assert.equal(ready[0].args.generation, 'fixture-ready');
+    assert.equal(f.win.document.documentElement.dataset.translucency, 'window');
+    assert.equal(f.element<HTMLDialogElement>('settings-page').open, true);
+    assert.equal(f.element<HTMLSelectElement>('zoom-level').value, '125');
+    assert.equal(f.element<HTMLFieldSetElement>('runtime-fields').disabled, true);
+    assert.ok(f.calls.findIndex(call => call.command === 'runtime_defaults') > f.calls.findIndex(call => call.command === 'settings_window_ready'));
+    releaseRuntime(); await f.tick(); assert.equal(f.element<HTMLFieldSetElement>('runtime-fields').disabled, false);
+    assert.equal(f.calls.some(call => ['start_pi', 'stop_pi', 'write_pi'].includes(call.command)), false);
+  } finally { releaseAppearance(); releaseTitlebar(); releaseRuntime(); f.win.close(); }
+});
+
+test('appearance startup failure still reveals a readable Settings error without replaying presentation', async () => {
+  const f = await fixture(undefined, { globalSettings: true, appearanceError: 'fixture native appearance failed' });
+  try {
+    await f.tick(); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'settings_window_ready').length, 1);
+    assert.match(f.element('application-notices').textContent!, /fixture native appearance failed/);
+  } finally { f.win.close(); }
+});
+
+test('closing cold Settings suppresses late readiness and native focus requests', async () => {
+  let release!: () => void; const appearanceGate = new Promise<void>(resolve => { release = resolve; });
+  const f = await fixture(undefined, { globalSettings: true, appearanceGate });
+  try {
+    f.win.dispatchEvent(new f.win.Event('unload')); release(); await f.tick(); await f.tick();
+    assert.equal(f.calls.some(call => call.command === 'settings_window_ready'), false);
+  } finally { release(); f.win.close(); }
 });
 
 test('global Settings boots without any project services', async () => {

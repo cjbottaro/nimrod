@@ -262,6 +262,8 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   reloadSources();
   return {
     settings, settingsNavigation, themes, zoom, runtime,
+    ready: Promise.all([appearance.ready, zoom.ready]).then(() => {}),
+    async settled() { await appearance.ready; await zoom.reload(); await appearance.settled(); },
     initializeRuntime(defaults: { pi: string; node: string }) { runtimeDefaults = defaults; runtime.initialize(defaults); },
     notificationError, notificationProgress, capturePerformance,
     performanceProbe: performanceDiagnostics.probe,

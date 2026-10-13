@@ -1,6 +1,6 @@
 # Settings
 
-**Global Settings** opens in its own reusable window through **⌘/Ctrl+,**, the native **Settings…** menu item, or the command palette. It contains Appearance, Notifications, Diagnostics, Keybindings and Runtime. Opening it again focuses the existing window; Close or Escape closes that window. No project is required.
+**Global Settings** opens in its own reusable window through **⌘/Ctrl+,**, the native **Settings…** menu item, or the command palette. It contains Appearance, Notifications, Diagnostics, Keybindings and Runtime. On first open, the window appears after its controls, theme, translucency and zoom are prepared, instead of showing a blank opaque page while loading. Runtime-path detection can continue afterward. Opening it again focuses the existing ready window; Close or Escape closes that window. No project is required.
 
 **Project settings** opens inside the current project window through the Project bar's gear, **⌘/Ctrl+Shift+,**, or the command palette. The header names the project. **Back** or **Escape** returns to its conversation; **Open global settings** opens the separate defaults window.
 

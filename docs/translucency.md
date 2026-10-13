@@ -12,7 +12,9 @@ Open **global Settings → Appearance** (⌘/Ctrl+,) to customize the window bac
 
 ## Platform behavior
 
-**macOS:** Nimrod requests native frosted glass using a standard popover material rather than the denser sidebar material. It follows that window's theme dark/light appearance, including local theme-picker previews, without changing other windows' native appearance. Native frosting adds its own tint, so it is not pure blur and may still look denser than plain transparency. System **Reduce Transparency** keeps windows opaque without changing your saved preferences. Native accessibility changes are refreshed when a Nimrod window receives focus.
+**macOS:** The native title bar follows the window's theme colour and opacity while keeping its title and traffic lights. It remains separate from the Project bar; no custom replacement title bar is used. Native title-bar details, including full-screen and activation, still need visual confirmation.
+
+Nimrod requests native frosted glass using a standard popover material rather than the denser sidebar material. It follows that window's theme dark/light appearance, including local theme-picker previews, without changing other windows' native appearance. Native frosting adds its own tint, so it is not pure blur and may still look denser than plain transparency. System **Reduce Transparency** keeps windows opaque without changing your saved preferences. Native accessibility changes are refreshed when a Nimrod window receives focus.
 
 **Linux:** Nimrod exposes opacity and surface selection, not a frosting control. Configure blur in your desktop compositor. Transparency and blur depend on your desktop/compositor setup; Nimrod does not configure it or promise blur on every Linux desktop.
 
@@ -20,7 +22,7 @@ Open **global Settings → Appearance** (⌘/Ctrl+,) to customize the window bac
 
 Save/native failures appear in the shared [application notice strip](error-messages.md). Correct the settings or change the control explicitly; settings writes are not automatically retried.
 
-Native trials exposed opaque controls and then a loss of panel distinction below 100%. The current continuous surface-density treatment addresses that threshold behavior; its macOS appearance across the slider's range still needs a visual check. Blur-toggle removal, accessibility, resizing/full-screen behavior and performance have not yet been accepted. Linux native behavior remains unverified.
+Native trials exposed opaque controls and then a loss of panel distinction below 100%. The user reported the continuous surface-density treatment as much better. The next polish prepares cold Settings before showing it and themes the macOS title bar; those native changes still need a visual check. Blur-toggle removal, accessibility, resizing/full-screen behavior and performance have not yet been accepted. Linux native behavior remains unverified.
 
 ## Configuration
 

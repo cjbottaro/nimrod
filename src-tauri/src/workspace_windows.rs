@@ -198,6 +198,10 @@ pub(crate) fn focus_window(
     app: &tauri::AppHandle,
     window: &tauri::WebviewWindow,
 ) -> Result<(), String> {
+    // Cold Settings must not be revealed by generic app/CLI focus routing.
+    if window.label() == crate::settings_window::LABEL && !crate::settings_window::is_ready(app) {
+        return Ok(());
+    }
     #[cfg(target_os = "macos")]
     app.show().map_err(|e| e.to_string())?;
     #[cfg(not(target_os = "macos"))]
@@ -219,7 +223,12 @@ pub fn focus_existing(app: &tauri::AppHandle) -> Result<(), String> {
     let window = windows
         .values()
         .find(|w| w.is_focused().unwrap_or(false))
-        .or_else(|| windows.values().next())
+        .or_else(|| {
+            windows.values().find(|window| {
+                window.label() != crate::settings_window::LABEL
+                    || crate::settings_window::is_ready(app)
+            })
+        })
         .ok_or("No open project window")?;
     focus_window(app, window)
 }

@@ -9,6 +9,7 @@ export function installNativeWindowAppearance(host: Pick<AppearanceHost, 'read' 
     ...host,
     capabilities: () => invoke<AppearanceCapabilities>('window_appearance_capabilities'),
     apply: (frosted, dark) => invoke<AppearanceCapabilities>('apply_window_appearance', { frosted, dark }),
+    tintTitlebar: color => invoke<void>('tint_window_titlebar', { color }),
   }, controls);
   let disposed = false;
   let unlisten: (() => void) | undefined;
@@ -19,7 +20,7 @@ export function installNativeWindowAppearance(host: Pick<AppearanceHost, 'read' 
     if (!disposed) host.report(`Could not observe window appearance changes: ${String(error)}`, 'focus');
   });
   return {
-    reload: appearance.reload,
+    ready: appearance.ready, settled: appearance.settled, reload: appearance.reload,
     dispose() { disposed = true; unlisten?.(); appearance.dispose(); },
   };
 }
