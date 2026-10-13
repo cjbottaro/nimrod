@@ -27,6 +27,13 @@ The canonical composer reference records an earlier 80-character baseline of **1
 
 User-supplied native reports during the subsequent investigation sampled composer input-handler durations of **at most 1 ms at the report's clock resolution**, including sluggish and snappy captures. This helped distinguish cheap instrumented handlers from delay elsewhere; it does not prove edited text is presented within 1 ms.
 
+## Regression risks and maintenance guardrails
+
+- **Likely erosion:** attaching synchronous Markdown previews, broad validation/serialization or geometry reads to every draft input; rebuilding status/control DOM for unrelated keystrokes; persisting the whole draft library instead of the selected draft.
+- **Reuse the boundary:** keep ordinary text edits on `updateComposer`'s draft-only path, sizing through native field-sizing or the coalesced fallback, and draft storage through the scoped native staging/debounce path. Do not add synchronous localStorage/file writes or gate typing/Send on storage/RPC completion.
+- **Correctness traps:** changes to attachments, recovery or error state must still take their required non-draft update path. Preserve IME/selection, fallback shell-height hold, hide/dispose cancellation and draft durability boundaries; disk debounce does not eliminate per-edit staging IPC.
+- **Extend fixtures when changing:** autocomplete, validation, previews, attachments, composer CSS or draft storage. Extend composer-performance geometry/mutation/storage counters with large transcripts/draft libraries and both sizing-capability paths; retain native-drafts and native-view cases for selection, clearing, recovery and late results. Cheap measured handlers alone do not prove cheap engine layout.
+
 ## Limits and code anchors
 
 Unsupported engines still require fallback layout measurement. Native sizing can involve engine layout outside the measured helper. Abrupt shutdown can lose undelivered/debounced draft changes; no guaranteed unload durability is claimed. Instrumented handler timing is not full input-to-screen latency.

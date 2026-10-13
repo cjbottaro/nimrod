@@ -31,6 +31,13 @@ The user subsequently reported snappy typing/scrolling with CPU usage still near
 
 A later report showed milder degradation with much more background presentation activity. That is evidence of remaining opportunities, not proof that this optimization failed or removed every bottleneck. [Verification → Performance observation](../../features/references/verification.md#performance-observation) owns the complete comparison and caveats.
 
+## Regression risks and maintenance guardrails
+
+- **Likely erosion:** adding per-token timestamps, counters or transient activity to persisted layout makes every snapshot different; bypassing conditional saves reintroduces redundant IPC even if native disk writes are suppressed. Keep runtime-only metadata out of durable layout unless persistence is actually required.
+- **Reuse the boundary:** routine shell bookkeeping should use `saveStateIfChanged` and the shared queued writer, not direct state IPC or an independent last-value cache. Explicit writes remain available for operations that genuinely require them; do not indiscriminately suppress all saves.
+- **Correctness traps:** compare against the latest queued value, not only committed state. Preserve A → B → A ordering, captured caller values, failure recovery and native external-file refresh/validation before equality checks.
+- **Extend fixtures when changing:** session-layout schemas/callers, write queues or native state storage. Retain the bundled-shell streaming IPC counter plus preferences/native cases for real selection/rename writes, mixed explicit/conditional requests, failed writes, caller mutation and external edit/deletion. Check avoided work as well as durable outcomes.
+
 ## Limits and code anchors
 
 The native observations are not a controlled A/B: CPU utilization was reported rather than sampled, session/restart state and event traffic differed, and reports lack a unique source-build revision. They support observed improvement, not sole-cause attribution or universal platform acceptance.

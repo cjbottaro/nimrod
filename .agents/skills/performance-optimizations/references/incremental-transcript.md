@@ -33,6 +33,15 @@ Keep every ordered state transition observable even when paints are coalesced. P
 
 Primary code anchors: `src/pi/webview-client.ts` (`renderState`, `patchMessage`), `src/pi/session.ts` (`publish`), `src/pi/tool-progress.ts`, `src/pi/reducer.ts`, `src/pi/steering-transcript.ts` and `src/pi/safe-markdown.ts`.
 
+## Regression risks and maintenance guardrails
+
+This candidate is not implemented; proposed caches/dirty metadata need their own evidence and ownership review.
+
+- **Likely erosion:** new content/configuration fields missing from dirty keys leave stale output; projecting fresh objects for stable history defeats identity caches. A new reducer path that mutates retained objects can make reference-equality shortcuts incorrect.
+- **Reuse the boundary if implemented:** own revisions/invalidation at the reducer/projection/rendering boundary whose identity guarantees were verified. Keep an authoritative full-reconciliation fallback; do not invent ad hoc caches in individual feature handlers or bypass safe Markdown/highlighting.
+- **Correctness traps:** content text is not the only dependency. Include tool placement/lifecycle, late inputs, pending-user aliases, sticky queues, errors and rendering configuration. Release caches on removal/reset/disposal and keep them session-scoped; dirty rendering must not defer ordered semantic transitions.
+- **Extend fixtures when changing:** reducer identity, timeline projection, block types or rendering preferences. Extend the suites below with each new dependency, full-history replacement and incremental/full reconciliation equivalence. Count rows serialized/blocks parsed across increasing unchanged history sizes, and check memory retention—not merely paint duration.
+
 ## Validation target
 
 With fixed-size incoming deltas and progressively larger immutable histories, count rows serialized, blocks parsed and nodes mutated. Unchanged history should not be reserialized/reparsed on every token; explicit full reconciliation should still produce correct output.

@@ -29,6 +29,15 @@ A reader inspecting one output must not jump to its bottom because another tool 
 
 Primary code anchors: `src/pi/webview-client.ts` (`outputPositions` and restoration loop), `src/pi/card-shell.ts` (`captureStreamingOutput`, `restoreStreamingOutput`), `src/pi/dom-card-renderer.ts`, `src/pi/tool-card.ts` and `src/pi/transcript-scroll.ts`.
 
+## Regression risks and maintenance guardrails
+
+This candidate is not implemented; narrower scroll invalidation must be proven against the existing independent viewport owners.
+
+- **Likely erosion:** new output sections/plugins bypass affected-viewport tracking, or text-only checks overlook geometry changes from disclosure, terminal caps, width/zoom, themes or asynchronous content. Broad fallback scans can silently restore the original scaling cost.
+- **Reuse the boundary if implemented:** capture before mutation and restore through the existing core/card-controller output owners and registered keyed viewports. Coordinate their responsibilities rather than removing one as supposedly redundant; never substitute one session-wide follow flag.
+- **Correctness traps:** preserve each inspected output independently from siblings and transcript follow. Guard deferred work across hide/reveal, removal/reset/disposal, retain pending restoration intent, and never infer bottom-follow from zero hidden geometry.
+- **Extend fixtures when changing:** output types/registration, layout policies or plugin async mutation. Extend tool-card/DOM-renderer/native-view and offline WebKit cases below with many eligible outputs but one changing viewport; assert unaffected offsets and reduced geometry/restoration counts alongside lifecycle, disclosure and zoom correctness.
+
 ## Validation target
 
 For a fixture with many eligible tool-output viewports but one changing output, geometry reads and restoration work should scale with **affected viewports**, not all eligible cards. Completely unchanged cards should not receive redundant restoration writes.

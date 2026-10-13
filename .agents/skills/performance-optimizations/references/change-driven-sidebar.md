@@ -29,6 +29,15 @@ Local Send recency and sidebar-to-top feedback must remain immediate, independen
 
 Primary code anchors: `src/main.ts` (`changed`, `updateTab`, `renderSidebar`), `src/session-sidebar.ts`, `src/session-navigation.ts`, `src/session-attention.ts` and `src/session-recency.ts`.
 
+## Regression risks and maintenance guardrails
+
+This candidate is not implemented; these are design and future-maintenance guardrails, not claims about current invalidation coverage.
+
+- **Likely erosion:** new row metadata omitted from a presentation signature produces stale rows; volatile token-level metadata included in it defeats no-op detection. New filters/actions can also add dependencies that a list invalidation check misses.
+- **Reuse the boundary if implemented:** extend shared row presentation and navigation/attention projections, not a parallel sidebar state machine. A sidebar no-op must never short-circuit transcript/status updates, persistence or notifications elsewhere in `changed`.
+- **Correctness traps:** include membership, ordering, attention, selection and action eligibility—not just title/text—in invalidation. Preserve local Send effects, minute/foreground timestamp refresh, deletion locks and focused/filtered rows; do not hide missing invalidation behind a debounce.
+- **Extend fixtures when changing:** row fields, lifecycle controls, filters or recency/navigation. Add unchanged-token projection/geometry/mutation counters and explicit tests for each new dependency, using the shell and sidebar/navigation/attention/browser suites named below. Distinguish ordinary token no-ops from genuine immediate transitions.
+
 ## Validation target
 
 After establishing the working indicator, repeated text-only deltas with unchanged row presentation should perform **no sidebar-wide projection/geometry work or row mutations**. Actual busy/idle/input/failure, rename, local Send, selection, filter, close and deletion transitions must still update immediately.

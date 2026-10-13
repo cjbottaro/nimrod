@@ -33,6 +33,15 @@ Estimated heights can cause jumps with variable Markdown, images, code, disclosu
 
 Primary code anchors: `src/pi/webview-client.ts` (message registry and reconciliation), `src/pi/transcript.css`, `src/pi/transcript-scroll.ts`, `src/pi/dom-card-renderer.ts` and session-view lifetime in `src/main.ts`.
 
+## Regression risks and maintenance guardrails
+
+This candidate is not implemented; containment and virtualization require distinct designs and acceptance evidence.
+
+- **Likely erosion:** new images, variable-height blocks, disclosures or sticky elements invalidate height/anchor assumptions. Repeated materialization can recreate cards, lose selection/focus and leak plugin resources; CSS containment can introduce platform-specific clipping or geometry behavior.
+- **Reuse the boundary if implemented:** keep authoritative history separate from materialized DOM and use stable session/message/card identity plus the existing scroll owner. Define offscreen plugin/disclosure/inspection retention explicitly; do not equate DOM absence with semantic deletion.
+- **Correctness traps:** preserve multi-turn selection/copy, accessible reading order, supported find behavior, code actions and keyboard focus. Invalidate height estimates on content/layout/zoom changes; keep capability fallbacks and verify actual webview behavior rather than assuming browser-engine parity.
+- **Extend fixtures when changing:** block types, image loading, card lifecycle or transcript layout. Extend the long-history interactions below with representative content and repeated materialization/reset/disposal. Track mounted nodes, retained resources/memory and actual layout/paint savings; containment alone does not establish lower memory use. Native/platform acceptance remains separate.
+
 ## Validation target
 
 Demonstrate a substantial layout/paint or memory reduction on a representative large-history fixture before accepting the added complexity. Compare equivalent visible content and interactions, not an empty transcript against a complete one.

@@ -25,6 +25,13 @@ Avoid hidden Markdown parsing, transcript history diffing, renderer-managed card
 
 No new native report, controlled before/after comparison or packaged reveal-latency measurement is available. Implementation and fixtures are not proof of a responsiveness improvement or macOS/Linux/possible Windows acceptance.
 
+## Regression risks and maintenance guardrails
+
+- **Likely erosion:** new rendering entry points, output-follow callbacks or core disclosure timers bypassing active-view suspension; using hidden transcript DOM to derive unread state, notifications, queues or authoritative activity. Arbitrary plugin-owned timers/async mutations are not suspended by this optimization.
+- **Reuse the boundary:** renderer-driven presentation goes through `queueRender` and the activation/cancellation boundary; semantic state and ordered queue/receipt/recovery handling stay outside the paint gate. New deferred core work needs active/disposed/retired-generation guards. Preserve existing card/plugin instances rather than recreating them on reveal.
+- **Correctness traps:** reveal geometry before catch-up and resume scroll/disclosure ownership afterward. Never capture reader intent from zero hidden dimensions, require another event to refresh, replay intermediate presentation as semantic events, or turn hide into reset/disposal. Include hides between paint and output restoration.
+- **Extend fixtures when changing:** transcript/cards/plugins, activation, pending turns, notices or timer ownership. Extend the named native-view, shell, disclosure and offline WebKit fixtures below for zero hidden paints, current content without a new event, live background state, focus/inspection and reset/disposal races. Measure reveal latency separately: zero hidden paints can coexist with an expensive catch-up.
+
 ## Code and verification targets
 
 - `src/pi/webview-client.ts`: latest pending snapshot, active frame scheduling, guarded cancellation, synchronous reveal, output inspection and live recovery notices.
