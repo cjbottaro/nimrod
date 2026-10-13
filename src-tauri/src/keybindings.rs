@@ -104,6 +104,9 @@ mod tests {
             "primary+n",
             "primary+shift+n",
             "primary+backspace",
+            "primary+shift+m",
+            "primary+shift+e",
+            // Existing overrides remain valid even when native menus intercept them.
             "primary+m",
             "primary+e",
             "primary+shift+[",

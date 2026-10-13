@@ -19,7 +19,15 @@ function fixture() {
 }
 
 test('defaults distinguish creation, named creation, open-session switching and saved-history search', () => {
-  for (const [id, binding] of [['new', 'primary+n'], ['temporary', 'primary+shift+n'], ['delete', 'primary+backspace'], ['delete-sessions', 'primary+shift+backspace'], ['model', 'primary+m'], ['thinking', 'primary+e']] as const) assert.ok(bindingsFor(id, {}).includes(binding));
+  for (const [id, binding] of [['new', 'primary+n'], ['temporary', 'primary+shift+n'], ['delete', 'primary+backspace'], ['delete-sessions', 'primary+shift+backspace'], ['model', 'primary+shift+m'], ['thinking', 'primary+shift+e']] as const) assert.ok(bindingsFor(id, {}).includes(binding));
+  assert.deepEqual(bindingsFor('model', {}), ['primary+shift+m']);
+  assert.deepEqual(bindingsFor('thinking', {}), ['primary+shift+e']);
+  assert.equal(ACTIONS.some(action => action.defaults.some(binding => ['primary+m', 'primary+e'].includes(binding))), false);
+  assert.deepEqual(readKeyOverrides({ model: ['primary+m'], thinking: ['primary+e'] }), { model: ['primary+m'], thinking: ['primary+e'] }, 'legacy overrides stay valid');
+  for (const id of ['model', 'thinking'] as const) {
+    assert.deepEqual(bindingsFor(id, { [id]: ['primary+j'] }), ['primary+j']);
+    assert.deepEqual(bindingsFor(id, { [id]: [] }), []);
+  }
   assert.deepEqual(bindingsFor('new', {}), ['primary+n']);
   assert.deepEqual(bindingsFor('new-named', {}), ['primary+alt+n']);
   assert.deepEqual(bindingsFor('switch-session', {}), ['primary+t']);
@@ -218,7 +226,7 @@ test('editor searches, records without dispatch, requires explicit reassignment,
     f.get<HTMLDialogElement>('settings-page').showModal(); editor.focus();
     const search = f.get<HTMLInputElement>('keybinding-search'); search.value = 'effort'; search.dispatchEvent(new f.dom.window.Event('input')); assert.equal(f.get('keybinding-list').children.length, 1);
     search.value = ''; search.dispatchEvent(new f.dom.window.Event('input'));
-    click('Change Select model… shortcut ⌘+M');
+    click('Change Select model… shortcut ⌘+⇧+M');
     f.get('keybinding-record').dispatchEvent(f.event('n', { metaKey: true })); assert.equal(ran.length, 0);
     assert.match(f.get('keybinding-conflicts').textContent!, /New session/); assert.equal(f.get<HTMLButtonElement>('keybinding-save').disabled, true);
     f.get<HTMLInputElement>('keybinding-reassign').checked = true; f.get('keybinding-reassign').dispatchEvent(new f.dom.window.Event('change'));

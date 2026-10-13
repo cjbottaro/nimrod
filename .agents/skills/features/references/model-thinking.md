@@ -15,6 +15,7 @@ Changing Pi-scoped model/thinking preferences stays available during work/compac
 - `src/pi/webview-client.ts`: status-area entry points; disabled only before controls are ready, during a preference change, or when the session is unavailable.
 - `src/main.ts`: originating-session binding, serialized picker tasks and lifecycle guards.
 - [Command interactions](command-interactions.md): cancellation, stale metadata, focus and current-value markers.
+- [Keybindings](keybindings.md): model `primary+shift+m` and thinking/effort `primary+shift+e` defaults, effective hints and overrides; native macOS Cmd-M remains Minimize.
 
 ## Invariants
 
