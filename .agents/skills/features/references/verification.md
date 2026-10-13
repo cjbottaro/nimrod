@@ -44,6 +44,6 @@ Use current [user guides](../../../../docs/README.md) for available actions. The
 
 ## Recording evidence
 
-Run `mise run check`; scrolling changes also require offline `npm run test:browser`. Build only when explicitly requested, following [publication policy](build-cache.md). Do not launch/quit/restart the user's app automatically.
+Run tests/checks only when explicitly requested, per repository `AGENTS.md`. Requested validation uses `mise run check`; scrolling validation also includes offline `npm run test:browser`. Build only when explicitly requested, following [publication policy](build-cache.md). Do not launch/quit/restart the user's app automatically.
 
 Keep current test coverage and outstanding acceptance in the relevant feature reference. Update this matrix only when native evidence changes. Significant regression investigations may be archived under `history/` with source revision/platform, actual scope and explicit supersession; avoid adding every intermediate run/test count to living specifications.

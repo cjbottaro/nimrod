@@ -27,8 +27,8 @@ Explicitly requested builds use checkout-local targets and publish verified whol
 ## Explicit build and publication workflow
 
 - Never automatically run `mise run build`, Tauri packaging, or an equivalent app
-  build for validation, task completion or merge/cleanup. Run `mise run check` and
-  relevant offline tests; report app build as not run unless explicitly requested.
+  build for validation, task completion or merge/cleanup. Tests and checks also run
+  only when explicitly requested, per repository `AGENTS.md`; report what was not run.
   The user schedules builds across concurrent worktrees/agents to avoid CPU contention.
 - “Build the app” includes publication to the primary checkout on `main` so the
   installed `nimrod` CLI uses the result. Before merge, compile the requested task

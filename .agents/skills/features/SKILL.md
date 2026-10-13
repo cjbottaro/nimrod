@@ -51,7 +51,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 
 ## Workflow and documentation
 
-- Use a dedicated task worktree, run `mise run check`, and run offline browser tests for scrolling changes. No automatic app builds or user-app launch/interruption; [build workflow](references/build-cache.md) owns requested publication.
+- Follow repository `AGENTS.md`: use a dedicated task worktree, automatically commit and merge completed significant work into `main`, and retain the branch/worktree unless cleanup is requested. Do not run tests, checks or builds unless explicitly requested. When validation is requested, use `mise run check` and include offline browser tests for scrolling changes. No automatic user-app launch/interruption; [build workflow](references/build-cache.md) owns requested publication.
 - Keep tests fixture-based. No paid requests, live compaction, user-session deletion or upstream extension changes without authorization.
 - Every palette command must have a registered bindable action and shared dispatcher; empty defaults are allowed. Effective shortcut hints come from the registry. Native-only Open project remains an explicit exception. See [keybindings](references/keybindings.md#invariants).
 - `docs/` is user-facing usage, observable behavior and relevant limitations. References are internal specifications/implementation. Behavior changes update both; implementation-only changes update the reference.
