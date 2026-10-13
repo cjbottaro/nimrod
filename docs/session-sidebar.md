@@ -24,6 +24,8 @@ Empty Unread shows **N sessions working…** while agents are busy, otherwise **
 
 ## Ordering and navigation
 
+When a project opens, the remembered selected session's row scrolls into view with only the movement needed to make it visible. This preserves your chosen view: a session excluded by Unread or Working stays hidden, and a collapsed sidebar stays collapsed. Later activity updates do not repeat this startup scroll.
+
 New sessions start at the top. Resumed sessions insert using remembered recency or their latest saved user-message time. Sending a message immediately moves its session to the top—including steering, queued follow-ups and image-only messages—without waiting for Pi. A later send error does not undo that ordering. Selecting, reading, renaming, changing models, compaction and background output do not reorder All.
 
 Recency survives Close/reopening for saved sessions. Rows show **relative time · date**; unknown timestamps show **No message time**. Time labels refresh without reordering. Sending in the current session scrolls All or Working to the top with its row, without moving focus or changing transcript reading position. Unread keeps its arrival order and list position. Later Pi responses, errors and activity updates do not move the list; routine updates preserve your reading position.

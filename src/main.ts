@@ -476,7 +476,7 @@ async function enterWorkspace(path: string): Promise<void> {
   }
   ready = true;
   const selected = tabs.find(t => t.file?.path === layout?.active) || navigation.all()[0];
-  if (selected) activate(selected, 'restore');
+  if (selected) activate(selected, 'startup');
   controls();
 }
 async function ensureWorkspace(): Promise<boolean> { return !!workspace || await openWorkspace(cwd.value.trim()); }

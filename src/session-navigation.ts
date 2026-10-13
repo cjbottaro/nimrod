@@ -3,7 +3,7 @@ import { nextLastUsed, recentSessions } from './session-recency';
 
 export const SESSION_VIEWS = ['all', 'unread', 'working'] as const;
 export type SessionView = typeof SESSION_VIEWS[number];
-export type SelectionIntent = 'explicit' | 'row' | 'restore' | 'cleanup' | 'notification';
+export type SelectionIntent = 'explicit' | 'row' | 'startup' | 'restore' | 'cleanup' | 'notification';
 export interface NavigationSession { id: string; lastUsed: number; }
 export interface NavigationPolicy<T> {
   needsAttention(session: T): boolean;
@@ -73,7 +73,8 @@ export class SessionNavigation<T extends NavigationSession> {
     const explicit = intent === 'explicit' || intent === 'row' || intent === 'notification';
     return {
       target, view: explicit && !snapshot.visible.includes(target) ? 'all' : snapshot.view,
-      focus: intent !== 'restore', reveal: intent === 'explicit' || intent === 'notification',
+      focus: intent !== 'restore' && intent !== 'startup',
+      reveal: intent === 'explicit' || intent === 'notification' || intent === 'startup',
     };
   }
   /** Capture before removal; resolve once after the whole batch is removed. */

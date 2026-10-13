@@ -61,7 +61,7 @@ export function captureSidebarScroll(container: HTMLElement, rows: readonly HTML
     else container.scrollTop = top;
   };
 }
-/** Reveal only for explicit navigation; never scroll other ancestors/transcripts. */
+/** Reveal for navigation/startup intents; never scroll other ancestors/transcripts. */
 export function revealSidebarRow(container: HTMLElement, row: HTMLElement): void {
   if (!container.offsetHeight || row.hidden) return;
   const bounds = container.getBoundingClientRect(), rect = row.getBoundingClientRect(), zoom = scale(container);

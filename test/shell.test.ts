@@ -896,6 +896,61 @@ test('legacy unknown recency seeds before insertion from read-only metadata, not
   } finally { f.win.close(); }
 });
 
+test('startup reveals only the presented restored row once, without focus, filter or recency changes', async () => {
+  for (const scenario of [
+    { view: 'all', selected: 7, collapsed: false, scroll: 220 },
+    { view: 'all', selected: 1, collapsed: false, scroll: 0 },
+    { view: 'unread', selected: 7, collapsed: false, scroll: 0 },
+    { view: 'working', selected: 7, collapsed: false, scroll: 0 },
+    { view: 'all', selected: 7, collapsed: true, scroll: 0 },
+  ]) {
+    let restore!: () => void;
+    const windowWorkspaceGate = new Promise<void>(resolve => { restore = resolve; });
+    // Hold connection completion: its existing composer focus policy is separate
+    // from startup navigation, which must not focus anything or await the launch.
+    const startGate = new Promise<void>(() => {});
+    const key = 'nimrod.tabs.v1:/project';
+    const entries = Array.from({ length: 8 }, (_, index) => ({ path: `/sessions/${index}`, sessionId: 'fixture-id', name: `Session ${index}`, lastUsed: 100 - index }));
+    const f = await fixture(startGate, { windowWorkspace: '/project', windowWorkspaceGate, appState: {
+      [key]: { tabs: entries, active: entries[scenario.selected].path },
+      'nimrod.sidebar.view:/project': scenario.view,
+      'nimrod.sidebar.visible': !scenario.collapsed,
+    } });
+    try {
+      const panel = f.element('sidebar-session-panel');
+      Object.defineProperty(panel, 'offsetHeight', { get: () => f.element('session-sidebar').hidden ? 0 : 100 });
+      const rect = (top: number, height: number) => ({ top, bottom: top + height, left: 0, right: 200, width: 200, height, x: 0, y: top, toJSON() {} });
+      panel.getBoundingClientRect = () => rect(0, 100);
+      const originalRect = f.win.HTMLElement.prototype.getBoundingClientRect;
+      f.win.HTMLElement.prototype.getBoundingClientRect = function () {
+        if (!this.classList.contains('open-session')) return originalRect.call(this);
+        const siblings = [...this.parentElement!.children].filter(row => !(row as HTMLElement).hidden);
+        return rect(siblings.indexOf(this) * 40 - panel.scrollTop, 40);
+      };
+      f.win.document.body.tabIndex = -1; f.win.document.body.focus();
+      const focused = f.win.document.activeElement;
+      restore(); await f.tick(); await f.tick();
+      assert.equal(panel.scrollTop, scenario.scroll, JSON.stringify(scenario));
+      assert.equal(f.win.document.activeElement, focused, 'startup navigation adds no focus effect');
+      assert.equal(f.element(`sidebar-${scenario.view}`).getAttribute('aria-selected'), 'true');
+      assert.equal(f.element('session-sidebar').hidden, scenario.collapsed);
+      assert.deepEqual([...f.element('open-sessions').children].map(row => row.querySelector('.session-row-label')!.textContent), entries.map(entry => entry.name));
+      assert.deepEqual((f.preferences.value.state[key] as { tabs: { lastUsed: number }[] }).tabs.map(entry => entry.lastUsed), entries.map(entry => entry.lastUsed));
+      if (scenario.view === 'all') {
+        assert.equal(f.rows()[scenario.selected].getAttribute('aria-current'), 'true');
+        assert.equal(f.calls.filter(call => call.command === 'start_pi').length, 1);
+        panel.scrollTop = 80;
+        f.emit({ type: 'agent_start' }); await f.tick();
+        assert.equal(panel.scrollTop, 80, 'later activity does not repeat startup reveal');
+        assert.equal(f.win.document.activeElement, focused);
+      } else {
+        assert.equal(f.element('conversation').hidden, true);
+        assert.equal(f.calls.filter(call => call.command === 'start_pi').length, 0, 'filtered-out restoration never launches');
+      }
+    } finally { f.win.close(); }
+  }
+});
+
 test('All uses persisted user recency, preserves legacy ties and does not mark restoration as use', async () => {
   const key = 'nimrod.tabs.v1:/project';
   const layout = { tabs: [

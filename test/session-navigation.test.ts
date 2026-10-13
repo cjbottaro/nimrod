@@ -61,14 +61,14 @@ test('projections isolate inbox arrival, Working recency, selected retention and
 test('selection intents govern presentation, not connection policy, without mutating recency', () => {
   const navigation = model(), a = session('a', 2), b = session('b', 1);
   navigation.add(a); navigation.add(b); b.attention = true;
-  for (const view of SESSION_VIEWS) for (const intent of ['explicit', 'row', 'restore', 'cleanup', 'notification'] as SelectionIntent[]) {
+  for (const view of SESSION_VIEWS) for (const intent of ['explicit', 'row', 'startup', 'restore', 'cleanup', 'notification'] as SelectionIntent[]) {
     const snapshot = navigation.snapshot(view);
     assert.equal(navigation.presented(snapshot, a), view === 'all' ? a : undefined, 'hidden remembered selection has no presentation');
     const plan = navigation.selection(a, snapshot, intent)!;
     const explicit = ['explicit', 'row', 'notification'].includes(intent);
     assert.equal(plan.view, view === 'all' || explicit ? 'all' : view);
-    assert.equal(plan.focus, intent !== 'restore');
-    assert.equal(plan.reveal, intent === 'explicit' || intent === 'notification');
+    assert.equal(plan.focus, intent !== 'restore' && intent !== 'startup');
+    assert.equal(plan.reveal, intent === 'explicit' || intent === 'notification' || intent === 'startup');
     assert.equal('connect' in plan, false, 'navigation intents cannot opt out of selected-session connection');
     assert.deepEqual(navigation.open().map(s => s.lastUsed), [2, 1]);
   }
