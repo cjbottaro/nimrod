@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
-import { DEFAULT_WINDOW_APPEARANCE, installWindowAppearance, readWindowAppearance, type AppearanceCapabilities, type WindowAppearance } from '../src/window-appearance';
+import { DEFAULT_WINDOW_APPEARANCE, installWindowAppearance, readWindowAppearance, windowSurfaceOpacities, type AppearanceCapabilities, type WindowAppearance } from '../src/window-appearance';
 
 const mac: AppearanceCapabilities = { platform: 'macos', transparency: true, frost: true, reducedTransparency: false };
 const linux: AppearanceCapabilities = { platform: 'linux', transparency: true, frost: false, reducedTransparency: false };
@@ -47,6 +47,31 @@ test('appearance schema uses opaque defaults and rejects invalid values includin
   assert.equal(readWindowAppearance({ 'appearance.backgroundOpacity': 0 }).opacity, 0);
 });
 
+test('surface density is continuous, role-ordered and converges exactly to the opaque endpoint', () => {
+  const zero = windowSurfaceOpacities(0);
+  assert.equal(zero.control, .10); assert.equal(zero.panel, .25);
+  let previous = zero;
+  for (let opacity = 0; opacity <= 100; opacity++) {
+    const current = windowSurfaceOpacities(opacity);
+    for (const key of Object.keys(current) as (keyof typeof current)[]) {
+      assert.ok(current[key] >= previous[key]); assert.ok(current[key] >= 0 && current[key] <= 1);
+    }
+    assert.ok(current.panel >= current.control);
+    assert.ok(current.buttonHover >= current.button);
+    const base = opacity / 100;
+    const composer = base + (1 - base) * current.control;
+    const status = composer + (1 - composer) * current.panel;
+    const notice = base + (1 - base) * current.panel;
+    if (opacity < 100) { assert.ok(status > composer); assert.ok(notice > base); }
+    previous = current;
+  }
+  for (const value of Object.values(windowSurfaceOpacities(100))) assert.equal(value, 1);
+  for (const value of Object.values(windowSurfaceOpacities(99))) assert.ok(1 - value < .08);
+  for (const value of Object.values(windowSurfaceOpacities(99.999))) assert.ok(1 - value < .0001);
+  const middle = windowSurfaceOpacities(65);
+  assert.ok(middle.control < .15); assert.ok(middle.panel > .25 && middle.panel < .30);
+});
+
 test('Linux exposes opacity and area without frosting or any native effect work; input previews before saving', async () => {
   const f = fixture(linux);
   try {
@@ -68,7 +93,9 @@ test('macOS frosting follows opacity, toggle and local dark/light theme previews
   try {
     await tick(); assert.equal(f.controls.frostGroup.hidden, false);
     assert.deepEqual(f.effects, [{ frosted: true, dark: true }]);
-    assert.equal(f.root.style.getPropertyValue('--nimrod-control-overlay-opacity'), '14%');
+    const overlays = windowSurfaceOpacities(70);
+    assert.ok(Math.abs(parseFloat(f.root.style.getPropertyValue('--nimrod-control-overlay-opacity')) / 100 - overlays.control) < .00001);
+    assert.ok(Math.abs(parseFloat(f.root.style.getPropertyValue('--nimrod-panel-overlay-opacity')) / 100 - overlays.panel) < .00001);
     assert.equal(f.root.style.getPropertyValue('--nimrod-control-opacity'), '');
     let rootMutations = 0;
     const observer = new f.dom.window.MutationObserver(records => { rootMutations += records.length; });

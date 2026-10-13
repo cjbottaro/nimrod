@@ -33,7 +33,7 @@ body::before { display:none; }
 button, input, textarea, select { font:inherit; }
 button { font-weight:550; }
 button.secondary, #browse { color:var(--vscode-button-secondaryForeground); background:var(--nimrod-button-secondary-background, var(--vscode-button-secondaryBackground)); }
-button.secondary:hover, #browse:hover { background:var(--nimrod-button-secondary-hover-background, var(--vscode-button-secondaryBackground)); }
+button.secondary:hover, #browse:hover { background:var(--nimrod-button-secondary-control-hover-background, var(--vscode-button-secondaryBackground)); }
 input, select, #host-dialog-input { box-sizing:border-box; width:100%; border:1px solid var(--vscode-input-border); color:var(--vscode-input-foreground); background:var(--vscode-input-background); border-radius:6px; padding:10px 12px; }
 input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 #workspace-bar { display:flex; align-items:center; gap:16px; padding:0 18px; border-bottom:1px solid var(--vscode-panel-border); min-width:0; }
