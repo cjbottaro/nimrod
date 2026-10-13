@@ -25,6 +25,8 @@ Linked files open in VS Code, with supported line/column forms such as `path:lin
 
 When you're following live work near the bottom, incoming output keeps the transcript at the bottom. Scroll upward to pause and read older content; return near the bottom to follow again.
 
+Sending while idle jumps to the bottom and enables auto-follow by default. Steering and queued follow-ups preserve your reading position. Change **Settings → Appearance → Auto-follow after sending** to **Always**, **When idle** (default), or **Never**. Never preserves current scroll intent—it does not turn off already-active following. The jump happens when you submit, before Pi responds or image preparation finishes; scrolling upward afterward pauses following. Non-message commands such as `/name` and `/compact` do not jump.
+
 Streaming, card expansion, window resizing, zoom and ordinary session switching preserve reader intent rather than pulling you out of older history. Tool output has its own scrollable viewport; distinguish that from scrolling the transcript.
 
 Each open session retains its draft, disclosures and reading position while hidden. [Restart](sessions.md#restart-session) reloads history at an explicit resume boundary and resets disclosures. A [notification click](notifications.md#click-to-open-the-session) intentionally jumps its target to the bottom and re-enables auto-follow.

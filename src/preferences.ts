@@ -1,3 +1,4 @@
+import { DEFAULT_SEND_AUTO_FOLLOW, type SendAutoFollow } from './pi/transcript-scroll';
 import { readPluginSettings } from './pi/card-plugins/declarative';
 import { applyEdits, modify, parse, type ParseError } from 'jsonc-parser';
 import { runtimePaths, RUNTIME_STORAGE_KEY } from './settings';
@@ -29,6 +30,8 @@ export function parseSettings(text: string): Record<string, unknown> {
   if (settings['diagnostics.performance'] !== undefined && typeof settings['diagnostics.performance'] !== 'boolean') throw new Error('diagnostics.performance must be a boolean.');
   readKeyOverrides(settings[KEYBINDINGS_SETTING]);
   readPluginSettings(settings);
+  const sendAutoFollow = settings['appearance.autoFollowAfterSending'];
+  if (sendAutoFollow !== undefined && !['always', 'whenIdle', 'never'].includes(sendAutoFollow as string)) throw new Error('appearance.autoFollowAfterSending must be always, whenIdle or never.');
   const zoom = settings['appearance.zoom'];
   if (zoom !== undefined && !ZOOM_LEVELS.includes(zoom)) throw new Error('Invalid appearance.zoom percentage.');
   for (const key of ['runtime.piPath', 'runtime.nodePath']) {
@@ -196,6 +199,8 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
     savePerformance(enabled: boolean) { return patch({ 'diagnostics.performance': enabled }); },
     notificationsEnabled() { return settings['notifications.enabled'] !== false; },
     saveNotifications(enabled: boolean) { return patch({ 'notifications.enabled': enabled }); },
+    sendAutoFollow(): SendAutoFollow { return settings['appearance.autoFollowAfterSending'] as SendAutoFollow ?? DEFAULT_SEND_AUTO_FOLLOW; },
+    saveSendAutoFollow(mode: SendAutoFollow) { return patch({ 'appearance.autoFollowAfterSending': mode }); },
     zoom() { return settings['appearance.zoom'] ?? DEFAULT_ZOOM; },
     saveZoom(percent: number) { return patch({ 'appearance.zoom': percent }); },
     recordCommandUsage(id: string) {

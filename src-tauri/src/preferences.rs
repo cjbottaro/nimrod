@@ -176,6 +176,11 @@ fn validate(text: &str) -> Result<(), String> {
     {
         return Err("diagnostics.performance must be a boolean".into());
     }
+    if let Some(mode) = object.get("appearance.autoFollowAfterSending") {
+        if !matches!(mode.as_str(), Some("always" | "whenIdle" | "never")) {
+            return Err("appearance.autoFollowAfterSending must be always, whenIdle or never".into());
+        }
+    }
     if let Some(zoom) = object.get("appearance.zoom") {
         if ![75, 90, 100, 110, 125, 150, 175, 200]
             .iter()
@@ -594,6 +599,14 @@ mod tests {
         assert!(validate("[]").is_err());
         assert!(validate("{\"notifications.enabled\":\"yes\"}").is_err());
         validate("{\"notifications.enabled\":false}").unwrap();
+        for mode in ["always", "whenIdle", "never"] {
+            validate(&format!(r#"{{"appearance.autoFollowAfterSending":"{mode}"}}"#)).unwrap();
+        }
+        for mode in ["null", "true", "1", r#""idle""#, "{}", r#"["always"]"#] {
+            assert!(
+                validate(&format!(r#"{{"appearance.autoFollowAfterSending":{mode}}}"#)).is_err()
+            );
+        }
         validate("{\"diagnostics.performance\":true}").unwrap();
         assert!(validate("{\"diagnostics.performance\":\"true\"}").is_err());
         assert!(validate("{\"diagnostics.performance\":null}").is_err());

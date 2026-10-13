@@ -12,7 +12,7 @@ import { persistWebviewState, restoreComposerState } from "./webview-state";
 import { captureStreamingOutput, createToolDetails, renderToolCard as renderToolCardDom, restoreStreamingOutput, updateToolCard, toolCardIsBusy, disposeToolCard } from "./tool-card";
 import { ToolDisclosureController } from "./tool-disclosure";
 import { toolMessageBlock } from "./tool-call";
-import { TranscriptScroll } from "./transcript-scroll";
+import { DEFAULT_SEND_AUTO_FOLLOW, TranscriptScroll } from "./transcript-scroll";
 import { disposeParallelCard } from './parallel-card';
 import { renderReasoningCard, updateReasoningCard, disposeReasoningCard } from "./reasoning-card";
 import { transcriptRolePresentation } from "./transcript-presentation";
@@ -731,7 +731,11 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     }
     updateComposer(clearDraft(composer));
     // Local interaction effects belong to Send, never to a late RPC result.
-    if (!compact && !/^\/name(?:\s|$)/.test(text)) host.promptSubmitted?.();
+    if (!compact && !/^\/name(?:\s|$)/.test(text)) {
+      host.promptSubmitted?.();
+      const follow = host.sendAutoFollow?.() ?? DEFAULT_SEND_AUTO_FOLLOW;
+      if (follow === 'always' || (follow === 'whenIdle' && !(pendingState || displayedState).busy)) transcriptScroll.scrollToBottom();
+    }
     if (compact) post("compact", { id, customInstructions: compact[1]?.trim() || undefined });
     else if (imagesReady) {
       preparing++; renderComposer();

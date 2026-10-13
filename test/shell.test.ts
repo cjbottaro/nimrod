@@ -1965,6 +1965,35 @@ test('native notification timeouts can be dismissed in Settings without retrying
   } finally { f.dom.window.close(); }
 });
 
+test('send auto-follow saves and synchronizes without moving readers or restarting sessions', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const pane = f.element('transcript-viewport');
+    pane.scrollTop = 200; pane.dispatchEvent(new f.win.WheelEvent('wheel', { deltaY: -50 }));
+    const before = f.calls.filter(c => ['start_pi', 'stop_pi', 'write_pi'].includes(c.command)).length;
+    f.openSettings();
+    const picker = f.element<HTMLSelectElement>('send-auto-follow');
+    assert.equal(picker.value, 'whenIdle');
+    picker.value = 'never'; picker.dispatchEvent(new f.win.Event('change')); await f.tick();
+    assert.equal(parseSettings(f.preferences.value.text)['appearance.autoFollowAfterSending'], 'never');
+    assert.equal(picker.disabled, false);
+    f.preferences.external('{"appearance.autoFollowAfterSending":"always"}');
+    assert.equal(picker.value, 'always');
+    assert.equal(pane.scrollTop, 200);
+    assert.equal(f.calls.filter(c => ['start_pi', 'stop_pi', 'write_pi'].includes(c.command)).length, before);
+    f.preferences.external('{"appearance.autoFollowAfterSending":"invalid"}');
+    assert.equal(picker.value, 'always', 'invalid external edits retain the last valid setting');
+    f.preferences.external('{}');
+    assert.equal(picker.value, 'whenIdle');
+    f.preferences.settings = async () => { throw new Error('Fixture save failure'); };
+    picker.value = 'never'; picker.dispatchEvent(new f.win.Event('change')); await f.tick();
+    assert.equal(picker.value, 'whenIdle', 'failed saves restore the committed value');
+    assert.equal(picker.disabled, false);
+    assert.match(f.element('application-notices').textContent!, /Fixture save failure/);
+  } finally { f.dom.window.close(); }
+});
+
 test('notification settings save, synchronize and suppress alerts without interrupting sessions', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project', focused: () => false });
   try {

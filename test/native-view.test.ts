@@ -5,7 +5,7 @@ import { webviewHtml, rendererBundle } from './view-fixture';
 import { createSafeMarkdownRenderer } from '../src/pi/safe-markdown';
 import { initialConversationState, reduceRpcEvent } from '../src/pi/reducer';
 
-function fixture(options: { images?: boolean; clipboard?: boolean; missing?: boolean; imageGate?: Promise<void>; releaseOnClear?: boolean; cardRenderer?: import('../src/pi/view-host').ViewHost['cardRenderer']; cardActions?: import('../src/pi/view-host').ViewHost['cardActions'] } = {}) {
+function fixture(options: { sendAutoFollow?: import('../src/pi/view-host').ViewHost['sendAutoFollow']; images?: boolean; clipboard?: boolean; missing?: boolean; imageGate?: Promise<void>; releaseOnClear?: boolean; cardRenderer?: import('../src/pi/view-host').ViewHost['cardRenderer']; cardActions?: import('../src/pi/view-host').ViewHost['cardActions'] } = {}) {
   const dom = new JSDOM(webviewHtml(), { runScripts: 'outside-only', pretendToBeVisual: true });
   const win = dom.window;
   let persisted: unknown;
@@ -23,7 +23,7 @@ function fixture(options: { images?: boolean; clipboard?: boolean; missing?: boo
   win.requestAnimationFrame = cb => { frames.push(cb); return frames.length; };
   const sent: Record<string, unknown>[] = [];
   let receive: (message: unknown) => void = () => {};
-  Object.assign(win, { testHost: { promptSubmitted: () => { submittedPrompts++; }, attachments, cardRenderer: options.cardRenderer, cardActions: options.cardActions, getState: () => undefined, setState: (state: unknown) => { persisted = state; if (options.releaseOnClear) { const images = (state as { attachments?: { id: string }[] }).attachments ?? []; for (const id of blobs.keys()) if (!images.some(image => image.id === id)) blobs.delete(id); } }, postMessage: (message: Record<string, unknown>) => sent.push(message), onMessage: (listener: typeof receive) => { receive = listener; } } });
+  Object.assign(win, { testHost: { sendAutoFollow: options.sendAutoFollow, promptSubmitted: () => { submittedPrompts++; }, attachments, cardRenderer: options.cardRenderer, cardActions: options.cardActions, getState: () => undefined, setState: (state: unknown) => { persisted = state; if (options.releaseOnClear) { const images = (state as { attachments?: { id: string }[] }).attachments ?? []; for (const id of blobs.keys()) if (!images.some(image => image.id === id)) blobs.delete(id); } }, postMessage: (message: Record<string, unknown>) => sent.push(message), onMessage: (listener: typeof receive) => { receive = listener; } } });
   win.eval(rendererBundle() + '\nwindow.testView = PiView.mountPiView(window.testHost);');
   const flush = () => { while (frames.length) frames.shift()!(0); };
   const snapshot = (state: Record<string, unknown>) => { receive({ type: 'snapshot', state }); flush(); };
@@ -37,6 +37,81 @@ function fixture(options: { images?: boolean; clipboard?: boolean; missing?: boo
   };
   return { dom, win, sent, receive, snapshot, prompt, draft, send, flush, paste, state: () => persisted, clipboardReads: () => clipboardReads, submittedPrompts: () => submittedPrompts };
 }
+
+function scrollFixture(f: ReturnType<typeof fixture>) {
+  const pane = f.win.document.querySelector<HTMLElement>('#transcript-viewport')!;
+  let top = 0, height = 2000;
+  Object.defineProperties(pane, {
+    clientHeight: { get: () => 400 },
+    clientWidth: { get: () => 800 },
+    scrollHeight: { get: () => height },
+    scrollTop: { get: () => top, set: value => { top = Math.max(0, Math.min(value, height - 400)); } },
+  });
+  const readHistory = () => { pane.scrollTop = 200; pane.dispatchEvent(new f.win.WheelEvent('wheel', { deltaY: -50 })); };
+  return { pane, readHistory, grow: () => { height += 500; } };
+}
+
+for (const mode of [undefined, 'always', 'whenIdle', 'never'] as const) {
+  for (const delivery of ['idle', 'steer', 'followUp', 'idleAlt'] as const) {
+    test(`send auto-follow ${mode ?? 'default'} handles ${delivery} locally and never repeats on acknowledgement`, () => {
+      const f = fixture({ sendAutoFollow: mode ? () => mode : undefined });
+      try {
+        const s = scrollFixture(f);
+        const busy = delivery === 'steer' || delivery === 'followUp';
+        f.snapshot({ sessionUnavailable: false, busy, messages: [] });
+        s.readHistory();
+        f.draft('Local message');
+        f.prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', altKey: delivery === 'followUp' || delivery === 'idleAlt', bubbles: true, cancelable: true }));
+        const follow = mode === 'always' || ((mode ?? 'whenIdle') === 'whenIdle' && !busy);
+        assert.equal(s.pane.scrollTop, follow ? 1600 : 200, 'navigation precedes render, dispatch receipt and Pi events');
+        f.flush();
+        s.grow();
+        f.snapshot({ busy: true, messages: [] });
+        assert.equal(s.pane.scrollTop, follow ? 2100 : 200, 'subsequent growth follows only the selected intent');
+        s.readHistory(); f.draft('Newer draft');
+        f.receive({ type: 'submissionReceipt', id: f.sent.find(m => m.type === 'prompt')!.id, outcome: 'accepted' }); f.flush();
+        s.grow(); f.snapshot({ busy: true, messages: [] });
+        assert.equal(s.pane.scrollTop, 200, 'upward navigation cancels follow; receipts never jump again');
+        assert.equal(f.prompt.value, 'Newer draft');
+      } finally { f.dom.window.close(); }
+    });
+  }
+}
+
+test('whenIdle follows the latest observed activity even before the next paint', () => {
+  const f = fixture();
+  try {
+    const s = scrollFixture(f);
+    f.snapshot({ sessionUnavailable: false, busy: false, messages: [] }); s.readHistory();
+    f.receive({ type: 'snapshot', state: { sessionUnavailable: false, busy: true, messages: [] } });
+    f.draft('Already working'); f.send();
+    assert.equal(s.pane.scrollTop, 200);
+    f.flush();
+    f.receive({ type: 'snapshot', state: { sessionUnavailable: false, busy: false, messages: [] } });
+    f.draft('Now idle'); f.send();
+    assert.equal(s.pane.scrollTop, 1600);
+  } finally { f.dom.window.close(); }
+});
+
+test('send follow reads live preferences without navigating on changes or non-message controls', () => {
+  let mode: 'always' | 'never' = 'never';
+  const f = fixture({ sendAutoFollow: () => mode });
+  try {
+    const s = scrollFixture(f);
+    f.snapshot({ sessionUnavailable: false, messages: [] }); s.readHistory();
+    mode = 'always';
+    assert.equal(s.pane.scrollTop, 200);
+    for (const text of ['/name New', '/compact', '/delete', '']) {
+      f.draft(text); f.send(); f.flush();
+      assert.equal(s.pane.scrollTop, 200);
+    }
+    f.draft('/skill fixture'); f.send();
+    assert.equal(s.pane.scrollTop, 1600, 'prompt slash expansions count as messages');
+    mode = 'never';
+    s.grow(); f.snapshot({ sessionUnavailable: false, messages: [] });
+    assert.equal(s.pane.scrollTop, 2100, 'Never does not disable existing follow');
+  } finally { f.dom.window.close(); }
+});
 
 test('bundled native bridge clears immediately and isolates new drafts from pending/unknown/late receipts', () => {
   const f = fixture();
@@ -652,6 +727,27 @@ test('queued recovery handles coalesced removal and reset discards the old stick
 });
 
 const tickImages = () => new Promise(resolve => setTimeout(resolve, 30));
+
+test('idle image Send follows before preparation and does not override later upward navigation', async () => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const f = fixture({ images: true, imageGate: gate });
+  try {
+    const s = scrollFixture(f);
+    f.snapshot({ sessionUnavailable: false, messages: [] });
+    f.paste(); await tickImages(); s.readHistory();
+    f.draft('Image caption'); f.send();
+    assert.equal(s.pane.scrollTop, 1600, 'local intent precedes image-byte preparation');
+    assert.equal(f.sent.filter(message => message.type === 'prompt').length, 0);
+    f.flush(); s.readHistory(); release();
+    const deadline = Date.now() + 2000;
+    while (!f.sent.some(message => message.type === 'prompt') && Date.now() < deadline) await tickImages();
+    assert.ok(f.sent.find(message => message.type === 'prompt'));
+    f.flush();
+    assert.equal(s.pane.scrollTop, 200, 'prepared preview must respect newer reader intent');
+  } finally { release(); f.dom.window.close(); }
+});
+
 test('paste uses event images once, preserves newer attachments on ack, and never persists base64', async () => {
   const f = fixture({ images: true, clipboard: true });
   try {

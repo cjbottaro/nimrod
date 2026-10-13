@@ -281,6 +281,17 @@ performancePicker.addEventListener('change', () => {
   }).finally(() => { reloadPerformance(); performancePicker.disabled = false; });
 });
 reloadPerformance();
+const sendAutoFollowPicker = required<HTMLSelectElement>('send-auto-follow');
+const reloadSendAutoFollow = () => { sendAutoFollowPicker.value = preferences.sendAutoFollow(); };
+sendAutoFollowPicker.addEventListener('change', () => {
+  sendAutoFollowPicker.disabled = true;
+  void preferences.saveSendAutoFollow(sendAutoFollowPicker.value as import('./pi/transcript-scroll').SendAutoFollow).then(() => {
+    notices.resolve('send-auto-follow-settings');
+  }).catch(error => {
+    notices.report({ id: 'send-auto-follow-settings', operation: 'Save auto-follow setting', message: String(error) });
+  }).finally(() => { reloadSendAutoFollow(); sendAutoFollowPicker.disabled = false; });
+});
+reloadSendAutoFollow();
 const notificationPicker = required<HTMLSelectElement>('notification-mode');
 const notificationStatus = required('notification-status');
 const notificationTest = required<HTMLButtonElement>('notification-test');
@@ -405,7 +416,7 @@ preferences.subscribe(() => {
   const width = preferences.readState(settingsSidebarWidthKey);
   if (!Object.is(width, settingsSidebarWidth)) { settingsSidebarWidth = width; settingsSidebarResize.reload(); }
   void reloadCardPlugins();
-  runtime.reload(); themes.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); keybindingEditor.reload(); refreshShortcutHints();
+  runtime.reload(); themes.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadSendAutoFollow(); keybindingEditor.reload(); refreshShortcutHints();
 });
 const unlistenDraftErrors = await listen<string>('nimrod-draft-error', event => draftPersistenceError(event.payload));
 const unlistenDraftClose = await getCurrentWindow().onCloseRequested(() => {
@@ -810,6 +821,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
     if (!ready || !workspace || presented !== tab || !tabs.includes(tab) || tab.closing || tab.restarting || tab.deleting || document.querySelector('dialog[open]')) throw new Error('Card action is no longer available');
   }
   tab.view = mountPiView({
+    sendAutoFollow: () => preferences.sendAutoFollow(),
     performance: performanceDiagnostics.probe,
     reportNotice: notice => {
       if (unloading || tab.closing || !tabs.includes(tab)) return;
