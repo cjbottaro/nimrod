@@ -1,6 +1,6 @@
 # Performance diagnostics
 
-**Status: implemented; packaged-app latency/overhead acceptance pending.** User guide: [Performance reports](../../../../docs/performance-diagnostics.md). Related: [preferences](preferences.md), [composer](composer.md), [transcript interaction](transcript-interaction.md), [keybindings](keybindings.md).
+**Status: implemented; native macOS report collection observed, with instrumentation overhead and broader platform acceptance pending.** User guide: [Performance reports](../../../../docs/performance-diagnostics.md). Related: [preferences](preferences.md), [composer](composer.md), [transcript interaction](transcript-interaction.md), [keybindings](keybindings.md).
 
 ## Contract
 
@@ -47,4 +47,6 @@ Writes run on a blocking worker, serialize through a report-writer mutex, stage 
 - Native fixture tests: typed content/unknown-metric rejection, size/negative/unordered timing validation, private report writes, 20-report retention and unrelated-file preservation.
 - Offline WebKit capture regression: real Settings/palette flow, content exclusion, retained draft/focus/disclosure/reading position and error/cancellation routing. Native IPC/storage is mocked; no user session/model work.
 
-Run `mise run check` and offline `npm run test:browser`. No automatic app builds or user-window interruption. Actual packaged macOS capture during idle-session CPU contention, instrumentation overhead, compositor correlation and Linux/possible Windows behavior remain unverified; do not infer native latency acceptance from fixtures.
+User-supplied packaged macOS reports and feedback establish local report collection and limited observed responsiveness recovery after unchanged-write suppression; see the canonical [native performance observation](verification.md#performance-observation). They do not isolate instrumentation overhead or prove the lag's sole cause.
+
+Run `mise run check` and offline `npm run test:browser`. No automatic app builds or user-window interruption. Instrumentation overhead, broader session/history scaling, compositor correlation and Linux/possible Windows behavior remain unverified; do not infer native latency acceptance from fixtures.
