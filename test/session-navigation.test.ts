@@ -78,11 +78,11 @@ test('selection intents govern presentation, not connection policy, without muta
   assert.deepEqual(ids(navigation.all()), ['a', 'b'], 'projection consumers cannot mutate canonical order');
 });
 
-test('cleanup prefers connected current-view recency, then All, then next/previous inactive rows', () => {
+test('cleanup prefers connected current-view recency, then All, then inactive current-view recency and All', () => {
   const navigation = model(), removed = session('removed', 10), firstArrival = session('first', 1), newerArrival = session('newer', 2), hidden = session('hidden', 20);
   [removed, firstArrival, newerArrival, hidden].forEach(s => navigation.add(s));
-  firstArrival.attention = true; navigation.snapshot('unread');
-  removed.attention = true; newerArrival.attention = true;
+  firstArrival.attention = newerArrival.attention = true; navigation.snapshot('unread');
+  removed.attention = true;
   const before = navigation.snapshot('unread', removed, removed);
   navigation.remove(removed); firstArrival.connected = newerArrival.connected = hidden.connected = true;
   let result = navigation.replacement(before, navigation.snapshot('unread'));
@@ -92,13 +92,35 @@ test('cleanup prefers connected current-view recency, then All, then next/previo
   assert.deepEqual(result, { target: hidden, view: 'all' });
   hidden.connected = false;
   result = navigation.replacement(before, navigation.snapshot('unread'));
-  assert.deepEqual(result, { target: newerArrival, view: 'unread' }, 'inactive fallback uses next displayed row');
+  assert.deepEqual(result, { target: newerArrival, view: 'unread' }, 'inactive fallback uses recency, not the previous displayed row or first inbox arrival');
   navigation.remove(newerArrival);
-  assert.deepEqual(navigation.replacement(before, navigation.snapshot('unread')), { target: firstArrival, view: 'unread' }, 'then previous displayed row');
+  assert.deepEqual(navigation.replacement(before, navigation.snapshot('unread')), { target: firstArrival, view: 'unread' }, 'remaining visible session wins over newer hidden session');
   navigation.remove(firstArrival);
   assert.deepEqual(navigation.replacement(before, navigation.snapshot('unread')), { target: hidden, view: 'all' }, 'exhausted filter falls back to All');
   navigation.remove(hidden);
   assert.deepEqual(navigation.replacement(before, navigation.snapshot('unread')), { target: undefined, view: 'all' });
+});
+
+test('inactive cleanup uses canonical recency and stable ties regardless of removed row position', () => {
+  for (const times of [[1, 2, 3, 4], [0, 0, 0, 0], [3, 1, 4, 2]]) {
+    for (let selectedIndex = 0; selectedIndex < times.length; selectedIndex++) {
+      const navigation = model(), sessions = times.map((time, i) => session(String(i), time));
+      sessions.forEach(s => navigation.add(s));
+      const before = navigation.snapshot('all', sessions[selectedIndex], sessions[selectedIndex]);
+      navigation.remove(sessions[selectedIndex]);
+      const after = navigation.snapshot('all');
+      assert.deepEqual(navigation.replacement(before, after), { target: after.all[0], view: 'all' });
+      assert.deepEqual(sessions.map(s => s.lastUsed), times, 'cleanup never marks recency');
+    }
+  }
+});
+
+test('inactive batch cleanup selects the newest survivor rather than a removed descendant or adjacent row', () => {
+  const navigation = model(), newest = session('newest', 4), parent = session('parent', 3), child = session('child', 2), oldest = session('oldest', 1);
+  [oldest, child, parent, newest].forEach(s => navigation.add(s));
+  const before = navigation.snapshot('all', parent, parent);
+  navigation.remove(parent); navigation.remove(child);
+  assert.deepEqual(navigation.replacement(before, navigation.snapshot('all')), { target: newest, view: 'all' });
 });
 
 test('batch cleanup preserves a surviving selection and removes the entire subtree before resolving once', () => {
