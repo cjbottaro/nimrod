@@ -407,6 +407,86 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn expanding_deletion_gate_captures_new_owned_descendants_without_stopping_unrelated_children()
+     {
+        let host = WorkspaceHost::default();
+        let temp = tempfile::tempdir().unwrap();
+        let cwd = temp.path().to_owned();
+        let root = cwd.join("root.jsonl");
+        let child = cwd.join("new-child.jsonl");
+        std::fs::write(&root, "fixture").unwrap();
+        std::fs::write(&child, "fixture").unwrap();
+        let (out, _rx) = output();
+        host.start(
+            "one",
+            echo(),
+            cwd.clone(),
+            "root".into(),
+            Some(root.clone()),
+            out.clone(),
+        )
+        .await
+        .unwrap();
+        host.start(
+            "two",
+            echo(),
+            cwd.clone(),
+            "unrelated".into(),
+            None,
+            out.clone(),
+        )
+        .await
+        .unwrap();
+        host.begin_deletion().await.unwrap();
+        host.freeze_deletion([root.clone()].into_iter().collect())
+            .await;
+        // The descendant attaches while the original review is still open.
+        host.start(
+            "two",
+            echo(),
+            cwd.clone(),
+            "child".into(),
+            Some(child.clone()),
+            out.clone(),
+        )
+        .await
+        .unwrap();
+        host.stop_window("one", Some("root")).await.unwrap();
+        let membership = [root, child.clone()].into_iter().collect();
+        host.freeze_deletion(membership).await;
+        let owners = host
+            .deletion_owners(&[child.clone()].into_iter().collect())
+            .await;
+        assert_eq!(owners.len(), 1);
+        assert_eq!(owners[0].1, "child");
+        assert!(
+            host.write(
+                "two",
+                "child",
+                json!({"type":"prompt", "id":"blocked", "message":"never sent"})
+            )
+            .await
+            .is_err()
+        );
+        host.stop_window(&owners[0].0, Some(&owners[0].1))
+            .await
+            .unwrap();
+        assert!(
+            host.deletion_owners(&[child.clone()].into_iter().collect())
+                .await
+                .is_empty()
+        );
+        assert!(host.cwd("two", "unrelated").await.is_ok());
+        assert!(
+            host.start("one", echo(), cwd, "late".into(), Some(child), out)
+                .await
+                .is_err()
+        );
+        host.end_deletion().await;
+        host.stop_all().await.unwrap();
+    }
+
+    #[tokio::test]
     async fn independent_tabs_route_output_and_survive_sibling_shutdown() {
         let host = WorkspaceHost::default();
         let (a, mut ra) = output();

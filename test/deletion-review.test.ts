@@ -47,7 +47,8 @@ test('review can cover only the authorized deletion picker, with loading and hig
     assert.equal(f.dialog.open, false);
     host.close(); assert.equal(f.dialog.open, true);
     assert.equal(f.doc.activeElement?.id, 'deletion-confirm');
-    f.dialog.close('delete'); assert.equal(await blocked, true); assert.equal(picker.open, true);
+    f.doc.querySelector<HTMLButtonElement>('#deletion-confirm')!.click(); assert.equal(await blocked, true);
+    assert.equal(f.dialog.open, true); assert.equal(picker.open, true); f.controller.cancel();
   } finally { f.dispose(); }
 });
 
@@ -62,8 +63,9 @@ test('fast previews open the populated review directly and cancel the delayed lo
     assert.equal(f.doc.querySelector<HTMLButtonElement>('#deletion-confirm')!.disabled, false);
     assert.equal(f.timers.size, 0);
     f.advance(1000); assert.equal(f.dialog.open, true);
-    f.dialog.close('delete'); assert.equal(await answer, true);
-    f.advance(1000); assert.equal(f.dialog.open, false);
+    f.doc.querySelector<HTMLButtonElement>('#deletion-confirm')!.click(); assert.equal(await answer, true);
+    f.advance(1000); assert.equal(f.dialog.open, true);
+    f.controller.cancel(); assert.equal(f.dialog.open, false);
   } finally { f.dispose(); }
 });
 
@@ -89,7 +91,8 @@ test('slow previews show loading after 150ms and update the same modal without c
     assert.equal(f.doc.activeElement?.id, 'deletion-cancel');
     assert.equal(f.doc.querySelector<HTMLButtonElement>('#deletion-confirm')!.disabled, false);
     assert.equal(f.doc.querySelector('#deletion-tree')!.getAttribute('aria-busy'), 'false');
-    f.dialog.close('delete'); assert.equal(await answer, true);
+    f.doc.querySelector<HTMLButtonElement>('#deletion-confirm')!.click(); assert.equal(await answer, true);
+    assert.equal(f.dialog.open, true);
   } finally { f.dispose(); }
 });
 
@@ -126,7 +129,7 @@ test('custom deletion review displays nested safe text, concise copy and default
     const answer = f.controller.review({ id: 'review', sessions });
     assert.equal(f.dialog.open, true);
     assert.equal(f.doc.activeElement?.id, 'deletion-confirm');
-    assert.equal(f.doc.querySelector('#deletion-description')!.textContent, 'Deletes these sessions and their saved drafts and references.');
+    assert.match(f.doc.querySelector('#deletion-description')!.textContent!, /Stops work.*including descendants/);
     assert.equal(f.doc.querySelector('#deletion-confirm')!.textContent, 'Delete 3 sessions');
     assert.equal(f.doc.querySelectorAll('#deletion-tree ul ul ul').length, 1);
     assert.equal(f.doc.querySelectorAll('#deletion-tree ul[role="list"]').length, 3);
@@ -136,7 +139,8 @@ test('custom deletion review displays nested safe text, concise copy and default
     assert.equal(f.doc.querySelectorAll('#deletion-tree svg title').length, 0);
     assert.equal(f.doc.querySelector('#deletion-tree script'), null);
     assert.doesNotMatch(f.doc.querySelector('#deletion-tree')!.textContent!, /\/store\//);
-    f.dialog.close('delete'); assert.equal(await answer, true);
+    f.doc.querySelector<HTMLButtonElement>('#deletion-confirm')!.click(); assert.equal(await answer, true);
+    assert.equal(f.dialog.open, true);
   } finally { f.dispose(); }
 });
 
@@ -182,6 +186,7 @@ test('Enter confirms from Delete focus; Cancel focus and Escape cancel', async (
     const enter = new f.dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
     f.doc.activeElement!.dispatchEvent(enter);
     assert.equal(enter.defaultPrevented, true); assert.equal(await answer, true);
+    assert.equal(f.dialog.open, true); f.controller.cancel();
     const next = f.controller.review({ id: 'escape', sessions });
     f.doc.querySelector<HTMLButtonElement>('#deletion-confirm')!.focus();
     f.doc.activeElement!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
@@ -198,6 +203,32 @@ test('Enter confirms from Delete focus; Cancel focus and Escape cancel', async (
     assert.equal(f.dialog.open, false, 'Enter on focused Cancel cancels a loading preview');
     f.doc.activeElement!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     assert.equal(await f.controller.review({ id: 'late', sessions }), false);
+  } finally { f.dispose(); }
+});
+
+test('confirmation keeps the modal open, blocks cancel/repeated submit and reports progress until reconciliation closes it', async () => {
+  const f = fixture();
+  try {
+    const answer = f.controller.review({ id: 'execute', sessions });
+    const confirm = f.doc.querySelector<HTMLButtonElement>('#deletion-confirm')!;
+    const cancel = f.doc.querySelector<HTMLButtonElement>('#deletion-cancel')!;
+    confirm.click(); assert.equal(await answer, true);
+    assert.equal(f.dialog.open, true); assert.equal(confirm.disabled, true); assert.equal(cancel.disabled, true);
+    assert.match(f.doc.querySelector('#deletion-description')!.textContent!, /Stopping sessions/);
+    assert.equal(f.doc.activeElement?.id, 'deletion-tree');
+    const escape = new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    f.doc.activeElement!.dispatchEvent(escape); assert.equal(escape.defaultPrevented, true);
+    const nativeCancel = new f.dom.window.Event('cancel', { cancelable: true });
+    f.dialog.dispatchEvent(nativeCancel); assert.equal(nativeCancel.defaultPrevented, true);
+    confirm.form!.dispatchEvent(new f.dom.window.SubmitEvent('submit', { submitter: confirm, cancelable: true }));
+    cancel.click(); assert.equal(f.dialog.open, true);
+    assert.equal(await f.controller.review({ id: 'duplicate', sessions }), false);
+    f.controller.progress('deleting'); assert.match(f.doc.querySelector('#deletion-description')!.textContent!, /Deleting sessions/);
+    f.controller.cancel(); assert.equal(f.dialog.open, false);
+    const next = f.controller.review({ id: 'next', sessions });
+    assert.equal(confirm.disabled, false); assert.equal(cancel.disabled, false);
+    assert.match(f.doc.querySelector('#deletion-description')!.textContent!, /Stops work/);
+    cancel.click(); assert.equal(await next, false);
   } finally { f.dispose(); }
 });
 

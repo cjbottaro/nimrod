@@ -22,12 +22,16 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
   const tree = dialog.querySelector<HTMLElement>('#deletion-tree')!;
   const cancel = dialog.querySelector<HTMLButtonElement>('#deletion-cancel')!;
   const confirm = dialog.querySelector<HTMLButtonElement>('#deletion-confirm')!;
+  const form = confirm.form!;
+  const description = dialog.querySelector<HTMLElement>('#deletion-description')!;
+  const reviewDescription = description.textContent || '';
   labelDialogAction(cancel, 'Cancel', 'Escape');
   labelDialogAction(confirm, 'Delete sessions', 'Enter');
   let pending: { resolve(answer: boolean): void } | undefined;
   let disposed = false;
   let preview: 'idle' | 'loading' | 'cancelled' = 'idle';
   let loadingTimer: number | undefined;
+  let executing = false;
 
   function clearLoadingTimer(): void {
     if (loadingTimer !== undefined) win.clearTimeout(loadingTimer);
@@ -47,22 +51,50 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
     request?.resolve(answer);
   }
   function close(): void {
+    executing = false;
+    cancel.disabled = false; labelDialogAction(cancel, 'Cancel', 'Escape');
     preview = 'idle';
     if (dialog.open) dialog.close('cancel'); else finish();
   }
+  function progress(phase: 'stopping' | 'deleting'): void {
+    if (!executing || disposed) return;
+    const text = phase === 'stopping' ? 'Stopping sessions…' : 'Deleting sessions…';
+    description.textContent = text;
+    labelDialogAction(confirm, text);
+  }
+  function activate(button: HTMLButtonElement): void {
+    if (executing || button.disabled) return;
+    if (button === cancel) { dialog.close('cancel'); return; }
+    if (!pending) return;
+    executing = true;
+    cancel.disabled = true; confirm.disabled = true;
+    labelDialogAction(cancel, 'Cancel');
+    tree.setAttribute('aria-busy', 'true');
+    description.setAttribute('role', 'status');
+    // Resolve the answer without closing the dialog or restoring underlying focus.
+    finish(true); progress('stopping');
+    tree.focus({ preventScroll: true });
+  }
   const onClose = () => {
     if (preview === 'loading') preview = 'cancelled';
-    finish(!confirm.disabled && dialog.returnValue === 'delete');
+    finish(false);
   };
   const onKey = (event: KeyboardEvent) => {
-    confirmationKey(event, dialog, cancel, confirm);
+    confirmationKey(event, dialog, cancel, confirm, activate);
   };
+  const onCancel = (event: Event) => { event.preventDefault(); if (!executing) activate(cancel); };
+  const onClick = (event: Event) => { event.preventDefault(); activate(event.currentTarget as HTMLButtonElement); };
+  const onSubmit = (event: SubmitEvent) => { event.preventDefault(); activate(event.submitter === cancel ? cancel : confirm); };
   dialog.addEventListener('close', onClose);
+  dialog.addEventListener('cancel', onCancel);
   dialog.addEventListener('keydown', onKey);
+  cancel.addEventListener('click', onClick); confirm.addEventListener('click', onClick);
+  form.addEventListener('submit', onSubmit);
   return {
     loading(): void {
-      if (disposed || pending || preview === 'loading') return;
+      if (disposed || pending || executing || preview === 'loading') return;
       preview = 'loading';
+      cancel.disabled = false; description.textContent = reviewDescription; description.removeAttribute('role');
       confirm.disabled = true; labelDialogAction(confirm, 'Delete sessions');
       tree.setAttribute('aria-busy', 'true');
       const status = doc.createElement('div'); status.className = 'deletion-loading'; status.setAttribute('role', 'status');
@@ -74,7 +106,7 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
       loadingTimer = win.setTimeout(() => { loadingTimer = undefined; tryShow(); }, 150);
     },
     review(data: DeletionReviewData): Promise<boolean> {
-      if (disposed || pending || preview === 'cancelled') return Promise.resolve(false);
+      if (disposed || pending || executing || preview === 'cancelled') return Promise.resolve(false);
       clearLoadingTimer();
       if (!data.sessions.length) { close(); return Promise.resolve(false); }
       const projects = new Set(data.sessions.map(session => session.cwd).filter(Boolean));
@@ -112,7 +144,9 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
         }
       }
       if (seen.size !== files.size) { close(); return Promise.resolve(false); }
-      preview = 'idle'; confirm.disabled = false; tree.setAttribute('aria-busy', 'false');
+      preview = 'idle'; cancel.disabled = false; confirm.disabled = false;
+      description.textContent = reviewDescription; description.removeAttribute('role');
+      tree.setAttribute('aria-busy', 'false');
       tree.replaceChildren(list); tree.scrollTop = 0;
       labelDialogAction(confirm, `Delete ${data.sessions.length} ${data.sessions.length === 1 ? 'session' : 'sessions'}`, 'Enter');
       // A visible loading dialog keeps its user's focus when review arrives.
@@ -121,7 +155,11 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
         pending = { resolve }; doc.addEventListener('close', onOtherClose, true); tryShow();
       });
     },
+    progress,
     cancel: close,
-    dispose() { disposed = true; close(); dialog.removeEventListener('close', onClose); dialog.removeEventListener('keydown', onKey); },
+    dispose() {
+      disposed = true; close(); dialog.removeEventListener('close', onClose); dialog.removeEventListener('cancel', onCancel); dialog.removeEventListener('keydown', onKey);
+      cancel.removeEventListener('click', onClick); confirm.removeEventListener('click', onClick); form.removeEventListener('submit', onSubmit);
+    },
   };
 }

@@ -1501,7 +1501,7 @@ test('delete review uses a custom nested modal, Cancel is non-destructive and la
       assert.equal(f.element<HTMLDialogElement>('host-dialog').open, false);
       assert.equal(f.element('deletion-tree').textContent, 'Root');
       assert.equal(f.win.document.activeElement, f.element('deletion-confirm'));
-      f.element<HTMLDialogElement>('deletion-review').close(confirmed ? 'delete' : 'cancel'); await f.tick(); await f.tick(); await f.tick();
+      f.element<HTMLButtonElement>(confirmed ? 'deletion-confirm' : 'deletion-cancel').click(); await f.tick(); await f.tick(); await f.tick();
       assert.equal(f.win.document.querySelectorAll('.session-row').length, confirmed ? 0 : 1);
       if (confirmed) {
         assert.equal(f.element('sidebar-all').getAttribute('aria-selected'), 'true');
@@ -1514,8 +1514,8 @@ test('delete review uses a custom nested modal, Cancel is non-destructive and la
   }
 });
 
-test('deletion review keeps idle row indicators unchanged until confirmed execution and never counts as agent work', async () => {
-  for (const outcome of ['cancelled', 'deleted', 'failed']) {
+test('idle and working session deletion retains review until shutdown/removal without sending prompts or get_state', async () => {
+  for (const working of [false, true]) for (const outcome of ['cancelled', 'deleted', 'failed']) {
     const file = '/sessions/new.jsonl';
     let answer!: (confirmed: boolean) => void, finishExecution!: () => void;
     const execution = new Promise<void>(resolve => { finishExecution = resolve; });
@@ -1543,27 +1543,38 @@ test('deletion review keeps idle row indicators unchanged until confirmed execut
       const indicator = target.parentElement!.querySelector<HTMLElement>('.session-indicator')!;
       const unrelatedState = unrelated.parentElement!.querySelector<HTMLElement>('.session-indicator')!.dataset.state;
       const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Keep my draft'; prompt.dispatchEvent(new f.win.Event('input'));
-      assert.equal(indicator.dataset.state, 'ready');
+      if (working) f.emit({ type: 'agent_start' });
+      const underlyingState = indicator.dataset.state;
+      const stateRequests = f.calls.filter(c => (c.args.message as JsonRecord)?.type === 'get_state').length;
       const starts = f.calls.filter(c => c.command === 'start_pi').length;
       f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
       assert.equal(f.element<HTMLDialogElement>('deletion-review').open, true);
-      assert.equal(indicator.dataset.state, 'ready'); assert.match(target.getAttribute('aria-label')!, /— Ready$/);
+      assert.equal(indicator.dataset.state, underlyingState, 'review does not replace the underlying activity indicator');
       assert.equal(f.element('sidebar-working-count').textContent, '0');
-      assert.equal(prompt.closest('.session-view')!.getAttribute('aria-busy'), 'false');
+      assert.equal(prompt.closest('.session-view')!.getAttribute('aria-busy'), String(working));
       assert.equal(unrelated.parentElement!.querySelector<HTMLElement>('.session-indicator')!.dataset.state, unrelatedState);
       assert.equal(prompt.closest<HTMLElement>('.session-view')!.inert, true, 'review still locks the affected composer');
-      f.element<HTMLDialogElement>('deletion-review').close(outcome === 'cancelled' ? 'cancel' : 'delete'); await f.tick(); await f.tick();
+      f.element<HTMLButtonElement>(outcome === 'cancelled' ? 'deletion-cancel' : 'deletion-confirm').click(); await f.tick(); await f.tick();
       if (outcome === 'cancelled') {
-        assert.equal(indicator.dataset.state, 'ready'); assert.equal(prompt.closest<HTMLElement>('.session-view')!.inert, false);
+        assert.equal(indicator.dataset.state, underlyingState); assert.equal(prompt.closest<HTMLElement>('.session-view')!.inert, false);
         assert.equal(prompt.value, 'Keep my draft');
       } else {
         assert.equal(indicator.dataset.state, 'deleting'); assert.match(target.getAttribute('aria-label')!, /— Deleting$/);
         assert.equal(f.element('sidebar-working-count').textContent, '0');
+        assert.equal(f.element<HTMLDialogElement>('deletion-review').open, true, 'confirmation retains modal through shutdown');
+        assert.equal(f.element<HTMLButtonElement>('deletion-confirm').disabled, true);
+        assert.equal(f.element<HTMLButtonElement>('deletion-cancel').disabled, true);
+        f.element('deletion-tree').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        assert.equal(f.element<HTMLDialogElement>('deletion-review').open, true);
+        f.deletionEvent({ id: 'removing', phase: 'removing', files: [file], results: [], pending: true }); await f.tick();
+        assert.match(f.element('deletion-description').textContent!, /Deleting sessions/);
         finishExecution(); await f.tick(); await f.tick(); await f.tick();
         if (outcome === 'failed') { assert.equal(indicator.dataset.state, 'recovery'); assert.equal(prompt.value, 'Keep my draft'); }
         else assert.equal(target.isConnected, false);
       }
+      assert.equal(f.element<HTMLDialogElement>('deletion-review').open, false);
       assert.equal(f.calls.filter(c => c.command === 'start_pi').length, starts);
+      assert.equal(f.calls.filter(c => (c.args.message as JsonRecord)?.type === 'get_state').length, stateRequests, 'deletion never waits for fresh Pi state');
       assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
     } finally { f.dom.window.close(); }
   }
@@ -1620,7 +1631,7 @@ test('sidebar trash targets a background row without selecting/resuming it and p
       release(); await f.tick(); await f.tick();
       assert.equal(f.win.document.activeElement, f.element('deletion-confirm'));
       assert.equal(rows[2].getAttribute('aria-current'), 'true'); assert.equal(rows[0].getAttribute('aria-current'), 'false');
-      f.element<HTMLDialogElement>('deletion-review').close(outcome === 'cancelled' ? 'cancel' : 'delete');
+      f.element<HTMLButtonElement>(outcome === 'cancelled' ? 'deletion-cancel' : 'deletion-confirm').click();
       await f.tick(); await f.tick(); await f.tick();
       const calls = f.calls.filter(call => call.command === 'delete_session_tree');
       assert.equal(calls.length, 1); assert.equal(calls[0].args.root, root); assert.equal(calls[0].args.sessionId, 'fixture-id');
@@ -1637,7 +1648,7 @@ test('sidebar trash targets a background row without selecting/resuming it and p
   }
 });
 
-test('sidebar trash shares selected action guards for unsaved, temporary, busy, pending and quarantined sessions', async () => {
+test('sidebar trash allows working and pending sessions but guards unsaved, temporary and quarantined sessions', async () => {
   let exists = false;
   const f = await fixture(undefined, { windowWorkspace: '/project', fileExists: () => exists, holdPrompts: true });
   try {
@@ -1646,14 +1657,13 @@ test('sidebar trash shares selected action guards for unsaved, temporary, busy, 
     exists = true; f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
     const trash = f.rows()[1].parentElement!.querySelector<HTMLButtonElement>('.session-delete')!;
     assert.equal(trash.disabled, false);
-    f.emit({ type: 'agent_start' }); assert.equal(trash.disabled, true);
-    trash.click(); assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false);
+    f.emit({ type: 'agent_start' }); assert.equal(trash.disabled, false, 'working sessions can be deleted');
+    assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
     f.emit({ type: 'agent_settled' }); assert.equal(trash.disabled, false);
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Pending send'; prompt.dispatchEvent(new f.win.Event('input'));
     prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
-    assert.equal(trash.disabled, true, 'pending acknowledgement blocks deletion');
-    assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, true);
-    trash.click(); assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false);
+    assert.equal(trash.disabled, false, 'pending acknowledgement does not prevent native shutdown');
+    assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
     const request = f.calls.find(call => (call.args.message as JsonRecord)?.type === 'prompt')!.args.message as JsonRecord;
     f.captureChannel().onmessage({ kind: 'rpc', value: { type: 'response', id: request.id, success: true } }); await f.tick();
     assert.equal(trash.disabled, false, 'receipt settlement refreshes eligibility without an activity event');

@@ -23,12 +23,13 @@ export function navigateDialogActions(event: KeyboardEvent, cancel: HTMLButtonEl
 }
 
 /** Respect Cancel focus instead of making Enter silently activate another button. */
-export function confirmationKey(event: KeyboardEvent, dialog: HTMLDialogElement, cancel: HTMLButtonElement, confirm: HTMLButtonElement): void {
+export function confirmationKey(event: KeyboardEvent, dialog: HTMLDialogElement, cancel: HTMLButtonElement, confirm: HTMLButtonElement, activate?: (button: HTMLButtonElement) => void): void {
   if (!dialog.open || navigateDialogActions(event, cancel, confirm) || !['Enter', 'Escape'].includes(event.key)) return;
   event.preventDefault(); event.stopPropagation();
   if (event.isComposing || event.keyCode === 229 || event.key === 'Enter' && event.repeat) return;
   const button = event.key === 'Escape' || cancel.contains(event.target as Node) ? cancel : confirm;
   if (button.disabled) return;
-  if (button.form?.method === 'dialog') dialog.close(button.value);
+  if (activate) activate(button);
+  else if (button.form?.method === 'dialog') dialog.close(button.value);
   else button.click();
 }

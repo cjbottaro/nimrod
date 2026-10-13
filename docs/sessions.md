@@ -51,15 +51,16 @@ The **trash icon left of Close** targets that row without switching to or resumi
 
 1. Open deletion review.
 2. Inspect the selected session and its descendants, including any in other projects.
-3. Choose **Delete N sessions** to permanently remove them, or Cancel/Escape to retain everything.
+3. Choose **Delete N sessions** to stop affected agents and permanently remove the tree, or Cancel/Escape to retain everything without stopping work.
+4. The review stays open, showing **Stopping sessions…** and then **Deleting sessions…**. Its actions are disabled after confirmation. It closes when deletion and reconciliation finish.
 
-Deletion is permanent, not a move to OS trash. No Pi deletion plugin is required. Temporary/unsaved sessions cannot be deleted. Every affected open session must be idle; review locks only affected sessions. New sessions and unrelated Resume, Restart and Close actions remain available in other project windows, without stopping unrelated work.
+Deletion is permanent, not a move to OS trash. No Pi deletion plugin is required. Working sessions can be deleted; temporary/unsaved sessions cannot. Nimrod stops affected owned Pi processes and waits for exit before removing files. Confirmation covers the current tree, including descendants created during review or shutdown, without a second review. Review locks only affected sessions. New sessions and unrelated Resume, Restart and Close actions remain available in other project windows, without stopping unrelated work.
 
 Saved-history pickers can contain a stale row if its file is deleted after discovery. Choosing it shows an error; Nimrod never substitutes a new conversation. A session in the active deletion tree cannot attach a new agent until review is canceled or deletion finishes. The reviewing window retains normal modal focus and shortcut priority.
 
 Slower previews show **Loading session tree…** with Delete disabled. Cancel during loading prevents deletion even if preparation finishes later. Enter respects the focused action; Enter on Cancel cancels.
 
-Confirmed successes remove their history files, drafts, recovery items and saved references. A failed descendant retains its ancestors; other branches can succeed. Changed files, shutdown failures and uncertain outcomes show explicit errors without automatic retry. **Recovery needed** sessions require explicit **Resume session…** after the transaction finishes; row selection or Restart cannot bypass that guard.
+Confirmed successes remove their history files, drafts, recovery items and saved references. A failed descendant retains its ancestors; other branches can succeed. Review-time conversation or draft changes do not require another attempt. Invalid history, shutdown failures, late external file changes and uncertain outcomes still show explicit errors without automatic retry. **Recovery needed** sessions require explicit **Resume session…** after the transaction finishes; row selection or Restart cannot bypass that guard.
 
 Deletion supports Pi's session-directory environment override, not arbitrary locations outside the selected store. Unreadable/invalid headers, symlinks or hard-linked sessions can prevent tree discovery rather than silently omit descendants. External writers are not coordinated.
 

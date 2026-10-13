@@ -33,7 +33,6 @@ test('multiple sends reach Pi before acknowledgement and correlate out-of-order 
   const second = f.session.handle({ type: 'prompt', id: 'second', text: 'two' });
   assert.equal(f.sent.length, 2);
   assert.equal(f.rpc.hasPendingRequest('prompt'), true);
-  await assert.rejects(f.session.refreshDeletionState(), /operation is pending/);
   f.rpc.receive({ kind: 'rpc', value: { type: 'response', id: f.sent[1].id, success: true } });
   await second;
   assert.equal(f.rpc.hasPendingRequest('prompt'), true, 'the first transport request is still pending');

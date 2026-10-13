@@ -1,14 +1,13 @@
 import type { DeletionTreeSession } from './deletion-review';
 // Pi-specific frontend half of the native app-wide deletion transaction.
 export interface DeleteResult { file: string; deleted: boolean; error?: string | null; }
-export interface DeletionEvent { id: string; phase: 'begin' | 'lock' | 'check' | 'review' | 'quarantine' | 'complete' | 'release'; files: string[]; results: DeleteResult[]; tree?: DeletionTreeSession[] | null; message?: string | null; pending: boolean; }
+export interface DeletionEvent { id: string; phase: 'begin' | 'lock' | 'check' | 'review' | 'quarantine' | 'removing' | 'complete' | 'release'; files: string[]; results: DeleteResult[]; tree?: DeletionTreeSession[] | null; message?: string | null; pending: boolean; }
 export interface DeletionSnapshot { pending: boolean; quarantine: string[]; files: string[]; deleted?: string[]; error?: string | null; }
 export interface SessionDeletionReport { file: string; token?: string; title: string; busy: boolean; hasDraft: boolean; }
 export interface DeletionPanel {
   file: string;
   lock(locked: boolean): void;
   executionStarted?(): void;
-  refresh(): Promise<void>;
   report(): SessionDeletionReport;
   deleted(): void;
   failed(message: string): void;
@@ -25,6 +24,7 @@ interface Dependencies {
   review?(id: string, tree: DeletionTreeSession[]): Promise<boolean>;
   confirm?(id: string, confirmed: boolean): Promise<void>;
   cancelReview?(): void;
+  progressReview?(phase: 'stopping' | 'deleting'): void;
   error(message: string): void;
 }
 export class SessionDeletion {
@@ -34,6 +34,7 @@ export class SessionDeletion {
   private stateInvalid = false;
   private events = Promise.resolve();
   private disposed = false;
+  private runningHere = false;
   private confirmedDeleted = new Set<string>();
   constructor(private readonly deps: Dependencies) {}
   blocked(file: string | undefined): boolean { return !!file && (this.stateInvalid || this.quarantine.has(file)); }
@@ -51,7 +52,7 @@ export class SessionDeletion {
     this.pending = snapshot.pending; this.quarantine = new Set(snapshot.quarantine);
     this.stateInvalid = !!snapshot.error;
     this.lockedFiles = new Set(snapshot.pending ? snapshot.files : []);
-    if (!snapshot.pending) this.deps.cancelReview?.();
+    if (!snapshot.pending && !this.runningHere) this.deps.cancelReview?.();
     if (snapshot.error) this.deps.error(snapshot.error);
     const successful = new Set(snapshot.deleted || []);
     for (const panel of this.deps.panels().filter(panel => !successful.has(panel.file))) {
@@ -67,28 +68,28 @@ export class SessionDeletion {
     const task = this.events.then(async () => {
       if (this.disposed) return;
       const panels = this.deps.panels().filter(panel => event.files.includes(panel.file));
-      if (['lock', 'check', 'review', 'quarantine'].includes(event.phase)) event.files.forEach(file => this.lockedFiles.add(file));
+      if (['lock', 'check', 'review', 'quarantine', 'removing'].includes(event.phase)) event.files.forEach(file => this.lockedFiles.add(file));
       if (event.phase === 'lock' || event.phase === 'check') {
         for (const panel of panels) panel.lock(true);
-        const reports = await Promise.all(panels.map(async panel => {
-          let failed = false;
-          try { await panel.refresh(); } catch { failed = true; }
-          const report = panel.report(); return { ...report, busy: failed || report.busy };
-        }));
+        // Owned shutdown is native, not gated on Pi responding to get_state.
+        const reports = panels.map(panel => panel.report());
         if (!this.disposed) await this.deps.acknowledge(event.id, reports);
       } else if (event.phase === 'review') {
         const confirmed = await this.deps.review?.(event.id, event.tree || []) ?? false;
         if (!this.disposed) await this.deps.confirm?.(event.id, confirmed);
       } else if (event.phase === 'quarantine') {
         event.files.forEach(file => this.quarantine.add(file));
-        for (const panel of panels) panel.executionStarted?.();
+        for (const panel of panels) { panel.lock(true); panel.executionStarted?.(); }
+        this.deps.progressReview?.('stopping');
+      } else if (event.phase === 'removing') {
+        this.deps.progressReview?.('deleting');
       } else if (event.phase === 'complete' || event.phase === 'release') {
         this.pending = event.pending;
         if (event.phase === 'complete') {
           event.files.forEach(file => this.quarantine.add(file));
           for (const panel of this.deps.panels().filter(panel => event.files.includes(panel.file))) {
             const result = event.results.find(result => result.file === panel.file);
-            if (!result?.deleted) panel.failed(`${result?.error || event.message || 'Deletion did not complete.'} This session is inactive. Explicitly choose Resume session to validate and recover it; nothing will be replayed.`);
+            if (!result?.deleted) panel.failed(`${result?.error || event.message || 'Deletion did not complete.'} This session remains guarded. Explicitly choose Resume session to validate and recover it; nothing will be replayed.`);
           }
           this.removeConfirmed(event.results.filter(result => result.deleted).map(result => result.file));
         }
@@ -96,7 +97,7 @@ export class SessionDeletion {
         this.pending = event.pending;
         if (!event.pending) this.lockedFiles.clear();
         if (event.message) this.deps.error(event.message);
-        if (!event.pending) this.deps.cancelReview?.();
+        if (!event.pending && !this.runningHere) this.deps.cancelReview?.();
       }
       this.deps.changed();
     });
@@ -104,8 +105,8 @@ export class SessionDeletion {
     return this.events;
   }
   async run(file: string, sessionId: string): Promise<void> {
-    if (this.pending || this.disposed || this.blocked(file)) return;
-    this.pending = true; this.deps.changed();
+    if (this.pending || this.runningHere || this.disposed || this.blocked(file)) return;
+    this.pending = true; this.runningHere = true; this.deps.changed();
     this.deps.loadingReview?.();
     let results: DeleteResult[] = [];
     try {
@@ -116,7 +117,9 @@ export class SessionDeletion {
     }
     catch (error) { if (!this.disposed) this.deps.error(String(error)); }
     finally {
-      this.deps.cancelReview?.();
+      // Native failures can still have emitted authoritative partial results.
+      // Drain queued completion before applying the fallback snapshot on either path.
+      await this.events;
       if (!this.disposed) {
         try {
           const snapshot = await this.deps.snapshot();
@@ -126,6 +129,8 @@ export class SessionDeletion {
         this.removeConfirmed(results.filter(result => result.deleted).map(result => result.file));
         this.deps.changed();
       }
+      this.runningHere = false;
+      this.deps.cancelReview?.();
     }
   }
   async recover(file: string, sessionId: string): Promise<void> {

@@ -329,18 +329,10 @@ fn affected_windows(
         .map(|(window, _)| window.clone())
         .collect()
 }
-fn validate_idle(
+fn validate_owners(
     reports: &HashMap<String, Vec<SessionReport>>,
     owners: &[(String, String, PathBuf)],
-    files: &HashSet<PathBuf>,
 ) -> Result<(), String> {
-    if reports
-        .values()
-        .flatten()
-        .any(|s| files.contains(&s.file) && s.busy)
-    {
-        return Err("Wait for every affected session's queued, model and background work to finish before deleting its tree".into());
-    }
     for (window, token, file) in owners {
         if !reports.get(window).is_some_and(|sessions| {
             sessions
@@ -412,69 +404,12 @@ pub async fn delete_session_tree(
     let mut stopping = false;
     let mut results = Vec::new();
     let operation: Result<(), String> = async {
-        app.emit(EVENT, DeletionEvent { id:String::new(), phase:"begin".into(), files:vec![], results:vec![], message:None, pending:true, tree:None }).map_err(|e| e.to_string())?;
-        let cwd = project(&app, window.label())?;
-        let selected = crate::sessions::inspect(&root, &cwd)?;
-        if selected.session_id != session_id {
-            return Err("Selected session file changed; nothing deleted".into());
-        }
-        if state.blocked(&selected.path) {
-            return Err(
-                "Recover this quarantined session explicitly before reviewing another deletion"
-                    .into(),
-            );
-        }
-        let store = store_location(&app.path().home_dir().map_err(|e| e.to_string())?, &cwd)?;
-        let root = selected.path;
-        let plan = tauri::async_runtime::spawn_blocking(move || session_files::preview(&store, &root, &cwd, &session_id))
-            .await.map_err(|e| e.to_string())??;
-        let files = plan.files();
-        let tree = plan.tree();
-        let projects = tree.iter().map(|session| session.cwd.clone()).collect();
-        *state.files.lock().unwrap() = files.clone();
-        let membership: HashSet<_> = files.iter().cloned().collect();
-        host.freeze_deletion(membership.clone()).await;
-        let reports = state.reports(&app, "lock", &files, &projects).await?;
-        validate_idle(
-            &reports,
-            &host.deletion_owners(&membership).await,
-            &membership,
-        )?;
-        if state.closing.load(Ordering::SeqCst) || state.cancelled.load(Ordering::SeqCst) || app.get_webview_window(window.label()).is_none() { return Err("Deletion cancelled before confirmation".into()); }
-        let review_id = uuid::Uuid::new_v4().to_string();
-        *state.review.lock().unwrap() = Some(ReviewRound { id: review_id.clone(), owner: window.label().into(), answer: None });
-        app.emit_to(window.label(), EVENT, DeletionEvent { id: review_id, phase: "review".into(), files: files.clone(), results: vec![], message: None, pending: true, tree: Some(tree) }).map_err(|e| e.to_string())?;
-        let answer = loop {
-            let notified = state.notified.notified();
-            if state.closing.load(Ordering::SeqCst) || state.cancelled.load(Ordering::SeqCst) { return Err("Deletion cancelled".into()); }
-            if let Some(answer) = state.review.lock().unwrap().as_ref().and_then(|round| round.answer) { break answer; }
-            notified.await;
-        };
-        *state.review.lock().unwrap() = None;
-        if !answer { return Ok(()); }
-        if state.closing.load(Ordering::SeqCst) || state.cancelled.load(Ordering::SeqCst) || app.get_webview_window(window.label()).is_none()
-        {
-            return Err("Deletion cancelled before shutdown".into());
-        }
-        let final_reports = state.reports(&app, "check", &files, &projects).await?;
-        let owners = host.deletion_owners(&membership).await;
-        validate_idle(&final_reports, &owners, &membership)?;
-        let relevant = |reports: &HashMap<String, Vec<SessionReport>>| -> HashMap<String, Vec<SessionReport>> {
-            reports.iter().filter_map(|(window, sessions)| { let relevant: Vec<_> = sessions.iter().filter(|s| membership.contains(&s.file)).cloned().collect(); (!relevant.is_empty()).then(|| (window.clone(), relevant)) }).collect()
-        };
-        if relevant(&reports) != relevant(&final_reports) { return Err("Affected open sessions or drafts changed during confirmation; preview again, nothing deleted".into()); }
-        let check_plan = plan.clone();
-        tauri::async_runtime::spawn_blocking(move || session_files::revalidate(&check_plan))
-            .await.map_err(|e| e.to_string())??;
-        // Persist quarantine BEFORE stopping writers or unlinking any file.
-        state.remember(&app, &files)?;
-        stopping = true;
         app.emit(
             EVENT,
             DeletionEvent {
                 id: String::new(),
-                phase: "quarantine".into(),
-                files: files.clone(),
+                phase: "begin".into(),
+                files: vec![],
                 results: vec![],
                 message: None,
                 pending: true,
@@ -482,21 +417,187 @@ pub async fn delete_session_tree(
             },
         )
         .map_err(|e| e.to_string())?;
-        for (owner, token, _) in owners {
-            host.stop_window(&owner, Some(&token)).await?;
+        let cwd = project(&app, window.label())?;
+        // Validate the header through discovery, not a full live transcript read:
+        // an active Pi may be partway through appending a JSONL record.
+        let root = root
+            .canonicalize()
+            .map_err(|e| format!("Selected session unavailable: {e}"))?;
+        if state.blocked(&root) {
+            return Err(
+                "Recover this quarantined session explicitly before reviewing another deletion"
+                    .into(),
+            );
         }
-        if !host.deletion_owners(&membership).await.is_empty() {
-            return Err("An affected writer did not exit; nothing deleted".into());
+        let store = store_location(&app.path().home_dir().map_err(|e| e.to_string())?, &cwd)?;
+        let mut discovery = tauri::async_runtime::spawn_blocking(move || {
+            session_files::discover(&store, &root, &cwd, &session_id)
+        })
+        .await
+        .map_err(|e| e.to_string())??;
+        let files = discovery.files();
+        let mut tree = discovery.tree();
+        let projects = tree.iter().map(|session| session.cwd.clone()).collect();
+        *state.files.lock().unwrap() = files.clone();
+        let mut membership: HashSet<_> = files.iter().cloned().collect();
+        host.freeze_deletion(membership.clone()).await;
+        let reports = state.reports(&app, "lock", &files, &projects).await?;
+        validate_owners(&reports, &host.deletion_owners(&membership).await)?;
+        for session in &mut tree {
+            if let Some(report) = reports
+                .values()
+                .flatten()
+                .find(|report| report.file == session.file)
+            {
+                session.title = report.title.clone();
+            }
         }
-        if state.closing.load(Ordering::SeqCst) || state.cancelled.load(Ordering::SeqCst) || app.get_webview_window(window.label()).is_none()
+        if state.closing.load(Ordering::SeqCst)
+            || state.cancelled.load(Ordering::SeqCst)
+            || app.get_webview_window(window.label()).is_none()
+        {
+            return Err("Deletion cancelled before confirmation".into());
+        }
+        let review_id = uuid::Uuid::new_v4().to_string();
+        *state.review.lock().unwrap() = Some(ReviewRound {
+            id: review_id.clone(),
+            owner: window.label().into(),
+            answer: None,
+        });
+        app.emit_to(
+            window.label(),
+            EVENT,
+            DeletionEvent {
+                id: review_id,
+                phase: "review".into(),
+                files: files.clone(),
+                results: vec![],
+                message: None,
+                pending: true,
+                tree: Some(tree),
+            },
+        )
+        .map_err(|e| e.to_string())?;
+        let answer = loop {
+            let notified = state.notified.notified();
+            if state.closing.load(Ordering::SeqCst) || state.cancelled.load(Ordering::SeqCst) {
+                return Err("Deletion cancelled".into());
+            }
+            if let Some(answer) = state
+                .review
+                .lock()
+                .unwrap()
+                .as_ref()
+                .and_then(|round| round.answer)
+            {
+                break answer;
+            }
+            notified.await;
+        };
+        *state.review.lock().unwrap() = None;
+        if !answer {
+            return Ok(());
+        }
+        if state.closing.load(Ordering::SeqCst)
+            || state.cancelled.load(Ordering::SeqCst)
+            || app.get_webview_window(window.label()).is_none()
+        {
+            return Err("Deletion cancelled before shutdown".into());
+        }
+        // Confirmation authorizes the root's current tree, not the preview's
+        // fingerprint. Keep the gate monotonically growing while we stop writers
+        // and discover descendants created during review/shutdown. No re-review.
+        let plan = loop {
+            if state.closing.load(Ordering::SeqCst) || state.cancelled.load(Ordering::SeqCst) {
+                return Err("Deletion cancelled before removal".into());
+            }
+            let mut files: Vec<_> = membership.iter().cloned().collect();
+            files.sort();
+            *state.files.lock().unwrap() = files.clone();
+            host.freeze_deletion(membership.clone()).await;
+            let projects = discovery
+                .tree()
+                .iter()
+                .map(|session| session.cwd.clone())
+                .collect();
+            let reports = state.reports(&app, "check", &files, &projects).await?;
+            let owners = host.deletion_owners(&membership).await;
+            validate_owners(&reports, &owners)?;
+            // Persist quarantine BEFORE stopping this pass's writers.
+            state.remember(&app, &files)?;
+            stopping = true;
+            app.emit(
+                EVENT,
+                DeletionEvent {
+                    id: String::new(),
+                    phase: "quarantine".into(),
+                    files: files.clone(),
+                    results: vec![],
+                    message: None,
+                    pending: true,
+                    tree: None,
+                },
+            )
+            .map_err(|e| e.to_string())?;
+            for (owner, token, _) in owners {
+                host.stop_window(&owner, Some(&token)).await?;
+            }
+            if !host.deletion_owners(&membership).await.is_empty() {
+                return Err("An affected writer did not exit; nothing deleted".into());
+            }
+            let current = discovery.clone();
+            discovery = tauri::async_runtime::spawn_blocking(move || current.refresh())
+                .await
+                .map_err(|e| e.to_string())??;
+            let discovered = discovery.files();
+            if discovered.iter().any(|file| !membership.contains(file)) {
+                membership.extend(discovered);
+                if membership.len() > 10_000 {
+                    return Err("Deletion affected set exceeds 10,000 files".into());
+                }
+                continue;
+            }
+            let current = discovery.clone();
+            let plan = tauri::async_runtime::spawn_blocking(move || current.plan())
+                .await
+                .map_err(|e| e.to_string())??;
+            if plan.files().iter().any(|file| !membership.contains(file)) {
+                membership.extend(plan.files());
+                if membership.len() > 10_000 {
+                    return Err("Deletion affected set exceeds 10,000 files".into());
+                }
+                continue;
+            }
+            break plan;
+        };
+        if state.closing.load(Ordering::SeqCst)
+            || state.cancelled.load(Ordering::SeqCst)
+            || app.get_webview_window(window.label()).is_none()
         {
             return Err("Deletion cancelled before removal".into());
         }
+        app.emit(
+            EVENT,
+            DeletionEvent {
+                id: String::new(),
+                phase: "removing".into(),
+                files: plan.files(),
+                results: vec![],
+                message: None,
+                pending: true,
+                tree: Some(plan.tree()),
+            },
+        )
+        .map_err(|e| e.to_string())?;
         let execution_app = app.clone();
-        results = tauri::async_runtime::spawn_blocking(move || session_files::execute(&plan, || {
-            let state = execution_app.state::<SessionDeletion>();
-            state.closing.load(Ordering::SeqCst) || state.cancelled.load(Ordering::SeqCst)
-        })).await.map_err(|e| e.to_string())??;
+        results = tauri::async_runtime::spawn_blocking(move || {
+            session_files::execute(&plan, || {
+                let state = execution_app.state::<SessionDeletion>();
+                state.closing.load(Ordering::SeqCst) || state.cancelled.load(Ordering::SeqCst)
+            })
+        })
+        .await
+        .map_err(|e| e.to_string())??;
         Ok(())
     }
     .await;
@@ -677,12 +778,11 @@ mod tests {
         );
     }
     #[test]
-    fn busy_descendants_or_unreported_owned_writers_block_deletion() {
+    fn busy_descendants_are_allowed_but_unreported_owned_writers_block_deletion() {
         let file = PathBuf::from("/store/child.jsonl");
-        let files = [file.clone()].into_iter().collect();
         let owners = vec![("other-window".into(), "owned".into(), file.clone())];
         let mut reports = HashMap::new();
-        assert!(validate_idle(&reports, &owners, &files).is_err());
+        assert!(validate_owners(&reports, &owners).is_err());
         reports.insert(
             "other-window".into(),
             vec![SessionReport {
@@ -693,9 +793,9 @@ mod tests {
                 has_draft: true,
             }],
         );
-        assert!(validate_idle(&reports, &owners, &files).is_err());
-        reports.get_mut("other-window").unwrap()[0].busy = false;
-        assert!(validate_idle(&reports, &owners, &files).is_ok());
+        assert!(validate_owners(&reports, &owners).is_ok());
+        reports.get_mut("other-window").unwrap()[0].token = Some("new-token".into());
+        assert!(validate_owners(&reports, &owners).is_err());
     }
     #[test]
     fn review_answers_are_owner_scoped_correlated_and_single_use() {
