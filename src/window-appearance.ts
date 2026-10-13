@@ -34,7 +34,7 @@ export interface AppearanceHost {
   read(): WindowAppearance;
   save?(patch: Partial<WindowAppearance>): Promise<void>;
   capabilities(): Promise<AppearanceCapabilities>;
-  apply(frosted: boolean, dark: boolean): Promise<AppearanceCapabilities>;
+  apply(frosted: boolean, dark: boolean | null): Promise<AppearanceCapabilities>;
   report(message?: string, cause?: string): void;
 }
 
@@ -55,8 +55,10 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
   const effect = () => {
     const value = current();
     const frosted = !!capabilities?.frost && !reduceTransparency() && value.opacity < 100 && value.frosted;
-    const isDark = root.dataset.themeMode ? root.dataset.themeMode === 'dark' : !!dark?.matches;
-    return JSON.stringify({ frosted, dark: frosted && isDark });
+    // A system theme must not acquire a native appearance override: that would
+    // pin the window's media query and stop following future OS scheme changes.
+    const isDark = root.dataset.themeMode ? root.dataset.themeMode === 'dark' : null;
+    return JSON.stringify({ frosted, dark: frosted ? isDark : false });
   };
   async function applyEffect() {
     if (applying || !capabilities || disposed) return;
@@ -67,7 +69,7 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
       while (!disposed && desiredEffect !== appliedEffect && desiredEffect !== failedEffect) {
         const request = desiredEffect;
         try {
-          const args = JSON.parse(request) as { frosted: boolean; dark: boolean };
+          const args = JSON.parse(request) as { frosted: boolean; dark: boolean | null };
           capabilities = await host.apply(args.frosted, args.dark);
           if (disposed) return;
           appliedEffect = request; failedEffect = undefined;
@@ -87,8 +89,9 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
       paintSignature = signature;
       root.dataset.translucency = enabled ? value.area : 'off';
       root.style.setProperty('--nimrod-background-opacity', `${value.opacity}%`);
-      // Dense controls remain readable even at zero window tint.
-      root.style.setProperty('--nimrod-control-opacity', `${Math.max(85, value.opacity)}%`);
+      // This is an additional overlay on an already tinted parent, not another
+      // full-opacity surface. An 85% overlay over a 65% base became 95% opaque.
+      root.style.setProperty('--nimrod-control-overlay-opacity', `${Math.round(value.opacity * .2)}%`);
       if (controls) {
         controls.opacity.value = String(value.opacity);
         controls.value.value = value.opacity === 100 ? '100% · Opaque' : `${value.opacity}%`;

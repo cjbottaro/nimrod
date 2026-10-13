@@ -50,7 +50,7 @@ pub async fn window_appearance_capabilities(
 pub async fn apply_window_appearance(
     window: tauri::WebviewWindow,
     frosted: bool,
-    dark: bool,
+    dark: Option<bool>,
 ) -> Result<Capabilities, String> {
     let (send, receive) = tokio::sync::oneshot::channel();
     let target = window.clone();
@@ -63,7 +63,11 @@ pub async fn apply_window_appearance(
     receive.await.map_err(|error| error.to_string())?
 }
 
-fn apply(window: &tauri::WebviewWindow, frosted: bool, dark: bool) -> Result<Capabilities, String> {
+fn apply(
+    window: &tauri::WebviewWindow,
+    frosted: bool,
+    dark: Option<bool>,
+) -> Result<Capabilities, String> {
     let support = capabilities();
     #[cfg(target_os = "macos")]
     {
@@ -73,25 +77,45 @@ fn apply(window: &tauri::WebviewWindow, frosted: bool, dark: bool) -> Result<Cap
         // The helper adds a view on each application; remove ours first so
         // dark/light theme previews never stack additional blur layers.
         window_vibrancy::clear_vibrancy(window).map_err(|error| error.to_string())?;
+        use objc2_app_kit::{NSAppearance, NSAppearanceCustomization, NSColor, NSWindow};
+        let pointer = window.ns_window().map_err(|error| error.to_string())?;
+        if pointer.is_null() {
+            return Err("Native window is unavailable".into());
+        }
+        // SAFETY: Tauri retains the window; resolve/use its pointer only in the
+        // main-thread callback. NSWindow appearance is local; Tauri/Tao's
+        // set_theme changes NSApplication appearance and leaks across windows.
+        let native = unsafe { &*pointer.cast::<NSWindow>() };
+        native.setOpaque(false);
+        native.setBackgroundColor(Some(&NSColor::clearColor()));
         if frosted && !support.reduced_transparency {
-            window
-                .set_theme(Some(if dark {
-                    tauri::Theme::Dark
-                } else {
-                    tauri::Theme::Light
-                }))
-                .map_err(|error| error.to_string())?;
+            if let Some(dark) = dark {
+                // SAFETY: AppKit's named appearance constants are immutable globals.
+                let name = unsafe {
+                    if dark {
+                        objc2_app_kit::NSAppearanceNameDarkAqua
+                    } else {
+                        objc2_app_kit::NSAppearanceNameAqua
+                    }
+                };
+                let appearance = NSAppearance::appearanceNamed(name)
+                    .ok_or("Native window appearance is unavailable")?;
+                native.setAppearance(Some(&appearance));
+            } else {
+                // Nimrod (system) must keep following OS appearance changes.
+                native.setAppearance(None);
+            }
             window_vibrancy::apply_vibrancy(
                 window,
-                window_vibrancy::NSVisualEffectMaterial::Sidebar,
+                // Sidebar intentionally carries a dense fill. Popover is a
+                // more translucent standard recipe; CSS owns our theme tint.
+                window_vibrancy::NSVisualEffectMaterial::Popover,
                 Some(window_vibrancy::NSVisualEffectState::Active),
                 None,
             )
             .map_err(|error| error.to_string())?;
         } else {
-            window
-                .set_theme(None)
-                .map_err(|error| error.to_string())?;
+            native.setAppearance(None);
         }
     }
     #[cfg(not(target_os = "macos"))]
@@ -101,6 +125,19 @@ fn apply(window: &tauri::WebviewWindow, frosted: bool, dark: bool) -> Result<Cap
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn frosting_keeps_appearance_window_local_and_backing_clear() {
+        // Source guard, not evidence of material density or native appearance.
+        let source = include_str!("window_appearance.rs");
+        let implementation = source.split("#[cfg(test)]").next().unwrap();
+        assert!(!implementation.contains(".set_theme("));
+        assert!(implementation.contains("native.setAppearance(Some(&appearance))"));
+        assert!(implementation.contains("native.setAppearance(None)"));
+        assert!(implementation.contains("native.setOpaque(false)"));
+        assert!(implementation.contains("NSColor::clearColor()"));
+        assert!(implementation.contains("NSVisualEffectMaterial::Popover"));
+    }
+
     #[test]
     fn every_native_window_uses_the_transparent_backing_boundary() {
         let navigation = include_str!("webview_navigation.rs");
