@@ -2,6 +2,47 @@ import { test, expect } from '@playwright/test';
 import path from 'node:path';
 import { demoFixture } from './demo-fixture';
 
+test('session identity matches directory typography and truncates without displacing actions', async ({ page }) => {
+  const f = await demoFixture(page);
+  try {
+    await page.evaluate(() => {
+      document.querySelector('#project-name')!.textContent = 'nimrod';
+      document.querySelector('#workspace-label')!.textContent = '~/Projects';
+      (document.querySelector('#project-session') as HTMLElement).hidden = false;
+      document.querySelector('#project-session-name')!.textContent = 'A long session name '.repeat(30);
+    });
+    for (const width of [1100, 560, 360]) {
+      await page.setViewportSize({ width, height: 800 });
+      const layout = await page.evaluate(() => {
+        const session = document.querySelector<HTMLElement>('#project-session-name')!;
+        const parent = document.querySelector<HTMLElement>('#workspace-label')!;
+        const name = document.querySelector<HTMLElement>('#project-name')!;
+        const bar = document.querySelector<HTMLElement>('#workspace-bar')!;
+        const identity = document.querySelector<HTMLElement>('#project-identity')!;
+        const style = getComputedStyle(session), parentStyle = getComputedStyle(parent);
+        return {
+          size: style.fontSize, parentSize: parentStyle.fontSize,
+          weight: style.fontWeight, parentWeight: parentStyle.fontWeight,
+          color: style.color, parentColor: parentStyle.color,
+          truncated: session.scrollWidth > session.clientWidth,
+          nameTruncated: name.scrollWidth > name.clientWidth,
+          sessionRight: session.getBoundingClientRect().right, identityRight: identity.getBoundingClientRect().right,
+          overflow: bar.scrollWidth > bar.clientWidth + 1,
+        };
+      });
+      expect(layout.size).toBe(layout.parentSize);
+      expect(layout.weight).toBe(layout.parentWeight);
+      expect(layout.color).not.toBe(layout.parentColor);
+      expect(layout.truncated).toBe(true);
+      expect(layout.nameTruncated).toBe(false);
+      expect(layout.sessionRight).toBeLessThanOrEqual(layout.identityRight + 1);
+      expect(layout.overflow).toBe(false);
+      await expect(page.locator('#open-settings')).toBeInViewport();
+    }
+    expect(f.errors).toEqual([]);
+  } finally { await f.close(); }
+});
+
 test('project identity preserves its name while the parent truncates, including narrow windows', async ({ page }) => {
   const f = await demoFixture(page);
   try {

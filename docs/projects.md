@@ -2,7 +2,7 @@
 
 A project is a directory—no Git repository, manifest or registration required. One directory belongs to each window and is the working directory of all sessions in that window. A nested worktree with a different working directory needs its own project window.
 
-The **Project bar** shows the directory name and parent path. Home is abbreviated to `~`; hover for the full path.
+The **Project bar** shows the directory name and parent path. Home is abbreviated to `~`; hover for the full path. The displayed session’s name follows the path after a muted middle dot, even when the Session sidebar is collapsed. It uses the same label as the sidebar (including unnamed and temporary sessions); long names truncate, with the full label available on hover. When no conversation is displayed, the session label and dot are hidden.
 
 ## Open a project
 

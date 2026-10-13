@@ -41,6 +41,9 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 #project-name { flex:0 0 auto; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:17px; font-weight:750; }
 #workspace-label { flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--vscode-descriptionForeground); font-size:12px; }
 #workspace-label:empty { display:none; }
+#project-session { display:flex; align-items:center; gap:8px; flex:0 1 auto; min-width:0; max-width:50%; overflow:hidden; font-size:12px; font-weight:400; color:var(--vscode-foreground); }
+#project-session-separator { flex:none; color:var(--vscode-descriptionForeground); }
+#project-session-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #mode-badge { margin-left:auto; flex:none; color:var(--vscode-descriptionForeground); font-size:11px; text-transform:uppercase; letter-spacing:1px; }
 #open-settings, #restart-session, #delete-session { flex:none; display:grid; place-items:center; width:30px; height:30px; padding:4px; color:var(--vscode-descriptionForeground); background:transparent; }
 #delete-session:not(:disabled):hover { color:var(--vscode-errorForeground); background:var(--vscode-toolbar-hoverBackground); }
