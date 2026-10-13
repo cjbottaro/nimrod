@@ -32,7 +32,8 @@ body { grid-template-rows:48px minmax(0,1fr); font-size:14px; }
 body::before { display:none; }
 button, input, textarea, select { font:inherit; }
 button { font-weight:550; }
-button.secondary, #browse { color:var(--vscode-button-secondaryForeground); background:var(--vscode-button-secondaryBackground); }
+button.secondary, #browse { color:var(--vscode-button-secondaryForeground); background:var(--nimrod-button-secondary-background, var(--vscode-button-secondaryBackground)); }
+button.secondary:hover, #browse:hover { background:var(--nimrod-button-secondary-hover-background, var(--vscode-button-secondaryBackground)); }
 input, select, #host-dialog-input { box-sizing:border-box; width:100%; border:1px solid var(--vscode-input-border); color:var(--vscode-input-foreground); background:var(--vscode-input-background); border-radius:6px; padding:10px 12px; }
 input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 #workspace-bar { display:flex; align-items:center; gap:16px; padding:0 18px; border-bottom:1px solid var(--vscode-panel-border); min-width:0; }
@@ -46,8 +47,8 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 #project-session-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #mode-badge { margin-left:auto; flex:none; color:var(--vscode-descriptionForeground); font-size:11px; text-transform:uppercase; letter-spacing:1px; }
 #open-settings, #restart-session, #delete-session { flex:none; display:grid; place-items:center; width:30px; height:30px; padding:4px; color:var(--vscode-descriptionForeground); background:transparent; }
-#delete-session:not(:disabled):hover { color:var(--vscode-errorForeground); background:var(--vscode-toolbar-hoverBackground); }
-#open-settings:hover, #restart-session:not(:disabled):hover { background:var(--vscode-toolbar-hoverBackground); color:var(--vscode-foreground); }
+#delete-session:not(:disabled):hover { color:var(--vscode-errorForeground); background:var(--nimrod-toolbar-hover-background, var(--vscode-toolbar-hoverBackground)); }
+#open-settings:hover, #restart-session:not(:disabled):hover { background:var(--nimrod-toolbar-hover-background, var(--vscode-toolbar-hoverBackground)); color:var(--vscode-foreground); }
 #settings-page { box-sizing:border-box; position:fixed; inset:0; width:100%; height:100vh; height:100dvh; max-width:none; max-height:none; margin:0; padding:0; border:0; color:var(--vscode-foreground); background:var(--vscode-editor-background); }
 #settings-page[open] { display:flex; flex-direction:column; }
 #settings-page::backdrop { background:var(--vscode-editor-background); }
@@ -66,8 +67,8 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 #preferences-error { flex:none; margin:0; padding:12px 20px; color:var(--vscode-errorForeground); overflow-wrap:anywhere; }
 #settings-categories { display:grid; gap:3px; }
 #settings-categories [role=tab] { width:100%; padding:10px 8px; text-align:left; border-radius:5px; background:transparent; color:var(--vscode-foreground); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-#settings-categories [role=tab]:hover:not([aria-selected=true]) { background:var(--vscode-toolbar-hoverBackground); }
-#settings-categories [aria-selected=true] { background:var(--vscode-list-activeSelectionBackground); color:var(--vscode-list-activeSelectionForeground); }
+#settings-categories [role=tab]:hover:not([aria-selected=true]) { background:var(--nimrod-toolbar-hover-background, var(--vscode-toolbar-hoverBackground)); }
+#settings-categories [aria-selected=true] { background:var(--nimrod-selection-background, var(--vscode-list-activeSelectionBackground)); color:var(--vscode-list-activeSelectionForeground); }
 .settings-content h2 { font-size:17px; margin:0 0 8px; }
 .settings-description, .settings-hint { color:var(--vscode-descriptionForeground); line-height:1.5; }
 .settings-description { margin:0 0 18px; }

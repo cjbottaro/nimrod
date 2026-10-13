@@ -12,10 +12,14 @@
   --nimrod-surface-project-bar:color-mix(in srgb, var(--vscode-editor-background) var(--nimrod-background-opacity), transparent);
   --nimrod-surface-content:var(--vscode-editor-background);
   --nimrod-surface-controls:var(--vscode-editor-background);
+  --nimrod-surface-status:var(--vscode-editorWidget-background);
+  --nimrod-surface-notice:color-mix(in srgb, var(--vscode-descriptionForeground) 6%, var(--vscode-editor-background));
 }
 :root[data-translucency=window] {
   --nimrod-surface-content:color-mix(in srgb, var(--vscode-editor-background) var(--nimrod-background-opacity), transparent);
-  --nimrod-surface-controls:color-mix(in srgb, var(--vscode-editor-background) var(--nimrod-control-opacity), transparent);
+  --nimrod-surface-controls:color-mix(in srgb, var(--vscode-editor-background) var(--nimrod-control-overlay-opacity), transparent);
+  --nimrod-surface-status:color-mix(in srgb, var(--vscode-editorWidget-background) var(--nimrod-control-overlay-opacity), transparent);
+  --nimrod-surface-notice:color-mix(in srgb, color-mix(in srgb, var(--vscode-descriptionForeground) 6%, var(--vscode-editor-background)) var(--nimrod-control-overlay-opacity), transparent);
 }
 :root:is([data-translucency=chrome], [data-translucency=window]) #workspace-bar,
 :root:is([data-translucency=chrome], [data-translucency=window]) .settings-header { background:var(--nimrod-surface-project-bar); }
@@ -24,7 +28,24 @@
 :root:is([data-translucency=chrome], [data-translucency=window]) .settings-content,
 :root:is([data-translucency=chrome], [data-translucency=window]) body.code-popout-window { background:var(--nimrod-surface-content); }
 :root[data-translucency=window] :is(#composer-area, [data-pi-id="composer-area"]) { background:var(--nimrod-surface-controls); }
-/* Keep code, suggestions, selections, notices and ordinary dialogs opaque.
+:root[data-translucency=window] :is(#activity, [data-pi-id="activity"]) { background:var(--nimrod-surface-status); }
+:root[data-translucency=window] .session-notices { background:var(--nimrod-surface-notice); }
+:root[data-translucency=window] #application-notices { background:var(--nimrod-surface-chrome); }
+/* Shared controls use these semantic fills rather than per-button overrides.
+   Chrome-only inherits them just inside the chrome; the conversation is unchanged.
+   Foregrounds, focus rings and attention borders never receive container opacity. */
+:root[data-translucency=window],
+:root[data-translucency=chrome] :is(#workspace-bar, .settings-header, .layout-sidebar) {
+  --nimrod-button-foreground:var(--vscode-foreground);
+  --nimrod-button-background:color-mix(in srgb, var(--vscode-button-background) 30%, transparent);
+  --nimrod-button-hover-background:color-mix(in srgb, var(--vscode-button-hoverBackground) 45%, transparent);
+  --nimrod-button-secondary-background:color-mix(in srgb, var(--vscode-button-secondaryBackground, var(--vscode-button-background)) var(--nimrod-control-overlay-opacity), transparent);
+  --nimrod-button-secondary-hover-background:color-mix(in srgb, var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground)) 30%, transparent);
+  --nimrod-toolbar-hover-background:color-mix(in srgb, var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground)) 30%, transparent);
+  --nimrod-selection-background:color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 45%, transparent);
+  --nimrod-danger-background:color-mix(in srgb, var(--vscode-errorForeground) 45%, transparent);
+}
+/* Keep code, suggestions and ordinary dialogs opaque.
    Settings is a full-window surface: reveal the desktop, not the conversation
    beneath the modal. Visibility retains underlying layout/scroll/mounted nodes. */
 :root:is([data-translucency=chrome], [data-translucency=window]) #settings-page,
@@ -38,5 +59,18 @@
     --nimrod-surface-project-bar:var(--vscode-editor-background);
     --nimrod-surface-content:var(--vscode-editor-background);
     --nimrod-surface-controls:var(--vscode-editor-background);
+    --nimrod-surface-status:var(--vscode-editorWidget-background);
+    --nimrod-surface-notice:color-mix(in srgb, var(--vscode-descriptionForeground) 6%, var(--vscode-editor-background));
+  }
+  :root[data-translucency=window],
+  :root[data-translucency=chrome] :is(#workspace-bar, .settings-header, .layout-sidebar) {
+    --nimrod-button-foreground:initial;
+    --nimrod-button-background:initial;
+    --nimrod-button-hover-background:initial;
+    --nimrod-button-secondary-background:initial;
+    --nimrod-button-secondary-hover-background:initial;
+    --nimrod-toolbar-hover-background:initial;
+    --nimrod-selection-background:initial;
+    --nimrod-danger-background:initial;
   }
 }

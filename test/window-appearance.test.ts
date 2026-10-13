@@ -13,7 +13,7 @@ function fixture(support = mac, initial: Partial<WindowAppearance> = {}) {
   root.dataset.themeMode = 'dark';
   let value = { ...DEFAULT_WINDOW_APPEARANCE, ...initial };
   const saves: Partial<WindowAppearance>[] = [];
-  const effects: { frosted: boolean; dark: boolean }[] = [];
+  const effects: { frosted: boolean; dark: boolean | null }[] = [];
   const reports: { message?: string; cause?: string }[] = [];
   const controls = {
     opacity: root.querySelector<HTMLInputElement>('#opacity')!, value: root.querySelector<HTMLOutputElement>('output')!,
@@ -21,7 +21,7 @@ function fixture(support = mac, initial: Partial<WindowAppearance> = {}) {
     frostGroup: root.querySelector<HTMLElement>('#frost')!, hint: root.querySelector<HTMLElement>('p')!,
   };
   let save = async (patch: Partial<WindowAppearance>) => { value = { ...value, ...patch }; };
-  let apply = async (_frosted: boolean, _dark: boolean) => support;
+  let apply = async (_frosted: boolean, _dark: boolean | null) => support;
   const controller = installWindowAppearance(window, root, {
     read: () => value,
     save: patch => { saves.push(patch); return save(patch); },
@@ -68,6 +68,8 @@ test('macOS frosting follows opacity, toggle and local dark/light theme previews
   try {
     await tick(); assert.equal(f.controls.frostGroup.hidden, false);
     assert.deepEqual(f.effects, [{ frosted: true, dark: true }]);
+    assert.equal(f.root.style.getPropertyValue('--nimrod-control-overlay-opacity'), '14%');
+    assert.equal(f.root.style.getPropertyValue('--nimrod-control-opacity'), '');
     let rootMutations = 0;
     const observer = new f.dom.window.MutationObserver(records => { rootMutations += records.length; });
     observer.observe(f.root, { attributes: true });
@@ -79,6 +81,18 @@ test('macOS frosting follows opacity, toggle and local dark/light theme previews
     assert.equal(f.root.dataset.translucency, 'window'); await tick();
     assert.deepEqual(f.effects.at(-1), { frosted: false, dark: false });
     f.external({ opacity: 100 }); assert.equal(f.root.dataset.translucency, 'off');
+  } finally { f.close(); }
+});
+
+test('the system theme leaves native appearance inherited while explicit previews use window-local overrides', async () => {
+  const f = fixture(mac, { opacity: 60 });
+  try {
+    await tick(); delete f.root.dataset.themeMode; await tick();
+    assert.deepEqual(f.effects.at(-1), { frosted: true, dark: null });
+    f.root.dataset.themeMode = 'light'; await tick();
+    assert.deepEqual(f.effects.at(-1), { frosted: true, dark: false });
+    f.root.dataset.themeMode = 'dark'; await tick();
+    assert.deepEqual(f.effects.at(-1), { frosted: true, dark: true });
   } finally { f.close(); }
 });
 
