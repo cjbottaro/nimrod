@@ -155,17 +155,6 @@ export class PiSession {
     } finally { if (this.mcpCapture === capture) this.mcpCapture = undefined; }
   }
 
-  async refreshDeletionState(): Promise<void> {
-    if (this.disconnected) return;
-    if (this.compactionRequest || this.rpc.hasPendingRequest('prompt', 'set_session_name')) throw new Error('A session operation is pending');
-    await this.rpc.request('get_state', {}, 20_000, response => {
-      const data = record(response.data); this.applyState(data);
-      if (typeof data.pendingMessageCount === 'number') this.state = { ...this.state, queue: { ...this.state.queue, pendingCount: data.pendingMessageCount } };
-    });
-    this.publish();
-    if (this.compactionRequest || this.rpc.hasPendingRequest('prompt', 'set_session_name')) throw new Error('A session operation is pending');
-  }
-
   publish(): void {
     this.ui.publish({ type: 'snapshot', build: 'Nimrod PoC', commands: this.commands,
       state: { ...this.state, messages: projectToolTimeline(this.state.messages, this.state.toolProgress) } });

@@ -201,7 +201,6 @@ const deletion = new SessionDeletion({
     file: tab.file!.path,
     lock: locked => { tab.deleting = locked; if (!locked) tab.deletionExecuting = false; tab.receive?.({ type: 'deletionLock', locked }); updateTab(tab); },
     executionStarted: () => { tab.deletionExecuting = true; updateTab(tab); },
-    refresh: async () => { if (tab.session && !tab.ended) await tab.session.refreshDeletionState(); },
     report: () => {
       const composer = restoreComposerState(tab.drafts.read());
       return { file: tab.file!.path, token: tab.token, title: tab.title, busy: deletionBusy(tab), hasDraft: !!(composer.draft.trim() || composer.attachments?.length || composer.recovered.length) };
@@ -229,6 +228,7 @@ const deletion = new SessionDeletion({
   review: (id, sessions) => deletionReview.review({ id, sessions }),
   confirm: (id, confirmed) => invoke('confirm_session_deletion', { id, confirmed }),
   cancelReview: deletionReview.cancel,
+  progressReview: deletionReview.progress,
   error: message => { error.textContent = message; },
 });
 // A global (Any-target) listener also receives emit_to events for OTHER windows.
@@ -395,7 +395,7 @@ function deletionBusy(tab: Tab): boolean {
 function restartable(tab: Tab): boolean { return !!tab.file?.exists && tab.mode !== 'temporary'; }
 function deletable(tab: Tab | undefined): boolean {
   return ready && !deletion.pending && !!tab && tabs.includes(tab) && restartable(tab) &&
-    !tab.deleting && !deletion.blocked(tab.file?.path) && !deletionBusy(tab);
+    !tab.deleting && !deletion.blocked(tab.file?.path) && !tab.starting && !tab.closing && !tab.restarting;
 }
 function restartControl(): void {
   const active = presented;
@@ -403,7 +403,7 @@ function restartControl(): void {
   button.disabled = !ready || !active || !restartable(active) || active.deleting || deletion.locked(active.file?.path) || deletion.blocked(active.file?.path) || active.starting || active.closing || active.restarting;
   const remove = required<HTMLButtonElement>('delete-session');
   remove.disabled = !deletable(active);
-  remove.title = !active ? 'Delete session tree… — no open session' : deletion.pending ? 'Delete session tree… — deletion pending' : deletion.blocked(active.file?.path) ? 'Delete session tree… — recover through Resume session first' : active.mode === 'temporary' ? 'Delete session tree… — unavailable for temporary sessions' : !restartable(active) ? 'Delete session tree… — unavailable until saved' : deletionBusy(active) ? 'Delete session tree… — wait for active work to finish' : 'Delete session tree…';
+  remove.title = !active ? 'Delete session tree… — no open session' : deletion.pending ? 'Delete session tree… — deletion pending' : deletion.blocked(active.file?.path) ? 'Delete session tree… — recover through Resume session first' : active.mode === 'temporary' ? 'Delete session tree… — unavailable for temporary sessions' : !restartable(active) ? 'Delete session tree… — unavailable until saved' : active.starting || active.closing || active.restarting ? 'Delete session tree… — session lifecycle operation pending' : 'Delete session tree…';
   button.title = !active ? 'Restart session — no open session' : deletion.blocked(active.file?.path) ? 'Restart session — recover through Resume session first' : active.mode === 'temporary'
     ? 'Restart session — unavailable for temporary sessions' : !active.file?.exists
     ? 'Restart session — available after the first save' : active.restarting ? 'Restarting session…' : 'Restart session';
@@ -1037,8 +1037,8 @@ async function deleteSavedSession(saved: SessionSummary): Promise<void> {
   if (unloading || settings.isOpen || !ready || deletion.pending) throw new Error('Session deletion is currently unavailable.');
   if (deletion.blocked(saved.path)) throw new Error('Recover this session through Resume session before deleting it.');
   const tab = tabs.find(tab => tab.file?.path === saved.path);
-  if (tab && (tab.file?.sessionId !== saved.sessionId || !deletable(tab))) throw new Error('This session cannot be deleted now. Wait for active work to finish.');
-  // Closed history goes directly to native identity/idle checks; never activate,
+  if (tab && (tab.file?.sessionId !== saved.sessionId || !deletable(tab))) throw new Error('This session cannot be deleted during another lifecycle operation or after its saved identity changes.');
+  // Closed history goes directly to native identity/ownership checks; never activate,
   // create a sidebar entry or launch Pi merely to delete a saved file.
   await deletion.run(saved.path, saved.sessionId);
 }

@@ -166,8 +166,22 @@ fn open_regular(path: &Path) -> Result<(BufReader<File>, Identity), String> {
     }
     Ok((BufReader::new(file), identity))
 }
+// Appends change length/mtime, not ownership of the opened file. Do not reject
+// live discovery just because a transcript grows between stat and open.
+fn open_live(path: &Path) -> Result<(BufReader<File>, Identity), String> {
+    let identity = Identity::read(&fs::symlink_metadata(path).map_err(|e| e.to_string())?)?;
+    let file = File::open(path).map_err(|e| e.to_string())?;
+    let opened = Identity::read(&file.metadata().map_err(|e| e.to_string())?)?;
+    #[cfg(unix)]
+    if opened.device != identity.device || opened.inode != identity.inode {
+        return Err("Session replaced while opening it".into());
+    }
+    #[cfg(not(unix))]
+    let _ = identity;
+    Ok((BufReader::new(file), opened))
+}
 fn header(path: &Path) -> Result<Header, String> {
-    let (mut reader, _) = open_regular(path)?;
+    let (mut reader, _) = open_live(path)?;
     let mut line = String::new();
     let mut bytes_read = 0;
     while next_line(&mut reader, &mut line)? != 0 {
@@ -264,7 +278,68 @@ fn scan(store: &Path) -> Result<HashMap<PathBuf, Header>, String> {
     }
     Ok(found)
 }
-pub fn preview(store: &Path, root: &Path, cwd: &Path, id: &str) -> Result<Plan, String> {
+/// Header-only live discovery. Review is not a lease on transcript contents.
+#[derive(Clone, Debug)]
+pub struct Tree {
+    store: PathBuf,
+    root: PathBuf,
+    cwd: PathBuf,
+    id: String,
+    sessions: Vec<ReviewSession>,
+    headers: HashMap<PathBuf, Header>,
+}
+impl Tree {
+    pub fn tree(&self) -> Vec<ReviewSession> {
+        self.sessions.iter().rev().cloned().collect()
+    }
+    pub fn files(&self) -> Vec<PathBuf> {
+        self.sessions.iter().map(|s| s.file.clone()).collect()
+    }
+    pub fn refresh(&self) -> Result<Self, String> {
+        discover(&self.store, &self.root, &self.cwd, &self.id)
+    }
+    pub fn plan(&self) -> Result<Plan, String> {
+        preview(&self.store, &self.root, &self.cwd, &self.id)
+    }
+}
+
+// Only presentation metadata is best-effort while Pi can be appending. Strict
+// bounded JSONL validation and fingerprints are taken after owned writers exit.
+fn review_title(path: &Path, id: &str) -> String {
+    let read = || -> Result<Option<String>, String> {
+        let (reader, identity) = open_live(path)?;
+        let mut reader = BufReader::new(reader.into_inner().take(identity.len));
+        let mut title = None;
+        loop {
+            let mut line = String::new();
+            let bytes = reader
+                .by_ref()
+                .take(MAX_RECORD + 1)
+                .read_line(&mut line)
+                .map_err(|e| e.to_string())?;
+            if bytes == 0 {
+                break;
+            }
+            if bytes as u64 > MAX_RECORD {
+                return Err("Oversize review record".into());
+            }
+            if let Ok(value) = serde_json::from_str::<Value>(&line)
+                && value["type"] == "session_info"
+            {
+                title = value["name"]
+                    .as_str()
+                    .filter(|s| !s.trim().is_empty())
+                    .map(|name| name.chars().take(500).collect());
+            }
+        }
+        Ok(title)
+    };
+    read()
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| format!("Session {}", id.chars().take(12).collect::<String>()))
+}
+pub fn discover(store: &Path, root: &Path, cwd: &Path, id: &str) -> Result<Tree, String> {
     let store = store
         .canonicalize()
         .map_err(|e| format!("Pi session store unavailable: {e}"))?;
@@ -301,18 +376,47 @@ pub fn preview(store: &Path, root: &Path, cwd: &Path, id: &str) -> Result<Plan, 
         order.push(path);
         stack.extend(children.get(path).into_iter().flatten().copied());
     }
-    let files = order
+    let sessions = order
         .into_iter()
         .rev()
         .map(|path| {
-            let file = fingerprint(path, &root)?;
-            if Some(&file.header) != headers.get(path) {
-                return Err("Session header changed during preview".into());
+            let header = &headers[path];
+            ReviewSession {
+                file: path.to_owned(),
+                title: review_title(path, &header.id),
+                parent: header.parent.clone(),
+                cwd: header.cwd.clone(),
             }
-            Ok(file)
         })
-        .collect::<Result<Vec<_>, String>>()?;
-    Ok(Plan { store, root, files })
+        .collect();
+    Ok(Tree {
+        store,
+        root,
+        cwd: cwd.to_owned(),
+        id: id.to_owned(),
+        sessions,
+        headers,
+    })
+}
+pub fn preview(store: &Path, root: &Path, cwd: &Path, id: &str) -> Result<Plan, String> {
+    let tree = discover(store, root, cwd, id)?;
+    let files = tree
+        .sessions
+        .iter()
+        .map(|session| fingerprint(&session.file, &tree.root))
+        .collect::<Result<Vec<_>, _>>()?;
+    // Detect lineage changes during the final, stopped-writer planning pass.
+    if files
+        .iter()
+        .any(|file| tree.headers.get(&file.review.file) != Some(&file.header))
+    {
+        return Err("Session header changed during planning".into());
+    }
+    Ok(Plan {
+        store: tree.store,
+        root: tree.root,
+        files,
+    })
 }
 pub fn revalidate(plan: &Plan) -> Result<(), String> {
     let root = plan
@@ -329,7 +433,7 @@ pub fn revalidate(plan: &Plan) -> Result<(), String> {
                 || a.digest != b.digest
         })
     {
-        return Err("Session tree changed after preview; nothing deleted. Review it again.".into());
+        return Err("Session tree changed after owned writers stopped; nothing deleted. Stop external writers before explicitly retrying deletion.".into());
     }
     Ok(())
 }
@@ -417,6 +521,52 @@ mod tests {
         assert!(results.iter().all(|r| r.deleted));
         assert!(!root.exists());
         assert!(unrelated.exists());
+    }
+    #[test]
+    fn live_review_accepts_appends_and_refreshes_new_descendants_without_reusing_its_fingerprint() {
+        let (_temp, store, cwd, other) = fixture();
+        let root = store.join("root.jsonl");
+        let child = store.join("child.jsonl");
+        session(&root, &cwd, "root", None);
+        let review = discover(&store, &root, &cwd, "root").unwrap();
+        use std::io::Write;
+        writeln!(
+            fs::OpenOptions::new().append(true).open(&root).unwrap(),
+            "{{\"type\":\"session_info\",\"name\":\"Changed during review\"}}"
+        )
+        .unwrap();
+        session(&child, &other, "child", Some(&root));
+        let refreshed = review.refresh().unwrap();
+        assert_eq!(refreshed.files().len(), 2);
+        assert_eq!(refreshed.tree()[0].title, "Changed during review");
+        let results = execute(&refreshed.plan().unwrap(), || false).unwrap();
+        assert_eq!(results[0].file, child);
+        assert!(results.iter().all(|result| result.deleted));
+    }
+    #[test]
+    fn review_can_discover_a_live_partial_body_but_final_planning_requires_valid_stopped_history() {
+        let (_temp, store, cwd, _) = fixture();
+        let root = store.join("root.jsonl");
+        session(&root, &cwd, "root", None);
+        use std::io::Write;
+        let mut writer = fs::OpenOptions::new().append(true).open(&root).unwrap();
+        write!(writer, "{{\"type\":\"session_info\"").unwrap();
+        let review = discover(&store, &root, &cwd, "root").unwrap();
+        assert_eq!(review.tree()[0].title, "Name root");
+        assert!(review.plan().is_err());
+        writeln!(writer, ",\"name\":\"Finished\"}}").unwrap();
+        assert!(execute(&review.plan().unwrap(), || false).unwrap()[0].deleted);
+    }
+    #[test]
+    fn refreshing_never_substitutes_a_replaced_root_identity() {
+        let (_temp, store, cwd, _) = fixture();
+        let root = store.join("root.jsonl");
+        session(&root, &cwd, "root", None);
+        let review = discover(&store, &root, &cwd, "root").unwrap();
+        session(&root, &cwd, "replacement", None);
+        assert!(review.refresh().is_err());
+        assert!(review.plan().is_err());
+        assert!(root.exists());
     }
     #[test]
     fn stale_membership_content_and_replaced_identity_are_rejected_before_any_removal() {

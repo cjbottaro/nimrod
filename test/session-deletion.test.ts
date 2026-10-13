@@ -9,11 +9,10 @@ function fixture() {
   let results: DeleteResult[] = [];
   const batches: string[][] = [];
   const panels = ['root', 'child', 'unrelated'].map(name => {
-    const panel: DeletionPanel & { locked: boolean; executing: boolean; removed: boolean; busy: boolean; hasDraft: boolean; failing: boolean } = {
-      file: `/store/${name}.jsonl`, locked: false, executing: false, removed: false, busy: false, hasDraft: name === 'child', failing: false,
+    const panel: DeletionPanel & { locked: boolean; executing: boolean; removed: boolean; busy: boolean; hasDraft: boolean } = {
+      file: `/store/${name}.jsonl`, locked: false, executing: false, removed: false, busy: false, hasDraft: name === 'child',
       lock(locked) { this.locked = locked; if (!locked) this.executing = false; calls.push(`${name}:lock:${locked}`); },
       executionStarted() { this.executing = true; calls.push(`${name}:execution`); },
-      async refresh() { calls.push(`${name}:refresh`); if (this.failing) throw new Error('Unresponsive session'); },
       report() { return { file: this.file, token: name, title: name, busy: this.busy, hasDraft: this.hasDraft }; },
       deleted() { this.removed = true; calls.push(`${name}:deleted`); },
       failed(message) { calls.push(`${name}:failed`); errors.push(message); },
@@ -52,6 +51,33 @@ test('loading review opens before IPC and closes on failure even if deletion sta
   assert.equal(controller.pending, true);
 });
 
+test('initiating review stays modal through completion events, IPC and snapshot reconciliation, including returned-only successes', async () => {
+  const calls: string[] = [];
+  let finish!: (results: DeleteResult[]) => void, invocations = 0;
+  let readSnapshot!: (snapshot: DeletionSnapshot) => void, snapshotReady!: () => void;
+  const snapshotStarted = new Promise<void>(resolve => { snapshotReady = resolve; });
+  const controller = new SessionDeletion({
+    panels: () => [], acknowledge: async () => {}, recover: async () => {}, changed() {},
+    loadingReview: () => calls.push('loading'), cancelReview: () => calls.push('close'),
+    progressReview: phase => calls.push(phase),
+    deleted: files => calls.push(`deleted:${files.join(',')}`),
+    run: () => { invocations++; return new Promise(resolve => { finish = resolve; }); },
+    snapshot: () => new Promise(resolve => { readSnapshot = resolve; snapshotReady(); }),
+    error: message => calls.push(message),
+  });
+  const task = controller.run('/root', 'id');
+  const event = (phase: DeletionEvent['phase']): DeletionEvent => ({ id: phase, phase, files: ['/root'], results: [], pending: phase !== 'complete' });
+  await controller.handle(event('quarantine')); await controller.handle(event('removing'));
+  await controller.handle(event('complete'));
+  assert.deepEqual(calls, ['loading', 'stopping', 'deleting']);
+  finish([{ file: '/root', deleted: true }]);
+  await snapshotStarted;
+  await controller.run('/root', 'id'); assert.equal(invocations, 1, 'local settlement still suppresses duplicate deletion after native completion');
+  assert.equal(calls.includes('close'), false);
+  readSnapshot({ pending: false, quarantine: ['/root'], files: [] }); await task;
+  assert.deepEqual(calls, ['loading', 'stopping', 'deleting', 'deleted:/root', 'close']);
+});
+
 test('returned successful results reconcile even when completion events are missing; duplicates do not remove twice', async () => {
   const f = fixture();
   const results = f.panels.slice(0, 2).map(panel => ({ file: panel.file, deleted: true }));
@@ -77,10 +103,10 @@ test('custom review acknowledgement is correlated to its request and executes no
   assert.deepEqual(f.calls, ['confirm:round:true']); assert.equal(f.panels[0].removed, false);
 });
 
-test('deletion locks affected sessions only, refreshes idle state and includes recoverable draft disclosure', async () => {
+test('deletion locks affected sessions only and acknowledges ownership without waiting for Pi', async () => {
   const f = fixture();
   await f.controller.handle(f.event('lock'));
-  assert.deepEqual(f.calls, ['root:lock:true', 'child:lock:true', 'root:refresh', 'child:refresh', 'ack:round']);
+  assert.deepEqual(f.calls, ['root:lock:true', 'child:lock:true', 'ack:round']);
   assert.equal(f.panels[2].locked, false); assert.equal(f.controller.pending, true);
   assert.equal(f.acknowledgements[0][1].hasDraft, true);
   await f.controller.handle(f.event('release'));
@@ -111,13 +137,14 @@ test('invalid persisted deletion state guards saved paths but never pathless new
   assert.equal(f.controller.blocked(undefined), false);
 });
 
-test('busy or unresponsive descendants report busy and cannot silently disappear from the acknowledgement', async () => {
-  const f = fixture(); f.panels[1].failing = true;
+test('busy descendants remain in ownership reports and newly discovered descendants receive execution locks', async () => {
+  const f = fixture(); f.panels[1].busy = true;
   await f.controller.handle(f.event('lock'));
   assert.equal(f.acknowledgements[0].length, 2); assert.equal(f.acknowledgements[0][1].busy, true);
-  f.panels[1].failing = false; f.panels[1].busy = true;
-  await f.controller.handle(f.event('check', { id: 'check' }));
-  assert.equal(f.acknowledgements[1][1].busy, true);
+  await f.controller.handle(f.event('check', { id: 'check', files: f.panels.map(panel => panel.file) }));
+  assert.equal(f.acknowledgements[1].length, 3);
+  await f.controller.handle(f.event('quarantine', { files: f.panels.map(panel => panel.file) }));
+  assert.equal(f.panels[2].locked, true); assert.equal(f.panels[2].executing, true);
 });
 
 test('preview and confirmation lock affected panels without execution activity; quarantine starts execution only for affected files', async () => {

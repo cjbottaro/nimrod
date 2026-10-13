@@ -10,17 +10,16 @@ installed extension, runtime executable or chat command participates in deletion
 
 ## Specification and acceptance criteria
 
-Review a fingerprinted descendants tree without launching Pi or activating the target. Affected idle/writer coordination precedes permanent children-first removal; only confirmed successes clean state, while unknown/partial outcomes require explicit guarded recovery.
+Review a live descendants tree without launching Pi or activating the target, including working sessions. One confirmation authorizes stopping affected Nimrod-owned writers and deleting the root's current descendants, including those created during review/shutdown, without re-review. The initiating modal remains open through shutdown, removal and frontend reconciliation. Only confirmed successes clean state; unknown/partial outcomes require explicit guarded recovery.
 
 ## Code map
 
 | File | Role |
 | --- | --- |
 | `index.html`, `src/theme.css`, `src/workspace.css` | Trash icons, themed loading and scrollable nested-tree review |
-| `src/deletion-review.ts` | Safe iterative tree rendering, cross-project labels, loading/cancellation latch, Delete-first ready focus, retained Cancel loading focus, focus-aware Enter/Esc-cancel shortcuts and modal/IME guards |
+| `src/deletion-review.ts` | Safe iterative tree rendering, loading/cancellation, focus/IME guards, retained modal and disabled actions during execution, stopping/deleting progress |
 | `src/main.ts` | Saved-row eligibility, window-targeted event subscription, reports, renderer locks, reconciliation and recovery |
-| `src/session-deletion.ts` | Ordered frontend events, idle acknowledgement, partial-result reconciliation and quarantine |
-| `src/pi/session.ts` | `refreshDeletionState`: fresh `get_state` and pending-operation/queue checks without model work |
+| `src/session-deletion.ts` | Ordered frontend events, synchronous ownership acknowledgement without Pi RPC, progress, partial-result reconciliation and quarantine |
 | `src/pi/webview-client.ts` | Composer persistence/deletionLock handshake |
 | `src/pi/session-drafts.ts` | Confirmed-success file draft cleanup and matching last-session pointer |
 | `src-tauri/src/session_files.rs` | Bounded store scan, header lineage, fingerprints, revalidation and children-first unlink |
@@ -33,7 +32,7 @@ removed. Do not reintroduce extension discovery or `/pi-gui-delete` dispatch.
 
 ## Repeated deletion picker
 
-`delete-sessions` is a project action with `primary+shift+backspace`, distinct from selected-tree `delete` / `primary+backspace`. `main.ts::paletteSessions('delete')` shares Resume's saved top-level catalog, warnings, ordering, search metadata and row presentation. `deleteSavedSession` revalidates shell availability, quarantine and any matching open row's ID/idle eligibility, then calls `SessionDeletion.run` on the saved file/ID. Closed targets never create tabs, activate or launch Pi; native identity/affected-owner checks remain authoritative.
+`delete-sessions` is a project action with `primary+shift+backspace`, distinct from selected-tree `delete` / `primary+backspace`. `main.ts::paletteSessions('delete')` shares Resume's saved top-level catalog, warnings, ordering, search metadata and row presentation. `deleteSavedSession` revalidates shell availability, quarantine and any matching open row's saved ID/lifecycle eligibility, then calls `SessionDeletion.run` on the saved file/ID. Closed targets never create tabs, activate or launch Pi; native identity/affected-owner checks remain authoritative.
 
 `command-palette.ts::sessions('delete')` supplies the page. Choosing a row sets `isDeleting` and retains the open picker, input/query, cached catalog, row DOM and scroll position. Read-only input, disabled Back/Refresh and duplicate activation guards last until the whole `SessionDeletion.run` transaction settles. `installDeletionReview` accepts a narrow `canCover` callback from main: only this window's executing deletion picker may remain open underneath; unrelated modals still block review. Native modality gives review focus/Escape; picker key/cancel handlers also refuse higher-dialog events. Cancellation changes no rows or selection. After settlement, `sessionDeleted` reads authoritative `SessionDeletion.removed` tombstones (events, IPC results and snapshot successes); only matching cached rows are removed, including hidden filtered successes, with survivor nodes retained and pointer indices renumbered. Selected-row success advances to the same surviving index, falling back to previous; retained roots after partial failure stay listed/selected. No catalog reload occurs except explicit Refresh. Focus returns to the picker without passing through the composer or hiding/reopening the picker. Generation/disposal guards reject stale completion updates after closure/new pages; nothing is retried or reopened. Empty lists remain open; final picker Escape restores original focus. Explicit Back goes to commands.
 
@@ -48,7 +47,7 @@ The default scan covers cwd-encoded directories under the full store; custom
 flat stores are supported. Exact-file sessions outside this store remain refused.
 Pi runtime CLI/settings-only custom stores are not newly discovered by this work.
 
-`session_files::preview` scans directory entries iteratively and reads the first
+`session_files::discover` scans directory entries iteratively and reads the first
 nonblank JSONL record as the Pi v1–3 session header. The selected root must match
 its saved ID and initiating project. Descendants follow **file-level**
 `parentSession` paths, not entry `id`/`parentId` conversation branches. Recorded
@@ -65,19 +64,11 @@ symlinks. Unix hard-linked session files are refused. An invalid/unreadable file
 error identifies its path; there is no recursive deletion of directories or
 unrestricted arbitrary-path removal.
 
-Affected files are read fully with bounded records to validate JSONL, collect the
-latest `session_info` name (falling back to a shortened session ID), and compute
-SHA-256. Identity includes length/mtime and, on Unix, device/inode/ctime. The
-opened handle and current pathname metadata must agree before/after reading.
-Non-Unix identity currently uses length/mtime plus the content hash; replaced
-identical-content files are not guaranteed to be distinguished there.
+Live discovery validates headers, not transcript fingerprints. Opening for discovery permits append-driven length/mtime changes while retaining regular-file/link checks and Unix device/inode checks. Review names are best-effort over bounded snapshot bytes and complete records, falling back to shortened session IDs; affected open-session reports supply their current visible titles. A partial appended body record does not block review.
 
-Revalidation rescans membership and compares each affected file's path, header,
-identity and digest. It runs before quarantine/shutdown and again at execution
-start after owned writers have exited. Each exact file is fingerprinted again
-immediately before unlink. External writers are not locked; final pathname races
-and late external descendants remain outside Nimrod's guarantees. Do not claim
-OS-wide writer detection or atomic multi-file deletion.
+After owned writers exit and discovery stabilizes, `Tree::plan` / `session_files::preview` reads affected files fully with bounded records to validate JSONL and compute SHA-256. Identity includes length/mtime and, on Unix, device/inode/ctime; opened handle/pathname metadata must agree before/after fingerprinting. Non-Unix identity uses length/mtime plus the hash; identical-content replacements are not guaranteed to be distinguished there.
+
+Final-plan revalidation rescans membership and compares paths, headers, identities and digests at execution start; each exact file is fingerprinted again immediately before unlink. This protects the stopped-writer removal plan, **not the earlier review**. Review-time content/name/draft changes do not abort or ask for another confirmation. Root saved ID/cwd, store/link/bounds/lineage guards remain authoritative. Malformed stopped history or late external changes can still fail removal without retry. External writers are not locked; final pathname races and late external descendants remain outside Nimrod's guarantees. Do not claim OS-wide writer detection or atomic multi-file deletion.
 
 Removal uses `std::fs::remove_file` in deterministic children-first order, **not
 OS trash**. Every planned file gets a definitive success/failure result when
@@ -90,7 +81,7 @@ Execute is one locally owned operation and never automatically replayed.
 One native transaction per app process:
 
 1. Reserve the single native deletion transaction, broadcast begin, validate root
-   ID/cwd and construct the preview in an awaited blocking task. Nothing is stopped.
+   header ID/cwd and discover the live tree in an awaited blocking task. Nothing is stopped.
    This reservation does not block session creation or unrelated lifecycle actions.
 2. Freeze affected file attachments and mutating RPC writes; idle reads,
    unrelated writes, fresh launches and unrelated saved resumes remain operational.
@@ -100,22 +91,28 @@ One native transaction per app process:
    reviewed file fail; stale missing files fail even after the freeze releases.
 3. Choose acknowledgement participants from registered windows whose project
    directories occur in the plan, plus native affected owners and the initiator.
-   Unrelated project windows do not participate. Request locks/fresh `get_state`,
-   token/title, idleness and recoverable-draft presence. Busy includes main work,
-   compaction, pending submission/operation, model changes, queues, extension input
-   and documented active/queued background-agent counts. Failed refresh is busy.
-   Missing affected acknowledgement aborts after 25 seconds without deletion.
+   Unrelated project windows do not participate. Request frontend locks and current
+   token/title/draft reports synchronously, without `get_state` or waiting for Pi.
+   Busy, compaction, queues, pending submission/model operations and extension input
+   do not prohibit deletion. Missing affected acknowledgement aborts after 25 seconds
+   without deletion; native owned writers must still match their window/token reports.
 4. Validate every affected owned writer against reports. Emit review **only to
    the initiator**, with a fresh ID and `tree: [{file,title,parent,cwd}]`. Other
    affected windows acknowledge silently; they do not show confirmation dialogs.
    Native `confirm_session_deletion` accepts one matching ID/owner only.
-5. After confirmation, request second lock/idle reports and require unchanged
-   affected session/draft reports and native ownership. Revalidate the file plan.
-6. Persist quarantine **before** stopping any affected child. Stop only affected
-   tokens using existing observed-exit serialization and confirm no writer remains.
-   Failed stop prevents execute; unrelated children are never stopped.
-7. Await native execution on a blocking task. Owner close/quit checks before each
-   unlink stop further removal; already removed files are not rolled back.
+5. Confirmation keeps the initiating review modal open, disables both footer
+   actions and Escape, and shows Stopping sessions. Request fresh ownership/lock
+   reports; do not compare report/draft contents or fingerprints with review.
+6. Persist quarantine **before** stopping affected tokens using observed-exit
+   serialization. Rescan the root after shutdown. Newly discovered descendants
+   expand the monotonically growing file gate, lock/acknowledgement participants
+   and quarantine; stop their owned writers too. Repeat discovery/shutdown until
+   final planning contains no unguarded files and no affected owned writer remains.
+   The cumulative affected set is capped at 10,000 files with an explicit error.
+   Failed stop prevents execution; unrelated children are never stopped.
+7. Construct fingerprints from the current stopped tree, emit `removing` progress
+   (Deleting sessions), and await native execution on a blocking task. Owner close/quit
+   checks before each unlink stop further removal; already removed files are not rolled back.
 8. Reconcile successes/pop-outs/bookkeeping, clear operation state and release
    the affected-file gate. Clear the deletion transaction reservation and publish
    completion atomically under the start/finish transition mutex.
@@ -223,10 +220,9 @@ stays transparent. No session-row tooltip is added.
 
 The callback captures its row's `Tab`, calls `deleteSession(tab)` without
 `activate`, and never resumes/selects a background target. Shared `deletable`
-checks saved, idle, non-demo/non-temporary, lifecycle, pending/lock/quarantine
-state. `submissionPending` reads live draft status: restoration converts pending
-to unknown and is unsuitable for eligibility. Composer writes refresh actions on
-pending-status changes before any Pi activity snapshot. Native checks still win.
+checks saved, non-demo/non-temporary, lifecycle and deletion pending/lock/quarantine
+state. Working, queued and pending-submission sessions remain eligible; starting,
+closing or restarting the target does not. Native identity/ownership checks still win.
 
 `SessionDeletion.run` arms the loading review before deletion IPC, but the dialog
 opens with loading only if preparation takes at least **150 ms**. Fast previews
@@ -262,11 +258,15 @@ The review and palette share `.workspace-modal`: themed background/foreground,
 panel border, radius, shadow, padding, backdrop and top placement. Content sizing
 is separate. The capture-phase document `close` listener must ignore the review's
 own close: re-showing there resets returnValue and can turn Delete into Cancel.
-Populated reviews initially focus Delete; loading reviews focus Cancel and retain that focus when populated. Shared `dialog-actions.ts` provides plain labels, non-visual shortcut metadata and focus-aware shortcuts: Enter on Cancel cancels, otherwise Enter confirms only enabled Delete. Escape always cancels. Repeated/composing/keyCode-229 Enter cannot activate either action. Enter on Cancel during loading latches cancellation just like Escape.
+Populated reviews initially focus Delete; loading reviews focus Cancel and retain that focus when populated. Shared `dialog-actions.ts` provides plain labels, non-visual shortcut metadata and focus-aware shortcuts: Enter on Cancel cancels, otherwise Enter confirms only enabled Delete. Escape cancels before confirmation only. Confirmation resolves its correlated answer without closing the dialog; click/form-submit/keyboard activation share one guarded path, avoiding native `method=dialog` dismissal. Execution disables Cancel/Delete and suppresses native `cancel` events and repeated submissions. Repeated/composing/keyCode-229 Enter cannot activate either action. Enter on Cancel during loading latches cancellation just like Escape.
 Native HTML focus restoration stays authoritative; replacement activation does
 not focus through another modal.
 
 ## Reconciliation, storage and recovery
+
+The local `SessionDeletion.run` keeps the executing modal open through completion events, IPC results and its final snapshot reconciliation. Terminal events in other windows close only their own non-local review. Snapshot failures still report an error and retain existing affected guards; command settlement closes the modal rather than leaving it stuck. Retained Delete sessions pickers reconcile tombstones in the caller's settlement continuation before becoming interactive. No background first-attempt retry is introduced.
+
+The former preview fingerprint comparison and exact open-session/draft-report comparison could reject a first confirmation after ordinary streaming/title/draft changes, making a later attempt succeed. Both are deliberately removed; final stopped-plan guards remain. This is a concrete code-path correction, not a reproduction of a particular live report.
 
 Only `deleted:true` removes mounted entries/drafts. Broadcast completion, returned
 IPC results and snapshot success tombstones reconcile idempotently; do not assume
@@ -309,23 +309,31 @@ Snapshots reconcile locks and missed completion as well as guards.
 
 - `session_files.rs` tests use disposable directories and **actually unlink only
   generated fixtures**: cross-project lineage, children-first removal, unrelated
-  retention, changed membership/content/identity, cancellation, partial results,
-  wrong root ID/cwd/store, malformed headers, cycles, symlinks and hard links.
-- `session_deletion.rs` tests cover affected-window selection, fresh writer/idle
-  reports, owner/ID single-use answers, quarantine/corrupt state and success cleanup.
+  retention, live appended/partial-body review, refreshed descendants/content,
+  stopped-plan membership/content/identity rejection, replaced root ID rejection,
+  cancellation, partial results, wrong root ID/cwd/store, malformed headers, cycles,
+  symlinks and hard links.
+- `session_deletion.rs` tests cover affected-window selection, busy-but-acknowledged
+  writer acceptance, stale/missing ownership rejection, owner/ID single-use answers,
+  quarantine/corrupt state and success cleanup.
 - `workspaces.rs` tests retain affected-file attachment/write guards, fresh and
   unrelated saved launches, stale-file rejection, unrelated writes, exact-token
-  stop/observed exit and failed-shutdown reservations.
+  stop/observed exit, expanding gates capturing newly attached descendants while
+  unrelated children remain live, and failed-shutdown reservations.
 - `test/shell.test.ts` tests two-window targeted review vs global completion,
   extension-free IPC arguments, row targets without selection/resume, fast-preview
-  loading suppression, duplicate-click guards, cancellation/failure and confirmed-only cleanup.
+  loading suppression, working/pending-send eligibility, retained executing modal,
+  disabled Cancel/Escape, progress, duplicate-click guards, cancellation/failure and
+  confirmed-only cleanup.
 - `test/deletion-review.test.ts`, `test/session-deletion.test.ts` and
   `test/deleted-drafts.test.ts` retain safe labels/focus, local cancellation,
   partial/unknown reconciliation, pending-state guards and file-scoped cleanup.
   Keyboard tests cover Enter confirmation from Delete focus, Enter cancellation from Cancel focus, Escape from Delete focus, composing/repeated/keyCode-229 Enter suppression, and Enter/Escape during loading. Offline WebKit checks Enter yields one correlated true answer and Escape one false answer.
   A deterministic window timer in modal tests verifies the 149/150 ms boundary,
   fast ready-only opening, slow in-place replacement and timer cleanup on failure,
-  cancellation, disposal and existing-modal transitions.
+  cancellation, disposal and existing-modal transitions. Execution fixtures cover
+  keeping the modal open, native cancel/form-submit suppression, per-operation
+  reset, progress and closing only after event/IPC/snapshot reconciliation.
 - Offline WebKit tests retain scroll/footer/theme/focus behavior and sidebar trash
   geometry/eligibility. Tree geometry checks 32px even rows, 24px indentation,
   icon/name alignment and guide lines at 125% zoom, plus wrapped secondary-detail
@@ -334,7 +342,7 @@ Snapshots reconcile locks and missed completion as well as guards.
 
 Run `mise run check` and affected offline WebKit regressions. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow).
 No real user session deletion, live Pi/model request, installed extension change
-or app launch is used for verification. Native multiple-window dialog/idle/close
+or app launch is used for verification. Native multiple-window working-session shutdown/dialog/close
 acceptance, real filesystem failure modes and Linux/Windows remain unverified;
 do not infer them from mocked IPC or macOS Rust/DOM tests. Record exact results
 in [verification](verification.md).
