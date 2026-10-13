@@ -61,7 +61,11 @@ pub async fn apply_window_appearance(
     on_main_thread(&window, move || {
         let support = capabilities();
         #[cfg(target_os = "macos")]
-        crate::macos_window_appearance::apply(&target, frosted && !support.reduced_transparency, dark)?;
+        crate::macos_window_appearance::apply(
+            &target,
+            frosted && !support.reduced_transparency,
+            dark,
+        )?;
         #[cfg(not(target_os = "macos"))]
         let _ = (target, frosted, dark);
         Ok(support)
@@ -70,7 +74,10 @@ pub async fn apply_window_appearance(
 }
 
 #[tauri::command]
-pub async fn tint_window_titlebar(window: tauri::WebviewWindow, color: [u8; 4]) -> Result<(), String> {
+pub async fn tint_window_titlebar(
+    window: tauri::WebviewWindow,
+    color: [u8; 4],
+) -> Result<(), String> {
     let target = window.clone();
     on_main_thread(&window, move || {
         #[cfg(target_os = "macos")]

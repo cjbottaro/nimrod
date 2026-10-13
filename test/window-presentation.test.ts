@@ -13,10 +13,10 @@ test('prepared presentation lays out/reveals once and disposes owned resources i
     let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
     const one = presentation.presentWhenPrepared(() => gate);
     const two = presentation.presentWhenPrepared(() => gate);
-    assert.deepEqual(calls, []); release(); await Promise.all([one, two]);
-    assert.deepEqual(calls, ['layout', 'reveal']);
+    assert.deepEqual([...calls], []); release(); await Promise.all([one, two]);
+    assert.deepEqual([...calls], ['layout', 'reveal']);
     await presentation.presentWhenPrepared(async () => {}); assert.equal(calls.length, 2);
-    presentation.dispose(); presentation.dispose(); assert.deepEqual(calls, ['layout', 'reveal', 'second', 'first']);
+    presentation.dispose(); presentation.dispose(); assert.deepEqual([...calls], ['layout', 'reveal', 'second', 'first']);
     presentation.own(() => calls.push('late')); assert.equal(calls.at(-1), 'late');
   } finally { presentation.dispose(); dom.window.close(); }
 });

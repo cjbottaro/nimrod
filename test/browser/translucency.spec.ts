@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { demoFixture, visible } from './demo-fixture';
+import { buttonContrast } from '../../src/button-surfaces';
 import { windowSurfaceOpacities } from '../../src/window-appearance';
 
 function alpha(color: string): number {
@@ -37,16 +38,20 @@ test('buttons, Status area and notices use translucent overlays rather than stac
       expect(buttons.length).toBeGreaterThan(3);
       for (const button of buttons) expect(alpha(button.background), button.id).toBeLessThan(1);
       const send = page.locator(visible('send'));
-      await send.hover(); expect(alpha(await send.evaluate(node => getComputedStyle(node).backgroundColor))).toBeCloseTo(windowSurfaceOpacities(65).buttonHover, 3);
+      await send.hover();
+      const hoverDensity = await page.locator('html').evaluate(root => parseFloat(getComputedStyle(root).getPropertyValue('--nimrod-button-hover-opacity')) / 100);
+      expect(alpha(await send.evaluate(node => getComputedStyle(node).backgroundColor))).toBeCloseTo(hoverDensity, 3);
       await page.locator('#toggle-sidebar').hover();
-      expect(alpha(await page.locator('#toggle-sidebar').evaluate(node => getComputedStyle(node).backgroundColor))).toBeCloseTo(windowSurfaceOpacities(65).state, 3);
+      const secondaryHoverDensity = await page.locator('html').evaluate(root => parseFloat(getComputedStyle(root).getPropertyValue('--nimrod-secondary-hover-opacity')) / 100);
+      expect(alpha(await page.locator('#toggle-sidebar').evaluate(node => getComputedStyle(node).backgroundColor))).toBeCloseTo(secondaryHoverDensity, 3);
       // The notice's error outline/icon and foreground opacity remain untouched.
       expect(await notices.evaluate(node => getComputedStyle(node).opacity)).toBe('1');
       await fixture.editPreferences(JSON.stringify({ 'appearance.theme': theme, 'appearance.backgroundOpacity': 65, 'appearance.translucencyArea': 'chrome', 'appearance.frostedBackground': false }));
       await expect(page.locator('html')).toHaveAttribute('data-translucency', 'chrome');
       expect(alpha(await send.evaluate(node => getComputedStyle(node).backgroundColor))).toBe(1);
       expect(alpha(await notices.evaluate(node => getComputedStyle(node).backgroundColor))).toBe(1);
-      expect(alpha(await page.locator('#sidebar-new').evaluate(node => getComputedStyle(node).backgroundColor))).toBeCloseTo(windowSurfaceOpacities(65).button, 3);
+      const primaryDensity = await page.locator('html').evaluate(root => parseFloat(getComputedStyle(root).getPropertyValue('--nimrod-button-opacity')) / 100);
+      expect(alpha(await page.locator('#sidebar-new').evaluate(node => getComputedStyle(node).backgroundColor))).toBeCloseTo(primaryDensity, 3);
     }
     await fixture.editPreferences('{}');
     await expect(page.locator('html')).toHaveAttribute('data-translucency', 'off');
@@ -74,6 +79,19 @@ test('Status area, notices and buttons retain hierarchy across the slider, inclu
         const panel = alpha(await color(visible('activity')));
         const notice = alpha(await color(visible('session-notices')));
         const button = alpha(await color('#sidebar-new'));
+        const primary = await page.locator('#sidebar-new').evaluate(node => {
+          const style = getComputedStyle(node);
+          const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
+          const context = canvas.getContext('2d')!;
+          const hex = (value: string) => {
+            context.clearRect(0, 0, 1, 1); context.fillStyle = value; context.fillRect(0, 0, 1, 1);
+            return '#' + [...context.getImageData(0, 0, 1, 1).data].slice(0, 3).map(channel => channel.toString(16).padStart(2, '0')).join('');
+          };
+          return { foreground: hex(style.color), background: hex(style.backgroundColor), opacity: style.opacity };
+        });
+        expect(primary.opacity).toBe('1');
+        // Canvas readback quantizes alpha/unpremultiplied channels to 8-bit.
+        expect(buttonContrast(primary.foreground, primary.background, button)).toBeGreaterThan(4.4);
         expect(panel).toBeGreaterThanOrEqual(lastPanel); lastPanel = panel;
         if (opacity < 100) {
           expect(panel).toBeGreaterThan(interaction);
@@ -108,6 +126,26 @@ test('Status area, notices and buttons retain hierarchy across the slider, inclu
   } finally { await fixture.close(); }
 });
 
+test('an uncommitted drag updates project windows and native Settings close restores the saved opacity', async ({ page }) => {
+  const fixture = await demoFixture(page);
+  try {
+    await fixture.editPreferences(JSON.stringify({ 'appearance.theme': 'dracula', 'appearance.backgroundOpacity': 65 }));
+    const settings = await fixture.settingsWindow();
+    const before = fixture.settingsText();
+    const writes = fixture.calls.filter(call => call.command === 'preferences_settings').length;
+    await settings.locator('#background-opacity').evaluate((input: HTMLInputElement) => {
+      for (const opacity of [45, 20, 10]) { input.value = String(opacity); input.dispatchEvent(new Event('input', { bubbles: true })); }
+    });
+    await expect(page.locator('html')).toHaveCSS('--nimrod-background-opacity', '10%');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dracula');
+    expect(fixture.settingsText()).toBe(before);
+    expect(fixture.calls.filter(call => call.command === 'preferences_settings').length).toBe(writes);
+    await settings.close();
+    await expect(page.locator('html')).toHaveCSS('--nimrod-background-opacity', '65%');
+    expect(fixture.errors).toEqual([]);
+  } finally { await fixture.close(); }
+});
+
 test('whole-window and chrome-only tint synchronize without rebuilding the conversation', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {
@@ -116,12 +154,18 @@ test('whole-window and chrome-only tint synchronize without rebuilding the conve
       (window as Window & { __appearancePrompt?: Element }).__appearancePrompt = document.querySelector('.session-view:not([hidden]) [data-pi-id="prompt"]')!;
     });
     const settings = await fixture.settingsWindow();
+    const before = fixture.settingsText();
+    const writes = () => fixture.calls.filter(call => call.command === 'preferences_settings').length;
+    const beforeWrites = writes();
     await expect(settings.locator('#settings-translucency')).toBeVisible();
     await expect(settings.locator('#settings-frosted-background')).toBeVisible();
     await settings.locator('#background-opacity').evaluate((input: HTMLInputElement) => {
       input.value = '65'; input.dispatchEvent(new Event('input', { bubbles: true }));
     });
     await expect(settings.locator('html')).toHaveAttribute('data-translucency', 'window');
+    await expect(page.locator('html')).toHaveAttribute('data-translucency', 'window');
+    await expect(page.locator('html')).toHaveCSS('--nimrod-background-opacity', '65%');
+    expect(fixture.settingsText()).toBe(before); expect(writes()).toBe(beforeWrites);
     await settings.locator('#background-opacity').evaluate(input => input.dispatchEvent(new Event('change', { bubbles: true })));
     await expect(page.locator('html')).toHaveAttribute('data-translucency', 'window');
     const wholeBackground = await page.locator('#workspace-content').evaluate(element => getComputedStyle(element).backgroundColor);

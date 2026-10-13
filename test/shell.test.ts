@@ -126,6 +126,8 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       }
       if (command === 'tint_window_titlebar') { await options.titlebarGate; return; }
       if (command === 'settings_window_ready') return;
+      if (command === 'window_opacity_preview_snapshot') return { revision: 0, opacity: null };
+      if (command === 'preview_window_opacity') return { revision: calls.length, opacity: args.opacity };
       if (command === 'drafts_load') return [...nativeDrafts.values()];
       if (command === 'drafts_stage') { const record = args.record as { key: string; value: unknown; revision: number }; nativeDrafts.set(record.key, record); return; }
       if (command === 'drafts_flush') { await options.draftFlushGate; if (options.draftFlushError) throw new Error(options.draftFlushError); return; }

@@ -11,6 +11,12 @@ This is the current evidence/acceptance map, not a chronological test log. Featu
 - No Linux build/native parity or Windows acceptance is established by macOS checks. Windows remains a possible future target.
 - Installed-Pi metadata smokes isolate config/projects/history and make no provider requests; they don't establish provider-generated first-save or queue behavior.
 
+## Current automated validation
+
+Appearance-regression follow-up: TypeScript compilation and Rust formatting/Clippy pass; 71 targeted appearance/presentation/theme/preferences tests, 8 offline WebKit translucency/theme/Settings/pop-out tests and 144 Rust tests pass (2 installed-Pi smokes intentionally ignored). Browser evidence uses mock native material, title and Settings ownership—not a native app launch, macOS visual acceptance or Linux verification.
+
+Full `mise run check` is **not green**: 678/685 JS tests pass; seven failures were independently reproduced against the pre-fix `window-presentation` tree. They concern late plugin Copy completion, default/unbound keybinding expectations (two tests), hidden-render text content, project identity in an empty filtered sidebar, MCP composer-entry clearing and tool-input path text order. No appearance failures remain in that run; the unrelated failures were not altered by this task. The earlier test-only TypeScript assertion-narrowing compile blocker is fixed. No packaged app was built/published or user app launched.
+
 ## Native observations retained
 
 | Area | Evidence | Boundary |
@@ -58,7 +64,7 @@ Source report basenames (local files, not checked into this repository; retentio
 | Error presentation | Native macOS scoped-notice visuals, reader/focus preservation, announcements, dialog layering and page zoom; Linux/WebKitGTK remains unverified. Offline fixtures are not native acceptance. |
 | MCP inspector | Native macOS appearance/focus, installed-Pi status compatibility, busy-session inspection and cancellation; fixtures added but not run. Linux behavior unverified. [Inspector specification](mcp-inspector.md) |
 | Settings/keybindings/themes | Native menus, alternative keyboard layouts, file chooser, live import/preview focus and cross-window preferences |
-| Translucency | User's initial trial reported opaque Status-area/notices/buttons and near-opaque frosting. The light-overlay follow-up then lost panel distinction below 100%. User subsequently reported the continuous hierarchy as much better. Latest remaining issues: cold Settings flash and brown-looking title bar; first-reveal/theme-tint changes and fixtures are unvalidated. Material/window-local appearance and full slider/theme coverage still need acceptance. Packaged macOS visuals, blur removal, Reduce Transparency, theme previews, resize/full-screen and streaming performance need acceptance; Linux alpha/compositor integration unverified. [Specification](translucency.md) |
+| Translucency | User's initial trial reported opaque Status-area/notices/buttons and near-opaque frosting. The light-overlay follow-up then lost panel distinction below 100%. User subsequently reported the continuous hierarchy as much better. Latest user-reported regressions also include poor Nimrod button-label contrast and Settings-only drag previews. Shared filled-control contrast and generation-owned live opacity-preview fixes pass targeted offline coverage, but are not native-accepted. Cold Settings flash and brown-looking title bar also remain unaccepted; first-reveal/theme-tint changes and fixtures are unvalidated. Material/window-local appearance and full slider/theme coverage still need acceptance. Packaged macOS visuals, blur removal, Reduce Transparency, theme previews, resize/full-screen and streaming performance need acceptance; Linux alpha/compositor integration unverified. [Specification](translucency.md) |
 | Images | Native macOS screenshot paste, Linux/Wayland clipboard, reload/quota and real Pi image normalization |
 | Pop-outs/window state | Quit/relaunch persistence, automatic versus explicit focus, own-window Close, minimization and multi-display/DPI geometry |
 | Notifications | Native macOS session click, real input/failure delivery, Linux compilation/delivery/action/Wayland focus; Windows delivery remains unverified |

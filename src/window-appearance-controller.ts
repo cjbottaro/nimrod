@@ -1,3 +1,4 @@
+import { buttonSurface, primaryButtonSurfaces, buttonDensity } from './button-surfaces';
 import { appliedTheme, subscribeAppliedTheme } from './themes/applied-theme';
 import { installAppearanceEffects, type NativeAppearanceHost } from './window-appearance-effects';
 import { titlebarTint, windowSurfaceOpacities, type AppearanceCapabilities, type WindowAppearance } from './window-appearance';
@@ -9,6 +10,7 @@ export interface AppearanceControls {
 export interface AppearanceHost extends NativeAppearanceHost {
   read(): WindowAppearance;
   save?(patch: Partial<WindowAppearance>): Promise<void>;
+  previewOpacity?(opacity: number | null): Promise<void>;
   capabilities(): Promise<AppearanceCapabilities>;
 }
 
@@ -24,19 +26,34 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
   const reduced = window.matchMedia?.('(prefers-reduced-transparency: reduce)');
   let theme = appliedTheme(root);
   let background = '';
+  let primary: ReturnType<typeof buttonSurface>, hover: ReturnType<typeof buttonSurface>, danger: ReturnType<typeof buttonSurface>;
+  let secondary: ReturnType<typeof buttonSurface>, secondaryHover: ReturnType<typeof buttonSurface>;
   let paintSignature: string | undefined;
   const current = () => ({ ...host.read(), ...preview });
   const reduceTransparency = () => !!capabilities?.reducedTransparency || !!reduced?.matches;
   const effects = installAppearanceEffects(host, next => { if (!disposed) { capabilities = next; paint(); } });
-  function readBackground() {
+  function readPalette() {
     const fallback = theme.mode === 'light' || !theme.mode && !dark?.matches ? '#f7f9f8' : '#151c20';
-    background = theme.background ?? (window.getComputedStyle(root).getPropertyValue('--vscode-editor-background').trim() || fallback);
+    const style = window.getComputedStyle(root);
+    const color = (key: string) => style.getPropertyValue('--vscode-' + key).trim();
+    background = theme.background ?? (color('editor-background') || fallback);
+    const pair = primaryButtonSurfaces(color('button-foreground'), color('button-background'), color('button-hoverBackground'));
+    primary = pair.normal; hover = pair.hover;
+    const secondaryPair = primaryButtonSurfaces(color('button-secondaryForeground'), color('button-secondaryBackground'), color('button-secondaryHoverBackground'));
+    secondary = secondaryPair.normal; secondaryHover = secondaryPair.hover;
+    danger = buttonSurface(background, color('errorForeground'));
+    for (const [role, surface] of [['primary', primary], ['primary-hover', hover], ['secondary', secondary], ['secondary-hover', secondaryHover], ['danger', danger]] as const) {
+      for (const key of ['foreground', 'background'] as const) {
+        const property = role === 'danger' ? `--nimrod-danger-${key === 'foreground' ? 'text' : 'fill'}` : `--nimrod-${role}-${key}`;
+        if (surface) root.style.setProperty(property, surface[key]); else root.style.removeProperty(property);
+      }
+    }
   }
   function paint() {
     if (disposed) return;
     const value = current();
     const enabled = !!capabilities?.transparency && !reduceTransparency() && value.opacity < 100;
-    const signature = JSON.stringify([value, enabled, capabilities, !!reduced?.matches]);
+    const signature = JSON.stringify([value, enabled, capabilities, !!reduced?.matches, primary, hover, secondary, secondaryHover, danger]);
     if (signature !== paintSignature) {
       paintSignature = signature;
       root.dataset.translucency = enabled ? value.area : 'off';
@@ -44,14 +61,15 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
       const surfaces = windowSurfaceOpacities(value.opacity);
       const properties = {
         '--nimrod-control-overlay-opacity': surfaces.control,
+        '--nimrod-secondary-opacity': buttonDensity(secondary?.minimum ?? 0, surfaces.endpoint, .10),
+        '--nimrod-secondary-hover-opacity': buttonDensity(Math.max(secondary?.minimum ?? 0, secondaryHover?.minimum ?? 0), surfaces.endpoint, .30),
         '--nimrod-panel-overlay-opacity': surfaces.panel,
-        '--nimrod-button-opacity': surfaces.button,
-        '--nimrod-button-hover-opacity': surfaces.buttonHover,
+        '--nimrod-button-opacity': buttonDensity(primary?.minimum ?? 0, surfaces.endpoint, .35),
+        '--nimrod-button-hover-opacity': buttonDensity(Math.max(primary?.minimum ?? 0, hover?.minimum ?? 0), surfaces.endpoint, .45),
         '--nimrod-state-opacity': surfaces.state,
         '--nimrod-selection-opacity': surfaces.selection,
-        '--nimrod-danger-opacity': surfaces.danger,
+        '--nimrod-danger-opacity': buttonDensity(danger?.minimum ?? 0, surfaces.endpoint, .45),
         '--nimrod-notice-opacity': surfaces.notice,
-        '--nimrod-opaque-color-weight': surfaces.endpoint,
       };
       for (const [key, alpha] of Object.entries(properties)) root.style.setProperty(key, `${Number((alpha * 100).toFixed(4))}%`);
       if (controls) {
@@ -97,28 +115,36 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
     preview[key] = value;
     const version = (versions.get(key) ?? 0) + 1; versions.set(key, version);
     paint();
+    if (key === 'opacity' && host.previewOpacity) void host.previewOpacity(value as number).catch(error => {
+      if (!disposed) host.report(`Could not preview window opacity: ${String(error)}`, 'preview');
+    });
     if (!commit || !host.save) return;
     const patch: Partial<WindowAppearance> = {}; patch[key] = value;
     void host.save(patch).then(() => {
-      if (!disposed && versions.get(key) === version) { delete preview[key]; host.report(undefined, `save:${key}`); paint(); }
+      if (!disposed && versions.get(key) === version) { delete preview[key]; host.report(undefined, `save:${key}`); paint(); clearPreview(key); }
     }).catch(error => {
       if (disposed) return;
-      if (versions.get(key) === version) { delete preview[key]; paint(); }
+      if (versions.get(key) === version) { delete preview[key]; paint(); clearPreview(key); }
       host.report(`Could not save window appearance: ${String(error)}`, `save:${key}`);
+    });
+  }
+  function clearPreview(key: keyof WindowAppearance) {
+    if (key === 'opacity' && host.previewOpacity) void host.previewOpacity(null).catch(error => {
+      if (!disposed) host.report(`Could not finish window opacity preview: ${String(error)}`, 'preview');
     });
   }
   const previewOpacity = () => edit('opacity', Number(controls!.opacity.value), false);
   const saveOpacity = () => edit('opacity', Number(controls!.opacity.value), true);
   const saveArea = () => edit('area', controls!.area.value as WindowAppearance['area'], true);
   const saveFrost = () => edit('frosted', controls!.frosted.checked, true);
-  const systemSchemeChanged = () => { if (theme.mode === null) readBackground(); paint(); };
+  const systemSchemeChanged = () => { if (theme.mode === null) readPalette(); paint(); };
   controls?.opacity.addEventListener('input', previewOpacity);
   controls?.opacity.addEventListener('change', saveOpacity);
   controls?.area.addEventListener('change', saveArea);
   controls?.frosted.addEventListener('change', saveFrost);
   dark?.addEventListener('change', systemSchemeChanged); reduced?.addEventListener('change', paint);
-  const unsubscribeTheme = subscribeAppliedTheme(root, next => { theme = next; readBackground(); paint(); });
-  readBackground(); paint(); void refreshCapabilities();
+  const unsubscribeTheme = subscribeAppliedTheme(root, next => { theme = next; readPalette(); paint(); });
+  readPalette(); paint(); void refreshCapabilities();
   const ready = settled();
   return {
     ready, settled, reload: paint, refreshCapabilities,

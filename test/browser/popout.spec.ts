@@ -26,6 +26,7 @@ async function popoutFixture(page: Page, text: string, language: string) {
         if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 1;
         if (command === 'scoped_preferences_snapshot') return { text: '{}', state: {}, settingsPath: '/fixture/settings.json', statePath: '/fixture/state.json', revision: 1 };
         if (command === 'tint_window_titlebar') return;
+        if (command === 'window_opacity_preview_snapshot') return { revision: 0, opacity: null };
         if (command === 'window_appearance_capabilities' || command === 'apply_window_appearance') return { platform: 'macos', transparency: true, frost: true, reducedTransparency: false };
         if (command === 'code_popout_snapshot') return { session: 'fixture', title: 'Unused source session name', text, language };
         if (command === 'plugin:webview|set_webview_zoom') return;

@@ -15,6 +15,7 @@ type TestWindow = Window & {
   __fixtureHost(command: string, args: JsonRecord): Promise<unknown>;
   __fixtureChannels: Record<string, { onmessage(packet: Packet): void }>;
   __fixtureSettled: number;
+  __fixtureOpacityReceive?: (snapshot: { revision: number; opacity: number | null }) => void;
   __fixturePreferenceReceive?: (snapshot: PreferencesSnapshot) => void;
   __fixtureDeletionReceive?: (event: DeletionEvent) => void;
   __fixtureNotificationClick?: (event: { session: string; token: string }) => void;
@@ -40,6 +41,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
   let closing = false;
   const errors: string[] = [];
   const calls: { command: string; args: JsonRecord }[] = [];
+  let opacityPreview = { revision: 0, opacity: null as number | null };
   const nativeDrafts = new Map(Object.entries(typingOptions?.drafts ?? {}).map(([key, value]) => [key, { key, value, revision: 1 }]));
   const preferences = new MemoryPreferences();
   if (pluginOptions) { preferences.value.text = pluginOptions.settings; preferences.value.state.legacyMigrated = true; }
@@ -153,6 +155,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
           preferenceCallbacks.add(Number(args.handler));
           state.__fixturePreferenceReceive = payload => { for (const handler of preferenceCallbacks) callbacks.get(handler)?.({ payload }); };
         }
+        if (command === 'plugin:event|listen' && args.event === 'nimrod-window-opacity-preview') state.__fixtureOpacityReceive = payload => callbacks.get(Number(args.handler))?.({ payload });
         if (command === 'plugin:event|listen' && args.event === 'nimrod-session-deletion') state.__fixtureDeletionReceive = payload => callbacks.get(Number(args.handler))?.({ payload });
         if (command === 'plugin:event|listen' && args.event === 'nimrod-notification-click') state.__fixtureNotificationClick = payload => callbacks.get(Number(args.handler))?.({ payload });
         if (command === 'plugin:event|unlisten') state.__fixturePreferenceReceive = undefined;
@@ -174,6 +177,13 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     }
   }
   const projectHost = async (command: string, args: JsonRecord) => {
+    if (command === 'window_opacity_preview_snapshot') { calls.push({ command, args }); return opacityPreview; }
+    if (command === 'preview_window_opacity') {
+      calls.push({ command, args });
+      opacityPreview = { revision: opacityPreview.revision + 1, opacity: args.opacity as number | null };
+      for (const target of [page, settingsPage]) if (target && !target.isClosed()) await target.evaluate(snapshot => (window as unknown as TestWindow).__fixtureOpacityReceive?.(snapshot), opacityPreview);
+      return opacityPreview;
+    }
     const result = await host(command, args);
     if (['preferences_settings', 'project_preferences_settings', 'preferences_state'].includes(command)) await broadcast();
     return result;
@@ -183,6 +193,10 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (settingsPage && !settingsPage.isClosed()) { await settingsPage.bringToFront(); return settingsPage; }
     const target = settingsPage = await page.context().newPage();
     target.on('pageerror', error => errors.push(String(error)));
+    target.on('close', () => {
+      opacityPreview = { revision: opacityPreview.revision + 1, opacity: null };
+      if (!closing && !page.isClosed()) void page.evaluate(snapshot => (window as unknown as TestWindow).__fixtureOpacityReceive?.(snapshot), opacityPreview).catch(error => errors.push(String(error)));
+    });
     await target.exposeFunction('__fixtureHost', async (command: string, args: JsonRecord) => {
       if (command === 'plugin:window|close') { await target.close(); await page.bringToFront(); return; }
       if (['start_pi', 'stop_pi', 'write_pi', 'drafts_load', 'sync_popout_sessions', 'load_personal_card_plugins'].includes(command)) throw new Error('Global Settings must not initialize project services');
@@ -221,6 +235,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     settingsWindow: openSettingsWindow,
     async notificationClick(target: { session: string; token: string }) { await page.evaluate(payload => (window as unknown as TestWindow).__fixtureNotificationClick?.(payload), target); },
     state: () => structuredClone(preferences.value.state),
+    settingsText: () => preferences.value.text,
     async deletionEvent(event: DeletionEvent) { await page.evaluate(payload => (window as unknown as TestWindow).__fixtureDeletionReceive?.(payload), event); },
     async editPreferences(text: string) {
       preferences.external(text);
