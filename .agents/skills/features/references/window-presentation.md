@@ -7,7 +7,7 @@
 | Change | Canonical owner | Boundaries |
 | --- | --- | --- |
 | Surface density, role hierarchy, settings schema and native RGBA conversion | `src/window-appearance.ts`, `src/window-appearance.css` | Pure presentation policy; no IPC or lifecycle |
-| Filled-button colour pairing/contrast and density floors | `src/button-surfaces.ts` | Pure palette-independent policy, consumed by the appearance controller and semantic CSS; no per-theme overrides |
+| Filled-button colour pairing/contrast, density floors and known-parent tint credit | `src/button-surfaces.ts` | Pure palette-independent policy, consumed by the appearance controller and semantic CSS; no per-theme overrides |
 | Live global opacity preview | `src-tauri/src/settings_window.rs`, `src/native-window-appearance.ts` | Generation-authorized ephemeral state, revisioned subscription/snapshot, latest-value publishing and native-close clearing; not preference persistence |
 | Apply/preview/restore a theme | `src/themes/theme.ts::applyTheme` | Apply all managed CSS, then publish one completed window-local presentation snapshot |
 | Theme presentation notification | `src/themes/applied-theme.ts` | WeakMap per root, explicit mode/background/palette-signature snapshot; not DOM mutation inference or global broadcast |

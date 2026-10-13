@@ -22,12 +22,15 @@
   padding:var(--modal-padding);
   border:1px solid var(--vscode-panel-border);
   border-radius:var(--modal-radius);
-  background:var(--vscode-editorWidget-background);
+  background:var(--nimrod-surface-modal, var(--vscode-editorWidget-background));
+  --modal-field-surface:var(--nimrod-surface-modal-field, var(--vscode-input-background));
+  --modal-inset-surface:var(--nimrod-surface-modal-inset, var(--vscode-editor-background));
   color:var(--vscode-foreground);
   box-shadow:0 12px 48px var(--vscode-widget-shadow);
   overflow:auto;
 }
-.nimrod-modal::backdrop, .modal-overlay { background:var(--modal-backdrop); }
+.nimrod-modal :is(input, textarea, select) { background:var(--modal-field-surface); color:var(--vscode-input-foreground); }
+.nimrod-modal::backdrop, .modal-overlay { background:var(--nimrod-modal-backdrop, var(--modal-backdrop)); }
 .modal-stack { display:flex; flex-direction:column; gap:var(--modal-gap); min-height:0; }
 dialog.modal-stack:not([open]) { display:none; }
 .nimrod-modal > .modal-stack { max-height:calc(var(--modal-max-height) - 2 * var(--modal-padding) - 2px); }

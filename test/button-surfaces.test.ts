@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { BUTTON_CONTRAST, buttonContrast, buttonDensity, buttonSurface, primaryButtonSurfaces } from '../src/button-surfaces';
+import { BUTTON_CONTRAST, BUTTON_TINT_DISCOUNT, buttonContrast, buttonDensity, buttonSurface, primaryButtonSurfaces, buttonUnderlayCredit, tintedButtonDensity } from '../src/button-surfaces';
 import { BUILTIN_THEMES, CATALOG_THEMES } from '../src/themes/builtins';
 import { themeProperties } from '../src/themes/theme';
 
@@ -36,6 +36,51 @@ test('all bundled palettes use the same primary, hover and danger contrast polic
       for (const [surface, minimum, role] of [[normal, normal.minimum, .35], [hover, Math.max(normal.minimum, hover.minimum), .45], [danger, danger.minimum, .45], [secondary.normal, secondary.normal.minimum, .10], [secondary.hover, Math.max(secondary.normal.minimum, secondary.hover.minimum), .30]] as const) {
         const density = buttonDensity(minimum, endpoint, role);
         assert.ok(buttonContrast(surface.foreground, surface.background, density) >= BUTTON_CONTRAST, `${theme.id} at ${opacity}`);
+      }
+    }
+  }
+});
+
+test('known tinted parents permit modestly glassier buttons without reducing contrast', () => {
+  const normal = buttonSurface('#102921', '#77d8bd')!;
+  const density = buttonDensity(normal.minimum, .65 ** 8, .35);
+  const credit = buttonUnderlayCredit(normal, '#182126');
+  const tinted = tintedButtonDensity(density, .65, credit, .35);
+  assert.ok(tinted < density);
+  assert.ok(density - tinted <= BUTTON_TINT_DISCOUNT);
+  assert.ok(buttonContrast(normal.foreground, normal.background, tinted, { color: '#182126', opacity: .65 }) >= BUTTON_CONTRAST);
+  assert.equal(buttonUnderlayCredit(normal, 'unknown'), 0);
+  assert.equal(buttonUnderlayCredit(normal, '#18212600'), 0);
+  assert.ok(tintedButtonDensity(density, .65, 0, .35) >= density);
+  assert.equal(tintedButtonDensity(1, 1, 1, .35), 1);
+});
+
+test('all palettes retain contrast and monotonic composited density over tinted chrome/modal surfaces', () => {
+  for (const theme of [...BUILTIN_THEMES, ...CATALOG_THEMES.map(entry => entry.theme)]) {
+    const colors = themeProperties(theme);
+    const surfaces = [
+      [buttonSurface(colors['--vscode-button-foreground'], colors['--vscode-button-background'])!, .35],
+      [buttonSurface(colors['--vscode-button-secondaryForeground'], colors['--vscode-button-secondaryBackground'])!, .10],
+      [buttonSurface(colors['--vscode-editor-background'], colors['--vscode-errorForeground'])!, .45],
+    ] as const;
+    for (const color of [colors['--vscode-editor-background'], colors['--vscode-editorWidget-background']]) {
+      for (const [surface, role] of surfaces) {
+        for (const modal of [false, true]) {
+          const credit = buttonUnderlayCredit(surface, color);
+          let last = 0;
+          for (let step = 0; step <= 100; step++) {
+            const p = step / 100, endpoint = p ** 8;
+            const parent = modal ? .72 + .28 * endpoint : p;
+            const density = buttonDensity(surface.minimum, endpoint, role);
+            const tinted = tintedButtonDensity(density, parent, credit, role, endpoint);
+            assert.ok(tinted <= density + .000001, theme.id);
+            assert.ok(density - tinted <= BUTTON_TINT_DISCOUNT + .000001, theme.id);
+            assert.ok(buttonContrast(surface.foreground, surface.background, tinted, { color, opacity: parent }) >= BUTTON_CONTRAST, `${theme.id} at ${p}`);
+            const effective = parent + (1 - parent) * tinted;
+            assert.ok(effective >= last - .000001, `${theme.id} density at ${p}`); last = effective;
+          }
+          assert.equal(last, 1);
+        }
       }
     }
   }

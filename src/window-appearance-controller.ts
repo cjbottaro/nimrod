@@ -1,4 +1,4 @@
-import { buttonSurface, primaryButtonSurfaces, buttonDensity } from './button-surfaces';
+import { buttonSurface, primaryButtonSurfaces, buttonDensity, buttonUnderlayCredit, tintedButtonDensity } from './button-surfaces';
 import { appliedTheme, subscribeAppliedTheme } from './themes/applied-theme';
 import { installAppearanceEffects, type NativeAppearanceHost } from './window-appearance-effects';
 import { titlebarTint, windowSurfaceOpacities, type AppearanceCapabilities, type WindowAppearance } from './window-appearance';
@@ -28,6 +28,7 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
   let background = '';
   let primary: ReturnType<typeof buttonSurface>, hover: ReturnType<typeof buttonSurface>, danger: ReturnType<typeof buttonSurface>;
   let secondary: ReturnType<typeof buttonSurface>, secondaryHover: ReturnType<typeof buttonSurface>;
+  let credits: Record<string, Record<string, number>> = {};
   let paintSignature: string | undefined;
   const current = () => ({ ...host.read(), ...preview });
   const reduceTransparency = () => !!capabilities?.reducedTransparency || !!reduced?.matches;
@@ -42,6 +43,9 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
     const secondaryPair = primaryButtonSurfaces(color('button-secondaryForeground'), color('button-secondaryBackground'), color('button-secondaryHoverBackground'));
     secondary = secondaryPair.normal; secondaryHover = secondaryPair.hover;
     danger = buttonSurface(background, color('errorForeground'));
+    const roles = { button: primary, 'button-hover': hover, secondary, 'secondary-hover': secondaryHover, danger };
+    credits = Object.fromEntries([['sidebar', color('editorWidget-background')], ['project-bar', background], ['modal', color('editorWidget-background')]].map(([context, underlay]) =>
+      [context, Object.fromEntries(Object.entries(roles).map(([role, surface]) => [role, buttonUnderlayCredit(surface, underlay)]))]));
     for (const [role, surface] of [['primary', primary], ['primary-hover', hover], ['secondary', secondary], ['secondary-hover', secondaryHover], ['danger', danger]] as const) {
       for (const key of ['foreground', 'background'] as const) {
         const property = role === 'danger' ? `--nimrod-danger-${key === 'foreground' ? 'text' : 'fill'}` : `--nimrod-${role}-${key}`;
@@ -53,7 +57,7 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
     if (disposed) return;
     const value = current();
     const enabled = !!capabilities?.transparency && !reduceTransparency() && value.opacity < 100;
-    const signature = JSON.stringify([value, enabled, capabilities, !!reduced?.matches, primary, hover, secondary, secondaryHover, danger]);
+    const signature = JSON.stringify([value, enabled, capabilities, !!reduced?.matches, primary, hover, secondary, secondaryHover, danger, credits]);
     if (signature !== paintSignature) {
       paintSignature = signature;
       root.dataset.translucency = enabled ? value.area : 'off';
@@ -64,6 +68,8 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
         '--nimrod-secondary-opacity': buttonDensity(secondary?.minimum ?? 0, surfaces.endpoint, .10),
         '--nimrod-secondary-hover-opacity': buttonDensity(Math.max(secondary?.minimum ?? 0, secondaryHover?.minimum ?? 0), surfaces.endpoint, .30),
         '--nimrod-panel-overlay-opacity': surfaces.panel,
+        '--nimrod-modal-opacity': surfaces.modal,
+        '--nimrod-modal-backdrop-opacity': surfaces.modalBackdrop,
         '--nimrod-button-opacity': buttonDensity(primary?.minimum ?? 0, surfaces.endpoint, .35),
         '--nimrod-button-hover-opacity': buttonDensity(Math.max(primary?.minimum ?? 0, hover?.minimum ?? 0), surfaces.endpoint, .45),
         '--nimrod-state-opacity': surfaces.state,
@@ -71,6 +77,20 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
         '--nimrod-danger-opacity': buttonDensity(danger?.minimum ?? 0, surfaces.endpoint, .45),
         '--nimrod-notice-opacity': surfaces.notice,
       };
+      const densities = [
+        ['button', .35], ['button-hover', .45], ['secondary', .10], ['secondary-hover', .30], ['danger', .45],
+      ] as const;
+      for (const [context, roles] of Object.entries(credits)) {
+        const parentOpacity = context === 'modal' ? surfaces.modal : value.opacity / 100;
+        const contextual: Record<string, number> = {};
+        for (const [role, minimum] of densities) {
+          const density = properties[`--nimrod-${role}-opacity` as keyof typeof properties];
+          contextual[role] = tintedButtonDensity(density, parentOpacity, roles[role], minimum, surfaces.endpoint);
+        }
+        contextual['button-hover'] = Math.max(contextual.button, contextual['button-hover']);
+        contextual['secondary-hover'] = Math.max(contextual.secondary, contextual['secondary-hover']);
+        for (const [role, alpha] of Object.entries(contextual)) root.style.setProperty(`--nimrod-${context}-${role}-opacity`, `${Number((alpha * 100).toFixed(4))}%`);
+      }
       for (const [key, alpha] of Object.entries(properties)) root.style.setProperty(key, `${Number((alpha * 100).toFixed(4))}%`);
       if (controls) {
         controls.opacity.value = String(value.opacity);
