@@ -1,5 +1,27 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import { demoFixture, visible } from './demo-fixture';
+
+async function expectHeaderTypography(label: Locator) {
+  const typography = await label.evaluate(node => {
+    // .label retains the exact typography of the historical TOOL: BASH header.
+    const reference = document.createElement('div'); reference.className = 'label';
+    reference.textContent = node.textContent;
+    node.closest('.message')!.append(reference);
+    try {
+      const span = getComputedStyle(node), original = getComputedStyle(reference);
+      const properties = ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textTransform'] as const;
+      return {
+        fields: properties.map(property => ({ property, span: span[property], original: original[property] })),
+        family: span.fontFamily, uiFamily: getComputedStyle(document.documentElement).fontFamily,
+        size: parseFloat(span.fontSize), spacing: parseFloat(span.letterSpacing), transform: span.textTransform,
+      };
+    } finally { reference.remove(); }
+  });
+  for (const field of typography.fields) expect(field.span, field.property).toBe(field.original);
+  expect(typography.family).toBe(typography.uiFamily);
+  expect(typography.transform).toBe('uppercase');
+  expect(typography.spacing).toBeCloseTo(typography.size * 0.05, 3);
+}
 
 async function queuedStatus(page: Parameters<typeof demoFixture>[0]) {
   await page.evaluate(() => {
@@ -17,19 +39,11 @@ test('status shimmer sweeps left to right without changing text geometry and hon
   try {
     const label = await queuedStatus(page);
     await expect(label).toHaveCSS('animation-name', 'none');
-    const typography = await label.evaluate(node => {
-      const span = getComputedStyle(node), original = getComputedStyle(node.parentElement!);
-      const properties = ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing'] as const;
-      return {
-        fields: properties.map(property => ({ property, span: span[property], original: original[property] })),
-        family: span.fontFamily, uiFamily: getComputedStyle(document.documentElement).fontFamily,
-      };
-    });
-    for (const field of typography.fields) expect(field.span, field.property).toBe(field.original);
-    expect(typography.family).toBe(typography.uiFamily);
+    await expectHeaderTypography(label);
     expect(await label.evaluate(node => getComputedStyle(node).color)).not.toBe('rgba(0, 0, 0, 0)');
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await expect(label).toHaveCSS('animation-name', 'delivery-status-shimmer');
+    await expectHeaderTypography(label);
     const samples = await label.evaluate(node => {
       const animation = node.getAnimations()[0]; animation.pause();
       const sample = (time: number) => {
@@ -99,8 +113,7 @@ test('immediately acknowledged steering shimmers until the authoritative user ev
     const turn = page.locator(visible('messages')).locator('.message.user').filter({ hasText: 'Change course' });
     const label = turn.locator('.delivery-status-shimmer');
     await expect(label).toHaveText('Steering');
-    const family = await label.evaluate(node => ({ label: getComputedStyle(node).fontFamily, ui: getComputedStyle(document.documentElement).fontFamily }));
-    expect(family.label).toBe(family.ui);
+    await expectHeaderTypography(label);
     await expect(turn).not.toHaveClass(/sticky-turn/);
     await label.evaluate(node => { (node as HTMLElement).dataset.testIdentity = 'same-steering-label'; });
     await prompt.fill('Newer draft');
