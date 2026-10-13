@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
-import { DEFAULT_WINDOW_APPEARANCE, installWindowAppearance, readWindowAppearance, windowSurfaceOpacities, type AppearanceCapabilities, type WindowAppearance } from '../src/window-appearance';
+import { DEFAULT_WINDOW_APPEARANCE, installWindowAppearance, readWindowAppearance, windowSurfaceOpacities, titlebarTint, type TitlebarTint, type AppearanceCapabilities, type WindowAppearance } from '../src/window-appearance';
 
 const mac: AppearanceCapabilities = { platform: 'macos', transparency: true, frost: true, reducedTransparency: false };
 const linux: AppearanceCapabilities = { platform: 'linux', transparency: true, frost: false, reducedTransparency: false };
 const tick = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
-function fixture(support = mac, initial: Partial<WindowAppearance> = {}) {
+function fixture(support = mac, initial: Partial<WindowAppearance> = {}, tintTitlebar?: (color: TitlebarTint) => Promise<void>) {
   const dom = new JSDOM('<input id="opacity" type="range" min="0" max="100"><output></output><select><option value="window">Whole window</option><option value="chrome">Sidebar and Project bar</option></select><div id="frost"><input type="checkbox"></div><p></p><textarea>draft</textarea><details open>Retained card</details>', { pretendToBeVisual: true });
   const window = dom.window as unknown as Window;
   const root = dom.window.document.documentElement;
@@ -26,6 +26,7 @@ function fixture(support = mac, initial: Partial<WindowAppearance> = {}) {
     read: () => value,
     save: patch => { saves.push(patch); return save(patch); },
     capabilities: async () => support,
+    tintTitlebar,
     apply: (frosted, dark) => { effects.push({ frosted, dark }); return apply(frosted, dark); },
     report: (message, cause) => reports.push({ message, cause }),
   }, controls);
@@ -45,6 +46,52 @@ test('appearance schema uses opaque defaults and rejects invalid values includin
     'appearance.translucencyArea': ['whole', 'sidebar', true, null],
   })) for (const value of values) assert.throws(() => readWindowAppearance({ [key]: value }));
   assert.equal(readWindowAppearance({ 'appearance.backgroundOpacity': 0 }).opacity, 0);
+});
+
+test('native title tint follows bounded hex theme colors and background opacity', () => {
+  assert.deepEqual(titlebarTint('#123456', 50), [18, 52, 86, 128]);
+  assert.deepEqual(titlebarTint('#abc', 100), [170, 187, 204, 255]);
+  assert.deepEqual(titlebarTint('#abcd', 50), [170, 187, 204, 111]);
+  assert.deepEqual(titlebarTint('#11223380', 50), [17, 34, 51, 64]);
+  assert.equal(titlebarTint('red', 100), undefined); assert.equal(titlebarTint('#12', 100), undefined);
+});
+
+test('initial readiness waits for native tint and coalesces same-mode palette changes without reinstalling blur', async () => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const tints: TitlebarTint[] = [];
+  const f = fixture(mac, { opacity: 50, frosted: false }, color => {
+    tints.push(color); return tints.length === 1 ? gate : Promise.resolve();
+  });
+  try {
+    f.root.style.setProperty('--vscode-editor-background', '#123456');
+    let ready = false; void f.controller.ready.then(() => { ready = true; });
+    await tick(); assert.equal(ready, false); assert.deepEqual(tints[0], [18, 52, 86, 128]);
+    f.root.style.setProperty('--vscode-editor-background', '#334455'); await tick();
+    assert.equal(tints.length, 1); release(); await f.controller.ready;
+    assert.deepEqual(tints.at(-1), [51, 68, 85, 128]); assert.equal(f.effects.length, 1);
+    assert.deepEqual(f.effects[0], { frosted: false, dark: true });
+    const before = tints.length;
+    for (let i = 0; i < 200; i++) f.controller.reload();
+    await tick(); assert.equal(tints.length, before); assert.equal(f.effects.length, 1);
+    f.external({ opacity: 100 }); await tick(); assert.equal(tints.at(-1)![3], 255);
+  } finally { release(); f.close(); }
+});
+
+test('a same-colour appearance change cannot be hidden by an older title-tint reply', async () => {
+  let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
+  const tints: TitlebarTint[] = [];
+  const f = fixture(mac, { opacity: 50, frosted: false }, color => {
+    tints.push(color); return tints.length === 1 ? gate : Promise.resolve();
+  });
+  try {
+    f.root.style.setProperty('--vscode-editor-background', '#123456'); await tick();
+    assert.equal(tints.length, 1);
+    f.root.dataset.themeMode = 'light'; await tick();
+    assert.deepEqual(f.effects.at(-1), { frosted: false, dark: false });
+    release(); await f.controller.ready;
+    assert.equal(tints.length, 2); assert.deepEqual(tints[0], tints[1]);
+  } finally { release(); f.close(); }
 });
 
 test('surface density is continuous, role-ordered and converges exactly to the opaque endpoint', () => {

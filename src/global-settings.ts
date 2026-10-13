@@ -8,6 +8,17 @@ import { installKeybindingDispatch } from './keybindings';
 
 /** Deliberately separate boot: global Settings never mounts session controllers. */
 export async function mountGlobalSettings() {
+  let unloading = false, revealAttempted = false;
+  let appearanceReady = Promise.resolve();
+  window.addEventListener('unload', () => { unloading = true; }, { once: true });
+  const reveal = async () => {
+    if (unloading || revealAttempted) return;
+    revealAttempted = true;
+    // Flush prepared style/layout, not a hidden-webview rAF/timer gate (which
+    // may be throttled). Native presentation follows completed initial IPC.
+    document.getElementById('settings-page')!.getBoundingClientRect();
+    await invoke('settings_window_ready', { generation: new URLSearchParams(location.search).get('settingsGeneration') ?? '' });
+  };
   for (const id of ['workspace-bar', 'workspace-layout']) document.getElementById(id)!.hidden = true;
   const notices = installApplicationNotices(window);
   const report = (message?: string) => {
@@ -16,6 +27,7 @@ export async function mountGlobalSettings() {
   try {
     const preferences = await installNativePreferences(report);
     const surface = installSettingsSurface(preferences, notices, true);
+    appearanceReady = surface.ready;
     const section = document.createElement('section'); section.className = 'settings-project-overrides';
     const heading = document.createElement('h2'); heading.textContent = 'Open projects with overrides';
     const description = document.createElement('p'); description.className = 'settings-hint'; description.textContent = 'These projects keep their explicit values when global defaults change.';
@@ -67,6 +79,18 @@ export async function mountGlobalSettings() {
       error: error => notices.report({ id: 'settings-action', operation: 'Settings action', message: String(error) }),
     });
     window.addEventListener('unload', () => { disposed = true; ++generation; unsubscribeProjects(); unlistenFocus(); dispatch.dispose(); unlisten(); surface.dispose(); preferences.dispose(); notices.dispose(); }, { once: true });
-    surface.initializeRuntime(await invoke<{ pi: string; node: string }>('runtime_defaults'));
-  } catch (error) { report(`Could not open Settings: ${String(error)}`); }
+    await surface.settled();
+    if (disposed || unloading) return;
+    await reveal();
+    if (disposed || unloading) return;
+    // PATH/mise discovery can take seconds; do not gate first presentation on it.
+    void invoke<{ pi: string; node: string }>('runtime_defaults').then(defaults => {
+      if (!disposed && !unloading) surface.initializeRuntime(defaults);
+    }).catch(error => { if (!disposed && !unloading) notices.report({ id: 'runtime-defaults', operation: 'Detect runtime paths', message: String(error) }); });
+  } catch (error) {
+    if (unloading) return;
+    report(`Could not open Settings: ${String(error)}`);
+    // Startup errors must be readable, not leave a permanently hidden singleton.
+    try { await appearanceReady; await reveal(); } catch (error) { if (!unloading) report(`Could not show Settings: ${String(error)}`); }
+  }
 }

@@ -51,6 +51,7 @@ Resume and other saved-history actions live in the command palette, not a sideba
 
 | Term | Meaning | Code anchor |
 | --- | --- | --- |
+| **Native title bar** | OS-owned window title/control strip (macOS traffic lights), distinct from the Project bar | Native window frame |
 | **Project bar** | Top project identity/action strip | `#workspace-bar` |
 | **Session sidebar** | Collapsible open-session navigation | `#session-sidebar` |
 | **Global Settings window** | Singleton app-owned window for global defaults and global-only preferences | Native `settings` window |

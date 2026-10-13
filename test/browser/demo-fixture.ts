@@ -68,6 +68,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
   }
   const host = async (command: string, args: JsonRecord) => {
     calls.push({ command, args });
+    if (command === 'tint_window_titlebar' || command === 'settings_window_ready') return;
     if (command === 'window_appearance_capabilities' || command === 'apply_window_appearance') return { platform: 'macos', transparency: true, frost: true, reducedTransparency: false };
     if (command === 'drafts_load') return [...nativeDrafts.values()];
     if (command === 'drafts_stage') { const record = args.record as { key: string; value: unknown; revision: number }; nativeDrafts.set(record.key, record); return; }

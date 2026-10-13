@@ -8,6 +8,14 @@ pub struct SettingsWindow {
     creation: std::sync::Mutex<()>,
     projects: std::sync::Mutex<std::collections::HashSet<String>>,
     keybindings_requested: std::sync::Mutex<bool>,
+    ready: std::sync::atomic::AtomicBool,
+    generation: std::sync::Mutex<Option<String>>,
+}
+
+pub fn is_ready(app: &tauri::AppHandle) -> bool {
+    app.state::<SettingsWindow>()
+        .ready
+        .load(std::sync::atomic::Ordering::SeqCst)
 }
 
 pub fn open(app: &tauri::AppHandle, category: Option<&str>) -> Result<(), String> {
@@ -29,7 +37,9 @@ pub fn open(app: &tauri::AppHandle, category: Option<&str>) -> Result<(), String
         *state.keybindings_requested.lock().unwrap() = true;
     }
     if let Some(window) = app.get_webview_window(LABEL) {
-        crate::workspace_windows::focus_window(app, &window)?;
+        if state.ready.load(std::sync::atomic::Ordering::SeqCst) {
+            crate::workspace_windows::focus_window(app, &window)?;
+        }
         if category == "keybindings" {
             use tauri::Emitter;
             window
@@ -40,18 +50,60 @@ pub fn open(app: &tauri::AppHandle, category: Option<&str>) -> Result<(), String
     }
     // A failed/closed earlier window must not leave a stale category request.
     *state.keybindings_requested.lock().unwrap() = category == "keybindings";
+    let generation = uuid::Uuid::new_v4().to_string();
+    *state.generation.lock().unwrap() = Some(generation.clone());
     let builder = tauri::WebviewWindowBuilder::new(
         app,
         LABEL,
-        tauri::WebviewUrl::App(format!("index.html?settings={category}").into()),
+        tauri::WebviewUrl::App(
+            format!("index.html?settings={category}&settingsGeneration={generation}").into(),
+        ),
     );
-    let window = crate::webview_navigation::guard(builder, app, LABEL)
+    state
+        .ready
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+    crate::webview_navigation::guard(builder, app, LABEL)
+        .visible(false)
+        .focused(false)
         .title("Nimrod Settings")
         .inner_size(880.0, 700.0)
         .min_inner_size(560.0, 420.0)
         .build()
         .map_err(|error| error.to_string())?;
-    crate::workspace_windows::focus_window(app, &window)
+    Ok(())
+}
+
+/// Only the freshly mounted global Settings frontend can complete first reveal.
+/// Repeated calls never refocus; ordinary opens focus an already-ready window.
+#[tauri::command]
+pub fn settings_window_ready(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    generation: String,
+) -> Result<(), String> {
+    if window.label() != LABEL {
+        return Err("Only the Settings window can finish Settings startup".into());
+    }
+    if app
+        .state::<crate::ExitState>()
+        .closing
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        return Err("Nimrod is shutting down".into());
+    }
+    let state = app.state::<SettingsWindow>();
+    let _guard = state.creation.lock().unwrap();
+    if !accept_ready(&state, &generation)? {
+        return Ok(());
+    }
+    crate::workspace_windows::focus_window(&app, &window)
+}
+
+fn accept_ready(state: &SettingsWindow, generation: &str) -> Result<bool, String> {
+    if state.generation.lock().unwrap().as_deref() != Some(generation) {
+        return Err("Settings startup belongs to a closed window".into());
+    }
+    Ok(!state.ready.swap(true, std::sync::atomic::Ordering::SeqCst))
 }
 
 pub fn open_project(app: &tauri::AppHandle, label: &str) -> Result<(), String> {
@@ -108,4 +160,34 @@ pub fn take_settings_category(app: tauri::AppHandle, window: tauri::Window) -> b
 #[tauri::command]
 pub fn open_global_settings(app: tauri::AppHandle, category: Option<String>) -> Result<(), String> {
     open(&app, category.as_deref())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn readiness_is_generation_scoped_idempotent_and_rejects_late_old_windows() {
+        let state = SettingsWindow::default();
+        *state.generation.lock().unwrap() = Some("first".into());
+        assert!(accept_ready(&state, "old").is_err());
+        assert!(!state.ready.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(accept_ready(&state, "first").unwrap());
+        assert!(!accept_ready(&state, "first").unwrap());
+        *state.generation.lock().unwrap() = Some("second".into());
+        state.ready.store(false, std::sync::atomic::Ordering::SeqCst);
+        assert!(accept_ready(&state, "first").is_err());
+        assert!(!state.ready.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(accept_ready(&state, "second").unwrap());
+    }
+
+    #[test]
+    fn new_settings_is_hidden_until_its_own_frontend_ready_signal() {
+        let source = include_str!("settings_window.rs");
+        let implementation = source.split("#[cfg(test)]").next().unwrap();
+        assert!(implementation.contains(".visible(false)"));
+        assert!(implementation.contains(".focused(false)"));
+        assert!(implementation.contains("settingsGeneration={generation}"));
+        assert!(implementation.contains("window.label() != LABEL"));
+    }
 }
