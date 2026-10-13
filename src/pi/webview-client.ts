@@ -369,7 +369,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     node.classList.toggle('queued-turn', message.queued === true);
     node.classList.toggle('sticky-turn', message.sticky === true);
     const pending = message.steeringStatus === 'sending' || message.steeringStatus === 'pending';
-    const showSteering = message.steering && message.steeringStatus === 'sending';
+    const showSteering = message.steering && pending;
     if (!message.steeringStatus || (pending && !message.queued && !showSteering)) { label?.remove(); return; }
     if (!label) {
       label = element("div", "steering-status");
@@ -377,7 +377,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       node.prepend(label);
     }
     const text = label.firstElementChild as HTMLElement;
-    const status = pending ? message.queued ? 'Queued…' : 'Steering…' : steeringStatusLabel(message.steeringStatus);
+    const status = pending ? message.queued ? 'Queued' : 'Steering' : steeringStatusLabel(message.steeringStatus);
     if (text.textContent !== status) text.textContent = status;
     text.classList.toggle('delivery-status-shimmer', pending);
     node.setAttribute("aria-label", `User message: ${status}`);

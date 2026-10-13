@@ -70,7 +70,7 @@ for (const readingHistory of [false, true]) test(`steering reconciles without du
     const turn = page.locator(visible('messages')).locator('.message.user').filter({ hasText: 'Change direction now' });
     await expect(turn).toHaveCount(1);
     const label = turn.locator('.delivery-status-shimmer');
-    await expect(label).toHaveText('Steering…');
+    await expect(label).toHaveText('Steering');
     const position = await label.evaluate(node => getComputedStyle(node).backgroundPositionX);
     await expect.poll(() => label.evaluate(node => getComputedStyle(node).backgroundPositionX)).not.toBe(position);
     await turn.evaluate(node => { (node as HTMLElement).dataset.testIdentity = 'pending-steer'; });
@@ -79,7 +79,6 @@ for (const readingHistory of [false, true]) test(`steering reconciles without du
     if (readingHistory) expect(Math.abs((await demo.metrics()).top - readingTop)).toBeLessThanOrEqual(2);
     else await expect.poll(async () => (await demo.metrics()).gap).toBeLessThanOrEqual(2);
     await page.evaluate(() => (window as unknown as { __releaseSteer: () => void }).__releaseSteer());
-    await expect(turn.locator('.steering-status')).toHaveCount(0);
     await expect(turn).toHaveAttribute('data-test-identity', 'pending-steer');
     await page.waitForFunction(() => (window as unknown as { __fixtureSettled: number }).__fixtureSettled >= 3);
     await expect(turn).toHaveCount(1);

@@ -22,7 +22,7 @@ interface PendingSteering {
 }
 
 export const steeringStatusLabel = (status: SteeringStatus): string => ({
-  sending: 'Steering…', pending: 'Steering…', unknown: 'Acceptance unknown',
+  sending: 'Steering', pending: 'Steering', unknown: 'Acceptance unknown',
   interrupted: 'Delivery unconfirmed', rejected: 'Not sent', cancelled: 'Cancelled',
 })[status];
 
@@ -81,7 +81,7 @@ export class SteeringTranscript {
       for (const text of texts) {
         let entry = this.pending.find(item => !matched.has(item) && eligible(item) && item.kind === kind && sameText(item.text, text));
         if (!entry) {
-          entry = { key: `steering:queue-${++this.nextKey}`, text, status: 'pending', kind };
+          entry = { key: `steering:queue-${++this.nextKey}`, text, status: 'pending', kind, steering: kind === 'steering' };
           this.pending.push(entry);
         }
         matched.add(entry);

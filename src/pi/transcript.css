@@ -36,7 +36,7 @@ button { color:var(--vscode-button-foreground); background:var(--vscode-button-b
 .transcript-image { margin:8px 0; }
 .transcript-image img { display:block; max-width:100%; max-height:360px; width:auto; height:auto; border-radius:6px; }
 .steering-status { font-size:.78em; color:var(--vscode-descriptionForeground); margin-bottom:6px; }
-.delivery-status-text { display:inline-block; }
+.delivery-status-text { display:inline-block; font:inherit; }
 @supports (background-clip: text) or (-webkit-background-clip: text) {
   .delivery-status-shimmer { color:transparent; background:linear-gradient(90deg, var(--vscode-descriptionForeground) 35%, var(--vscode-foreground) 50%, var(--vscode-descriptionForeground) 65%); background-size:300% 100%; background-clip:text; -webkit-background-clip:text; animation:delivery-status-shimmer 2.4s linear infinite; }
 }

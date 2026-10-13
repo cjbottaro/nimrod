@@ -66,7 +66,7 @@ for (const readingHistory of [false, true]) test(`queued turns pin and reconcile
     const first = messages.locator('.message.user').filter({ hasText: 'Queued first' });
     const second = messages.locator('.message.user').filter({ hasText: 'Queued second' });
     await expect(messages.locator('.queued-turns .message')).toHaveCount(2);
-    await expect(first.locator('.steering-status')).toHaveText('Queued…');
+    await expect(first.locator('.steering-status')).toHaveText('Queued');
     const label = first.locator('.delivery-status-shimmer');
     const position = await label.evaluate(node => getComputedStyle(node).backgroundPositionX);
     await expect.poll(() => label.evaluate(node => getComputedStyle(node).backgroundPositionX)).not.toBe(position);

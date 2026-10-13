@@ -465,7 +465,7 @@ test('steering appears before acknowledgement, remains after live output, and re
     const submission = f.sent.find(m => m.type === 'prompt')!;
     const pending = f.win.document.querySelector<HTMLElement>('#messages .user')!;
     const label = pending.querySelector('.delivery-status-shimmer')!;
-    assert.equal(label.textContent, 'Steering…');
+    assert.equal(label.textContent, 'Steering');
     assert.equal(pending.querySelector('strong')?.textContent, 'change direction');
     assert.equal(f.prompt.value, '');
     assert.equal(f.win.document.activeElement, f.prompt);
@@ -478,9 +478,11 @@ test('steering appears before acknowledgement, remains after live output, and re
     f.draft('new draft');
     f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' }); f.flush();
     assert.equal(f.prompt.value, 'new draft');
-    assert.equal(pending.querySelector('.steering-status'), null);
+    assert.equal(pending.querySelector('.delivery-status-shimmer'), label, 'acceptance does not settle steering');
     f.snapshot({ busy: true, messages: [assistant, { key: 'tool', role: 'tool', toolCallId: 't', toolName: 'bash', toolStatus: 'running' }], queue: { authoritative: true, steering: [], followUp: [] } });
     assert.equal(f.win.document.querySelector('#messages')!.lastElementChild?.previousElementSibling, pending);
+    assert.equal(pending.querySelector('.delivery-status-shimmer'), label, 'dequeue does not settle steering');
+    assert.equal(pending.closest('.queued-turns'), null);
     f.snapshot({ busy: true, messages: [assistant, { key: 'user', role: 'user', content: [{ type: 'text', text: submission.text }] }] });
     assert.equal(f.win.document.querySelector('#messages .user'), pending);
     assert.equal(pending.querySelector('.steering-status'), null);
@@ -490,26 +492,29 @@ test('steering appears before acknowledgement, remains after live output, and re
   } finally { f.dom.window.close(); }
 });
 
-for (const eventFirst of [false, true]) test(`steering status is removed by ${eventFirst ? 'user event before receipt' : 'acceptance before consumption'} without replacing the turn`, () => {
+for (const eventFirst of [false, true]) test(`steering status is removed only by consumption with ${eventFirst ? 'user event before receipt' : 'receipt before user event'} without replacing the turn`, () => {
   const f = fixture();
   try {
     f.snapshot({ busy: true, messages: [] });
     f.draft('change course'); f.send(); f.flush();
     const submission = f.sent.find(m => m.type === 'prompt')!;
     const turn = f.win.document.querySelector('#messages .user')!;
-    assert.equal(turn.querySelector('.delivery-status-shimmer')?.textContent, 'Steering…');
+    assert.equal(turn.querySelector('.delivery-status-shimmer')?.textContent, 'Steering');
     f.draft('newer draft');
     const actual = { key: 'actual', role: 'user', content: 'change course' };
     if (eventFirst) f.snapshot({ busy: true, messages: [actual] });
     f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' }); f.flush();
+    if (!eventFirst) {
+      assert.equal(turn.querySelector('.delivery-status-shimmer')?.textContent, 'Steering');
+      f.snapshot({ busy: true, messages: [actual] });
+    }
     assert.equal(turn.querySelector('.steering-status'), null);
-    if (!eventFirst) f.snapshot({ busy: true, messages: [actual] });
     assert.equal(f.win.document.querySelector('#messages .user'), turn);
     assert.equal(f.prompt.value, 'newer draft');
   } finally { f.dom.window.close(); }
 });
 
-test('steering status shimmers only after local image preparation and stops on acceptance', async () => {
+test('steering status shimmers after local image preparation through acceptance until consumption', async () => {
   const f = fixture({ images: true });
   try {
     f.snapshot({ busy: true, messages: [] });
@@ -521,10 +526,29 @@ test('steering status shimmers only after local image preparation and stops on a
     assert.ok(submission);
     const turn = f.win.document.querySelector('#messages .user')!;
     assert.ok(turn.querySelector('.transcript-image'));
-    assert.equal(turn.querySelector('.delivery-status-shimmer')?.textContent, 'Steering…');
+    assert.equal(turn.querySelector('.delivery-status-shimmer')?.textContent, 'Steering');
+    const label = turn.querySelector('.delivery-status-shimmer');
     f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' }); f.flush();
+    assert.equal(turn.querySelector('.delivery-status-shimmer'), label);
+    f.snapshot({ busy: true, messages: [{ key: 'actual-image-steer', role: 'user', content: [{ type: 'text', text: 'caption' }, ...(submission.images as object[])] }] });
     assert.equal(turn.querySelector('.steering-status'), null);
     assert.equal(f.win.document.querySelector('#messages .user'), turn);
+  } finally { f.dom.window.close(); }
+});
+
+test('authoritative steering queue entries shimmer until consumed, without becoming sticky', () => {
+  const f = fixture();
+  try {
+    f.snapshot({ busy: true, messages: [], queue: { authoritative: true, steering: ['queued steer'], followUp: [] } });
+    const turn = f.win.document.querySelector('#messages .user')!;
+    const label = turn.querySelector('.delivery-status-shimmer');
+    assert.equal(label?.textContent, 'Steering');
+    assert.equal(turn.closest('.queued-turns'), null);
+    f.snapshot({ busy: true, messages: [], queue: { authoritative: true, steering: [], followUp: [] } });
+    assert.equal(turn.querySelector('.delivery-status-shimmer'), label);
+    f.snapshot({ busy: true, messages: [{ key: 'actual', role: 'user', content: 'queued steer' }] });
+    assert.equal(f.win.document.querySelector('#messages .user'), turn);
+    assert.equal(turn.querySelector('.steering-status'), null);
   } finally { f.dom.window.close(); }
 });
 
@@ -574,10 +598,10 @@ test('follow-ups stay pinned through acceptance and dequeue, then reconcile in p
     assert.equal(submission.mode, 'followUp');
     const pending = f.win.document.querySelector('#messages .user')!;
     assert.ok(pending.closest('.queued-turns'));
-    assert.match(pending.textContent!, /Queued….*Later/);
+    assert.match(pending.textContent!, /Queued.*Later/);
     const label = pending.querySelector('.delivery-status-shimmer')!;
     f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' }); f.flush();
-    assert.match(pending.textContent!, /Queued….*Later/);
+    assert.match(pending.textContent!, /Queued.*Later/);
     assert.equal(pending.querySelector('.delivery-status-shimmer'), label, 'receipt retains the same label/animation');
     f.snapshot({ busy: true, messages: [], queue: { authoritative: true, steering: [], followUp: ['Later'] } });
     assert.equal(f.win.document.querySelectorAll('#messages .user').length, 1);
