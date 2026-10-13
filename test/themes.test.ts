@@ -6,6 +6,7 @@ import { applyTheme, COLOR_KEYS, importTheme, isColor, MAX_THEME_BYTES, readLibr
 import { BUILTIN_THEMES, DRACULA, OSAKA_JADE, TOKYO_NIGHT, selectedTheme } from '../src/themes/builtins';
 import { BUILTIN_THEME_IDS } from '../src/themes/theme';
 import { installThemes } from '../src/themes/picker';
+import { appliedTheme, subscribeAppliedTheme } from '../src/themes/applied-theme';
 import { webviewHtml, rendererBundle } from './view-fixture';
 
 const minimal = { name: 'Sample', colors: { 'editor.background': '#112233', 'editor.foreground': '#eeddcc' } };
@@ -99,6 +100,26 @@ test('maps broad token scopes with specificity, while ignoring language-context 
 
 test('caps raw theme byte size before parsing', () => {
   assert.throws(() => importTheme(' '.repeat(MAX_THEME_BYTES + 1), 'big.json', 'import-test'), /512 KiB/);
+});
+
+test('theme application explicitly publishes its completed window-local presentation snapshot', () => {
+  const a = new JSDOM(''), b = new JSDOM('');
+  const root = a.window.document.documentElement, other = b.window.document.documentElement;
+  const seen: string[] = [];
+  const stop = subscribeAppliedTheme(root, theme => {
+    assert.equal(root.dataset.theme, theme.id);
+    assert.equal(root.dataset.themeMode ?? null, theme.mode);
+    assert.equal(root.style.getPropertyValue('--vscode-editor-background') || undefined, theme.background);
+    seen.push(theme.id);
+  });
+  try {
+    applyTheme(root, DRACULA); applyTheme(other, TOKYO_NIGHT);
+    assert.deepEqual(seen, ['dracula']); assert.equal(appliedTheme(other).id, 'tokyo-night');
+    applyTheme(root, OSAKA_JADE); applyTheme(root);
+    assert.deepEqual(seen, ['dracula', 'osaka-jade', 'nimrod']);
+    assert.equal(appliedTheme(root).mode, null); stop(); applyTheme(root, DRACULA);
+    assert.equal(seen.length, 3);
+  } finally { stop(); a.window.close(); b.window.close(); }
 });
 
 test('theme selection clears every previous override and preserves unrelated root styles', () => {

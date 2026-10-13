@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { installWindowAppearance, type AppearanceCapabilities, type AppearanceControls, type AppearanceHost } from './window-appearance';
+import type { AppearanceCapabilities } from './window-appearance';
+import { installWindowAppearance, type AppearanceControls, type AppearanceHost } from './window-appearance-controller';
 import './window-appearance.css';
 
 /** A narrow native boundary shared by project, Settings and reference windows. */

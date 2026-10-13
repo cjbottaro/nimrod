@@ -26,6 +26,9 @@ mod settings_window;
 mod single_instance;
 mod webview_navigation;
 mod window_appearance;
+mod window_presentation;
+#[cfg(target_os = "macos")]
+mod macos_window_appearance;
 mod window_state;
 mod workspace_windows;
 mod workspaces;

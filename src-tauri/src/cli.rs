@@ -103,7 +103,7 @@ impl CliRequests {
                     Request::Workspace(path) => {
                         crate::workspace_windows::route_workspace(&app, None, path).map(|_| ())
                     }
-                    Request::Focus => crate::workspace_windows::focus_existing(&app),
+                    Request::Focus => crate::window_presentation::focus_existing(&app),
                     Request::Help => Ok(()),
                     Request::Error(error) => Err(error),
                 };

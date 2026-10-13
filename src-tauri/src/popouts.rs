@@ -182,7 +182,7 @@ async fn create_window(app: &tauri::AppHandle, id: &str, entry: PopoutEntry) -> 
         label(id),
         tauri::WebviewUrl::App("index.html?popout".into()),
     );
-    let result = crate::webview_navigation::guard(builder, app, &label(id))
+    let result = crate::window_presentation::prepare(builder, app, &label(id))
         .title("Nimrod") // The rendered pop-out sets its content-derived title.
         .inner_size(720.0, 540.0)
         .min_inner_size(320.0, 220.0)
@@ -628,9 +628,7 @@ pub async fn open_code_popout(
     if state.visible(window.label(), &binding.runtime_id)
         && let Some(popout) = app.get_webview_window(&label(&id))
     {
-        popout.show().map_err(|e| e.to_string())?;
-        popout.unminimize().map_err(|e| e.to_string())?;
-        popout.set_focus().map_err(|e| e.to_string())?;
+        crate::window_presentation::focus_reference(&popout)?;
     }
     Ok(())
 }

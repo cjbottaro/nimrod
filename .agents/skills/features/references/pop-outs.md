@@ -288,7 +288,7 @@ keybinding or make references permanently non-focusable.
   stay authoritative. Windows/Linux use the existing show API plus guards; their
   native focus behavior remains unverified.
 
-**Explicit click:** keep `show()` → `unminimize()` → `set_focus()`.
+**Explicit click:** keep `show()` → `unminimize()` → `set_focus()` through `window_presentation::focus_reference`, without adding app activation. [Window presentation](window-presentation.md) owns the shared native sequence; this feature still owns reference eligibility and passive restore.
 
 The pop-out must remain focusable/selectable when the user deliberately chooses it.
 Its `popout-*` capability allows clipboard writes, native zoom, title changes and

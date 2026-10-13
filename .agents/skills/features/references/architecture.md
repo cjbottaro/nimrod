@@ -18,6 +18,7 @@ Pi is the only implemented harness. Integrate a concrete second harness before i
 | Transcript/composer | Incremental presentation and user intent | [Cards](transcript-cards.md), [scroll/focus](transcript-interaction.md), [composer](composer.md) |
 | Rust host | Window/token ownership, pipes, shutdown and file validation | [Projects/sessions](projects-and-sessions.md), [Pi transport](pi-transport.md) |
 | Settings/state | JSONC preferences and separate app-managed bookkeeping | [Preferences](preferences.md) |
+| Window presentation | Shared creation/focus composition, explicit theme snapshots, appearance pipeline and prepared-window lifetime | [Window presentation](window-presentation.md) |
 | Native integrations | Startup, references and notifications | [Startup](single-instance.md), [pop-outs](pop-outs.md), [notifications](notifications.md) |
 
 There is no extra Node backend; Pi itself requires Node. The reducer and request correlation remain TypeScript so response snapshots apply synchronously in the ordered channel before later events. Rust validates the outer framing/record, TypeScript validates relevant Pi payload content. Small TS/Rust launch/packet shapes are hand-maintained; Pi's open-ended payload remains JSON.
@@ -41,6 +42,10 @@ Pi remains authoritative for history, queue consumption, configuration, identity
 - Preferences and bookkeeping are separate from Pi history and scoped draft storage.
 - RPC results and background delivery/completion never navigate themselves. Explicit user navigation can connect a saved session without sending a prompt.
 - Platform direction is macOS first, Linux next, Windows possibly later. Narrow native integrations must not turn macOS conventions into portable product requirements. See [verification](verification.md) for actual acceptance.
+
+## Window presentation choke points
+
+[Window presentation](window-presentation.md) owns change routing and implementation boundaries. Every native constructor composes appearance and navigation through `window_presentation::prepare`; navigation security does not own styling. Explicit user focus is centralized separately from passive reference restoration. `applyTheme` publishes a completed, root-local appearance snapshot instead of having native presentation infer palette changes from DOM mutations. A single typed native pipeline serializes appearance/title work; a prepared-window lifetime owner handles first reveal/cancellation/cleanup. Feature owners retain their concrete project/session/Settings identity and lifecycle—this is not a generic harness abstraction or a single catch-all UI controller.
 
 ## Source provenance
 

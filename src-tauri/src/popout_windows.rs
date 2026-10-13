@@ -174,7 +174,9 @@ mod tests {
             .split("pub fn notify_error")
             .next()
             .unwrap();
-        assert!(explicit.contains("popout.show()"));
-        assert!(explicit.contains("popout.set_focus()"));
+        assert!(explicit.contains("window_presentation::focus_reference(&popout)"));
+        let presentation = include_str!("window_presentation.rs");
+        assert!(presentation.contains("window.show()"));
+        assert!(presentation.contains("window.set_focus()"));
     }
 }

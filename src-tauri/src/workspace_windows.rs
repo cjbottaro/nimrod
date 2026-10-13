@@ -115,7 +115,7 @@ pub fn open_initial_window(app: &tauri::AppHandle, cwd: Option<PathBuf>) -> Resu
             .ok_or("Missing welcome window configuration")?;
         let builder =
             tauri::WebviewWindowBuilder::from_config(app, config).map_err(|e| e.to_string())?;
-        let window = crate::webview_navigation::guard(builder, app, "main")
+        let window = crate::window_presentation::prepare(builder, app, "main")
             .build()
             .map_err(|e| e.to_string())?;
         crate::window_state::restore(&window, None);
@@ -150,7 +150,7 @@ pub fn route_workspace(
     let mut directories = workspaces.directories.lock().unwrap();
     if let Some((label, _)) = directories.iter().find(|(_, directory)| **directory == cwd) {
         if let Some(existing) = app.get_webview_window(label) {
-            focus_window(app, &existing)?;
+            crate::window_presentation::focus(app, &existing)?;
             return Ok(WorkspaceOpened {
                 cwd,
                 current: Some(label.as_str()) == source,
@@ -174,7 +174,7 @@ pub fn route_workspace(
     directories.insert(label.clone(), cwd.clone());
     let builder =
         tauri::WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App("index.html".into()));
-    let result = crate::webview_navigation::guard(builder, app, &label)
+    let result = crate::window_presentation::prepare(builder, app, &label)
         .title(format!("Nimrod — {}", cwd.display()))
         .inner_size(1100.0, 800.0)
         .min_inner_size(560.0, 420.0)
@@ -187,50 +187,11 @@ pub fn route_workspace(
         }
     };
     crate::window_state::restore(&window, Some(&cwd));
-    focus_window(app, &window)?;
+    crate::window_presentation::focus(app, &window)?;
     Ok(WorkspaceOpened {
         cwd,
         current: false,
     })
-}
-
-pub(crate) fn focus_window(
-    app: &tauri::AppHandle,
-    window: &tauri::WebviewWindow,
-) -> Result<(), String> {
-    // Cold Settings must not be revealed by generic app/CLI focus routing.
-    if window.label() == crate::settings_window::LABEL && !crate::settings_window::is_ready(app) {
-        return Ok(());
-    }
-    #[cfg(target_os = "macos")]
-    app.show().map_err(|e| e.to_string())?;
-    #[cfg(not(target_os = "macos"))]
-    let _ = app;
-    window.show().map_err(|e| e.to_string())?;
-    window.unminimize().map_err(|e| e.to_string())?;
-    window.set_focus().map_err(|e| e.to_string())
-}
-
-pub fn focus_existing(app: &tauri::AppHandle) -> Result<(), String> {
-    if app
-        .state::<crate::ExitState>()
-        .closing
-        .load(Ordering::SeqCst)
-    {
-        return Err("Nimrod is shutting down".into());
-    }
-    let windows = app.webview_windows();
-    let window = windows
-        .values()
-        .find(|w| w.is_focused().unwrap_or(false))
-        .or_else(|| {
-            windows.values().find(|window| {
-                window.label() != crate::settings_window::LABEL
-                    || crate::settings_window::is_ready(app)
-            })
-        })
-        .ok_or("No open project window")?;
-    focus_window(app, window)
 }
 
 #[tauri::command]
