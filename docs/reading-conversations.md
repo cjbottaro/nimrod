@@ -29,6 +29,6 @@ Sending while idle jumps to the bottom and enables auto-follow by default. Steer
 
 Streaming, card expansion, window resizing, zoom and ordinary session switching preserve reader intent rather than pulling you out of older history. Tool output has its own scrollable viewport; distinguish that from scrolling the transcript.
 
-Each open session retains its draft, disclosures and reading position while hidden. [Restart](sessions.md#restart-session) reloads history at an explicit resume boundary and resets disclosures. A [notification click](notifications.md#click-to-open-the-session) intentionally jumps its target to the bottom and re-enables auto-follow.
+Each open session retains its draft, disclosures and reading position while hidden. Background agents keep working, but hidden transcripts wait to update until you switch back, then show the latest content. Automatic tool disclosure delay and minimum visible dwell pause while a session is hidden; a tool that finishes entirely in the background does not open just because you return. [Restart](sessions.md#restart-session) reloads history at an explicit resume boundary and resets disclosures. A [notification click](notifications.md#click-to-open-the-session) intentionally jumps its target to the bottom and re-enables auto-follow.
 
 Appearance follows [Settings](settings.md) and [Themes](themes.md); whole-app zoom changes scale, not conversation content.

@@ -12,7 +12,7 @@ Idle sends and busy Enter steering clear the editable draft immediately, indepen
 - `src/pi/webview-client.ts`: busy-state hints, keyboard submission, send-local image preparation, receipt-only error reporting and compaction lock.
 - `src/pi/session.ts`: authoritative session-state gate and Pi prompt RPC.
 - `src/pi/steering-transcript.ts`: live pending-turn projection, queue reconciliation and user-turn key aliases.
-- `src/pi/webview-client.ts`: applies every ordered snapshot before coalesced painting; patches pending-status labels in the existing user article.
+- `src/pi/webview-client.ts`: applies every ordered snapshot before coalesced painting, including while hidden; hidden views retain the latest pending presentation for synchronous reveal catch-up. Queue/consumption/receipt/recovery observations are never deferred or discarded. Patches pending-status labels in the existing user article.
 
 Image attachment behavior and its text-only queue recovery boundary are covered in [Image paste](image-paste.md). Error/uncertainty presentation follows the [error presentation policy](error-presentation.md); this reference owns delivery semantics, not a separate error surface.
 

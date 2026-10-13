@@ -1,38 +1,38 @@
 # Suppress hidden-session transcript painting
 
-**Status: deferred candidate. Suggested priority: first; medium interaction risk.**
+**Status: implemented; regression coverage added but not run, native responsiveness/reveal-latency acceptance pending.**
 
-## Why
+## Why we chose it
 
-Each session is mounted in the same project document. In `src/pi/webview-client.ts`, `queueRender` schedules a paint without checking whether the session is active. `setActive` suspends transcript scroll bookkeeping, composer resize frames and motion, but does not stop transcript reconciliation/DOM work.
+Mounted background views previously ran Markdown/card reconciliation and output-scroll callbacks despite being invisible. `setActive(false)` suspended scroll bookkeeping, composer sizing and motion, but not transcript painting. This was the first deferred candidate: eliminate unnecessary presentation work before changing full-history diffing or architecture.
 
-Consequently a connected background session can parse Markdown, update tool/plugin DOM, scan history and schedule output-scroll work that the user cannot see. Report samples confirmed hidden-view render activity. A later mildly sluggish capture contained 451 hidden paints in its retained ~45-second window, versus one in the prior snappy capture; [native observations](../../features/references/verification.md#performance-observation) owns the comparison and limits. That association motivates this candidate but does not establish hidden painting as the remaining lag cause.
+The later mildly sluggish macOS report contained 451 hidden paints over its retained ~45-second window (~1.3 seconds of measured render work), versus one in the prior snappy capture. This motivates the experiment; it does not establish hidden painting as the lag's cause. [Native observations](../../features/references/verification.md#performance-observation) owns those comparisons and attribution limits.
 
-## Potential benefits
+## What changed
 
-- Reduce UI-thread CPU and allocation pressure from background streaming.
-- Leave more scheduling headroom for the selected session's typing and scrolling.
-- Scale better with the number of concurrently working sessions.
-- Avoid hidden geometry reads and unnecessary DOM/plugin updates.
+- Inactive views retain the latest pending presentation snapshot without scheduling transcript paints. Every host message, steering/queue observation, receipt, recovery and identity transition still processes synchronously in order. Drafts, session notices, shell attention and notifications remain live.
+- Hiding cancels queued transcript/output-restoration frames; presentation epochs also reject retired callbacks after hide/reveal, reset and disposal. Explicit reset/disposal still clears/releases presentation immediately, including while hidden.
+- The shell reveals the root before activation. Activation synchronously reconciles the latest snapshot while transcript-follow/reader intent is still suspended, then restores scroll intent and resumes disclosure timers/composer sizing. It requires no subsequent Pi event and does not focus through a modal.
+- Mounted card/plugin instances remain intact while hidden. Catch-up patches their latest data once; it does not replay intermediate presentation updates, dispose/recreate every card, or change mounted renderer selection. Cards absent from the latest snapshot are disposed at catch-up; reset/disposal remain immediate.
+- Core tool-output inspection is captured with visible geometry before hide and restored on reveal, including a hide between painting and deferred output restoration. Plugin-owned registered viewports retain their existing mounted update/scroll owner.
+- Automatic disclosure's unelapsed qualifying delay and minimum visible dwell pause while hidden. Catch-up supplies current lifecycle data before timers resume: tools that start/finish entirely while hidden do not auto-open on reveal; still-running unseen output begins its qualifying delay on reveal. Manual choices remain authoritative.
 
-This does not eliminate background Pi reduction, timeline projection, notifications or arbitrary plugin-owned timers. Do not claim that hidden sessions become computationally free.
+Canonical behavior is owned by [transcript interaction](../../features/references/transcript-interaction.md), [cards](../../features/references/transcript-cards.md), [composer](../../features/references/composer.md) and [card plugins](../../features/references/card-plugins.md).
 
-## Experiment outline
+## Intended benefits and limits
 
-Keep processing every host message and ordered session transition. Retain only the latest pending presentation snapshot while inactive; schedule one catch-up paint on reveal. Cancel/guard already scheduled paints when hiding or disposing so they cannot mutate a retired view.
+Avoid hidden Markdown parsing, transcript history diffing, renderer-managed card updates and output-restoration work; reduce UI-thread contention as concurrently working sessions increase. Background Pi reduction, timeline projection, sidebar updates and arbitrary plugin-owned async mutations/timers are not eliminated. Hidden views remain mounted and retain their DOM/memory. A large catch-up snapshot can still make reveal expensive.
 
-Revisit shell reveal ordering and `TranscriptScroll.setActive` together: catch-up content must use valid revealed geometry without treating layout growth as reader navigation. Define catch-up behavior for tool-disclosure timers and card/plugin lifecycle explicitly; delaying DOM updates is not permission to change semantic lifecycle or dispose/recreate all cards.
+No new native report, controlled before/after comparison or packaged reveal-latency measurement is available. Implementation and fixtures are not proof of a responsiveness improvement or macOS/Linux/possible Windows acceptance.
 
-## Constraints and current contracts
+## Code and verification targets
 
-Read [transcript interaction](../../features/references/transcript-interaction.md), [cards](../../features/references/transcript-cards.md), [composer](../../features/references/composer.md) and [card plugins](../../features/references/card-plugins.md).
+- `src/pi/webview-client.ts`: latest pending snapshot, active frame scheduling, guarded cancellation, synchronous reveal, output inspection and live recovery notices.
+- `src/pi/tool-disclosure.ts`: paused qualifying delay/visible dwell, latest lifecycle on resume.
+- Existing shell reveal ordering and `TranscriptScroll` suspension remain the geometry/intent boundary; ordered Pi transport/reduction are unchanged.
+- `test/native-view.test.ts`: zero hidden render probes/scheduled frames under 100 snapshots, one synchronous catch-up, raced callbacks, independent outputs, reader/follow intent, hidden queue consumption and outcomes, retained plugins/local state, modal focus, notices and hidden reset/disposal.
+- `test/tool-disclosure.test.ts`: deterministic clock coverage for remaining qualifying delay, visible dwell, hidden completion, manual choices and disposal.
+- `test/shell.test.ts`: foreground/background streaming retains zero unchanged-state IPC, background attention stays live, hidden DOM stays stale until synchronous reveal.
+- `test/browser/hidden-session-painting.spec.ts`: offline WebKit DOM-mutation counter, real-layout reader/follow and two inspected outputs, latest hidden content, retained drafts and repeated switching. Existing workspace/steering/queued/plugin suites remain required regressions.
 
-Retain queue/steering observations, receipts, recovery, errors, drafts and identity changes even when no paint occurs. Hidden-session notifications/attention remain live. Switching must retain inspected output, manual disclosures and follow/reader intent, show current content without another incoming event, and not steal focus through a modal. Explicit reset/disposal remains distinct from hide/show.
-
-Primary code anchors: `src/pi/webview-client.ts` (`queueRender`, host-message handler, `setActive`), `src/pi/transcript-scroll.ts`, and shell activation in `src/main.ts`.
-
-## Validation target
-
-A background-only streaming fixture should produce **zero hidden transcript paints** after suspension while continuing to reconcile ordered state. On reveal, assert the latest content, pending-turn lifecycle, stable existing tool nodes, disclosures, per-tool inspection and older-history/bottom-follow behavior.
-
-Extend `test/native-view.test.ts`, `test/shell.test.ts` and offline WebKit workspace/steering/queued-transcript regressions. Include hide between scheduling and frame delivery, completion/consumption within one hidden interval, repeated switching, resets, disposal and custom-renderer updates. Measure saved paint work and reveal latency separately; packaged responsiveness and platform behavior still need native evidence.
+Tests/checks/builds were not run for this implementation. When requested, run `mise run check` and `npm run test:browser`; then compare packaged responsiveness and reveal latency under representative background-session load. No app/window interruption or live model requests are authorized by this catalogue.

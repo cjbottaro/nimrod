@@ -5,7 +5,7 @@ import { webviewHtml, rendererBundle } from './view-fixture';
 import { createSafeMarkdownRenderer } from '../src/pi/safe-markdown';
 import { initialConversationState, reduceRpcEvent } from '../src/pi/reducer';
 
-function fixture(options: { sendAutoFollow?: import('../src/pi/view-host').ViewHost['sendAutoFollow']; images?: boolean; clipboard?: boolean; missing?: boolean; imageGate?: Promise<void>; releaseOnClear?: boolean; cardRenderer?: import('../src/pi/view-host').ViewHost['cardRenderer']; cardActions?: import('../src/pi/view-host').ViewHost['cardActions'] } = {}) {
+function fixture(options: { sendAutoFollow?: import('../src/pi/view-host').ViewHost['sendAutoFollow']; performance?: import('../src/pi/view-host').ViewHost['performance']; reportNotice?: import('../src/pi/view-host').ViewHost['reportNotice']; resolveNotice?: import('../src/pi/view-host').ViewHost['resolveNotice']; images?: boolean; clipboard?: boolean; missing?: boolean; imageGate?: Promise<void>; releaseOnClear?: boolean; cardRenderer?: import('../src/pi/view-host').ViewHost['cardRenderer']; cardActions?: import('../src/pi/view-host').ViewHost['cardActions'] } = {}) {
   const dom = new JSDOM(webviewHtml(), { runScripts: 'outside-only', pretendToBeVisual: true });
   const win = dom.window;
   let persisted: unknown;
@@ -19,13 +19,16 @@ function fixture(options: { sendAutoFollow?: import('../src/pi/view-host').ViewH
     get: async (image: { id: string }) => { if (options.missing) throw new Error('Image draft is missing'); const blob = blobs.get(image.id)!; await options.imageGate; return blob; },
     readClipboard: options.clipboard ? async () => { clipboardReads++; return new win.Blob(['abc'], { type: 'image/png' }); } : undefined,
   } : undefined;
-  const frames: FrameRequestCallback[] = [];
-  win.requestAnimationFrame = cb => { frames.push(cb); return frames.length; };
+  const frames = new Map<number, FrameRequestCallback>();
+  let nextFrame = 0;
+  win.requestAnimationFrame = cb => { frames.set(++nextFrame, cb); return nextFrame; };
+  win.cancelAnimationFrame = id => { frames.delete(id); };
   const sent: Record<string, unknown>[] = [];
   let receive: (message: unknown) => void = () => {};
-  Object.assign(win, { testHost: { sendAutoFollow: options.sendAutoFollow, promptSubmitted: () => { submittedPrompts++; }, attachments, cardRenderer: options.cardRenderer, cardActions: options.cardActions, getState: () => undefined, setState: (state: unknown) => { persisted = state; if (options.releaseOnClear) { const images = (state as { attachments?: { id: string }[] }).attachments ?? []; for (const id of blobs.keys()) if (!images.some(image => image.id === id)) blobs.delete(id); } }, postMessage: (message: Record<string, unknown>) => sent.push(message), onMessage: (listener: typeof receive) => { receive = listener; } } });
+  Object.assign(win, { testHost: { sendAutoFollow: options.sendAutoFollow, performance: options.performance, reportNotice: options.reportNotice, resolveNotice: options.resolveNotice, promptSubmitted: () => { submittedPrompts++; }, attachments, cardRenderer: options.cardRenderer, cardActions: options.cardActions, getState: () => undefined, setState: (state: unknown) => { persisted = state; if (options.releaseOnClear) { const images = (state as { attachments?: { id: string }[] }).attachments ?? []; for (const id of blobs.keys()) if (!images.some(image => image.id === id)) blobs.delete(id); } }, postMessage: (message: Record<string, unknown>) => sent.push(message), onMessage: (listener: typeof receive) => { receive = listener; } } });
   win.eval(rendererBundle() + '\nwindow.testView = PiView.mountPiView(window.testHost);');
-  const flush = () => { while (frames.length) frames.shift()!(0); };
+  const flush = () => { while (frames.size) { const [id, frame] = frames.entries().next().value!; frames.delete(id); frame(0); } };
+  const view = (win as unknown as { testView: import('../src/pi/webview-client').PiView }).testView;
   const snapshot = (state: Record<string, unknown>) => { receive({ type: 'snapshot', state }); flush(); };
   const prompt = win.document.querySelector<HTMLTextAreaElement>('#prompt')!;
   const draft = (text: string) => { prompt.value = text; prompt.dispatchEvent(new win.Event('input')); };
@@ -35,7 +38,7 @@ function fixture(options: { sendAutoFollow?: import('../src/pi/view-host').ViewH
     Object.defineProperty(event, 'clipboardData', { value: { items: image ? [{ kind: 'file', type: 'image/png', getAsFile: () => new win.File(['abc'], 'Screenshot.png', { type: 'image/png' }) }] : [], types: text ? ['text/plain'] : [], files: [], getData: () => text } });
     prompt.dispatchEvent(event); return event;
   };
-  return { dom, win, sent, receive, snapshot, prompt, draft, send, flush, paste, state: () => persisted, clipboardReads: () => clipboardReads, submittedPrompts: () => submittedPrompts };
+  return { dom, win, sent, receive, snapshot, prompt, draft, send, flush, paste, view, frames, state: () => persisted, clipboardReads: () => clipboardReads, submittedPrompts: () => submittedPrompts };
 }
 
 function scrollFixture(f: ReturnType<typeof fixture>) {
@@ -110,6 +113,157 @@ test('send follow reads live preferences without navigating on changes or non-me
     mode = 'never';
     s.grow(); f.snapshot({ sessionUnavailable: false, messages: [] });
     assert.equal(s.pane.scrollTop, 2100, 'Never does not disable existing follow');
+  } finally { f.dom.window.close(); }
+});
+
+test('hidden snapshots do no painting; reveal catches up synchronously and cancelled frames cannot paint', () => {
+  const paints: boolean[] = [], snapshots: boolean[] = [];
+  const f = fixture({ performance: {
+    measure(kind, work, active) { if (kind === 'transcript-render') paints.push(active === true); return work(); },
+    record(_kind, active) { snapshots.push(active); },
+  } });
+  try {
+    f.snapshot({ messages: [{ key: 'a', role: 'assistant', content: 'Visible' }] });
+    const article = f.win.document.querySelector('#messages article')!;
+    const before = paints.length;
+    f.receive({ type: 'snapshot', state: { messages: [{ key: 'a', role: 'assistant', content: 'Scheduled' }] } });
+    const cancelled = [...f.frames.values()];
+    f.view.setActive(false);
+    for (let i = 0; i < 100; i++) f.snapshot({ busy: true, messages: [{ key: 'a', role: 'assistant', content: [{ type: 'text', text: `Hidden ${i}` }] }] });
+    for (const frame of cancelled) frame(0); // Simulate delivery despite cancellation.
+    assert.equal(paints.length, before);
+    assert.equal(article.textContent, 'Visible');
+    assert.equal(f.frames.size, 0, 'no hidden presentation frames');
+    assert.equal(snapshots.filter(active => !active).length, 100, 'every hidden snapshot was received');
+    f.prompt.focus(); f.draft('Retained draft');
+    f.view.setActive(true);
+    assert.equal(paints.length, before + 1, 'one synchronous catch-up, without another host event');
+    assert.match(f.win.document.querySelector('#messages')!.textContent!, /Hidden 99/);
+    assert.equal(f.win.document.activeElement, f.prompt);
+    assert.equal(f.prompt.value, 'Retained draft');
+    f.view.setActive(true); f.flush();
+    for (const frame of cancelled) frame(0);
+    assert.equal(paints.length, before + 1, 'idempotent activation and retired callbacks');
+    assert.ok(paints.every(Boolean), 'zero inactive transcript renders');
+  } finally { f.dom.window.close(); }
+});
+
+for (const follow of [false, true]) test(`hidden catch-up retains transcript intent and independent tool inspection (follow: ${follow})`, () => {
+  const f = fixture();
+  try {
+    const pane = f.win.document.querySelector<HTMLElement>('#transcript-viewport')!;
+    let height = 1000, hidden = false;
+    Object.defineProperties(pane, { clientHeight: { get: () => hidden ? 0 : 100 }, scrollHeight: { get: () => hidden ? 0 : height } });
+    const tools = ['one', 'two'].map(id => ({ type: 'toolCall', id, name: 'bash', arguments: { command: id }, toolStatus: 'running', executionOutput: 'Start', hasStreamingOutput: true }));
+    const state = (output: string) => ({ busy: true, messages: [{ key: 'a', role: 'assistant', content: tools.map(tool => ({ ...tool, executionOutput: output })) }] });
+    f.snapshot(state('Start'));
+    const cards = [...f.win.document.querySelectorAll<HTMLDetailsElement>('.tool-card')];
+    cards.forEach(card => { card.open = true; card.dispatchEvent(new f.win.Event('toggle')); });
+    f.flush();
+    const outputs = cards.map(card => card.querySelector<HTMLElement>('.tool-output')!);
+    outputs.forEach((output, index) => {
+      Object.defineProperties(output, { clientHeight: { get: () => hidden ? 0 : 100 }, scrollHeight: { get: () => hidden ? 0 : height } });
+      output.scrollTop = 37 + 40 * index;
+    });
+    pane.scrollTop = follow ? height - 100 : 240;
+    pane.dispatchEvent(new f.win.Event('scroll'));
+    if (!follow) pane.dispatchEvent(new f.win.WheelEvent('wheel', { deltaY: -100 }));
+    else { f.view.scrollToBottom(); f.flush(); }
+    f.view.setActive(false); hidden = true;
+    f.snapshot(state('Latest output')); height = 2000;
+    hidden = false; f.view.setActive(true); f.flush();
+    assert.equal(pane.scrollTop, follow ? height : 240, 'mock offsets retain the existing follow target or reader position');
+    assert.deepEqual(outputs.map(output => output.scrollTop), [37, 77]);
+    cards.forEach((card, index) => {
+      assert.equal(f.win.document.querySelectorAll('.tool-card')[index], card);
+      assert.equal(card.open, true);
+      assert.match(card.textContent!, /Latest output/);
+    });
+    // Hiding again before output-restoration delivery must retain the intended offset.
+    f.receive({ type: 'snapshot', state: state('Another output') });
+    const [id, render] = f.frames.entries().next().value!;
+    f.frames.delete(id); render(0);
+    f.view.setActive(false); hidden = true;
+    f.snapshot(state('Final visible output'));
+    hidden = false; f.view.setActive(true); f.flush();
+    assert.deepEqual(outputs.map(output => output.scrollTop), [37, 77]);
+    f.receive({ type: 'snapshot', state: state('Paint before immediate hide') });
+    const [nextId, nextRender] = f.frames.entries().next().value!;
+    f.frames.delete(nextId); nextRender(0);
+    f.view.setActive(false); hidden = true;
+    outputs.forEach(output => { output.scrollTop = 0; }); // Hidden-geometry settlement before restoration.
+    hidden = false; f.view.setActive(true); f.flush();
+    assert.deepEqual(outputs.map(output => output.scrollTop), [37, 77], 'restore a cancelled output frame even without a newer snapshot');
+  } finally { f.dom.window.close(); }
+});
+
+test('hidden ordered queue consumption adopts the existing pending article despite a later identical queue entry', () => {
+  const f = fixture();
+  try {
+    f.snapshot({ busy: true, messages: [] });
+    f.draft('Later');
+    f.prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true, cancelable: true })); f.flush();
+    const pending = f.win.document.querySelector('.queued-turns .user')!;
+    const submission = f.sent.find(message => message.type === 'prompt')!;
+    f.draft('New draft'); f.view.setActive(false);
+    f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' });
+    f.snapshot({ busy: true, messages: [], queue: { authoritative: true, steering: [], followUp: ['Later'] } });
+    f.snapshot({ busy: true, messages: [{ key: 'actual', role: 'user', content: 'Later' }], queue: { authoritative: true, steering: [], followUp: [] } });
+    f.snapshot({ busy: false, messages: [{ key: 'actual', role: 'user', content: 'Later' }], queue: { authoritative: true, steering: [], followUp: ['Later'] } });
+    assert.ok(pending.closest('.queued-turns'), 'hidden DOM is untouched');
+    f.view.setActive(true);
+    assert.equal(f.win.document.querySelector('#messages > .user'), pending);
+    assert.equal(pending.querySelector('.steering-status'), null);
+    assert.equal(f.win.document.querySelectorAll('#messages .user').length, 2);
+    assert.equal(f.prompt.value, 'New draft');
+    assert.equal(f.sent.filter(message => message.type === 'prompt').length, 1);
+  } finally { f.dom.window.close(); }
+});
+
+test('hidden reset/disposal retire pending paints and plugins; reveal updates mounted plugins only once', () => {
+  let updates = 0, disposals = 0;
+  const phases: string[] = [], notices: string[] = [];
+  const f = fixture({ reportNotice: notice => notices.push(notice.message), cardRenderer: () => ({
+    apiVersion: 2, id: 'fixture.hidden', supports: () => true,
+    mount(context) {
+      const input = context.document.createElement('input'); input.value = 'Local plugin state'; context.body.append(input);
+      return { update(data) { updates++; phases.push(data.toolStatus ?? ''); }, dispose() { disposals++; } };
+    },
+  }) });
+  try {
+    const state = (text: string, toolStatus = 'running') => ({ messages: [{ key: 'a', role: 'assistant', content: [{ type: 'toolCall', id: 'one', name: 'bash', arguments: { command: text }, toolStatus }] }] });
+    f.snapshot(state('Start'));
+    const card = f.win.document.querySelector<HTMLDetailsElement>('.tool-card')!;
+    const input = card.querySelector<HTMLInputElement>('input')!;
+    const before = updates;
+    f.view.setActive(false);
+    for (let i = 0; i < 20; i++) f.snapshot(state(`Hidden ${i}`));
+    f.snapshot({ ...state('Latest', 'finished'), recoveryNotice: 'Unavailable in background' });
+    assert.equal(updates, before); assert.equal(disposals, 0);
+    assert.ok(notices.includes('Unavailable in background'), 'notices are live before reveal');
+    const modal = f.win.document.createElement('dialog'); modal.setAttribute('open', ''); f.win.document.body.append(modal);
+    const focus = f.win.document.createElement('button'); modal.append(focus); focus.focus();
+    f.view.setActive(true);
+    assert.equal(updates, before + 1); assert.equal(disposals, 0);
+    assert.equal(phases.at(-1), 'finished', 'completion is current on reveal');
+    assert.equal(f.win.document.querySelector('.tool-card'), card);
+    assert.equal(card.querySelector('input'), input); assert.equal(input.value, 'Local plugin state');
+    assert.equal(f.win.document.activeElement, focus);
+    f.receive({ type: 'snapshot', state: state('Scheduled') });
+    const retired = [...f.frames.values()];
+    f.view.setActive(false);
+    f.receive({ type: 'sessionReset' });
+    assert.equal(disposals, 1, 'reset is immediate even while hidden');
+    f.snapshot(state('Replacement'));
+    f.view.setActive(true); f.flush();
+    assert.notEqual(f.win.document.querySelector('.tool-card'), card);
+    const paintsBeforeDispose = updates;
+    f.receive({ type: 'snapshot', state: state('Never paint') });
+    retired.push(...f.frames.values());
+    f.view.dispose();
+    for (const frame of retired) frame(0);
+    f.view.setActive(true);
+    assert.equal(updates, paintsBeforeDispose); assert.equal(disposals, 2);
   } finally { f.dom.window.close(); }
 });
 
@@ -692,7 +846,7 @@ test('follow-ups stay pinned through acceptance and dequeue, then reconcile in p
 });
 
 
-for (const outcome of ['rejected', 'unknown', 'cancelled', 'disconnected'] as const) test(`queued ${outcome} becomes an ordinary transcript turn without losing identity`, () => {
+for (const hidden of [false, true]) for (const outcome of ['rejected', 'unknown', 'cancelled', 'disconnected'] as const) test(`queued ${outcome} becomes an ordinary transcript turn without losing identity (hidden: ${hidden})`, () => {
   const f = fixture();
   try {
     f.snapshot({ busy: true, messages: [] });
@@ -701,7 +855,9 @@ for (const outcome of ['rejected', 'unknown', 'cancelled', 'disconnected'] as co
     const submission = f.sent.find(m => m.type === 'prompt')!;
     const pending = f.win.document.querySelector('.queued-turns .user')!;
     f.draft('New draft');
+    if (hidden) f.view.setActive(false);
     f.receive(outcome === 'disconnected' ? { type: 'sessionDisconnected' } : { type: 'submissionReceipt', id: submission.id, outcome }); f.flush();
+    if (hidden) { assert.ok(pending.closest('.queued-turns')); f.view.setActive(true); }
     assert.equal(f.win.document.querySelector('#messages > .user'), pending);
     assert.equal(pending.classList.contains('sticky-turn'), false);
     assert.equal(f.prompt.value, 'New draft');
@@ -709,13 +865,15 @@ for (const outcome of ['rejected', 'unknown', 'cancelled', 'disconnected'] as co
   } finally { f.dom.window.close(); }
 });
 
-test('queued recovery handles coalesced removal and reset discards the old sticky stack', () => {
+for (const hidden of [false, true]) test(`queued recovery handles coalesced removal and reset discards the old sticky stack (hidden: ${hidden})`, () => {
   const f = fixture();
   try {
     f.snapshot({ busy: true, messages: [], queue: { authoritative: true, steering: ['same'], followUp: ['same', 'same'] } });
     assert.equal(f.win.document.querySelectorAll('.queued-turns .user').length, 2);
+    if (hidden) f.view.setActive(false);
     f.receive({ type: 'snapshot', state: { busy: true, messages: [], queue: { authoritative: true, steering: ['same'], followUp: [] } } });
     f.receive({ type: 'queueRecovery', steering: [], followUp: ['same', 'same'] }); f.flush();
+    if (hidden) f.view.setActive(true);
     assert.equal(f.win.document.querySelectorAll('#messages .user').length, 1);
     assert.equal(f.win.document.querySelectorAll('[data-recovery-id]').length, 2);
     f.snapshot({ busy: true, messages: [], queue: { authoritative: true, steering: [], followUp: ['old'] } });

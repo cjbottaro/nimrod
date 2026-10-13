@@ -15,6 +15,51 @@ function fixture() {
   return { dom, expanded, disclosure, details };
 }
 
+test('hidden disclosure pauses the remaining qualifying delay and ignores completed hidden work', t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const { dom, disclosure, details } = fixture();
+  try {
+    disclosure.update(details, true, true, true);
+    t.mock.timers.tick(5);
+    disclosure.setActive(false);
+    t.mock.timers.tick(1000);
+    assert.equal(details.open, false);
+    disclosure.update(details, true, true, true); // Latest catch-up lifecycle, still suspended.
+    disclosure.setActive(true);
+    t.mock.timers.tick(9); assert.equal(details.open, false);
+    t.mock.timers.tick(1); assert.equal(details.open, true);
+    disclosure.setActive(false);
+    t.mock.timers.tick(1000);
+    disclosure.update(details, false, false, true);
+    disclosure.setActive(true);
+    t.mock.timers.tick(14); assert.equal(details.open, true, 'hidden time does not consume visible dwell');
+    t.mock.timers.tick(1); assert.equal(details.open, false);
+    disclosure.update(details, true, true, true);
+    disclosure.setActive(false);
+    t.mock.timers.tick(1000);
+    disclosure.update(details, false, false, true);
+    disclosure.setActive(true);
+    t.mock.timers.tick(1000);
+    assert.equal(details.open, false, 'a finished result cannot open on reveal');
+  } finally { disclosure.dispose(); dom.window.close(); }
+});
+
+test('manual choices and reset remain authoritative while disclosure is suspended', t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const { dom, disclosure, details, expanded } = fixture();
+  try {
+    disclosure.update(details, true, true, true);
+    disclosure.setActive(false);
+    expanded.set('call-1', false); disclosure.manualToggle('call-1');
+    disclosure.setActive(true); t.mock.timers.tick(1000);
+    assert.equal(details.open, false);
+    expanded.clear(); disclosure.update(details, true, true, true);
+    disclosure.setActive(false); disclosure.dispose();
+    disclosure.setActive(true); t.mock.timers.tick(1000);
+    assert.equal(details.open, false, 'disposed timers never toggle retired cards');
+  } finally { disclosure.dispose(); dom.window.close(); }
+});
+
 test("tool disclosure stays closed for generation, silent work, and output shorter than the debounce", async () => {
   const { dom, disclosure, details } = fixture();
   try {

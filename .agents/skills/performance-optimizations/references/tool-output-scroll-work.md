@@ -1,6 +1,6 @@
 # Limit tool-output scroll work to affected viewports
 
-**Status: deferred candidate. Suggested priority: fourth; high scroll-regression sensitivity.**
+**Status: deferred candidate. Suggested priority: third remaining; high scroll-regression sensitivity.**
 
 ## Why
 

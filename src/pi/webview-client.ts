@@ -44,6 +44,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   let preparing = 0;
   let attachmentSignature = '';
   let errorNoticeText: string | undefined;
+  let recoveryNoticeText: string | undefined;
   let errorNoticeSequence = 0;
   let composerNoticeCause: string | undefined;
   let composerNoticeOperation: string | undefined;
@@ -66,7 +67,11 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   let deletionLocked = false;
   let pendingState: State | undefined;
   let displayedState: State = {};
-  let renderScheduled = false;
+  let renderFrame: number | undefined;
+  let presentationEpoch = 0;
+  const outputFrames = new Set<number>();
+  const pendingOutputPositions = new Map<string, ReturnType<typeof captureStreamingOutput>>();
+  let suspendedOutputPositions: Map<string, ReturnType<typeof captureStreamingOutput>> | undefined;
   let composerResizeFrame: number | undefined;
   const rendered = new Map<string, { node: HTMLElement; signature: string }>();
   let steeringTranscript = new SteeringTranscript();
@@ -91,8 +96,19 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   }) : undefined;
   transcriptResizeObserver?.observe(transcriptViewport);
   window.addEventListener("resize", resizeTranscript, { passive: true, signal: listeners.signal });
+  function cancelPresentationFrames(): void {
+    presentationEpoch++;
+    if (renderFrame !== undefined) window.cancelAnimationFrame(renderFrame);
+    renderFrame = undefined;
+    for (const frame of outputFrames) window.cancelAnimationFrame(frame);
+    outputFrames.clear();
+    pendingOutputPositions.clear();
+  }
   function dispose(): void {
     disposed = true;
+    cancelPresentationFrames();
+    pendingState = undefined;
+    suspendedOutputPositions = undefined;
     if (composerResizeFrame !== undefined) window.cancelAnimationFrame(composerResizeFrame);
     composerGeneration++;
     for (const url of attachmentUrls.values()) URL.revokeObjectURL(url);
@@ -241,8 +257,6 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
         composerNoticeCause = undefined; composerNoticeOperation = undefined;
       }
       errorNoticeText = composer.lastError;
-      if (displayedState.recoveryNotice) host.reportNotice({ id: 'session-recovery', operation: 'Session unavailable', message: displayedState.recoveryNotice });
-      else host.resolveNotice?.('session-recovery');
       return;
     }
     if (displayedState.recoveryNotice) {
@@ -460,8 +474,9 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
 
   /** Manual disclosure is a local reveal, never an automatic bottom-follow request. */
   function revealExpandedCard(details: HTMLDetailsElement): void {
+    const epoch = presentationEpoch;
     requestAnimationFrame(() => {
-      if (!details.isConnected || !details.open) return;
+      if (epoch !== presentationEpoch || disposed || !active || !details.isConnected || !details.open) return;
       const viewport = transcriptViewport.getBoundingClientRect();
       const bounds = details.getBoundingClientRect();
       const margin = 12;
@@ -605,42 +620,53 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
 
   function queueRender(state: State): void {
     pendingState = state;
-    if (renderScheduled) return;
-    renderScheduled = true;
-    requestAnimationFrame(() => {
-      renderScheduled = false;
-      const snapshot = pendingState;
-      pendingState = undefined;
-      if (!snapshot || disposed) return;
-      try {
-        render(snapshot);
-      } catch (error) {
-        reportRenderError(error);
-        // Recover from a broken incremental patch using the authoritative snapshot.
-        for (const entry of rendered.values()) disposeMessageCards(entry.node);
-        rendered.clear();
-        queuedTurns.replaceChildren();
-        messages.replaceChildren(queuedTurns);
-        const display = steeringTranscript.project(Array.isArray(snapshot.messages) ? snapshot.messages : []);
-        for (const [index, message] of display.entries()) {
-          const key = safeText(message.key) || `message-${index}`;
-          try {
-            const node = renderMessage(message);
-            if (message.sticky) queuedTurns.append(node);
-            else messages.insertBefore(node, queuedTurns);
-            rendered.set(key, { node, signature: JSON.stringify(message) });
-          }
-          catch (messageError) {
-            reportRenderError(messageError);
-            const fallback = element("pre", "message error");
-            fallback.textContent = `Unable to render this message. Raw content:\n${JSON.stringify(message.content, null, 2)}`;
-            messages.insertBefore(fallback, queuedTurns);
-            rendered.set(key, { node: fallback, signature: JSON.stringify(message) });
-          }
-        }
-        queuedTurns.hidden = queuedTurns.childElementCount === 0;
-      }
+    // Session-owned notices remain live even when presentation is suspended.
+    if (host.reportNotice && recoveryNoticeText !== state.recoveryNotice) {
+      recoveryNoticeText = state.recoveryNotice;
+      if (state.recoveryNotice) host.reportNotice({ id: 'session-recovery', operation: 'Session unavailable', message: state.recoveryNotice });
+      else host.resolveNotice?.('session-recovery');
+    }
+    if (!active || disposed || renderFrame !== undefined) return;
+    const epoch = presentationEpoch;
+    renderFrame = window.requestAnimationFrame(() => {
+      if (epoch !== presentationEpoch) return;
+      renderFrame = undefined;
+      flushRender();
     });
+  }
+
+  function flushRender(): void {
+    if (!active || disposed || !pendingState) return;
+    const snapshot = pendingState;
+    pendingState = undefined;
+    try {
+      render(snapshot);
+    } catch (error) {
+      reportRenderError(error);
+      // Recover from a broken incremental patch using the authoritative snapshot.
+      for (const entry of rendered.values()) disposeMessageCards(entry.node);
+      rendered.clear();
+      queuedTurns.replaceChildren();
+      messages.replaceChildren(queuedTurns);
+      const display = steeringTranscript.project(Array.isArray(snapshot.messages) ? snapshot.messages : []);
+      for (const [index, message] of display.entries()) {
+        const key = safeText(message.key) || `message-${index}`;
+        try {
+          const node = renderMessage(message);
+          if (message.sticky) queuedTurns.append(node);
+          else messages.insertBefore(node, queuedTurns);
+          rendered.set(key, { node, signature: JSON.stringify(message) });
+        }
+        catch (messageError) {
+          reportRenderError(messageError);
+          const fallback = element("pre", "message error");
+          fallback.textContent = `Unable to render this message. Raw content:\n${JSON.stringify(message.content, null, 2)}`;
+          messages.insertBefore(fallback, queuedTurns);
+          rendered.set(key, { node: fallback, signature: JSON.stringify(message) });
+        }
+      }
+      queuedTurns.hidden = queuedTurns.childElementCount === 0;
+    }
   }
 
   function render(state: State): void {
@@ -650,7 +676,9 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
 
   function renderState(state: State): void {
     const wasAtBottom = transcriptScroll.capture();
-    const outputPositions = new Map(Array.from(toolCards, ([key, card]) => [key, captureStreamingOutput(card)]));
+    const outputPositions = suspendedOutputPositions ?? new Map(Array.from(toolCards, ([key, card]) => [key,
+      pendingOutputPositions.has(key) ? pendingOutputPositions.get(key) : captureStreamingOutput(card)]));
+    suspendedOutputPositions = undefined;
     displayedState = state;
     renderActivity(state);
     renderModelControls(state);
@@ -696,9 +724,18 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
         toolDisclosure.remove(key);
         toolCards.delete(key);
       }
-      else requestAnimationFrame(() => {
-        if (!disposed && card.isConnected) restoreStreamingOutput(card, outputPositions.get(key));
-      });
+      else {
+        const position = outputPositions.get(key);
+        pendingOutputPositions.set(key, position);
+        const epoch = presentationEpoch;
+        const frame = window.requestAnimationFrame(() => {
+          outputFrames.delete(frame);
+          if (epoch !== presentationEpoch || disposed || !active || !card.isConnected) return;
+          restoreStreamingOutput(card, position);
+          pendingOutputPositions.delete(key);
+        });
+        outputFrames.add(frame);
+      }
     }
     transcriptScroll.request(wasAtBottom);
   }
@@ -854,6 +891,8 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   host.onMessage((data: HostMessage) => {
     if (disposed) return;
     if (data.type === "sessionReset") {
+      cancelPresentationFrames();
+      suspendedOutputPositions = undefined;
       composerGeneration++; preparing = 0; attachmentSignature = '';
       // An explicit launch boundary only; ordinary snapshots retain all live UI state.
       toolDisclosure.dispose();
@@ -947,11 +986,32 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     dispose,
     scrollToBottom: () => { if (!disposed) transcriptScroll.scrollToBottom(); },
     setActive(value) {
+      if (disposed || active === value) return;
+      if (!value) {
+        // Capture inspection with real geometry, before the shell hides the root.
+        suspendedOutputPositions = new Map(Array.from(toolCards, ([key, card]) => [key,
+          pendingOutputPositions.has(key) ? pendingOutputPositions.get(key) : captureStreamingOutput(card)]));
+        cancelPresentationFrames();
+        transcriptScroll.setActive(false);
+        toolDisclosure.setActive(false);
+      }
       active = value;
       updateMotion();
-      transcriptScroll.setActive(value);
-      if (value) resizePrompt();
-      else if (composerResizeFrame !== undefined) {
+      if (value) {
+        // The shell has revealed the root. Reconcile once while scroll/disclosure
+        // intent is still suspended, before restoring focus or accepting input.
+        // A hide between a paint and its output-follow frame can need restoration
+        // even when no newer snapshot arrived.
+        if (!pendingState && suspendedOutputPositions) for (const [key, position] of suspendedOutputPositions) {
+          const card = toolCards.get(key);
+          if (card?.isConnected) restoreStreamingOutput(card, position);
+        }
+        flushRender();
+        suspendedOutputPositions = undefined;
+        transcriptScroll.setActive(true);
+        toolDisclosure.setActive(true);
+        resizePrompt();
+      } else if (composerResizeFrame !== undefined) {
         window.cancelAnimationFrame(composerResizeFrame);
         composerResizeFrame = undefined;
       }
