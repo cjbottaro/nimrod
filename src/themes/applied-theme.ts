@@ -3,6 +3,7 @@ export interface AppliedTheme {
   id: string;
   mode: 'dark' | 'light' | null;
   background?: string;
+  paletteSignature?: string;
 }
 interface ThemeState { value: Readonly<AppliedTheme>; listeners: Set<(theme: Readonly<AppliedTheme>) => void>; }
 const states = new WeakMap<HTMLElement, ThemeState>();
@@ -20,6 +21,6 @@ export function subscribeAppliedTheme(root: HTMLElement, receive: (theme: Readon
 export function publishAppliedTheme(root: HTMLElement, theme: AppliedTheme): void {
   const entry = state(root), previous = entry.value;
   entry.value = Object.freeze({ ...theme });
-  if (previous.id === theme.id && previous.mode === theme.mode && previous.background === theme.background) return;
+  if (previous.id === theme.id && previous.mode === theme.mode && previous.background === theme.background && previous.paletteSignature === theme.paletteSignature) return;
   for (const receive of entry.listeners) receive(entry.value);
 }

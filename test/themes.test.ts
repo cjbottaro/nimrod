@@ -115,10 +115,12 @@ test('theme application explicitly publishes its completed window-local presenta
   try {
     applyTheme(root, DRACULA); applyTheme(other, TOKYO_NIGHT);
     assert.deepEqual(seen, ['dracula']); assert.equal(appliedTheme(other).id, 'tokyo-night');
+    applyTheme(root, { ...DRACULA, colors: { ...DRACULA.colors, 'button.background': '#abcdef' } });
+    assert.deepEqual(seen, ['dracula', 'dracula']); // Same ID/background, changed controls.
     applyTheme(root, OSAKA_JADE); applyTheme(root);
-    assert.deepEqual(seen, ['dracula', 'osaka-jade', 'nimrod']);
+    assert.deepEqual(seen, ['dracula', 'dracula', 'osaka-jade', 'nimrod']);
     assert.equal(appliedTheme(root).mode, null); stop(); applyTheme(root, DRACULA);
-    assert.equal(seen.length, 3);
+    assert.equal(seen.length, 4);
   } finally { stop(); a.window.close(); b.window.close(); }
 });
 

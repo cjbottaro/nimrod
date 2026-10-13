@@ -19,6 +19,7 @@ function fixture(support = mac, initial: Partial<WindowAppearance> = {}, tintTit
   setTheme('dark');
   let value = { ...DEFAULT_WINDOW_APPEARANCE, ...initial };
   const saves: Partial<WindowAppearance>[] = [];
+  const previews: (number | null)[] = [];
   const effects: { frosted: boolean; dark: boolean | null }[] = [];
   const reports: { message?: string; cause?: string }[] = [];
   const controls = {
@@ -31,18 +32,41 @@ function fixture(support = mac, initial: Partial<WindowAppearance> = {}, tintTit
   const controller = installWindowAppearance(window, root, {
     read: () => value,
     save: patch => { saves.push(patch); return save(patch); },
+    previewOpacity: async opacity => { previews.push(opacity); },
     capabilities: async () => support,
     tintTitlebar,
     apply: (frosted, dark) => { effects.push({ frosted, dark }); return apply(frosted, dark); },
     report: (message, cause) => reports.push({ message, cause }),
   }, controls);
   const event = (target: HTMLElement, type: string) => target.dispatchEvent(new dom.window.Event(type, { bubbles: true }));
-  return { dom, root, controls, saves, effects, reports, controller, event, setTheme,
+  return { dom, root, controls, saves, previews, effects, reports, controller, event, setTheme,
     external(patch: Partial<WindowAppearance>) { value = { ...value, ...patch }; controller.reload(); },
     setSave(next: typeof save) { save = next; }, setApply(next: typeof apply) { apply = next; },
     close() { controller.dispose(); dom.window.close(); },
   };
 }
+
+test('opacity input publishes a paint-only preview and only its matching save clears it', async () => {
+  const f = fixture();
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  try {
+    await f.controller.ready;
+    f.controls.opacity.value = '65'; f.event(f.controls.opacity, 'input');
+    assert.deepEqual([...f.previews], [65]); assert.equal(f.saves.length, 0);
+    f.setSave(() => pending);
+    f.event(f.controls.opacity, 'change');
+    f.controls.opacity.value = '25'; f.event(f.controls.opacity, 'input');
+    release(); await tick();
+    assert.equal(f.previews.includes(null), false); // Old completion cannot cancel a newer drag.
+    f.setSave(async () => { f.external({ opacity: 25 }); });
+    f.event(f.controls.opacity, 'change'); await tick();
+    assert.equal(f.previews.at(-1), null);
+    f.setSave(async () => { throw new Error('disk'); });
+    f.controls.opacity.value = '40'; f.event(f.controls.opacity, 'change'); await tick();
+    assert.equal(f.previews.at(-1), null); assert.equal(f.controls.opacity.value, '25');
+  } finally { release(); f.close(); }
+});
 
 test('appearance schema uses opaque defaults and rejects invalid values including explicit null', () => {
   assert.deepEqual(readWindowAppearance({}), DEFAULT_WINDOW_APPEARANCE);

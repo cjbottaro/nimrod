@@ -7,14 +7,15 @@ Human guide: [Themes](../../../../docs/themes.md). Maintenance guide:
 
 ## Specification and acceptance criteria
 
-Theme application changes palette CSS colors only. After CSS is complete, `applyTheme` publishes a root-local mode/background snapshot through `themes/applied-theme.ts`; the separate [window-presentation pipeline](window-presentation.md) consumes this explicit notification for native appearance, including previews/restoration, without rewriting palettes or observing DOM mutations. Theme selection in a project window (Settings or palette) creates a project override; global Settings edits the default. Inheriting projects follow global changes; explicit overrides do not. Imports/removal remain global-only, and project pickers use the shared global library without copying palettes. [Preferences](preferences.md#project-layering) owns precedence/reset semantics. Window-local previews never persist/broadcast; cancellation restores the latest committed theme. Imports remain bounded standalone files, catalog IDs stay stable, and no runtime networking occurs.
+Theme application changes palette CSS colors only. After CSS is complete, `applyTheme` publishes a root-local mode/background/palette-signature snapshot through `themes/applied-theme.ts`; the separate [window-presentation pipeline](window-presentation.md) consumes this explicit notification for native appearance, including previews/restoration, without rewriting palettes or observing DOM mutations. Theme selection in a project window (Settings or palette) creates a project override; global Settings edits the default. Inheriting projects follow global changes; explicit overrides do not. Imports/removal remain global-only, and project pickers use the shared global library without copying palettes. [Preferences](preferences.md#project-layering) owns precedence/reset semantics. Window-local previews never persist/broadcast; cancellation restores the latest committed theme. Imports remain bounded standalone files, catalog IDs stay stable, and no runtime networking occurs.
 
 ## Code map and invariants
 
 - `src/themes/theme.ts`: bounded JSONC importer, hex allowlist, broad syntax
   mapping, fallback derivation, imported-library validation and CSS-only application.
   `BUILTIN_THEME_IDS` preserves Nimrod/Dracula/Tokyo Night/Osaka Jade;
-  `CATALOG_THEME_IDS` comes directly from the generated catalog. No registry cycle.
+  `CATALOG_THEME_IDS` comes directly from the generated catalog. No registry cycle. JSON imports explicitly declare `with { type: 'json' }` for the pinned Node ESM/Playwright loader as well as bundler execution.
+- Filled-button readability is a shared presentation policy in `src/button-surfaces.ts`, documented in [Translucency](translucency.md#filled-control-contrast). It applies equally to Nimrod, built-ins, catalog and future imported palettes; no bespoke theme fixes. Stable opaque text and palette-derived fill floors replace foreground interpolation. Original palette tokens remain unchanged; unreadable/alpha button pairs receive derived control-specific repair.
 - `src/themes/applied-theme.ts`: root-local current snapshot and explicit subscriptions, published only after `applyTheme` finishes CSS application. Same-mode palette changes, previews and rollback reach the same presentation boundary; no persistent/global preview broadcast.
 - `src/themes/builtins.ts`: existing adaptations plus `CATALOG_THEMES` parsed by
   the normal importer. `selectedTheme` is shared by Settings, project windows and

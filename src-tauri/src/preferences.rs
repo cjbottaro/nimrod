@@ -625,8 +625,10 @@ mod tests {
         for opacity in ["-1", "101", "50.5", "null", "true", r#""50""#] {
             assert!(validate(&format!(r#"{{"appearance.backgroundOpacity":{opacity}}}"#)).is_err());
         }
-        validate(r#"{"appearance.frostedBackground":false,"appearance.translucencyArea":"chrome"}"#)
-            .unwrap();
+        validate(
+            r#"{"appearance.frostedBackground":false,"appearance.translucencyArea":"chrome"}"#,
+        )
+        .unwrap();
         validate(r#"{"appearance.translucencyArea":"window"}"#).unwrap();
         assert!(validate(r#"{"appearance.frostedBackground":null}"#).is_err());
         assert!(validate(r#"{"appearance.translucencyArea":"sidebar"}"#).is_err());

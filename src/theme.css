@@ -32,7 +32,7 @@ body { grid-template-rows:48px minmax(0,1fr); font-size:14px; }
 body::before { display:none; }
 button, input, textarea, select { font:inherit; }
 button { font-weight:550; }
-button.secondary, #browse { color:var(--vscode-button-secondaryForeground); background:var(--nimrod-button-secondary-background, var(--vscode-button-secondaryBackground)); }
+button.secondary, #browse { color:var(--nimrod-button-secondary-foreground, var(--vscode-button-secondaryForeground)); background:var(--nimrod-button-secondary-background, var(--vscode-button-secondaryBackground)); }
 button.secondary:hover, #browse:hover { background:var(--nimrod-button-secondary-control-hover-background, var(--vscode-button-secondaryBackground)); }
 input, select, #host-dialog-input { box-sizing:border-box; width:100%; border:1px solid var(--vscode-input-border); color:var(--vscode-input-foreground); background:var(--vscode-input-background); border-radius:6px; padding:10px 12px; }
 input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }

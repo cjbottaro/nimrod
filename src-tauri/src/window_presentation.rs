@@ -74,7 +74,11 @@ impl PreparationGate {
         generation
     }
     pub fn ready(&self) -> bool {
-        self.0.lock().unwrap().as_ref().is_some_and(|state| state.ready)
+        self.0
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|state| state.ready)
     }
     /// Return true exactly once for the current native creation; stale tokens never consume readiness.
     pub fn accept(&self, generation: &str) -> Result<bool, String> {
@@ -96,10 +100,13 @@ mod tests {
     fn current_creation_reveals_once_and_old_generations_never_consume_new_readiness() {
         let gate = PreparationGate::default();
         let first = gate.begin();
-        assert!(gate.accept("old").is_err()); assert!(!gate.ready());
-        assert!(gate.accept(&first).unwrap()); assert!(!gate.accept(&first).unwrap());
+        assert!(gate.accept("old").is_err());
+        assert!(!gate.ready());
+        assert!(gate.accept(&first).unwrap());
+        assert!(!gate.accept(&first).unwrap());
         let second = gate.begin();
-        assert!(gate.accept(&first).is_err()); assert!(!gate.ready());
+        assert!(gate.accept(&first).is_err());
+        assert!(!gate.ready());
         assert!(gate.accept(&second).unwrap());
     }
     #[test]
@@ -110,7 +117,10 @@ mod tests {
             (include_str!("popouts.rs"), 1),
         ] {
             assert_eq!(source.matches("WebviewWindowBuilder::").count(), count);
-            assert_eq!(source.matches("window_presentation::prepare(").count(), count);
+            assert_eq!(
+                source.matches("window_presentation::prepare(").count(),
+                count
+            );
             assert!(!source.contains("webview_navigation::guard("));
         }
         let navigation = include_str!("webview_navigation.rs");

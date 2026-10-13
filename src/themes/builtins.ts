@@ -1,7 +1,7 @@
-import catalog from './catalog.json';
-import dracula from './dracula.json';
-import tokyoNight from './tokyo-night.json';
-import osakaJade from './osaka-jade.json';
+import catalog from './catalog.json' with { type: 'json' };
+import dracula from './dracula.json' with { type: 'json' };
+import tokyoNight from './tokyo-night.json' with { type: 'json' };
+import osakaJade from './osaka-jade.json' with { type: 'json' };
 import { importTheme, type ColorTheme, type ThemeLibrary } from './theme';
 
 // Nimrod palette adaptations, not complete upstream application themes.

@@ -1,4 +1,4 @@
-import catalog from './catalog.json';
+import catalog from './catalog.json' with { type: 'json' };
 import { publishAppliedTheme } from './applied-theme';
 import { parse, printParseErrorCode, type ParseError } from 'jsonc-parser';
 
@@ -184,7 +184,7 @@ export function applyTheme(root: HTMLElement, theme?: ColorTheme): void {
   root.style.colorScheme = theme.mode;
   const properties = themeProperties(theme);
   for (const [key, color] of Object.entries(properties)) root.style.setProperty(key, color);
-  publishAppliedTheme(root, { id: theme.id, mode: theme.mode, background: properties['--vscode-editor-background'] });
+  publishAppliedTheme(root, { id: theme.id, mode: theme.mode, background: properties['--vscode-editor-background'], paletteSignature: JSON.stringify(properties) });
 }
 
 export function readLibrary(raw: unknown): ThemeLibrary {

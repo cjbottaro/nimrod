@@ -5,6 +5,8 @@ mod command_usage;
 mod drafts;
 mod keybindings;
 mod links;
+#[cfg(target_os = "macos")]
+mod macos_window_appearance;
 mod native_menu;
 mod notifications;
 mod performance_diagnostics;
@@ -27,8 +29,6 @@ mod single_instance;
 mod webview_navigation;
 mod window_appearance;
 mod window_presentation;
-#[cfg(target_os = "macos")]
-mod macos_window_appearance;
 mod window_state;
 mod workspace_windows;
 mod workspaces;
@@ -535,6 +535,8 @@ fn main() {
             project_preferences::project_preferences_settings,
             settings_window::open_global_settings,
             settings_window::settings_window_ready,
+            settings_window::window_opacity_preview_snapshot,
+            settings_window::preview_window_opacity,
             settings_window::open_owned_project_settings,
             settings_window::take_project_settings_request,
             settings_window::take_settings_category,
@@ -590,6 +592,9 @@ fn main() {
         })
         .on_window_event(|window, event| {
             if window.label() == settings_window::LABEL {
+                if matches!(event, tauri::WindowEvent::Destroyed) {
+                    settings_window::destroyed(window.app_handle());
+                }
                 // Settings is app-owned: native close must not run project teardown
                 // or save its geometry under the welcome/project window's key.
                 return;

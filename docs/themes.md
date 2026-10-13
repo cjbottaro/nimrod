@@ -44,6 +44,8 @@ Both Omarchy adaptations stay dark regardless of OS appearance and work without 
 
 Changes apply immediately across project windows and pop-outs and are remembered between launches. They do not change zoom, layout, fonts, draft text, or the conversation. Switching colors does not reset expanded cards, reading position or restart Pi. Native window decorations and OS file choosers still follow platform appearance settings.
 
+Filled buttons use a shared readability policy across every palette, including imports: readable text colours are retained, otherwise a neutral contrast fallback is used. Button fill density can remain higher than the window background opacity to support the label. Button-specific colours are solid RGB, even when a source button token has alpha; the source palette is not modified. See [Translucency](translucency.md).
+
 ## Import a theme
 
 1. Obtain a **standalone VS Code color-theme JSON or JSONC file**.

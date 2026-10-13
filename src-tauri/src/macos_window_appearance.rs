@@ -5,7 +5,11 @@ pub fn reduced_transparency() -> bool {
     objc2_app_kit::NSWorkspace::sharedWorkspace().accessibilityDisplayShouldReduceTransparency()
 }
 
-pub fn apply(window: &tauri::WebviewWindow, frosted: bool, dark: Option<bool>) -> Result<(), String> {
+pub fn apply(
+    window: &tauri::WebviewWindow,
+    frosted: bool,
+    dark: Option<bool>,
+) -> Result<(), String> {
     // Tauri 2.11's set_effects(None) does not clear macOS vibrancy and its
     // apply path discards errors. Use its same underlying library directly,
     // awaited on the main thread, with a real removal path and error result.
@@ -33,8 +37,8 @@ pub fn apply(window: &tauri::WebviewWindow, frosted: bool, dark: Option<bool>) -
                 objc2_app_kit::NSAppearanceNameAqua
             }
         };
-        let appearance = NSAppearance::appearanceNamed(name)
-            .ok_or("Native window appearance is unavailable")?;
+        let appearance =
+            NSAppearance::appearanceNamed(name).ok_or("Native window appearance is unavailable")?;
         native.setAppearance(Some(&appearance));
     } else {
         // Nimrod (system) must keep following OS appearance changes.
@@ -83,11 +87,7 @@ pub fn tint_titlebar(window: &tauri::WebviewWindow, color: [u8; 4]) -> Result<()
             return Ok(());
         };
         let size = view.bounds().size;
-        if width > 0.0
-            && size.width >= width * 0.9
-            && size.height > 0.0
-            && size.height <= 120.0
-        {
+        if width > 0.0 && size.width >= width * 0.9 && size.height > 0.0 && size.height <= 120.0 {
             view.setWantsLayer(true);
             if let Some(layer) = view.layer() {
                 let fill = NSColor::colorWithSRGBRed_green_blue_alpha(
@@ -104,4 +104,3 @@ pub fn tint_titlebar(window: &tauri::WebviewWindow, color: [u8; 4]) -> Result<()
     }
     Ok(())
 }
-

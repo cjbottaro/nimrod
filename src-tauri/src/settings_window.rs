@@ -9,6 +9,77 @@ pub struct SettingsWindow {
     projects: std::sync::Mutex<std::collections::HashSet<String>>,
     keybindings_requested: std::sync::Mutex<bool>,
     presentation: crate::window_presentation::PreparationGate,
+    opacity_preview: std::sync::Mutex<OpacityPreview>,
+}
+
+#[derive(Clone, Default, serde::Serialize)]
+pub struct OpacityPreviewSnapshot {
+    revision: u64,
+    opacity: Option<u8>,
+}
+#[derive(Default)]
+struct OpacityPreview {
+    generation: Option<String>,
+    snapshot: OpacityPreviewSnapshot,
+}
+impl OpacityPreview {
+    fn update(&mut self, generation: &str, opacity: Option<u8>) -> Result<bool, String> {
+        if self.generation.as_deref() != Some(generation) {
+            return Err("Opacity preview belongs to a closed Settings window".into());
+        }
+        if opacity.is_some_and(|value| value > 100) {
+            return Err("Background opacity must be from 0 to 100".into());
+        }
+        Ok(self.set(opacity))
+    }
+    fn set(&mut self, opacity: Option<u8>) -> bool {
+        if self.snapshot.opacity == opacity {
+            return false;
+        }
+        self.snapshot.revision += 1;
+        self.snapshot.opacity = opacity;
+        true
+    }
+}
+
+/// Paint-only state: never a settings-file write or a project/theme override.
+#[tauri::command]
+pub fn window_opacity_preview_snapshot(app: tauri::AppHandle) -> OpacityPreviewSnapshot {
+    app.state::<SettingsWindow>()
+        .opacity_preview
+        .lock()
+        .unwrap()
+        .snapshot
+        .clone()
+}
+#[tauri::command]
+pub fn preview_window_opacity(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    generation: String,
+    opacity: Option<u8>,
+) -> Result<OpacityPreviewSnapshot, String> {
+    use tauri::Emitter;
+    if window.label() != LABEL {
+        return Err("Only global Settings can preview window opacity".into());
+    }
+    let state = app.state::<SettingsWindow>();
+    let mut preview = state.opacity_preview.lock().unwrap();
+    if preview.update(&generation, opacity)? {
+        app.emit("nimrod-window-opacity-preview", &preview.snapshot)
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(preview.snapshot.clone())
+}
+
+pub fn destroyed(app: &tauri::AppHandle) {
+    use tauri::Emitter;
+    let state = app.state::<SettingsWindow>();
+    let mut preview = state.opacity_preview.lock().unwrap();
+    preview.generation = None;
+    if preview.set(None) {
+        let _ = app.emit("nimrod-window-opacity-preview", &preview.snapshot);
+    }
 }
 
 pub fn is_ready(app: &tauri::AppHandle) -> bool {
@@ -48,6 +119,7 @@ pub fn open(app: &tauri::AppHandle, category: Option<&str>) -> Result<(), String
     // A failed/closed earlier window must not leave a stale category request.
     *state.keybindings_requested.lock().unwrap() = category == "keybindings";
     let generation = state.presentation.begin();
+    state.opacity_preview.lock().unwrap().generation = Some(generation.clone());
     let builder = tauri::WebviewWindowBuilder::new(
         app,
         LABEL,
@@ -157,6 +229,29 @@ pub fn open_global_settings(app: tauri::AppHandle, category: Option<String>) -> 
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn preview_is_bounded_generation_owned_revisioned_and_cleared_on_close() {
+        let mut preview = OpacityPreview {
+            generation: Some("first".into()),
+            ..Default::default()
+        };
+        assert!(preview.update("old", Some(50)).is_err());
+        assert!(preview.update("first", Some(101)).is_err());
+        assert!(preview.update("first", Some(65)).unwrap());
+        assert_eq!(preview.snapshot.opacity, Some(65));
+        assert_eq!(preview.snapshot.revision, 1);
+        assert!(!preview.update("first", Some(65)).unwrap());
+        preview.generation = None;
+        assert!(preview.set(None));
+        assert_eq!(preview.snapshot.revision, 2);
+        assert!(preview.update("first", Some(20)).is_err());
+        preview.generation = Some("second".into());
+        assert!(preview.update("first", Some(20)).is_err());
+        assert!(preview.update("second", Some(0)).unwrap());
+    }
+
     #[test]
     fn new_settings_is_hidden_until_its_own_frontend_ready_signal() {
         let source = include_str!("settings_window.rs");
