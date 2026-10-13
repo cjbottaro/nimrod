@@ -26,6 +26,24 @@ export function readWindowAppearance(settings: Record<string, unknown>): WindowA
   return { opacity, frosted, area };
 }
 
+/** Preserve surface hierarchy and converge to the opaque palette, not a 99% style switch.
+ * Overlays are composited over an already-tinted parent. Keep modest role-specific
+ * density at low opacity, then ease their color contribution to 100% near opaque.
+ */
+export function windowSurfaceOpacities(opacity: number) {
+  const base = opacity / 100;
+  const endpoint = base ** 8;
+  const blend = (minimum: number) => minimum + (1 - minimum) * endpoint;
+  const panel = blend(.25);
+  return {
+    endpoint, control: blend(.10), panel,
+    button: blend(.35), buttonHover: blend(.45), state: blend(.30),
+    selection: blend(.45), danger: blend(.45),
+    // A fixed-position application strip has no tinted parent beneath it.
+    notice: base + (1 - base) * panel,
+  };
+}
+
 export interface AppearanceControls {
   opacity: HTMLInputElement; value: HTMLOutputElement; area: HTMLSelectElement;
   frostGroup: HTMLElement; frosted: HTMLInputElement; hint: HTMLElement;
@@ -89,9 +107,19 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
       paintSignature = signature;
       root.dataset.translucency = enabled ? value.area : 'off';
       root.style.setProperty('--nimrod-background-opacity', `${value.opacity}%`);
-      // This is an additional overlay on an already tinted parent, not another
-      // full-opacity surface. An 85% overlay over a 65% base became 95% opaque.
-      root.style.setProperty('--nimrod-control-overlay-opacity', `${Math.round(value.opacity * .2)}%`);
+      const surfaces = windowSurfaceOpacities(value.opacity);
+      const properties = {
+        '--nimrod-control-overlay-opacity': surfaces.control,
+        '--nimrod-panel-overlay-opacity': surfaces.panel,
+        '--nimrod-button-opacity': surfaces.button,
+        '--nimrod-button-hover-opacity': surfaces.buttonHover,
+        '--nimrod-state-opacity': surfaces.state,
+        '--nimrod-selection-opacity': surfaces.selection,
+        '--nimrod-danger-opacity': surfaces.danger,
+        '--nimrod-notice-opacity': surfaces.notice,
+        '--nimrod-opaque-color-weight': surfaces.endpoint,
+      };
+      for (const [key, alpha] of Object.entries(properties)) root.style.setProperty(key, `${Number((alpha * 100).toFixed(4))}%`);
       if (controls) {
         controls.opacity.value = String(value.opacity);
         controls.value.value = value.opacity === 100 ? '100% · Opaque' : `${value.opacity}%`;

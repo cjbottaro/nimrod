@@ -45,7 +45,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Shared modal shell and action focus | [Modal layout](references/modal-layout.md) | [Confirmations](../../../docs/command-palette.md#confirmation-dialogs) |
 | Opt-in timing history, explicit local capture and bounded report storage | [Performance diagnostics](references/performance-diagnostics.md) | [Performance reports](../../../docs/performance-diagnostics.md) |
 | Completed performance work, rationale/results and potential future optimizations (catalogue, not replacement feature contracts) | [Performance optimizations skill](../performance-optimizations/SKILL.md) | Agent-facing only |
-| Window opacity, native/compositor blur, surface selection and accessibility | [Translucency](references/translucency.md) | [Translucency](../../../docs/translucency.md) |
+| Window opacity, continuous surface hierarchy, native/compositor blur and accessibility | [Translucency](references/translucency.md) | [Translucency](../../../docs/translucency.md) |
 | Theme selection, preview, import and synchronization | [Themes](references/themes.md) | [Themes](../../../docs/themes.md) |
 | Theme-catalog maintenance and pinned sources | [Theme catalog](references/theme-catalog.md) | [Contributing](../../../CONTRIBUTING.md) |
 | Explicit builds, publication and compiler cache | [Build workflow](references/build-cache.md) | [Contributing](../../../CONTRIBUTING.md#app-builds) |

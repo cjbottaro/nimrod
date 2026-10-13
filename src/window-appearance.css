@@ -18,8 +18,8 @@
 :root[data-translucency=window] {
   --nimrod-surface-content:color-mix(in srgb, var(--vscode-editor-background) var(--nimrod-background-opacity), transparent);
   --nimrod-surface-controls:color-mix(in srgb, var(--vscode-editor-background) var(--nimrod-control-overlay-opacity), transparent);
-  --nimrod-surface-status:color-mix(in srgb, var(--vscode-editorWidget-background) var(--nimrod-control-overlay-opacity), transparent);
-  --nimrod-surface-notice:color-mix(in srgb, color-mix(in srgb, var(--vscode-descriptionForeground) 6%, var(--vscode-editor-background)) var(--nimrod-control-overlay-opacity), transparent);
+  --nimrod-surface-status:color-mix(in srgb, var(--vscode-editorWidget-background) var(--nimrod-panel-overlay-opacity), transparent);
+  --nimrod-surface-notice:color-mix(in srgb, color-mix(in srgb, var(--vscode-descriptionForeground) 6%, var(--vscode-editor-background)) var(--nimrod-panel-overlay-opacity), transparent);
 }
 :root:is([data-translucency=chrome], [data-translucency=window]) #workspace-bar,
 :root:is([data-translucency=chrome], [data-translucency=window]) .settings-header { background:var(--nimrod-surface-project-bar); }
@@ -30,20 +30,26 @@
 :root[data-translucency=window] :is(#composer-area, [data-pi-id="composer-area"]) { background:var(--nimrod-surface-controls); }
 :root[data-translucency=window] :is(#activity, [data-pi-id="activity"]) { background:var(--nimrod-surface-status); }
 :root[data-translucency=window] .session-notices { background:var(--nimrod-surface-notice); }
-:root[data-translucency=window] #application-notices { background:var(--nimrod-surface-chrome); }
+:root[data-translucency=window] #application-notices { background:color-mix(in srgb, var(--vscode-editorWidget-background) var(--nimrod-notice-opacity), transparent); }
 /* Shared controls use these semantic fills rather than per-button overrides.
    Chrome-only inherits them just inside the chrome; the conversation is unchanged.
    Foregrounds, focus rings and attention borders never receive container opacity. */
 :root[data-translucency=window],
 :root[data-translucency=chrome] :is(#workspace-bar, .settings-header, .layout-sidebar) {
-  --nimrod-button-foreground:var(--vscode-foreground);
-  --nimrod-button-background:color-mix(in srgb, var(--vscode-button-background) 30%, transparent);
-  --nimrod-button-hover-background:color-mix(in srgb, var(--vscode-button-hoverBackground) 45%, transparent);
+  --nimrod-button-foreground:color-mix(in srgb, var(--vscode-button-foreground) var(--nimrod-opaque-color-weight), var(--vscode-foreground));
+  --nimrod-danger-foreground:color-mix(in srgb, var(--vscode-editor-background) var(--nimrod-opaque-color-weight), var(--vscode-foreground));
+  --nimrod-button-background:color-mix(in srgb, var(--vscode-button-background) var(--nimrod-button-opacity), transparent);
+  --nimrod-button-hover-background:color-mix(in srgb, var(--vscode-button-hoverBackground) var(--nimrod-button-hover-opacity), transparent);
   --nimrod-button-secondary-background:color-mix(in srgb, var(--vscode-button-secondaryBackground, var(--vscode-button-background)) var(--nimrod-control-overlay-opacity), transparent);
-  --nimrod-button-secondary-hover-background:color-mix(in srgb, var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground)) 30%, transparent);
-  --nimrod-toolbar-hover-background:color-mix(in srgb, var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground)) 30%, transparent);
-  --nimrod-selection-background:color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 45%, transparent);
-  --nimrod-danger-background:color-mix(in srgb, var(--vscode-errorForeground) 45%, transparent);
+  --nimrod-button-secondary-hover-background:color-mix(in srgb, var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground)) var(--nimrod-state-opacity), transparent);
+  --nimrod-secondary-control-hover-color:color-mix(in srgb, var(--vscode-button-secondaryBackground) var(--nimrod-opaque-color-weight), var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground)));
+  --nimrod-button-secondary-control-hover-background:color-mix(in srgb, var(--nimrod-secondary-control-hover-color) var(--nimrod-state-opacity), transparent);
+  --nimrod-toolbar-hover-background:color-mix(in srgb, var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground)) var(--nimrod-state-opacity), transparent);
+  --nimrod-list-hover-background:color-mix(in srgb, var(--vscode-list-hoverBackground, var(--vscode-toolbar-hoverBackground)) var(--nimrod-state-opacity), transparent);
+  --nimrod-selection-background:color-mix(in srgb, var(--vscode-list-activeSelectionBackground) var(--nimrod-selection-opacity), transparent);
+  --nimrod-quick-selection-background:color-mix(in srgb, var(--vscode-quickInputList-focusBackground, var(--vscode-list-focusBackground)) var(--nimrod-selection-opacity), transparent);
+  --nimrod-suggestion-selection-background:color-mix(in srgb, var(--vscode-editorSuggestWidget-selectedBackground, var(--vscode-list-activeSelectionBackground)) var(--nimrod-selection-opacity), transparent);
+  --nimrod-danger-background:color-mix(in srgb, var(--vscode-errorForeground) var(--nimrod-danger-opacity), transparent);
 }
 /* Keep code, suggestions and ordinary dialogs opaque.
    Settings is a full-window surface: reveal the desktop, not the conversation
@@ -62,15 +68,21 @@
     --nimrod-surface-status:var(--vscode-editorWidget-background);
     --nimrod-surface-notice:color-mix(in srgb, var(--vscode-descriptionForeground) 6%, var(--vscode-editor-background));
   }
+  :root[data-translucency=window] #application-notices { background:var(--vscode-editorWidget-background); }
   :root[data-translucency=window],
   :root[data-translucency=chrome] :is(#workspace-bar, .settings-header, .layout-sidebar) {
     --nimrod-button-foreground:initial;
+    --nimrod-danger-foreground:initial;
     --nimrod-button-background:initial;
     --nimrod-button-hover-background:initial;
     --nimrod-button-secondary-background:initial;
     --nimrod-button-secondary-hover-background:initial;
+    --nimrod-button-secondary-control-hover-background:initial;
     --nimrod-toolbar-hover-background:initial;
+    --nimrod-list-hover-background:initial;
     --nimrod-selection-background:initial;
+    --nimrod-quick-selection-background:initial;
+    --nimrod-suggestion-selection-background:initial;
     --nimrod-danger-background:initial;
   }
 }
