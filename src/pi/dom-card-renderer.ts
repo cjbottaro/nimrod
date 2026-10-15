@@ -1,4 +1,5 @@
 import { isSafeLink } from './safe-markdown';
+import { renderConsoleOutput, clearConsoleOutput } from './console-output';
 import { validatePresentation, type CardPresentation, type CardRenderer } from './card-renderer';
 
 import type { CardPlugin as DomCardRenderer, CardPluginInstance as DomCardInstance, CardPluginContext, CardUpdateState } from '../card-plugin-api';
@@ -221,7 +222,9 @@ export class DomCardController<Data> {
       const previous = this.content.get(output);
       if (previous?.text !== part.text || previous.format !== format) {
         this.content.set(output, { text: part.text, format });
-        if (format === 'diff') {
+        if (format !== 'console') clearConsoleOutput(output);
+        if (format === 'console') renderConsoleOutput(output, part.text);
+        else if (format === 'diff') {
           output.replaceChildren();
           for (const line of part.text.split('\n')) {
             const span = doc.createElement('span'); span.className = line.startsWith('+') ? 'hljs-addition' : line.startsWith('-') ? 'hljs-deletion' : '';

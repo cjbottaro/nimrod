@@ -8,7 +8,7 @@ export interface ToolCardData {
   isError?: boolean;
   toolStatus?: 'running' | 'finished' | 'result';
 }
-export interface CardSection { key: string; label: string; text: string; format?: 'text' | 'markdown' | 'diff'; }
+export interface CardSection { key: string; label: string; text: string; format?: 'text' | 'markdown' | 'diff' | 'console'; }
 export interface CardPresentation {
   title: string;
   preview?: string;

@@ -9,7 +9,7 @@ for (const follow of [false, true]) test(`hidden streaming leaves transcript DOM
     const token = [...demo.children.keys()][0];
     const row = page.locator(`.session-row[aria-controls="${panel}"]`);
     const ids = ['hidden-output-one', 'hidden-output-two'];
-    const output = Array.from({ length: 70 }, (_, i) => `Original line ${i}`).join('\n');
+    const output = '\x1b[32m' + Array.from({ length: 70 }, (_, i) => `Original line ${i}`).join('\n') + '\x1b[0m';
     await page.evaluate(({ token, ids, output }) => {
       const channels = (window as unknown as { __fixtureChannels: Record<string, { onmessage(packet: unknown): void }> }).__fixtureChannels;
       const emit = (value: object) => channels[token].onmessage({ kind: 'rpc', value });

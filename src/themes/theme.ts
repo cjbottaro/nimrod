@@ -29,7 +29,11 @@ export const COLOR_KEYS = [
   'editorSuggestWidget.selectedBackground', 'editorSuggestWidget.selectedForeground',
   'symbolIcon.keywordForeground', 'symbolIcon.stringForeground', 'symbolIcon.numberForeground',
   'symbolIcon.functionForeground', 'symbolIcon.classForeground', 'symbolIcon.regexpForeground',
-  'testing.iconPassed', 'testing.iconFailed', 'terminal.ansiGreen', 'terminal.ansiRed', 'terminal.ansiYellow',
+  'testing.iconPassed', 'testing.iconFailed',
+  'terminal.ansiBlack', 'terminal.ansiRed', 'terminal.ansiGreen', 'terminal.ansiYellow',
+  'terminal.ansiBlue', 'terminal.ansiMagenta', 'terminal.ansiCyan', 'terminal.ansiWhite',
+  'terminal.ansiBrightBlack', 'terminal.ansiBrightRed', 'terminal.ansiBrightGreen', 'terminal.ansiBrightYellow',
+  'terminal.ansiBrightBlue', 'terminal.ansiBrightMagenta', 'terminal.ansiBrightCyan', 'terminal.ansiBrightWhite',
 ] as const;
 const allowedColors = new Set<string>(COLOR_KEYS);
 

@@ -21,7 +21,13 @@ export const defaultToolRenderer: CardRenderer<ToolCardBlock> = {
   id: 'nimrod.tool',
   supports: () => true,
   mount: () => ({
-    update: block => ({ ...rawToolPresentation(block), preview: inputPresentation(typeof block.name === 'string' ? block.name : 'tool', block.arguments, block.toolStatus !== undefined)?.value }),
+    update: block => {
+      const presentation = rawToolPresentation(block);
+      if (isBashTool(normalizedToolName(presentation.title))) {
+        presentation.sections = presentation.sections.map(section => ({ ...section, format: 'console' as const }));
+      }
+      return { ...presentation, preview: inputPresentation(typeof block.name === 'string' ? block.name : 'tool', block.arguments, block.toolStatus !== undefined)?.value };
+    },
     dispose() {},
   }),
 };

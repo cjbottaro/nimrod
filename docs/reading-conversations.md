@@ -13,6 +13,14 @@ Click a disclosure arrow or summary to expand a card.
 
 Cards start closed. Sustained non-empty execution updates may open a running tool after about half a second; a fast final result alone does not. Your manual disclosure choice wins. Inspecting one tool's output does not reset another tool's reading position.
 
+### Console-style command output
+
+Bash, shell and terminal tool cards render ANSI colors and text styles in both live output and results. Carriage returns, backspaces, tabs, line clearing and common relative cursor movements render progress updates instead of printing escape codes. Output remains selectable text in the existing scrollable viewport; colors follow the theme's terminal palette where available.
+
+When rendering changes the supplied text, a separate **Raw output** disclosure retains the exact original output, including escape sequences. Other tools keep literal output unless their card plugin requests console rendering.
+
+This is a log renderer, not an interactive terminal: full-screen applications, alternate screens, terminal resizing and exact wide/combining-character cursor geometry are not emulated. Unsupported terminal controls are ignored; terminal titles, clipboard commands and embedded terminal links have no effect. Nimrod renders what Pi supplies—it cannot recover omitted/truncated output or make a command behave as though it had a TTY.
+
 ## Code and links
 
 Code blocks have **Pop out** and **Copy** icons. Copy returns source text and briefly shows a checkmark on success. [Pop-outs](pop-outs.md) capture code or rendered Markdown in separate reference windows; later output does not update the capture.

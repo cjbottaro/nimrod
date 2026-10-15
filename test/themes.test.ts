@@ -12,6 +12,25 @@ import { webviewHtml, rendererBundle } from './view-fixture';
 const minimal = { name: 'Sample', colors: { 'editor.background': '#112233', 'editor.foreground': '#eeddcc' } };
 const parse = (value: unknown, filename = 'theme.json') => importTheme(JSON.stringify(value), filename, 'import-test');
 
+test('all standard/bright terminal palette tokens survive imports and clear on theme changes', () => {
+  const names = ['Black', 'Red', 'Green', 'Yellow', 'Blue', 'Magenta', 'Cyan', 'White'];
+  const colors = Object.fromEntries(['', 'Bright'].flatMap(bright => names.map(name => [`terminal.ansi${bright}${name}`, '#123abc'])));
+  const theme = parse({ ...minimal, colors: { ...minimal.colors, ...colors } }).theme;
+  const dom = new JSDOM(''); const root = dom.window.document.documentElement;
+  try {
+    applyTheme(root, theme);
+    for (const key of Object.keys(colors)) {
+      assert.equal(theme.colors[key], '#123abc');
+      assert.equal(root.style.getPropertyValue(`--vscode-${key.replaceAll('.', '-')}`), '#123abc');
+    }
+    applyTheme(root, parse(minimal).theme);
+    assert.equal(root.style.getPropertyValue('--vscode-terminal-ansiBlue'), '');
+    assert.equal(root.style.getPropertyValue('--vscode-terminal-ansiBrightRed'), '');
+    applyTheme(root);
+    for (const key of Object.keys(colors)) assert.equal(root.style.getPropertyValue(`--vscode-${key.replaceAll('.', '-')}`), '');
+  } finally { dom.window.close(); }
+});
+
 test('Dracula uses the official base/accent/syntax palette', () => {
   assert.equal(DRACULA.name, 'Dracula'); assert.equal(DRACULA.mode, 'dark');
   const properties = themeProperties(DRACULA);

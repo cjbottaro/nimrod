@@ -56,7 +56,7 @@ Updates receive cloned, deeply frozen data snapshots and frozen lifecycle state;
 | --- | --- |
 | `document`, `summary`, `body` | Owner document and plugin-owned content slots. Build custom HTML with DOM APIs; use `textContent` for agent-provided strings. |
 | `markdown(source)`, `code(source, language?)` | Existing safe Markdown/highlighting and code controls. Rendering is local; no provider request. |
-| `renderPresentation(value)` | Optional incremental helper for title/preview, keyed text/Markdown/diff sections and keyed member labels. Custom DOM is not limited to this helper. |
+| `renderPresentation(value)` | Optional incremental helper for title/preview, keyed text/Markdown/diff/console sections and keyed member labels. Custom DOM is not limited to this helper. |
 | `registerOutput(key, element)` | Register a stable independently scrolling viewport inside your body. Core applies live/final caps and preserves its reading position. Returns an unregister function. |
 | `mutate(change)` | Capture transcript/output intent **before** a later synchronous DOM/layout change, then reconcile through core. Use it inside async completion handlers; direct async mutations cannot promise scroll preservation. |
 | `on(target, type, handler)` | Managed handler with active/modal/disposal guards and exception/rejection containment. Returns an unsubscribe function. |
@@ -64,6 +64,8 @@ Updates receive cloned, deeply frozen data snapshots and frozen lifecycle state;
 | `copy(text)` | Copy exact text via the host. Also available for historical/disconnected cards. |
 | `openLink(href)` | Existing validated HTTP(S)/file/editor handoff, relative to the owning project. Never navigate the app webview. |
 | `popOutCode(text, language?)` | Existing immutable session-owned pop-out request. Queued opens retain selected-session guards; stale requests may be suppressed. |
+
+Sections may set `format: 'console'` to render ANSI colors/styles and common command-log progress controls. It uses the same keyed viewport, lifecycle caps and reading-position ownership as text sections. It is not an interactive/full-screen terminal. Exact source is retained in the core **Raw output** disclosure when the rendered text differs. See [console-style command output](reading-conversations.md#console-style-command-output) for supported behavior and limits.
 
 Presentation actions require a mounted active card and no modal. Handle expected operation failures in your UI, and check `signal.aborted` after awaiting before changing it. No prompt submission, tool execution, filesystem access, configuration mutation or unrestricted IPC is provided by this API.
 
