@@ -15,6 +15,8 @@ Apply the [optimistic interaction policy](references/architecture.md#optimistic-
 
 ## Changelog and release policy
 
+For requests to generate, prepare, cut, ship, publish or retry a release, load the dedicated [release skill](../release/SKILL.md). It requires a concrete version/source/changelog/platform/validation preview and a subsequent explicit approval before release metadata edits, tags or publication. Ordinary task commit/merge authorization does not bypass that gate.
+
 For every task, assess user-visible impact before completion. Meaningful implemented features, behavior changes, fixes, removals, compatibility or installation changes update the root [CHANGELOG.md](../../../CHANGELOG.md) under **Unreleased**, in the same commit as the implementation. Otherwise explicitly report why no changelog entry is warranted. Pure refactors, test maintenance, routine documentation and policy-only changes normally need no entry.
 
 Unreleased is a curated description of the final behavior, not an agent activity log: consolidate related iterations, preserve other tasks' entries and never rewrite published history. Follow the canonical [development/changelog policy](references/releases.md#development-and-changelog-policy) for categories, breaking changes, release preparation and prerelease snapshots.
@@ -58,6 +60,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Theme selection, preview, import and synchronization | [Themes](references/themes.md) | [Themes](../../../docs/themes.md) |
 | Theme-catalog maintenance and pinned sources | [Theme catalog](references/theme-catalog.md) | [Contributing](../../../CONTRIBUTING.md) |
 | Changelog maintenance, rapid local development and release preparation | [Development/changelog policy](references/releases.md#development-and-changelog-policy) | [Changelog](../../../CHANGELOG.md), [Contributing](../../../CONTRIBUTING.md#changelog-and-local-development) |
+| Agent-assisted release proposals, mandatory preview/approval and scoped publication | [Release skill](../release/SKILL.md), [approval contract](references/releases.md#agent-release-preview-and-approval) | [Agent-assisted releases](../../../CONTRIBUTING.md#agent-assisted-releases) |
 | Signed GitHub releases, Homebrew cask and packaged launcher | [Release distribution](references/releases.md) | [Installation](../../../docs/installation.md), [Release setup](../../../CONTRIBUTING.md#release-setup) |
 | Explicit builds, publication and compiler cache | [Build workflow](references/build-cache.md) | [Contributing](../../../CONTRIBUTING.md#app-builds) |
 | Optional external renderer for Pi web search/fetch/stored content/source check | [Pi Web Access cards](references/pi-web-access-plugin.md) | [Pi Web Access cards](../../../docs/pi-web-access-plugin.md) |

@@ -36,6 +36,20 @@ Publication writes the extracted body to `release-notes.md`, passes it with `gh 
 
 The macOS release workflow, verifier, artifact names/checksums and Homebrew cask target **Apple Silicon only** (`aarch64-apple-darwin`, ARM64). The cask has an explicit ARM64 dependency and a fixed ARM download URL. This does not alter source/local-build targets, narrow the Linux roadmap or claim Linux acceptance. No tag, version bump, workflow dispatch or release is performed by implementing this behavior.
 
+## Agent release preview and approval
+
+The dedicated [release skill](../../release/SKILL.md) is the entry point for requests to generate, prepare, cut, ship, publish or retry a release. The initial request authorizes a local read-only proposal, not execution. This preview gate overrides ordinary task commit/merge preauthorization for release version/changelog preparation. It is an agent workflow contract, not a GitHub Actions enforcement mechanism: a directly pushed version tag can still trigger the workflow.
+
+Before release metadata changes or publication, the agent must present the proposed version/tag, stable/prerelease channel, exact source base and included scope, complete proposed changelog/release-note body, stable date/rollover or prerelease snapshot plan, exact version-file changes, actual workflow platforms/artifacts, destination repository/title, Homebrew/tap effect, validation evidence tied to revisions, hard blockers and unverified prerequisites. Unknown remote state and unrun validation must be labeled, never guessed. Local development remains independent of release preparation.
+
+The preview must enumerate requested permissions: local preparation commit/merge; any separately requested local checks/builds; exact remote/ref pushes or an explicitly chosen retry/dispatch; and the resulting remote CI signing/notarization, public GitHub release and stable Homebrew update. Stop and await a subsequent explicit affirmative response to the concrete publication question. A generic initial “publish a release” request, agreement with notes alone, silence or ambiguous acknowledgement does not bypass review. Preparation-only approval stops before tags, pushes or remote actions. Permission to inspect remote state or validate is not permission to publish.
+
+Approval applies only to that source base plus the disclosed metadata-only preparation diff, version/channel, notes/date, platform/artifact scope and destination/action set. New feature commits, main drift, modified notes/version/workflow/platforms or expanded remote actions require a fresh preview and approval. Do not silently include newer main changes or inherit assumed approval from another session. Recheck the final preparation diff/commit before creating/pushing the tag; preserve unrelated changes and stop on conflicts.
+
+Publication approval can authorize the remote checks/build/signing pipeline when disclosed; it does not automatically authorize local packaging, user-app interruption, repository/credential administration, bypassing protection, force pushes, tag moves, deleting releases/assets or worktree cleanup. Inspect remote prerequisites only within explicit authorization. Known validation failures must be resolved, not hidden; unrun local checks are not passes, and CI checks cannot be skipped. Revalidate newly discovered blockers before proceeding.
+
+After execution, report the exact version/tag/commit and actual workflow, GitHub release and tap state. A successful tag push is not a completed release. Verify ambiguous acceptance before retrying and apply the immutable-publication/recovery contract below. Never rebuild/overwrite public assets to resolve a retry, or claim pending signing/platform acceptance as complete.
+
 ## Contract
 
 - Version tags `vMAJOR.MINOR.PATCH` create stable releases; valid SemVer prerelease suffixes create GitHub prereleases only. Build metadata suffixes are deliberately unsupported.
@@ -54,6 +68,7 @@ The macOS release workflow, verifier, artifact names/checksums and Homebrew cask
 
 ## Code map
 
+- `.agents/skills/release/SKILL.md`: discoverable operational workflow with local preview, scoped explicit approval, drift checks, approved execution and accurate outcome reporting. No publishing command is executed by merely loading the skill.
 - `.github/workflows/release.yml`: tag/manual triggers, tag/version/changelog preflight, pinned source identity, one native ARM build, publication, stable tap update.
 - `src-tauri/tauri.release.conf.json`: release-only DMG/app targets, null signing identity removes the local ad-hoc override so APPLE_SIGNING_IDENTITY applies, hardened runtime and deployment floor.
 - `scripts/prepare-release-signing.sh`: environment preflight, temporary certificate/private-key setup.

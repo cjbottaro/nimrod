@@ -106,7 +106,17 @@ See [Tauri macOS signing](https://v2.tauri.app/distribute/sign/macos/) and [Appl
 
 The generated cask requires ARM64, uses the final Apple Silicon DMG's checksum, installs the app and links its packaged `nimrod` launcher. It does not install Node/Pi, bypass quarantine or purge user data on uninstall. No private token is needed by end users.
 
-### Cut a release
+### Agent-assisted releases
+
+Invoke **`/skill:release`**, optionally with a version/channel such as `/skill:release prepare v0.1.0-alpha.1`, or ask the agent to **prepare a release**, **generate a release**, or **prepare an alpha release**. The dedicated [release skill](.agents/skills/release/SKILL.md) is named `release` and is discovered from `.agents/skills/release/`; existing sessions may need a supported reload/restart or a new session to discover it. Nimrod does not implement Pi's `/reload`. The skill first inspects local state and shows a proposal; even an initial “publish a release” request or command arguments do not bypass this preview.
+
+The preview includes the proposed version/tag and channel, source commit/scope, complete exact release notes, changelog/date and version-file plan, supported platforms/artifacts, GitHub destination, whether Homebrew updates, validation results and outstanding blockers/unknowns. It also lists the actions requiring permission, including any pushes and the resulting remote build/signing/publication. Release metadata changes, tags and publication wait for approval of that concrete preview. Remote inspection and checks/builds require separate explicit authorization; the default preview is local and read-only.
+
+The agent then **stops for explicit approval**. An affirmative answer to its specific publication question authorizes only that preview's disclosed scope; approval of the notes alone does not authorize publishing. You can request preparation only, with no tag or push. If source, notes, version, platforms or other material inputs change, the agent must preview again. Expected metadata-only preparation edits are included in the original preview, so their new commit ID alone does not require another review.
+
+This is an agent instruction, not a new GitHub workflow gate. Direct tag pushes still trigger the pipeline, and any separately configured GitHub environment approvals still apply. The agent must distinguish a queued workflow from a finished release and report GitHub and Homebrew outcomes separately. This workflow never turns routine local builds into releases.
+
+### Cut a release manually
 
 Follow [changelog and local-development policy](#changelog-and-local-development): release preparation is deliberate, not part of routine personal builds. Review the matching changelog section or prerelease snapshot along with the version bump. Release changes must already be merged into main. Set **all** version locations to the exact version, including a prerelease suffix if applicable:
 
@@ -122,7 +132,7 @@ git push origin main
 git push origin v0.1.0
 ```
 
-Those pushes trigger remote builds and publication; they are operator actions, not something an agent runs as part of local implementation. A manual **Actions → Release → Run workflow** also accepts an existing tag; dispatch from main. The tag must resolve to a commit reachable from main, and its version must match all package identities. Publication rechecks that the remote tag still resolves to the prepared source commit. Do not move published tags.
+Those pushes trigger remote builds and publication. They are explicit operator actions; an agent may perform them only after the [release preview and publication approval](#agent-assisted-releases), never as part of ordinary local implementation. A manual **Actions → Release → Run workflow** also accepts an existing tag; dispatch from main. The tag must resolve to a commit reachable from main, and its version must match all package identities. Publication rechecks that the remote tag still resolves to the prepared source commit. Do not move published tags.
 
 The pipeline validates the tag's changelog notes, runs offline checks, then signs/notarizes/verifies the Apple Silicon app and its compiler sidecar. It additionally notarizes/staples the final DMG, generates `SHA256SUMS` from its final bytes, creates/uploads a draft release with the reviewed changelog body, and publishes only after verification passes. The body is also retained as `release-notes.md`; draft retries refresh it from the same tagged source, while public retries must match the existing notes and assets rather than rewriting them. Stable releases include the generated `nimrod.rb` and update the tap. Prereleases such as `v0.2.0-alpha.1` publish to GitHub only and do not replace the latest stable release.
 
