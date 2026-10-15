@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom';
 import { webviewHtml, rendererBundle } from './view-fixture';
 import { createSafeMarkdownRenderer } from '../src/pi/safe-markdown';
 import { initialConversationState, reduceRpcEvent } from '../src/pi/reducer';
+import { TranscriptUpdates } from '../src/pi/transcript-updates';
 
 function fixture(options: { sendAutoFollow?: import('../src/pi/view-host').ViewHost['sendAutoFollow']; performance?: import('../src/pi/view-host').ViewHost['performance']; reportNotice?: import('../src/pi/view-host').ViewHost['reportNotice']; resolveNotice?: import('../src/pi/view-host').ViewHost['resolveNotice']; images?: boolean; clipboard?: boolean; missing?: boolean; imageGate?: Promise<void>; releaseOnClear?: boolean; cardRenderer?: import('../src/pi/view-host').ViewHost['cardRenderer']; cardActions?: import('../src/pi/view-host').ViewHost['cardActions'] } = {}) {
   const dom = new JSDOM(webviewHtml(), { runScripts: 'outside-only', pretendToBeVisual: true });
@@ -1065,6 +1066,77 @@ for (const outcome of ['rejected', 'unknown'] as const) test(`image send ${outco
     assert.equal(f.win.document.querySelector("[data-action='dismiss-unknown']"), null);
     assert.equal(f.win.document.querySelectorAll('.composer-attachments img').length, 0);
     f.send(); assert.equal(f.sent.filter(message => message.type === 'prompt').length, 1);
+  } finally { f.dom.window.close(); }
+});
+
+test('incremental parallel streams coalesce dirty rows without materializing history or touching unrelated outputs', () => {
+  const calls = new Map<string, number>(); let mounts = 0;
+  const f = fixture({ cardRenderer: () => ({ apiVersion: 2, id: 'fixture.incremental', supports: () => true,
+    mount(context) {
+      mounts++;
+      const field = context.document.createElement('input'); context.body.append(field);
+      return { update(data) {
+        const id = (data.arguments as { command: string }).command;
+        calls.set(id, (calls.get(id) ?? 0) + 1);
+        context.renderPresentation({ title: id, sections: [{ key: 'result', label: 'Live', text: data.executionOutput || '', format: 'console' }] });
+      }, dispose() {} };
+    },
+  }) });
+  let state = reduceRpcEvent(initialConversationState(), { type: 'message_start', message: { role: 'assistant', timestamp: 1,
+    content: ['a', 'b', 'unrelated'].map(id => ({ type: 'toolCall', id, name: 'bash', arguments: { command: id }, toolStatus: 'running' })) } });
+  const updates = new TranscriptUpdates(); let materializations = 0;
+  const deliver = () => {
+    const next = updates.snapshot(state);
+    f.receive({ type: 'snapshot', transcript: next.transcript, state: new Proxy(next.state, { get(target, key) {
+      if (key === 'messages') materializations++;
+      return Reflect.get(target, key);
+    } }) });
+  };
+  const chunk = (id: string, text: string) => {
+    state = reduceRpcEvent(state, { type: 'tool_execution_update', toolCallId: id, toolName: 'bash', partialResult: { content: [{ type: 'text', text }] } }); deliver();
+  };
+  try {
+    deliver(); f.flush();
+    const cards = [...f.win.document.querySelectorAll<HTMLDetailsElement>('.tool-card')];
+    const field = cards[0].querySelector('input')!; field.value = 'local state'; field.focus();
+    const unrelated = cards[2].querySelector<HTMLElement>('.tool-output')!;
+    let unrelatedReads = 0;
+    Object.defineProperties(unrelated, { clientHeight: { get() { unrelatedReads++; return 100; } }, scrollHeight: { get() { unrelatedReads++; return 500; } } });
+    const count = materializations;
+    chunk('a', 'a1'); chunk('b', 'b1'); chunk('a', 'a1\na2');
+    assert.equal(materializations, count, 'no full history observation before paint');
+    f.flush();
+    assert.equal(materializations, count, 'no history diff/serialization during paint');
+    assert.deepEqual([...calls.entries()], [['a', 2], ['b', 2], ['unrelated', 1]], 'one update per changed card per paint');
+    assert.equal(unrelatedReads, 0, 'no unrelated viewport capture or restoration');
+    assert.equal(mounts, 3); assert.equal(f.win.document.activeElement, field); assert.equal(field.value, 'local state');
+    assert.equal(cards[0].querySelector('.tool-output')!.textContent, 'a1\na2');
+    assert.equal(cards[1].querySelector('.tool-output')!.textContent, 'b1');
+    assert.equal(f.win.document.querySelectorAll('.tool-card')[0], cards[0]);
+    // A dropped revision must recover from the authoritative full snapshot.
+    state = reduceRpcEvent(state, { type: 'tool_execution_update', toolCallId: 'a', partialResult: { content: [{ type: 'text', text: 'replacement' }] } });
+    updates.snapshot(state);
+    state = reduceRpcEvent(state, { type: 'tool_execution_update', toolCallId: 'b', partialResult: { content: [{ type: 'text', text: 'replacement b' }] } });
+    deliver(); f.flush();
+    assert.ok(materializations > count); assert.equal(cards[0].querySelector('.tool-output')!.textContent, 'replacement');
+    assert.equal(mounts, 3);
+  } finally { f.dom.window.close(); }
+});
+
+test('hidden incremental snapshots retain all dirty cards through reveal and completion', () => {
+  const f = fixture(); const updates = new TranscriptUpdates(); let state = initialConversationState();
+  const event = (value: Record<string, unknown>) => { state = reduceRpcEvent(state, value); f.receive({ type: 'snapshot', ...updates.snapshot(state) }); };
+  try {
+    event({ type: 'message_start', message: { role: 'assistant', timestamp: 1, content: ['a', 'b'].map(id => ({ type: 'toolCall', id, name: 'bash', arguments: { command: id } })) } }); f.flush();
+    const card = f.win.document.querySelector('.tool-card');
+    f.view.setActive(false);
+    for (const id of ['a', 'b']) event({ type: 'tool_execution_update', toolCallId: id, partialResult: { content: [{ type: 'text', text: `${id} output` }] } });
+    event({ type: 'tool_execution_end', toolCallId: 'a', result: { content: [{ type: 'text', text: 'a final' }] } });
+    assert.equal(f.frames.size, 0);
+    f.view.setActive(true); f.flush();
+    assert.equal(f.win.document.querySelector('.tool-card'), card);
+    assert.match(f.win.document.querySelector('#messages')!.textContent!, /a final/);
+    assert.match(f.win.document.querySelector('#messages')!.textContent!, /b output/);
   } finally { f.dom.window.close(); }
 });
 

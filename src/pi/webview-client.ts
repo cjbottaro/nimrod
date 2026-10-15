@@ -69,12 +69,16 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   let pendingState: State | undefined;
   let displayedState: State = {};
   let renderFrame: number | undefined;
+  let receivedRevision: number | undefined;
+  let pendingFull = true;
+  const pendingRows = new Map<string, DisplayMessage>();
+  let lastCommands: unknown;
   let presentationEpoch = 0;
   const outputFrames = new Set<number>();
   const pendingOutputPositions = new Map<string, ReturnType<typeof captureStreamingOutput>>();
   let suspendedOutputPositions: Map<string, ReturnType<typeof captureStreamingOutput>> | undefined;
   let composerResizeFrame: number | undefined;
-  const rendered = new Map<string, { node: HTMLElement; signature: string }>();
+  const rendered = new Map<string, { node: HTMLElement; signature?: string; message?: DisplayMessage }>();
   let steeringTranscript = new SteeringTranscript();
   const expanded = new Map<string, boolean>();
   const toolCards = new Map<string, HTMLDetailsElement>();
@@ -108,7 +112,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   function dispose(): void {
     disposed = true;
     cancelPresentationFrames();
-    pendingState = undefined;
+    pendingState = undefined; pendingRows.clear();
     suspendedOutputPositions = undefined;
     if (composerResizeFrame !== undefined) window.cancelAnimationFrame(composerResizeFrame);
     composerGeneration++;
@@ -543,47 +547,53 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     thinking.disabled = !enabled;
   }
 
+  let activityState: State | undefined;
+  let activityRecovered: ComposerState['recovered'] | undefined;
   function renderActivity(state: State): { busy: boolean; text: string } {
+    const before = activityState;
     const presentation = presentActivity(!!state.busy, state.status, state.extensionStatuses);
     mainActivity.hidden = false;
-    renderMainActivity(mainActivityDom, presentation);
-    renderSubagentActivity(subagentActivityDom, presentation.subagents);
-    if (state.sessionStats && typeof state.sessionStats === "object") {
-      sessionMetrics.hidden = false;
-      sessionMetrics.textContent = formatNativeSessionStats(state.sessionStats);
-    } else {
-      sessionMetrics.hidden = true;
-      sessionMetrics.textContent = "";
+    if (!before || before.busy !== state.busy || before.status !== state.status || before.extensionStatuses !== state.extensionStatuses) {
+      renderMainActivity(mainActivityDom, presentation);
+      renderSubagentActivity(subagentActivityDom, presentation.subagents);
     }
-
-    extensionActivity.replaceChildren();
-    const informational = informationalExtensionStatuses(state.extensionStatuses);
-    const widgets = extensionWidgets(state.extensionWidgets);
-    for (const [key, text] of informational) extensionActivity.append(activityRow(key, text));
-    for (const [key, lines] of widgets) {
-      for (const line of lines) extensionActivity.append(activityRow(key, line));
+    if (!before || before.sessionStats !== state.sessionStats) {
+      if (state.sessionStats && typeof state.sessionStats === 'object') {
+        sessionMetrics.hidden = false;
+        sessionMetrics.textContent = formatNativeSessionStats(state.sessionStats);
+      } else {
+        sessionMetrics.hidden = true;
+        sessionMetrics.textContent = '';
+      }
     }
-    extensionActivity.hidden = extensionActivity.childElementCount === 0;
-    queueActivity.replaceChildren();
-    const queue = state.queue;
-    if (queue?.authoritative) {
-      const count = queue.steering?.length || 0;
-      if (count) queueActivity.append(activityRow("steering", `${count} pending`));
-      const followUps = queue.followUp?.length || 0;
-      if (followUps) queueActivity.append(activityRow("queued", `${followUps} pending`));
-    } else if (typeof queue?.pendingCount === "number" && queue.pendingCount > 0) {
-      queueActivity.append(activityRow("Pi queue", `${queue.pendingCount} message${queue.pendingCount === 1 ? "" : "s"} pending; text unavailable until Pi sends a queue update.`));
+    if (!before || before.extensionStatuses !== state.extensionStatuses || before.extensionWidgets !== state.extensionWidgets) {
+      extensionActivity.replaceChildren();
+      for (const [key, text] of informationalExtensionStatuses(state.extensionStatuses)) extensionActivity.append(activityRow(key, text));
+      for (const [key, lines] of extensionWidgets(state.extensionWidgets)) {
+        for (const line of lines) extensionActivity.append(activityRow(key, line));
+      }
+      extensionActivity.hidden = extensionActivity.childElementCount === 0;
     }
-    for (const item of composer.recovered) {
-      const row = activityRow(`Recovered ${item.kind}`, item.text);
-      const restore = element("button");
-      restore.type = "button";
-      restore.dataset.recoveryId = item.id;
-      restore.textContent = "Restore";
-      row.append(restore);
-      queueActivity.append(row);
+    if (!before || before.queue !== state.queue || activityRecovered !== composer.recovered) {
+      queueActivity.replaceChildren();
+      const queue = state.queue;
+      if (queue?.authoritative) {
+        const count = queue.steering?.length || 0;
+        if (count) queueActivity.append(activityRow('steering', `${count} pending`));
+        const followUps = queue.followUp?.length || 0;
+        if (followUps) queueActivity.append(activityRow('queued', `${followUps} pending`));
+      } else if (typeof queue?.pendingCount === 'number' && queue.pendingCount > 0) {
+        queueActivity.append(activityRow('Pi queue', `${queue.pendingCount} message${queue.pendingCount === 1 ? '' : 's'} pending; text unavailable until Pi sends a queue update.`));
+      }
+      for (const item of composer.recovered) {
+        const row = activityRow(`Recovered ${item.kind}`, item.text);
+        const restore = element('button');
+        restore.type = 'button'; restore.dataset.recoveryId = item.id; restore.textContent = 'Restore';
+        row.append(restore); queueActivity.append(row);
+      }
+      queueActivity.hidden = queueActivity.childElementCount === 0;
     }
-    queueActivity.hidden = queueActivity.childElementCount === 0;
+    activityState = state; activityRecovered = composer.recovered;
     activity.hidden = false;
     return presentation;
   }
@@ -619,8 +629,10 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   window.addEventListener("error", event => { if (active) reportRenderError(event.error || event.message); }, { signal: listeners.signal });
   window.addEventListener("unhandledrejection", event => { if (active) reportRenderError(event.reason); }, { signal: listeners.signal });
 
-  function queueRender(state: State): void {
+  function queueRender(state: State, rows?: readonly DisplayMessage[]): void {
     pendingState = state;
+    if (!rows) { pendingFull = true; pendingRows.clear(); }
+    else if (!pendingFull) for (const row of rows) pendingRows.set(safeText(row.key), row);
     // Session-owned notices remain live even when presentation is suspended.
     if (host.reportNotice && recoveryNoticeText !== state.recoveryNotice) {
       recoveryNoticeText = state.recoveryNotice;
@@ -639,11 +651,13 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   function flushRender(): void {
     if (!active || disposed || !pendingState) return;
     const snapshot = pendingState;
-    pendingState = undefined;
+    const rows = pendingFull ? undefined : [...pendingRows.values()];
+    pendingState = undefined; pendingRows.clear(); pendingFull = false;
     try {
-      render(snapshot);
+      render(snapshot, rows);
     } catch (error) {
       reportRenderError(error);
+      pendingFull = true;
       // Recover from a broken incremental patch using the authoritative snapshot.
       for (const entry of rendered.values()) disposeMessageCards(entry.node);
       rendered.clear();
@@ -670,75 +684,103 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     }
   }
 
-  function render(state: State): void {
-    if (host.performance) host.performance.measure('transcript-render', () => renderState(state), active);
-    else renderState(state);
+  function render(state: State, rows?: readonly DisplayMessage[]): void {
+    if (host.performance) host.performance.measure('transcript-render', () => renderState(state, rows), active);
+    else renderState(state, rows);
   }
 
-  function renderState(state: State): void {
+  function renderState(state: State, rows?: readonly DisplayMessage[]): void {
     const wasAtBottom = transcriptScroll.capture();
-    const outputPositions = suspendedOutputPositions ?? new Map(Array.from(toolCards, ([key, card]) => [key,
-      pendingOutputPositions.has(key) ? pendingOutputPositions.get(key) : captureStreamingOutput(card)]));
-    suspendedOutputPositions = undefined;
-    displayedState = state;
-    renderActivity(state);
-    renderModelControls(state);
-    renderComposer();
-
-    const nextKeys = new Set<string>();
-    const display = steeringTranscript.project(Array.isArray(state.messages) ? state.messages : []);
-    let normalIndex = 0;
-    let stickyIndex = 0;
+    if (rows?.some(row => !rendered.has(safeText(row.key)))) rows = undefined;
+    const full = rows === undefined;
+    const display = rows === undefined ? steeringTranscript.project(Array.isArray(state.messages) ? state.messages : []) : rows;
+    const updates: Array<{ key: string; message: DisplayMessage; signature?: string }> = [];
     display.forEach((message, index) => {
       const key = safeText(message.key) || `message-${index}`;
-      nextKeys.add(key);
-      const signature = JSON.stringify(message);
-      let entry = rendered.get(key);
-      if (!entry || entry.signature !== signature) {
-        if (entry && patchMessage(entry.node, message)) {
-          entry.signature = signature;
-        } else {
-          const node = renderMessage(message);
-          if (entry) { disposeMessageCards(entry.node); entry.node.replaceWith(node); }
-          entry = { node, signature };
-          rendered.set(key, entry);
-        }
-      }
-      const parent = message.sticky ? queuedTurns : messages;
-      const currentAtIndex = parent.children.item(message.sticky ? stickyIndex++ : normalIndex++);
-      if (currentAtIndex !== entry.node) parent.insertBefore(entry.node, currentAtIndex || (parent === messages && queuedTurns.parentElement === messages ? queuedTurns : null));
+      const entry = rendered.get(key);
+      if (entry?.message === message) return;
+      // Serialization is a compatibility/recovery fallback, never streaming change detection.
+      const signature = full ? JSON.stringify(message) : undefined;
+      if (!full || !entry || entry.signature !== signature) updates.push({ key, message, signature });
     });
-    for (const [key, entry] of rendered) {
-      if (!nextKeys.has(key)) {
-        disposeMessageCards(entry.node);
-        entry.node.remove();
-        rendered.delete(key);
+    const affectedTools = new Set<string>();
+    for (const { message } of updates) {
+      if (message.role === 'tool' && message.toolCallId) affectedTools.add(`tool:${message.toolCallId}`);
+      if (Array.isArray(message.content)) for (const block of message.content) {
+        if (block.type === 'toolCall') affectedTools.add(safeText(block.id) ? `tool:${safeText(block.id)}` : `${message.key}:tool:${safeText(block.id) || message.content.indexOf(block)}`);
       }
     }
-    queuedTurns.hidden = queuedTurns.childElementCount === 0;
-    // The stack is always last, after ordinary pending and authoritative turns.
-    if (queuedTurns.hidden) queuedTurns.remove();
-    else if (messages.lastElementChild !== queuedTurns) messages.append(queuedTurns);
-    for (const [key, card] of toolCards) {
-      if (!card.isConnected) {
-        disposeToolCard(card);
-        toolDisclosure.remove(key);
-        toolCards.delete(key);
+    const outputPositions = suspendedOutputPositions ?? new Map<string, ReturnType<typeof captureStreamingOutput>>();
+    for (const key of affectedTools) {
+      const card = toolCards.get(key);
+      if (card && !outputPositions.has(key)) outputPositions.set(key,
+        pendingOutputPositions.has(key) ? pendingOutputPositions.get(key) : captureStreamingOutput(card));
+    }
+    suspendedOutputPositions = undefined;
+    const previous = displayedState;
+    displayedState = state;
+    if (!activityState || activityChanged(previous, state)) renderActivity(state);
+    if (full || previous.modelControls !== state.modelControls || previous.sessionUnavailable !== state.sessionUnavailable) renderModelControls(state);
+    if (full || previous.busy !== state.busy || previous.compacting !== state.compacting || previous.sessionUnavailable !== state.sessionUnavailable || previous.modelControls !== state.modelControls || previous.recoveryNotice !== state.recoveryNotice) renderComposer();
+
+    for (const { key, message, signature } of updates) {
+      let entry = rendered.get(key);
+      if (entry && patchMessage(entry.node, message)) {
+        entry.signature = signature; entry.message = message;
+      } else {
+        const node = renderMessage(message);
+        if (entry) { disposeMessageCards(entry.node); entry.node.replaceWith(node); }
+        entry = { node, signature, message }; rendered.set(key, entry);
       }
-      else {
-        const position = outputPositions.get(key);
-        pendingOutputPositions.set(key, position);
-        const epoch = presentationEpoch;
-        const frame = window.requestAnimationFrame(() => {
-          outputFrames.delete(frame);
-          if (epoch !== presentationEpoch || disposed || !active || !card.isConnected) return;
-          restoreStreamingOutput(card, position);
+    }
+    if (full) {
+      const nextKeys = new Set<string>();
+      let normalIndex = 0, stickyIndex = 0;
+      display.forEach((message, index) => {
+        const key = safeText(message.key) || `message-${index}`;
+        nextKeys.add(key);
+        const entry = rendered.get(key)!;
+        const parent = message.sticky ? queuedTurns : messages;
+        const currentAtIndex = parent.children.item(message.sticky ? stickyIndex++ : normalIndex++);
+        if (currentAtIndex !== entry.node) parent.insertBefore(entry.node, currentAtIndex || (parent === messages && queuedTurns.parentElement === messages ? queuedTurns : null));
+      });
+      for (const [key, entry] of rendered) if (!nextKeys.has(key)) {
+        disposeMessageCards(entry.node); entry.node.remove(); rendered.delete(key);
+      }
+      queuedTurns.hidden = queuedTurns.childElementCount === 0;
+      if (queuedTurns.hidden) queuedTurns.remove();
+      else if (messages.lastElementChild !== queuedTurns) messages.append(queuedTurns);
+      for (const [key, card] of toolCards) if (!card.isConnected) {
+        disposeToolCard(card); toolDisclosure.remove(key); toolCards.delete(key);
+      }
+    }
+    // One deferred batch for affected live outputs, not one callback per registry entry.
+    const restore = new Map<string, ReturnType<typeof captureStreamingOutput>>();
+    for (const key of new Set([...affectedTools, ...outputPositions.keys()])) {
+      const card = toolCards.get(key);
+      if (!card?.isConnected || !card.querySelector('.tool-output-streaming')) continue;
+      const position = outputPositions.get(key);
+      pendingOutputPositions.set(key, position); restore.set(key, position);
+    }
+    if (restore.size) {
+      const epoch = presentationEpoch;
+      const frame = window.requestAnimationFrame(() => {
+        outputFrames.delete(frame);
+        if (epoch !== presentationEpoch || disposed || !active) return;
+        for (const [key, position] of restore) {
+          const card = toolCards.get(key);
+          if (card?.isConnected) restoreStreamingOutput(card, position);
           pendingOutputPositions.delete(key);
-        });
-        outputFrames.add(frame);
-      }
+        }
+      });
+      outputFrames.add(frame);
     }
     transcriptScroll.request(wasAtBottom);
+  }
+
+  function activityChanged(before: State, after: State): boolean {
+    return before.busy !== after.busy || before.status !== after.status || before.extensionStatuses !== after.extensionStatuses
+      || before.extensionWidgets !== after.extensionWidgets || before.sessionStats !== after.sessionStats || before.queue !== after.queue;
   }
 
   function submit(mode: SubmissionMode = "normal"): void {
@@ -903,6 +945,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     if (disposed) return;
     if (data.type === "sessionReset") {
       cancelPresentationFrames();
+      pendingRows.clear(); pendingFull = true; receivedRevision = undefined; lastCommands = undefined; activityState = undefined;
       suspendedOutputPositions = undefined;
       composerGeneration++; preparing = 0; attachmentSignature = '';
       // An explicit launch boundary only; ordinary snapshots retain all live UI state.
@@ -942,11 +985,13 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
         persistedState = { ...retained, restore: data.restore };
         persistComposer();
       }
-      if (data.commands !== undefined) slashCompletion.setCommands(data.commands);
+      if (data.commands !== undefined && data.commands !== lastCommands) { lastCommands = data.commands; slashCompletion.setCommands(data.commands); }
       const state = data.state || {};
-      steeringTranscript.snapshot(state.messages || [], state.queue?.authoritative ? state.queue.steering || [] : undefined, state.queue?.authoritative ? state.queue.followUp || [] : undefined);
+      const incremental = data.transcript?.rows !== undefined && data.transcript.base === receivedRevision;
+      receivedRevision = data.transcript?.revision;
+      if (!incremental) steeringTranscript.snapshot(state.messages || [], state.queue?.authoritative ? state.queue.steering || [] : undefined, state.queue?.authoritative ? state.queue.followUp || [] : undefined);
       if (state.sessionUnavailable) steeringTranscript.disconnect();
-      queueRender(state);
+      queueRender(state, incremental ? data.transcript!.rows : undefined);
     }
     if (data.type === "setEditorText") updateComposer(updateDraft(composer, safeText(data.text)));
     if (data.type === 'submissionMessage' && typeof data.id === 'string' && typeof data.key === 'string' && data.key) {
@@ -1073,6 +1118,7 @@ export interface HostMessage {
   locked?: boolean;
   commands?: unknown;
   state?: State;
+  transcript?: import('./transcript-updates').TranscriptUpdate;
   restore?: unknown;
   composerState?: unknown;
   text?: unknown;
@@ -1119,6 +1165,7 @@ interface DisplayMessage {
   content?: unknown | ContentBlock[];
   toolCallId?: string;
   toolName?: string;
+  toolArguments?: unknown;
   isError?: boolean;
   output?: string;
   hasStreamingOutput?: boolean;

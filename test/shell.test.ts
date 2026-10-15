@@ -2495,6 +2495,30 @@ test('project shell boots without Pi and Settings holds layered preferences, not
   } finally { f.dom.window.close(); }
 });
 
+test('tool output chunks leave unchanged sidebar, status rows and bookkeeping alone', async () => {
+  const f = await fixture();
+  try {
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    f.emit({ type: 'agent_start' });
+    f.emit({ type: 'tool_execution_start', toolCallId: 'stream', toolName: 'bash', args: { command: 'stream' } });
+    f.emit({ type: 'tool_execution_update', toolCallId: 'stream', toolName: 'bash', partialResult: { content: [{ type: 'text', text: 'initial' }] } });
+    await f.tick();
+    let mutations = 0;
+    const observer = new f.win.MutationObserver(records => { mutations += records.length; });
+    for (const node of [f.element('open-sessions'), f.element('activity')]) observer.observe(node, { subtree: true, childList: true, attributes: true, characterData: true });
+    const calls = f.calls.length;
+    for (let i = 0; i < 50; i++) f.emit({ type: 'tool_execution_update', toolCallId: 'stream', toolName: 'bash', partialResult: { content: [{ type: 'text', text: `initial ${i}` }] } });
+    // Collect records before the observer callback consumes them.
+    assert.equal(observer.takeRecords().length, 0, 'ordered delivery performs no shell DOM work');
+    await f.tick();
+    mutations += observer.takeRecords().length;
+    assert.equal(mutations, 0, 'painting output does not rebuild status rows');
+    assert.equal(f.calls.length, calls, 'no unrelated IPC or bookkeeping writes');
+    assert.match(f.win.document.querySelector('.tool-card')!.textContent!, /initial 49/);
+    observer.disconnect(); f.disconnect();
+  } finally { f.dom.window.close(); }
+});
+
 test('Settings preserves a live conversation and saving paths does not mutate its launch', async () => {
   const f = await fixture(); const { win, element, calls } = f;
   try {

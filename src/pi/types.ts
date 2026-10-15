@@ -42,6 +42,8 @@ export interface DisplayMessage {
   key: string;
   role: string;
   parallelCluster?: import("./tool-progress").ParallelToolCluster;
+  /** Parsed, core-owned immutable inputs for standalone tool envelopes. */
+  toolArguments?: unknown;
   uiPhase?: "thinking" | "stopped";
   content?: string | ContentBlock[];
   toolCallId?: string;

@@ -5,7 +5,7 @@ import { initialConversationState, messagesToDisplay, reduceRpcEvent, sanitizeEx
 import { ModelThinkingController, type ModelIdentity } from './model-thinking-controller';
 import { SessionStatsController } from './session-stats-controller';
 import { MODEL_SCOPE_STATUS, parseModelScope, scopedModels, type ModelReference } from './pi-model-scope';
-import { projectToolTimeline } from './tool-progress';
+import { TranscriptUpdates } from './transcript-updates';
 import { isBuiltinMcpCommand, parseMcpStatus, type McpStatusReport } from './mcp-status';
 import type { AgentMessage, ConversationState, JsonRecord } from './types';
 import type { HostMessage } from './webview-client';
@@ -38,6 +38,7 @@ const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 export class PiSession {
   state: ConversationState = { ...initialConversationState(), sessionUnavailable: true, temporary: true };
   private commands: unknown[] = [];
+  private transcript = new TranscriptUpdates();
   private mcpTask?: Promise<McpStatusReport>;
   private mcpCapture?: { report?: McpStatusReport };
   private mcpUncertain = false;
@@ -163,9 +164,9 @@ export class PiSession {
   }
 
   publish(): void {
-    const messages = this.measure('timeline-projection', () => projectToolTimeline(this.state.messages, this.state.toolProgress));
+    const snapshot = this.measure('timeline-projection', () => this.transcript.snapshot(this.state));
     this.measure('snapshot-delivery', () => this.ui.publish({ type: 'snapshot', build: 'Nimrod PoC', commands: this.commands,
-      state: { ...this.state, messages } }));
+      ...snapshot }));
     this.measure('shell-session-update', () => this.ui.changed(this.state));
   }
 

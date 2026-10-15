@@ -10,6 +10,7 @@ import { sessionIndicator, createSessionRowContent, updateSessionRowContent, upd
 import { installDeletionReview } from './deletion-review';
 import { SessionDeletion, type DeletionEvent, type DeletionSnapshot } from './session-deletion';
 import { presentActivity } from './pi/activity-state';
+import { messageChanges, messageVersion } from './pi/conversation-index';
 import { listen } from '@tauri-apps/api/event';
 import { CardPluginCatalog, type PersonalBundles } from './pi/card-plugins/catalog';
 import { installCardPluginLoading } from './card-plugin-loading';
@@ -894,6 +895,7 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
   let identityGeneration = 0;
   let confirmedRaw: { path: string; sessionId: string } | undefined;
   let startupPackets: Packet[] | undefined = [];
+  let shellState: import('./pi/types').ConversationState | undefined;
   const current = new PiSession(rpc, {
     performance: settingsSurface.performanceProbe,
     active: () => presented === tab,
@@ -944,6 +946,13 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
     },
     changed: state => {
       if (!currentToken()) return;
+      const before = shellState; shellState = state;
+      const changes = messageChanges(state.messages);
+      const contentOnly = before && (before.messages === state.messages || changes?.previous === messageVersion(before.messages) && changes.indices.every(index => state.messages[index].role !== 'user'));
+      if (before && contentOnly && before.busy === state.busy && before.compacting === state.compacting
+        && before.sessionUnavailable === state.sessionUnavailable && before.sessionName === state.sessionName
+        && before.extensionStatuses === state.extensionStatuses && before.queue === state.queue
+        && before.modelControls === state.modelControls) return;
       if (!state.sessionUnavailable) notices.resolve(`${tab.id}:connection`);
       if (state.busy && !state.compacting && !state.sessionUnavailable) tab.failed = false;
       const previousTitle = tab.title;

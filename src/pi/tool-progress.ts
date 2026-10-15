@@ -34,8 +34,8 @@ export function transcriptRows(messages: DisplayMessage[]): DisplayMessage[] {
 }
 
 /** Progress is presentation state; Pi's actual execution statuses and history remain untouched. */
-export function projectToolTimeline(messages: DisplayMessage[], progress?: ToolProgress): DisplayMessage[] {
-  const rows = transcriptRows(messages).map(message => {
+export function projectToolTimeline(messages: DisplayMessage[], progress?: ToolProgress, sourceRows = transcriptRows(messages)): DisplayMessage[] {
+  const rows = sourceRows.map(message => {
     const id = message.key.startsWith("tool:") ? message.key.slice(5) : undefined;
     const uiPhase = id && progress?.interrupted.includes(id) ? "stopped" as const
       : id && progress?.processingToolId === id ? "thinking" as const : undefined;

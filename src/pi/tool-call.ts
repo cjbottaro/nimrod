@@ -1,4 +1,6 @@
 import type { ContentBlock, DisplayMessage } from "./types";
+import { immutableSnapshot } from './immutable-snapshot';
+import { trackOutputSources, transferOutputSources } from './output-source';
 
 export interface ToolCallUpdate {
   id: string;
@@ -12,31 +14,36 @@ export interface ToolCallUpdate {
 }
 
 /** Standalone placement is only an envelope; cards always consume the same model. */
-export function toolMessageBlock(message: Pick<DisplayMessage, "toolCallId" | "toolName" | "output" | "hasStreamingOutput" | "resultOutput" | "isError" | "toolStatus" | "uiPhase"> & { content?: unknown }): ContentBlock {
-  let args: unknown = message.content;
-  if (typeof args === "string") {
+export function toolMessageBlock(message: Pick<DisplayMessage, "toolCallId" | "toolName" | "output" | "hasStreamingOutput" | "resultOutput" | "isError" | "toolStatus" | "uiPhase"> & { content?: unknown; toolArguments?: unknown }): ContentBlock {
+  let args: unknown = message.toolArguments !== undefined ? message.toolArguments : message.content;
+  if (message.toolArguments === undefined && typeof args === "string") {
     try { args = JSON.parse(args); } catch { /* Keep non-JSON inputs intact. */ }
   }
-  return {
+  const block: ContentBlock = {
     type: "toolCall", id: message.toolCallId, name: message.toolName, arguments: args,
     executionOutput: message.output, hasStreamingOutput: message.hasStreamingOutput,
     resultOutput: message.resultOutput, isError: message.isError,
     toolStatus: message.toolStatus, uiPhase: message.uiPhase,
   };
+  transferOutputSources(message, block);
+  return block;
 }
 
 /** Merge partial information from either source without rewinding execution. */
 export function mergeToolCall(block: ContentBlock, update: ToolCallUpdate): ContentBlock {
   const rank = { running: 1, finished: 2, result: 3 };
   const stale = !!block.toolStatus && !!update.toolStatus && rank[update.toolStatus] < rank[block.toolStatus];
-  return {
+  const next: ContentBlock = {
     ...block, type: "toolCall", id: update.id,
     name: update.name && update.name !== "tool" ? update.name : block.name || update.name || "tool",
-    ...(update.arguments !== undefined ? { arguments: update.arguments } : {}),
+    ...(update.arguments !== undefined ? { arguments: immutableSnapshot(update.arguments) } : {}),
     ...(!stale && update.executionOutput !== undefined ? { executionOutput: update.executionOutput } : {}),
     ...(update.hasStreamingOutput ? { hasStreamingOutput: true } : {}),
     ...(update.resultOutput !== undefined ? { resultOutput: update.resultOutput } : {}),
     ...(!stale && update.isError !== undefined ? { isError: update.isError } : {}),
     ...(!stale && update.toolStatus ? { toolStatus: update.toolStatus } : {}),
   };
+  if (Object.keys(next).every(key => next[key as keyof ContentBlock] === block[key as keyof ContentBlock])) return block;
+  trackOutputSources(block, next);
+  return next;
 }

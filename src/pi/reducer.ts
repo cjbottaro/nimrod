@@ -1,6 +1,9 @@
 import { AgentMessage, ContentBlock, ConversationState, DisplayMessage, ExtensionWidget, JsonRecord, NativeSessionStats } from "./types";
 
 import { updateToolProgress } from "./tool-progress";
+import { conversationIndex, trackMessageChanges } from './conversation-index';
+import { immutableSnapshot } from './immutable-snapshot';
+import { transferOutputSources } from './output-source';
 import { mergeToolCall as mergeToolBlock, toolMessageBlock, type ToolCallUpdate as ToolUpdate } from "./tool-call";
 
 export const initialConversationState = (): ConversationState => ({
@@ -189,40 +192,43 @@ function applyToolResult(state: ConversationState, message: AgentMessage): Conve
 
 /** Attaches all tool lifecycle information to exactly one card, keyed by toolCallId. */
 function applyToolUpdate(state: ConversationState, update: ToolUpdate): ConversationState {
-  const messages = [...state.messages];
-  let found = false;
-  for (let messageIndex = 0; messageIndex < messages.length; messageIndex++) {
-    const message = messages[messageIndex];
-    if (!Array.isArray(message.content)) continue;
-    let changed = false;
-    const content = message.content.map((block) => {
-      if (block.type !== "toolCall" || block.id !== update.id) return block;
-      found = true;
-      changed = true;
-      return mergeToolBlock(block, update);
-    });
-    if (changed) messages[messageIndex] = { ...message, content };
-  }
-
-  if (!found) {
-    const existing = messages.findIndex((message) => message.role === "tool" && message.toolCallId === update.id);
-    if (existing >= 0) {
-      messages[existing] = mergeOrphanTool(messages[existing], update);
+  const locations = conversationIndex(state.messages).tools.get(update.id);
+  // Assistant placement wins over any still-unadopted envelope, as before.
+  const embedded = locations?.filter(location => location.block !== undefined);
+  const targets = embedded?.length ? embedded : locations?.slice(0, 1);
+  if (!targets?.length) return { ...state, messages: [...state.messages, mergeOrphanTool({
+    key: `tool-${update.id}`, role: 'tool', toolCallId: update.id,
+  }, update)] };
+  let messages = state.messages;
+  const dirty = new Set<number>();
+  for (const location of targets) {
+    const message = messages[location.message];
+    if (location.block === undefined) {
+      const next = mergeOrphanTool(message, update);
+      if (Object.keys(next).every(key => next[key as keyof DisplayMessage] === message[key as keyof DisplayMessage])) continue;
+      if (messages === state.messages) messages = [...messages];
+      messages[location.message] = next;
     } else {
-      messages.push(mergeOrphanTool({
-        key: `tool-${update.id}`, role: "tool", toolCallId: update.id,
-      }, update));
+      const blocks = message.content as ContentBlock[];
+      const block = blocks[location.block];
+      const next = mergeToolBlock(block, update);
+      if (next === block) continue;
+      if (messages === state.messages) messages = [...messages];
+      const content = [...blocks]; content[location.block] = next;
+      messages[location.message] = { ...message, content };
     }
+    dirty.add(location.message);
   }
-  return { ...state, messages };
+  return messages === state.messages ? state : { ...state, messages: trackMessageChanges(messages, state.messages, [...dirty], true, [update.id]) };
 }
 
 function mergeOrphanTool(message: DisplayMessage, update: ToolUpdate): DisplayMessage {
   const block = mergeToolBlock(toolMessageBlock(message), update);
-  return {
+  const next: DisplayMessage = {
     ...message,
     toolName: block.name,
-    content: block.arguments === undefined ? undefined : safeJson(block.arguments),
+    toolArguments: block.arguments,
+    content: update.arguments === undefined && message.content !== undefined ? message.content : block.arguments === undefined ? undefined : safeJson(block.arguments),
     output: block.executionOutput,
     hasStreamingOutput: block.hasStreamingOutput,
     resultOutput: block.resultOutput,
@@ -230,10 +236,13 @@ function mergeOrphanTool(message: DisplayMessage, update: ToolUpdate): DisplayMe
     toolStatus: block.toolStatus,
     streaming: block.toolStatus === "running",
   };
+  transferOutputSources(block, next);
+  return next;
 }
 
 /** Moves an out-of-order execution card into the assistant's ordered tool-call block. */
 function reconcileOrphanTools(messages: DisplayMessage[]): DisplayMessage[] {
+  if (!conversationIndex(messages).orphans) return messages;
   const orphanById = new Map(messages.filter((message) => message.role === "tool" && message.toolCallId).map((message) => [message.toolCallId!, message]));
   if (!orphanById.size) return messages;
   const consumed = new Set<string>();
@@ -319,14 +328,20 @@ function applyMessageDelta(state: ConversationState, raw: unknown): Conversation
   else return state;
 
   messages[assistantIndex] = { ...current, content };
-  return { ...state, messages: reconcileOrphanTools(messages) };
+  const nextBlock = content[contentIndex];
+  const sameLocations = (existing?.type === 'toolCall' ? existing.id : undefined) === (nextBlock?.type === 'toolCall' ? nextBlock.id : undefined);
+  trackMessageChanges(messages, state.messages, [assistantIndex], sameLocations);
+  // Only tool-call start/end can adopt a standalone envelope. Ordinary text
+  // deltas must not scan history even when unrelated orphan tools exist.
+  return { ...state, messages: kind === 'toolcall_start' || kind === 'toolcall_end' ? reconcileOrphanTools(messages) : messages };
 }
 
 function fromAgentMessage(message: AgentMessage, key: string, streaming = false): DisplayMessage {
   return {
     key,
     role: message.role,
-    content: message.content ?? (["compactionSummary", "branchSummary"].includes(message.role) && typeof message.summary === "string" ? message.summary : undefined),
+    content: Array.isArray(message.content) ? message.content.map(block => block.type === 'toolCall' && block.arguments !== undefined ? { ...block, arguments: immutableSnapshot(block.arguments) } : block)
+      : message.content ?? (["compactionSummary", "branchSummary"].includes(message.role) && typeof message.summary === "string" ? message.summary : undefined),
     toolCallId: message.toolCallId,
     toolName: message.toolName,
     isError: message.isError,
@@ -337,7 +352,7 @@ function fromAgentMessage(message: AgentMessage, key: string, streaming = false)
 }
 
 function toolCallBlock(value: JsonRecord): ContentBlock {
-  return { type: "toolCall", id: string(value.id), name: string(value.name || value.toolName), arguments: value.arguments };
+  return { type: "toolCall", id: string(value.id), name: string(value.name || value.toolName), arguments: immutableSnapshot(value.arguments) };
 }
 
 function keyFor(message: AgentMessage): string {
