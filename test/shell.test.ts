@@ -11,6 +11,8 @@ import { MemoryPreferences } from './preferences-fixture';
 import { parseSettings } from '../src/preferences';
 import { CATALOG_THEMES } from '../src/themes/builtins';
 import type { DeletionEvent, DeletionSnapshot } from '../src/session-deletion';
+import { ACTIONS } from '../src/keybindings';
+import { INTENTIONALLY_UNBOUND_ACTIONS } from './keybindings-fixture';
 
 // Real shell/renderer/controller bundle, mocked native boundary—not native WebKit acceptance.
 interface ShellOptions {
@@ -434,7 +436,7 @@ test('old saved Gogh themes remain usable and catalog choices never require down
   } finally { f.win.close(); }
 });
 
-test('palette commands have registered shortcuts (theme intentionally unbound) and removed actions stay absent and inert', async () => {
+test('palette commands show shortcuts except intentionally unbound actions and removed actions stay absent and inert', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   try {
     assert.equal(f.win.document.querySelector('#start-demo, #resume-file'), null);
@@ -442,7 +444,12 @@ test('palette commands have registered shortcuts (theme intentionally unbound) a
     f.openPalette();
     const rows = [...f.element('palette-list').querySelectorAll('[role=option]')];
     assert.ok(rows.length > 0);
-    for (const row of rows) if (!/Select theme|Reload card plugins|Capture performance report|Edit keybindings/.test(row.textContent || '')) assert.ok(row.querySelector('kbd')?.textContent, row.textContent!);
+    const unboundLabels = new Set<string>(INTENTIONALLY_UNBOUND_ACTIONS.map(id => ACTIONS.find(action => action.id === id)!.label));
+    for (const row of rows) {
+      const label = row.querySelector('.palette-item-label')!.textContent!;
+      if (unboundLabels.has(label)) assert.equal(row.querySelector('kbd'), null, label);
+      else assert.ok(row.querySelector('kbd')?.textContent, label);
+    }
     assert.doesNotMatch(f.element('palette-list').textContent!, /offline demo|session file/i);
     f.element<HTMLDialogElement>('command-palette').close(); await f.tick();
     f.preferences.external('{"keybindings":{"demo":["primary+d"],"file":["primary+f"]}}'); await f.tick();
@@ -2394,6 +2401,12 @@ test('project bar follows the displayed session even with the sidebar collapsed'
     f.element<HTMLButtonElement>('sidebar-working').click();
     assert.equal(identity.hidden, false);
     first.onmessage({ kind: 'rpc', value: { type: 'agent_end' } }); await f.tick();
+    assert.equal(identity.hidden, false, 'agent_end does not settle the displayed session');
+    first.onmessage({ kind: 'rpc', value: { type: 'agent_settled' } }); await f.tick();
+    assert.equal(identity.hidden, false, 'Working retains the selected settled session');
+    assert.equal(name.textContent, 'Temporary session');
+    f.element<HTMLButtonElement>('sidebar-all').click();
+    f.element<HTMLButtonElement>('sidebar-working').click();
     assert.equal(identity.hidden, true, 'empty filtered views have no stale session identity');
     assert.equal(name.textContent, '');
     f.element<HTMLButtonElement>('sidebar-all').click();
@@ -3195,6 +3208,10 @@ test('MCP inspector routes palette and composer entries to the same session with
     input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await f.tick();
     assert.equal(f.win.document.activeElement, prompt);
     prompt.value = '/mcp'; prompt.dispatchEvent(new f.win.Event('input'));
+    prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    assert.equal(prompt.value, '/mcp ', 'first Enter accepts the slash suggestion without executing it');
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+    assert.equal(f.calls.filter(call => (call.args.message as JsonRecord)?.type === 'prompt').length, 1);
     prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await f.tick(); await f.tick();
     assert.equal(prompt.value, '');

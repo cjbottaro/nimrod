@@ -1,6 +1,6 @@
 # MCP inspector
 
-**Status: read-only first version implemented; added fixtures have not been run. Native acceptance pending.** User guide: [MCP inspector](../../../../docs/mcp.md).
+**Status: read-only first version implemented; TS/Node fixtures pass in the full check. Native acceptance pending.** User guide: [MCP inspector](../../../../docs/mcp.md).
 
 ## Specification
 
@@ -35,6 +35,6 @@ Read-only snapshot only: no tools/schema list, per-tool exposure, source/scope, 
 - `test/mcp-status.test.ts`: formats, counts, multiline text, unavailable/replaced integration, unrelated notifications, busy inspection, shared task, disconnect and no replay.
 - `test/command-palette.test.ts`: safe text, detail selection, Enter, Refresh, Escape/focus and stale-page rejection.
 - `test/native-view.test.ts`: no model prompt post, pending turn, recency or auto-follow for bare `/mcp`; existing controls/validation rules.
-- `test/shell.test.ts`: palette/composer entry wiring, draft preservation, attention-first detail projection, absence of status notices and disconnect cancellation.
+- `test/shell.test.ts`: palette/composer entry wiring, draft preservation, attention-first detail projection, absence of status notices and disconnect cancellation. Composer entry accepts the slash suggestion on the first Enter without inspection, then submits on the second Enter and clears only the command.
 
-Fixtures were added but not run. No builds, checks, live MCP calls or app launch performed for implementation. Native macOS visual/focus/real-Pi acceptance and Linux behavior remain unverified. When validation is requested, use the repository’s explicit-validation workflow; fixtures alone do not establish native acceptance.
+TS/Node fixtures pass in the full `mise run check`; see [verification status](verification.md#current-automated-validation). No browser tests, packaged builds, live MCP calls or app launch were performed for the fixture correction. Native macOS visual/focus/real-Pi acceptance and Linux behavior remain unverified. When validation is requested, use the repository’s explicit-validation workflow; fixtures alone do not establish native acceptance.

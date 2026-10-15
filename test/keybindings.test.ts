@@ -6,6 +6,7 @@ import { installKeybindingEditor } from '../src/keybinding-editor';
 import { editSettings, installPreferences, parseSettings } from '../src/preferences';
 import { MemoryPreferences } from './preferences-fixture';
 import { stubDialogs } from './dialog-fixture';
+import { INTENTIONALLY_UNBOUND_ACTIONS } from './keybindings-fixture';
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 function fixture() {
@@ -37,7 +38,8 @@ test('defaults distinguish creation, named creation, open-session switching and 
   assert.deepEqual(bindingsFor('keybindings', {}), []);
   assert.deepEqual(bindingsFor('project-settings', {}), ['primary+shift+,']);
   assert.deepEqual(bindingsFor('settings', {}), ['primary+,']);
-  assert.ok(ACTIONS.filter(action => !['select-theme', 'reload-card-plugins', 'capture-performance'].includes(action.id)).every(action => action.defaults.length > 0));
+  assert.deepEqual(ACTIONS.filter(action => action.defaults.length === 0).map(action => action.id).sort(), [...INTENTIONALLY_UNBOUND_ACTIONS].sort());
+  assert.deepEqual(bindingsFor('mcp', {}), []);
   assert.deepEqual(bindingsFor('select-theme', {}), []);
   assert.deepEqual(bindingsFor('capture-performance', {}), []);
   assert.deepEqual(bindingsFor('capture-performance', { 'capture-performance': ['primary+alt+p'] }), ['primary+alt+p']);

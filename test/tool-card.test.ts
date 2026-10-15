@@ -60,7 +60,7 @@ test("streaming arguments expose only complete top-level preview fields", () => 
   }
 });
 
-test("tool header previews are plain inputs and expanded cards contain raw inputs only", () => {
+test("tool header previews retain plain inputs and edit paths stay accessible with raw input recovery", () => {
   const doc = document();
   const edit = card(doc, {
     name: "edit",
@@ -70,7 +70,10 @@ test("tool header previews are plain inputs and expanded cards contain raw input
   const search = card(doc, { name: "grep", arguments: { query: "tool-output", path: "src" } });
   const custom = card(doc, { name: "vendor_action", arguments: { payload: "<img src=x onerror=alert(1)>", options: { dryRun: true } } });
 
-  assert.equal(edit.querySelector(".tool-card-preview")?.textContent, "src/webview-client.ts");
+  const editPreview = edit.querySelector(".tool-card-preview")!;
+  assert.equal(editPreview.querySelector(".edit-card-filename")?.textContent, "webview-client.ts");
+  assert.equal(editPreview.querySelector(".edit-card-directory")?.textContent, "src/");
+  assert.equal(editPreview.getAttribute("aria-label"), "src/webview-client.ts");
   assert.equal(bash.querySelector(".tool-card-preview")?.textContent, "git status --short");
   assert.equal(search.querySelector(".tool-card-preview")?.textContent, "tool-output in src");
   assert.equal(custom.querySelector(".tool-card-preview")?.textContent, "2 fields");
@@ -82,7 +85,9 @@ test("tool header previews are plain inputs and expanded cards contain raw input
   const raw = edit.querySelector<HTMLDetailsElement>(".tool-raw-inputs");
   assert.ok(raw);
   assert.equal(raw.open, false);
-  assert.match(raw.querySelector("pre")?.textContent || "", /"edits"/);
+  const rawInputs = JSON.parse(raw.querySelector("pre")!.textContent!);
+  assert.equal(rawInputs.file_path, "src/webview-client.ts");
+  assert.equal(rawInputs.edits.length, 1);
 });
 
 test("web tools show both singular and plural search targets in their previews", () => {

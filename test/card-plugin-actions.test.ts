@@ -49,7 +49,9 @@ test('late copy completion after disposal does not mutate the detached plugin UI
   const dom = new JSDOM('<body></body>'); const doc = dom.window.document; let resolve!: () => void;
   const card = renderToolCard(doc, { name: 'edit', arguments: { oldText: 'a', newText: 'b' } }, doc.createElement('details'), undefined, undefined,
     { copy: () => new Promise<void>(done => { resolve = done; }) }); doc.body.append(card);
-  card.querySelector<HTMLButtonElement>('button')!.click(); disposeToolCard(card); resolve();
+  card.querySelector<HTMLButtonElement>('.card-plugin-copy')!.click();
+  assert.equal(typeof resolve, 'function', 'copy must start before disposal');
+  disposeToolCard(card); resolve();
   await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
   assert.equal(card.querySelector('.card-plugin-copy-status')?.textContent, ''); dom.window.close();
 });

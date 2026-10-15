@@ -127,6 +127,8 @@ test('hidden snapshots do no painting; reveal catches up synchronously and cance
   try {
     f.snapshot({ messages: [{ key: 'a', role: 'assistant', content: 'Visible' }] });
     const article = f.win.document.querySelector('#messages article')!;
+    const visibleText = article.textContent;
+    assert.match(visibleText!, /Visible/);
     const before = paints.length;
     f.receive({ type: 'snapshot', state: { messages: [{ key: 'a', role: 'assistant', content: 'Scheduled' }] } });
     const cancelled = [...f.frames.values()];
@@ -134,7 +136,7 @@ test('hidden snapshots do no painting; reveal catches up synchronously and cance
     for (let i = 0; i < 100; i++) f.snapshot({ busy: true, messages: [{ key: 'a', role: 'assistant', content: [{ type: 'text', text: `Hidden ${i}` }] }] });
     for (const frame of cancelled) frame(0); // Simulate delivery despite cancellation.
     assert.equal(paints.length, before);
-    assert.equal(article.textContent, 'Visible');
+    assert.equal(article.textContent, visibleText, 'hidden snapshots preserve the rendered content');
     assert.equal(f.frames.size, 0, 'no hidden presentation frames');
     assert.equal(snapshots.filter(active => !active).length, 100, 'every hidden snapshot was received');
     f.prompt.focus(); f.draft('Retained draft');
