@@ -15,6 +15,10 @@ Cards start closed. Sustained non-empty execution updates may open a running too
 
 A tool may keep its activity indicator after execution finishes while Pi processes the result. Receiving the result text alone does not end that phase. Interrupted tools retain their stopped indication if late output arrives.
 
+### Built-in tool presentations
+
+Each Pi built-in has a dedicated [card plugin](card-plugins.md#matching-and-overrides). Read summaries include the requested path and line range when supplied. Write cards show the destination and literal **Requested content**, separately scrollable from Pi's output; this previews the input, not a successful write. Grep/find show the pattern and path, and ls shows the directory. Edit cards retain requested diffs with Wrap/Copy. Unknown tools use a generic card, and personal plugins can override built-in presentation.
+
 ### Console-style command output
 
 Bash, shell and terminal tool cards render ANSI colors and text styles in both live output and results. Carriage returns, backspaces, tabs, line clearing and common relative cursor movements render progress updates instead of printing escape codes. Output remains selectable text in the existing scrollable viewport; colors follow the theme's terminal palette where available.

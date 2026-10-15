@@ -1,7 +1,7 @@
 import type { DomCardRenderer } from '../dom-card-renderer';
 import type { CardRenderer } from '../card-renderer';
 import type { ParallelToolCluster } from '../tool-progress';
-import { toolInputPreview } from './tool';
+import { toolInputPreview } from './input-preview';
 
 export const defaultParallelRenderer: CardRenderer<ParallelToolCluster> = {
   id: 'nimrod.parallel', supports: () => true,

@@ -1,18 +1,18 @@
 import type { DomCardRenderer } from '../dom-card-renderer';
 import type { CardRenderer, CardSection } from '../card-renderer';
 import type { ToolCardBlock } from '../tool-card';
-import { defaultToolRenderer } from './tool';
+import { rawToolPresentation } from './tool-shared';
+import { fileInputPreview, normalizedToolName } from './tool-input';
 import { editDiff } from './edit-diff';
 
 /** Requested substitutions, not a claim about file contents or successful application. */
 export const editPreviewRenderer: CardRenderer<ToolCardBlock> = {
   id: 'nimrod.edit-preview', supports: () => true,
   mount() {
-    const base = defaultToolRenderer.mount();
     let cached: { oldText: string; newText: string; diff: ReturnType<typeof editDiff> }[] = [];
     return {
       update(data) {
-        const presentation = base.update(data);
+        const presentation = { ...rawToolPresentation(data), preview: fileInputPreview(data.arguments, data.toolStatus !== undefined) };
         const args = data.arguments;
         if (!args || typeof args !== 'object' || Array.isArray(args)) { cached = []; return presentation; }
         const record = args as Record<string, unknown>;
@@ -35,14 +35,14 @@ export const editPreviewRenderer: CardRenderer<ToolCardBlock> = {
         const showOutput = data.isError || data.uiPhase === 'stopped' || data.toolStatus === 'running';
         return { ...presentation, rawInputsPlacement: 'after', sections: [...sections, ...(showOutput ? presentation.sections : [])] };
       },
-      dispose() { cached = []; base.dispose(); },
+      dispose() { cached = []; },
     };
   },
 };
 
 /** Custom interactive DOM using only the public plugin context. */
 export const editDomRenderer: DomCardRenderer<ToolCardBlock> = {
-  apiVersion: 2, id: 'nimrod.edit-preview', supports: () => true,
+  apiVersion: 2, id: 'nimrod.edit-preview', tools: ['edit'], supports: data => normalizedToolName(data.name) === 'edit',
   mount(context) {
     const presentation = editPreviewRenderer.mount();
     const controls = new Map<string, { button: HTMLButtonElement; wrap: HTMLButtonElement; status: HTMLElement; text: string; remove: () => void }>();
@@ -102,3 +102,5 @@ export const editDomRenderer: DomCardRenderer<ToolCardBlock> = {
     }, dispose() { presentation.dispose(); controls.clear(); } };
   },
 };
+
+export default editDomRenderer;

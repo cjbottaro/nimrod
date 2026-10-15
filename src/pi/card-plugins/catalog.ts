@@ -3,6 +3,7 @@ import { presentationPlugin, type DomCardRenderer } from '../dom-card-renderer';
 import type { ToolCardRenderer, ToolCardBlock } from '../tool-card';
 import { defaultToolRenderer, rawToolPresentation } from './tool';
 import { bundledToolRenderer } from './registry';
+import { normalizedToolName } from './tool-input';
 import { declarativeRenderer, parsePluginPackage, type PluginSettings } from './declarative';
 import { parseExecutableManifest, importCardModule, executableRenderer, personalRenderer } from './executable';
 
@@ -94,7 +95,7 @@ export class CardPluginCatalog {
   dispose(): void { this.generation++; this.enabled.clear(); this.trusted.clear(); this.personal.clear(); this.packages.clear(); }
 
   select(data: Readonly<ToolCardBlock>): ToolCardRenderer {
-    const name = typeof data.name === 'string' ? data.name.trim().toLowerCase().split(/[.:/]/).pop() || '' : '';
+    const name = normalizedToolName(data.name);
     const override = Object.hasOwn(this.config.overrides, name) ? this.config.overrides[name] : undefined;
     if (override === 'nimrod.raw') return presentationPlugin({ id: 'nimrod.raw', supports: () => true, mount: () => ({ update: rawToolPresentation, dispose() {} }) });
     const bundled = bundledToolRenderer(data);

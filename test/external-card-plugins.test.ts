@@ -79,7 +79,7 @@ test('bad/missing/duplicate packages report errors without blocking built-in fal
     return name === 'bad.json' ? '{' : packageText;
   }, message => { errors = message; });
   assert.match(errors, /missing.json/); assert.match(errors, /bad.json/); assert.match(errors, /Duplicate/);
-  assert.equal(catalog.select({ name: 'bash' }).id, 'nimrod.tool');
+  assert.equal(catalog.select({ name: 'bash' }).id, 'nimrod.bash');
   assert.equal(catalog.select({ name: 'constructor' }).id, 'nimrod.tool');
   assert.equal(catalog.select({ name: 'toString' }).id, 'nimrod.tool');
   let resolve!: (text: string) => void;

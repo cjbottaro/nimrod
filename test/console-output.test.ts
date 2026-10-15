@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom';
 import { renderConsoleOutput } from '../src/pi/console-output';
 import { renderToolCard, updateToolCard } from '../src/pi/tool-card';
 import { defaultToolRenderer } from '../src/pi/card-plugins/tool';
+import { bashPresentation } from '../src/pi/card-plugins/bash';
 import { validatePresentation } from '../src/pi/card-renderer';
 
 function fixture(run: (doc: Document, output: HTMLElement) => void): void {
@@ -114,10 +115,10 @@ test('managed console updates do not read accumulated DOM text or rewrite unchan
 test('bundled Bash aliases opt into console sections while raw/file output stays literal', () => {
   const renderer = defaultToolRenderer.mount();
   for (const name of ['bash', 'functions.bash', 'shell', 'terminal']) {
-    const value = validatePresentation(renderer.update({ name, toolStatus: 'result', executionOutput: 'live', resultOutput: '\x1b[32mdone\x1b[0m' }));
+    const value = validatePresentation(bashPresentation({ name, toolStatus: 'result', executionOutput: 'live', resultOutput: '\x1b[32mdone\x1b[0m' }));
     assert.deepEqual(value.sections.map(section => section.format), ['console', 'console']);
   }
-  assert.equal(renderer.update({ name: 'read', resultOutput: '\x1b[32mliteral' }).sections[0].format, undefined);
+  for (const name of ['read', 'bash', 'custom']) assert.equal(renderer.update({ name, resultOutput: '\x1b[32mliteral' }).sections[0].format, undefined);
   renderer.dispose();
 });
 

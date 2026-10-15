@@ -51,7 +51,7 @@ test('source compile/import/metadata errors remain isolated and stale discovery 
   await catalog.reload({ files: [], overrides: {}, autoLoad: false }, async () => '', () => {});
   finish(bundle()); await old; assert.equal(evaluated, 0);
   await catalog.reload({ files: [], overrides: {} }, async () => '', message => { errors = message; }, { readModule: async () => '', loadPersonal: async () => ({ ...bundle(), warnings: ['bad.ts: compile failed'] }), importModule: async () => ({ default: {} }) });
-  assert.match(errors, /compile failed/); assert.match(errors, /Unsupported/); assert.equal(catalog.select({ name: 'bash' }).id, 'nimrod.tool');
+  assert.match(errors, /compile failed/); assert.match(errors, /Unsupported/); assert.equal(catalog.select({ name: 'bash' }).id, 'nimrod.bash');
 });
 
 test('background loader coalesces same-signature work, forces source reload and suppresses stale/unloaded reporting', async () => {

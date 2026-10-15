@@ -59,7 +59,21 @@ Corrupt/stale caches rebuild. Failed edits do not execute the old bundle as a fa
 
 `tools` contains normalized exact names: Nimrod lowercases the tool name and takes its final namespace component (`functions.read` matches `read`). Explicit manifest packages retain their configured order/precedence; then personal entries use sorted relative-path order; then bundled rendering. Duplicate IDs are rejected. For personal sources, metadata is known only after evaluating trusted code, so duplicate detection does not undo module-global effects.
 
-`cards.renderers` maps normalized tool names to renderer IDs. Bundled choices are `nimrod.tool`, `nimrod.edit-preview` and `nimrod.raw`. Missing/incompatible explicit choices use raw fallback rather than silently choosing another plugin.
+`cards.renderers` maps normalized tool names to renderer IDs. Each Pi built-in has its own bundled plugin:
+
+| Tool | Renderer ID | Presentation |
+| --- | --- | --- |
+| `read` | `nimrod.read` | File path and requested line range, when supplied; literal result text. |
+| `bash` | `nimrod.bash` | Command preview and console-style streaming/results; also matches `shell` and `terminal`. |
+| `edit` | `nimrod.edit-preview` | Requested substitution diffs with Wrap/Copy. |
+| `write` | `nimrod.write` | Destination and literal **Requested content**, alongside Pi's output. |
+| `grep` | `nimrod.grep` | Pattern/path preview and literal matches. |
+| `find` | `nimrod.find` | Glob/path preview and literal results. |
+| `ls` | `nimrod.ls` | Directory preview and literal listing. |
+
+Each invocation mounts its own plugin instance. These use the same API-v2 lifecycle and context as personal plugins; shared helpers do not own tool selection or conversation state. External matches still take precedence unless explicitly overridden.
+
+`nimrod.tool` is the generic fallback/override (input preview and literal output); `nimrod.raw` shows literal output without an input preview. To keep console formatting, choose `nimrod.bash` rather than forcing the generic renderer. Missing/incompatible explicit choices use raw fallback rather than silently choosing another plugin. A tool-specific renderer ID only applies to its matching tool names.
 
 Already-mounted cards retain their renderer on reload. Disabling autoload or removing an entry on reload stops its managed callbacks/actions on the next event/update, disposing that card to raw fallback. Unmanaged/global effects or already accepted native actions cannot be undone; reopen the window for full webview teardown.
 
@@ -88,6 +102,12 @@ These JS files are not automatically discovered. Entry/manifest names cannot inc
 API-v1 declarative JSON remains an optional no-executable-code adapter: `id`, `tools`, optional title/preview templates and keyed sections using own-property JSON pointers such as `{{/arguments/path}}`. Formats are literal `text`/`diff`, not HTML. It requires `cards.plugins` but no executable trust. Limits remain 32 sections, 16,384 characters per template and 2 Mi characters per expanded presentation; code/CSS/actions and invalid pointers are rejected.
 
 ## Requested edits and recovery
+
+### Requested file content
+
+Read ranges describe requested inputs, not verified output line numbers. Write previews show the requested `content` verbatim, including empty content; they do not claim that the file was written successfully. Pi's running/error/final output remains visible separately. Partial arguments do not show invented placeholders or unfinished string fields. Read image/non-text results and structured Bash exit metadata are not available through the current plugin data; plugins do not infer them from the path or output text.
+
+### Requested edits
 
 Bundled edit cards emphasize the filename, with a muted directory path. Expanded cards show a line diff from structured `oldText`/`newText` substitutions: unchanged lines remain context, and a compact toolbar shows added/removed line counts, **Wrap** and **Copy**. Multiple substitutions also show their position (for example, **1 of 3**). Wrap is local to each preview; Copy copies the diff text, unaffected by visual wrapping.
 
