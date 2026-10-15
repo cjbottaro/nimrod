@@ -49,6 +49,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Window opacity, continuous surface hierarchy, native/compositor blur and accessibility | [Translucency](references/translucency.md) | [Translucency](../../../docs/translucency.md) |
 | Theme selection, preview, import and synchronization | [Themes](references/themes.md) | [Themes](../../../docs/themes.md) |
 | Theme-catalog maintenance and pinned sources | [Theme catalog](references/theme-catalog.md) | [Contributing](../../../CONTRIBUTING.md) |
+| Signed GitHub releases, Homebrew cask and packaged launcher | [Release distribution](references/releases.md) | [Installation](../../../docs/installation.md), [Release setup](../../../CONTRIBUTING.md#release-setup) |
 | Explicit builds, publication and compiler cache | [Build workflow](references/build-cache.md) | [Contributing](../../../CONTRIBUTING.md#app-builds) |
 | Optional external renderer for Pi web search/fetch/stored content/source check | [Pi Web Access cards](references/pi-web-access-plugin.md) | [Pi Web Access cards](../../../docs/pi-web-access-plugin.md) |
 | Mounted DOM renderers, cached personal TypeScript discovery/reload and legacy packages | [Card plugins](references/card-plugins.md) | [Card plugins](../../../docs/card-plugins.md), [Authoring](../../../docs/card-plugin-api.md) |

@@ -12,7 +12,7 @@ macOS cold launches elect one owner before UI and publish forwarding synchronous
 
 ## Code map
 
-- `bin/nimrod`: canonical Bash directory launcher; macOS `open -n -a … --args --workspace …`, Linux executable launch. Returns on OS acceptance, not routing/focus completion.
+- `bin/nimrod`: canonical Bash directory launcher; source installs resolve the checkout, while packaged/Homebrew symlinks resolve the owning `.app/Contents/Resources/bin/nimrod` resource (NIMROD_APP still takes priority). See [release distribution](releases.md). macOS `open -n -a … --args --workspace …`, Linux executable launch. Returns on OS acceptance, not routing/focus completion.
 - `src-tauri/src/single_instance.rs`: macOS pre-runtime lifetime lock, synchronous Unix listener binding, bounded forwarding IO and owner-only cleanup. The core is also compiled into Unix fixture tests; this does not replace Linux's production backend.
 - `src-tauri/src/main.rs`: parses/validates the initial request, elects/forwards before constructing Tauri, starts the listener after managed state exists, then creates the initial window and enables the existing request queue. Explicit `RunEvent::Exit` cleanup is required because Tauri `App::run` exits the process without running Rust destructors.
 - `src-tauri/src/cli.rs`: canonical argument parsing and one ordered, setup-gated router worker. This queue is not an inter-process election mechanism.

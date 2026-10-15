@@ -21,7 +21,7 @@ requested=${1-.}
 [[ -n $requested && -d $requested ]] || fail "Not a project directory: $requested"
 workspace=$(CDPATH= cd -P -- "$requested" && pwd -P) || fail "Cannot open project: $requested"
 
-# Resolve an installed symlink back to this checkout, including relative links.
+# Resolve an installed symlink to its checkout or packaged resource, including relative links.
 source_path=${BASH_SOURCE[0]}
 while [[ -L $source_path ]]; do
   source_dir=$(CDPATH= cd -P -- "$(dirname "$source_path")" && pwd -P)
@@ -32,8 +32,13 @@ repo=$(CDPATH= cd -P -- "$(dirname "$source_path")/.." && pwd -P)
 
 case $(uname -s) in
   Darwin)
-    app=${NIMROD_APP:-$repo/src-tauri/target/release/bundle/macos/Nimrod.app}
-    [[ -d $app && -x $app/Contents/MacOS/nimrod ]] || fail "Build not found at $app. Run mise run build or set NIMROD_APP."
+    if [[ $repo == *.app/Contents/Resources ]]; then
+      default_app=${repo%/Contents/Resources}
+    else
+      default_app=$repo/src-tauri/target/release/bundle/macos/Nimrod.app
+    fi
+    app=${NIMROD_APP:-$default_app}
+    [[ -d $app && -x $app/Contents/MacOS/nimrod ]] || fail "Build not found at $app. Install/build Nimrod or set NIMROD_APP."
     app=$(CDPATH= cd -P -- "$app" && pwd -P)
     # --args alone is ignored for an already-running app. The transient second
     # launch forwards through Nimrod's pre-runtime instance gate, then exits.

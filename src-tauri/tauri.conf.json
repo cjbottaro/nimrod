@@ -13,5 +13,5 @@
       "devCsp": "default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost http://127.0.0.1:1420 ws://127.0.0.1:1420; img-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'"
     }
   },
-  "bundle": { "active": true, "targets": ["app"], "externalBin": ["resources/plugin-compiler/esbuild"], "macOS": { "signingIdentity": "-" }, "resources": ["resources/pi-model-scope.ts", "resources/plugin-compiler/LICENSE.esbuild.txt", "../THIRD_PARTY_NOTICES.md", "../THEME_CATALOG_NOTICES.md"], "icon": ["icons/icon.png", "icons/icon.icns", "icons/icon.ico"] }
+  "bundle": { "active": true, "targets": ["app"], "externalBin": ["resources/plugin-compiler/esbuild"], "macOS": { "signingIdentity": "-" }, "resources": { "resources/pi-model-scope.ts": "resources/pi-model-scope.ts", "resources/plugin-compiler/LICENSE.esbuild.txt": "resources/plugin-compiler/LICENSE.esbuild.txt", "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md", "../THEME_CATALOG_NOTICES.md": "THEME_CATALOG_NOTICES.md", "../bin/nimrod": "bin/nimrod" }, "icon": ["icons/icon.png", "icons/icon.icns", "icons/icon.ico"] }
 }

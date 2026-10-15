@@ -6,7 +6,9 @@ A dedicated cross-platform app for directory-backed coding projects and agent se
 
 ## Get started
 
-This proof of concept runs from a local checkout. Rust, Node and sccache are pinned through mise:
+For packaged macOS releases, see [Installation](docs/installation.md): signed/notarized Apple Silicon and Intel DMGs, plus `brew install --cask cjbottaro/tap/nimrod` once the first stable release and tap are published. The release pipeline is implemented; first-run distribution acceptance is pending.
+
+For development, Rust, Node and sccache are pinned through mise:
 
 ```sh
 mise trust
@@ -62,6 +64,6 @@ See the [user-guide index](docs/README.md). [Card plugins](docs/card-plugins.md)
 
 macOS is the current development platform; Linux is next, and Windows is a possible future target, not a parity commitment. Linux native delivery/focus and Windows behavior remain unverified. The Bash launcher has no Windows wrapper; Windows Pi npm `.cmd` wrappers are not supported (select Pi's JS entry point and `node.exe` explicitly).
 
-There is no background process continuity, integrated diff editor, fork/tree-navigation UI, Pi `/reload`, other harness integration, automatic update system or production installer. macOS local bundles use ad-hoc signing, not Developer ID signing/notarization. Opening a project does not start Pi; selecting an inactive saved session loads and reconnects it without sending a prompt. Closing a project stops its owned agents.
+There is no background process continuity, integrated diff editor, fork/tree-navigation UI, Pi `/reload`, other harness integration or in-app update system. macOS local bundles use ad-hoc signing; the separate [release workflow](CONTRIBUTING.md#release-setup) uses Developer ID signing/notarization and DMG packaging. Opening a project does not start Pi; selecting an inactive saved session loads and reconnects it without sending a prompt. Closing a project stops its owned agents.
 
 Send clears the composer and previews ordinary messages in the transcript immediately (images after local preparation), then reconciles Pi’s user turn in place. Failed or uncertain sends show an error without restoring the message or blocking a new draft; nothing is automatically replayed. Pi owns conversation history; Nimrod cannot coordinate external applications writing the same session file.

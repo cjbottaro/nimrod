@@ -1,5 +1,7 @@
 # User guides
 
+- [Installation](installation.md) — macOS downloads, Homebrew, runtime setup and updates.
+
 ## Projects and conversations
 
 - [Projects](projects.md) — open directories, recent projects and terminal launches.

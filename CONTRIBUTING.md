@@ -60,6 +60,68 @@ Keep the installed CLI pointing to the primary checkout. Requested publications 
 
 Cargo asset preparation copies a target-matching esbuild binary/license from the installed npm dependency into an ignored staging directory; Tauri packages it as a compiler sidecar. No compiler is downloaded at runtime. Native same-platform builds use `npm ci`; cross builds require the matching target dependency installed locally. Requested macOS verification includes the helper signature. Compiler packaging/execution still needs native acceptance; no app build is part of checks.
 
+## Release setup
+
+The [Release workflow](.github/workflows/release.yml) builds Developer ID signed/notarized macOS 13+ DMGs for Apple Silicon and Intel. It publishes GitHub Releases and updates a stable Homebrew cask in a separate tap. Local `mise run build` remains ad-hoc signed; the release overlay is `src-tauri/tauri.release.conf.json`. No updater service or App Store submission is involved.
+
+### Apple credentials
+
+1. Enroll in the Apple Developer Program. Create a **Developer ID Application** certificate using a CSR from Keychain Access; install it with its private key on your Mac. An Apple Development or Apple Distribution certificate is not the right identity.
+2. Export that certificate **with its private key** as a password-protected `.p12`. Base64-encode it for the secret below (`openssl base64 -A -in /path/to/certificate.p12`). Keep exports outside the repository.
+3. Create an **App Store Connect team API key** with Developer access under Users and Access → Integrations. API access may first need the account holder's approval. Download its `.p8` once; retain the issuer UUID and Key ID. This workflow uses a team issuer/key, not an issuer-less individual API key or your Apple login password.
+4. Create a GitHub environment named **release** in this repository and set:
+
+| Environment secret | Value |
+| --- | --- |
+| `APPLE_CERTIFICATE` | Base64 of the exported `.p12` |
+| `APPLE_CERTIFICATE_PASSWORD` | The export password |
+| `APPLE_SIGNING_IDENTITY` | Full `Developer ID Application: Your Name (TEAMID)` identity; inspect with `security find-identity -v -p codesigning` |
+| `APPLE_TEAM_ID` | The Apple team identifier expected in signatures |
+| `APPLE_API_KEY` | App Store Connect Key ID, not the key contents |
+| `APPLE_API_ISSUER` | App Store Connect issuer UUID |
+| `APPLE_API_KEY_P8` | Raw multiline contents of the `.p8` private key |
+
+The workflow imports the certificate into a temporary runner keychain, writes the API key under RUNNER_TEMP, and removes both in an always cleanup step. Only the signed assets leave the build jobs. Keep signing access on trusted version tags/manual runs; environment tag restrictions must allow `v*`, plus `main` if using manual dispatch from main. Configure required approvals if desired. Protect release tag creation in repository rules.
+
+See [Tauri macOS signing](https://v2.tauri.app/distribute/sign/macos/) and [Apple Developer ID](https://developer.apple.com/developer-id/).
+
+### Homebrew tap
+
+1. The Nimrod repository/releases must be **public** for unauthenticated Homebrew downloads; stable runs reject a private source repository. Create a **public** GitHub repository `cjbottaro/homebrew-tap`, initialized with a README and a `main` branch. The first stable run creates `Casks/nimrod.rb`. This is your own tap, not a submission to Homebrew's central cask repository.
+2. Create a fine-grained token scoped **only** to that tap with **Contents: Read and write**. It needs to check out and push `Casks/nimrod.rb`; the app repository's default GITHUB_TOKEN cannot write another repository.
+3. Create a GitHub environment **homebrew** in the Nimrod repository; add `HOMEBREW_TAP_TOKEN` as its secret. For another owner/repository, set `HOMEBREW_TAP_REPOSITORY` as a GitHub Actions configuration variable in that environment. The default is `cjbottaro/homebrew-tap`. Adjust the documented install command for another tap.
+4. Allow this bot's normal non-force commits to the tap's main branch under your branch rules. If direct writes are not allowed, the workflow will fail rather than bypass protection; adapt to a PR-based tap workflow instead.
+
+The generated cask selects the right architecture/checksum, installs the app and links its packaged `nimrod` launcher. It does not install Node/Pi, bypass quarantine or purge user data on uninstall. No private token is needed by end users.
+
+### Cut a release
+
+Release changes must already be merged into main. Set **all** version locations to the exact version, including a prerelease suffix if applicable:
+
+- `package.json` and `package-lock.json` (top-level and `packages[""].version`); `npm version VERSION --no-git-tag-version` updates these without making a commit/tag.
+- `src-tauri/tauri.conf.json`.
+- `[package].version` in `src-tauri/Cargo.toml` and the `nimrod` package's version in `src-tauri/Cargo.lock` (not every dependency version).
+
+Commit/merge that version change using the worktree workflow, then tag the resulting main commit when ready to publish:
+
+```sh
+git tag -a v0.1.0 -m 'Nimrod 0.1.0'
+git push origin main
+git push origin v0.1.0
+```
+
+Those pushes trigger remote builds and publication; they are operator actions, not something an agent runs as part of local implementation. A manual **Actions → Release → Run workflow** also accepts an existing tag; dispatch from main. The tag must resolve to a commit reachable from main, and its version must match all package identities. Publication rechecks that the remote tag still resolves to the prepared source commit. Do not move published tags.
+
+The pipeline runs offline checks, then signs/notarizes/verifies both builds. It additionally notarizes/staples the final DMGs, generates `SHA256SUMS` from their final bytes, creates/uploads a draft release, and publishes only after both architectures pass. Stable releases include the generated `nimrod.rb` and update the tap. Prereleases such as `v0.2.0-alpha.1` publish to GitHub only and do not replace the latest stable release.
+
+Start with an alpha version to exercise signing/downloads without changing Homebrew; then increment to a stable version to exercise tap publication. Native acceptance should include browser downloads on another Mac, both architectures, first launch, Pi discovery, notifications, `brew install`/upgrade/uninstall, and `nimrod .`. Pipeline signing success is not GUI/platform acceptance. Add the actually tested Pi version and known limitations to release notes; generated notes do not infer runtime compatibility.
+
+### Failure and retry
+
+A build failure publishes nothing. Upload failure leaves a draft that can be retried. A tap failure leaves the GitHub release published: use **Re-run failed jobs**, preserving the original artifacts, rather than rebuilding/re-signing that tag. Publication retries of an already-public release must byte-match every published asset and never replace it; stable publication/tap checks reject downgrades. Artifacts are retained for seven days. After that, recover `nimrod.rb` from the public stable release and update the tap manually, or publish a new version. If a first release fails midway, inspect/delete only that release's draft explicitly before starting over; do not delete public assets to bypass immutability.
+
+**Verification:** this pipeline and its fixtures have been authored but not run; Apple credentials, actual notarization and fresh-machine/Homebrew installation still need first-run acceptance. [Internal release contract](.agents/skills/features/references/releases.md).
+
 ## Maintained external card plugins
 
 `plugins/` holds real optional external renderer sources, not production imports. They are type-checked with the app and exercised through synthetic/offline fixtures. [Pi Web Access cards](docs/pi-web-access-plugin.md) documents the first plugin's compatibility, limitations and personal installation. Keep its source self-contained except for type-only SDK imports so a regular copy works without installing dependencies or altering upstream Pi extensions.

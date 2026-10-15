@@ -27,6 +27,26 @@ function fixture() {
 }
 
 const posix = process.platform !== 'win32';
+test('packaged launcher resolves its owning app through a Homebrew-style symlink, including moved apps', { skip: !posix }, () => {
+  const f = fixture();
+  try {
+    const app = join(f.root, 'Custom Applications', 'Nimrod.app');
+    const launcher = join(app, 'Contents/Resources/bin/nimrod');
+    mkdirSync(dirname(launcher), { recursive: true });
+    mkdirSync(join(app, 'Contents/MacOS'), { recursive: true });
+    copyFileSync(f.launcher, launcher); chmodSync(launcher, 0o755);
+    writeFileSync(join(app, 'Contents/MacOS/nimrod'), 'fixture only', { mode: 0o755 });
+    const bin = join(f.root, 'brew bin'); mkdirSync(bin);
+    const link = join(bin, 'nimrod');
+    symlinkSync('../Custom Applications/Nimrod.app/Contents/Resources/bin/nimrod', link);
+    const result = f.run(['.'], link);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(result.stdout.split('\0').filter(Boolean), ['/usr/bin/open', '-n', '-a', app, '--args', '--workspace', f.workspace]);
+    const override = f.run(['.'], link, { NIMROD_APP: f.app });
+    assert.equal(override.status, 0, override.stderr);
+    assert.ok(override.stdout.includes(f.app));
+  } finally { f.close(); }
+});
 test('Bash launcher resolves current directory and passes exact launch arguments without shell interpolation', { skip: !posix }, () => {
   const f = fixture();
   try {

@@ -22,7 +22,7 @@ Explicitly requested builds use checkout-local targets and publish verified whol
   tool pin without changing their tracked files. Explicit child overrides can
   supersede them. External worktrees need the configuration in their own branch.
   Tool installation alone does not enable the wrapper outside this config hierarchy.
-- Developer guide: [Contributing](../../../../CONTRIBUTING.md#app-builds).
+- Developer guide: [Contributing](../../../../CONTRIBUTING.md#app-builds). Signed GitHub/Homebrew distribution is a separate [release pipeline](releases.md); local `mise run build` retains ad-hoc signing and does not publish remotely.
 
 ## Explicit build and publication workflow
 

@@ -22,7 +22,7 @@ Recents remember opened directories, including empty directories and home. There
 
 ## Terminal launches
 
-After packaging, install the launcher from your primary checkout:
+A [Homebrew installation](installation.md#homebrew) includes the launcher and uses the installed app. For a development build, package the app and install the launcher from your primary checkout:
 
 ```sh
 mise run install-cli            # ~/.local/bin/nimrod
@@ -33,7 +33,7 @@ nimrod --help
 
 Ensure `~/.local/bin` is on PATH. Without installation, use `./bin/nimrod .`. A different installation directory can be passed to `bash scripts/install-cli.sh /your/bin`; installation refuses to overwrite another command and does not edit shell configuration.
 
-The launcher uses that checkout's packaged app. Set `NIMROD_APP=/Applications/Nimrod.app` for another macOS bundle, or a Linux executable path for another Linux build. No Windows terminal wrapper is included.
+The development launcher uses that checkout's packaged app; the Homebrew/packaged launcher resolves its own containing app, including a custom Applications directory. Set `NIMROD_APP=/Applications/Nimrod.app` for another macOS bundle, or a Linux executable path for another Linux build. No Windows terminal wrapper is included.
 
 Terminal launches open/focus projects without starting or resuming agents. Rapid macOS launches are intended to share one app instance. The command returns on OS launch acceptance, not a window-focus acknowledgement; later routing errors appear in the app.
 
