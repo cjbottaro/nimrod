@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -34,6 +34,41 @@ test('version discovery reads all six package/config/lock identities', () => {
   assert.ok(Object.values(versions).every(version => typeof version === 'string' && version.length > 0));
   const version = versions['package.json'];
   assert.doesNotThrow(() => releaseMetadata(`v${version}`, repository, versions));
+});
+
+test('Cargo version discovery reads the whole package table without leaking into other tables', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'nimrod-release-versions-'));
+  try {
+    mkdirSync(path.join(root, 'src-tauri'));
+    writeFileSync(path.join(root, 'package.json'), JSON.stringify({ version: '1.2.3' }));
+    writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify({ version: '1.2.3', packages: { '': { version: '1.2.3' } } }));
+    writeFileSync(path.join(root, 'src-tauri/tauri.conf.json'), JSON.stringify({ version: '1.2.3' }));
+    writeFileSync(path.join(root, 'src-tauri/Cargo.lock'), '[[package]]\nname = "nimrod"\nversion = "1.2.3"\n');
+    const cargoFile = path.join(root, 'src-tauri/Cargo.toml');
+    const packageTable = '[package]\nname = "nimrod"\n\n# Version follows other fields and blank lines.\nversion = "1.2.3"\n';
+    for (const cargo of [
+      `${packageTable}\n[dependencies]\nversion = "9.9.9"\n`,
+      packageTable.trimEnd(),
+      `[dependencies]\nversion = "9.9.9"\n\n${packageTable}`,
+    ]) {
+      for (const newline of ['\n', '\r\n']) {
+        writeFileSync(cargoFile, cargo.replaceAll('\n', newline));
+        const versions = readVersions(root);
+        assert.equal(versions['Cargo.toml'], '1.2.3');
+        assert.doesNotThrow(() => releaseMetadata('v1.2.3', repository, versions));
+      }
+    }
+    for (const cargo of [
+      '[package]\nname = "nimrod"\n\n[dependencies]\nversion = "1.2.3"\n',
+      '[package]\nname = "nimrod"\n\n[package.metadata]\nversion = "1.2.3"\n',
+      '[dependencies]\nversion = "1.2.3"\n',
+    ]) {
+      writeFileSync(cargoFile, cargo);
+      const versions = readVersions(root);
+      assert.equal(versions['Cargo.toml'], undefined);
+      assert.throws(() => releaseMetadata('v1.2.3', repository, versions), /Cargo.toml version undefined/);
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test('cask uses immutable per-architecture URLs and final checksums, including the packaged CLI', () => {

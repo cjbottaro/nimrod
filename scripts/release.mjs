@@ -26,12 +26,14 @@ export function readVersions(root = '.') {
   const lock = json('package-lock.json');
   const cargo = readFileSync(path.join(root, 'src-tauri/Cargo.toml'), 'utf8');
   const cargoLock = readFileSync(path.join(root, 'src-tauri/Cargo.lock'), 'utf8');
+  // No multiline flag: the table ends at the next header or file end, not each line end.
+  const packageTable = /(?:^|\n)\[package\][ \t]*\r?\n([\s\S]*?)(?=\r?\n\[|$)/.exec(cargo)?.[1];
   return {
     'package.json': json('package.json').version,
     'package-lock.json': lock.version,
     'package-lock.json root': lock.packages?.['']?.version,
     'tauri.conf.json': json('src-tauri/tauri.conf.json').version,
-    'Cargo.toml': /^\[package\]\s*\n([\s\S]*?)(?=\n\[|$)/m.exec(cargo)?.[1].match(/^version\s*=\s*"([^"]+)"/m)?.[1],
+    'Cargo.toml': packageTable?.match(/^version\s*=\s*"([^"]+)"/m)?.[1],
     'Cargo.lock': cargoLock.split('[[package]]').find(block => /^name = "nimrod"$/m.test(block))?.match(/^version = "([^"]+)"/m)?.[1],
   };
 }
