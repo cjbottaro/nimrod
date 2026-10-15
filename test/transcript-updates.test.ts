@@ -71,7 +71,7 @@ test('index rebuilds for history replacement and adoption; late updates never re
   assert.equal(state.messages.at(-1)?.role, 'tool', 'old index cannot address replaced history');
 });
 
-test('verified output lineage survives coalesced appends but not truncation or replacement', () => {
+test('output revisions validate coalesced render endpoints and reject replacement/truncation', () => {
   let state = running();
   const block = () => (state.messages[0].content as import('../src/pi/types').ContentBlock[])[0];
   state = output(state, 'a', 'first'); const first = outputSources(block()).executionOutput;
@@ -80,10 +80,18 @@ test('verified output lineage survives coalesced appends but not truncation or r
   assert.ok(sameOutputAppend(first, outputSources(block()).executionOutput));
   state = output(state, 'a', 'short'); const replacement = outputSources(block()).executionOutput;
   assert.equal(sameOutputAppend(first, replacement), false);
-  state = output(state, 'a', 'short more');
-  assert.ok(sameOutputAppend(replacement, outputSources(block()).executionOutput));
+  state = output(state, 'a', 'short more'); const longer = outputSources(block()).executionOutput;
+  assert.ok(sameOutputAppend(replacement, longer));
   state = output(state, 'a', 'short');
-  assert.equal(sameOutputAppend(replacement, outputSources(block()).executionOutput), false, 'a truncated/reextended stream cannot reuse the old lineage');
+  assert.equal(sameOutputAppend(longer, outputSources(block()).executionOutput), false, 'truncation of displayed output replaces it');
+  assert.ok(sameOutputAppend(replacement, outputSources(block()).executionOutput), 'skipped intermediate changes need not be replayed when rendered endpoints match');
+});
+
+test('presentation and raw recovery share one append comparison per rendered source pair', () => {
+  let reads = 0;
+  const before = { text: 'base' }, after = { get text() { reads++; return 'base appended'; } };
+  assert.ok(sameOutputAppend(before, after)); assert.ok(sameOutputAppend(before, after));
+  assert.equal(reads, 1);
 });
 
 test('card snapshots isolate caller data and share only owned deeply frozen subtrees', () => {
@@ -97,4 +105,8 @@ test('card snapshots isolate caller data and share only owned deeply frozen subt
   assert.ok(Object.isFrozen(second)); assert.ok(Object.isFrozen(second.arguments.nested));
   assert.throws(() => { second.arguments.nested.value = 'plugin changed'; }, TypeError);
   assert.equal(immutableSnapshot({ arguments: source }).arguments.nested.value, 'caller changed');
+  const shallow = Object.freeze({ nested: { value: 'not owned' } });
+  const detached = immutableSnapshot(shallow);
+  shallow.nested.value = 'external mutation';
+  assert.equal(detached.nested.value, 'not owned', 'shallow-frozen caller data is not a shareable subtree');
 });

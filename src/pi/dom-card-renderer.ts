@@ -202,7 +202,8 @@ export class DomCardController<Data> {
 
   private renderPresentation(value: CardPresentation): void {
     const doc = this.body.ownerDocument;
-    this.presentationOutputs = new Map();
+    const coverage = new Map<string, { text: string; literal: boolean; output: HTMLElement }>();
+    this.presentationOutputs = coverage;
     this.body.dataset.rawInputsPlacement = value.rawInputsPlacement ?? 'before';
     let title = this.summary.querySelector<HTMLElement>('.tool-card-title');
     if (!title) { title = doc.createElement('span'); title.className = 'tool-card-title'; this.summary.append(title); }
@@ -228,7 +229,7 @@ export class DomCardController<Data> {
       const format = part.format || 'text';
       const previous = this.content.get(output);
       const source = this.outputData && sectionOutputSource(this.outputData, part.key, part.text);
-      const append = sameOutputAppend(previous?.source, source);
+      const append = previous?.source && source ? sameOutputAppend(previous.source, source) : undefined;
       if (previous?.text !== part.text || previous.format !== format) {
         this.content.set(output, { text: part.text, format, source });
         if (format !== 'console') clearConsoleOutput(output);
@@ -243,7 +244,7 @@ export class DomCardController<Data> {
         } else if (format === 'markdown') output.replaceChildren(this.context.markdown(part.text));
         else renderLiteralOutput(output, part.text, source);
       }
-      this.presentationOutputs.set(part.key, { text: part.text, literal: format === 'text' || format === 'console' && consoleOutputIsLiteral(output), output });
+      coverage.set(part.key, { text: part.text, literal: format === 'text' || format === 'console' && consoleOutputIsLiteral(output), output });
       this.applyOutputPolicy(output); this.outputs.set(part.key, output);
       const at = sections()[index]; if (at !== section) this.body.insertBefore(section, at || null);
       old.delete(part.key);

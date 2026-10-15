@@ -6,7 +6,8 @@ export function renderLiteralOutput(output: HTMLElement, text: string, source?: 
   const previous = sources.get(output);
   if (previous?.text === text) return;
   const node = output.firstChild;
-  if (previous && (sameOutputAppend(previous.source, source) || text.startsWith(previous.text)) && node?.nodeType === 3 && node === output.lastChild) {
+  const append = previous && (previous.source && source ? sameOutputAppend(previous.source, source) : text.startsWith(previous.text));
+  if (previous && append && node?.nodeType === 3 && node === output.lastChild) {
     (node as Text).appendData(text.slice(previous.text.length));
   } else output.textContent = text;
   sources.set(output, { text, source });

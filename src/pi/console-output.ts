@@ -16,7 +16,7 @@ const renderers = new WeakMap<HTMLElement, ConsoleOutput>();
 export function clearConsoleOutput(output: HTMLElement): void { renderers.delete(output); }
 export function consoleOutputIsLiteral(output: HTMLElement): boolean { return renderers.get(output)?.literal === true; }
 
-export function renderConsoleOutput(output: HTMLElement, source: string, verifiedAppend = false): void {
+export function renderConsoleOutput(output: HTMLElement, source: string, verifiedAppend?: boolean): void {
   let renderer = renderers.get(output);
   if (!renderer) { renderer = new ConsoleOutput(output); renderers.set(output, renderer); }
   renderer.update(source, verifiedAppend);
@@ -36,9 +36,9 @@ class ConsoleOutput {
   private carry = '';
   constructor(private readonly output: HTMLElement) { output.replaceChildren(); }
 
-  update(source: string, verifiedAppend: boolean): void {
+  update(source: string, verifiedAppend?: boolean): void {
     if (source === this.source) return;
-    const append = verifiedAppend || source.startsWith(this.source);
+    const append = verifiedAppend ?? source.startsWith(this.source);
     const added = append ? source.slice(this.source.length) : source;
     // Scan only new bytes. A replacement can return to the literal path.
     const controls = /[\x00-\x09\x0b-\x1f\x7f-\x9f]/.test(added);
