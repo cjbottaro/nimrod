@@ -19,6 +19,18 @@ Work on a dedicated branch/worktree under `.worktrees/`, never directly on `main
 
 Keep compiler targets, `node_modules/` and frontend output checkout-local; do not redirect Cargo targets into another checkout. Mise's shared machine-local sccache reuses compatible Rust dependency compilations; final linking and all checks are not necessarily cacheable. Inspect it with `mise exec -- sccache --show-stats`.
 
+## Changelog and local development
+
+Keep the rapid local loop unchanged: task worktree → commit → merge into main → build when explicitly requested. Local builds and frequent merges need **no version bump, tag or release**. They may include changes beyond the latest public version; Git revision/dirty-state build metadata distinguishes those builds. Normal pushes to main do not publish releases.
+
+Maintain the root [CHANGELOG.md](CHANGELOG.md) as changes merge. Add meaningful user-visible features, behavior changes, fixes, removals and compatibility/installation changes under **Unreleased**, in the same task commit as the implementation. Use nonempty **Added / Changed / Fixed / Removed** groups; mark breaking changes and include migration instructions. Skip internal refactors, test maintenance and routine documentation/policy edits unless they materially affect users; agents report when no entry is warranted.
+
+Unreleased describes the current outcome, not every experiment. Consolidate related iterations while preserving other tasks' entries; remove reverted unreleased features rather than logging an add/remove cycle. Never silently rewrite published history or list unmerged/planned work. No historical versions/dates are fabricated when starting the changelog.
+
+During deliberate stable-release preparation, move the reviewed Unreleased entries under `VERSION — YYYY-MM-DD` (UTC release date), leave a fresh Unreleased section, and commit this with the package version bump before tagging. Prereleases snapshot Unreleased from the tagged source without clearing it. GitHub release notes should come from that reviewed text, not a second manually maintained history. **Automation gap:** the current pipeline still generates GitHub notes automatically; changelog extraction/enforcement is not yet implemented.
+
+The agreed macOS release direction is Apple Silicon only, but the current workflow still builds Intel too; removing Intel is a separate implementation task. Neither decision changes the Linux roadmap. Full agent rules and implementation boundaries are in the [release policy](.agents/skills/features/references/releases.md#development-and-changelog-policy).
+
 ## Checks
 
 Run checks and tests only when explicitly requested; they are not an automatic task-completion or merge gate.
@@ -96,7 +108,7 @@ The generated cask selects the right architecture/checksum, installs the app and
 
 ### Cut a release
 
-Release changes must already be merged into main. Set **all** version locations to the exact version, including a prerelease suffix if applicable:
+Follow [changelog and local-development policy](#changelog-and-local-development): release preparation is deliberate, not part of routine personal builds. Review the matching changelog section or prerelease snapshot along with the version bump. Release changes must already be merged into main. Set **all** version locations to the exact version, including a prerelease suffix if applicable:
 
 - `package.json` and `package-lock.json` (top-level and `packages[""].version`); `npm version VERSION --no-git-tag-version` updates these without making a commit/tag.
 - `src-tauri/tauri.conf.json`.

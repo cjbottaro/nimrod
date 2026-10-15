@@ -2,6 +2,38 @@
 
 **Status: implemented, not executed against Apple/GitHub/Homebrew.** This is a macOS release pipeline, not cross-platform acceptance. Local builds retain ad-hoc signing. User instructions: [Installation](../../../../docs/installation.md). Operator setup: [Contributing](../../../../CONTRIBUTING.md#release-setup).
 
+## Development and changelog policy
+
+### Local development is not release preparation
+
+- Preserve the current loop: dedicated task worktree → commit → merge into main → explicitly requested local build. Frequent merges and personal builds are expected; neither requires a version bump, tag, changelog rollover or release ceremony.
+- Local main can contain Unreleased changes beyond the latest public version. Retain the configured package version until deliberate release preparation; existing Git revision/dirty-state build metadata distinguishes local builds without manufacturing versions.
+- A normal main push does not publish; a pushed version tag triggers the release workflow. Manual dispatch is also an explicit remote publication action, not a local build step. Follow existing authorization boundaries; never create/push release tags or publish just because a feature was completed.
+
+### Task completion and entries
+
+- The root `CHANGELOG.md` is the single maintained user-facing release history. Keep `## Unreleased` first, followed by released versions newest first. Create only nonempty `### Added`, `### Changed`, `### Fixed` and `### Removed` groups, in that order.
+- Every task must assess user-visible impact. Include meaningful implemented features, behavior changes, noticeable fixes, removals, compatibility and installation changes. Update Unreleased in the same task commit as the implementation. If no entry is warranted, state that and the reason in the completion report.
+- Exclude internal refactors, implementation details, test maintenance and routine documentation/policy changes unless they materially affect users. Do not copy commit subjects, agent progress, intermediate failed approaches, verification logs, planned work or promises into the changelog. Describe the outcome using product terminology; preserve actual verification limitations.
+- Prefix breaking changes with **Breaking:** and include the concrete migration/action required. Choose the category based on the user-visible outcome, not the internal type of edit.
+- Unreleased is editable while behavior evolves: revise or consolidate the same feature's iterations into one accurate final description. If an unreleased feature is reverted entirely, remove its entry rather than documenting an add/remove cycle that no public user experienced.
+- Preserve unrelated entries from concurrent worktrees. Resolve merges by retaining distinct changes and consolidating only overlapping descriptions; never replace the whole section with one task's view. Keep entries for work actually present on the target branch, not unmerged worktrees.
+- Published sections are historical. Put subsequent changes in Unreleased; do not silently rewrite old notes. Explicit factual corrections are exceptional and must not alter what that version actually shipped.
+- Start the file with Unreleased; do not invent prior versions or dates. Before the first public release, deliberately curate its initial feature summary from the tagged source rather than backfilling every development commit.
+
+### Deliberate release preparation
+
+- Select a release version deliberately, not per task or local build. Follow SemVer: breaking changes require an appropriate compatibility bump, additions a minor bump and fixes a patch bump; pre-1.0 compatibility/version choices remain explicit operator decisions. Keep all npm/Cargo/Tauri version identities aligned as required below.
+- Stable release: move the reviewed Unreleased entries into `## VERSION — YYYY-MM-DD` using the release's UTC date, leave a fresh Unreleased section, and commit the changelog rollover with the package version bump. Tag that merged preparation commit only when publication is requested. The changelog must describe only changes included in that tag.
+- Prerelease: bump the package identities to the exact prerelease version, but do not roll over or clear Unreleased. GitHub prerelease notes snapshot Unreleased from the tagged source. Later development may refine Unreleased; it cannot change that published snapshot.
+- Release notes should use the matching stable section or prerelease snapshot as the authoritative text, not auto-generated commit/PR lists. Stop release preparation if its notes/version are missing or inconsistent; do not substitute a guessed history. The same reviewed material can flow to GitHub without a second manually maintained changelog.
+
+### Implementation boundary and agreed follow-ups
+
+This policy is agent/operator guidance, not new runtime enforcement. The existing release script still uses GitHub `--generate-notes`; extracting the versioned changelog/prerelease snapshot and enforcing it in publication remains a follow-up. No tag, version bump, workflow dispatch or release is performed by a policy-only task.
+
+The agreed macOS distribution direction is **Apple Silicon only**; this does not narrow the Linux roadmap or claim Linux acceptance. The current workflow/cask generator still supports Apple Silicon and Intel. Removing Intel artifacts and adapting verification, checksums/cask generation and documentation together is a separate implementation step; do not claim ARM-only publication until that change is made.
+
 ## Contract
 
 - Version tags `vMAJOR.MINOR.PATCH` create stable releases; valid SemVer prerelease suffixes create GitHub prereleases only. Build metadata suffixes are deliberately unsupported.

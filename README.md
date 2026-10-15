@@ -18,7 +18,7 @@ mise run dev
 ```
 
 macOS needs Xcode Command Line Tools; other platforms need [Tauri's prerequisites](https://v2.tauri.app/start/prerequisites/).
-For checks and explicitly requested packaged builds, see [Contributing](CONTRIBUTING.md).
+For checks and explicitly requested packaged builds, see [Contributing](CONTRIBUTING.md). [Changelog](CHANGELOG.md) tracks notable changes; Unreleased can be ahead of public downloads. Local development builds do not require version bumps or release tags.
 
 1. Open a project directory.
 2. Choose **New session**, or open **⌘/Ctrl Shift+P → Resume session…** for saved project history.

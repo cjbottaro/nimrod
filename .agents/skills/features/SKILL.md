@@ -1,6 +1,6 @@
 ---
 name: features
-description: Nimrod feature specifications and implementation guidance. Load for design, implementation, debugging, review or documentation; use the index to read only relevant references.
+description: Nimrod feature specifications and implementation guidance. Load for design, implementation, debugging, review, documentation, changelog maintenance or release preparation; use the index to read only relevant references.
 ---
 
 # Nimrod features
@@ -12,6 +12,14 @@ When adding or changing error paths, notices, banners, flash messages or operati
 ## Interaction policy
 
 Apply the [optimistic interaction policy](references/architecture.md#optimistic-interaction-policy) to all UI work: local user actions drive immediate feedback; RPC success is not a general UI gate. Late errors annotate the affected operation, and authoritative harness events reconcile data without replay, draft restoration or repeat navigation. Any result-gated exception must have a concrete authoritative-state or destructive-operation requirement documented in its feature reference.
+
+## Changelog and release policy
+
+For every task, assess user-visible impact before completion. Meaningful implemented features, behavior changes, fixes, removals, compatibility or installation changes update the root [CHANGELOG.md](../../../CHANGELOG.md) under **Unreleased**, in the same commit as the implementation. Otherwise explicitly report why no changelog entry is warranted. Pure refactors, test maintenance, routine documentation and policy-only changes normally need no entry.
+
+Unreleased is a curated description of the final behavior, not an agent activity log: consolidate related iterations, preserve other tasks' entries and never rewrite published history. Follow the canonical [development/changelog policy](references/releases.md#development-and-changelog-policy) for categories, breaking changes, release preparation and prerelease snapshots.
+
+Rapid local development stays unchanged: merge task branches into main and build only when requested. Local merges/builds need no version bump, tag or release; the Git revision/dirty metadata distinguishes builds. Changelog maintenance grants no permission to run checks/builds, tag, push or publish.
 
 ## Feature index
 
@@ -49,6 +57,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Window opacity, continuous surface hierarchy, native/compositor blur and accessibility | [Translucency](references/translucency.md) | [Translucency](../../../docs/translucency.md) |
 | Theme selection, preview, import and synchronization | [Themes](references/themes.md) | [Themes](../../../docs/themes.md) |
 | Theme-catalog maintenance and pinned sources | [Theme catalog](references/theme-catalog.md) | [Contributing](../../../CONTRIBUTING.md) |
+| Changelog maintenance, rapid local development and release preparation | [Development/changelog policy](references/releases.md#development-and-changelog-policy) | [Changelog](../../../CHANGELOG.md), [Contributing](../../../CONTRIBUTING.md#changelog-and-local-development) |
 | Signed GitHub releases, Homebrew cask and packaged launcher | [Release distribution](references/releases.md) | [Installation](../../../docs/installation.md), [Release setup](../../../CONTRIBUTING.md#release-setup) |
 | Explicit builds, publication and compiler cache | [Build workflow](references/build-cache.md) | [Contributing](../../../CONTRIBUTING.md#app-builds) |
 | Optional external renderer for Pi web search/fetch/stored content/source check | [Pi Web Access cards](references/pi-web-access-plugin.md) | [Pi Web Access cards](../../../docs/pi-web-access-plugin.md) |

@@ -1,6 +1,7 @@
 # User guides
 
 - [Installation](installation.md) — macOS downloads, Homebrew, runtime setup and updates.
+- [Changelog](../CHANGELOG.md) — notable changes; Unreleased describes development, not a published download.
 
 ## Projects and conversations
 
