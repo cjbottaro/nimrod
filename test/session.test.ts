@@ -17,6 +17,23 @@ function fixture() {
   return { session, rpc, sent, published, respond, attention, previews, ui };
 }
 
+test('performance scopes observe ordered reduction/projection/delivery without changing session semantics', () => {
+  const f = fixture();
+  const scopes: string[] = [];
+  f.ui.active = () => false;
+  f.ui.performance = {
+    measure: (_kind, work) => work(), record() {},
+    scope(kind, work, active) { scopes.push(`${kind}:${active}`); return work(); },
+  };
+  let observed = false;
+  f.ui.changed = state => { assert.equal(state.busy, true); assert.equal(f.published.at(-1)?.state?.busy, true); observed = true; };
+  f.rpc.receive({ kind: 'rpc', value: { type: 'agent_start' } });
+  assert.equal(observed, true, 'state and published snapshot reconcile synchronously');
+  assert.deepEqual(scopes, ['pi-event:false', 'state-reduction:false', 'timeline-projection:false', 'snapshot-delivery:false', 'shell-session-update:false']);
+  // Restore the callback before disconnection's distinct lifecycle snapshots.
+  f.ui.changed = () => {}; f.rpc.disconnect('done');
+});
+
 test('ordinary prompt RPC results report outcomes independently of local UI', async () => {
   const f = fixture();
   const pending = f.session.handle({ type: 'prompt', id: 's1', text: 'hello' });

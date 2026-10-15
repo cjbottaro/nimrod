@@ -1,3 +1,4 @@
+import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -92,6 +93,12 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   const performanceDiagnostics = installPerformanceDiagnostics(window, () => ({
     userAgent: navigator.userAgent.slice(0, 512), fieldSizing: window.CSS?.supports('field-sizing', 'content') ?? false,
     zoom: Number(preferences.zoom()), devicePixelRatio: window.devicePixelRatio, hardwareConcurrency: navigator.hardwareConcurrency || 0,
+    appearance: {
+      backgroundOpacity: preferences.windowAppearance().opacity,
+      frostedBackground: preferences.windowAppearance().frosted,
+      area: preferences.windowAppearance().area,
+      ...appearance.diagnostics(),
+    },
   }));
   const performancePicker = required<HTMLSelectElement>('performance-mode');
   const performanceCapture = required<HTMLButtonElement>('performance-capture');
@@ -106,7 +113,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     performanceCapture.disabled = !enabled || capturingPerformance;
     if (changed || !enabled) performanceStatus.textContent = enabled ? 'Timing diagnostics enabled. Capture when the app feels slow.' : 'Performance diagnostics are off.';
   }
-  async function capturePerformance(): Promise<void> {
+  async function capturePerformance(copyPath = false): Promise<void> {
     if (capturingPerformance) return;
     capturingPerformance = true; reloadPerformance();
     performanceStatus.textContent = 'Capturing five more seconds of timing data…';
@@ -120,6 +127,19 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
       performancePath = path;
       performanceStatus.textContent = `Report saved: ${path}`;
       notices.report({ id: 'performance-capture', operation: 'Capture performance report', message: `Report saved: ${path}`, severity: 'info' });
+      if (copyPath) {
+        try {
+          await writeText(path);
+          if (!unloading) {
+            notices.resolve('performance-copy');
+            performanceStatus.textContent = `Report saved: ${path} · Path copied to clipboard.`;
+            notices.report({ id: 'performance-capture', operation: 'Capture performance report', message: performanceStatus.textContent, severity: 'info' });
+          }
+        } catch (error) {
+          if (!unloading) notices.report({ id: 'performance-copy', operation: 'Copy performance report path',
+            message: `Report saved: ${path}. Could not copy its path: ${String(error)}` });
+        }
+      }
     } catch (error) {
       if (!unloading) {
         performanceStatus.textContent = '';

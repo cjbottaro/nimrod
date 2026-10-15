@@ -37,7 +37,7 @@ interface ShellOptions {
   holdPrompts?: boolean;
   mcpReport?: string;
   focused?: () => boolean;
-  performanceControl?: { after: (() => void)[]; writeError?: string };
+  performanceControl?: { after: (() => void)[]; writeError?: string; copyError?: string };
   notificationError?: string;
   notificationDiagnosticsError?: string;
   notificationFocusGate?: Promise<void>;
@@ -169,9 +169,10 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       if (command === 'take_project_settings_request' || command === 'take_settings_category') return false;
       if (command === 'list_project_overrides') return [];
       if (command === 'plugin:window|is_focused') return options.focused?.() ?? true;
+      if (command === 'plugin:clipboard-manager|write_text' && options.performanceControl?.copyError) throw new Error(options.performanceControl.copyError);
       if (command === 'write_performance_report') {
         if (options.performanceControl?.writeError) throw new Error(options.performanceControl.writeError);
-        return '/fixture/.local/state/nimrod/performance/performance-report.json';
+        return '/fixture/.local/state/nimrod/performance-captures/2026-10-14_12-00-00.000Z.json';
       }
       if (command === 'prepare_notifications') return;
       if (command === 'focus_notification_window') { await options.notificationFocusGate; return; }
@@ -468,7 +469,7 @@ test('palette commands have registered shortcuts (theme intentionally unbound) a
 });
 
 test('performance capture is opt-in, bindable, timing-only and preserves the mounted session', async () => {
-  const control = { after: [] as (() => void)[], writeError: undefined as string | undefined };
+  const control = { after: [] as (() => void)[], writeError: undefined as string | undefined, copyError: undefined as string | undefined };
   const f = await fixture(undefined, { windowWorkspace: '/project', performanceControl: control });
   try {
     assert.equal(f.element<HTMLSelectElement>('performance-mode').value, 'off');
@@ -496,7 +497,14 @@ test('performance capture is opt-in, bindable, timing-only and preserves the mou
     for (const kind of ['input-handler', 'composer-layout', 'snapshot', 'transcript-render']) {
       assert.ok(report.samples.some(sample => sample.kind === kind && sample.active === true), `${kind} reaches the window-owned capture through the renderer probe`);
     }
-    assert.match(f.element('performance-status').textContent!, /Report saved:.*performance-report.json/);
+    assert.equal(report.version, 2);
+    assert.ok(report.environment.appearance);
+    for (const kind of ['pi-event', 'state-reduction', 'timeline-projection', 'snapshot-delivery', 'shell-session-update', 'sidebar-row-update', 'sidebar-reconcile', 'bookkeeping-prepare', 'sidebar-rows']) {
+      assert.ok(report.work.some(sample => sample.kind === kind), `${kind} reaches the shared work aggregate capture`);
+    }
+    const savedPath = '/fixture/.local/state/nimrod/performance-captures/2026-10-14_12-00-00.000Z.json';
+    assert.match(f.element('performance-status').textContent!, /Report saved:.*\.json.*Path copied/);
+    assert.equal(f.calls.filter(call => call.command === 'plugin:clipboard-manager|write_text').at(-1)!.args.text, savedPath);
     assert.equal(prompt.closest('.session-view'), view); assert.equal(prompt.value, 'private draft');
     assert.equal(f.win.document.activeElement, prompt);
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, started);
@@ -504,6 +512,19 @@ test('performance capture is opt-in, bindable, timing-only and preserves the mou
     f.preferences.external('{"diagnostics.performance":true,"keybindings":{"capture-performance":[]}}'); await f.tick();
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'p', metaKey: true, altKey: true, bubbles: true, cancelable: true }));
     assert.equal(control.after.length, 0, 'unbound shortcut does not capture');
+    const writesBeforeCopyFailure = f.calls.filter(call => call.command === 'write_performance_report').length;
+    control.copyError = 'fixture clipboard unavailable';
+    f.openPalette(); f.element<HTMLInputElement>('palette-input').value = 'Capture performance report';
+    f.element<HTMLInputElement>('palette-input').dispatchEvent(new f.win.Event('input'));
+    f.element<HTMLInputElement>('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await f.tick(); control.after.shift()!(); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'write_performance_report').length, writesBeforeCopyFailure + 1, 'clipboard failure never retries report saving');
+    assert.match(f.element('application-notices').textContent!, /Report saved:.*\.json.*Could not copy.*fixture clipboard unavailable/);
+    assert.equal(prompt.value, 'private draft');
+    control.copyError = undefined;
+    const copiesBeforeButton = f.calls.filter(call => call.command === 'plugin:clipboard-manager|write_text').length;
+    f.element<HTMLButtonElement>('performance-capture').click(); control.after.shift()!(); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'plugin:clipboard-manager|write_text').length, copiesBeforeButton, 'save-only helper does not copy without an action request');
     control.writeError = 'fixture disk full';
     f.element<HTMLButtonElement>('performance-capture').click(); control.after.shift()!(); await f.tick();
     assert.match(f.element('application-notices').textContent!, /fixture disk full/);

@@ -10,6 +10,7 @@ use std::{
 const MAX_SAMPLES: usize = 4096;
 const MAX_BYTES: usize = 1024 * 1024;
 const MAX_REPORTS: usize = 20;
+const MAX_WORK_SAMPLES: usize = 2048;
 static WRITER: Mutex<()> = Mutex::new(());
 
 #[derive(Deserialize, Serialize)]
@@ -51,6 +52,59 @@ struct Sample {
 }
 
 #[derive(Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum WorkKind {
+    PiEvent,
+    StateReduction,
+    TimelineProjection,
+    SnapshotDelivery,
+    ShellSessionUpdate,
+    SidebarRowUpdate,
+    SidebarReconcile,
+    BookkeepingPrepare,
+    SidebarRows,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct WorkSample {
+    at_ms: f64,
+    started_at_ms: f64,
+    kind: WorkKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    parent: Option<WorkKind>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    active: Option<bool>,
+    count: u64,
+    total_ms: f64,
+    self_ms: f64,
+    max_ms: f64,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum Area {
+    Chrome,
+    Window,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum EffectiveArea {
+    Off,
+    Chrome,
+    Window,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Appearance {
+    background_opacity: u8,
+    frosted_background: bool,
+    area: Area,
+    effective_area: EffectiveArea,
+    effective_background_opacity: u8,
+    reduced_transparency: bool,
+    frost_supported: bool,
+}
+
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Environment {
     user_agent: String,
@@ -58,6 +112,8 @@ struct Environment {
     zoom: f64,
     device_pixel_ratio: f64,
     hardware_concurrency: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    appearance: Option<Appearance>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -70,13 +126,19 @@ pub struct Report {
     end_ms: f64,
     dropped_samples: u64,
     environment: Environment,
+    environment_at_start: Environment,
     samples: Vec<Sample>,
+    work: Vec<WorkSample>,
+    dropped_work_samples: u64,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SavedReport {
     app_version: &'static str,
+    source_revision: &'static str,
+    source_dirty: Option<bool>,
+    built_at_unix_ms: Option<u128>,
     webview_version: Option<String>,
     os: &'static str,
     architecture: &'static str,
@@ -90,8 +152,9 @@ fn finite(value: f64) -> bool {
 }
 
 fn validate(report: &Report) -> Result<(), String> {
-    if report.version != 1
+    if report.version != 2
         || report.samples.len() > MAX_SAMPLES
+        || report.work.len() > MAX_WORK_SAMPLES
         || !finite(report.time_origin_ms)
         || !finite(report.start_ms)
         || !finite(report.marker_ms)
@@ -107,6 +170,19 @@ fn validate(report: &Report) -> Result<(), String> {
     {
         return Err("Invalid or oversized performance report".into());
     }
+    for environment in [&report.environment, &report.environment_at_start] {
+        if environment.user_agent.len() > 512
+            || !finite(environment.zoom)
+            || !(75.0..=200.0).contains(&environment.zoom)
+            || !finite(environment.device_pixel_ratio)
+            || environment.device_pixel_ratio > 16.0
+            || environment.appearance.as_ref().is_some_and(|appearance| {
+                appearance.background_opacity > 100 || appearance.effective_background_opacity > 100
+            })
+        {
+            return Err("Invalid performance environment".into());
+        }
+    }
     let mut previous = report.start_ms;
     for sample in &report.samples {
         if !finite(sample.at_ms)
@@ -119,20 +195,41 @@ fn validate(report: &Report) -> Result<(), String> {
         }
         previous = sample.at_ms;
     }
+    previous = report.start_ms;
+    for sample in &report.work {
+        if !finite(sample.at_ms)
+            || sample.at_ms < previous
+            || sample.at_ms > report.end_ms
+            || !finite(sample.started_at_ms)
+            || sample.started_at_ms > sample.at_ms
+            || !finite(sample.total_ms)
+            || !finite(sample.self_ms)
+            || !finite(sample.max_ms)
+            || sample.self_ms > sample.total_ms
+            || sample.max_ms > sample.total_ms
+            || sample.count > 1_000_000_000_000
+        {
+            return Err("Invalid performance work aggregate".into());
+        }
+        previous = sample.at_ms;
+    }
     Ok(())
 }
 
+fn report_timestamp(name: &str) -> Option<i64> {
+    let body = name.strip_suffix(".json")?;
+    if body.len() != 24 {
+        return None;
+    }
+    let time = chrono::NaiveDateTime::parse_from_str(body, "%Y-%m-%d_%H-%M-%S%.3fZ").ok()?;
+    // Recognize our exact fixed-width UTC names, not loosely parseable user files.
+    if time.format("%Y-%m-%d_%H-%M-%S%.3fZ").to_string() != body {
+        return None;
+    }
+    Some(time.and_utc().timestamp_millis())
+}
 fn report_name(name: &str) -> bool {
-    let Some(body) = name
-        .strip_prefix("performance-")
-        .and_then(|n| n.strip_suffix(".json"))
-    else {
-        return false;
-    };
-    let Some((timestamp, id)) = body.split_once('-') else {
-        return false;
-    };
-    timestamp.parse::<u128>().is_ok() && uuid::Uuid::parse_str(id).is_ok()
+    report_timestamp(name).is_some()
 }
 
 fn write_report(directory: &Path, report: Report) -> Result<PathBuf, String> {
@@ -146,6 +243,9 @@ fn write_report(directory: &Path, report: Report) -> Result<PathBuf, String> {
         .as_millis();
     let bytes = serde_json::to_vec_pretty(&SavedReport {
         app_version: env!("CARGO_PKG_VERSION"),
+        source_revision: option_env!("NIMROD_SOURCE_REVISION").unwrap_or("unknown"),
+        source_dirty: option_env!("NIMROD_SOURCE_DIRTY").and_then(|value| value.parse().ok()),
+        built_at_unix_ms: option_env!("NIMROD_BUILT_AT_MS").and_then(|value| value.parse().ok()),
         webview_version: tauri::webview_version().ok(),
         os: std::env::consts::OS,
         architecture: std::env::consts::ARCH,
@@ -162,13 +262,38 @@ fn write_report(directory: &Path, report: Report) -> Result<PathBuf, String> {
     let mut staged = tempfile::NamedTempFile::new_in(directory).map_err(|e| e.to_string())?;
     std::io::Write::write_all(&mut staged, &bytes).map_err(|e| e.to_string())?;
     staged.as_file().sync_all().map_err(|e| e.to_string())?;
-    let destination = directory.join(format!(
-        "performance-{saved_at}-{}.json",
-        uuid::Uuid::new_v4()
-    ));
-    staged
-        .persist_noclobber(&destination)
-        .map_err(|e| e.to_string())?;
+    let mut timestamp =
+        i64::try_from(saved_at).map_err(|_| "Performance timestamp out of range")?;
+    // Monotonic names make latest unambiguous even with same-ms captures/backwards clocks.
+    for entry in fs::read_dir(directory).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        if let Some(existing) = entry.file_name().to_str().and_then(report_timestamp) {
+            timestamp = timestamp.max(
+                existing
+                    .checked_add(1)
+                    .ok_or("Performance timestamp out of range")?,
+            );
+        }
+    }
+    let destination = loop {
+        let time = chrono::DateTime::from_timestamp_millis(timestamp)
+            .ok_or("Performance timestamp out of range")?;
+        let name = format!("{}.json", time.format("%Y-%m-%d_%H-%M-%S%.3fZ"));
+        if !report_name(&name) {
+            return Err("Performance timestamp out of range".into());
+        }
+        let destination = directory.join(name);
+        match staged.persist_noclobber(&destination) {
+            Ok(_) => break destination,
+            Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {
+                staged = error.file;
+                timestamp = timestamp
+                    .checked_add(1)
+                    .ok_or("Performance timestamp out of range")?;
+            }
+            Err(error) => return Err(error.to_string()),
+        }
+    };
 
     let mut reports = Vec::new();
     for entry in fs::read_dir(directory).map_err(|e| e.to_string())? {
@@ -179,7 +304,7 @@ fn write_report(directory: &Path, report: Report) -> Result<PathBuf, String> {
             reports.push(entry.path());
         }
     }
-    // Timestamp names sort oldest first (epoch milliseconds are currently equal-width).
+    // Fixed-width UTC timestamp names sort oldest first.
     reports.sort();
     let excess = reports.len().saturating_sub(MAX_REPORTS);
     for old in reports
@@ -210,7 +335,7 @@ fn report_directory(snapshot: crate::preferences::Snapshot) -> Result<PathBuf, S
         .state_path
         .parent()
         .ok_or("Missing Nimrod state directory")?
-        .join("performance"))
+        .join("performance-captures"))
 }
 
 #[tauri::command]
@@ -231,10 +356,12 @@ mod tests {
     use serde_json::json;
 
     fn fixture() -> serde_json::Value {
-        json!({ "version": 1, "timeOriginMs": 1700000000000_f64, "markerMs": 60000,
+        let environment = json!({ "userAgent": "fixture WebKit", "fieldSizing": true, "zoom": 125,
+            "devicePixelRatio": 2, "hardwareConcurrency": 8 });
+        json!({ "version": 2, "timeOriginMs": 1700000000000_f64, "markerMs": 60000,
             "startMs": 0, "endMs": 65000, "droppedSamples": 0,
-            "environment": { "userAgent": "fixture WebKit", "fieldSizing": true, "zoom": 125,
-                "devicePixelRatio": 2, "hardwareConcurrency": 8 },
+            "environment": environment, "environmentAtStart": environment,
+            "work": [], "droppedWorkSamples": 0,
             "samples": [{ "atMs": 60000, "kind": "transcript-render", "durationMs": 2, "active": false }] })
     }
 
@@ -254,14 +381,14 @@ mod tests {
         snapshot.text = "// explicit opt-in\n{\"diagnostics.performance\":true}".into();
         assert_eq!(
             report_directory(snapshot).unwrap(),
-            root.path().join("state/performance")
+            root.path().join("state/performance-captures")
         );
     }
 
     #[test]
     fn saves_private_bounded_reports_without_touching_other_files() {
         let root = tempfile::tempdir().unwrap();
-        let directory = root.path().join("performance");
+        let directory = root.path().join("performance-captures");
         fs::create_dir_all(&directory).unwrap();
         fs::write(directory.join("notes.json"), "keep").unwrap();
         fs::write(directory.join("performance-not-a-report.json"), "keep").unwrap();
@@ -283,6 +410,70 @@ mod tests {
                 0o600
             );
         }
+    }
+
+    #[test]
+    fn timestamp_only_names_are_unique_sortable_and_do_not_overwrite_existing_entries() {
+        let root = tempfile::tempdir().unwrap();
+        let directory = root.path().join("performance-captures");
+        fs::create_dir_all(&directory).unwrap();
+        let reserved = "2099-01-01_00-00-00.000Z.json";
+        fs::write(directory.join(reserved), "preserve").unwrap();
+        let first = write_report(&directory, serde_json::from_value(fixture()).unwrap()).unwrap();
+        let second = write_report(&directory, serde_json::from_value(fixture()).unwrap()).unwrap();
+        assert!(first < second);
+        assert!(first.file_name().unwrap().to_str().unwrap() > reserved);
+        assert!(report_name(second.file_name().unwrap().to_str().unwrap()));
+        assert_eq!(
+            fs::read_to_string(directory.join(reserved)).unwrap(),
+            "preserve"
+        );
+        assert!(!report_name("performance-1700000000000-anything.json"));
+        assert!(!report_name("latest.json"));
+        #[cfg(unix)]
+        {
+            let target = root.path().join("unrelated");
+            fs::write(&target, "keep").unwrap();
+            let link = directory.join("2099-01-01_00-00-00.999Z.json");
+            std::os::unix::fs::symlink(&target, &link).unwrap();
+            let next =
+                write_report(&directory, serde_json::from_value(fixture()).unwrap()).unwrap();
+            assert_ne!(next, link);
+            assert_eq!(fs::read_to_string(target).unwrap(), "keep");
+            assert!(fs::symlink_metadata(link).unwrap().file_type().is_symlink());
+        }
+    }
+
+    #[test]
+    fn work_aggregates_and_appearance_are_bounded_typed_and_content_free() {
+        let mut raw = fixture();
+        raw["work"] = json!([{ "atMs": 60000, "startedAtMs": 59000, "kind": "pi-event", "count": 12,
+            "totalMs": 50, "selfMs": 10, "maxMs": 9, "active": false }]);
+        raw["environment"]["appearance"] = json!({ "backgroundOpacity": 85, "frostedBackground": true,
+            "area": "window", "effectiveArea": "window", "effectiveBackgroundOpacity": 85,
+            "reducedTransparency": false, "frostSupported": true });
+        assert!(validate(&serde_json::from_value(raw.clone()).unwrap()).is_ok());
+        for (key, value) in [
+            ("selfMs", 51.0),
+            ("maxMs", 51.0),
+            ("totalMs", -1.0),
+            ("startedAtMs", 60001.0),
+        ] {
+            let mut invalid = raw.clone();
+            invalid["work"][0][key] = json!(value);
+            assert!(validate(&serde_json::from_value(invalid).unwrap()).is_err());
+        }
+        let mut invalid = raw.clone();
+        invalid["work"][0]["parent"] = json!("prompt-text");
+        assert!(serde_json::from_value::<Report>(invalid).is_err());
+        let mut invalid = raw.clone();
+        invalid["work"][0]["label"] = json!("project path");
+        assert!(serde_json::from_value::<Report>(invalid).is_err());
+        let mut invalid = raw.clone();
+        invalid["environment"]["appearance"]["backgroundOpacity"] = json!(101);
+        assert!(validate(&serde_json::from_value(invalid).unwrap()).is_err());
+        raw["work"] = json!(vec![raw["work"][0].clone(); MAX_WORK_SAMPLES + 1]);
+        assert!(validate(&serde_json::from_value(raw).unwrap()).is_err());
     }
 
     #[test]

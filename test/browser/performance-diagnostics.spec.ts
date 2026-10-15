@@ -28,6 +28,11 @@ test('global opt-in captures only the project and preserves reading, draft and d
     await settingsPage.locator('#performance-mode').selectOption('on');
     await settingsPage.locator('#settings-back').click();
     await expect(prompt).toBeFocused();
+    // Local fixture packet exercises the ordered event-to-shell probes without a prompt.
+    await page.evaluate(() => {
+      const channels = (window as unknown as { __fixtureChannels: Record<string, { onmessage(packet: unknown): void }> }).__fixtureChannels;
+      Object.values(channels)[0].onmessage({ kind: 'rpc', value: { type: 'agent_start' } });
+    });
     async function capture() {
       await page.keyboard.press(primary + '+Shift+P');
       await page.locator('#palette-input').fill('Capture performance report');
@@ -38,11 +43,17 @@ test('global opt-in captures only the project and preserves reading, draft and d
     await expect(prompt).toBeFocused();
     await expect.poll(() => fixture.calls.filter(c => c.command === 'write_performance_report').length, { timeout: 10_000 }).toBe(1);
     const report = fixture.calls.find(c => c.command === 'write_performance_report')!.args.report as unknown as PerformanceReport;
+    expect(report.version).toBe(2);
     expect(report.samples.length).toBeGreaterThan(0);
+    expect(report.environment.appearance).toBeDefined();
+    expect(report.work.length).toBeGreaterThan(0);
+    expect(report.work.every(sample => sample.selfMs <= sample.totalMs)).toBe(true);
     expect(report.endMs - report.markerMs).toBeGreaterThanOrEqual(4900);
     expect(JSON.stringify(report)).not.toMatch(/Private draft|never record this|\/sessions|fixture-only/);
     expect(report.environment.fieldSizing).toBe(await page.evaluate(() => CSS.supports('field-sizing', 'content')));
     await expect(page.locator('#application-notices')).toContainText('Report saved: /fixture/');
+    await expect(page.locator('#application-notices')).toContainText('Path copied to clipboard');
+    expect(fixture.calls.filter(call => call.command === 'plugin:clipboard-manager|write_text').at(-1)?.args.text).toBe('/fixture/.local/state/nimrod/performance-captures/2026-10-14_12-00-00.000Z.json');
     await expect(prompt).toHaveValue('Private draft: never record this text'); await expect(prompt).toBeFocused();
     expect(await page.locator('.session-view:not([hidden])').getAttribute('id')).toBe(viewId);
     expect(await card.evaluate(node => (node as HTMLDetailsElement).open)).toBe(open);

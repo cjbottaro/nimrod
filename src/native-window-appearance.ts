@@ -73,6 +73,7 @@ export function installNativeWindowAppearance(host: Pick<AppearanceHost, 'read' 
         if (!publishing || pending === publishing) return;
       }
     },
+    diagnostics: appearance.diagnostics,
     reload: appearance.reload,
     dispose() { disposed = true; unlisten?.(); previewListener?.(); appearance.dispose(); },
   };

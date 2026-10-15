@@ -68,6 +68,23 @@ test('opacity input publishes a paint-only preview and only its matching save cl
   } finally { release(); f.close(); }
 });
 
+test('performance context is read-only and includes native reduced-transparency policy', async () => {
+  for (const support of [mac, { ...mac, reducedTransparency: true }, linux]) {
+    const f = fixture(support, { opacity: 65, area: 'chrome' });
+    try {
+      await f.controller.ready;
+      const html = f.root.outerHTML, effects = f.effects.length;
+      for (let i = 0; i < 200; i++) assert.deepEqual(f.controller.diagnostics(), {
+        effectiveArea: support.reducedTransparency ? 'off' : 'chrome',
+        effectiveBackgroundOpacity: support.reducedTransparency ? 100 : 65,
+        reducedTransparency: support.reducedTransparency, frostSupported: support.frost,
+      });
+      assert.equal(f.root.outerHTML, html);
+      assert.equal(f.effects.length, effects);
+    } finally { f.close(); }
+  }
+});
+
 test('appearance schema uses opaque defaults and rejects invalid values including explicit null', () => {
   assert.deepEqual(readWindowAppearance({}), DEFAULT_WINDOW_APPEARANCE);
   for (const [key, values] of Object.entries({

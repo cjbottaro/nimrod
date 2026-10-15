@@ -96,8 +96,61 @@ fn stage_compiler(manifest: &Path) {
     );
 }
 
+fn source_identity(manifest: &Path) {
+    let root = manifest.parent().unwrap_or(manifest);
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .args(args)
+            .current_dir(root)
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .and_then(|output| String::from_utf8(output.stdout).ok())
+    };
+    let revision = git(&["rev-parse", "HEAD"])
+        .map(|value| value.trim().to_owned())
+        .filter(|value| {
+            matches!(value.len(), 40 | 64) && value.bytes().all(|c| c.is_ascii_hexdigit())
+        })
+        .unwrap_or_else(|| "unknown".into());
+    let dirty = git(&["status", "--porcelain"]).map(|value| !value.is_empty());
+    println!("cargo:rustc-env=NIMROD_SOURCE_REVISION={revision}");
+    println!(
+        "cargo:rustc-env=NIMROD_SOURCE_DIRTY={}",
+        dirty
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "unknown".into())
+    );
+    let built_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    println!("cargo:rustc-env=NIMROD_BUILT_AT_MS={built_at}");
+    for path in [
+        "src",
+        "src-tauri/src",
+        "src-tauri/Cargo.toml",
+        "src-tauri/Cargo.lock",
+        "dist",
+    ] {
+        println!("cargo:rerun-if-changed={}", root.join(path).display());
+    }
+    // Worktree .git is a file; resolve the real per-worktree HEAD/index and shared refs.
+    for name in ["HEAD", "index", "refs"] {
+        if let Some(path) = git(&["rev-parse", "--git-path", name]) {
+            println!(
+                "cargo:rerun-if-changed={}",
+                root.join(path.trim()).display()
+            );
+        }
+    }
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    source_identity(&PathBuf::from(
+        std::env::var_os("CARGO_MANIFEST_DIR").unwrap(),
+    ));
     stage_compiler(&PathBuf::from(
         std::env::var_os("CARGO_MANIFEST_DIR").unwrap(),
     ));

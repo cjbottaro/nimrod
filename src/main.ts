@@ -21,6 +21,7 @@ import { readClipboardImage } from './clipboard-image';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { BUILTIN_THEMES, CATALOG_THEMES } from './themes/builtins';
 import type { ColorTheme } from './themes/theme';
+import { measureWork } from './performance-diagnostics';
 import { mountPiView, type HostMessage, type PiView } from './pi/webview-client';
 import { PiTransport, type Packet } from './pi/transport';
 import { PiSession } from './pi/session';
@@ -309,6 +310,10 @@ function touchTab(tab: Tab): void {
   persistTabs();
 }
 function renderSidebar(moved?: HTMLElement): void {
+  measureWork(settingsSurface.performanceProbe, 'sidebar-reconcile', () => reconcileSidebar(moved));
+}
+function reconcileSidebar(moved?: HTMLElement): void {
+  settingsSurface.performanceProbe.count?.('sidebar-rows', tabs.length);
   const visible = sidebarTabs();
   const membership = new Set(visible);
   if (presented && !membership.has(presented)) presentConversation(undefined);
@@ -411,6 +416,9 @@ function restartControl(): void {
 function layoutKey(): string { return `nimrod.tabs.v1:${workspace}`; }
 function recencyKey(): string { return `nimrod.recency.v1:${workspace}`; }
 function persistTabs(): void {
+  measureWork(settingsSurface.performanceProbe, 'bookkeeping-prepare', prepareTabBookkeeping);
+}
+function prepareTabBookkeeping(): void {
   if (!workspace) return;
   let changed = false;
   for (const tab of tabs) if (restartable(tab) && recency.record(tab.file!, tab.lastUsed)) changed = true;
@@ -563,7 +571,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     const active = presented;
     return [
     { id: 'open-recent-project', label: 'Open recent project…', detail: 'Open or focus a previously opened project', next: true, run: () => palette.projects() },
-    { id: 'capture-performance', label: 'Capture performance report', detail: settingsSurface.performancePath ? `Last report: ${settingsSurface.performancePath}` : 'Save this project window’s recent timing data; enable in global Settings → Diagnostics first.', run: capturePerformance },
+    { id: 'capture-performance', label: 'Capture performance report', detail: settingsSurface.performancePath ? `Last report: ${settingsSurface.performancePath}` : 'Save recent timing data and copy its path; enable in global Settings → Diagnostics first.', run: () => capturePerformance(true) },
     { id: 'reload-card-plugins', label: 'Reload card plugins', detail: 'Rescan personal sources and refresh renderers for new cards; no Pi restart', run: () => reloadCardPlugins(true) },
     { id: 'select-theme', label: 'Select theme…', detail: 'Preview bundled VS Code themes and saved imports', next: true, run: () => pickTheme() },
     { id: 'resume', label: 'Resume session…', detail: 'Open a saved conversation in this project', next: true, run: () => palette.sessions() },
@@ -770,6 +778,9 @@ function indicator(tab: Tab) {
 }
 function sessionRow(tab: Tab) { return { timestamp: tab.lastUsed, indicator: indicator(tab) }; }
 function updateTab(tab: Tab): void {
+  measureWork(settingsSurface.performanceProbe, 'sidebar-row-update', () => updateTabPresentation(tab), presented === tab);
+}
+function updateTabPresentation(tab: Tab): void {
   tab.root.inert = tab.closing || tab.restarting || tab.deleting || tab !== presented;
   const name = tab.title;
   tab.root.setAttribute('aria-busy', String(tab.session?.state.busy === true));
@@ -884,6 +895,8 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
   let confirmedRaw: { path: string; sessionId: string } | undefined;
   let startupPackets: Packet[] | undefined = [];
   const current = new PiSession(rpc, {
+    performance: settingsSurface.performanceProbe,
+    active: () => presented === tab,
     publish: message => { if (currentToken()) tab.receive?.(message); },
     notice: (message, severity, cause) => {
       if (currentToken() && !tab.closing && !tab.restarting && !tab.deleting) notices.report({ id: `${tab.id}:pi:${++noticeSequence}`, owner: tab.id, cause, operation: 'Pi operation', message, severity });
@@ -1194,7 +1207,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'temporary': return newSession('temporary');
       case 'delete': return presented ? deleteSession(presented) : undefined;
       case 'delete-sessions': return palette.deleteSessions();
-      case 'capture-performance': return capturePerformance();
+      case 'capture-performance': return capturePerformance(true);
       case 'reload-card-plugins': return reloadCardPlugins(true);
       case 'select-theme': return pickTheme();
       case 'mcp': return presented ? inspectMcp(presented) : undefined;

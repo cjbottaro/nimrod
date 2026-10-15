@@ -8,7 +8,7 @@ The user reported jagged scrolling and delayed typing under CPU contention even 
 
 ## What was implemented
 
-Opt-in Settings diagnostics retain bounded timing history in memory. Capture saves up to 60 seconds before a marker plus a five-second follow-up to a bounded local JSON report store. Metrics cover callback cadence, timer/event delays, input/composer/render spans, snapshot activity and focus/visibility context, with runtime/environment metadata.
+Opt-in Settings diagnostics retain bounded timing history in memory. Capture saves up to 60 seconds before a marker plus a five-second follow-up to a bounded local JSON report store. Metrics cover callback cadence, timer/event delays, input/composer/render spans, snapshot activity and focus/visibility context. Version 2 adds bounded event/reduction/projection/shell/sidebar/bookkeeping work aggregates with explicit nesting/self time and logical rows-visited counts, plus marker/end appearance context and native build-checkout metadata. New aggregate/storage/clipboard fixtures are authored, not run; this instrumentation expansion is not an optimization or native acceptance.
 
 Disabled diagnostics do not install samplers/listeners. Reports do not capture prompt/response text, key values or session/project identities. [Performance diagnostics](../../features/references/performance-diagnostics.md) owns exact sampling, privacy, limits and storage contracts; [the user guide](../../../../docs/performance-diagnostics.md) owns usage.
 
@@ -29,10 +29,16 @@ After unchanged-write suppression, the user reported improvement under high CPU 
 
 [Verification → Performance observation](../../features/references/verification.md#performance-observation) is the canonical result summary rather than duplicating raw reports here.
 
+## Report lookup and maintenance guardrails
+
+For “look at the latest performance report”, use the greatest timestamp-only `YYYY-MM-DD_HH-MM-SS.mmmZ.json` name in the resolved native state root's `performance-captures/` directory (default `~/.local/state/nimrod/performance-captures/`; honor absolute `XDG_STATE_HOME` or use the exact saved path when supplied). Read only regular recognized report files, not symlinks/unrelated JSON. Old UUID reports stay in `performance/` and are historical, not silently selected as new captures. Command-palette/action success copies the saved path; clipboard failure is distinct from save failure.
+
+When adding instrumented work, extend the closed TS/Rust metric/schema together, reuse the owning window's probe and record no identities/content. Keep synchronous ordering/exception semantics and disabled no-clock behavior. Aggregate frequent work rather than adding per-token samples; extend nesting, caps/overwrite, privacy, native validation and shell capture fixtures. Retain appearance/source context and distinguish missing fields in legacy version-1 reports from false/zero values.
+
 ## Interpretation limits and code anchors
 
 Callback cadence is not compositor FPS; event timestamp age is not complete OS input latency; next-callback delay is not proof of visible text presentation. CPU utilization is not sampled. `droppedSamples` includes cumulative history-ring overwrites since enablement, so use retained sample timestamps to assess actual coverage. Focus/background throttling can distort whole-window averages.
 
-Existing spans do not measure every reducer, timeline projection, sidebar operation, preference response, engine layout/paint or GC event. Native profiling may still be needed. No claim of Linux/possible Windows acceptance follows from macOS captures.
+New work aggregates cover named reducer/projection/sidebar paths, but do not measure every transport response, preference broadcast, async IPC/storage operation, engine layout/paint or GC event. Inclusive parent/child totals overlap; compare self-time or same-scope totals rather than summing nested costs. Aggregate maxima/counts are not per-event latency percentiles. Native profiling may still be needed. No claim of Linux/possible Windows acceptance follows from macOS captures.
 
 Code: `src/performance-diagnostics.ts`, optional probes in `src/pi/view-host.ts`/`webview-client.ts`, Settings/command routing in `src/main.ts`, and `src-tauri/src/performance_diagnostics.rs`. Tests: timing-buffer/sampler fixtures, shell capture flow, native report validation/retention and offline WebKit capture regression.

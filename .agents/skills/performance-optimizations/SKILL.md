@@ -17,7 +17,7 @@ Read the [features skill](../features/SKILL.md), [architecture](../features/refe
 
 ## Measurement work
 
-1. [Opt-in local performance diagnostics](references/local-performance-diagnostics.md) — implemented instrumentation, **not itself a responsiveness optimization**.
+1. [Opt-in local performance diagnostics](references/local-performance-diagnostics.md) — implemented instrumentation, **not itself a responsiveness optimization**; version-2 event-to-UI aggregates, appearance/build context, and [latest-report lookup](references/local-performance-diagnostics.md#report-lookup-and-maintenance-guardrails).
 
 ## Potential future optimizations
 

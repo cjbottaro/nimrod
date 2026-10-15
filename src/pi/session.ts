@@ -1,3 +1,4 @@
+import { measureWork, type PerformanceProbe, type WorkKind } from '../performance-diagnostics';
 import { validateImageContents } from './image-attachments';
 import { PiTransport, RpcResponseError } from './transport';
 import { initialConversationState, messagesToDisplay, reduceRpcEvent, sanitizeExtensionUiText, setExtensionStatus, setExtensionWidget } from './reducer';
@@ -15,6 +16,8 @@ export interface PreferencePicker {
 }
 
 export interface SessionUi {
+  performance?: PerformanceProbe;
+  active?(): boolean;
   publish(message: HostMessage): void;
   choose(title: string, options: string[]): Promise<string | undefined>;
   input(title: string, prefill?: string): Promise<string | undefined>;
@@ -55,7 +58,7 @@ export class PiSession {
 
   constructor(readonly rpc: PiTransport, private ui: SessionUi, temporary = true) {
     this.state.temporary = temporary;
-    rpc.onEvent = event => this.event(event);
+    rpc.onEvent = event => this.measure('pi-event', () => this.event(event));
     this.model = new ModelThinkingController(rpc, {
       isChangeBlocked: () => !!this.state.sessionUnavailable || this.rpc.hasPendingRequest('prompt', 'set_session_name'),
       onRpcState: data => this.applyState(data),
@@ -155,10 +158,15 @@ export class PiSession {
     } finally { if (this.mcpCapture === capture) this.mcpCapture = undefined; }
   }
 
+  private measure<T>(kind: WorkKind, work: () => T): T {
+    return measureWork(this.ui.performance, kind, work, this.ui.active?.());
+  }
+
   publish(): void {
-    this.ui.publish({ type: 'snapshot', build: 'Nimrod PoC', commands: this.commands,
-      state: { ...this.state, messages: projectToolTimeline(this.state.messages, this.state.toolProgress) } });
-    this.ui.changed(this.state);
+    const messages = this.measure('timeline-projection', () => projectToolTimeline(this.state.messages, this.state.toolProgress));
+    this.measure('snapshot-delivery', () => this.ui.publish({ type: 'snapshot', build: 'Nimrod PoC', commands: this.commands,
+      state: { ...this.state, messages } }));
+    this.measure('shell-session-update', () => this.ui.changed(this.state));
   }
 
   private async identify(data: JsonRecord): Promise<void> {
@@ -205,7 +213,7 @@ export class PiSession {
     }
     if (event.type === 'extension_error') this.notice(`Extension error: ${errorText(event.error)}`);
     if (event.type === 'compaction_end' && typeof event.errorMessage === 'string') this.notice(`Compaction: ${event.errorMessage}`, 'error', this.compactionNoticeId);
-    this.state = reduceRpcEvent(this.state, event);
+    this.state = this.measure('state-reduction', () => reduceRpcEvent(this.state, event));
     // Pi's prompt preflight emits disposition=started before its first live user
     // event, after image normalization. Correlate by that ordered boundary, never
     // by transformed bytes/caption or a history refresh.

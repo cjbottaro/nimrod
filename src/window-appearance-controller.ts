@@ -168,6 +168,13 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
   const ready = settled();
   return {
     ready, settled, reload: paint, refreshCapabilities,
+    diagnostics() {
+      const value = current();
+      const enabled = !!capabilities?.transparency && !reduceTransparency() && value.opacity < 100;
+      return { effectiveArea: enabled ? value.area : 'off' as const,
+        effectiveBackgroundOpacity: enabled ? value.opacity : 100,
+        reducedTransparency: reduceTransparency(), frostSupported: !!capabilities?.frost };
+    },
     dispose() {
       disposed = true; ++capabilityGeneration; unsubscribeTheme(); effects.dispose();
       dark?.removeEventListener('change', systemSchemeChanged); reduced?.removeEventListener('change', paint);
