@@ -1,6 +1,8 @@
 import { type CardRenderer } from './card-renderer';
 import { DomCardController, presentationPlugin, type DomCardRenderer, type CardDomHost } from './dom-card-renderer';
 import { associateOutputViewport } from './card-shell';
+import { renderLiteralOutput } from './literal-output';
+import { sectionOutputSource } from './output-source';
 import { bundledToolRenderer } from './card-plugins/registry';
 import { rawToolPresentation } from './tool-presentation';
 export { toolInputPreview } from './tool-presentation';
@@ -12,9 +14,10 @@ export type { ToolCardData as ToolCardBlock } from '../card-plugin-api';
 export type ToolCardRenderer = DomCardRenderer<ToolCardBlock> | CardRenderer<ToolCardBlock>;
 const renderers = new WeakMap<HTMLDetailsElement, DomCardController<ToolCardBlock>>();
 const retained = new WeakMap<HTMLDetailsElement, ToolCardBlock>();
+const inputs = new WeakMap<HTMLDetailsElement, unknown>();
 
 export function disposeToolCard(details: HTMLDetailsElement): void {
-  renderers.get(details)?.dispose(); renderers.delete(details); retained.delete(details); associateOutputViewport(details);
+  renderers.get(details)?.dispose(); renderers.delete(details); retained.delete(details); inputs.delete(details); associateOutputViewport(details);
 }
 export function toolCardIsBusy(block: ToolCardBlock): boolean {
   const status = toolStatus(block); return status === 'running' || status === 'thinking';
@@ -52,7 +55,9 @@ export function updateToolCard(document: Document, details: HTMLDetailsElement, 
     phase.textContent = 'Execution was interrupted before completion was reported.';
   } else phase?.remove();
   retained.set(details, block);
-  updateInputs(document, details, block.arguments);
+  if (!inputs.has(details) || inputs.get(details) !== block.arguments) {
+    inputs.set(details, block.arguments); updateInputs(document, details, block.arguments);
+  }
   renderers.get(details)?.update(block, { streaming: toolCardIsBusy(block) });
   const raw = Array.from(details.querySelectorAll<HTMLElement>('.tool-section')).filter(section => ['execution', 'result'].includes(section.dataset.outputKind || ''));
   associateOutputViewport(details, raw.find(section => section.querySelector('.tool-output-streaming'))?.querySelector<HTMLElement>('.tool-output') || raw[0]?.querySelector<HTMLElement>('.tool-output') || details.querySelector<HTMLElement>('.tool-output') || undefined);
@@ -72,7 +77,9 @@ function syncRawRecovery(document: Document, details: HTMLDetailsElement, block:
     if (body.dataset.rawInputsPlacement === 'after') { if (body.nextElementSibling !== inputs) body.after(inputs); }
     else if (inputs.nextElementSibling !== body) body.before(inputs);
   }
-  const provided = expected.every(part => Array.from(body.querySelectorAll<HTMLElement>('.tool-section')).some(section =>
+  // Custom DOM plugins retain the legacy inspection fallback. Managed presentation
+  // sections have explicit source/format bookkeeping and never read output text.
+  const provided = renderers.get(details)?.coversRawSections(expected) ?? expected.every(part => Array.from(body.querySelectorAll<HTMLElement>('.tool-section')).some(section =>
     section.dataset.outputKind === part.key && section.querySelector('.tool-output')?.textContent === part.text));
   let recovery = directChild<HTMLDetailsElement>(details, '.tool-raw-output');
   if (provided || !expected.length) { if (recovery) recovery.hidden = true; return; }
@@ -88,7 +95,7 @@ function syncRawRecovery(document: Document, details: HTMLDetailsElement, block:
     const output = section.querySelector('pre')!;
     output.className = `tool-output ${toolCardIsBusy(block) ? 'tool-output-streaming' : 'tool-output-final'}`;
     output.tabIndex = 0; output.setAttribute('aria-label', part.label);
-    if (output.textContent !== part.text) output.textContent = part.text;
+    renderLiteralOutput(output, part.text, sectionOutputSource(block, part.key, part.text));
     old.delete(part.key);
   }
   for (const stale of old.values()) stale.remove();

@@ -1,7 +1,7 @@
 /** Transcript-oriented console output, not a PTY or full-screen terminal emulator. */
 type Style = { foreground?: string; background?: string; bold?: boolean; dim?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; inverse?: boolean; hidden?: boolean };
 type Cell = { text: string; style: Style };
-type Line = { cells: Cell[]; node?: HTMLSpanElement };
+type Line = { cells: Cell[]; node?: HTMLSpanElement; rendered?: number; rewrite?: boolean; lastStyle?: Style; lastText?: Text };
 const names = ['Black', 'Red', 'Green', 'Yellow', 'Blue', 'Magenta', 'Cyan', 'White'];
 const fallback = ['var(--vscode-editor-background, #202124)', '#cd3131', '#0dbc79', '#e5b700', '#2472c8', '#bc3fbc', '#119eaf', 'var(--vscode-editor-foreground, #ddd)', 'var(--vscode-descriptionForeground, #888)', '#f14c4c', '#23d18b', '#f5d44f', '#3b8eea', '#d670d6', '#29b8db', 'var(--vscode-editor-foreground, #fff)'];
 const palette = (index: number): string => `var(--vscode-terminal-ansi${index < 8 ? '' : 'Bright'}${names[index % 8]}, ${fallback[index]})`;
@@ -14,15 +14,17 @@ const color = (index: number): string => {
 const renderers = new WeakMap<HTMLElement, ConsoleOutput>();
 
 export function clearConsoleOutput(output: HTMLElement): void { renderers.delete(output); }
+export function consoleOutputIsLiteral(output: HTMLElement): boolean { return renderers.get(output)?.literal === true; }
 
-export function renderConsoleOutput(output: HTMLElement, source: string): void {
+export function renderConsoleOutput(output: HTMLElement, source: string, verifiedAppend = false): void {
   let renderer = renderers.get(output);
   if (!renderer) { renderer = new ConsoleOutput(output); renderers.set(output, renderer); }
-  renderer.update(source);
+  renderer.update(source, verifiedAppend);
 }
 
 class ConsoleOutput {
   private source = '';
+  literal = true;
   private lines: Line[] = [{ cells: [] }];
   private row = 0;
   private column = 0;
@@ -34,18 +36,26 @@ class ConsoleOutput {
   private carry = '';
   constructor(private readonly output: HTMLElement) { output.replaceChildren(); }
 
-  update(source: string): void {
+  update(source: string, verifiedAppend: boolean): void {
     if (source === this.source) return;
-    // Ordinary command logs stay on the cheap literal-text path until controls appear.
-    if (this.plain && !/[\x00-\x09\x0b-\x1f\x7f-\x9f]/.test(source)) {
-      this.output.textContent = source; this.source = source; return;
+    const append = verifiedAppend || source.startsWith(this.source);
+    const added = append ? source.slice(this.source.length) : source;
+    // Scan only new bytes. A replacement can return to the literal path.
+    const controls = /[\x00-\x09\x0b-\x1f\x7f-\x9f]/.test(added);
+    if ((this.plain || !append) && !controls) {
+      const text = this.output.firstChild;
+      if (append && this.plain && text?.nodeType === 3 && text === this.output.lastChild) (text as Text).appendData(added);
+      else this.output.textContent = source;
+      if (!this.plain) { this.lines = [{ cells: [] }]; this.dirty.clear(); this.row = this.column = 0; this.style = {}; this.state = 'text'; this.sequence = this.carry = ''; }
+      this.plain = this.literal = true; this.source = source; return;
     }
+    this.literal = false;
     let suffix: string;
-    if (this.plain || !source.startsWith(this.source)) {
+    if (this.plain || !append) {
       this.lines = [{ cells: [] }]; this.row = this.column = 0; this.style = {};
       this.state = 'text'; this.sequence = this.carry = ''; this.output.replaceChildren();
       this.dirty.clear(); this.dirty.add(this.lines[0]); suffix = source;
-    } else suffix = this.carry + source.slice(this.source.length);
+    } else suffix = this.carry + added;
     this.plain = false; this.source = source; this.carry = '';
     // Do not split an astral character between cumulative snapshots.
     if (suffix.length && /[\ud800-\udbff]/.test(suffix.at(-1)!)) { this.carry = suffix.at(-1)!; suffix = suffix.slice(0, -1); }
@@ -87,6 +97,7 @@ class ConsoleOutput {
     const line = this.lines[this.row];
     const blankStyle: Style = {};
     while (line.cells.length < this.column) line.cells.push({ text: ' ', style: blankStyle });
+    if (this.column < line.cells.length) line.rewrite = true;
     line.cells[this.column++] = { text: char, style: this.style };
     this.dirty.add(line);
   }
@@ -103,6 +114,7 @@ class ConsoleOutput {
     else if (final === 'D') this.column = Math.max(0, this.column - amount);
     else if (final === 'G' || final === '`') this.column = Math.min(16384, amount - 1);
     else if (final === 'K') {
+      line.rewrite = true;
       if (values[0] === 0) line.cells.length = Math.min(line.cells.length, this.column);
       else if (values[0] === 1) {
         for (let i = 0; i <= Math.min(this.column, line.cells.length - 1); i++) line.cells[i] = { text: ' ', style: this.style };
@@ -158,28 +170,38 @@ class ConsoleOutput {
         if (this.output.childNodes.length) this.output.append(doc.createTextNode('\n'));
         this.output.append(line.node);
       }
+      const start = line.rewrite ? 0 : line.rendered ?? 0;
+      if (line.rewrite) { line.node.replaceChildren(); line.lastStyle = undefined; line.lastText = undefined; }
       const fragment = doc.createDocumentFragment();
       let text = '', style: Style | undefined;
       const append = () => {
         if (!text) return;
-        if (!style || !Object.keys(style).length) fragment.append(doc.createTextNode(text));
+        if (line.lastText && line.lastStyle === style) line.lastText.appendData(text);
         else {
-          const span = doc.createElement('span'); span.textContent = text;
-          const foreground = style.foreground || 'var(--vscode-editor-foreground, inherit)';
-          const background = style.background || 'var(--vscode-editor-background, transparent)';
-          if (style.foreground || style.inverse) span.style.color = style.inverse ? background : foreground;
-          if (style.background || style.inverse) span.style.backgroundColor = style.inverse ? foreground : background;
-          if (style.bold) span.style.fontWeight = 'bold';
-          if (style.dim) span.style.opacity = '0.65';
-          if (style.italic) span.style.fontStyle = 'italic';
-          if (style.underline || style.strike) span.style.textDecoration = [style.underline ? 'underline' : '', style.strike ? 'line-through' : ''].filter(Boolean).join(' ');
-          if (style.hidden) span.style.visibility = 'hidden';
-          fragment.append(span);
+          const textNode = doc.createTextNode(text);
+          if (!style || !Object.keys(style).length) fragment.append(textNode);
+          else {
+            const span = doc.createElement('span'); span.append(textNode);
+            const foreground = style.foreground || 'var(--vscode-editor-foreground, inherit)';
+            const background = style.background || 'var(--vscode-editor-background, transparent)';
+            if (style.foreground || style.inverse) span.style.color = style.inverse ? background : foreground;
+            if (style.background || style.inverse) span.style.backgroundColor = style.inverse ? foreground : background;
+            if (style.bold) span.style.fontWeight = 'bold';
+            if (style.dim) span.style.opacity = '0.65';
+            if (style.italic) span.style.fontStyle = 'italic';
+            if (style.underline || style.strike) span.style.textDecoration = [style.underline ? 'underline' : '', style.strike ? 'line-through' : ''].filter(Boolean).join(' ');
+            if (style.hidden) span.style.visibility = 'hidden';
+            fragment.append(span);
+          }
+          line.lastText = textNode; line.lastStyle = style;
         }
         text = '';
       };
-      for (const cell of line.cells) { if (style !== cell.style) { append(); style = cell.style; } text += cell.text; }
-      append(); line.node.replaceChildren(fragment);
+      for (let index = start; index < line.cells.length; index++) {
+        const cell = line.cells[index];
+        if (style !== cell.style) { append(); style = cell.style; } text += cell.text;
+      }
+      append(); line.node.append(fragment); line.rendered = line.cells.length; line.rewrite = false;
     }
     this.dirty.clear();
   }

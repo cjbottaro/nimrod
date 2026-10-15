@@ -4,6 +4,7 @@ import { initialConversationState, messagesToDisplay, reduceRpcEvent } from '../
 import { conversationIndex } from '../src/pi/conversation-index';
 import { TranscriptUpdates } from '../src/pi/transcript-updates';
 import { immutableSnapshot } from '../src/pi/immutable-snapshot';
+import { outputSources, sameOutputAppend } from '../src/pi/output-source';
 import type { ConversationState } from '../src/pi/types';
 
 function running(history = 0): ConversationState {
@@ -68,6 +69,21 @@ test('index rebuilds for history replacement and adoption; late updates never re
   assert.equal(block.executionOutput, undefined);
   state = output(state, 'orphan', 'new invocation envelope');
   assert.equal(state.messages.at(-1)?.role, 'tool', 'old index cannot address replaced history');
+});
+
+test('verified output lineage survives coalesced appends but not truncation or replacement', () => {
+  let state = running();
+  const block = () => (state.messages[0].content as import('../src/pi/types').ContentBlock[])[0];
+  state = output(state, 'a', 'first'); const first = outputSources(block()).executionOutput;
+  state = output(state, 'a', 'first second');
+  state = output(state, 'a', 'first second third');
+  assert.ok(sameOutputAppend(first, outputSources(block()).executionOutput));
+  state = output(state, 'a', 'short'); const replacement = outputSources(block()).executionOutput;
+  assert.equal(sameOutputAppend(first, replacement), false);
+  state = output(state, 'a', 'short more');
+  assert.ok(sameOutputAppend(replacement, outputSources(block()).executionOutput));
+  state = output(state, 'a', 'short');
+  assert.equal(sameOutputAppend(replacement, outputSources(block()).executionOutput), false, 'a truncated/reextended stream cannot reuse the old lineage');
 });
 
 test('card snapshots isolate caller data and share only owned deeply frozen subtrees', () => {

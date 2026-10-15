@@ -79,6 +79,38 @@ test('console output plain-text fast path switches to controls without losing ea
   assert.equal(output.textContent, 'one\nthree');
 }));
 
+test('plain and ANSI append updates preserve existing text nodes, including long active lines', () => fixture((_doc, output) => {
+  renderConsoleOutput(output, 'plain'); const plain = output.firstChild;
+  renderConsoleOutput(output, 'plain appended');
+  assert.equal(output.firstChild, plain); assert.equal(output.textContent, 'plain appended');
+  renderConsoleOutput(output, '\x1b[32m' + 'x'.repeat(10000));
+  const line = output.firstChild; const run = line!.firstChild; const text = run!.firstChild;
+  renderConsoleOutput(output, '\x1b[32m' + 'x'.repeat(10000) + ' suffix');
+  assert.equal(output.firstChild, line); assert.equal(line!.firstChild, run); assert.equal(run!.firstChild, text);
+  assert.equal(output.textContent, 'x'.repeat(10000) + ' suffix');
+  renderConsoleOutput(output, 'replacement'); const replacement = output.firstChild;
+  renderConsoleOutput(output, 'replacement appended');
+  assert.equal(output.firstChild, replacement); assert.equal(output.textContent, 'replacement appended');
+}));
+
+test('managed console updates do not read accumulated DOM text or rewrite unchanged raw inputs', () => fixture((doc) => {
+  const args = { command: 'stream' };
+  const block = { name: 'bash', arguments: args, toolStatus: 'running' as const, executionOutput: 'initial' };
+  const card = renderToolCard(doc, block, doc.createElement('details')); doc.body.append(card);
+  const output = card.querySelector<HTMLElement>('.card-plugin-body .tool-output')!;
+  const inputText = card.querySelector('.tool-raw-inputs pre')!.firstChild;
+  const text = output.firstChild;
+  const descriptor = Object.getOwnPropertyDescriptor(doc.defaultView!.Node.prototype, 'textContent')!;
+  Object.defineProperty(output, 'textContent', { get() { throw new Error('accumulated DOM text read'); }, set(value) { descriptor.set!.call(this, value); }, configurable: true });
+  updateToolCard(doc, card, { ...block, executionOutput: 'initial appended' });
+  assert.equal(output.firstChild, text); assert.equal(text!.textContent, 'initial appended');
+  assert.equal(card.querySelector('.tool-raw-inputs pre')!.firstChild, inputText);
+  updateToolCard(doc, card, { ...block, executionOutput: 'initial appended\x1b[32m colored' });
+  const raw = card.querySelector('.tool-raw-output pre')!; const rawText = raw.firstChild;
+  updateToolCard(doc, card, { ...block, executionOutput: 'initial appended\x1b[32m colored suffix' });
+  assert.equal(raw.firstChild, rawText); assert.equal(rawText!.textContent, 'initial appended\x1b[32m colored suffix');
+}));
+
 test('bundled Bash aliases opt into console sections while raw/file output stays literal', () => {
   const renderer = defaultToolRenderer.mount();
   for (const name of ['bash', 'functions.bash', 'shell', 'terminal']) {

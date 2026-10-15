@@ -1,5 +1,8 @@
 import { isSafeLink } from './safe-markdown';
-import { renderConsoleOutput, clearConsoleOutput } from './console-output';
+import { renderConsoleOutput, clearConsoleOutput, consoleOutputIsLiteral } from './console-output';
+import { renderLiteralOutput, clearLiteralOutput } from './literal-output';
+import { immutableSnapshot } from './immutable-snapshot';
+import { sectionOutputSource, sameOutputAppend, type OutputSource } from './output-source';
 import { validatePresentation, type CardPresentation, type CardRenderer } from './card-renderer';
 
 import type { CardPlugin as DomCardRenderer, CardPluginInstance as DomCardInstance, CardPluginContext, CardUpdateState } from '../card-plugin-api';
@@ -26,16 +29,6 @@ export function presentationPlugin<Data>(renderer: CardRenderer<Data>): DomCardR
   } };
 }
 
-function immutableSnapshot<Data>(data: Data): Readonly<Data> {
-  const copy: Data = typeof structuredClone === 'function' ? structuredClone(data) : JSON.parse(JSON.stringify(data));
-  const seen = new WeakSet<object>();
-  const freeze = (value: unknown): void => {
-    if (!value || typeof value !== 'object' || seen.has(value)) return;
-    seen.add(value); for (const child of Object.values(value)) freeze(child); Object.freeze(value);
-  };
-  freeze(copy); return copy;
-}
-
 export class DomCardController<Data> {
   private instance?: DomCardInstance<Data>;
   private resources = new AbortController();
@@ -45,7 +38,18 @@ export class DomCardController<Data> {
   private disposed = false;
   private data?: Readonly<Data>;
   private state: CardUpdateState = { streaming: false };
-  private readonly content = new WeakMap<HTMLElement, { text: string; format: string }>();
+  private readonly content = new WeakMap<HTMLElement, { text: string; format: string; source?: OutputSource }>();
+  private outputData?: { executionOutput?: string; resultOutput?: string };
+  private presentationOutputs?: Map<string, { text: string; literal: boolean; output: HTMLElement }>;
+
+  /** Managed sections report source coverage without reading accumulated DOM text. */
+  coversRawSections(sections: CardPresentation['sections']): boolean | undefined {
+    if (!this.presentationOutputs) return undefined;
+    return sections.every(section => {
+      const rendered = this.presentationOutputs!.get(section.key);
+      return rendered && this.body.contains(rendered.output) && rendered.literal && rendered.text === section.text;
+    });
+  }
   readonly context: CardPluginContext;
 
   constructor(private readonly renderer: DomCardRenderer<Data>, private readonly summary: HTMLElement,
@@ -80,6 +84,7 @@ export class DomCardController<Data> {
         try { if (!this.supported()) throw new Error('Card plugin is no longer enabled or trusted'); }
         catch (error) { this.fail(error); return; }
         this.host.beforeChange?.();
+        this.presentationOutputs = undefined;
         const positions = this.captureOutputs();
         try { const result: unknown = change(); this.assertSynchronous(result, 'mutate'); } catch (error) { this.fail(error); }
         finally { this.restoreOutputs(positions); this.host.afterChange?.(); }
@@ -103,6 +108,7 @@ export class DomCardController<Data> {
 
   update(data: Readonly<Data>, state: CardUpdateState): void {
     if (this.disposed) return;
+    this.outputData = data as typeof this.outputData;
     this.data = data; this.state = Object.freeze({ ...state });
     try { this.data = immutableSnapshot(data); } catch (error) { this.fail(error); return; }
     const positions = this.captureOutputs();
@@ -196,14 +202,15 @@ export class DomCardController<Data> {
 
   private renderPresentation(value: CardPresentation): void {
     const doc = this.body.ownerDocument;
+    this.presentationOutputs = new Map();
     this.body.dataset.rawInputsPlacement = value.rawInputsPlacement ?? 'before';
     let title = this.summary.querySelector<HTMLElement>('.tool-card-title');
     if (!title) { title = doc.createElement('span'); title.className = 'tool-card-title'; this.summary.append(title); }
-    title.textContent = value.title;
+    if (title.textContent !== value.title) title.textContent = value.title;
     let preview = this.summary.querySelector<HTMLElement>('.tool-card-preview');
     if (value.preview !== undefined) {
       if (!preview) { preview = doc.createElement('span'); preview.className = 'tool-card-preview'; this.summary.append(preview); }
-      preview.textContent = value.preview;
+      if (preview.textContent !== value.preview) preview.textContent = value.preview;
     } else preview?.remove();
     const sections = () => Array.from(this.body.children).filter((node): node is HTMLElement => node instanceof doc.defaultView!.HTMLElement && node.classList.contains('tool-section'));
     const old = new Map(sections().map(section => [section.dataset.outputKind!, section]));
@@ -220,10 +227,13 @@ export class DomCardController<Data> {
       output.setAttribute('aria-label', part.label);
       const format = part.format || 'text';
       const previous = this.content.get(output);
+      const source = this.outputData && sectionOutputSource(this.outputData, part.key, part.text);
+      const append = sameOutputAppend(previous?.source, source);
       if (previous?.text !== part.text || previous.format !== format) {
-        this.content.set(output, { text: part.text, format });
+        this.content.set(output, { text: part.text, format, source });
         if (format !== 'console') clearConsoleOutput(output);
-        if (format === 'console') renderConsoleOutput(output, part.text);
+        if (format !== 'text' || previous?.format !== 'text') clearLiteralOutput(output);
+        if (format === 'console') renderConsoleOutput(output, part.text, append);
         else if (format === 'diff') {
           output.replaceChildren();
           for (const line of part.text.split('\n')) {
@@ -231,8 +241,9 @@ export class DomCardController<Data> {
             span.textContent = line; output.append(span, doc.createTextNode('\n'));
           }
         } else if (format === 'markdown') output.replaceChildren(this.context.markdown(part.text));
-        else output.textContent = part.text;
+        else renderLiteralOutput(output, part.text, source);
       }
+      this.presentationOutputs.set(part.key, { text: part.text, literal: format === 'text' || format === 'console' && consoleOutputIsLiteral(output), output });
       this.applyOutputPolicy(output); this.outputs.set(part.key, output);
       const at = sections()[index]; if (at !== section) this.body.insertBefore(section, at || null);
       old.delete(part.key);
