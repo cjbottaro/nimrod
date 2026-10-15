@@ -69,7 +69,7 @@ Sections may set `format: 'console'` to render ANSI colors/styles and common com
 
 Presentation actions require a mounted active card and no modal. Handle expected operation failures in your UI, and check `signal.aborted` after awaiting before changing it. No prompt submission, tool execution, filesystem access, configuration mutation or unrestricted IPC is provided by this API.
 
-Core always retains raw inputs. `renderPresentation` accepts optional `rawInputsPlacement: 'after'` to request those core-owned inputs below the plugin body; omission or `'before'` retains their usual position. Reordering preserves the mounted disclosure and its open state. A custom tool presentation that omits literal execution/result sections gets an independent **Raw output** disclosure, so historical results remain accessible without depending on your renderer.
+Core always retains raw inputs. `renderPresentation` accepts optional `rawInputsPlacement: 'after'` to request those core-owned inputs below the plugin body; omission or `'before'` retains their usual position. Reordering preserves the mounted disclosure and its open state. A custom tool presentation that omits literal execution/result sections gets an independent **Raw output** disclosure, so historical results remain accessible without depending on your renderer. This also applies when your synchronous `update` customizes the text of a helper-rendered section: calling `renderPresentation` does not waive raw recovery.
 
 ## Styling and trust
 

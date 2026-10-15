@@ -1,5 +1,5 @@
 import { conversationIndex, messageChanges, messageVersion } from './conversation-index';
-import { projectToolTimeline, transcriptRows } from './tool-progress';
+import { projectToolRow, projectToolTimeline, transcriptRows } from './tool-progress';
 import type { ContentBlock, ConversationState, DisplayMessage } from './types';
 
 /** Optional in-process optimization. Missing/discontinuous metadata means full reconciliation. */
@@ -57,7 +57,7 @@ export class TranscriptUpdates {
             if (oldRows.length !== nextRows.length || oldRows.some((row, at) => row.key !== nextRows[at].key || row.role !== nextRows[at].role)) { structural = true; break; }
             nextRows.forEach((row, at) => { if (row !== oldRows[at]) dirty.push(row); });
           }
-          if (!structural) transcript.rows = dirty;
+          if (!structural) transcript.rows = dirty.map(row => projectToolRow(row, state.toolProgress));
         }
       }
     }

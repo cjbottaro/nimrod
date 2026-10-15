@@ -11,6 +11,7 @@ import { installDeletionReview } from './deletion-review';
 import { SessionDeletion, type DeletionEvent, type DeletionSnapshot } from './session-deletion';
 import { presentActivity } from './pi/activity-state';
 import { messageChanges, messageVersion } from './pi/conversation-index';
+import type { ConversationState } from './pi/types';
 import { listen } from '@tauri-apps/api/event';
 import { CardPluginCatalog, type PersonalBundles } from './pi/card-plugins/catalog';
 import { installCardPluginLoading } from './card-plugin-loading';
@@ -781,6 +782,20 @@ function sessionRow(tab: Tab) { return { timestamp: tab.lastUsed, indicator: ind
 function updateTab(tab: Tab): void {
   measureWork(settingsSurface.performanceProbe, 'sidebar-row-update', () => updateTabPresentation(tab), presented === tab);
 }
+/** State dependencies of sidebar/title/bookkeeping updates; local tab effects run separately. */
+function shellPresentationChanged(before: ConversationState | undefined, after: ConversationState): boolean {
+  if (!before) return true;
+  if (before.busy !== after.busy || before.compacting !== after.compacting
+    || before.sessionUnavailable !== after.sessionUnavailable || before.sessionName !== after.sessionName
+    || before.extensionStatuses !== after.extensionStatuses || before.queue !== after.queue
+    || before.modelControls !== after.modelControls) return true;
+  if (before.messages === after.messages) return false;
+  const changes = messageChanges(after.messages);
+  // Only user content supplies an automatic session title. Untracked history
+  // replacement is conservative even if its visible title happens to be equal.
+  if (!changes || changes.previous !== messageVersion(before.messages)) return true;
+  return changes.indices.some(index => after.messages[index].role === 'user');
+}
 function updateTabPresentation(tab: Tab): void {
   tab.root.inert = tab.closing || tab.restarting || tab.deleting || tab !== presented;
   const name = tab.title;
@@ -895,7 +910,7 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
   let identityGeneration = 0;
   let confirmedRaw: { path: string; sessionId: string } | undefined;
   let startupPackets: Packet[] | undefined = [];
-  let shellState: import('./pi/types').ConversationState | undefined;
+  let shellState: ConversationState | undefined;
   const current = new PiSession(rpc, {
     performance: settingsSurface.performanceProbe,
     active: () => presented === tab,
@@ -947,12 +962,7 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
     changed: state => {
       if (!currentToken()) return;
       const before = shellState; shellState = state;
-      const changes = messageChanges(state.messages);
-      const contentOnly = before && (before.messages === state.messages || changes?.previous === messageVersion(before.messages) && changes.indices.every(index => state.messages[index].role !== 'user'));
-      if (before && contentOnly && before.busy === state.busy && before.compacting === state.compacting
-        && before.sessionUnavailable === state.sessionUnavailable && before.sessionName === state.sessionName
-        && before.extensionStatuses === state.extensionStatuses && before.queue === state.queue
-        && before.modelControls === state.modelControls) return;
+      if (!shellPresentationChanged(before, state)) return;
       if (!state.sessionUnavailable) notices.resolve(`${tab.id}:connection`);
       if (state.busy && !state.compacting && !state.sessionUnavailable) tab.failed = false;
       const previousTitle = tab.title;

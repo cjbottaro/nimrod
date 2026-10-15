@@ -1,11 +1,11 @@
-export interface OutputSource { text: string; }
+export interface OutputSource { readonly text: string; }
 type OutputData = { executionOutput?: string; resultOutput?: string };
 type Sources = Partial<Record<keyof OutputData, OutputSource>>;
 const sources = new WeakMap<object, Sources>();
 const appends = new WeakMap<OutputSource, WeakMap<OutputSource, boolean>>();
 
-/** Snapshot tokens share source strings, never backward links to old blocks. */
-export function outputSources(data: OutputData): Sources {
+/** Created only at render boundaries; canonical state carries no append bookkeeping. */
+function outputSources(data: OutputData): Sources {
   let value = sources.get(data);
   if (!value) {
     value = {};
@@ -13,17 +13,6 @@ export function outputSources(data: OutputData): Sources {
     sources.set(data, value);
   }
   return value;
-}
-export function trackOutputSources(before: OutputData, after: OutputData): void {
-  const previous = outputSources(before), next: Sources = {};
-  for (const key of ['executionOutput', 'resultOutput'] as const) {
-    const text = after[key]; if (text === undefined) continue;
-    next[key] = previous[key]?.text === text ? previous[key] : { text };
-  }
-  sources.set(after, next);
-}
-export function transferOutputSources(from: object, to: object): void {
-  const value = sources.get(from); if (value) sources.set(to, value);
 }
 export function sameOutputAppend(before: OutputSource | undefined, after: OutputSource | undefined): boolean {
   if (!before || !after) return false;

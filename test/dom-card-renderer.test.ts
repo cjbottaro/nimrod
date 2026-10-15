@@ -85,6 +85,41 @@ test('custom DOM retains local input/focus across updates and independent regist
   } finally { dom.window.close(); }
 });
 
+for (const customization of ['same update', 'later update'] as const) test(`customizing helper output in the ${customization} retains exact raw recovery`, () => {
+  const dom = new JSDOM('<body></body>'); const doc = dom.window.document;
+  let updates = 0;
+  const plugin: DomCardRenderer<ToolCardBlock> = { apiVersion: 2, id: 'fixture.mixed', supports: () => true,
+    mount(ctx) {
+      return { update(data) {
+        updates++;
+        if (customization === 'same update' || updates === 1) ctx.renderPresentation({ title: 'Custom', sections: [
+          { key: 'result', label: 'Result', text: data.resultOutput || '' },
+        ] });
+        if (customization === 'same update' || updates > 1) ctx.body.querySelector('.tool-output')!.textContent = 'Short summary';
+      }, dispose() {} };
+    },
+  };
+  try {
+    const data = { name: 'custom', toolStatus: 'result' as const, resultOutput: 'complete raw result' };
+    const card = renderToolCard(doc, data, doc.createElement('details'), plugin); doc.body.append(card);
+    if (customization === 'later update') {
+      assert.equal(card.querySelector('.tool-raw-output'), null, 'unaltered literal helper output needs no duplicate');
+      updateToolCard(doc, card, data);
+    }
+    const recovery = card.querySelector<HTMLDetailsElement>('.tool-raw-output')!;
+    assert.equal(recovery.hidden, false);
+    assert.equal(recovery.querySelector('pre')!.textContent, data.resultOutput);
+    assert.equal(card.querySelector('.card-plugin-body .tool-output')!.textContent, 'Short summary');
+    recovery.open = true;
+    const text = recovery.querySelector('pre')!.firstChild;
+    updateToolCard(doc, card, { ...data, resultOutput: data.resultOutput + ' appended' });
+    assert.equal(card.querySelector('.tool-raw-output'), recovery);
+    assert.equal(recovery.open, true);
+    assert.equal(recovery.querySelector('pre')!.firstChild, text);
+    assert.equal(text!.textContent, 'complete raw result appended');
+  } finally { dom.window.close(); }
+});
+
 test('managed mutation captures before change and becomes inert after disposal; bundled inventory implements DOM API', () => {
   const dom = new JSDOM('<body><span id="summary"></span><div id="body"></div></body>'); const doc = dom.window.document;
   const order: string[] = []; let context!: CardPluginContext;

@@ -3,7 +3,6 @@ import { AgentMessage, ContentBlock, ConversationState, DisplayMessage, Extensio
 import { updateToolProgress } from "./tool-progress";
 import { conversationIndex, trackMessageChanges } from './conversation-index';
 import { immutableSnapshot } from './immutable-snapshot';
-import { transferOutputSources } from './output-source';
 import { mergeToolCall as mergeToolBlock, toolMessageBlock, type ToolCallUpdate as ToolUpdate } from "./tool-call";
 
 export const initialConversationState = (): ConversationState => ({
@@ -224,7 +223,7 @@ function applyToolUpdate(state: ConversationState, update: ToolUpdate): Conversa
 
 function mergeOrphanTool(message: DisplayMessage, update: ToolUpdate): DisplayMessage {
   const block = mergeToolBlock(toolMessageBlock(message), update);
-  const next: DisplayMessage = {
+  return {
     ...message,
     toolName: block.name,
     toolArguments: block.arguments,
@@ -236,8 +235,6 @@ function mergeOrphanTool(message: DisplayMessage, update: ToolUpdate): DisplayMe
     toolStatus: block.toolStatus,
     streaming: block.toolStatus === "running",
   };
-  transferOutputSources(block, next);
-  return next;
 }
 
 /** Moves an out-of-order execution card into the assistant's ordered tool-call block. */

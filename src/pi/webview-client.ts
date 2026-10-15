@@ -720,8 +720,8 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     const previous = displayedState;
     displayedState = state;
     if (!activityState || activityChanged(previous, state)) renderActivity(state);
-    if (full || previous.modelControls !== state.modelControls || previous.sessionUnavailable !== state.sessionUnavailable) renderModelControls(state);
-    if (full || previous.busy !== state.busy || previous.compacting !== state.compacting || previous.sessionUnavailable !== state.sessionUnavailable || previous.modelControls !== state.modelControls || previous.recoveryNotice !== state.recoveryNotice) renderComposer();
+    if (full || modelControlsChanged(previous, state)) renderModelControls(state);
+    if (full || composerPresentationChanged(previous, state)) renderComposer();
 
     for (const { key, message, signature } of updates) {
       let entry = rendered.get(key);
@@ -776,6 +776,16 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       outputFrames.add(frame);
     }
     transcriptScroll.request(wasAtBottom);
+  }
+
+  // Snapshot dependencies only; local draft/recovery/lock actions render directly.
+  function modelControlsChanged(before: State, after: State): boolean {
+    return before.modelControls !== after.modelControls || before.sessionUnavailable !== after.sessionUnavailable;
+  }
+
+  function composerPresentationChanged(before: State, after: State): boolean {
+    return modelControlsChanged(before, after) || before.busy !== after.busy || before.compacting !== after.compacting
+      || before.recoveryNotice !== after.recoveryNotice;
   }
 
   function activityChanged(before: State, after: State): boolean {

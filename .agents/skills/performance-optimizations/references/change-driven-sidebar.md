@@ -27,11 +27,11 @@ Read [sidebar views](../../features/references/sidebar-attention.md), [session n
 
 Local Send recency and sidebar-to-top feedback must remain immediate, independent of RPC results. Working/Unread membership, arrival order, selected-row retention, failure/input attention and controls must update at their existing boundaries. Preserve minute/foreground timestamp refresh, filter focus recovery, sidebar reading position, shared Switch/cycling order and deletion-lock eligibility. Session notices must not become sidebar failure indicators.
 
-Primary code anchors: `src/main.ts` (`changed`, `updateTab`, `renderSidebar`), `src/session-sidebar.ts`, `src/session-navigation.ts`, `src/session-attention.ts` and `src/session-recency.ts`.
+Primary code anchors: `src/main.ts` (`changed`, `shellPresentationChanged`, `updateTab`, `renderSidebar`), `src/session-sidebar.ts`, `src/session-navigation.ts`, `src/session-attention.ts` and `src/session-recency.ts`.
 
 ## Regression risks and maintenance guardrails
 
-The narrow content-only guard is implemented; broader row/list invalidation remains a candidate. Extend its dependency set in `main.ts` whenever new shell-visible state is introduced. Busy/compaction/availability/name, extension statuses, queue and model controls are currently guarded; external lifecycle/attention/selection/recency paths keep their existing immediate `updateTab` calls. `test/shell.test.ts` adds unchanged output-chunk DOM/IPC coverage (not run). Remaining bullets describe broader proposed coverage, not completed native acceptance.
+The narrow content-only guard is implemented; broader row/list invalidation remains a candidate. Extend the named `shellPresentationChanged` dependency predicate beside `updateTabPresentation` whenever new shell-visible state is introduced. Busy/compaction/availability/name, extension statuses, queue and model controls are currently guarded; external lifecycle/attention/selection/recency paths keep their existing immediate `updateTab` calls. `test/shell.test.ts` adds unchanged output-chunk DOM/IPC coverage (not run). Remaining bullets describe broader proposed coverage, not completed native acceptance.
 
 - **Likely erosion:** new row metadata omitted from a presentation signature produces stale rows; volatile token-level metadata included in it defeats no-op detection. New filters/actions can also add dependencies that a list invalidation check misses.
 - **Reuse the boundary if implemented:** extend shared row presentation and navigation/attention projections, not a parallel sidebar state machine. A sidebar no-op must never short-circuit transcript/status updates, persistence or notifications elsewhere in `changed`.

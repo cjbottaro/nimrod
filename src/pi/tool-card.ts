@@ -77,8 +77,8 @@ function syncRawRecovery(document: Document, details: HTMLDetailsElement, block:
     if (body.dataset.rawInputsPlacement === 'after') { if (body.nextElementSibling !== inputs) body.after(inputs); }
     else if (inputs.nextElementSibling !== body) body.before(inputs);
   }
-  // Custom DOM plugins retain the legacy inspection fallback. Managed presentation
-  // sections have explicit source/format bookkeeping and never read output text.
+  // Arbitrary mounted plugins can customize even helper-rendered sections.
+  // Only pure presentation adapters/core fallback may trust source bookkeeping.
   const provided = renderers.get(details)?.coversRawSections(expected) ?? expected.every(part => Array.from(body.querySelectorAll<HTMLElement>('.tool-section')).some(section =>
     section.dataset.outputKind === part.key && section.querySelector('.tool-output')?.textContent === part.text));
   let recovery = directChild<HTMLDetailsElement>(details, '.tool-raw-output');

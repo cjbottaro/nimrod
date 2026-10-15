@@ -33,16 +33,19 @@ export function transcriptRows(messages: DisplayMessage[]): DisplayMessage[] {
   });
 }
 
-/** Progress is presentation state; Pi's actual execution statuses and history remain untouched. */
+/** Shared by full and dirty-row projection; progress never changes canonical history. */
+export function projectToolRow(message: DisplayMessage, progress?: ToolProgress): DisplayMessage {
+  const id = message.key.startsWith("tool:") ? message.key.slice(5) : undefined;
+  const uiPhase = id && progress?.interrupted.includes(id) ? "stopped" as const
+    : id && progress?.processingToolId === id ? "thinking" as const : undefined;
+  if (!uiPhase) return message;
+  if (message.role === "tool") return { ...message, uiPhase };
+  return { ...message, content: (message.content as ContentBlock[]).map(block => ({ ...block, uiPhase })) };
+}
+
+/** Full projection alone owns structural parallel-overview placement. */
 export function projectToolTimeline(messages: DisplayMessage[], progress?: ToolProgress, sourceRows = transcriptRows(messages)): DisplayMessage[] {
-  const rows = sourceRows.map(message => {
-    const id = message.key.startsWith("tool:") ? message.key.slice(5) : undefined;
-    const uiPhase = id && progress?.interrupted.includes(id) ? "stopped" as const
-      : id && progress?.processingToolId === id ? "thinking" as const : undefined;
-    if (!uiPhase) return message;
-    if (message.role === "tool") return { ...message, uiPhase };
-    return { ...message, content: (message.content as ContentBlock[]).map(block => ({ ...block, uiPhase })) };
-  });
+  const rows = sourceRows.map(message => projectToolRow(message, progress));
   const cluster = progress?.parallel;
   if (!cluster) return rows;
   const positions = new Map(rows.map((row, index) => [row.key, index]));

@@ -4,8 +4,9 @@ import { initialConversationState, messagesToDisplay, reduceRpcEvent } from '../
 import { conversationIndex } from '../src/pi/conversation-index';
 import { TranscriptUpdates } from '../src/pi/transcript-updates';
 import { immutableSnapshot } from '../src/pi/immutable-snapshot';
-import { outputSources, sameOutputAppend } from '../src/pi/output-source';
-import type { ConversationState } from '../src/pi/types';
+import { sectionOutputSource, sameOutputAppend } from '../src/pi/output-source';
+import { projectToolTimeline } from '../src/pi/tool-progress';
+import type { ConversationState, DisplayMessage, JsonRecord } from '../src/pi/types';
 
 function running(history = 0): ConversationState {
   return { ...initialConversationState(), busy: true, messages: [
@@ -71,20 +72,60 @@ test('index rebuilds for history replacement and adoption; late updates never re
   assert.equal(state.messages.at(-1)?.role, 'tool', 'old index cannot address replaced history');
 });
 
-test('output revisions validate coalesced render endpoints and reject replacement/truncation', () => {
-  let state = running();
-  const block = () => (state.messages[0].content as import('../src/pi/types').ContentBlock[])[0];
-  state = output(state, 'a', 'first'); const first = outputSources(block()).executionOutput;
-  state = output(state, 'a', 'first second');
-  state = output(state, 'a', 'first second third');
-  assert.ok(sameOutputAppend(first, outputSources(block()).executionOutput));
-  state = output(state, 'a', 'short'); const replacement = outputSources(block()).executionOutput;
+test('render-owned sources validate endpoints without reducer lineage and share raw-recovery tokens', () => {
+  const source = (text: string) => {
+    const card = Object.freeze({ executionOutput: text });
+    const token = sectionOutputSource(card, 'result', text);
+    assert.equal(sectionOutputSource(card, 'result', text), token, 'presentation and raw recovery share a token');
+    assert.equal(sectionOutputSource(card, 'result', 'custom summary'), undefined);
+    return token;
+  };
+  const first = source('first');
+  assert.ok(sameOutputAppend(first, source('first second third')));
+  const replacement = source('short');
   assert.equal(sameOutputAppend(first, replacement), false);
-  state = output(state, 'a', 'short more'); const longer = outputSources(block()).executionOutput;
+  const longer = source('short more');
   assert.ok(sameOutputAppend(replacement, longer));
-  state = output(state, 'a', 'short');
-  assert.equal(sameOutputAppend(longer, outputSources(block()).executionOutput), false, 'truncation of displayed output replaces it');
-  assert.ok(sameOutputAppend(replacement, outputSources(block()).executionOutput), 'skipped intermediate changes need not be replayed when rendered endpoints match');
+  assert.equal(sameOutputAppend(longer, source('short')), false, 'truncation of displayed output replaces it');
+  assert.ok(sameOutputAppend(replacement, source('short')), 'skipped intermediate changes do not need replay');
+});
+
+for (const placement of ['standalone', 'embedded'] as const) test(`dirty ${placement} tool rows match full projection through result processing and interruption`, () => {
+  let state = initialConversationState();
+  if (placement === 'embedded') state = reduceRpcEvent(state, { type: 'message_start', message: {
+    role: 'assistant', timestamp: 1, content: ['a', 'b'].map(id => ({ type: 'toolCall', id, name: 'bash', arguments: { command: id } })),
+  } });
+  const updates = new TranscriptUpdates();
+  let retained = updates.snapshot(state).state.messages;
+  const step = (event: JsonRecord) => {
+    state = reduceRpcEvent(state, event);
+    const snapshot = updates.snapshot(state);
+    if (snapshot.transcript.rows === undefined) retained = snapshot.state.messages;
+    else {
+      const dirty = new Map(snapshot.transcript.rows.map(row => [row.key, row]));
+      assert.ok([...dirty.keys()].every(key => retained.some(row => row.key === key)), 'patches cannot add rows');
+      retained = retained.map(row => dirty.get(row.key) ?? row);
+    }
+    assert.deepEqual(retained, projectToolTimeline(state.messages, state.toolProgress), String(event.type));
+    return snapshot.transcript;
+  };
+  const phase = (row: DisplayMessage) => row.role === 'tool' ? row.uiPhase : Array.isArray(row.content) ? row.content[0].uiPhase : undefined;
+  const result = (id: string) => ({ type: 'message_start', message: { role: 'toolResult', toolCallId: id, content: [{ type: 'text', text: `${id} result` }] } });
+  step({ type: 'agent_start' });
+  for (const id of ['a', 'b']) step({ type: 'tool_execution_start', toolCallId: id, toolName: 'bash', args: { command: id } });
+  for (const id of ['a', 'b']) step({ type: 'tool_execution_end', toolCallId: id, result: { content: [{ type: 'text', text: `${id} final` }] } });
+  step(result('a'));
+  const processing = step(result('b'));
+  assert.equal(phase(processing.rows![0]), 'thinking', 'result delivery does not end processing');
+  step({ ...result('b'), type: 'message_end' });
+  step({ type: 'message_start', message: { role: 'assistant', timestamp: 2, content: [] } });
+  step({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'Next answer' } });
+  assert.equal(phase(retained.find(row => row.key === 'tool:b')!), undefined);
+  step({ type: 'tool_execution_start', toolCallId: 'c', toolName: 'bash' });
+  step({ type: 'agent_settled' });
+  const interrupted = step({ type: 'tool_execution_update', toolCallId: 'c', partialResult: { content: [{ type: 'text', text: 'late output' }] } });
+  assert.equal(phase(interrupted.rows![0]), 'stopped', 'late content does not remove interruption');
+  step({ type: 'queue_update', steering: ['next'], followUp: [] });
 });
 
 test('presentation and raw recovery share one append comparison per rendered source pair', () => {

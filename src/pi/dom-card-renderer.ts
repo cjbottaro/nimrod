@@ -21,12 +21,19 @@ export interface CardDomHost {
   afterUpdate?: () => void;
 }
 
+// Pure presentation adapters never hand their renderer mutable DOM slots.
+// Arbitrary mounted plugins may mix the helper with custom DOM, so source
+// bookkeeping alone cannot prove that their literal output is still present.
+const presentationAdapters = new WeakSet<object>();
+
 /** Legacy declarations and pure bundled presentation helpers use the public DOM API. */
 export function presentationPlugin<Data>(renderer: CardRenderer<Data>): DomCardRenderer<Data> {
-  return { apiVersion: 2, id: renderer.id, supports: data => renderer.supports(data), mount(context) {
+  const plugin: DomCardRenderer<Data> = { apiVersion: 2, id: renderer.id, supports: data => renderer.supports(data), mount(context) {
     const instance = renderer.mount();
     return { update(data) { context.renderPresentation(instance.update(data)); }, dispose: () => instance.dispose() };
   } };
+  presentationAdapters.add(plugin);
+  return plugin;
 }
 
 export class DomCardController<Data> {
@@ -40,14 +47,15 @@ export class DomCardController<Data> {
   private state: CardUpdateState = { streaming: false };
   private readonly content = new WeakMap<HTMLElement, { text: string; format: string; source?: OutputSource }>();
   private outputData?: { executionOutput?: string; resultOutput?: string };
-  private presentationOutputs?: Map<string, { text: string; literal: boolean; output: HTMLElement }>;
 
-  /** Managed sections report source coverage without reading accumulated DOM text. */
+  /** Only core-owned presentation output can skip inspection of actual DOM text. */
   coversRawSections(sections: CardPresentation['sections']): boolean | undefined {
-    if (!this.presentationOutputs) return undefined;
+    if (!this.failed && !presentationAdapters.has(this.renderer)) return undefined;
     return sections.every(section => {
-      const rendered = this.presentationOutputs!.get(section.key);
-      return rendered && this.body.contains(rendered.output) && rendered.literal && rendered.text === section.text;
+      const output = this.outputs.get(section.key);
+      const rendered = output && this.content.get(output);
+      return !!(output && this.body.contains(output) && rendered && rendered.text === section.text
+        && (rendered.format === 'text' || rendered.format === 'console' && consoleOutputIsLiteral(output)));
     });
   }
   readonly context: CardPluginContext;
@@ -84,7 +92,6 @@ export class DomCardController<Data> {
         try { if (!this.supported()) throw new Error('Card plugin is no longer enabled or trusted'); }
         catch (error) { this.fail(error); return; }
         this.host.beforeChange?.();
-        this.presentationOutputs = undefined;
         const positions = this.captureOutputs();
         try { const result: unknown = change(); this.assertSynchronous(result, 'mutate'); } catch (error) { this.fail(error); }
         finally { this.restoreOutputs(positions); this.host.afterChange?.(); }
@@ -202,8 +209,6 @@ export class DomCardController<Data> {
 
   private renderPresentation(value: CardPresentation): void {
     const doc = this.body.ownerDocument;
-    const coverage = new Map<string, { text: string; literal: boolean; output: HTMLElement }>();
-    this.presentationOutputs = coverage;
     this.body.dataset.rawInputsPlacement = value.rawInputsPlacement ?? 'before';
     let title = this.summary.querySelector<HTMLElement>('.tool-card-title');
     if (!title) { title = doc.createElement('span'); title.className = 'tool-card-title'; this.summary.append(title); }
@@ -244,7 +249,6 @@ export class DomCardController<Data> {
         } else if (format === 'markdown') output.replaceChildren(this.context.markdown(part.text));
         else renderLiteralOutput(output, part.text, source);
       }
-      coverage.set(part.key, { text: part.text, literal: format === 'text' || format === 'console' && consoleOutputIsLiteral(output), output });
       this.applyOutputPolicy(output); this.outputs.set(part.key, output);
       const at = sections()[index]; if (at !== section) this.body.insertBefore(section, at || null);
       old.delete(part.key);

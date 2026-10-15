@@ -5,6 +5,7 @@ import { webviewHtml, rendererBundle } from './view-fixture';
 import { createSafeMarkdownRenderer } from '../src/pi/safe-markdown';
 import { initialConversationState, reduceRpcEvent } from '../src/pi/reducer';
 import { TranscriptUpdates } from '../src/pi/transcript-updates';
+import { projectToolTimeline } from '../src/pi/tool-progress';
 
 function fixture(options: { sendAutoFollow?: import('../src/pi/view-host').ViewHost['sendAutoFollow']; performance?: import('../src/pi/view-host').ViewHost['performance']; reportNotice?: import('../src/pi/view-host').ViewHost['reportNotice']; resolveNotice?: import('../src/pi/view-host').ViewHost['resolveNotice']; images?: boolean; clipboard?: boolean; missing?: boolean; imageGate?: Promise<void>; releaseOnClear?: boolean; cardRenderer?: import('../src/pi/view-host').ViewHost['cardRenderer']; cardActions?: import('../src/pi/view-host').ViewHost['cardActions'] } = {}) {
   const dom = new JSDOM(webviewHtml(), { runScripts: 'outside-only', pretendToBeVisual: true });
@@ -1122,6 +1123,70 @@ test('incremental parallel streams coalesce dirty rows without materializing his
     assert.equal(mounts, 3);
   } finally { f.dom.window.close(); }
 });
+
+for (const placement of ['standalone', 'embedded'] as const) for (const delivery of ['each', 'coalesced', 'hidden', 'gap'] as const) {
+  test(`${placement} tool lifecycle matches full rendering with ${delivery} delivery`, () => {
+    const f = fixture(), reference = fixture();
+    const updates = new TranscriptUpdates();
+    let state = initialConversationState();
+    const presentation = (view: ReturnType<typeof fixture>) => ({
+      rows: [...view.win.document.querySelectorAll<HTMLElement>('#messages article')].map(row => [row.dataset.key, row.className, row.textContent]),
+      tools: [...view.win.document.querySelectorAll<HTMLElement>('.tool-card')].map(card => ({
+        key: card.dataset.detailKey, status: card.querySelector('summary')!.getAttribute('aria-label'),
+        outputs: [...card.querySelectorAll('.tool-output')].map(output => [output.className, output.textContent]),
+      })),
+    });
+    const paint = () => {
+      f.flush(); reference.flush();
+      assert.deepEqual(presentation(f), presentation(reference));
+    };
+    const event = (value: Record<string, unknown>, drop = false) => {
+      state = reduceRpcEvent(state, value);
+      const snapshot = updates.snapshot(state);
+      if (!drop) f.receive({ type: 'snapshot', ...snapshot });
+      reference.receive({ type: 'snapshot', state: { ...state, messages: projectToolTimeline(state.messages, state.toolProgress) } });
+    };
+    const result = (id: string) => ({ type: 'message_start', message: { role: 'toolResult', toolCallId: id, content: [{ type: 'text', text: `${id} result` }] } });
+    try {
+      event({ type: 'agent_start' });
+      if (placement === 'embedded') event({ type: 'message_start', message: { role: 'assistant', timestamp: 1,
+        content: ['a', 'b'].map(id => ({ type: 'toolCall', id, name: 'bash', arguments: { command: id } })),
+      } });
+      for (const id of ['a', 'b']) event({ type: 'tool_execution_start', toolCallId: id, toolName: 'bash', args: { command: id } });
+      paint();
+      const card = f.win.document.querySelector<HTMLDetailsElement>('[data-detail-key="tool:b"]')!;
+      const spinner = card.querySelector('.tool-card-spinner');
+      f.prompt.focus();
+      for (const id of ['a', 'b']) event({ type: 'tool_execution_end', toolCallId: id, result: { content: [{ type: 'text', text: `${id} final` }] } });
+      paint(); // Commit thinking before dirty result rows arrive.
+      if (delivery === 'hidden') f.view.setActive(false);
+      event(result('a'), delivery === 'gap');
+      if (delivery === 'each') paint();
+      event(result('b'));
+      if (delivery === 'hidden') f.view.setActive(true);
+      paint();
+      assert.equal(f.win.document.querySelector('[data-detail-key="tool:b"]'), card);
+      assert.equal(card.querySelector('.tool-card-spinner'), spinner);
+      assert.match(card.querySelector('summary')!.getAttribute('aria-label')!, /thinking/);
+      assert.ok(card.querySelector('.tool-output-streaming'), 'result-processing caps remain live');
+      assert.equal(f.win.document.activeElement, f.prompt);
+      event({ type: 'message_start', message: { role: 'assistant', timestamp: 2, content: [] } });
+      event({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'Next answer' } });
+      paint();
+      assert.match(card.querySelector('summary')!.getAttribute('aria-label')!, /succeeded/);
+      event({ type: 'tool_execution_start', toolCallId: 'c', toolName: 'bash' });
+      event({ type: 'agent_settled' });
+      paint();
+      if (delivery === 'hidden') f.view.setActive(false);
+      event({ type: 'tool_execution_update', toolCallId: 'c', partialResult: { content: [{ type: 'text', text: 'late output' }] } });
+      if (delivery === 'hidden') f.view.setActive(true);
+      paint();
+      assert.match(f.win.document.querySelector('[data-detail-key="tool:c"] summary')!.getAttribute('aria-label')!, /stopped/);
+      assert.equal(f.sent.some(message => message.type === 'renderError'), false);
+      assert.equal(reference.sent.some(message => message.type === 'renderError'), false);
+    } finally { f.dom.window.close(); reference.dom.window.close(); }
+  });
+}
 
 test('hidden incremental snapshots retain all dirty cards through reveal and completion', () => {
   const f = fixture(); const updates = new TranscriptUpdates(); let state = initialConversationState();

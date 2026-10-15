@@ -13,11 +13,13 @@ Click a disclosure arrow or summary to expand a card.
 
 Cards start closed. Sustained non-empty execution updates may open a running tool after about half a second; a fast final result alone does not. Your manual disclosure choice wins. Inspecting one tool's output does not reset another tool's reading position.
 
+A tool may keep its activity indicator after execution finishes while Pi processes the result. Receiving the result text alone does not end that phase. Interrupted tools retain their stopped indication if late output arrives.
+
 ### Console-style command output
 
 Bash, shell and terminal tool cards render ANSI colors and text styles in both live output and results. Carriage returns, backspaces, tabs, line clearing and common relative cursor movements render progress updates instead of printing escape codes. Output remains selectable text in the existing scrollable viewport; colors follow the theme's terminal palette where available.
 
-When rendering changes the supplied text, a separate **Raw output** disclosure retains the exact original output, including escape sequences. Formatted plugin sections may also retain Raw output when their rendered presentation cannot establish exact literal coverage. Other tools keep literal output unless their card plugin requests console rendering.
+When rendering changes the supplied text, a separate **Raw output** disclosure retains the exact original output, including escape sequences. Formatted or customized plugin sections also retain Raw output when their visible text does not contain the exact original output. Other tools keep literal output unless their card plugin requests console rendering.
 
 This is a log renderer, not an interactive terminal: full-screen applications, alternate screens, terminal resizing and exact wide/combining-character cursor geometry are not emulated. Unsupported terminal controls are ignored; terminal titles, clipboard commands and embedded terminal links have no effect. Nimrod renders what Pi supplies—it cannot recover omitted/truncated output or make a command behave as though it had a TTY.
 
