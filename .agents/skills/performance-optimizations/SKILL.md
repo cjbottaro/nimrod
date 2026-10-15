@@ -14,6 +14,8 @@ Read the [features skill](../features/SKILL.md), [architecture](../features/refe
 1. [Suppress unchanged bookkeeping writes](references/unchanged-bookkeeping-writes.md) — the optimization selected during the CPU-contention investigation.
 2. [Keep draft typing off expensive UI/storage paths](references/composer-typing-hot-path.md) — existing optimization baseline that predates that investigation.
 3. [Suppress hidden-session transcript painting](references/hidden-session-painting.md) — latest-snapshot catch-up with retained interaction state; regression coverage added, validation/native comparison pending.
+4. [Incremental transcript and output updates](references/incremental-transcript.md) — indexed tools, explicit dirty rows, lazy authoritative fallback, append-only console/text DOM, immutable-input sharing and guarded surrounding UI; fixtures authored, not run.
+5. [Affected tool-output scroll work](references/tool-output-scroll-work.md) — targeted capture and one guarded deferred batch rather than registry-wide per-card callbacks; fixtures authored, not run.
 
 ## Measurement work
 
@@ -21,12 +23,10 @@ Read the [features skill](../features/SKILL.md), [architecture](../features/refe
 
 ## Potential future optimizations
 
-The remaining four are **deferred**. Suggested order is subject to the next observed bottleneck, not a delivery commitment:
+The remaining two are **deferred**. Suggested order is subject to the next observed bottleneck, not a delivery commitment:
 
-1. [Make Session sidebar updates change-driven](references/change-driven-sidebar.md)
-2. [Make transcript updates proportional to changed content](references/incremental-transcript.md)
-3. [Limit tool-output scroll work to affected viewports](references/tool-output-scroll-work.md)
-4. [Reduce large-history rendering and DOM cost](references/large-history-dom.md)
+1. [Make Session sidebar updates change-driven](references/change-driven-sidebar.md) — content-only streaming publications now skip unchanged shell work; broader sidebar projection/invalidation remains deferred.
+2. [Reduce large-history rendering and DOM cost](references/large-history-dom.md)
 
 Each optimization reference includes **Regression risks and maintenance guardrails**: likely ways to lose the benefit or break correctness, shared paths to reuse, and fixture-extension triggers. Deferred candidates describe proposed safeguards, not implemented protections. Each candidate also includes **why**, **potential benefits**, code anchors, an experiment outline, preservation constraints and validation targets. Existing observed improvement justified pausing additional work; a later mildly sluggish report suggests remaining scaling opportunities without invalidating the earlier result. [Native observations](../features/references/verification.md#performance-observation) owns the report comparisons and attribution limits.
 

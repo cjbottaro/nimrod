@@ -1,10 +1,10 @@
 # Make Session sidebar updates change-driven
 
-**Status: deferred candidate. Suggested priority: first remaining; medium navigation/focus risk.**
+**Status: broader candidate deferred; content-only publication guard implemented with incremental streaming (new fixtures not run). Medium navigation/focus risk.**
 
 ## Why
 
-`PiSession.publish` invokes the shell's `changed` callback for routine streaming events. That callback calls `updateTab`, which updates row/control attributes and calls `renderSidebar`. The sidebar then recomputes projections/counts, captures/restores viewport geometry and walks rows even when token output changes none of the sidebar's visible properties.
+`PiSession.publish` invokes the shell's `changed` callback for routine streaming events. A content-only change with unchanged shell dependencies now returns before `updateTab`, title derivation and bookkeeping preparation; exact dirty metadata avoids inspecting history. Other paths still call `updateTab`, which updates row/control attributes and calls `renderSidebar`. The sidebar then recomputes projections/counts, captures/restores viewport geometry and walks rows even when token output changes none of the sidebar's visible properties.
 
 The current renderer already preserves mounted rows and moves only out-of-order nodes. This proposal targets **redundant calls and projection/geometry work**, not an imaginary full sidebar rebuild. Unchanged bookkeeping-write suppression is already implemented separately.
 
@@ -31,7 +31,7 @@ Primary code anchors: `src/main.ts` (`changed`, `updateTab`, `renderSidebar`), `
 
 ## Regression risks and maintenance guardrails
 
-This candidate is not implemented; these are design and future-maintenance guardrails, not claims about current invalidation coverage.
+The narrow content-only guard is implemented; broader row/list invalidation remains a candidate. Extend its dependency set in `main.ts` whenever new shell-visible state is introduced. Busy/compaction/availability/name, extension statuses, queue and model controls are currently guarded; external lifecycle/attention/selection/recency paths keep their existing immediate `updateTab` calls. `test/shell.test.ts` adds unchanged output-chunk DOM/IPC coverage (not run). Remaining bullets describe broader proposed coverage, not completed native acceptance.
 
 - **Likely erosion:** new row metadata omitted from a presentation signature produces stale rows; volatile token-level metadata included in it defeats no-op detection. New filters/actions can also add dependencies that a list invalidation check misses.
 - **Reuse the boundary if implemented:** extend shared row presentation and navigation/attention projections, not a parallel sidebar state machine. A sidebar no-op must never short-circuit transcript/status updates, persistence or notifications elsewhere in `changed`.

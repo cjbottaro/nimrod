@@ -21,7 +21,7 @@ Canonical behavior is owned by [transcript interaction](../../features/reference
 
 ## Intended benefits and limits
 
-Avoid hidden Markdown parsing, transcript history diffing, renderer-managed card updates and output-restoration work; reduce UI-thread contention as concurrently working sessions increase. Background Pi reduction, timeline projection, sidebar updates and arbitrary plugin-owned async mutations/timers are not eliminated. Hidden views remain mounted and retain their DOM/memory. A large catch-up snapshot can still make reveal expensive.
+Avoid hidden Markdown parsing, transcript history diffing, renderer-managed card updates and output-restoration work; reduce UI-thread contention as concurrently working sessions increase. Background Pi reduction and arbitrary plugin-owned async mutations/timers are not eliminated. Subsequent [incremental streaming work](incremental-transcript.md) also avoids full timeline projection and unchanged shell/sidebar updates for ordinary content-only publications; structural/history/lifecycle fallbacks still perform their necessary work. Hidden views remain mounted and retain their DOM/memory. A large catch-up snapshot can still make reveal expensive.
 
 No new native report, controlled before/after comparison or packaged reveal-latency measurement is available. Implementation and fixtures are not proof of a responsiveness improvement or macOS/Linux/possible Windows acceptance.
 

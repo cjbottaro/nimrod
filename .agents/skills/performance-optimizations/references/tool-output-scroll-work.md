@@ -1,45 +1,30 @@
 # Limit tool-output scroll work to affected viewports
 
-**Status: deferred candidate. Suggested priority: third remaining; high scroll-regression sensitivity.**
+**Status: implemented alongside [incremental transcript updates](incremental-transcript.md); fixtures authored, not run. Native acceptance pending.**
 
-## Why
+## What changed and why
 
-Each `renderState` captures streaming-output positions across the tool-card registry and schedules restoration callbacks for connected cards, even when many cards are untouched by the update. The capture/restore helpers read geometry and write scroll offsets. Managed card renderers also maintain keyed output positions internally.
+Previously every transcript paint captured positions across the mounted tool registry and scheduled one restoration callback per connected card, including completed/unrelated cards. The renderer now determines changed rows before mutation, captures only their tool output viewports and schedules one guarded batch for affected live outputs. Ordinary incremental paints do not traverse/prune the registry; structural full reconciliation owns removal/disposal. Unchanged cards do not receive renderer updates, geometry reads or output-restoration callbacks.
 
-These paths protect independent inspection, but broad bookkeeping can add selector scans, layout reads and callback work proportional to tool-card count. Finished cards without a live viewport already short-circuit; quantify the eligible viewport count rather than assuming every historical tool forces layout.
+Full hide captures all inspection positions while geometry is visible. Reveal restores the suspended positions, including untouched viewports, while catching up the latest snapshot. Reset/disposal still cancel frames and retire epochs. These deliberate lifecycle boundaries retain broad bookkeeping; they are not the streaming hot path.
 
-## Potential benefits
+`DomCardController` remains the synchronous owner for all registered output viewports within an affected card, including multi-output custom plugins and completion caps. The outer renderer retains a deferred settled-layout pass for affected live cards and hide/reveal. Their scopes now agree on affected cards; synchronous registered-output restoration was not removed as supposedly redundant. Capture work precedes card mutations; deferred core restoration is batched rather than scheduled per registry entry.
 
-- Fewer geometry reads, scroll writes and animation callbacks during streaming.
-- Less risk of forced layout from interleaved DOM/geometry work.
-- Better scaling with many live/expanded tool outputs.
-- More scheduling headroom for transcript scrolling and input.
+## Benefits and remaining costs
 
-## Experiment outline
+Eliminates unrelated card/viewport work and callbacks, including completed-card no-op frames. This is confirmed avoided work, not a measured native layout/latency speedup. Affected cards can still perform both synchronous plugin-output and deferred core-output restoration. Browser geometry/layout reads and writes remain necessary; plugin-owned async mutations must use managed ownership. Layout changes from width/zoom/disclosure continue through existing owners.
 
-Identify the actual owners and overlap between outer streaming-output helpers and `DomCardController`'s registered viewports before changing either. Track affected cards/output sections and capture their intent before mutation; restore only viewports whose content or geometry can change.
-
-Batch eligible restorations into a guarded frame where practical, retaining per-output intent rather than one shared follow flag. Include disclosure, lifecycle-cap, width/zoom and theme/layout changes in invalidation; text equality alone is not enough to decide geometry is unchanged.
-
-## Constraints and current contracts
-
-Read [transcript interaction](../../features/references/transcript-interaction.md), [cards](../../features/references/transcript-cards.md) and [card plugins](../../features/references/card-plugins.md).
-
-A reader inspecting one output must not jump to its bottom because another tool updated. Preserve bottom-follow separately for every output and for the transcript. Keep streaming/final viewport caps, manual disclosure precedence, call-ID identity and supported custom-renderer viewports. Do not infer reader intent from zero hidden dimensions; handle removal/reset/disposal before delayed callbacks run.
-
-Primary code anchors: `src/pi/webview-client.ts` (`outputPositions` and restoration loop), `src/pi/card-shell.ts` (`captureStreamingOutput`, `restoreStreamingOutput`), `src/pi/dom-card-renderer.ts`, `src/pi/tool-card.ts` and `src/pi/transcript-scroll.ts`.
+Canonical contracts: [interaction](../../features/references/transcript-interaction.md), [cards](../../features/references/transcript-cards.md), [plugins](../../features/references/card-plugins.md). Code: `webview-client.ts`, `card-shell.ts`, `dom-card-renderer.ts`, `transcript-scroll.ts`.
 
 ## Regression risks and maintenance guardrails
 
-This candidate is not implemented; narrower scroll invalidation must be proven against the existing independent viewport owners.
+- Add new tool/output types to affected-row discovery and registered keyed output ownership, not ad hoc registry-wide scans. Full structural reconciliation must still prune removed plugin instances/cards.
+- Preserve each output's reading/follow intent independently from siblings and transcript follow. Keep lifecycle caps, manual disclosure, control/truncation/replacement behavior and supported custom outputs.
+- Capture intent before DOM mutation; guard deferred work across hide/reveal/reset/disposal. Never infer intent from zero hidden dimensions. Hidden reveal must restore suspended untouched positions as well as changed cards.
+- Do not remove the synchronous plugin owner without proving final caps and multi-output custom behavior. New async mutation/layout features must preserve managed ownership and include width/zoom/disclosure/reveal cases.
 
-- **Likely erosion:** new output sections/plugins bypass affected-viewport tracking, or text-only checks overlook geometry changes from disclosure, terminal caps, width/zoom, themes or asynchronous content. Broad fallback scans can silently restore the original scaling cost.
-- **Reuse the boundary if implemented:** capture before mutation and restore through the existing core/card-controller output owners and registered keyed viewports. Coordinate their responsibilities rather than removing one as supposedly redundant; never substitute one session-wide follow flag.
-- **Correctness traps:** preserve each inspected output independently from siblings and transcript follow. Guard deferred work across hide/reveal, removal/reset/disposal, retain pending restoration intent, and never infer bottom-follow from zero hidden geometry.
-- **Extend fixtures when changing:** output types/registration, layout policies or plugin async mutation. Extend tool-card/DOM-renderer/native-view and offline WebKit cases below with many eligible outputs but one changing viewport; assert unaffected offsets and reduced geometry/restoration counts alongside lifecycle, disclosure and zoom correctness.
+## Fixtures and evidence
 
-## Validation target
+`test/native-view.test.ts` adds simultaneous/coalesced updates with zero unrelated geometry reads, retained plugins/focus and hidden catch-up/completion. `test/browser/incremental-streaming.spec.ts` checks plain text-node identity, independent inspected/following/untouched outputs, zero unrelated-card mutations and final terminal-style replacement. Existing console, hidden-session, tool-card/DOM-renderer and native-view scroll fixtures remain required.
 
-For a fixture with many eligible tool-output viewports but one changing output, geometry reads and restoration work should scale with **affected viewports**, not all eligible cards. Completely unchanged cards should not receive redundant restoration writes.
-
-Retain tool-card/DOM-renderer/native-view tests for multiple independently inspected outputs, supported plugins, streaming-to-final transitions and disposal. Extend offline WebKit coverage for collapse/expand, hidden/revealed sessions, fractional zoom, width changes and paused versus following outputs. Run the full required scroll regression suite; geometry counters are not native trackpad acceptance.
+No tests/checks/builds or new native report were run for this implementation. Requested validation uses `mise run check` plus `npm run test:browser`; fixtures do not establish native trackpad, zoom, macOS/Linux/possible Windows acceptance.
