@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
 # Verifies without launching Nimrod, Pi or the packaged compiler.
 set -euo pipefail
-[[ $# -eq 2 ]] || { echo 'Usage: verify-release-macos.sh TARGET ARCH' >&2; exit 1; }
-target=$1
-arch=$2
-case $arch in arm64) cpu=arm64 ;; x64) cpu=x86_64 ;; *) exit 1 ;; esac
+[[ $# -eq 0 ]] || { echo 'Usage: verify-release-macos.sh (Apple Silicon release only)' >&2; exit 1; }
 : "${APPLE_TEAM_ID:?}" "${APPLE_API_KEY_PATH:?}" "${APPLE_API_KEY:?}" "${APPLE_API_ISSUER:?}"
-bundle=src-tauri/target/$target/release/bundle
+bundle=src-tauri/target/aarch64-apple-darwin/release/bundle
 app=$bundle/macos/Nimrod.app
 npm run verify:bundle -- "$app"
 codesign --verify --deep --strict --verbose=2 "$app"
@@ -17,7 +14,7 @@ for binary in "$app" "$app/Contents/MacOS/esbuild"; do
   grep -E '^CodeDirectory .*flags=.*runtime' <<< "$details" >/dev/null
 done
 for binary in nimrod esbuild; do
-  [[ $(lipo -archs "$app/Contents/MacOS/$binary") == "$cpu" ]] || { echo "Wrong architecture: $binary" >&2; exit 1; }
+  [[ $(lipo -archs "$app/Contents/MacOS/$binary") == arm64 ]] || { echo "Wrong architecture: $binary" >&2; exit 1; }
 done
 [[ -x $app/Contents/Resources/bin/nimrod ]]
 cmp bin/nimrod "$app/Contents/Resources/bin/nimrod"

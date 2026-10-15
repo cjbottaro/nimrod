@@ -27,9 +27,9 @@ Maintain the root [CHANGELOG.md](CHANGELOG.md) as changes merge. Add meaningful 
 
 Unreleased describes the current outcome, not every experiment. Consolidate related iterations while preserving other tasks' entries; remove reverted unreleased features rather than logging an add/remove cycle. Never silently rewrite published history or list unmerged/planned work. No historical versions/dates are fabricated when starting the changelog.
 
-During deliberate stable-release preparation, move the reviewed Unreleased entries under `VERSION — YYYY-MM-DD` (UTC release date), leave a fresh Unreleased section, and commit this with the package version bump before tagging. Prereleases snapshot Unreleased from the tagged source without clearing it. GitHub release notes should come from that reviewed text, not a second manually maintained history. **Automation gap:** the current pipeline still generates GitHub notes automatically; changelog extraction/enforcement is not yet implemented.
+During deliberate stable-release preparation, move the reviewed Unreleased entries under `VERSION — YYYY-MM-DD` (UTC release date), leave a fresh Unreleased section, and commit this with the package version bump before tagging. Prereleases snapshot Unreleased from the tagged source without clearing it. The pipeline validates the selected section before building and publishes its contents as GitHub release notes and a `release-notes.md` asset. Missing, duplicated, invalid-date or empty target sections stop publication; there is no auto-generated commit-list fallback. Stable headings must use exactly `## VERSION — YYYY-MM-DD`, with a real calendar date; Unreleased must be the first level-two section and appear once. Markdown fences are respected and author HTML comments outside fences are omitted.
 
-The agreed macOS release direction is Apple Silicon only, but the current workflow still builds Intel too; removing Intel is a separate implementation task. Neither decision changes the Linux roadmap. Full agent rules and implementation boundaries are in the [release policy](.agents/skills/features/references/releases.md#development-and-changelog-policy).
+Packaged macOS releases and the Homebrew cask are Apple Silicon only; no Intel artifact is built or required. This does not change the Linux roadmap or local build targets. Full agent rules and implementation boundaries are in the [release policy](.agents/skills/features/references/releases.md#development-and-changelog-policy).
 
 ## Checks
 
@@ -74,7 +74,7 @@ Cargo asset preparation copies a target-matching esbuild binary/license from the
 
 ## Release setup
 
-The [Release workflow](.github/workflows/release.yml) builds Developer ID signed/notarized macOS 13+ DMGs for Apple Silicon and Intel. It publishes GitHub Releases and updates a stable Homebrew cask in a separate tap. Local `mise run build` remains ad-hoc signed; the release overlay is `src-tauri/tauri.release.conf.json`. No updater service or App Store submission is involved.
+The [Release workflow](.github/workflows/release.yml) builds Developer ID signed/notarized macOS 13+ DMGs for Apple Silicon only. It publishes GitHub Releases and updates a stable Homebrew cask in a separate tap. Local `mise run build` remains ad-hoc signed; the release overlay is `src-tauri/tauri.release.conf.json`. No updater service or App Store submission is involved.
 
 ### Apple credentials
 
@@ -104,7 +104,7 @@ See [Tauri macOS signing](https://v2.tauri.app/distribute/sign/macos/) and [Appl
 3. Create a GitHub environment **homebrew** in the Nimrod repository; add `HOMEBREW_TAP_TOKEN` as its secret. For another owner/repository, set `HOMEBREW_TAP_REPOSITORY` as a GitHub Actions configuration variable in that environment. The default is `cjbottaro/homebrew-tap`. Adjust the documented install command for another tap.
 4. Allow this bot's normal non-force commits to the tap's main branch under your branch rules. If direct writes are not allowed, the workflow will fail rather than bypass protection; adapt to a PR-based tap workflow instead.
 
-The generated cask selects the right architecture/checksum, installs the app and links its packaged `nimrod` launcher. It does not install Node/Pi, bypass quarantine or purge user data on uninstall. No private token is needed by end users.
+The generated cask requires ARM64, uses the final Apple Silicon DMG's checksum, installs the app and links its packaged `nimrod` launcher. It does not install Node/Pi, bypass quarantine or purge user data on uninstall. No private token is needed by end users.
 
 ### Cut a release
 
@@ -124,15 +124,15 @@ git push origin v0.1.0
 
 Those pushes trigger remote builds and publication; they are operator actions, not something an agent runs as part of local implementation. A manual **Actions → Release → Run workflow** also accepts an existing tag; dispatch from main. The tag must resolve to a commit reachable from main, and its version must match all package identities. Publication rechecks that the remote tag still resolves to the prepared source commit. Do not move published tags.
 
-The pipeline runs offline checks, then signs/notarizes/verifies both builds. It additionally notarizes/staples the final DMGs, generates `SHA256SUMS` from their final bytes, creates/uploads a draft release, and publishes only after both architectures pass. Stable releases include the generated `nimrod.rb` and update the tap. Prereleases such as `v0.2.0-alpha.1` publish to GitHub only and do not replace the latest stable release.
+The pipeline validates the tag's changelog notes, runs offline checks, then signs/notarizes/verifies the Apple Silicon app and its compiler sidecar. It additionally notarizes/staples the final DMG, generates `SHA256SUMS` from its final bytes, creates/uploads a draft release with the reviewed changelog body, and publishes only after verification passes. The body is also retained as `release-notes.md`; draft retries refresh it from the same tagged source, while public retries must match the existing notes and assets rather than rewriting them. Stable releases include the generated `nimrod.rb` and update the tap. Prereleases such as `v0.2.0-alpha.1` publish to GitHub only and do not replace the latest stable release.
 
-Start with an alpha version to exercise signing/downloads without changing Homebrew; then increment to a stable version to exercise tap publication. Native acceptance should include browser downloads on another Mac, both architectures, first launch, Pi discovery, notifications, `brew install`/upgrade/uninstall, and `nimrod .`. Pipeline signing success is not GUI/platform acceptance. Add the actually tested Pi version and known limitations to release notes; generated notes do not infer runtime compatibility.
+Start with an alpha version to exercise signing/downloads without changing Homebrew; then increment to a stable version to exercise tap publication. Native acceptance should include browser downloads on another Apple Silicon Mac, first launch, Pi discovery, notifications, `brew install`/upgrade/uninstall, and `nimrod .`. Pipeline signing success is not GUI/platform acceptance. Add the actually tested Pi version and known limitations to the selected changelog section before tagging; the pipeline does not infer runtime compatibility.
 
 ### Failure and retry
 
 A build failure publishes nothing. Upload failure leaves a draft that can be retried. A tap failure leaves the GitHub release published: use **Re-run failed jobs**, preserving the original artifacts, rather than rebuilding/re-signing that tag. Publication retries of an already-public release must byte-match every published asset and never replace it; stable publication/tap checks reject downgrades. Artifacts are retained for seven days. After that, recover `nimrod.rb` from the public stable release and update the tap manually, or publish a new version. If a first release fails midway, inspect/delete only that release's draft explicitly before starting over; do not delete public assets to bypass immutability.
 
-**Verification:** this pipeline and its fixtures have been authored but not run; Apple credentials, actual notarization and fresh-machine/Homebrew installation still need first-run acceptance. [Internal release contract](.agents/skills/features/references/releases.md).
+**Verification:** the Apple Silicon/changelog changes and their new fixtures have not been run. Apple credentials, actual notarization and fresh-machine/Homebrew installation still need first-run acceptance. [Internal release contract](.agents/skills/features/references/releases.md).
 
 ## Maintained external card plugins
 

@@ -1,6 +1,6 @@
 # Install Nimrod
 
-The release pipeline targets **macOS 13 (Ventura) or newer**, with separate Apple Silicon and Intel downloads. Linux packaging is not part of this pipeline; Windows is not a current release target. The pipeline is implemented, but signed release, fresh-machine installation and Homebrew acceptance still need an actual release run.
+The release pipeline targets **Apple Silicon Macs running macOS 13 (Ventura) or newer**. Intel downloads are not provided, and the Homebrew cask requires ARM64. Linux packaging is not part of this pipeline; Windows is not a current release target. The pipeline is implemented, but signed release, fresh-machine installation and Homebrew acceptance still need an actual release run.
 
 ## Homebrew
 
@@ -24,13 +24,13 @@ If you already installed the development launcher's `~/.local/bin/nimrod` symlin
 ## Direct download
 
 1. Open [GitHub Releases](https://github.com/cjbottaro/nimrod/releases).
-2. Download `Nimrod-VERSION-macos-arm64.dmg` for Apple Silicon or `Nimrod-VERSION-macos-x64.dmg` for Intel.
+2. Download `Nimrod-VERSION-macos-arm64.dmg` for Apple Silicon.
 3. Open the DMG and drag **Nimrod.app** to Applications.
 4. Open Nimrod normally. Official release builds are Developer ID signed and notarized; local development builds remain ad-hoc signed.
 
 To update, quit Nimrod and replace the app with the newer download. There is no in-app updater. Do not manage the same copy with both Homebrew and manual replacement.
 
-The release includes `SHA256SUMS`. From the directory containing both DMGs and that file, `shasum -a 256 -c SHA256SUMS` verifies the downloads.
+The release includes `SHA256SUMS`. From the directory containing the DMG and that file, `shasum -a 256 -c SHA256SUMS` verifies the download. Each release also includes `release-notes.md`, the changelog excerpt used as its GitHub release description.
 
 The direct download also contains a launcher at `/Applications/Nimrod.app/Contents/Resources/bin/nimrod`. Run it directly or create your own symlink in a directory on PATH. Homebrew creates the link automatically.
 
@@ -44,6 +44,6 @@ Open a project in Nimrod, then choose **New session**. If discovery fails, selec
 
 ## Prereleases and uninstalling
 
-GitHub prereleases (for example `v0.2.0-alpha.1`) are direct downloads only; the Homebrew cask follows stable releases.
+GitHub prereleases (for example `v0.2.0-alpha.1`) are direct downloads only; the Homebrew cask follows stable releases. Stable release notes come from the matching version in [CHANGELOG.md](../CHANGELOG.md); prerelease notes snapshot Unreleased at that tag. Later local development does not change already-published notes.
 
 `brew uninstall --cask cjbottaro/tap/nimrod` removes the app and its Homebrew launcher. There is no automatic data purge: preferences, Nimrod state/drafts and Pi-owned session history are not removed by the cask. Manual app removal likewise does not delete those files.

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const architectures = ['arm64', 'x64'];
+const architectures = ['arm64'];
 
 export function releaseMetadata(tag, repository, versions) {
   const match = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.exec(tag || '');
@@ -38,6 +38,72 @@ export function readVersions(root = '.') {
   };
 }
 
+/** Read notes only from the checked-out tag; never fall back to GitHub-generated history. */
+export function extractReleaseNotes(metadata, changelog) {
+  const sections = [];
+  let section;
+  let fence;
+  let comment = false;
+  for (const raw of changelog.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').split('\n')) {
+    let line = raw;
+    if (!fence) {
+      // Ignore author comments, but preserve literal comments inside fenced examples.
+      line = '';
+      let rest = raw;
+      while (rest) {
+        if (comment) {
+          const end = rest.indexOf('-->');
+          if (end < 0) break;
+          rest = rest.slice(end + 3);
+          comment = false;
+        } else {
+          const start = rest.indexOf('<!--');
+          if (start < 0) { line += rest; break; }
+          line += rest.slice(0, start);
+          rest = rest.slice(start + 4);
+          comment = true;
+        }
+      }
+    }
+    if (fence) {
+      section?.lines.push(line);
+      const closing = /^ {0,3}(`+|~+)[ \t]*$/.exec(line)?.[1];
+      if (closing?.[0] === fence[0] && closing.length >= fence.length) fence = undefined;
+      continue;
+    }
+    const opening = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    if (opening) {
+      fence = opening;
+      section?.lines.push(line);
+      continue;
+    }
+    const heading = /^##[ \t]+(.+?)[ \t]*$/.exec(line)?.[1];
+    if (heading) {
+      section = { heading, lines: [] };
+      sections.push(section);
+    } else section?.lines.push(line);
+  }
+  if (fence || comment) throw new Error('CHANGELOG.md has an unterminated fence or comment');
+  const unreleased = sections.filter(entry => entry.heading === 'Unreleased');
+  if (unreleased.length !== 1 || sections[0] !== unreleased[0]) {
+    throw new Error('CHANGELOG.md must start with exactly one ## Unreleased section');
+  }
+  let selected = unreleased[0];
+  if (!metadata.prerelease) {
+    const matches = sections.filter(entry => entry.heading.split(' — ')[0] === metadata.version);
+    if (matches.length !== 1) throw new Error(`CHANGELOG.md requires exactly one ## ${metadata.version} — YYYY-MM-DD section`);
+    selected = matches[0];
+    const date = selected.heading.slice(metadata.version.length + 3);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) {
+      throw new Error(`Invalid release date in CHANGELOG.md section: ${selected.heading}`);
+    }
+  }
+  const body = selected.lines.join('\n').trim();
+  const hasContent = selected.lines.some(line => line.trim() && !/^\s*(?:#{1,6}(?:\s|$)|`{3,}|~{3,}|[-*_]{3,}\s*$|[-*+]\s*$)/.test(line));
+  if (!hasContent) throw new Error(`CHANGELOG.md section ${selected.heading} has no release notes`);
+  return `${body}\n`;
+}
+
 export function assetName(version, arch) {
   if (!architectures.includes(arch)) throw new Error(`Unsupported release architecture: ${arch}`);
   return `Nimrod-${version}-macos-${arch}.dmg`;
@@ -51,17 +117,15 @@ export function renderCask(metadata, checksums) {
     if (!/^[a-f0-9]{64}$/.test(checksums[arch] || '')) throw new Error(`Invalid ${arch} checksum`);
   }
   return `cask "nimrod" do
-  arch arm: "arm64", intel: "x64"
-
   version "${metadata.version}"
-  sha256 arm:   "${checksums.arm64}",
-         intel: "${checksums.x64}"
+  sha256 "${checksums.arm64}"
 
-  url "https://github.com/${metadata.repository}/releases/download/v#{version}/Nimrod-#{version}-macos-#{arch}.dmg"
+  url "https://github.com/${metadata.repository}/releases/download/v#{version}/Nimrod-#{version}-macos-arm64.dmg"
   name "Nimrod"
   desc "Dedicated desktop workspace for coding agents"
   homepage "https://github.com/${metadata.repository}"
 
+  depends_on arch: :arm64
   depends_on macos: ">= :ventura"
 
   app "Nimrod.app"
@@ -72,7 +136,8 @@ end
 `;
 }
 
-export function assembleRelease(metadata, directory) {
+export function assembleRelease(metadata, directory, changelog) {
+  const notes = extractReleaseNotes(metadata, changelog);
   const checksums = {};
   const entries = architectures.map(arch => {
     const name = assetName(metadata.version, arch);
@@ -81,6 +146,7 @@ export function assembleRelease(metadata, directory) {
     return `${digest}  ${name}\n`;
   });
   writeFileSync(path.join(directory, 'SHA256SUMS'), entries.join(''));
+  writeFileSync(path.join(directory, 'release-notes.md'), notes);
   if (!metadata.prerelease) writeFileSync(path.join(directory, 'nimrod.rb'), renderCask(metadata, checksums));
 }
 
@@ -104,6 +170,9 @@ function gh(args) {
 }
 
 export function publishRelease(metadata, directory, runGh = gh) {
+  const notesFile = path.resolve(directory, 'release-notes.md');
+  const notes = readFileSync(notesFile, 'utf8');
+  if (!notes.trim()) throw new Error('release-notes.md must contain the validated changelog notes');
   if (metadata.commit) {
     const actual = runGh(['api', `repos/${metadata.repository}/commits/${metadata.tag}`, '--jq', '.sha']).trim();
     if (actual !== metadata.commit) throw new Error('Release tag moved after preparation; refusing to publish assets for another commit');
@@ -111,11 +180,14 @@ export function publishRelease(metadata, directory, runGh = gh) {
   // A transient API failure must not be mistaken for an absent release.
   const releases = JSON.parse(runGh(['api', '--paginate', '--slurp', `repos/${metadata.repository}/releases?per_page=100`])).flat();
   const existing = releases.find(release => release.tag_name === metadata.tag);
-  const files = [...architectures.map(arch => assetName(metadata.version, arch)), 'SHA256SUMS', ...(!metadata.prerelease ? ['nimrod.rb'] : [])];
+  const files = [...architectures.map(arch => assetName(metadata.version, arch)), 'SHA256SUMS', 'release-notes.md', ...(!metadata.prerelease ? ['nimrod.rb'] : [])];
   if (existing && !existing.draft) {
     // Retry a failed publish job with the SAME retained build artifacts, never
     // overwrite a public release with a fresh build (signatures/tickets differ).
     if (existing.prerelease !== metadata.prerelease) throw new Error('Published release status does not match the tag');
+    if ((existing.body || '').replace(/\r\n/g, '\n').trim() !== notes.trim()) {
+      throw new Error('Published release notes differ from the tagged changelog; refusing to rewrite public history');
+    }
     const download = mkdtempSync(path.join(tmpdir(), 'nimrod-release-'));
     try {
       runGh(['release', 'download', metadata.tag, '--repo', metadata.repository, '--dir', download, ...files.flatMap(file => ['--pattern', file])]);
@@ -135,16 +207,17 @@ export function publishRelease(metadata, directory, runGh = gh) {
     }
   }
   if (!existing) {
-    runGh(['release', 'create', metadata.tag, '--repo', metadata.repository, '--verify-tag', '--draft', '--title', `Nimrod ${metadata.version}`, '--generate-notes', ...(metadata.prerelease ? ['--prerelease'] : [])]);
+    runGh(['release', 'create', metadata.tag, '--repo', metadata.repository, '--verify-tag', '--draft', '--title', `Nimrod ${metadata.version}`, '--notes-file', notesFile, ...(metadata.prerelease ? ['--prerelease'] : [])]);
   }
   runGh(['release', 'upload', metadata.tag, '--repo', metadata.repository, '--clobber', ...files.map(file => path.join(directory, file))]);
-  runGh(['release', 'edit', metadata.tag, '--repo', metadata.repository, '--draft=false', `--prerelease=${metadata.prerelease}`, `--latest=${!metadata.prerelease}`]);
+  runGh(['release', 'edit', metadata.tag, '--repo', metadata.repository, '--notes-file', notesFile, '--draft=false', `--prerelease=${metadata.prerelease}`, `--latest=${!metadata.prerelease}`]);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const metadata = releaseMetadata(process.env.RELEASE_TAG, process.env.GITHUB_REPOSITORY, readVersions());
   const [command, ...args] = process.argv.slice(2);
   if (command === 'metadata') {
+    extractReleaseNotes(metadata, readFileSync('CHANGELOG.md', 'utf8'));
     if (!process.env.GITHUB_OUTPUT) throw new Error('GITHUB_OUTPUT is required');
     appendFileSync(process.env.GITHUB_OUTPUT, `tag=${metadata.tag}\nversion=${metadata.version}\nprerelease=${metadata.prerelease}\n`);
   } else if (command === 'stage') {
@@ -159,7 +232,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     if (!/^[a-f0-9]{40}$/.test(metadata.commit || '') || checkout.status !== 0 || checkout.stdout.trim() !== metadata.commit) {
       throw new Error('RELEASE_COMMIT must match the prepared source checkout');
     }
-    assembleRelease(metadata, args[0]);
+    assembleRelease(metadata, args[0], readFileSync('CHANGELOG.md', 'utf8'));
     publishRelease(metadata, args[0]);
   } else if (command === 'check-cask-upgrade') {
     const current = readFileSync(args[0], 'utf8');

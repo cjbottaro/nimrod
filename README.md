@@ -6,7 +6,7 @@ A dedicated cross-platform app for directory-backed coding projects and agent se
 
 ## Get started
 
-For packaged macOS releases, see [Installation](docs/installation.md): signed/notarized Apple Silicon and Intel DMGs, plus `brew install --cask cjbottaro/tap/nimrod` once the first stable release and tap are published. The release pipeline is implemented; first-run distribution acceptance is pending.
+For packaged macOS releases, see [Installation](docs/installation.md): signed/notarized Apple Silicon DMGs (no Intel downloads), plus `brew install --cask cjbottaro/tap/nimrod` once the first stable release and tap are published. The release pipeline is implemented; first-run distribution acceptance is pending.
 
 For development, Rust, Node and sccache are pinned through mise:
 

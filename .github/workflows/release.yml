@@ -36,7 +36,7 @@ jobs:
           ref: refs/tags/${{ env.RELEASE_TAG }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Validate tag and all package versions
+      - name: Validate tag, package versions and changelog notes
         id: metadata
         run: node scripts/release.mjs metadata
       - name: Require public downloads for the stable cask
@@ -54,17 +54,7 @@ jobs:
   build:
     needs: prepare
     environment: release
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-15
-            target: aarch64-apple-darwin
-            arch: arm64
-          - runner: macos-15-intel
-            target: x86_64-apple-darwin
-            arch: x64
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-15
     timeout-minutes: 120
     env:
       MACOSX_DEPLOYMENT_TARGET: '13.0'
@@ -93,18 +83,18 @@ jobs:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        run: npm run tauri build -- --ci --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json --bundles app,dmg -- --locked
+        run: npm run tauri build -- --ci --target aarch64-apple-darwin --config src-tauri/tauri.release.conf.json --bundles app,dmg -- --locked
       - name: Verify app and notarize the final DMG
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        run: bash scripts/verify-release-macos.sh ${{ matrix.target }} ${{ matrix.arch }}
+        run: bash scripts/verify-release-macos.sh
       - name: Stage immutable release asset
-        run: node scripts/release.mjs stage ${{ matrix.arch }} src-tauri/target/${{ matrix.target }}/release/bundle release-assets
+        run: node scripts/release.mjs stage arm64 src-tauri/target/aarch64-apple-darwin/release/bundle release-assets
       - uses: actions/upload-artifact@v4
         with:
-          name: macos-${{ matrix.arch }}
+          name: macos-arm64
           path: release-assets/*.dmg
           if-no-files-found: error
           retention-days: 7
@@ -129,10 +119,9 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
-          pattern: macos-*
-          merge-multiple: true
+          name: macos-arm64
           path: release-assets
-      - name: Publish only after both architectures passed
+      - name: Publish verified Apple Silicon release with changelog notes
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
