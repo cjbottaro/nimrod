@@ -13,6 +13,14 @@ When adding or changing error paths, notices, banners, flash messages or operati
 
 Apply the [optimistic interaction policy](references/architecture.md#optimistic-interaction-policy) to all UI work: local user actions drive immediate feedback; RPC success is not a general UI gate. Late errors annotate the affected operation, and authoritative harness events reconcile data without replay, draft restoration or repeat navigation. Any result-gated exception must have a concrete authoritative-state or destructive-operation requirement documented in its feature reference.
 
+## Harness integration direction
+
+**Planned, not implemented:** add [ACP harness support](references/acp-harnesses.md), using Copilot CLI as the first concrete target and a second ACP agent to establish interoperability. Pi remains the only implemented harness and retains its native integration. ACP is a reusable integration alongside Pi, not a mandatory internal protocol for every harness.
+
+Generic ACP support need not be the ceiling. Harnesses offering SDKs, native RPC or other supported interfaces may warrant **bespoke integrations** for richer lifecycle/history control, configuration, tool detail or other concrete capability gaps. Copilot SDK support is a potential later example, not a commitment. Prefer evidence of user benefit over adding another backend for its own sake; extract shared presentation/session boundaries from concrete integrations rather than inventing a universal harness framework.
+
+A bespoke backend would be an alternative controller for that harness, not a second concurrent controller of the same live session. Do not promise seamless ACP/SDK switching until session identity, history, configuration and ownership interoperability are verified. Harnesses remain authoritative, and controls must reflect actual capabilities rather than approximating Pi semantics.
+
 ## Changelog and release policy
 
 For requests to generate, prepare, cut, ship, publish or retry a release, load the dedicated [release skill](../release/SKILL.md). It requires a concrete version/source/changelog/platform/validation preview and a subsequent explicit approval before release metadata edits, tags or publication. Ordinary task commit/merge authorization does not bypass that gate.
@@ -37,6 +45,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | CLI forwarding and native instance ownership | [Single instance](references/single-instance.md) | [Terminal launches](../../../docs/projects.md#terminal-launches) |
 | Session-local notices and window/application strip, routing, deduplication, wording and lifecycle | [Error presentation](references/error-presentation.md) | [Error messages](../../../docs/error-messages.md) |
 | Pi framing, response order and result correlation | [Pi transport](references/pi-transport.md) | [Writing messages](../../../docs/writing-messages.md) |
+| Planned ACP harness support, Copilot-first delivery and capability/compatibility boundaries | [ACP harnesses](references/acp-harnesses.md) | Agent-facing planning only; not implemented |
 | Native per-session drafts, debounced saves and submission durability | [Native drafts](references/native-drafts.md) | [Drafts](../../../docs/drafts.md) |
 | Send/steer/queue, pending turns and recovery | [Composer](references/composer.md) | [Writing messages](../../../docs/writing-messages.md) |
 | Image paste, draft bytes and send outcomes | [Image paste](references/image-paste.md) | [Paste images](../../../docs/image-paste.md) |
