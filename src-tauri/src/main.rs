@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod acp;
 mod card_plugins;
 mod cli;
 mod command_usage;
@@ -405,7 +406,11 @@ fn request_exit(app: &tauri::AppHandle) {
         }
         let host = app.state::<WorkspaceHost>();
         let compiler = app.state::<plugin_compiler::Compiler>();
-        let (result, ()) = tokio::join!(host.shutdown(), compiler.shutdown());
+        let acp = app.state::<acp::AcpHost>();
+        let (result, acp_result, ()) = tokio::join!(host.shutdown(), acp.shutdown(), compiler.shutdown());
+        if let Err(error) = acp_result {
+            eprintln!("Nimrod ACP shutdown: {error}");
+        }
         if let Err(error) = result {
             eprintln!("Nimrod shutdown: {error}");
         }
@@ -441,6 +446,7 @@ fn main() {
     };
     let builder = tauri::Builder::default()
         .manage(WorkspaceHost::default())
+        .manage(acp::AcpHost::default())
         .manage(WorkspaceWindows::default())
         .manage(project_preferences::ProjectPreferences::default())
         .manage(settings_window::SettingsWindow::default())
@@ -553,6 +559,9 @@ fn main() {
             list_workspace_sessions,
             inspect_workspace_session,
             start_pi,
+            acp::start_acp,
+            acp::write_acp,
+            acp::stop_acp,
             session_file_info,
             write_pi,
             stop_pi,
@@ -674,6 +683,9 @@ fn main() {
                         .await
                     {
                         eprintln!("Nimrod window shutdown: {error}");
+                    }
+                    if let Err(error) = app.state::<acp::AcpHost>().stop_window(window.label(), None, true).await {
+                        eprintln!("Nimrod ACP window shutdown: {error}");
                     }
                     let store = app.state::<drafts::Drafts>().inner().clone();
                     if let Err(error) =

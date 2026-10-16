@@ -2,6 +2,12 @@
 
 **Status: product integration planned; isolated protocol foundation implemented, not validated or wired into the app.** Pi remains Nimrod's only usable harness. This reference records decisions, implementation stages and current foundation boundaries, not a Copilot compatibility guarantee. The [features skill](../SKILL.md#harness-integration-direction) owns the broader direction, including potential bespoke SDK integrations.
 
+## POC workstream and abandonment checkpoint
+
+Continue all POC stages on `feature/acp-foundation` in `.worktrees/acp-foundation/`, with incremental commits and no intermediate merges into `main`. Sub-worktrees, if needed, integrate into this task branch first. The retained local branch `checkpoint/pre-acp-poc` points to **`784e80f`**, the last commit before ACP implementation; **`a3e1919`** is the already-merged isolated foundation and the starting point for the rest of the POC. Do not reset/discard unrelated work to abandon the effort: leave the task worktree/branch intact and revert selected merged ACP commits explicitly if needed. No branch/worktree cleanup is authorized.
+
+POC target: launch an owned ACP agent beside Pi, stream into the shared transcript/card runtime, submit/cancel text, choose permissions, switch/close independently and expose supported configuration/commands. Copilot is the first target, with a generic configurable launch profile. Saved ACP discovery/resume/deletion and attachments may remain explicit limitations. Live requests, checks and app builds/launches still require explicit authorization; code completion alone is not native compatibility evidence.
+
 ## Goal and sequence
 
 Implement a reusable Agent Client Protocol (ACP) client, with **Copilot CLI as the first concrete acceptance target**. Use the existing protocol rather than inventing a universal harness protocol. Keep Pi's native integration; do not force Pi through ACP or translate ACP events into fake Pi events.
