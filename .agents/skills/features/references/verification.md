@@ -13,6 +13,8 @@ This is the current evidence/acceptance map, not a chronological test log. Featu
 
 ## Current automated validation
 
+[ACP foundation](acp-harnesses.md#current-foundation): isolated connection/client code and offline record fixtures are authored but **not run or type-checked**. There is no app/native integration, Copilot/second-agent compatibility evidence or new Pi regression result. Existing passing results below do not validate the new ACP files; native launch, transcript/plugin integration and mixed-harness acceptance remain future work.
+
 Appearance-regression follow-up: TypeScript compilation and Rust formatting/Clippy pass; 71 targeted appearance/presentation/theme/preferences tests, 8 offline WebKit translucency/theme/Settings/pop-out tests and 144 Rust tests pass (2 installed-Pi smokes intentionally ignored). Browser evidence uses mock native material, title and Settings ownership—not a native app launch, macOS visual acceptance or Linux verification.
 
 90%-density follow-up: TypeScript compilation, 20 focused button/appearance tests and 8 offline WebKit modal-layout/translucency tests pass. Contrast is now a lower bound on the eased role curve, not the base of a second ramp; dark Nimrod's normal fill at 90% is ~65% rather than ~80%. Independent legacy-fill comparison covers dark/light system schemes, multiple palettes, both areas and normal/hover states. This covers all palette contrast bounds with known parent tint, composited density, all six shared shells and opaque/sidebar-only/simulated reduced-transparency fallbacks. No native app acceptance/build/launch is implied.
