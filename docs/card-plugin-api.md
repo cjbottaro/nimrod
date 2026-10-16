@@ -1,6 +1,6 @@
 # Authoring TypeScript card plugins
 
-Executable plugins use **API v2**. Personal `.ts`/`.tsx` entries export their own ID/tool metadata and are automatically bundled/cached by Nimrod; a separate compiled-JS manifest is optional for compatibility/distribution. The standalone type-only SDK is [`src/card-plugin-api.ts`](../src/card-plugin-api.ts); import its types from your Nimrod checkout or copy that file into your plugin project. There is no separately published SDK package yet.
+Executable plugins use **API v2**. Personal `.ts`/`.tsx` entries export their own ID/tool metadata and are automatically bundled/cached by Nimrod; a separate compiled-JS manifest is optional for compatibility/distribution. The standalone type contract is [`src/card-plugin-api.ts`](../src/card-plugin-api.ts); import its types from your Nimrod checkout or copy that file into your plugin project. Optional public runtime helpers live in [`src/card-plugin-ui.ts`](../src/card-plugin-ui.ts). There is no separately published SDK package yet.
 
 See [installation and trust](card-plugins.md#personal-typescript-plugins). Bundling instructions live in [Contributing](../CONTRIBUTING.md#card-plugin-examples). The complete [command-summary example](../examples/card-plugins/command-summary/plugin.ts) demonstrates custom DOM, a local input, incremental output and Copy through the supported host API.
 
@@ -36,7 +36,7 @@ export default plugin;
 
 Nimrod automatically bundles personal TypeScript sources, static local imports and already-installed browser-compatible dependencies. No runtime npm install/download, Node builtins, external module fetch or additional CSS/asset output is supported. Compiler target/options are fixed (browser ESM/ES2022, no implicit tsconfig/aliases), and it does not type-check. Compiled manifest packages must still supply self-contained JS.
 
-Use type-only SDK imports: they are erased before runtime resolution, so copying the complete example works without installing a runtime SDK package. For editor checking, you can copy `src/card-plugin-api.ts` into a local `.d.ts` file (declarations are not autoloaded) and adjust the type import. Keep module initialization side-effect-free; acquire per-card resources in `mount` and release them in `dispose`.
+Use type-only imports for the type contract: they are erased before runtime resolution, so the command-summary example works without installing a runtime SDK package. Runtime helper imports are real browser-compatible local imports and must be bundled along with their dependency graph; copying only the type file does not supply those implementations. For editor checking, you can copy `src/card-plugin-api.ts` into a local `.d.ts` file (declarations are not autoloaded) and adjust the type import. Keep module initialization side-effect-free; acquire per-card resources in `mount` and release them in `dispose`.
 
 ## Lifecycle and ownership
 
@@ -48,7 +48,7 @@ Use type-only SDK imports: they are erased before runtime resolution, so copying
 - Core owns the outer card, authoritative status/indicator, disclosure, placement and transcript scroll. Modify only your summary/body content. Do not set outer `open`, recreate the shell, focus the composer or implement your own transcript following.
 - Use `context.signal` and `dispose` for timers/requests/resources. Mount/update/managed-callback failures release owned resources and recover only that card. Unmanaged callbacks, module globals and infinite loops are outside this containment guarantee.
 
-Updates receive detached, deeply frozen data snapshots and frozen lifecycle state; retain your own mutable UI state rather than modifying these values. Unchanged immutable subtrees such as arguments may be shared across updates, so do not assume every nested object gets a new identity. `ToolCardData` supplies retained Pi tool fields: `name`, `arguments`, `executionOutput`, `resultOutput`, `isError`, `toolStatus` and presentation `uiPhase`. Arguments can be partial JSON text or structured data; narrow their shape before use. `state.streaming` controls host-owned output caps and is not authority to infer agent activity or execution success. Structured/non-text result metadata is not available yet.
+Updates receive detached, deeply frozen data snapshots and frozen lifecycle state; retain your own mutable UI state rather than modifying these values. Unchanged immutable subtrees such as arguments may be shared across updates, so do not assume every nested object gets a new identity. `ToolCardData` supplies the existing tool presentation fields: `name`, `arguments`, `executionOutput`, `resultOutput`, `isError`, `toolStatus` and presentation `uiPhase`. Arguments can be partial JSON text or structured data; narrow their shape before use. `state.streaming` controls host-owned output caps and is not authority to infer agent activity or execution success. Pi's structured/non-text result metadata is not available yet. ACP cards additionally supply `source`, human-readable `title`, protocol `kind` and retained `native` metadata; they do not pretend to have Pi's native payload shape.
 
 ## Context API
 
@@ -70,6 +70,37 @@ Sections may set `format: 'console'` to render ANSI colors/styles and common com
 Presentation actions require a mounted active card and no modal. Handle expected operation failures in your UI, and check `signal.aborted` after awaiting before changing it. No prompt submission, tool execution, filesystem access, configuration mutation or unrestricted IPC is provided by this API.
 
 Core always retains raw inputs. `renderPresentation` accepts optional `rawInputsPlacement: 'after'` to request those core-owned inputs below the plugin body; omission or `'before'` retains their usual position. Reordering preserves the mounted disclosure and its open state. A custom tool presentation that omits literal execution/result sections gets an independent **Raw output** disclosure, so historical results remain accessible without depending on your renderer. This also applies when your synchronous `update` customizes the text of a helper-rendered section: calling `renderPresentation` does not waive raw recovery.
+
+## Harness targets and shared runtime
+
+This surface is new in the experimental [ACP POC](acp.md); new fixtures have not yet been run.
+
+Executable plugin exports may declare `targets`:
+
+```ts
+const targets = [{ backend: 'acp' as const, agent: 'copilot' }];
+```
+
+Omitting `targets` keeps existing plugins **Pi-only**. `{ backend: 'acp' }` matches any ACP agent; an optional `agent` matches the exact negotiated `agentInfo.name`, not the user's profile label. Put `targets` on the default-exported plugin object, not in a legacy manifest (its schema is unchanged). Declarative packages remain Pi-only. Pi's existing tool-name overrides do not carry over to ACP.
+
+For ACP, `tools` matches protocol tool kinds such as `execute` or `read`; `data.title` retains the descriptive tool title, `data.arguments` carries `rawInput` and `data.native` retains the patched native tool record. Generic ACP cards work without an agent-specific plugin. Renderer choice remains fixed for a mounted card.
+
+The [external ACP shell example](../examples/card-plugins/acp-shell/plugin.ts) imports the **same public runtime** as bundled Pi Bash and optional Copilot shell cards:
+
+```ts
+import { defineToolPlugin, rawToolPresentation, shellPresentation }
+  from '../path/to/nimrod/src/card-plugin-ui';
+
+const plugin = defineToolPlugin('example.shell', ['execute'], data => {
+  const raw = rawToolPresentation(data);
+  return shellPresentation({ title: raw.title, sections: raw.sections });
+});
+export default Object.assign(plugin, { targets: [{ backend: 'acp' as const }] });
+```
+
+`defineToolPlugin` and `definePresentationPlugin` adapt pure presentation callbacks to the normal mount/update/dispose API. `rawToolPresentation` retains live/result sections; `shellPresentation` adds an optional `command` preview and console formatting through the shared keyed-output component. Argument/preview helpers are also public. All use `context.renderPresentation`, so output caps, raw recovery and scroll ownership are the same supported host behavior as custom DOM plugins. Using these helpers is optional.
+
+Bundled and external plugins have the same capabilities, not a private built-in-only shell renderer. A separately bundled helper copy may use conservative raw-output inspection rather than the host's pure-adapter bookkeeping optimization; it does not lose rendering/action capabilities. These are local source-module imports, not a hypothetical `@nimrod/card-ui` npm package.
 
 ## Styling and trust
 

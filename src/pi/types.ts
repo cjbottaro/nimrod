@@ -12,6 +12,10 @@ export interface NativeSessionStats {
 
 export interface ContentBlock {
   type: string;
+  source?: import('../card-plugin-api').CardPluginTarget;
+  title?: string;
+  kind?: string;
+  native?: unknown;
   data?: string;
   mimeType?: string;
   text?: string;
@@ -48,6 +52,10 @@ export interface DisplayMessage {
   content?: string | ContentBlock[];
   toolCallId?: string;
   toolName?: string;
+  toolSource?: import('../card-plugin-api').CardPluginTarget;
+  toolTitle?: string;
+  toolKind?: string;
+  toolNative?: unknown;
   isError?: boolean;
   timestamp?: number;
   streaming?: boolean;

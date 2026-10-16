@@ -6,7 +6,7 @@
 
 Nimrod is a directory-backed agent workspace, not an IDE or generic chat frontend. One canonical directory belongs to each project window and is every session's exact cwd. Nested worktrees with other cwd values require separate windows. User terminology is Project/Project bar; existing workspace identifiers, IPC labels and storage keys remain compatibility details.
 
-Pi is the only implemented harness. Integrate a concrete second harness before inventing a universal protocol. Pi owns conversation history, tools, models, configuration and semantic lifecycle; Nimrod owns presentation, local drafts, native windows, process ownership and explicit file deletion.
+Pi is the primary integration; [ACP has an experimental source POC](acp-harnesses.md), not established real-agent/platform compatibility. Session backends are immutable. Keep concrete integrations instead of inventing a universal harness protocol: Pi retains its native transport/session semantics, ACP its standardized protocol. Harnesses own conversation history, tools, models, configuration and semantic lifecycle; Nimrod owns presentation, local drafts, native windows, process ownership and explicit supported deletion.
 
 ## Responsibility map
 
@@ -15,6 +15,7 @@ Pi is the only implemented harness. Integrate a concrete second harness before i
 | Project shell (`src/main.ts`) | Mounted session views and effect coordination | [Projects/sessions](projects-and-sessions.md) |
 | Navigation/connection | Shared projections, activation and connection deferral | [Session navigation](session-navigation.md) |
 | Pi coordinator/transport | Ordered RPC, identity and result correlation | [Pi transport](pi-transport.md) |
+| Experimental ACP integration | Separate native ownership/JSON-RPC/session semantics; shared presentation, not Pi events | [ACP POC](acp-harnesses.md) |
 | Transcript/composer | Incremental presentation and user intent | [Cards](transcript-cards.md), [scroll/focus](transcript-interaction.md), [composer](composer.md) |
 | Rust host | Window/token ownership, pipes, shutdown and file validation | [Projects/sessions](projects-and-sessions.md), [Pi transport](pi-transport.md) |
 | Settings/state | JSONC preferences and separate app-managed bookkeeping | [Preferences](preferences.md) |

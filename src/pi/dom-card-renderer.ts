@@ -1,3 +1,4 @@
+import { definePresentationPlugin, isPresentationPlugin } from '../card-plugin-ui';
 import { isSafeLink } from './safe-markdown';
 import { renderConsoleOutput, clearConsoleOutput, consoleOutputIsLiteral } from './console-output';
 import { renderLiteralOutput, clearLiteralOutput } from './literal-output';
@@ -21,19 +22,9 @@ export interface CardDomHost {
   afterUpdate?: () => void;
 }
 
-// Pure presentation adapters never hand their renderer mutable DOM slots.
-// Arbitrary mounted plugins may mix the helper with custom DOM, so source
-// bookkeeping alone cannot prove that their literal output is still present.
-const presentationAdapters = new WeakSet<object>();
-
-/** Legacy declarations and pure bundled presentation helpers use the public DOM API. */
+/** Compatibility export; bundled and external pure adapters share the public factory. */
 export function presentationPlugin<Data>(renderer: CardRenderer<Data>): DomCardRenderer<Data> {
-  const plugin: DomCardRenderer<Data> = { apiVersion: 2, id: renderer.id, supports: data => renderer.supports(data), mount(context) {
-    const instance = renderer.mount();
-    return { update(data) { context.renderPresentation(instance.update(data)); }, dispose: () => instance.dispose() };
-  } };
-  presentationAdapters.add(plugin);
-  return plugin;
+  return definePresentationPlugin(renderer);
 }
 
 export class DomCardController<Data> {
@@ -50,7 +41,7 @@ export class DomCardController<Data> {
 
   /** Only core-owned presentation output can skip inspection of actual DOM text. */
   coversRawSections(sections: CardPresentation['sections']): boolean | undefined {
-    if (!this.failed && !presentationAdapters.has(this.renderer)) return undefined;
+    if (!this.failed && !isPresentationPlugin(this.renderer)) return undefined;
     return sections.every(section => {
       const output = this.outputs.get(section.key);
       const rendered = output && this.content.get(output);

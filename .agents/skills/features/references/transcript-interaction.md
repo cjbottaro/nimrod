@@ -8,6 +8,10 @@ The transcript is its own scroll pane above the in-flow Status area/composer. Tr
 
 Preserve live follow versus older-history reading through incremental updates, card/content resizing, composer growth, native zoom and hidden-session switching. Routine snapshots never steal focus or rebuild connected disclosure/spinner nodes. Each mounted session owns geometry, nodes and draft selection. Session notices occupy a bounded in-flow row above and outside the transcript pane, aligned with its gutters; application notices reserve shell space separately. Notice appearance/disclosure uses existing resize/follow ownership, never forced bottom navigation. See [error presentation](error-presentation.md).
 
+## ACP POC reuse
+
+`src/conversation-view.ts` exposes the existing mounted runtime under a shared name; no second scroll/follow engine is introduced. ACP feeds display snapshots and optional continuous dirty-row revisions directly, not Pi events. Structural changes/gaps use the same full fallback, hidden catch-up and disposal boundaries. Inline ACP permission regions live in their owning interaction area, never a background global modal; their layout changes use the existing viewport resize owner. `test/browser/acp-sessions.spec.ts` adds mixed-backend disclosure/reader/draft coverage, authored but not run. See [ACP POC](acp-harnesses.md).
+
 ## Code map
 
 - `src/pi/transcript-scroll.ts`: sole deferred transcript-follow owner; capture/request/flush, reader cancellation, resize recovery and active suspension.

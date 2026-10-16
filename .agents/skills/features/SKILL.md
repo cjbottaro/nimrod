@@ -15,9 +15,9 @@ Apply the [optimistic interaction policy](references/architecture.md#optimistic-
 
 ## Harness integration direction
 
-**ACP product support is planned; an isolated protocol foundation is implemented but not validated or wired into the app.** Follow [ACP harness support](references/acp-harnesses.md) for recorded decisions, staged implementation and evidence boundaries. Copilot CLI is the first concrete target; a second ACP agent must establish interoperability. Pi remains the only usable harness and retains its native integration. ACP is a reusable integration alongside Pi, not a mandatory internal protocol for every harness.
+**ACP has an experimental source POC; checks, real-agent compatibility and native acceptance are pending.** Follow [ACP harness support](references/acp-harnesses.md) for decisions, staged implementation, the single-worktree/checkpoint strategy and evidence boundaries. Copilot CLI is the first concrete target; a second ACP agent must establish interoperability. Pi remains the primary integration and retains its native transport/session semantics. ACP is a reusable integration alongside Pi, not a mandatory internal protocol for every harness.
 
-Session backends are immutable; model/thinking changes never switch harnesses. Preserve bespoke harness functionality behind a shared transcript/plugin runtime and one Nimrod-owned command palette. Plugin sets may be harness/agent-specific, but shared UI components must be public and dogfooded equally by bundled and external plugins; see the [planned plugin boundary](references/card-plugins.md#planned-multi-harness-plugin-boundary).
+Session backends are immutable; model/thinking changes never switch harnesses. Preserve bespoke harness functionality behind a shared transcript/plugin runtime and one Nimrod-owned command palette. Plugin sets may be harness/agent-specific, but shared UI components must be public and dogfooded equally by bundled and external plugins; see the [planned plugin boundary](references/card-plugins.md#multi-harness-plugin-boundary).
 
 Generic ACP support need not be the ceiling. Harnesses offering SDKs, native RPC or other supported interfaces may warrant **bespoke integrations** for richer lifecycle/history control, configuration, tool detail or other concrete capability gaps. Copilot SDK support is a potential later example, not a commitment. Prefer evidence of user benefit over adding another backend for its own sake; extract shared presentation/session boundaries from concrete integrations rather than inventing a universal harness framework.
 
@@ -47,7 +47,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | CLI forwarding and native instance ownership | [Single instance](references/single-instance.md) | [Terminal launches](../../../docs/projects.md#terminal-launches) |
 | Session-local notices and window/application strip, routing, deduplication, wording and lifecycle | [Error presentation](references/error-presentation.md) | [Error messages](../../../docs/error-messages.md) |
 | Pi framing, response order and result correlation | [Pi transport](references/pi-transport.md) | [Writing messages](../../../docs/writing-messages.md) |
-| ACP harness plan, isolated protocol foundation, immutable backend identity and command ownership | [ACP harnesses](references/acp-harnesses.md) | Agent-facing only; no app integration yet |
+| Experimental ACP POC, immutable backend identity, command ownership and staged compatibility work | [ACP harnesses](references/acp-harnesses.md) | [ACP sessions (POC)](../../../docs/acp.md) |
 | Native per-session drafts, debounced saves and submission durability | [Native drafts](references/native-drafts.md) | [Drafts](../../../docs/drafts.md) |
 | Send/steer/queue, pending turns and recovery | [Composer](references/composer.md) | [Writing messages](../../../docs/writing-messages.md) |
 | Image paste, draft bytes and send outcomes | [Image paste](references/image-paste.md) | [Paste images](../../../docs/image-paste.md) |

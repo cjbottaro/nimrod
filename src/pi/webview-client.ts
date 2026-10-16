@@ -141,7 +141,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
   if (isTemporaryRestore(bootstrapRestore)) composer = { ...composer, recovered: [], queue: { steering: [], followUp: [], authoritative: false } };
   prompt.value = composer.draft;
   sizeComposer();
-  const slashCompletion = installSlashCompletion(prompt, required("slash-suggestions"), text => updateComposer(updateDraft(composer, text)));
+  const slashCompletion = installSlashCompletion(prompt, required("slash-suggestions"), text => updateComposer(updateDraft(composer, text)), host.acp ? 'acp' : 'pi');
 
   function post(type: string, extra: Record<string, unknown> = {}): void { host.postMessage({ type, ...extra }); }
   function required<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -250,7 +250,8 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       preparing: preparing > 0,
       sessionUnavailable: displayedState.sessionUnavailable === true,
     });
-    keyboardHintNode.textContent = compacting ? "Compacting context… · Stop to cancel" : keyboardHint(mainBusy);
+    keyboardHintNode.textContent = host.acp && mainBusy ? 'Agent working · Stop to cancel · Shift+Enter for newline' : compacting ? "Compacting context… · Stop to cancel" : keyboardHint(mainBusy);
+    if (host.acp && mainBusy) { send.title = `Stop ${host.acp.label}`; send.setAttribute('aria-label', send.title); }
     if (compacting) {
       send.title = "Cancel compaction";
       send.setAttribute("aria-label", "Cancel compaction");
@@ -545,6 +546,10 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     // Empty startup metadata is not a permanent capability decision. The picker
     // queries Pi again and explains missing-model/unsupported states explicitly.
     thinking.disabled = !enabled;
+    if (host.acp) {
+      model.hidden = !host.acp.modelAvailable(); thinking.hidden = !host.acp.thinkingAvailable();
+      model.disabled ||= state.busy === true; thinking.disabled ||= state.busy === true;
+    }
   }
 
   let activityState: State | undefined;
@@ -797,15 +802,17 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     if (deletionLocked || preparing) return;
     const text = composer.draft.trim();
     if (composer.attachments?.length && text.startsWith('/')) { updateComposer({ ...composer, lastError: 'Send images with a message, not a slash command. Your draft was kept.' }); return; }
-    const compact = /^\/compact(?:\s+([\s\S]*))?$/.exec(text);
-    if (/^\/(?:resume|delete|new|fork|clone|tree|reload|quit)(?:\s|$)/.test(text)) {
+    const acpError = host.acp?.validatePrompt(text);
+    if (acpError) { updateComposer({ ...composer, lastError: acpError }); return; }
+    const compact = host.acp ? null : /^\/compact(?:\s+([\s\S]*))?$/.exec(text);
+    if (!host.acp && /^\/(?:resume|delete|new|fork|clone|tree|reload|quit)(?:\s|$)/.test(text)) {
       updateComposer({ ...composer, lastError: 'Use the project session controls for session management. This slash operation is not supported; nothing was sent.' }); return;
     }
     if (compact && (displayedState.sessionUnavailable || displayedState.busy || displayedState.compacting)) {
       updateComposer({ ...composer, lastError: 'Manual compaction is available only while Pi is idle. Your draft was kept.' }); return;
     }
     if (displayedState.sessionUnavailable || displayedState.compacting || (!text && !composer.attachments?.length)) return;
-    if (text === '/mcp') {
+    if (!host.acp && text === '/mcp') {
       updateComposer(clearDraft(composer));
       post('inspectMcp');
       return;
@@ -826,7 +833,7 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     }
     updateComposer(clearDraft(composer));
     // Local interaction effects belong to Send, never to a late RPC result.
-    if (!compact && !/^\/name(?:\s|$)/.test(text)) {
+    if (host.acp || !compact && !/^\/name(?:\s|$)/.test(text)) {
       host.promptSubmitted?.();
       const follow = host.sendAutoFollow?.() ?? DEFAULT_SEND_AUTO_FOLLOW;
       if (follow === 'always' || (follow === 'whenIdle' && !(pendingState || displayedState).busy)) transcriptScroll.scrollToBottom();
@@ -867,6 +874,12 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
     if (!active || disposed || prompt.readOnly || document.querySelector('dialog[open]')) return;
     const files = clipboardImages(event.clipboardData);
     const text = event.clipboardData?.getData('text/plain') ?? '';
+    if (host.acp && files.length) {
+      event.preventDefault();
+      if (text) { prompt.setRangeText(text, prompt.selectionStart, prompt.selectionEnd, 'end'); updateComposer(updateDraft(composer, prompt.value)); }
+      updateComposer({ ...composer, lastError: 'This ACP proof of concept accepts text only. No image was attached.' });
+      return;
+    }
     if (!files.length && (text || event.clipboardData?.types.includes('text/html') || event.clipboardData?.files.length)) return;
     if (!files.length && !host.attachments?.readClipboard) return;
     if (files.length) {
@@ -1016,7 +1029,8 @@ export function mountPiView(host: import('./view-host').ViewHost, root: HTMLElem
       } else if (data.outcome !== 'cancelled') {
         const unknown = data.outcome === 'unknown';
         const error = safeText(data.error);
-        const message = unknown ? `Pi did not confirm whether this message was received. Nothing was retried automatically.${error ? ` ${error}` : ""}` : error || 'Pi rejected this message.';
+        const harness = host.acp?.label || 'Pi';
+        const message = unknown ? `${harness} did not confirm whether this message was received. Nothing was retried automatically.${error ? ` ${error}` : ""}` : error || `${harness} rejected this message.`;
         if (host.reportNotice) host.reportNotice({ id: `send:${data.id}`, operation: unknown ? 'Message delivery unknown' : safeText(data.operation) || 'Send message', message,
           cause: unknown ? 'connection' : safeText(data.noticeCause) || undefined, priority: unknown ? 100 : undefined });
         else updateComposer({ ...composer, lastError: message });

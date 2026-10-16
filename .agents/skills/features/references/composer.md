@@ -2,6 +2,10 @@
 
 **Status: implemented.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#composer) retain prior execution records.
 
+## Harness boundary
+
+The detailed delivery/queue/compaction contract below is Pi-specific. The [ACP POC](acp-harnesses.md#current-foundation) reuses the mounted presentation engine through explicit optional `ViewHost.acp` behavior: text-only local Send, no Pi slash interception, only advertised command completion, no busy steering/queue, and agent-labeled Stop. Busy Enter keeps the newer draft. ACP configuration/turn lifecycle stays in `src/acp/session.ts`, not Pi's controller. The default/omitted view behavior retains Pi's existing path. New mixed-shell/offline-browser fixtures are authored, not run.
+
 ## Specification and acceptance criteria
 
 Idle sends and busy Enter steering clear the editable draft immediately, independently of acknowledgement. Busy-only explicit follow-up queues and immediate idle/steering pending turns reconcile without duplicate user messages, result-driven transcript scrolling or inferred consumption. Local Send navigation follows the [auto-follow preference](transcript-interaction.md#auto-follow-after-sending). Apply the [optimistic interaction policy](architecture.md#optimistic-interaction-policy); Send also updates sidebar recency immediately.

@@ -30,7 +30,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
       builder.onLoad({ filter: /.*/, namespace: 'raw' }, args => ({ contents: readFileSync(args.path, 'utf8'), loader: 'text' }));
     } }],
   });
-  const css = ['src/pi/transcript.css', 'src/theme.css', 'src/workspace.css', 'src/keybindings.css', 'src/modal.css', 'src/application-notices.css', 'src/window-appearance.css'].map(p => readFileSync(p, 'utf8')).join('\n');
+  const css = ['src/pi/transcript.css', 'src/theme.css', 'src/workspace.css', 'src/keybindings.css', 'src/modal.css', 'src/application-notices.css', 'src/window-appearance.css', 'src/acp/session.css'].map(p => readFileSync(p, 'utf8')).join('\n');
   let html = readFileSync('index.html', 'utf8').replace('<script type="module" src="/src/main.ts"></script>', '').replace('</head>', `<style>${css}</style></head>`);
   if (fixtureOptions?.enforceCsp) {
     const policy = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8')).app.security.csp as string;
@@ -119,6 +119,23 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'notification_diagnostics') return 'macOS: authorized; desktop alerts: enabled; style: temporary; Notification Center: enabled; app active: yes; foreground handler calls: 1 (requests Banner + List).';
     if (command === 'notify_session' || command === 'test_notification') return 'submitted'; // Recorded only: never emit real OS notifications.
     if (command === 'list_workspace_sessions') return { sessions: catalog, warnings: [] };
+    if (command === 'start_acp') {
+      const token = String(args.token);
+      if (children.has(token)) throw new Error('Duplicate offline ACP token');
+      const child = spawn(process.execPath, ['test/fixtures/acp-agent.mjs'], { cwd: process.cwd(), stdio: ['pipe', 'pipe', 'pipe'] });
+      children.set(token, child);
+      createInterface({ input: child.stdout }).on('line', line => send(token, { kind: 'rpc', value: JSON.parse(line) }));
+      child.stderr.on('data', chunk => errors.push(String(chunk)));
+      child.on('error', error => errors.push(String(error)));
+      child.on('exit', () => send(token, { kind: 'disconnected', message: 'Offline ACP fixture ended' }));
+      return process.cwd();
+    }
+    if (command === 'write_acp') {
+      const child = children.get(String(args.token));
+      if (!child?.stdin.writable) throw new Error('No writable ACP fixture');
+      child.stdin.write(JSON.stringify(args.message) + '\n'); return;
+    }
+    if (command === 'stop_acp') { await stopChildren(typeof args.token === 'string' ? args.token : undefined); return; }
     if (command === 'start_pi') {
       const token = String(args.token);
       if ((args.config as JsonRecord)?.mode !== (typingOptions?.persistent ? 'saved' : 'temporary') || children.has(token)) throw new Error('Only independent offline fixture processes are allowed');
@@ -159,7 +176,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
         if (command === 'plugin:event|listen' && args.event === 'nimrod-session-deletion') state.__fixtureDeletionReceive = payload => callbacks.get(Number(args.handler))?.({ payload });
         if (command === 'plugin:event|listen' && args.event === 'nimrod-notification-click') state.__fixtureNotificationClick = payload => callbacks.get(Number(args.handler))?.({ payload });
         if (command === 'plugin:event|unlisten') state.__fixturePreferenceReceive = undefined;
-        if (command === 'start_pi') {
+        if (command === 'start_pi' || command === 'start_acp') {
           state.__fixtureChannels[String(args.token)] = args.onEvent as { onmessage(packet: Packet): void };
           return state.__fixtureHost(command, { config: args.config, token: args.token });
         }
@@ -199,7 +216,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     });
     await target.exposeFunction('__fixtureHost', async (command: string, args: JsonRecord) => {
       if (command === 'plugin:window|close') { await target.close(); await page.bringToFront(); return; }
-      if (['start_pi', 'stop_pi', 'write_pi', 'drafts_load', 'sync_popout_sessions', 'load_personal_card_plugins'].includes(command)) throw new Error('Global Settings must not initialize project services');
+      if (['start_pi', 'stop_pi', 'write_pi', 'start_acp', 'stop_acp', 'write_acp', 'drafts_load', 'sync_popout_sessions', 'load_personal_card_plugins'].includes(command)) throw new Error('Global Settings must not initialize project services');
       const result = await projectHost(command, args);
       return command === 'scoped_preferences_snapshot' ? globalSnapshot(result as PreferencesSnapshot) : result;
     });

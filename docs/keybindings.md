@@ -17,7 +17,9 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 | Action | Shortcut |
 | --- | --- |
 | Open recent project… | Cmd/Ctrl+Shift+O |
-| New session | Cmd/Ctrl+N |
+| New session (Pi default) | Cmd/Ctrl+N |
+| New ACP session… (experimental) | Unbound by default |
+| ACP session options… | Unbound by default |
 | New named session… | Cmd+Option+N / Ctrl+Alt+N |
 | New temporary session | Cmd/Ctrl+Shift+N |
 | Delete session tree… | Cmd/Ctrl+Backspace |

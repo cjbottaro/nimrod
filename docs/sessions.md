@@ -1,12 +1,13 @@
 # Sessions
 
-Each session has its own conversation, draft and agent process. Switching sessions leaves background work running and preserves reading position and expanded cards.
+Each session has its own conversation, draft and agent process. Switching sessions leaves background work running and preserves reading position and expanded cards. The backend is fixed for that session. The saved/temporary lifecycle below describes Pi; [experimental ACP sessions](acp.md) have a separate in-memory POC lifecycle.
 
 ## Create a session
 
 | Action | Use |
 | --- | --- |
-| **New session** / **⌘/Ctrl+N** | Start a normal persistent Pi conversation. |
+| **New session** / **⌘/Ctrl+N** | Start a normal persistent Pi conversation, regardless of the selected session's backend. |
+| **New ACP session…** | Select Copilot or a custom ACP launch profile (experimental; no default shortcut). |
 | **New named session…** / **⌘+Option+N**, **Ctrl+Alt+N** | Enter a single-line name, then press Enter or Create. Escape cancels. Requires Pi's native `--name` support. |
 | **New temporary session** / **⌘/Ctrl+Shift+N** | Start without saved conversation history. Closing, quitting or reloading discards its drafts, recovery items and pop-outs. |
 

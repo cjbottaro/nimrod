@@ -16,6 +16,7 @@ import { INTENTIONALLY_UNBOUND_ACTIONS } from './keybindings-fixture';
 
 // Real shell/renderer/controller bundle, mocked native boundary—not native WebKit acceptance.
 interface ShellOptions {
+  acpCleanupError?: string;
   globalSettings?: boolean;
   appearanceCapabilities?: import('../src/window-appearance').AppearanceCapabilities;
   appearanceGate?: Promise<void>;
@@ -92,6 +93,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   let activeToken: string;
   let activeConfig: JsonRecord = {};
   const sessions = new Map<string, { channel: typeof channel; config: JsonRecord; file: string; name?: string }>();
+  const acpSessions = new Map<string, { channel: typeof channel; promptId?: unknown }>();
   let workspace = options.windowWorkspace;
   let selectedModel: JsonRecord | null = null;
   let thinkingLevel = 'medium';
@@ -209,6 +211,25 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         const error = options.stopError?.(); if (error) throw new Error(error);
         await options.stopGate;
       }
+      if (command === 'start_acp') {
+        acpSessions.set(String(args.token), { channel: args.onEvent as typeof channel });
+        return (args.config as JsonRecord).cwd;
+      }
+      if (command === 'stop_acp') { if (options.acpCleanupError) throw new Error(options.acpCleanupError); acpSessions.delete(String(args.token)); return; }
+      if (command === 'write_acp') {
+        const target = acpSessions.get(String(args.token)); assert.ok(target);
+        const request = args.message as JsonRecord;
+        const send = (value: JsonRecord) => target.channel.onmessage({ kind: 'rpc', value: { jsonrpc: '2.0', ...value } });
+        if (request.method === 'initialize') send({ id: request.id, result: { protocolVersion: 1, agentInfo: { name: 'fixture-agent', version: '1' }, agentCapabilities: {} } });
+        else if (request.method === 'session/new') send({ id: request.id, result: { sessionId: 'acp-fixture', configOptions: [] } });
+        else if (request.method === 'session/prompt') {
+          target.promptId = request.id;
+          const params = request.params as { prompt: { text: string }[] };
+          send({ method: 'session/update', params: { sessionId: 'acp-fixture', update: { sessionUpdate: 'user_message_chunk', content: { type: 'text', text: params.prompt[0].text } } } });
+          send({ method: 'session/update', params: { sessionId: 'acp-fixture', update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'ACP fixture response' } } } });
+        } else if (request.method === 'session/cancel') send({ id: target.promptId, result: { stopReason: 'cancelled' } });
+        return;
+      }
       if (command === 'start_pi') {
         if (options.startError) throw new Error(options.startError);
         channel = args.onEvent as typeof channel; activeToken = String(args.token); activeConfig = args.config as JsonRecord;
@@ -264,7 +285,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   return { dom, win, tick, calls, element, openSettings, back, preferences, openPalette, rows,
     confirm: async () => { await tick(); element<HTMLDialogElement>('host-dialog').close('ok'); await tick(); await tick(); },
     saved: (): { drafts: Record<string, any>; last: unknown } => ({ drafts: Object.fromEntries([...nativeDrafts].filter(([, record]) => record.value !== null).map(([key, record]) => [key, record.value])), last: preferences.value.state['nimrod.last-session.v1'] }),
-    sessions,
+    sessions, acpSessions,
     deletionEvent: (event: DeletionEvent, target?: string) => deletionEvent?.(event, target),
     projectPicker: (target?: string) => projectPicker?.(target),
     linkError: (message: string, target?: string) => linkError?.(message, target),
@@ -274,6 +295,82 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     disconnect: () => channel.onmessage({ kind: 'disconnected', message: 'fixture closed' }),
   };
 }
+
+test('an unavailable ACP host cannot prevent Pi startup or enable ACP launches', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', acpCleanupError: 'ACP host unavailable' });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'start_pi').length, 1);
+    assert.equal(f.element<HTMLButtonElement>('send').disabled, false);
+    f.openPalette();
+    assert.doesNotMatch(f.element('palette-list').textContent!, /New ACP session/);
+    assert.equal(f.calls.some(call => call.command === 'start_acp'), false);
+  } finally { f.win.close(); }
+});
+
+test('ACP POC coexists with Pi without changing its draft, default backend or stop routing', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  const enter = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const piRoot = f.win.document.querySelector<HTMLElement>('.session-view')!, pi = f.captureChannel();
+    const piPrompt = f.element<HTMLTextAreaElement>('prompt'); piPrompt.value = 'Keep Pi draft'; piPrompt.dispatchEvent(new f.win.Event('input'));
+    f.openPalette(); const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New ACP session'; input.dispatchEvent(new f.win.Event('input')); enter(); await f.tick(); await f.tick();
+    enter(); await f.tick(); await f.tick(); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'start_pi').length, 1);
+    assert.equal(f.calls.filter(call => call.command === 'start_acp').length, 1);
+    assert.match(f.element('mode-badge').textContent!, /Copilot.*ACP/);
+    const acpRoot = f.win.document.querySelector('.session-view:not([hidden])')!;
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'ACP request'; prompt.dispatchEvent(new f.win.Event('input'));
+    prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
+    assert.equal(acpRoot.querySelectorAll('.message.user').length, 1, 'echo reconciles the local user turn');
+    assert.match(f.element('messages').textContent!, /ACP fixture response/);
+    prompt.value = 'New ACP draft'; prompt.dispatchEvent(new f.win.Event('input'));
+    prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
+    assert.equal(prompt.value, 'New ACP draft');
+    assert.equal(f.calls.filter(call => call.command === 'write_acp' && (call.args.message as JsonRecord).method === 'session/prompt').length, 1);
+    f.element<HTMLButtonElement>('send').click(); await f.tick(); await f.tick();
+    assert.equal(prompt.value, 'New ACP draft');
+    f.rows()[0].click(); await f.tick();
+    assert.equal(f.element('prompt'), piPrompt); assert.equal(piPrompt.value, 'Keep Pi draft'); assert.equal(piRoot.hidden, false);
+    pi.onmessage({ kind: 'rpc', value: { type: 'agent_start' } }); await f.tick();
+    assert.match(f.rows()[0].getAttribute('aria-label')!, /Working/);
+    f.rows()[1].click(); await f.tick();
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'n', metaKey: true, bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'start_pi').length, 2, 'New stays explicitly Pi-default, not selected-session-derived');
+    assert.equal(f.calls.filter(call => call.command === 'start_acp').length, 1);
+    f.rows()[1].click(); await f.tick();
+    const piStops = f.calls.filter(call => call.command === 'stop_pi').length;
+    const acpStops = f.calls.filter(call => call.command === 'stop_acp').length;
+    f.rows()[1].parentElement!.querySelector<HTMLButtonElement>('.session-close')!.click(); await f.confirm();
+    assert.equal(f.calls.filter(call => call.command === 'stop_acp').length, acpStops + 1);
+    assert.equal(f.calls.filter(call => call.command === 'stop_pi').length, piStops);
+    assert.equal(piPrompt.value, 'Keep Pi draft'); assert.equal(f.rows().length, 2);
+  } finally { f.win.close(); }
+});
+
+test('background ACP permissions stay in their conversation and cannot approve another session', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  const enter = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    f.openPalette(); const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New ACP session'; input.dispatchEvent(new f.win.Event('input')); enter(); await f.tick(); await f.tick(); enter(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'permission'; prompt.dispatchEvent(new f.win.Event('input')); prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
+    const target = [...f.acpSessions.values()][0], acpRoot = f.win.document.querySelector<HTMLElement>('.session-view:not([hidden])')!;
+    f.rows()[0].click(); await f.tick(); const piPrompt = f.element<HTMLTextAreaElement>('prompt'); piPrompt.focus();
+    target.channel.onmessage({ kind: 'rpc', value: { jsonrpc: '2.0', id: 'permission', method: 'session/request_permission', params: { sessionId: 'acp-fixture', toolCall: { toolCallId: 'shell', title: 'Run fixture only', rawInput: { command: 'no execution' } }, options: [{ optionId: 'allow', name: 'Allow fixture', kind: 'allow_once' }] } } });
+    await f.tick();
+    assert.equal(acpRoot.hidden, true); assert.equal(f.win.document.activeElement, piPrompt);
+    assert.equal(f.element<HTMLDialogElement>('host-dialog').open, false);
+    assert.ok(acpRoot.querySelector('.acp-permission'));
+    f.rows()[1].click(); await f.tick();
+    const cancel = [...acpRoot.querySelectorAll<HTMLButtonElement>('.acp-permission button')].find(button => button.textContent === 'Cancel request')!;
+    cancel.click(); await f.tick();
+    const reply = f.calls.filter(call => call.command === 'write_acp').map(call => call.args.message as JsonRecord).find(message => message.id === 'permission');
+    assert.deepEqual(JSON.parse(JSON.stringify(reply?.result)), { outcome: { outcome: 'cancelled' } });
+    assert.equal(acpRoot.querySelector('.acp-permission'), null);
+  } finally { f.win.close(); }
+});
 
 test('foreground/background streaming does not persist unchanged session layout; selection and rename still save', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });

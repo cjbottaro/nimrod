@@ -4,6 +4,8 @@
 
 Pi extensions define agent capabilities; Nimrod card plugins define their transcript presentation. Core owns identity, placement, authoritative status, outer disclosure, focus, output caps, scrolling and raw recovery. Plugins own content inside summary/body slots and can provide interactive presentation controls.
 
+[ACP POC cards](acp.md) use the same plugin runtime with separate harness/agent matching. Existing plugins remain Pi-only unless their executable export explicitly adds an ACP target. External authors can use the same public shell/presentation helpers as bundled cards; see [harness targets and shared runtime](card-plugin-api.md#harness-targets-and-shared-runtime).
+
 ## Personal TypeScript plugins
 
 Place a `.ts` or `.tsx` file here:

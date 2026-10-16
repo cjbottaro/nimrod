@@ -7,6 +7,7 @@
 
 - [Projects](projects.md) — open directories, recent projects and terminal launches.
 - [Sessions](sessions.md) — create, switch, resume, restart, close and delete conversations.
+- [ACP sessions (POC)](acp.md) — experimental Copilot/custom agents, permissions, configuration and current limits.
 - [Session sidebar](session-sidebar.md) — All, Unread and Working views, indicators and width.
 - [Drafts](drafts.md) — native storage, debounce, recovery and ignored legacy drafts.
 - [Writing messages](writing-messages.md) — send, steer, queue, Stop, slash commands and recovery.

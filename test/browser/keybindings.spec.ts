@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { demoFixture, visible } from './demo-fixture';
+import { ACTIONS } from '../../src/keybindings';
+import { INTENTIONALLY_UNBOUND_ACTIONS } from '../keybindings-fixture';
 
 test('session shortcut defaults open Switch, Resume and New named directly without disturbing the offline draft', async ({ page }) => {
   const demo = await demoFixture(page);
@@ -23,7 +25,9 @@ test('session shortcut defaults open Switch, Resume and New named directly witho
     await page.keyboard.press(primary + '+Shift+P');
     const commands = page.locator('#palette-list [role=option]');
     await expect(commands).not.toHaveCount(0);
-    expect(await commands.count() - 4).toBe(await commands.locator('kbd').count()); // Theme, plugin reload and performance capture are bindable, intentionally unbound by default.
+    const unbound = new Set<string>(INTENTIONALLY_UNBOUND_ACTIONS.map(id => ACTIONS.find(action => action.id === id)!.label));
+    const labels = await commands.locator('.palette-item-label').allTextContents();
+    expect(labels.filter(label => !unbound.has(label)).length).toBe(await commands.locator('kbd').count());
     await expect(commands.filter({ hasText: 'Reload card plugins' }).locator('kbd')).toHaveCount(0);
     await expect(commands.filter({ hasText: 'Capture performance report' }).locator('kbd')).toHaveCount(0);
     await expect(page.locator('#palette-list')).not.toContainText('New offline demo');

@@ -23,6 +23,10 @@ Repeated deletion is the deliberate nested-dialog exception: the shared deletion
 Project navigation is another shared page, not a separate modal controller; see [recent-project picker](projects-and-sessions.md#recent-project-picker). Its recent-directory page uses inline project rows and has no OS folder-chooser action; native File Open / Cmd/Ctrl+O is separate.
 Command-list sorting and accepted-command history are independent of page lifecycle; see [Command ranking](command-ranking.md). Subordinate picker order is unchanged.
 
+## ACP POC commands
+
+`new-acp` and `acp-options` use this same palette lifecycle/dispatcher, without default shortcuts. Explicit profile choice/custom literal JSON launch is separate from unchanged Pi-default New. ACP option selections stay bound to their initiating session; the general option chooser closes before opening the selected value page. Supported model/thinking actions delegate to ACP only for that exact backend. Pi-only MCP inspection is omitted/disabled for ACP; Resume/Delete history remain Pi-only. Agent commands stay in advertised composer completion rather than overriding Nimrod commands. Inline permission choices are session interaction controls, not palette pages or background global dialogs. [ACP reference](acp-harnesses.md#command-palette-ownership) owns current scope and future aggregation.
+
 ## Lifecycle contract
 
 - Escape from any control and the native dialog `cancel` event call `closeInteraction()` with no action. Public `close()` and an active selection request's `cancel()` use the same path. All dismiss the entire interaction; none invoke commands or navigate backward.

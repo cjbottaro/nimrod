@@ -1,3 +1,6 @@
+import { bundledAcpPlugin } from '../../acp/card-plugins';
+import { pluginTargets, matchesTarget } from '../../card-plugin-targets';
+import type { CardPluginTarget } from '../../card-plugin-api';
 import type { CardRenderer } from '../card-renderer';
 import { presentationPlugin, type DomCardRenderer } from '../dom-card-renderer';
 import type { ToolCardRenderer, ToolCardBlock } from '../tool-card';
@@ -18,7 +21,7 @@ export interface ExecutablePluginHost {
   readModule(name: string, expectedManifest: string): Promise<string>;
   importModule?(source: string): Promise<unknown>;
 }
-interface Entry { tools: string[]; renderer: DomCardRenderer<ToolCardBlock>; file: string; executable: boolean; personal?: boolean; }
+interface Entry { tools: string[]; renderer: DomCardRenderer<ToolCardBlock>; file: string; executable: boolean; personal?: boolean; targets?: readonly CardPluginTarget[]; }
 export class CardPluginCatalog {
   private generation = 0;
   private enabled = new Set<string>();
@@ -49,7 +52,7 @@ export class CardPluginCatalog {
           const module = await (host.importModule ?? importCardModule)(source);
           if (generation !== this.generation) return;
           const renderer = executableRenderer(manifest, module);
-          packages.set(manifest.id, { tools: manifest.tools, renderer, file, executable: true });
+          packages.set(manifest.id, { tools: manifest.tools, renderer, file, executable: true, targets: pluginTargets(renderer.targets) });
         } else {
           const pkg = parsePluginPackage(text);
           if (packages.has(pkg.id)) throw new Error(`Duplicate renderer ID ${pkg.id}`);
@@ -77,7 +80,7 @@ export class CardPluginCatalog {
             if (generation !== this.generation) return;
             const { renderer, tools } = personalRenderer(module);
             if (packages.has(renderer.id)) throw new Error(`Duplicate renderer ID ${renderer.id}`);
-            packages.set(renderer.id, { renderer, tools, file: item.entry, executable: true, personal: true });
+            packages.set(renderer.id, { renderer, tools, file: item.entry, executable: true, personal: true, targets: pluginTargets(renderer.targets) });
             personalLoaded++; if (item.cacheHit) cacheHits++;
           } catch (error) { errors.push(`${item.entry}: ${String(error)}`); }
         }
@@ -96,12 +99,13 @@ export class CardPluginCatalog {
 
   select(data: Readonly<ToolCardBlock>): ToolCardRenderer {
     const name = normalizedToolName(data.name);
-    const override = Object.hasOwn(this.config.overrides, name) ? this.config.overrides[name] : undefined;
+    // Existing tool-only overrides belong to Pi. ACP never inherits a Pi match.
+    const override = data.source?.backend === 'acp' ? undefined : Object.hasOwn(this.config.overrides, name) ? this.config.overrides[name] : undefined;
     if (override === 'nimrod.raw') return presentationPlugin({ id: 'nimrod.raw', supports: () => true, mount: () => ({ update: rawToolPresentation, dispose() {} }) });
-    const bundled = bundledToolRenderer(data);
+    const bundled = data.source?.backend === 'acp' ? bundledAcpPlugin(data) : bundledToolRenderer(data);
     if (override === bundled.id || override === 'nimrod.tool') return override === 'nimrod.tool' ? presentationPlugin(defaultToolRenderer) : bundled;
-    const entry = override ? this.packages.get(override) : [...this.packages.values()].find(entry => entry.tools.includes(name));
-    if (entry && entry.tools.includes(name)) {
+    const entry = override ? this.packages.get(override) : [...this.packages.values()].find(entry => entry.tools.includes(name) && matchesTarget(entry.targets ?? [{ backend: 'pi' }], data));
+    if (entry && entry.tools.includes(name) && matchesTarget(entry.targets ?? [{ backend: 'pi' }], data)) {
       if (!entry.executable) return entry.renderer;
       // Fixed renderer selection, but managed work must still honor current package trust.
       return { ...entry.renderer, supports: value => (entry.personal ? this.autoLoad && this.personal.has(entry.file) : this.enabled.has(entry.file) && this.trusted.has(entry.file)) && entry.renderer.supports(value) };

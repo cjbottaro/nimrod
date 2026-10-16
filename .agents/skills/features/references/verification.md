@@ -13,7 +13,7 @@ This is the current evidence/acceptance map, not a chronological test log. Featu
 
 ## Current automated validation
 
-[ACP foundation](acp-harnesses.md#current-foundation): isolated connection/client code and offline record fixtures are authored but **not run or type-checked**. There is no app/native integration, Copilot/second-agent compatibility evidence or new Pi regression result. Existing passing results below do not validate the new ACP files; native launch, transcript/plugin integration and mixed-harness acceptance remain future work.
+[ACP POC](acp-harnesses.md#current-foundation): native launch/ownership, shared transcript/public plugin helpers and mixed-session UI are implemented in source, with protocol/session/card/native/shell/offline-browser fixtures authored but **not run or type-checked**. Rust source formatting only was applied. No app build/launch, offline-agent execution, Copilot/second-agent acceptance or new Pi regression evidence exists. Passing results below predate this work and do not validate it; both `mise run check` and `npm run test:browser` are required when validation is authorized.
 
 Appearance-regression follow-up: TypeScript compilation and Rust formatting/Clippy pass; 71 targeted appearance/presentation/theme/preferences tests, 8 offline WebKit translucency/theme/Settings/pop-out tests and 144 Rust tests pass (2 installed-Pi smokes intentionally ignored). Browser evidence uses mock native material, title and Settings ownership—not a native app launch, macOS visual acceptance or Linux verification.
 

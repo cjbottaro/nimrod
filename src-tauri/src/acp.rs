@@ -1,18 +1,36 @@
 //! ACP-only launch/JSON-RPC boundary. Pi's host and validators remain independent.
-use crate::{process::{Output, Packet}, workspace_windows::WorkspaceWindows};
+use crate::{
+    process::{Output, Packet},
+    workspace_windows::WorkspaceWindows,
+};
 use futures_util::StreamExt;
 use serde::Deserialize;
 use serde_json::Value;
-use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, process::Stdio, sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    path::{Path, PathBuf},
+    process::Stdio,
+    sync::Arc,
+    time::Duration,
+};
 use tauri::{Manager, ipc::Channel};
-use tokio::{io::AsyncWriteExt, process::{Child, Command}, sync::{Mutex, mpsc, oneshot}, task::JoinHandle, time::timeout};
+use tokio::{
+    io::AsyncWriteExt,
+    process::{Child, Command},
+    sync::{Mutex, mpsc, oneshot},
+    task::JoinHandle,
+    time::timeout,
+};
 use tokio_util::codec::{FramedRead, LinesCodec};
 
 const MAX_RECORD: usize = 16 * 1024 * 1024;
 type Write = (Value, oneshot::Sender<Result<(), String>>);
 type StopTask = (oneshot::Sender<()>, JoinHandle<Result<(), String>>);
 #[derive(Default)]
-struct StopState { task: Option<StopTask>, error: Option<String> }
+struct StopState {
+    task: Option<StopTask>,
+    error: Option<String>,
+}
 struct Owned {
     window: String,
     cwd: PathBuf,
@@ -35,39 +53,97 @@ pub struct Config {
     node: Option<PathBuf>,
 }
 impl AcpHost {
-    async fn start(&self, window: &str, token: String, cwd: PathBuf, mut command: Command, output: Output) -> Result<(), String> {
+    async fn start(
+        &self,
+        window: &str,
+        token: String,
+        cwd: PathBuf,
+        mut command: Command,
+        output: Output,
+    ) -> Result<(), String> {
         let closing = self.lifecycle.lock().await;
-        if closing.contains(window) || closing.contains("*") { return Err("Project is closing".into()); }
+        if closing.contains(window) || closing.contains("*") {
+            return Err("Project is closing".into());
+        }
         let mut sessions = self.sessions.lock().await;
-        if sessions.contains_key(&token) { return Err("ACP token is already owned".into()); }
-        if sessions.values().any(|session| session.window == window && session.cwd != cwd) { return Err("ACP sessions must use the project directory".into()); }
-        command.current_dir(&cwd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
+        if sessions.contains_key(&token) {
+            return Err("ACP token is already owned".into());
+        }
+        if sessions
+            .values()
+            .any(|session| session.window == window && session.cwd != cwd)
+        {
+            return Err("ACP sessions must use the project directory".into());
+        }
+        command
+            .current_dir(&cwd)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
         #[cfg(windows)]
         command.creation_flags(0x08000000);
-        let mut child = command.spawn().map_err(|error| format!("Could not start ACP agent: {error}"))?;
+        let mut child = command
+            .spawn()
+            .map_err(|error| format!("Could not start ACP agent: {error}"))?;
         let stdin = child.stdin.take().ok_or("Missing ACP stdin")?;
         let stdout = child.stdout.take().ok_or("Missing ACP stdout")?;
         let stderr = child.stderr.take().ok_or("Missing ACP stderr")?;
         let (writer, writes) = mpsc::channel(32);
         let (stop, stopped) = oneshot::channel();
-        let task = tokio::spawn(supervise(child, stdin, stdout, stderr, writes, stopped, output));
-        sessions.insert(token, Arc::new(Owned { window: window.into(), cwd, writer, stop: Mutex::new(StopState { task: Some((stop, task)), error: None }) }));
+        let task = tokio::spawn(supervise(
+            child, stdin, stdout, stderr, writes, stopped, output,
+        ));
+        sessions.insert(
+            token,
+            Arc::new(Owned {
+                window: window.into(),
+                cwd,
+                writer,
+                stop: Mutex::new(StopState {
+                    task: Some((stop, task)),
+                    error: None,
+                }),
+            }),
+        );
         Ok(())
     }
     async fn owned(&self, window: &str, token: &str) -> Result<Arc<Owned>, String> {
-        self.sessions.lock().await.get(token).filter(|session| session.window == window).cloned().ok_or_else(|| "Unknown ACP session or wrong project window".into())
+        self.sessions
+            .lock()
+            .await
+            .get(token)
+            .filter(|session| session.window == window)
+            .cloned()
+            .ok_or_else(|| "Unknown ACP session or wrong project window".into())
     }
     async fn write(&self, window: &str, token: &str, message: Value) -> Result<(), String> {
         let session = self.owned(window, token).await?;
         validate_message(&message, &session.cwd)?;
         let (reply, result) = oneshot::channel();
-        session.writer.send((message, reply)).await.map_err(|_| "ACP agent disconnected")?;
-        result.await.map_err(|_| "ACP write outcome is unknown".to_string())?
+        session
+            .writer
+            .send((message, reply))
+            .await
+            .map_err(|_| "ACP agent disconnected")?;
+        result
+            .await
+            .map_err(|_| "ACP write outcome is unknown".to_string())?
     }
-    pub async fn stop_window(&self, window: &str, token: Option<&str>, closing: bool) -> Result<(), String> {
+    pub async fn stop_window(
+        &self,
+        window: &str,
+        token: Option<&str>,
+        closing: bool,
+    ) -> Result<(), String> {
         let mut lifecycle = self.lifecycle.lock().await;
-        if closing { lifecycle.insert(window.into()); }
-        self.stop_matching(|id, session| session.window == window && token.is_none_or(|token| id == token)).await
+        if closing {
+            lifecycle.insert(window.into());
+        }
+        self.stop_matching(|id, session| {
+            session.window == window && token.is_none_or(|token| id == token)
+        })
+        .await
     }
     pub async fn shutdown(&self) -> Result<(), String> {
         let mut lifecycle = self.lifecycle.lock().await;
@@ -75,72 +151,228 @@ impl AcpHost {
         self.stop_matching(|_, _| true).await
     }
     async fn stop_matching(&self, matches: impl Fn(&str, &Owned) -> bool) -> Result<(), String> {
-        let selected: Vec<_> = self.sessions.lock().await.iter().filter(|(id, session)| matches(id, session)).map(|(id, session)| (id.clone(), session.clone())).collect();
+        let selected: Vec<_> = self
+            .sessions
+            .lock()
+            .await
+            .iter()
+            .filter(|(id, session)| matches(id, session))
+            .map(|(id, session)| (id.clone(), session.clone()))
+            .collect();
         let mut errors = Vec::new();
         for (id, session) in selected {
             let mut state = session.stop.lock().await;
-            if let Some(error) = &state.error { errors.push(error.clone()); continue; }
+            if let Some(error) = &state.error {
+                errors.push(error.clone());
+                continue;
+            }
             if let Some((stop, task)) = state.task.take() {
                 let _ = stop.send(());
-                let result = task.await.map_err(|error| error.to_string()).and_then(|result| result);
-                if let Err(error) = result { state.error = Some(error.clone()); errors.push(error); continue; }
+                let result = task
+                    .await
+                    .map_err(|error| error.to_string())
+                    .and_then(|result| result);
+                if let Err(error) = result {
+                    state.error = Some(error.clone());
+                    errors.push(error);
+                    continue;
+                }
             }
             self.sessions.lock().await.remove(&id);
         }
-        if errors.is_empty() { Ok(()) } else { Err(errors.join("\n")) }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors.join("\n"))
+        }
     }
 }
 fn valid_id(value: &Value) -> bool {
-    value.as_str().is_some_and(|id| !id.is_empty() && id.len() <= 128) || value.as_u64().is_some_and(|id| id <= 9_007_199_254_740_991)
+    value.as_str().is_some_and(|id| id.len() <= 128)
+        || value
+            .as_i64()
+            .is_some_and(|id| id.unsigned_abs() <= 9_007_199_254_740_991)
 }
 fn validate_message(message: &Value, cwd: &Path) -> Result<(), String> {
-    if !message.is_object() || message["jsonrpc"] != "2.0" || serde_json::to_vec(message).map_err(|error| error.to_string())?.len() > MAX_RECORD { return Err("Invalid or oversized ACP packet".into()); }
+    if !message.is_object()
+        || message["jsonrpc"] != "2.0"
+        || serde_json::to_vec(message)
+            .map_err(|error| error.to_string())?
+            .len()
+            > MAX_RECORD
+    {
+        return Err("Invalid or oversized ACP packet".into());
+    }
     if let Some(method) = message.get("method") {
         let method = method.as_str().ok_or("Invalid ACP method")?;
-        if message.get("result").is_some() || message.get("error").is_some() || !message["params"].is_object() { return Err("Invalid ACP request".into()); }
+        if message.get("result").is_some()
+            || message.get("error").is_some()
+            || !message["params"].is_object()
+        {
+            return Err("Invalid ACP request".into());
+        }
         match method {
-            "initialize" | "session/new" | "session/prompt" | "session/set_config_option" | "session/set_mode" | "session/set_model" if valid_id(&message["id"]) => {},
-            "session/cancel" if message.get("id").is_none() => {},
+            "initialize"
+            | "session/new"
+            | "session/prompt"
+            | "session/set_config_option"
+            | "session/set_mode"
+            | "session/set_model"
+                if valid_id(&message["id"]) => {}
+            "session/cancel" if message.get("id").is_none() => {}
             _ => return Err("Unsupported ACP operation".into()),
         }
-        if method == "session/new" && message["params"]["cwd"].as_str() != cwd.to_str() { return Err("ACP session cwd must match its project".into()); }
-    } else if !valid_id(&message["id"]) || (message.get("result").is_some() == message.get("error").is_some()) { return Err("Invalid ACP client response".into()); }
+        if method == "session/new" && message["params"]["cwd"].as_str() != cwd.to_str() {
+            return Err("ACP session cwd must match its project".into());
+        }
+    } else if !valid_id(&message["id"])
+        || (message.get("result").is_some() == message.get("error").is_some())
+    {
+        return Err("Invalid ACP client response".into());
+    }
     Ok(())
 }
 fn validate_config(config: &Config) -> Result<(), String> {
-    if config.command.is_empty() || config.command.len() > 4096 || config.command.contains('\0') || config.args.len() > 128 || config.args.iter().any(|arg| arg.len() > 8192 || arg.contains('\0')) || config.env.len() > 64 || config.env.iter().any(|(key, value)| key.is_empty() || key.contains(['=', '\0']) || key.len() > 128 || value.len() > 8192 || value.contains('\0')) { return Err("Invalid ACP launch configuration".into()); }
+    if config.command.is_empty()
+        || config.command.len() > 4096
+        || config.command.contains('\0')
+        || config.args.len() > 128
+        || config
+            .args
+            .iter()
+            .any(|arg| arg.len() > 8192 || arg.contains('\0'))
+        || config.env.len() > 64
+        || config.env.iter().any(|(key, value)| {
+            key.is_empty()
+                || key.contains(['=', '\0'])
+                || key.len() > 128
+                || value.len() > 8192
+                || value.contains('\0')
+        })
+    {
+        return Err("Invalid ACP launch configuration".into());
+    }
     Ok(())
 }
 #[tauri::command]
-pub async fn start_acp(app: tauri::AppHandle, window: tauri::Window, host: tauri::State<'_, AcpHost>, config: Config, token: String, on_event: Channel<Packet>) -> Result<PathBuf, String> {
-    if app.state::<crate::ExitState>().closing.load(std::sync::atomic::Ordering::SeqCst) { return Err("Nimrod is shutting down".into()); }
-    if token.is_empty() || token.len() > 128 { return Err("Invalid ACP token".into()); }
+pub async fn start_acp(
+    app: tauri::AppHandle,
+    window: tauri::Window,
+    host: tauri::State<'_, AcpHost>,
+    config: Config,
+    token: String,
+    on_event: Channel<Packet>,
+) -> Result<PathBuf, String> {
+    if app
+        .state::<crate::ExitState>()
+        .closing
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        return Err("Nimrod is shutting down".into());
+    }
+    if token.is_empty() || token.len() > 128 {
+        return Err("Invalid ACP token".into());
+    }
     validate_config(&config)?;
-    let cwd = config.cwd.canonicalize().map_err(|error| error.to_string())?;
-    if !cwd.is_dir() || app.state::<WorkspaceWindows>().directories.lock().unwrap().get(window.label()) != Some(&cwd) { return Err("ACP launch requires this window's canonical project directory".into()); }
-    let executable = if Path::new(&config.command).is_absolute() { PathBuf::from(&config.command) } else { crate::find_program(&config.command).ok_or("ACP executable not found; configure its absolute path")? };
-    if !executable.is_file() { return Err("ACP executable does not exist".into()); }
+    let cwd = config
+        .cwd
+        .canonicalize()
+        .map_err(|error| error.to_string())?;
+    if !cwd.is_dir()
+        || app
+            .state::<WorkspaceWindows>()
+            .directories
+            .lock()
+            .unwrap()
+            .get(window.label())
+            != Some(&cwd)
+    {
+        return Err("ACP launch requires this window's canonical project directory".into());
+    }
+    let executable = if Path::new(&config.command).is_absolute() {
+        PathBuf::from(&config.command)
+    } else if let Some(path) = config.env.get("PATH") {
+        which::which_in(&config.command, Some(path), &cwd)
+            .map_err(|_| "ACP executable not found on the configured PATH".to_string())?
+    } else {
+        crate::find_program(&config.command)
+            .ok_or("ACP executable not found; configure its absolute path")?
+    };
+    if !executable.is_file() {
+        return Err("ACP executable does not exist".into());
+    }
     #[cfg(windows)]
-    if executable.extension().is_some_and(|extension| extension == "cmd" || extension == "bat") { return Err("Use the agent's executable or node.exe plus its JS entry point, not a Windows command wrapper".into()); }
+    if executable
+        .extension()
+        .is_some_and(|extension| extension == "cmd" || extension == "bat")
+    {
+        return Err("Use the agent's executable or node.exe plus its JS entry point, not a Windows command wrapper".into());
+    }
     let mut command = Command::new(&executable);
     command.args(&config.args).envs(&config.env);
     let mut paths = Vec::new();
-    if let Some(node) = &config.node {
-        if let Some(parent) = crate::executable(node)?.parent() { paths.push(parent.to_path_buf()); }
+    // Native ACP agents do not require Node. Enrich PATH when a configured
+    // Node is available, without turning Pi's runtime into an ACP prerequisite.
+    let node_parent = config
+        .node
+        .as_ref()
+        .and_then(|node| crate::executable(node).ok())
+        .and_then(|node| node.parent().map(Path::to_path_buf));
+    if let Some(parent) = node_parent {
+        paths.push(parent);
     }
-    if let Some(parent) = executable.parent() { paths.push(parent.to_path_buf()); }
-    paths.extend(std::env::split_paths(config.env.get("PATH").map(std::ffi::OsStr::new).unwrap_or_else(|| std::ffi::OsStr::new(""))));
-    paths.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()));
-    command.env("PATH", std::env::join_paths(paths).map_err(|error| error.to_string())?);
-    host.start(window.label(), token, cwd.clone(), command, Arc::new(move |packet| on_event.send(packet).map_err(|error| error.to_string()))).await?;
+    if let Some(parent) = executable.parent() {
+        paths.push(parent.to_path_buf());
+    }
+    let inherited_path = std::env::var_os("PATH").unwrap_or_default();
+    let search_path = config
+        .env
+        .get("PATH")
+        .map(std::ffi::OsStr::new)
+        .unwrap_or(inherited_path.as_os_str());
+    paths.extend(std::env::split_paths(search_path));
+    command.env(
+        "PATH",
+        std::env::join_paths(paths).map_err(|error| error.to_string())?,
+    );
+    host.start(
+        window.label(),
+        token,
+        cwd.clone(),
+        command,
+        Arc::new(move |packet| on_event.send(packet).map_err(|error| error.to_string())),
+    )
+    .await?;
     Ok(cwd)
 }
 #[tauri::command]
-pub async fn write_acp(host: tauri::State<'_, AcpHost>, window: tauri::Window, token: String, message: Value) -> Result<(), String> { host.write(window.label(), &token, message).await }
+pub async fn write_acp(
+    host: tauri::State<'_, AcpHost>,
+    window: tauri::Window,
+    token: String,
+    message: Value,
+) -> Result<(), String> {
+    host.write(window.label(), &token, message).await
+}
 #[tauri::command]
-pub async fn stop_acp(host: tauri::State<'_, AcpHost>, window: tauri::Window, token: Option<String>) -> Result<(), String> { host.stop_window(window.label(), token.as_deref(), false).await }
+pub async fn stop_acp(
+    host: tauri::State<'_, AcpHost>,
+    window: tauri::Window,
+    token: Option<String>,
+) -> Result<(), String> {
+    host.stop_window(window.label(), token.as_deref(), false)
+        .await
+}
 
-async fn supervise(mut child: Child, mut stdin: tokio::process::ChildStdin, stdout: tokio::process::ChildStdout, stderr: tokio::process::ChildStderr, mut writes: mpsc::Receiver<Write>, mut stop: oneshot::Receiver<()>, output: Output) -> Result<(), String> {
+async fn supervise(
+    mut child: Child,
+    mut stdin: tokio::process::ChildStdin,
+    stdout: tokio::process::ChildStdout,
+    stderr: tokio::process::ChildStderr,
+    mut writes: mpsc::Receiver<Write>,
+    mut stop: oneshot::Receiver<()>,
+    output: Output,
+) -> Result<(), String> {
     let mut records = FramedRead::new(stdout, LinesCodec::new_with_max_length(MAX_RECORD));
     let mut errors = FramedRead::new(stderr, LinesCodec::new_with_max_length(64 * 1024));
     let mut stderr_open = true;
@@ -177,19 +409,40 @@ async fn supervise(mut child: Child, mut stdin: tokio::process::ChildStdin, stdo
     };
     drop(stdin);
     let result = terminate(&mut child).await;
-    let message = match &result { Ok(()) => reason, Err(error) => format!("{reason}; {error}") };
+    let message = match &result {
+        Ok(()) => reason,
+        Err(error) => format!("{reason}; {error}"),
+    };
     let _ = output(Packet::Disconnected { message });
     result
 }
 async fn terminate(child: &mut Child) -> Result<(), String> {
-    if child.try_wait().map_err(|error| error.to_string())?.is_some() { return Ok(()); }
+    if child
+        .try_wait()
+        .map_err(|error| error.to_string())?
+        .is_some()
+    {
+        return Ok(());
+    }
     #[cfg(unix)]
-    if let Some(id) = child.id() { use nix::{sys::signal::{Signal, kill}, unistd::Pid}; let _ = kill(Pid::from_raw(id as i32), Signal::SIGTERM); }
+    if let Some(id) = child.id() {
+        use nix::{
+            sys::signal::{Signal, kill},
+            unistd::Pid,
+        };
+        let _ = kill(Pid::from_raw(id as i32), Signal::SIGTERM);
+    }
     #[cfg(windows)]
     child.start_kill().map_err(|error| error.to_string())?;
-    if let Ok(status) = timeout(Duration::from_millis(1500), child.wait()).await { status.map_err(|error| error.to_string())?; return Ok(()); }
+    if let Ok(status) = timeout(Duration::from_millis(1500), child.wait()).await {
+        status.map_err(|error| error.to_string())?;
+        return Ok(());
+    }
     child.start_kill().map_err(|error| error.to_string())?;
-    timeout(Duration::from_secs(3), child.wait()).await.map_err(|_| "Owned ACP process did not exit".to_string())?.map_err(|error| error.to_string())?;
+    timeout(Duration::from_secs(3), child.wait())
+        .await
+        .map_err(|_| "Owned ACP process did not exit".to_string())?
+        .map_err(|error| error.to_string())?;
     Ok(())
 }
 
@@ -201,8 +454,20 @@ mod tests {
     fn acp_is_not_an_arbitrary_rpc_or_cross_project_interface() {
         let cwd = Path::new("/fixture/project");
         assert!(validate_message(&json!({"jsonrpc":"2.0","id":1,"method":"session/new","params":{"cwd":"/fixture/project","mcpServers":[]}}), cwd).is_ok());
-        assert!(validate_message(&json!({"jsonrpc":"2.0","id":1,"method":"session/new","params":{"cwd":"/other"}}), cwd).is_err());
-        assert!(validate_message(&json!({"jsonrpc":"2.0","id":1,"method":"session/delete","params":{}}), cwd).is_err());
+        assert!(
+            validate_message(
+                &json!({"jsonrpc":"2.0","id":1,"method":"session/new","params":{"cwd":"/other"}}),
+                cwd
+            )
+            .is_err()
+        );
+        assert!(
+            validate_message(
+                &json!({"jsonrpc":"2.0","id":1,"method":"session/delete","params":{}}),
+                cwd
+            )
+            .is_err()
+        );
         assert!(validate_message(&json!({"type":"prompt","id":"pi"}), cwd).is_err());
         assert!(validate_message(&json!({"jsonrpc":"2.0","id":"permission","result":{"outcome":{"outcome":"cancelled"}}}), cwd).is_ok());
     }
@@ -210,16 +475,37 @@ mod tests {
     #[tokio::test]
     async fn owned_processes_route_and_stop_by_window_and_token() {
         let host = AcpHost::default();
-        let command = || { let mut command = Command::new("/bin/sh"); command.args(["-c", "while IFS= read -r line; do printf '%s\\n' \"$line\"; done"]); command };
+        let command = || {
+            let mut command = Command::new("/bin/sh");
+            command.args([
+                "-c",
+                "while IFS= read -r line; do printf '%s\\n' \"$line\"; done",
+            ]);
+            command
+        };
         let (tx, mut rx) = mpsc::unbounded_channel();
-        let output: Output = Arc::new(move |packet| tx.send(packet).map_err(|error| error.to_string()));
+        let output: Output =
+            Arc::new(move |packet| tx.send(packet).map_err(|error| error.to_string()));
         let cwd = std::env::temp_dir();
-        host.start("one", "first".into(), cwd.clone(), command(), output.clone()).await.unwrap();
-        host.start("two", "second".into(), cwd, command(), output).await.unwrap();
+        host.start(
+            "one",
+            "first".into(),
+            cwd.clone(),
+            command(),
+            output.clone(),
+        )
+        .await
+        .unwrap();
+        host.start("two", "second".into(), cwd, command(), output)
+            .await
+            .unwrap();
         let packet = json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}});
         assert!(host.write("two", "first", packet.clone()).await.is_err());
         host.write("one", "first", packet.clone()).await.unwrap();
-        assert!(matches!(timeout(Duration::from_secs(2), rx.recv()).await.unwrap(), Some(Packet::Rpc { .. })));
+        assert!(matches!(
+            timeout(Duration::from_secs(2), rx.recv()).await.unwrap(),
+            Some(Packet::Rpc { .. })
+        ));
         host.stop_window("one", Some("first"), false).await.unwrap();
         assert!(host.write("one", "first", packet.clone()).await.is_err());
         host.write("two", "second", packet).await.unwrap();

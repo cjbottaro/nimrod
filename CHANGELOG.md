@@ -4,6 +4,11 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ## Unreleased
 
+### Added
+
+- Experimental ACP session POC alongside Pi: Copilot/custom-agent launch, shared transcript cards, session-local permissions, cancellation and advertised configuration/commands. Saved ACP history and real-agent/native acceptance remain pending.
+- Public card-plugin presentation/shell-output helpers and explicit harness/agent targeting, preserving legacy plugins as Pi-only by default.
+
 ### Changed
 
 - macOS release downloads and Homebrew installation target Apple Silicon only; Intel downloads are not provided.

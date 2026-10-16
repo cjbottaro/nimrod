@@ -10,6 +10,9 @@ export interface AcpPermissionRequest {
   options: readonly AcpPermissionOption[];
 }
 export interface AcpClientHooks {
+  created?(configuration: AcpRecord): void;
+  configured?(configuration: AcpRecord): void;
+  selected?(kind: 'model' | 'mode', id: string): void;
   /** Synchronous ordered delivery, not a coalesced paint callback. */
   update?(event: AcpSessionUpdate): void;
   /** Return an offered optionId; undefined cancels. Never defaults to approval. */
@@ -33,6 +36,7 @@ export class AcpClient {
   private initialized?: AcpRecord;
   private created?: AcpRecord;
   private earlyUpdates: AcpSessionUpdate[] = [];
+  private earlyBytes = 0;
   private turn?: AbortController;
 
   constructor(send: (packet: AcpPacket) => void | Promise<void>, private hooks: AcpClientHooks = {}) {
@@ -42,7 +46,7 @@ export class AcpClient {
       disconnected: error => {
         this.currentPhase = 'disconnected';
         this.turn?.abort();
-        this.earlyUpdates = [];
+        this.earlyUpdates = []; this.earlyBytes = 0;
         hooks.disconnected?.(error);
       },
     });
@@ -92,8 +96,9 @@ export class AcpClient {
         this.created = value;
         this.currentPhase = 'idle';
         const updates = this.earlyUpdates;
-        this.earlyUpdates = [];
+        this.earlyUpdates = []; this.earlyBytes = 0;
         for (const update of updates) this.hooks.update?.(update);
+        this.hooks.created?.(value);
       });
       return this.currentSession!;
     } catch (error) {
@@ -130,6 +135,31 @@ export class AcpClient {
     }
   }
 
+  async setConfigOption(configId: string, value: string): Promise<unknown> {
+    this.requirePhase('idle');
+    return this.connection.request('session/set_config_option', { sessionId: this.currentSession, configId, value }, result => {
+      if (!isRecord(result) || !Array.isArray(result.configOptions)) throw new Error('Invalid ACP configuration response');
+      this.created = { ...this.created, configOptions: result.configOptions };
+      this.hooks.configured?.(this.created);
+    });
+  }
+
+  async setMode(modeId: string): Promise<unknown> {
+    this.requirePhase('idle');
+    return this.connection.request('session/set_mode', { sessionId: this.currentSession, modeId }, result => {
+      if (!isRecord(result)) throw new Error('Invalid ACP mode response');
+      this.hooks.selected?.('mode', modeId);
+    });
+  }
+
+  async setModel(modelId: string): Promise<unknown> {
+    this.requirePhase('idle');
+    return this.connection.request('session/set_model', { sessionId: this.currentSession, modelId }, result => {
+      if (!isRecord(result)) throw new Error('Invalid ACP model response');
+      this.hooks.selected?.('model', modelId);
+    });
+  }
+
   cancel(): void {
     if (this.currentPhase !== 'working' || !this.turn || this.turn.signal.aborted) return;
     // Cancels pending permission choices immediately, but stays working until
@@ -160,7 +190,8 @@ export class AcpClient {
     if (this.currentPhase === 'creating') {
       // Some agents advertise commands before returning session/new. Bound the
       // buffer; overflow fails the connection rather than silently losing data.
-      if (this.earlyUpdates.length >= 128) throw new Error('Too many ACP updates before session identity');
+      this.earlyBytes += new TextEncoder().encode(JSON.stringify(event)).length;
+      if (this.earlyUpdates.length >= 128 || this.earlyBytes > 16 * 1024 * 1024) throw new Error('Too many ACP updates before session identity');
       this.earlyUpdates.push(event);
     } else {
       if (!this.currentSession || event.sessionId !== this.currentSession) throw new Error('ACP session identity mismatch');

@@ -1,3 +1,4 @@
+import { bundledAcpPlugin } from '../acp/card-plugins';
 import { type CardRenderer } from './card-renderer';
 import { DomCardController, presentationPlugin, type DomCardRenderer, type CardDomHost } from './dom-card-renderer';
 import { associateOutputViewport } from './card-shell';
@@ -23,7 +24,7 @@ export function toolCardIsBusy(block: ToolCardBlock): boolean {
   const status = toolStatus(block); return status === 'running' || status === 'thinking';
 }
 export function renderToolCard(document: Document, block: ToolCardBlock, details: HTMLDetailsElement,
-  renderer: ToolCardRenderer = bundledToolRenderer(block), report?: (error: unknown) => void, host: CardDomHost = {}): HTMLDetailsElement {
+  renderer: ToolCardRenderer = block.source?.backend === 'acp' ? bundledAcpPlugin(block) : bundledToolRenderer(block), report?: (error: unknown) => void, host: CardDomHost = {}): HTMLDetailsElement {
   disposeToolCard(details); details.classList.add('tool-card');
   const summary = document.createElement('summary');
   const row = document.createElement('span'); row.className = 'tool-card-summary';
@@ -38,7 +39,7 @@ export function renderToolCard(document: Document, block: ToolCardBlock, details
   updateToolCard(document, details, block); return details;
 }
 export function updateToolCard(document: Document, details: HTMLDetailsElement, block: ToolCardBlock): void {
-  const name = string(block.name) || 'tool'; const status = toolStatus(block);
+  const name = string(block.title) || string(block.name) || 'tool'; const status = toolStatus(block);
   const summary = directChild<HTMLElement>(details, 'summary');
   const row = summary?.querySelector<HTMLElement>('.tool-card-summary');
   if (!summary || !row) return;

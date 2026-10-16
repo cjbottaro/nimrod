@@ -1,0 +1,18 @@
+.acp-permission {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--vscode-widget-border, var(--vscode-descriptionForeground));
+  border-radius: 6px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  max-height: min(30dvh, 220px);
+  overflow: auto;
+}
+.acp-permission pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  max-height: 100px;
+  overflow: auto;
+}
+.acp-permission-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.acp-permission-actions button { padding: 4px 8px; }

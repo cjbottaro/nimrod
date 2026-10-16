@@ -2,6 +2,8 @@ export const KEYBINDINGS_SETTING = 'keybindings';
 export const ACTIONS = [
   { id: 'open-recent-project', label: 'Open recent project…', scope: 'project', defaults: ['primary+shift+o'] },
   { id: 'new', label: 'New session', scope: 'project', defaults: ['primary+n'] },
+  { id: 'new-acp', label: 'New ACP session…', scope: 'project', defaults: [] },
+  { id: 'acp-options', label: 'ACP session options…', scope: 'project', defaults: [] },
   { id: 'temporary', label: 'New temporary session', scope: 'project', defaults: ['primary+shift+n'] },
   { id: 'delete', label: 'Delete session tree…', scope: 'project', defaults: ['primary+backspace'] },
   { id: 'delete-sessions', label: 'Delete sessions…', scope: 'project', defaults: ['primary+shift+backspace'] },

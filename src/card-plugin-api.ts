@@ -1,5 +1,12 @@
 /** Standalone type-only SDK for executable card manifest API v2. No runtime imports. */
+export interface CardPluginTarget { backend: 'pi' | 'acp'; agent?: string; }
 export interface ToolCardData {
+  /** Absence means legacy Pi. Supplied by Nimrod, not inferred from a tool name. */
+  source?: CardPluginTarget;
+  title?: string;
+  kind?: string;
+  /** Retained native tool metadata, not permission to execute anything. */
+  native?: unknown;
   name?: unknown;
   arguments?: unknown;
   uiPhase?: 'thinking' | 'stopped';
@@ -47,6 +54,8 @@ export interface CardPlugin<Data = ToolCardData> {
   readonly id: string;
   /** Required for automatically discovered personal sources; optional with a separate manifest. */
   readonly tools?: readonly string[];
+  /** Omitted targets preserve legacy Pi-only matching. An ACP target may name an exact negotiated agent. */
+  readonly targets?: readonly CardPluginTarget[];
   /** Compatibility, not input completeness: false latches the mounted card to raw fallback. */
   supports(data: Readonly<Data>): boolean;
   mount(context: CardPluginContext): CardPluginInstance<Data>;

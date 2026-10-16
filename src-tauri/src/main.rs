@@ -407,7 +407,8 @@ fn request_exit(app: &tauri::AppHandle) {
         let host = app.state::<WorkspaceHost>();
         let compiler = app.state::<plugin_compiler::Compiler>();
         let acp = app.state::<acp::AcpHost>();
-        let (result, acp_result, ()) = tokio::join!(host.shutdown(), acp.shutdown(), compiler.shutdown());
+        let (result, acp_result, ()) =
+            tokio::join!(host.shutdown(), acp.shutdown(), compiler.shutdown());
         if let Err(error) = acp_result {
             eprintln!("Nimrod ACP shutdown: {error}");
         }
@@ -684,7 +685,11 @@ fn main() {
                     {
                         eprintln!("Nimrod window shutdown: {error}");
                     }
-                    if let Err(error) = app.state::<acp::AcpHost>().stop_window(window.label(), None, true).await {
+                    if let Err(error) = app
+                        .state::<acp::AcpHost>()
+                        .stop_window(window.label(), None, true)
+                        .await
+                    {
                         eprintln!("Nimrod ACP window shutdown: {error}");
                     }
                     let store = app.state::<drafts::Drafts>().inner().clone();

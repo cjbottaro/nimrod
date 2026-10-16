@@ -2,7 +2,7 @@
 
 A dedicated cross-platform app for directory-backed coding projects and agent sessions. Conversations belong here; files, searches and diffs stay in your editor.
 
-**One project directory per window, with bespoke harness integrations.** Pi is the first and only implemented integration. Nimrod uses your installed Pi and its configuration, extensions, models and authentication.
+**One project directory per window, with bespoke harness integrations.** Pi is the primary integration, using your installed Pi and its configuration, extensions, models and authentication. An [experimental ACP POC](docs/acp.md) adds Copilot/custom-agent sessions; real-agent and native acceptance are still pending.
 
 ## Get started
 
@@ -43,6 +43,7 @@ Without installation, use `./bin/nimrod .`. The launcher opens or focuses a proj
 
 - [Projects](docs/projects.md) — directory-backed windows and recent-project navigation.
 - [Sessions](docs/sessions.md) — persistent and temporary conversations, resume, restart, close and deletion.
+- [ACP sessions (POC)](docs/acp.md) — experimental Copilot/custom-agent stdio integration, permissions and capability-aware controls.
 - [Session sidebar](docs/session-sidebar.md) — All, Unread and Working views, activity indicators and resizing.
 - [Drafts](docs/drafts.md) — native per-session storage, debounced saves and recovery.
 - [Writing messages](docs/writing-messages.md) — send, steer, queue, Stop, slash commands and recovery. [Error messages](docs/error-messages.md) describes session-local notices and the application notice strip.
@@ -64,6 +65,6 @@ See the [user-guide index](docs/README.md). [Card plugins](docs/card-plugins.md)
 
 macOS is the current development platform; Linux is next, and Windows is a possible future target, not a parity commitment. Linux native delivery/focus and Windows behavior remain unverified. The Bash launcher has no Windows wrapper; Windows Pi npm `.cmd` wrappers are not supported (select Pi's JS entry point and `node.exe` explicitly).
 
-There is no background process continuity, integrated diff editor, fork/tree-navigation UI, Pi `/reload`, other harness integration or in-app update system. macOS local bundles use ad-hoc signing; the separate [release workflow](CONTRIBUTING.md#release-setup) uses Developer ID signing/notarization and DMG packaging. Opening a project does not start Pi; selecting an inactive saved session loads and reconnects it without sending a prompt. Closing a project stops its owned agents.
+There is no background process continuity, integrated diff editor, fork/tree-navigation UI, Pi `/reload` or in-app update system. Experimental ACP sessions have no Nimrod saved-history resume/restart/deletion or attachment sending. macOS local bundles use ad-hoc signing; the separate [release workflow](CONTRIBUTING.md#release-setup) uses Developer ID signing/notarization and DMG packaging. Opening a project does not start Pi; selecting an inactive saved session loads and reconnects it without sending a prompt. Closing a project stops its owned agents.
 
 Send clears the composer and previews ordinary messages in the transcript immediately (images after local preparation), then reconciles Pi’s user turn in place. Failed or uncertain sends show an error without restoring the message or blocking a new draft; nothing is automatically replayed. Pi owns conversation history; Nimrod cannot coordinate external applications writing the same session file.

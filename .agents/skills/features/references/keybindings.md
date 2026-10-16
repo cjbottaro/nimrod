@@ -19,6 +19,10 @@ Every palette action is bindable through one shared dispatcher; empty default bi
 - `src-tauri/src/preferences.rs`: delegates keybindings validation, preserving the existing native last-valid/atomic/CAS path.
 - `src-tauri/src/native_menu.rs` / `main.rs`: custom Minimize/Close Window items; Minimize restores the native macOS `Cmd+M` accelerator (menu-only on other platforms), while Close Window remains accelerator-free. Focused-window events use Tauri minimize/close, with normal window shutdown lifecycle. Quit/Open project stay native and reserved. Open recent project has an accelerator-free native menu entry and frontend-owned configurable `primary+shift+o` default; a native accelerator would intercept the old default after rebinding.
 
+## ACP POC actions
+
+`new-acp` and `acp-options` are project actions with empty default bindings, using the same dispatcher and configurable hints. Existing `new` remains Pi-default even from an ACP session. Model/thinking require the selected ACP session to expose their selectors; Pi MCP inspection is unavailable there. Unavailable matches are still consumed, not passed to text editing. `test/keybindings-fixture.ts` includes the two new intentionally unbound IDs; shell/browser fixtures cover mixed-session dispatch and existing Pi defaults but have not been run for this change. See [ACP POC](acp-harnesses.md).
+
 ## Data and reset semantics
 
 `settings.json` contains `keybindings: { [actionId]: string[] }`. No defaults are copied on startup/migration. Absence inherits defaults, `[]` intentionally unbinds, a list replaces the entire action's defaults. Multiple bindings are supported (max eight). Unknown syntactically valid IDs survive individual edits; no unknown action executes. Reset one removes its property; Reset all confirms and writes `{}` to avoid deleting comments preceding the settings property. Comments inside reset/removed overrides are naturally removed with them. Unrelated properties/comments survive.

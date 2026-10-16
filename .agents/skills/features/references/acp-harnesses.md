@@ -1,6 +1,6 @@
 # Supporting ACP harnesses
 
-**Status: product integration planned; isolated protocol foundation implemented, not validated or wired into the app.** Pi remains Nimrod's only usable harness. This reference records decisions, implementation stages and current foundation boundaries, not a Copilot compatibility guarantee. The [features skill](../SKILL.md#harness-integration-direction) owns the broader direction, including potential bespoke SDK integrations.
+**Status: ACP POC wired into the app in source; validation/native acceptance pending.** Pi remains the primary integration. This reference records decisions, implementation stages and POC boundaries, not a Copilot compatibility guarantee. User setup/limitations: [ACP sessions](../../../../docs/acp.md). The [features skill](../SKILL.md#harness-integration-direction) owns the broader direction, including potential bespoke SDK integrations.
 
 ## POC workstream and abandonment checkpoint
 
@@ -14,14 +14,14 @@ Implement a reusable Agent Client Protocol (ACP) client, with **Copilot CLI as t
 
 | Stage | Scope and completion boundary |
 | --- | --- |
-| 1. Isolated protocol foundation — implemented, fixtures not run | ACP-only JSON-RPC and new-session/text-turn/permission handling. No app imports or native launch. See [current foundation](#current-foundation). |
-| 2. Native vertical slice — next | Add named, owned stdio launch/IPC alongside Pi; literal executable/args/environment, framing/byte bounds, canonical cwd validation, observed shutdown and Copilot preset. Connect an experimental ACP conversation without changing Pi's transport. |
-| 3. Shared rendering and public plugin components | Introduce explicit presentation boundaries, harness/agent-scoped plugins and generic ACP fallback. Exercise public shared components from both bundled and external plugins. Preserve Pi transcript behavior through targeted fixtures. |
-| 4. Shell and palette integration | Immutable session backend/profile identity, capability-aware controls, explicit creation default/selection, mixed-session navigation, permissions and notice ownership. Do not silently migrate existing Pi identities/settings/drafts. |
-| 5. History and richer capabilities | Implement supported discovery/loading/replay, configuration, commands and attachments; document unavailable temporary/rename/deletion semantics rather than emulate them. |
+| 1. Protocol foundation — source implemented | ACP-only JSON-RPC, new-session/text-turn/permission handling. See [current foundation](#current-foundation). Fixtures not run. |
+| 2. Native vertical slice — source implemented | Separate owned stdio host/named IPC, literal launch configuration, framing/byte bounds, canonical cwd validation, observed shutdown and Copilot preset. Native fixtures authored, not run. |
+| 3. Shared rendering/public components — POC source implemented | Shared conversation-view entry, scoped plugins, generic ACP fallback and public presentation/shell helpers used by bundled and external fixtures. No claim of Pi rendering regression acceptance. |
+| 4. Shell/palette — POC source implemented | Immutable runtime profile identity; explicit New ACP command alongside unchanged Pi-default New; mixed-session switching, inline permissions, advertised options/commands and independent Close. Saved ACP identities not implemented. |
+| 5. History and richer capabilities — deferred | Supported discovery/loading/replay and attachments remain future work. The POC exposes select configuration/legacy model/mode controls and advertised commands, not every protocol feature. |
 | 6. Interoperability and acceptance | Validate Copilot, then a second ACP agent, with explicit native/platform evidence and versioned capability gaps. |
 
-Each stage is a bounded task/worktree. Add fixture coverage with the implementation, but run checks/tests/builds only when requested. Reassess after the native vertical slice before committing to the full compatibility scope. A tighter Copilot SDK backend remains a possible follow-on only for identified gaps.
+Keep these stages as bounded commits in the single POC task worktree (the checkpoint/workstream policy above overrides the earlier separate-worktree-per-stage suggestion). Add fixture coverage with the implementation, but run checks/tests/builds only when requested. Reassess after the native vertical slice before committing to the full compatibility scope. A tighter Copilot SDK backend remains a possible follow-on only for identified gaps.
 
 ## Recorded product decisions
 
@@ -29,7 +29,7 @@ Each stage is a bounded task/worktree. Add fixture coverage with the implementat
 - **Bespoke behavior is intentional:** Pi keeps Pi-specific controls and semantics; ACP exposes as much supported ACP functionality as possible. Do not reduce both to a lowest-common-denominator chat interface.
 - **ACP supplies reusable protocol behavior, not identical agents:** implement the standard once; capability differences and tool payloads do not justify duplicating the ACP transport per agent. Agent-specific work should primarily be optional presentation improvements.
 - **The transcript runtime is shared; plugin sets need not be.** Pi Bash and Copilot shell plugins can be separate adapters using the same public visual components. Generic ACP cards must remain usable with an unknown agent and no bespoke plugins.
-- **External authors get equal supported building blocks.** Bundled plugins must use the same public components/API available to external plugins, not private rendering helpers. The [card-plugin reference](card-plugins.md#planned-multi-harness-plugin-boundary) owns this planned contract.
+- **External authors get equal supported building blocks.** Bundled plugins must use the same public components/API available to external plugins, not private rendering helpers. The [card-plugin reference](card-plugins.md#multi-harness-plugin-boundary) owns this contract.
 
 ## Command palette ownership
 
@@ -41,14 +41,14 @@ Keep one Nimrod-owned palette and dispatcher, with explicit command ownership ra
 | Cross-session coordination | New, Switch, Resume and Delete sessions remain common entry points; each integration supplies supported operations and metadata, not a universal deletion/resume algorithm. |
 | Selected session | Model/thinking and other operations target that exact session and its capabilities. Pi-only commands remain Pi-only; ACP commands must be advertised/supported. |
 
-- New needs an explicit harness/profile choice or configured project default. The precise chooser/default UX remains to be implemented; do not silently derive the new backend from whichever session is selected.
+- The POC preserves **New session** as Pi-default and adds explicit **New ACP session…**, selecting Copilot or a custom literal JSON profile. Do not silently derive a new backend from the selected session. Configurable project defaults/profile persistence are deferred.
 - Switch lists all open sessions with harness/agent identity, regardless of connectivity or capabilities.
 - Resume can aggregate supported history sources with harness labels. A source failure must not hide working Pi history. Distinguish remembered resumable sessions from complete agent-owned discovery.
 - Delete retains harness-specific review and safeguards. Pi's exact-file/tree behavior must not become an assumed ACP capability.
 - Keep agent-advertised slash commands in composer completion initially, not automatically in the top-level Nimrod palette. Any future palette exposure needs namespacing and the existing bindable-action/dispatcher contract; agent command names cannot replace application actions.
 - A picker stays bound to its originating session through async results, selection changes and cancellation. Stale results cannot act on the newly selected session or reopen canceled interactions. Unsupported shortcuts do not fall through into destructive text editing.
 
-Use the existing [command interaction](command-interactions.md) lifecycle and [keybinding](keybindings.md) registry. This is planned ownership/routing, not implemented mixed-harness palette behavior.
+Use the existing [command interaction](command-interactions.md) lifecycle and [keybinding](keybindings.md) registry. `new-acp` and `acp-options` are registered project actions with empty defaults. Selected ACP configuration uses session-bound palette selections; each accepted selection closes before a subsequent page opens. Resume/Delete saved history still use Pi's existing catalog only; aggregate history remains planned.
 
 ## Proposed integration boundary
 
@@ -90,13 +90,19 @@ ACP also supports **client-provided filesystem and terminal services**. Initiall
 
 ## Current foundation
 
-- `src/acp/connection.ts`: isolated, dependency-free ACP JSON-RPC record boundary. Outbound result callbacks apply synchronously before later wire events. Incoming/outgoing ID spaces are independent; duplicate active incoming IDs and malformed records fail closed. Explicit RPC errors differ from uncertain connection/write failure; no automatic retry. Disconnect rejects pending operations, aborts incoming handlers and suppresses late replies/events.
-- `src/acp/client.ts`: deliberately limited ACP v1 client, one new session per connection. Negotiates v1 with empty client capabilities, preserves returned capability/configuration records, sends text, delivers ordered raw session updates, handles whole-turn completion, sends cancel once and remains working until authoritative completion. Busy sends are rejected locally rather than queued/steered implicitly.
-- Permission callbacks may select only an offered option. Missing handlers, callback errors, invalid choices and cancellation fail closed. Cancel/disconnect/turn completion abort pending permission UI; late approval cannot revive a canceled request. Unimplemented filesystem/terminal/auth methods return method-not-found and are not advertised.
-- Some agents send updates before the new-session response. The client buffers at most 128 updates, verifies their session identity and releases them synchronously on identity confirmation; overflow disconnects rather than dropping updates. Future native framing/aggregate bounds remain required.
-- `test/acp-connection.test.ts` and `test/acp-client.test.ts`: authored offline record fixtures for ordering, negotiation, identity, cancellation, permission selection/late results, unsupported methods, malformed records, bidirectional IDs and uncertain delivery. **Not run.** No native subprocess fixture or actual Copilot/second-agent evidence exists yet.
+- `src/acp/connection.ts`: independent JSON-RPC record boundary. Result callbacks apply synchronously before later wire events; incoming/outgoing IDs are independent. Malformed records/duplicate active incoming IDs fail closed. Explicit RPC errors differ from uncertain write/disconnection; no automatic retries. Disconnect rejects pending work, aborts handlers and suppresses late events/replies.
+- `src/acp/client.ts`: ACP v1, one new session per connection, empty advertised client capabilities. Text prompts, ordered session updates, whole-turn completion/cancellation, supported configuration requests and permissions. Pre-identity buffering is capped at 128 updates/16 MiB; overflow disconnects explicitly. Busy sends never become synthetic queues/steering.
+- `src/acp/session.ts`: ACP semantics adapted directly to shared display records, not Pi events. Local user echoes reconcile by renderer key. Tool IDs patch retained native metadata and supplied content; pending tools become interrupted on cancellation/disconnect. Configuration responses apply synchronously before later updates. Startup/configuration have 20s deadlines; prompts have no acceptance timeout. Unsupported rich content falls back to JSON/text. Plan/context updates are displayed; fuller rich content, cost and extensions remain follow-ons.
+- `src-tauri/src/acp.rs`: separate `AcpHost`, `start_acp`/`write_acp`/`stop_acp`; window/token ownership, project-cwd validation and literal executable/args/env. Native outgoing operations are whitelisted separately from Pi; no session loading/deletion endpoint. Stdout 16 MiB/record, stderr 64 KiB/line with a bounded diagnostic tail; 5s stdin deadline; owned SIGTERM/kill escalation and observed exit. Failed shutdown retains the reservation. App Quit/window Close includes both hosts; neither scans OS processes. Webview reload separately reaps ACP children before enabling new ACP sessions, without making ACP availability a gate on Pi startup. Node PATH enrichment is optional for native agents.
+- `src/acp/profiles.ts`, `src/main.ts`: frozen Copilot/custom profile identity at creation; no profile persistence. Pi-default creation/history remains untouched. ACP entries use runtime UUIDs and memory-only draft/pop-out scopes, excluded from Pi saved layout/history. This does not imply the agent disables its own persistence. Close confirms loss of Nimrod state without claiming agent-history deletion.
+- `src/conversation-view.ts`: shared engine entry (legacy implementation remains in `src/pi/webview-client.ts`). The optional ACP view behavior disables Pi slash interception, busy steering/queue semantics and attachments, labels Stop for the owning agent, and hides unsupported preference controls. Pi omits this behavior and retains its existing branch. `src/acp/card-plugins.ts` supplies generic ACP fallback/optional Copilot shell adaptation; public component details belong to [card plugins](card-plugins.md#multi-harness-plugin-boundary).
+- Permissions are inline in their owning conversation's interaction area, without focus/modal/navigation side effects. Only exact offered choices can select; absent UI, failures, invalid choices and cancellation fail closed. Stop/disconnect/completion abort pending UI and suppress late approvals. Client filesystem/terminal/auth/elicitation services are not advertised or implemented. The agent must already be authenticated and provide its own execution services.
 
-The host must deliver decoded records and writes in order, enforce byte/framing limits, validate canonical cwd, manage token/window ownership, stop on connection failure and provide lifecycle deadlines for startup. The foundation has no request deadlines (in particular no Pi-style prompt-acceptance timeout). It forwards extensible update records; variant-specific validation and presentation are future work, not an existing rendering guarantee. No rich-content sending, authentication flow, history, configuration mutation, subprocess launch or UI integration is implemented. Nothing in the app imports this foundation; Pi source, native commands, saved formats and UI paths are unchanged.
+### POC fixtures and evidence
+
+`test/acp-connection.test.ts`, `test/acp-client.test.ts`, `test/acp-session.test.ts`, `test/acp-cards.test.ts`, mixed cases in `test/shell.test.ts`, native tests in `acp.rs`, and `test/browser/acp-sessions.spec.ts` are authored but **not run or type-checked**. The offline `test/fixtures/acp-agent.mjs` implements simulated ACP streaming, permission/configuration and cancellation without tools/providers/network/user-history writes; browser hosts substitute it for every ACP launch and keep Pi on the existing offline demo. The fixture file itself has not been executed for acceptance yet. External-plugin fixtures bundle/import the public shell helper and assert bundled shell entries avoid private rendering imports.
+
+No app build/launch, installed-agent startup, live request or native platform acceptance has occurred. Source formatting is not validation. Requested validation must include `mise run check` and `npm run test:browser` because shared transcript/composer/scroll paths changed. Real Copilot and a second agent require separate explicit authorization/evidence. No ACP history loading/discovery, attachment sending, login/elicitation/client terminal/filesystem support, saved draft migration or SDK backend is implemented.
 
 ## Pi regression protection
 
@@ -110,7 +116,7 @@ Use fixture agents for negotiation, unsupported capabilities, bidirectional requ
 
 Validate actual Copilot compatibility separately from fixtures, then a second agent separately. Record tested agent/protocol versions, platforms and capability gaps in the [verification reference](verification.md). No live paid requests, user-session mutation, tests, builds or app launches without the authorization required by repository policy.
 
-When app support is implemented, add user-facing setup/limitations documentation and update the affected internal feature contracts. This foundation does not change user-visible behavior and does not warrant a changelog entry or user setup guide yet.
+The POC's user-facing behavior is documented in [ACP sessions](../../../../docs/acp.md), linked from the guide index and README, and recorded under Unreleased. Keep current limitations explicit until actual validation/agent acceptance closes them.
 
 ## Upstream references
 

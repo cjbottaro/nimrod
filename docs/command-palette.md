@@ -6,6 +6,10 @@
 
 Open with **⌘/Ctrl+Shift+P**, type an action or description, then press Enter or click a result. Commands show a short description and their effective shortcut; unbound actions leave the shortcut space empty. Every palette command is bindable, but **Select theme…** has no default shortcut.
 
+## Harness-aware commands
+
+**New session** stays Pi-default. **New ACP session…** explicitly opens the [experimental ACP POC](acp.md); **ACP session options…** appears for a selected ACP session with advertised selectors. Both are bindable without default shortcuts. Switch session includes both backends; Resume/Delete saved history remain Pi-only in the POC. Model/thinking and Pi MCP commands follow the selected session's actual support. Application commands remain Nimrod-owned, not agent slash commands.
+
 ## Pickers and cancellation
 
 Some commands open a picker or name field:

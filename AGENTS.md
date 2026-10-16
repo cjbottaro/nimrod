@@ -1,6 +1,6 @@
 # Nimrod
 
-A dedicated cross-platform agent workspace, with bespoke harness integrations. Pi is the first and only implemented harness; do not invent a generic harness protocol before a concrete second integration.
+A dedicated cross-platform agent workspace, with bespoke harness integrations. Pi is the primary integration; ACP is an experimental, capability-driven POC. Preserve bespoke harness semantics and concrete integration boundaries rather than inventing a universal harness protocol. See the [ACP feature reference](.agents/skills/features/references/acp-harnesses.md) for its task-worktree strategy and abandonment checkpoint.
 
 Platform direction: macOS first, Linux next, and possibly Windows later. Nimrod is not a macOS-only product. Design new features—including notifications—with portable behavior and narrow platform-specific native integrations where needed; do not assume macOS APIs or desktop conventions apply everywhere. Windows remains a possible future target, not a current parity commitment. Distinguish intended support from actual per-platform verification.
 

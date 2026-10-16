@@ -6,6 +6,10 @@ Read the [human guide](../../../../docs/sessions.md),
 [architecture](architecture.md), and
 [UI vocabulary](../../nimrod-ui-vocabulary/SKILL.md). Paths below are repository-root relative.
 
+## ACP POC boundary
+
+The saved-history/identity/temporary contracts below remain Pi's. [ACP POC sessions](acp-harnesses.md) carry an immutable frozen `acpProfile`, separate `AcpSession` and native `AcpHost`; they share project navigation but never enter the Pi session catalog or saved layout. Their runtime UUID and memory-only draft/pop-out scope reuse Nimrod's temporary-storage mechanism without promising that the agent disables its own history. New session remains Pi-default; New ACP session is explicit. Close confirms Nimrod state loss and routes to `stop_acp`; window/app teardown stops both hosts independently. No ACP resume/restart/deletion/migration is implemented or accepted. Mixed/native fixtures are authored, not run.
+
 ## Specification and acceptance criteria
 
 One canonical directory per window with independently owned sessions. New is persistent by default, saved identity gates submission/Restart, exact-file resume never falls back, and temporary disposal never leaks drafts into persistence.

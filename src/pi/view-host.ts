@@ -4,6 +4,13 @@ import type { JsonRecord } from './types';
 /** The existing Pi renderer's small in-process boundary; no VS Code compatibility shim. */
 export interface ViewHost {
   performance?: import('../performance-diagnostics').PerformanceProbe;
+  /** Explicit ACP behavior; omission preserves the existing Pi interaction contract. */
+  acp?: {
+    label: string;
+    validatePrompt(text: string): string | undefined;
+    modelAvailable(): boolean;
+    thinkingAvailable(): boolean;
+  };
   cardRenderer?: (data: Readonly<import('./tool-card').ToolCardBlock>) => import('./tool-card').ToolCardRenderer;
   cardActions?: {
     copy(text: string): Promise<void>;
