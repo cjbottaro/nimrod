@@ -175,6 +175,40 @@ test('busy SDK configuration updates one queued transcript row and applies at id
   } finally { await demo.close(); }
 });
 
+test('SDK configuration accepted before the first prompt stays at the start as conversation arrives', async ({ page }) => {
+  const demo = await demoFixture(page);
+  try {
+    await page.keyboard.press('Meta+Shift+P');
+    await page.locator('#palette-input').fill('New Copilot session'); await page.locator('#palette-input').press('Enter');
+    await expect(page.locator(visible('model'))).toHaveText('small');
+    await page.locator(visible('model')).click();
+    await page.locator('#palette-input').fill('Fixture large'); await page.locator('#palette-input').press('Enter');
+    await expect(page.locator(visible('model'))).toHaveText('large');
+    const messages = page.locator(visible('messages'));
+    const row = messages.locator('.message.configuration');
+    await expect(row).toHaveCount(1);
+    await expect(row.locator('.delivery-status-text')).toHaveText('Configuration changed');
+    await expect(row.locator('.delivery-status-shimmer')).toHaveCount(0);
+    await row.evaluate(node => { node.setAttribute('data-fixture-identity', 'accepted-before-first-prompt'); });
+    const prompt = page.locator(visible('prompt'));
+    await prompt.fill('First turn after configuration'); await prompt.press('Enter');
+    await page.locator('#command-palette').getByRole('option', { name: 'Allow once', exact: true }).click();
+    await expect(messages).toContainText('Offline SDK response.');
+    await expect(messages.locator(':scope > .message').first()).toHaveAttribute('data-fixture-identity', 'accepted-before-first-prompt');
+    await expect(messages.locator('.queued-turns .message.configuration')).toHaveCount(0);
+    await expect(row).not.toHaveClass(/sticky-turn/);
+    await expect(page.locator(visible('send'))).toHaveAttribute('aria-label', 'Send message');
+    await prompt.fill('More output after configuration'); await prompt.press('Enter');
+    await page.locator('#command-palette').getByRole('option', { name: 'Allow once', exact: true }).click();
+    await expect(page.locator(visible('send'))).toHaveAttribute('aria-label', 'Stop Copilot');
+    await prompt.fill('Keep newer draft');
+    await expect(messages.locator(':scope > .message').first()).toHaveAttribute('data-fixture-identity', 'accepted-before-first-prompt');
+    await expect(row.locator('.delivery-status-shimmer')).toHaveCount(0);
+    await expect(prompt).toHaveValue('Keep newer draft');
+    expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
 test('SDK discovery never resumes automatically; selection uses the exact ID and SDK-only draft', async ({ page }) => {
   const scope = copilotSdkScope('fixture-sdk');
   const demo = await demoFixture(page, { [copilotHistoryKey(process.cwd())]: true }, [], {

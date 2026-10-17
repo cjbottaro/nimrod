@@ -679,7 +679,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   window.addEventListener("unhandledrejection", event => { if (active) reportRenderError(event.reason); }, { signal: listeners.signal });
 
   function queueRender(state: State, rows?: readonly DisplayMessage[]): void {
-    const operations = configurationTranscript.sync(state.configurationOperations);
+    const operations = configurationTranscript.sync(state.configurationOperations, () => steeringTranscript.project(state.messages || []));
     if (operations.structural) rows = undefined;
     else if (rows && operations.rows.length) rows = [...rows, ...operations.rows];
     pendingState = state;

@@ -141,16 +141,16 @@ test('a replacement during concrete pre-dispatch validation suppresses the old m
 test('local operation projection retains row identity, pins pending work, and anchors completed operations without touching native records', () => {
   const transcript = new ConfigurationTranscript();
   const queued = { key: 'configuration:fixture', phase: 'queued' as const, title: 'Model change queued', text: 'Model: b' };
-  assert.equal(transcript.sync([queued]).structural, true);
   const native = [{ key: 'native', role: 'assistant', content: 'Native answer' }];
+  assert.equal(transcript.sync([queued], () => native).structural, true);
   const projected = transcript.project(native);
   assert.equal(projected[0], native[0]); assert.equal(projected[1].sticky, true);
   const replaced = { ...queued, text: 'Model: c' };
-  const changed = transcript.sync([replaced]);
+  const changed = transcript.sync([replaced], () => assert.fail('pending replacement must not read history'));
   assert.equal(changed.structural, false);
   assert.equal(changed.rows[0].key, queued.key);
   const completed = { ...replaced, phase: 'completed' as const, title: 'Configuration changed' };
-  assert.equal(transcript.sync([completed]).structural, true);
+  assert.equal(transcript.sync([completed], () => native).structural, true);
   const done = transcript.project(native);
   const future = { key: 'future', role: 'user', content: 'Next question' };
   const later = transcript.project([...native, future]);

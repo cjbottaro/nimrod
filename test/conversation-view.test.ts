@@ -219,6 +219,47 @@ test('configuration progress reuses queued-turn layout and one shimmering title 
   } finally { f.dom.window.close(); }
 });
 
+for (const hidden of [false, true]) for (const empty of [false, true]) {
+  test(`configuration acceptance anchors before later output with ${hidden ? 'hidden' : 'coalesced'} painting and ${empty ? 'empty' : 'existing'} history`, () => {
+    const f = fixture();
+    try {
+      const document = f.win.document;
+      const native = empty ? [] : [{ key: 'native', role: 'assistant', content: 'Existing answer' }];
+      const operation = { key: 'configuration:fixture', phase: 'queued' as const, title: 'Model change queued', text: 'Model: requested' };
+      f.receive({ type: 'snapshot', state: { messages: native, configurationOperations: [operation] }, transcript: { base: 0, revision: 1 } }); f.flush();
+      const row = document.querySelector<HTMLElement>('.message.configuration')!;
+      const title = row.querySelector<HTMLElement>('.delivery-status-text')!;
+      const prompt = document.querySelector<HTMLTextAreaElement>('#prompt')!;
+      prompt.value = 'Keep newer draft'; prompt.dispatchEvent(new f.win.Event('input')); prompt.focus();
+      assert.equal(row.parentElement?.className, 'queued-turns');
+      if (hidden) f.view.setActive(false);
+      const operations = [{ ...operation, phase: 'completed' as const, title: 'Configuration changed' }];
+      f.receive({ type: 'snapshot', state: { messages: native, configurationOperations: operations }, transcript: { base: 1, revision: 2, rows: [] } });
+      const future = { key: 'future', role: 'assistant', content: 'Later output' };
+      f.receive({ type: 'snapshot', state: { messages: [...native, future], configurationOperations: operations }, transcript: { base: 2, revision: 3 } });
+      assert.equal(title.classList.contains('delivery-status-shimmer'), true, 'painting is still deferred');
+      if (hidden) { f.flush(); f.view.setActive(true); }
+      f.flush();
+      const keys = () => Array.from(document.querySelectorAll('#messages > article'), node => (node as HTMLElement).dataset.key);
+      assert.deepEqual(keys(), [...native.map(message => message.key), operation.key, 'future']);
+      assert.equal(document.querySelector('.message.configuration'), row);
+      assert.equal(row.querySelector('.delivery-status-text'), title);
+      assert.equal(title.classList.contains('delivery-status-shimmer'), false);
+      assert.equal(row.classList.contains('sticky-turn'), false);
+      assert.equal(row.parentElement?.id, 'messages');
+      assert.equal(document.querySelector('.queued-turns'), null);
+      // Later dirty updates must remain lazy and leave the accepted row in place.
+      const updated = { ...future, content: 'Later output keeps streaming' };
+      f.receive({ type: 'snapshot', state: { get messages(): never { assert.fail('dirty output must not read history'); }, configurationOperations: operations }, transcript: { base: 3, revision: 4, rows: [updated] } }); f.flush();
+      assert.deepEqual(keys(), [...native.map(message => message.key), operation.key, 'future']);
+      assert.equal(document.querySelector('[data-key="future"]')?.textContent?.includes(updated.content), true);
+      assert.equal(prompt.value, 'Keep newer draft');
+      assert.equal(document.activeElement, prompt);
+      assert.equal(f.sent.some(message => message.type === 'prompt'), false);
+    } finally { f.dom.window.close(); }
+  });
+}
+
 test('metric tooltip-only changes invalidate presentation, retain text nodes and catch up without touching the draft', () => {
   const f = fixture();
   try {
