@@ -37,10 +37,10 @@ Explicitly requested builds use checkout-local targets and publish verified whol
 
 - Never automatically run `mise run build`, Tauri packaging, or an equivalent app
   build for validation, task completion or merge/cleanup. The sole automatic validation
-  exception is post-merge `cargo check` on `main`, with compilation fixes committed/merged
+  exception is post-merge `mise run check` on `main`, with TypeScript/Rust compilation fixes committed/merged
   through a task worktree and rechecked until passing; follow the
-  [worktree workflow](../../../../CONTRIBUTING.md#worktree-workflow). All other tests and
-  checks require an explicit request, per repository `AGENTS.md`; report what was not run.
+  [worktree workflow](../../../../CONTRIBUTING.md#worktree-workflow). All other tests,
+  checks and builds require an explicit request, per repository `AGENTS.md`; report what was not run.
   The user schedules builds across concurrent worktrees/agents to avoid CPU contention.
 - “Build the app” includes publication to the primary checkout on `main` so the
   installed `nimrod` CLI uses the result. Before merge, compile the requested task
