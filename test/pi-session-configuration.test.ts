@@ -7,7 +7,7 @@ import type { JsonRecord } from '../src/pi/types';
 
 const flush = async () => { for (let index = 0; index < 40; index++) await Promise.resolve(); };
 async function fixture() {
-  const models = [{ provider: 'first', id: 'same' }, { provider: 'second', id: 'same' }];
+  const models = [{ provider: 'first', id: 'same', name: 'Friendly' }, { provider: 'second', id: 'same' }];
   let current: ModelIdentity = models[0], effort = 'low', blocked = false, unavailable = false, scoped = models;
   const calls: { type: string; fields?: JsonRecord }[] = [], errors: string[] = [];
   let configuration: SessionConfigurationController | undefined;
@@ -35,6 +35,10 @@ test('Pi configuration preserves provider identity, fresh scope and changes duri
   const f = await fixture();
   const models = await f.configuration.choices('model');
   assert.notEqual(models[0].value, models[1].value);
+  assert.deepEqual(models.map(({ label, detail, keywords }) => ({ label, detail, keywords })), [
+    { label: 'Friendly', detail: 'first', keywords: 'same' },
+    { label: 'same', detail: 'second', keywords: undefined },
+  ]);
   assert.equal(f.configuration.get('model'), models[0].value);
   f.configuration.set('model', models[1]); await flush();
   assert.equal(f.configuration.get('model'), models[1].value);

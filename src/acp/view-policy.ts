@@ -7,7 +7,7 @@ import type { SessionAction } from '../session-backend';
 export function acpSessionActions(session: AcpSession | undefined): readonly SessionAction[] {
   const actions: SessionAction[] = [];
   if (session?.configuration.capabilities.some(setting => setting.id === 'model')) actions.push({ id: 'model', label: 'Select model…', detail: 'Choose the model for this session' });
-  if (session?.configuration.capabilities.some(setting => setting.id === 'effort')) actions.push({ id: 'thinking', label: 'Select thinking level…', keywords: 'effort reasoning', detail: 'Choose reasoning effort for this session' });
+  if (session?.configuration.capabilities.some(setting => setting.id === 'effort')) actions.push({ id: 'thinking', label: 'Select thinking level…', keywords: 'effort reasoning', detail: 'Choose the thinking level for this session' });
   if (session?.options.length) actions.push({ id: 'acp-options', label: 'ACP session options…', detail: 'Configuration selectors advertised by this ACP agent' });
   return actions;
 }

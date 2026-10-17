@@ -44,7 +44,7 @@ export interface InspectionRequest {
 }
 export interface SelectionRequest {
   choose(options: string[], current?: string): Promise<string | undefined>;
-  chooseItems(options: readonly { id: string; label: string; detail?: string }[], current?: string): Promise<string | undefined>;
+  chooseItems(options: readonly { id: string; label: string; detail?: string; keywords?: string }[], current?: string): Promise<string | undefined>;
   error(message: string): void;
   finish(): void;
   cancel(): void;
@@ -304,7 +304,8 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       if (!current()) return Promise.resolve(undefined);
       return new Promise(resolve => {
         cancelChoice(); resolveChoice = resolve;
-        items = values.map(value => ({ ...value, current: value.id === selectedValue, keywords: value.id === selectedValue ? 'Current' : undefined,
+        items = values.map(value => ({ ...value, current: value.id === selectedValue,
+          keywords: [value.keywords, value.id === selectedValue ? 'Current' : undefined].filter(Boolean).join(' ') || undefined,
           run: () => { accepted = true; resolve(value.id); } }));
         matches = items; selected = Math.max(0, items.findIndex(item => item.id === selectedValue));
         loading = false; notice = ''; draw();

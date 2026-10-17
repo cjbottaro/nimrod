@@ -1052,7 +1052,8 @@ async function pickPreference(tab: Tab, kind: 'model' | 'thinking'): Promise<voi
   const valid = () => tabs.includes(tab) && sessionConfiguration(tab) === configuration && tab.cancelPreference === request.cancel
     && !tab.ended && !tab.closing && !tab.restarting && !tab.deleting;
   try {
-    await pickConfiguration(configuration, kind === 'model' ? 'model' : 'effort', (options, current) => request.choose(options, current), valid);
+    await pickConfiguration(configuration, kind === 'model' ? 'model' : 'effort',
+      (options, current) => request.chooseItems(options.map(option => ({ id: option.value, label: option.label, detail: option.detail, keywords: option.keywords })), current), valid);
   } catch (error) { if (valid()) request.error(String(error)); }
   finally { request.finish(); if (tab.cancelPreference === request.cancel) tab.cancelPreference = undefined; }
 }

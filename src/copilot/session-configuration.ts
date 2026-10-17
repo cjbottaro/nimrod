@@ -22,7 +22,7 @@ export function createCopilotConfiguration(host: {
     get: setting => setting === 'model' ? host.model() : setting === 'effort' ? host.effort() : undefined,
     choices: async (setting, desired) => {
       const models = host.models();
-      if (setting === 'model') return models.map(model => ({ value: model.id, label: `${model.label} (${model.id})` }));
+      if (setting === 'model') return models.map(model => ({ value: model.id, label: model.label, detail: model.id }));
       if (setting === 'effort') return (models.find(model => model.id === (desired.model ?? host.model()))?.efforts || []).map(value => ({ value, label: value }));
       throw new Error('This Copilot setting is unsupported.');
     },

@@ -16,6 +16,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- Model and thinking-level actions now use consistent descriptions across Pi and Copilot. Model pickers remove numbered prefixes and use stable model identities: Copilot shows friendly names with model IDs as detail, while Pi shows reported names with providers as detail.
 - Copilot's Status area shows estimated USD equivalent of reported session AI credits and compact context utilization (`25.5% / 125k`), with AIC totals, coverage and full context counters in the tooltip. Fresh sessions begin with provisional zero cost/utilization and resumed sessions with unknowns, then share the same metadata update path. Missing fields use `—`, partial totals stay qualified, and optional usage reads never block chat.
 - ACP command permissions use a compact **Run command · description** summary, exact command previews without duplicate metadata, and collapsed raw details below the existing permission buttons. Long descriptions wrap without truncation; unsupported operations retain the literal fallback.
 - Experimental ACP plugins distinguish tool names (`tools`) from protocol categories (`kinds`); early POC category-based plugins must move their matching to `kinds`. Agent-specific matches take precedence over generic ACP matches.

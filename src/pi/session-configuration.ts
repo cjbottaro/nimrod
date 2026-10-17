@@ -20,7 +20,12 @@ export function createPiConfiguration(model: ModelThinkingController, host: {
     ],
     get: setting => setting === 'model' ? identity(model.current.model) : setting === 'effort' ? model.current.thinkingLevel : undefined,
     choices: async (setting, desired) => {
-      if (setting === 'model') return host.scoped(await model.availableModels()).map(item => ({ value: identity(item)!, label: `${item.provider}/${item.id}` }));
+      if (setting === 'model') return host.scoped(await model.availableModels()).map(item => ({
+        value: identity(item)!,
+        label: item.name || item.id,
+        detail: item.provider,
+        keywords: item.name ? item.id : undefined,
+      }));
       if (setting !== 'effort') throw new Error('This Pi setting is unsupported.');
       if (desired.model && desired.model !== identity(model.current.model)) throw new Error('Wait for the pending model change before choosing Pi thinking levels for that model.');
       return (await model.availableThinkingLevels()).map(value => ({ value, label: value }));

@@ -45,11 +45,13 @@ test('harness choice pages share selection mechanics without application Back/Re
   const f = fixture();
   try {
     const request = f.palette.startSelection('Copilot permissions', () => { throw new Error('A command choice must not retry an invocation'); }, undefined, true)!;
-    const choosing = request.chooseItems([{ id: 'show', label: 'show', detail: 'Show current permissions' }, { id: 'reset', label: 'reset', detail: 'Clear approvals' }]);
+    const choosing = request.chooseItems([{ id: 'show', label: 'show', detail: 'Show current permissions' },
+      { id: 'reset', label: 'reset', detail: 'Clear approvals', keywords: 'restore defaults' }]);
     assert.equal(f.win.document.querySelector<HTMLButtonElement>('#palette-back')!.hidden, true);
     assert.equal(f.win.document.querySelector<HTMLButtonElement>('#palette-refresh')!.hidden, true);
     assert.match(f.list().textContent!, /Show current permissions/);
-    f.key('ArrowDown'); f.key('Enter'); await tick();
+    f.query('restore defaults'); assert.match(f.list().textContent!, /reset/);
+    f.key('Enter'); await tick();
     assert.equal(await choosing, 'reset'); assert.deepEqual(f.calls, []);
     assert.equal(f.dialog.open, false);
     const cancelled = f.palette.startSelection('Another choice', () => {}, undefined, true)!;

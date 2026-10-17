@@ -10,7 +10,7 @@ import type { SessionAction } from '../session-backend';
 export const piSessionActions: readonly SessionAction[] = [
   { id: 'mcp', label: 'MCP servers…', detail: 'Inspect this Pi session’s MCP connections, exposure and reported errors' },
   { id: 'model', label: 'Select model…', detail: 'Choose the model for this session' },
-  { id: 'thinking', label: 'Select thinking level…', keywords: 'effort reasoning', detail: 'Choose reasoning effort for this session' },
+  { id: 'thinking', label: 'Select thinking level…', keywords: 'effort reasoning', detail: 'Choose the thinking level for this session' },
 ];
 
 /** Pi owns slash interception, steering/queue semantics, compaction and skill UI. */

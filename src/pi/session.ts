@@ -104,7 +104,13 @@ export class PiSession {
 
   /** Each picker invocation is bound to this session, including cancellation and errors. */
   async selectPreference(kind: 'model' | 'thinking', picker: PreferencePicker): Promise<void> {
-    try { await pickConfiguration(this.configuration, kind === 'model' ? 'model' : 'effort', (options, current) => picker.choose(kind === 'model' ? 'Select model' : 'Select thinking level', options, current)); }
+    try {
+      await pickConfiguration(this.configuration, kind === 'model' ? 'model' : 'effort', async (options, current) => {
+        const labels = options.map(option => option.detail ? `${option.label} — ${option.detail}` : option.label);
+        const selected = await picker.choose(kind === 'model' ? 'Select model' : 'Select thinking level', labels, labels[options.findIndex(option => option.value === current)]);
+        return options[labels.indexOf(selected || '')]?.value;
+      });
+    }
     catch (error) { picker.error(errorText(error)); }
   }
 

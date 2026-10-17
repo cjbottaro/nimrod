@@ -114,6 +114,10 @@ test('SDK busy drafts do not dispatch; Stop cancels session-bound decisions with
 test('SDK model events outrank older configuration responses and thinking remains model-specific', async () => {
   const f = await fixture();
   assert.equal(f.session.supports('thinking'), true);
+  assert.deepEqual((await f.session.configuration.choices('model')).map(({ value, label, detail }) => ({ value, label, detail })), [
+    { value: 'small', label: 'Small', detail: 'small' },
+    { value: 'large', label: 'Large', detail: 'large' },
+  ]);
   const selecting = f.session.selectPreference('model', async values => values[1]);
   await flush();
   f.event('session.model_change', { newModel: 'small', reasoningEffort: 'high' });

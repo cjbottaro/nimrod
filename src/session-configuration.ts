@@ -1,5 +1,10 @@
 export type ConfigurationAvailability = 'ready' | 'deferred' | 'unavailable';
-export interface ConfigurationChoice { readonly value: string; readonly label: string; }
+export interface ConfigurationChoice {
+  readonly value: string;
+  readonly label: string;
+  readonly detail?: string;
+  readonly keywords?: string;
+}
 export interface ConfigurationSetting {
   readonly id: string;
   readonly label: string;

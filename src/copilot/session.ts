@@ -236,7 +236,11 @@ export class CopilotSession {
     }
   }
   async selectPreference(kind: 'model' | 'thinking', choose: (values: string[], current?: string) => Promise<string | undefined>): Promise<void> {
-    await pickConfiguration(this.configuration, kind === 'model' ? 'model' : 'effort', choose);
+    await pickConfiguration(this.configuration, kind === 'model' ? 'model' : 'effort', async (options, current) => {
+      const labels = options.map(option => option.detail ? `${option.label} — ${option.detail}` : option.label);
+      const selected = await choose(labels, labels[options.findIndex(option => option.value === current)]);
+      return options[labels.indexOf(selected || '')]?.value;
+    });
   }
   private async applyPreference(setting: string, value: string, current: () => boolean): Promise<void> {
     if (this.ended || this.state.sessionUnavailable) throw new Error('Copilot configuration is unavailable.');

@@ -161,7 +161,11 @@ export class AcpSession {
     } finally { this.echo = undefined; this.group = undefined; }
   }
   async selectOption(option: AcpOption, choose: (title: string, values: string[], current?: string) => Promise<string | undefined>): Promise<void> {
-    await pickConfiguration(this.configuration, this.configurationId(option), (values, current) => choose(option.name, values, current));
+    await pickConfiguration(this.configuration, this.configurationId(option), async (choices, current) => {
+      const labels = choices.map(choice => choice.detail ? `${choice.label} — ${choice.detail}` : choice.label);
+      const selected = await choose(option.name, labels, labels[choices.findIndex(choice => choice.value === current)]);
+      return choices[labels.indexOf(selected || '')]?.value;
+    });
   }
   private async applyOption(option: AcpOption, value: string): Promise<void> {
     if (this.ended || this.state.sessionUnavailable) throw new Error('ACP configuration is unavailable.');
