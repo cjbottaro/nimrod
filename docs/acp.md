@@ -1,6 +1,6 @@
 # ACP sessions (experimental POC)
 
-Nimrod has an experimental Agent Client Protocol integration alongside its bespoke Pi integration. **The POC passes type-checking, the full unit/native-fixture checks and offline browser tests. It has not yet been packaged or accepted with Copilot or another real agent.** It is not a broad compatibility guarantee.
+Nimrod has an experimental Agent Client Protocol integration alongside its bespoke Pi integration. **The initial POC passed offline checks and browser tests; the latest shared-view and correctness changes have not yet been validated. It has not been accepted with Copilot or another real agent in the native app.** It is not a broad compatibility guarantee.
 
 ## Start an ACP session
 
@@ -30,15 +30,15 @@ Nimrod uses the project's exact directory. Opening the session does not submit a
 
 - Text sends immediately clear the composer and preview the user turn; later events reconcile it without automatic retries or draft restoration.
 - While an ACP turn is running, the primary button is **Stop**. Enter does not steer or queue; the newer draft remains editable and is kept. Stop requests cancellation and waits for the agent's turn-completion response.
-- Permission requests appear **inside their own conversation area** with the exact offered choices and a Cancel request action. They do not open a global modal, select a background session or take focus. Return to that session to act. Existing notification preferences also apply to background input/completion.
+- Permission requests appear **inside their own conversation area** with the exact offered choices and a Cancel request action. Tool details are resolved from earlier updates even when the request supplies only a tool-call ID; provided inputs, operation content (including diffs) and locations are shown literally. The call ID remains visible; missing details are explicitly identified. They do not open a global modal, select a background session or take focus. Return to that session to act. Existing notification preferences also apply to background input/completion.
 - Pending permission choices are canceled when the turn stops, the connection fails or the session closes. Nothing is silently approved.
 - If the agent stops responding, the POC cannot reconnect or restart that conversation. Close it and explicitly create another session; nothing is replayed.
 
 ## Reading and configuration
 
-Pi and ACP sessions share the transcript, reasoning/tool-card runtime, disclosure/scroll behavior and presentation actions. ACP tool cards default to generic protocol-level rendering, with optional agent-specific or [external plugins](card-plugin-api.md#harness-targets-and-shared-runtime). Unsupported rich content is shown as raw JSON/text rather than inferred into a different tool schema.
+Pi and ACP sessions share the transcript, reasoning/tool-card runtime, disclosure/scroll behavior and presentation actions. ACP tool cards default to generic protocol-level rendering, with optional agent-specific or [external plugins](card-plugin-api.md#harness-targets-and-shared-runtime). Unsupported rich content is shown as literal JSON/text rather than inferred into a different tool schema; consecutive content blocks are retained independently.
 
-Supported agent-advertised selectors appear through **ACP session options…**. Select model/thinking controls appear only when the agent exposes a corresponding selector; changes are available while idle. The POC also accepts legacy ACP model/mode selectors. Advertised slash commands appear in composer completion and are sent as ordinary ACP prompts. Unadvertised slash commands are blocked locally, not accidentally forwarded to a model.
+Supported agent-advertised selectors appear through **ACP session options…**. Model, thinking and mode controls appear in the Status area only when the agent advertises their corresponding categories. Mode names and meanings belong to the agent. Other selectors remain in ACP session options. Changes are available while idle; working-turn configuration updates do not leave controls disabled afterward. The POC also accepts legacy ACP model/mode selectors. Advertised slash commands appear in composer completion and are sent as ordinary ACP prompts. Unadvertised slash commands are blocked locally, not accidentally forwarded to a model.
 
 Session sidebar and Switch session include both backends. ACP rows and the Project bar identify the agent/ACP POC. Application commands such as Settings, themes and plugin reload remain Nimrod operations; Pi-only MCP inspection is not offered for ACP sessions.
 

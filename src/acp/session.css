@@ -7,6 +7,7 @@
   max-height: min(30dvh, 220px);
   overflow: auto;
 }
+.acp-permission small { display: block; color: var(--vscode-descriptionForeground); overflow-wrap: anywhere; }
 .acp-permission pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

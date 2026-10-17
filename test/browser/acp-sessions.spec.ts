@@ -23,6 +23,8 @@ test('offline ACP and Pi keep independent drafts, permissions, configuration and
     await page.locator(visible('prompt')).press('Enter');
     const permission = page.locator(`#${acpId} .acp-permission`);
     await expect(permission).toBeVisible();
+    await expect(permission).toContainText('Fixture shell output');
+    await expect(permission).toContainText('printf fixture-only');
     await expect(page.locator(`#${acpId} .message.user`)).toHaveCount(1);
     await page.locator(`#open-sessions .session-row[aria-controls="${piId}"]`).click();
     await expect(page.locator(visible('prompt'))).toHaveValue('Pi draft must survive');
@@ -37,6 +39,12 @@ test('offline ACP and Pi keep independent drafts, permissions, configuration and
     await page.locator('#palette-input').fill('Fixture large');
     await page.locator('#palette-input').press('Enter');
     await expect(page.locator(visible('model'))).toHaveText('Fixture large');
+    const mode = page.locator(`#${acpId} [data-control-id="mode"]`);
+    await expect(mode).toHaveText('Fixture ask');
+    await mode.click();
+    await page.locator('#palette-input').fill('Fixture review');
+    await page.locator('#palette-input').press('Enter');
+    await expect(mode).toHaveText('Fixture review');
     await page.locator(visible('prompt')).fill('/context');
     await page.locator(visible('prompt')).press('Tab');
     await expect(page.locator(visible('prompt'))).toHaveValue('/context ');

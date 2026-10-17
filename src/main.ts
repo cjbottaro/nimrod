@@ -1,4 +1,9 @@
 import { AcpSession } from './acp/session';
+import { renderPermissionDetails } from './acp/tool-state';
+import { acpInteraction } from './acp/view-policy';
+import { createPiViewProjection, piInteraction } from './pi/view-policy';
+import { piSession, acpSession, acpProfile as profileFor, disconnectBackend, sessionActions, type SessionAction, type SessionBackend } from './session-backend';
+import type { ConversationViewMessage, ConversationView } from './conversation-view-host';
 import { COPILOT_PROFILE, parseAcpProfile, type AcpProfile } from './acp/profiles';
 import { mountConversationView } from './conversation-view';
 import { installApplicationNotices } from './application-notices';
@@ -27,7 +32,7 @@ import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { BUILTIN_THEMES, CATALOG_THEMES } from './themes/builtins';
 import type { ColorTheme } from './themes/theme';
 import { measureWork } from './performance-diagnostics';
-import { mountPiView, type HostMessage, type PiView } from './pi/webview-client';
+import type { HostMessage } from './pi/webview-client';
 import { PiTransport, type Packet } from './pi/transport';
 import { PiSession } from './pi/session';
 import { SessionDrafts, type LastSession } from './pi/session-drafts';
@@ -146,11 +151,10 @@ interface SessionFile { path: string; sessionId: string; exists: boolean; parent
 interface LaunchInfo { cwd: string; session?: SessionFile; }
 interface SessionSummary { path: string; sessionId: string; name?: string; preview: string; modified: number; parentSession?: string | null; lastUserMessageAt?: number; }
 interface Tab {
-  readonly acpProfile?: AcpProfile;
-  acp?: AcpSession;
+  readonly backend: SessionBackend;
   id: string; token?: string; title: string; lastUsed: number; mode: LaunchMode; file?: SessionFile;
-  root: HTMLElement; view: PiView; drafts: SessionDrafts; receive?: (message: HostMessage) => void;
-  session?: PiSession; starting: boolean; closing: boolean; restarting: boolean; deleting: boolean; deletionExecuting: boolean; ended: boolean; stopTask?: Promise<void>;
+  root: HTMLElement; view: ConversationView; drafts: SessionDrafts; receive?: (message: HostMessage | ConversationViewMessage) => void;
+  starting: boolean; closing: boolean; restarting: boolean; deleting: boolean; deletionExecuting: boolean; ended: boolean; stopTask?: Promise<void>;
   inputCount: number; unread: boolean; failed: boolean; focus?: HTMLElement; notice: HTMLElement;
   notices: ReturnType<typeof installApplicationNotices>;
   cancelPreference?: () => void;
@@ -199,7 +203,7 @@ const selectedConnection = new SessionConnection<Tab>({
   selected: () => presented,
   eligibility: tab => {
     if (!ready || unloading || !workspace || !tabs.includes(tab) || !tab.file?.exists || deletion.blocked(tab.file.path) || tab.closing || tab.restarting) return 'unavailable';
-    if (tab.starting || (tab.session && !tab.ended)) return 'connected';
+    if (tab.starting || (tab.backend.session && !tab.ended)) return 'connected';
     if (tab.deleting || deletion.locked(tab.file.path)) return 'blocked';
     return 'connectable';
   },
@@ -217,7 +221,7 @@ const deletion = new SessionDeletion({
     },
     deleted: () => removeDeletedSessions([tab.file!.path]),
     failed: message => {
-      tab.ended = true; tab.session?.rpc.disconnect('Session deletion did not complete');
+      tab.ended = true; piSession(tab)?.rpc.disconnect('Session deletion did not complete');
       showNotice(tab, message);
     },
   })),
@@ -276,7 +280,7 @@ window.addEventListener('unload', () => {
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
   pluginLoading.dispose();
   sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); unlistenLinkErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
-  for (const tab of tabs) { tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.session?.rpc.disconnect('Window closed'); tab.acp?.disconnect('Window closed'); }
+  for (const tab of tabs) { tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); disconnectBackend(tab, 'Window closed'); }
   keybindingDispatch.dispose(); unlistenProjectSettings();
   unlistenProjectPicker(); palette.dispose();
 }, { once: true });
@@ -300,12 +304,12 @@ function controls(): void {
 }
 function needsAttention(tab: Tab): boolean { return !!tab.inputCount || tab.unread || tab.failed; }
 function isWorking(tab: Tab): boolean {
-  const state = tab.acp?.state ?? tab.session?.state;
+  const state = tab.backend.session?.state;
   return !tab.starting && !tab.closing && !tab.restarting && !tab.deleting && !tab.ended && !tab.inputCount &&
-    !!state && !state.sessionUnavailable && (state.busy || !!presentActivity(false, '', state.extensionStatuses).subagents);
+    !!state && !state.sessionUnavailable && (state.busy || !!presentActivity(false, '', piSession(tab)?.state.extensionStatuses).subagents);
 }
 function isConnected(tab: Tab): boolean {
-  return !!(tab.acp || tab.session) && !tab.ended && !(tab.acp?.state ?? tab.session!.state).sessionUnavailable &&
+  return !!tab.backend.session && !tab.ended && !tab.backend.session.state.sessionUnavailable &&
     !tab.starting && !tab.closing && !tab.restarting && !tab.deleting && !deletion.blocked(tab.file?.path);
 }
 function navigationSnapshot(): NavigationSnapshot<Tab> { return navigation.snapshot(sidebarView, presented, active); }
@@ -395,18 +399,19 @@ function presentConversation(tab: Tab | undefined): void {
   if (sessionName.textContent !== title) sessionName.textContent = title;
   if (sessionIdentity.title !== title) sessionIdentity.title = title;
   const badge = required('mode-badge');
-  badge.textContent = !tab ? '' : tab.acpProfile ? `${tab.acpProfile.name} · ACP POC` : tab.mode === 'temporary' ? 'Pi · temporary' : tab.file?.exists ? 'Pi' : 'Pi · awaiting first save';
+  badge.textContent = !tab ? '' : profileFor(tab) ? `${profileFor(tab)!.name} · ACP POC` : tab.mode === 'temporary' ? 'Pi · temporary' : tab.file?.exists ? 'Pi' : 'Pi · awaiting first save';
   badge.title = tab?.file?.path || '';
   restartControl();
 }
 function promptPending(tab: Tab): boolean {
-  return tab.acp ? tab.acp.client.phase === 'working' : tab.session?.rpc.hasPendingRequest('prompt', 'set_session_name') ?? false;
+  const backend = tab.backend;
+  return backend.kind === 'acp' ? backend.session?.client.phase === 'working' : backend.session?.rpc.hasPendingRequest('prompt', 'set_session_name') ?? false;
 }
 function deletionBusy(tab: Tab): boolean {
-  const state = tab.session?.state;
+  const state = piSession(tab)?.state;
   return tab.starting || tab.closing || tab.restarting || !!tab.inputCount || promptPending(tab) || !!(state && !tab.ended && (state.busy || state.compacting || state.modelControls.changing || state.sessionUnavailable || state.queue.pendingCount || state.queue.steering.length || state.queue.followUp.length || presentActivity(false, '', state.extensionStatuses).subagents));
 }
-function restartable(tab: Tab): boolean { return !tab.acpProfile && !!tab.file?.exists && tab.mode !== 'temporary'; }
+function restartable(tab: Tab): boolean { return tab.backend.kind === 'pi' && !!tab.file?.exists && tab.mode !== 'temporary'; }
 function deletable(tab: Tab | undefined): boolean {
   return ready && !deletion.pending && !!tab && tabs.includes(tab) && restartable(tab) &&
     !tab.deleting && !deletion.blocked(tab.file?.path) && !tab.starting && !tab.closing && !tab.restarting;
@@ -417,8 +422,8 @@ function restartControl(): void {
   button.disabled = !ready || !active || !restartable(active) || active.deleting || deletion.locked(active.file?.path) || deletion.blocked(active.file?.path) || active.starting || active.closing || active.restarting;
   const remove = required<HTMLButtonElement>('delete-session');
   remove.disabled = !deletable(active);
-  remove.title = !active ? 'Delete session tree… — no open session' : active.acpProfile ? 'Delete session tree… — unavailable in the ACP POC' : deletion.pending ? 'Delete session tree… — deletion pending' : deletion.blocked(active.file?.path) ? 'Delete session tree… — recover through Resume session first' : active.mode === 'temporary' ? 'Delete session tree… — unavailable for temporary sessions' : !restartable(active) ? 'Delete session tree… — unavailable until saved' : active.starting || active.closing || active.restarting ? 'Delete session tree… — session lifecycle operation pending' : 'Delete session tree…';
-  button.title = !active ? 'Restart session — no open session' : active.acpProfile ? 'Restart session — unavailable in the ACP POC' : deletion.blocked(active.file?.path) ? 'Restart session — recover through Resume session first' : active.mode === 'temporary'
+  remove.title = !active ? 'Delete session tree… — no open session' : profileFor(active) ? 'Delete session tree… — unavailable in the ACP POC' : deletion.pending ? 'Delete session tree… — deletion pending' : deletion.blocked(active.file?.path) ? 'Delete session tree… — recover through Resume session first' : active.mode === 'temporary' ? 'Delete session tree… — unavailable for temporary sessions' : !restartable(active) ? 'Delete session tree… — unavailable until saved' : active.starting || active.closing || active.restarting ? 'Delete session tree… — session lifecycle operation pending' : 'Delete session tree…';
+  button.title = !active ? 'Restart session — no open session' : profileFor(active) ? 'Restart session — unavailable in the ACP POC' : deletion.blocked(active.file?.path) ? 'Restart session — recover through Resume session first' : active.mode === 'temporary'
     ? 'Restart session — unavailable for temporary sessions' : !active.file?.exists
     ? 'Restart session — available after the first save' : active.restarting ? 'Restarting session…' : 'Restart session';
 }
@@ -503,7 +508,7 @@ function openSessionPicker(): PalettePage {
     items: navigation.all().map(tab => ({
       id: tab.id,
       label: tab.title,
-      detail: tab.acpProfile ? `${tab.acpProfile.name} · ACP POC` : 'Pi',
+      detail: profileFor(tab) ? `${profileFor(tab)!.name} · ACP POC` : 'Pi',
       sessionRow: sessionRow(tab),
       keywords: tab === presented ? 'Current' : undefined,
       run: () => activate(tab),
@@ -590,10 +595,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     ...(acpReady ? [{ id: 'new-acp', label: 'New ACP session…', detail: 'Experimental · Copilot or a custom ACP agent · text only, in-memory Nimrod state', next: true, run: newAcpSessionPicker }] : []),
     { id: 'new-named', label: 'New named session…', detail: 'Choose a name before starting', next: true, run: newNamedSession },
     ...(tabs.length ? [{ id: 'switch-session', label: 'Switch session…', detail: 'All open sessions, regardless of sidebar view', next: true, run: () => palette.openSessions() }] : []),
-    ...(active && !active.acpProfile ? [{ id: 'mcp', label: 'MCP servers…', detail: 'Inspect this Pi session’s MCP connections, exposure and reported errors', next: true, run: () => inspectMcp(active!) }] : []),
-    ...(active && (!active.acpProfile || active.acp?.supports('model')) ? [{ id: 'model', label: 'Select model…', detail: 'Choose the model for this session', next: true, run: () => pickPreference(active!, 'model') }] : []),
-    ...(active && (!active.acpProfile || active.acp?.supports('thinking')) ? [{ id: 'thinking', label: 'Select thinking level…', keywords: 'effort reasoning', detail: 'Choose reasoning effort for this session', next: true, run: () => pickPreference(active!, 'thinking') }] : []),
-    ...(active?.acp?.options.length ? [{ id: 'acp-options', label: 'ACP session options…', detail: 'Configuration selectors advertised by this ACP agent', next: true, run: () => pickAcpOption(active!) }] : []),
+    ...(active ? sessionCommands(active) : []),
     ...(active && restartable(active) ? [
       { id: 'restart', label: 'Restart session', detail: 'Restart Pi and retain this conversation', run: () => restartSession(active!) },
       { id: 'delete', label: 'Delete session tree…', detail: 'Review removal of this saved session and its descendants', run: () => deleteSession(active!) },
@@ -665,7 +667,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
   deleteButton.append(required('delete-session').querySelector('svg')!.cloneNode(true));
   const closeButton = button('×', () => { void closeTab(tab); }); closeButton.className = 'session-close';
   rowNode.append(row, deleteButton, closeButton); required('open-sessions').append(rowNode);
-  const tab: Tab = { id, mode, file, title, acpProfile, lastUsed: Math.max(lastUsed(used), file ? recency.get(file) : 0), root, notice, notices: sessionNotices, closeButton, deleteButton, row, rowLabel, rowIndicator, rowTime, rowNode,
+  const tab: Tab = { id, mode, file, title, backend: acpProfile ? { kind: 'acp', profile: acpProfile } : { kind: 'pi' }, lastUsed: Math.max(lastUsed(used), file ? recency.get(file) : 0), root, notice, notices: sessionNotices, closeButton, deleteButton, row, rowLabel, rowIndicator, rowTime, rowNode,
     drafts: drafts.fork(), starting: false, closing: false, restarting: false, deleting: false, deletionExecuting: false, ended: false, inputCount: 0, unread: false, failed: deletion.blocked(file?.path),
     view: { setActive() {}, scrollToBottom() {}, dispose() {} } };
   root.addEventListener('focusin', event => { if (event.target instanceof HTMLElement) tab.focus = event.target; });
@@ -681,13 +683,10 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
   function guardCardAction(): void {
     if (!ready || !workspace || presented !== tab || !tabs.includes(tab) || tab.closing || tab.restarting || tab.deleting || document.querySelector('dialog[open]')) throw new Error('Card action is no longer available');
   }
-  tab.view = (acpProfile ? mountConversationView : mountPiView)({
-    ...(acpProfile ? { acp: {
-      label: acpProfile.name,
-      validatePrompt: (text: string) => tab.starting || !tab.acp ? 'ACP is still connecting. Your draft was kept.' : tab.acp.validatePrompt(text),
-      modelAvailable: () => tab.acp?.supports('model') ?? false,
-      thinkingAvailable: () => tab.acp?.supports('thinking') ?? false,
-    } } : {}),
+  const projectPi = createPiViewProjection();
+  tab.view = mountConversationView({
+    interaction: acpProfile ? acpInteraction(acpProfile.name, text => tab.starting || !acpSession(tab)
+      ? 'ACP is still connecting. Your draft was kept.' : acpSession(tab)!.validatePrompt(text)) : piInteraction,
     sendAutoFollow: () => preferences.sendAutoFollow(),
     performance: settingsSurface.performanceProbe,
     reportNotice: notice => {
@@ -735,9 +734,9 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
       // Best-effort durability of cleared drafts, not a gate on prompt dispatch.
       if (tab.mode !== 'temporary' && (previous?.recovered !== next?.recovered || previous?.attachments !== next?.attachments || (previous?.draft && !next?.draft))) void nativeDrafts?.flush().catch(draftPersistenceError);
     },
-    onMessage: receive => { tab.receive = receive; },
+    onMessage: receive => { tab.receive = message => receive(acpProfile || !message.state ? message : { ...message, state: projectPi(message.state) }); },
     promptSubmitted: () => {
-      if (!unloading && tabs.includes(tab) && (tab.session || tab.acp) && !tab.ended && !tab.closing && !tab.restarting && !tab.deleting) touchTab(tab);
+      if (!unloading && tabs.includes(tab) && tab.backend.session && !tab.ended && !tab.closing && !tab.restarting && !tab.deleting) touchTab(tab);
     },
     postMessage: message => {
       if (message.type === 'deletionState') return;
@@ -749,18 +748,21 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
         }
         return;
       }
-      if (tab.acp) {
-        if (tab.closing || tab.restarting) return;
-        if (message.type === 'selectModel' || message.type === 'selectThinking') { void pickAcpOption(tab, message.type === 'selectModel' ? 'model' : 'thinking'); return; }
-        void tab.acp.handle(message).catch(error => showNotice(tab, String(error)));
+      if (tab.closing || tab.restarting) return;
+      if (message.type === 'selectControl') {
+        if (message.id === 'model' || message.id === 'thinking') void runSessionAction(tab, message.id);
+        else {
+          const option = typeof message.id === 'string' ? acpSession(tab)?.controlOption(message.id) : undefined;
+          if (option) void pickAcpOption(tab, undefined, option);
+        }
         return;
       }
-      if (!tab.session || tab.closing || tab.restarting) return;
-      if (message.type === 'inspectMcp') { void inspectMcp(tab); return; }
-      if (message.type === 'selectModel' || message.type === 'selectThinking') void pickPreference(tab, message.type === 'selectModel' ? 'model' : 'thinking');
+      if (message.type === 'inspectMcp') { void runSessionAction(tab, 'mcp'); return; }
+      const backend = tab.backend, session = backend.session;
+      if (!session) return;
+      if (backend.kind === 'acp') void session.handle(message).catch(error => showNotice(tab, String(error)));
       else {
-        const session = tab.session;
-        void session.handle(message).finally(() => { if (tabs.includes(tab) && tab.session === session) updateTab(tab); });
+        void session.handle(message).finally(() => { if (tabs.includes(tab) && tab.backend.session === session) updateTab(tab); });
         updateTab(tab);
       }
     },
@@ -792,11 +794,11 @@ function refreshTime(tab: Tab): void {
   updateSessionRowTime(tab.rowTime, tab.lastUsed);
 }
 function indicator(tab: Tab) {
-  const state = tab.acp?.state ?? tab.session?.state;
+  const state = tab.backend.session?.state;
   // A preview lock is not activity; show Deleting only after confirmation.
   return sessionIndicator({ ...tab, deleting: tab.deletionExecuting, blocked: deletion.blocked(tab.file?.path),
-    inactive: tab.ended || !state || state.sessionUnavailable, compacting: state?.compacting,
-    busy: state?.busy || !!(state && presentActivity(false, '', state.extensionStatuses).subagents), pending: promptPending(tab) });
+    inactive: tab.ended || !state || state.sessionUnavailable, compacting: piSession(tab)?.state.compacting,
+    busy: state?.busy || !!presentActivity(false, '', piSession(tab)?.state.extensionStatuses).subagents, pending: promptPending(tab) });
 }
 function sessionRow(tab: Tab) { return { timestamp: tab.lastUsed, indicator: indicator(tab) }; }
 function updateTab(tab: Tab): void {
@@ -818,8 +820,8 @@ function shellPresentationChanged(before: ConversationState | undefined, after: 
 }
 function updateTabPresentation(tab: Tab): void {
   tab.root.inert = tab.closing || tab.restarting || tab.deleting || tab !== presented;
-  const name = tab.acpProfile ? `${tab.title} · ${tab.acpProfile.name} ACP` : tab.title;
-  tab.root.setAttribute('aria-busy', String((tab.acp?.state ?? tab.session?.state)?.busy === true));
+  const name = profileFor(tab) ? `${tab.title} · ${profileFor(tab)!.name} ACP` : tab.title;
+  tab.root.setAttribute('aria-busy', String(tab.backend.session?.state.busy === true));
   updateSessionRowContent(tab, name, sessionRow(tab));
   tab.row.disabled = !ready;
   tab.row.setAttribute('aria-current', String(tab === presented)); tab.closeButton.setAttribute('aria-label', `Close ${name}`); tab.closeButton.disabled = !ready || tab.deleting || deletion.locked(tab.file?.path) || tab.closing || tab.starting || tab.restarting;
@@ -839,13 +841,22 @@ async function withTabDialog<T>(tab: Tab, action: (title: string) => Promise<T>,
   try { return await action(`${tab.title} — ${title}`); }
   finally { tab.inputCount--; if (tabs.includes(tab)) updateTab(tab); }
 }
+function sessionCommands(tab: Tab) {
+  return sessionActions(tab).map(action => ({ ...action, next: true, run: () => runSessionAction(tab, action.id) }));
+}
+async function runSessionAction(tab: Tab, id: SessionAction['id']): Promise<void> {
+  if (!tabs.includes(tab) || tab.closing || tab.restarting || tab.deleting || !sessionActions(tab).some(action => action.id === id)) return;
+  if (id === 'mcp') return inspectMcp(tab);
+  if (id === 'acp-options') return pickAcpOption(tab);
+  return pickPreference(tab, id);
+}
 async function inspectMcp(tab: Tab): Promise<void> {
-  if (tab.acpProfile) return;
+  if (profileFor(tab)) return;
   const request = palette.startInspection('MCP servers', () => { void inspectMcp(tab); });
   if (!request) return;
   tab.cancelInspector = request.cancel;
-  const session = tab.session;
-  const valid = () => tabs.includes(tab) && tab.session === session && !tab.ended && !tab.closing && !tab.restarting && !tab.deleting && !deletion.blocked(tab.file?.path);
+  const session = piSession(tab);
+  const valid = () => tabs.includes(tab) && piSession(tab) === session && !tab.ended && !tab.closing && !tab.restarting && !tab.deleting && !deletion.blocked(tab.file?.path);
   if (!session || !valid()) {
     request.cancel();
     if (tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:mcp-inspection`, owner: tab.id, operation: 'Inspect MCP servers', message: 'Connect this session before inspecting MCP servers.' });
@@ -880,20 +891,20 @@ async function inspectMcp(tab: Tab): Promise<void> {
   }
 }
 async function pickPreference(tab: Tab, kind: 'model' | 'thinking'): Promise<void> {
-  if (tab.acpProfile) return pickAcpOption(tab, kind);
+  if (profileFor(tab)) return pickAcpOption(tab, kind);
   const operation = kind === 'model' ? 'Select model' : 'Select thinking level';
   const request = palette.startSelection(operation, () => { void pickPreference(tab, kind); }, message => {
     if (tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:preference:${++noticeSequence}`, owner: tab.id, operation, message });
   });
   if (!request) return;
-  const session = tab.session;
+  const session = piSession(tab);
   if (!session || tab.ended || tab.closing || tab.restarting || tab.deleting || deletion.blocked(tab.file?.path)) { request.error('Resume this session before changing its model or thinking level.'); return; }
   tab.cancelPreference = request.cancel;
   error.textContent = '';
   const previous = tab.preferenceTask;
   const task = (async () => {
     await previous;
-    if (tab.cancelPreference !== request.cancel || tab.session !== session || tab.ended || tab.restarting || tab.deleting) return;
+    if (tab.cancelPreference !== request.cancel || piSession(tab) !== session || tab.ended || tab.restarting || tab.deleting) return;
     await session.selectPreference(kind, {
       choose: (_title, options, current) => request.choose(options, current),
       error: message => {
@@ -913,7 +924,7 @@ async function pickPreference(tab: Tab, kind: 'model' | 'thinking'): Promise<voi
   }
 }
 async function pickAcpOption(tab: Tab, kind?: 'model' | 'thinking', selectedOption?: import('./acp/session').AcpOption): Promise<void> {
-  const session = tab.acp;
+  const session = acpSession(tab);
   if (!session || tab.ended || tab.closing) return;
   const operation = kind === 'model' ? 'Select model' : kind === 'thinking' ? 'Select thinking level' : 'ACP session options';
   const request = palette.startSelection(operation, () => { void pickAcpOption(tab, kind); }, message => {
@@ -927,11 +938,11 @@ async function pickAcpOption(tab: Tab, kind?: 'model' | 'thinking', selectedOpti
       const options = session.options.slice(), labels = options.map((option, index) => `${index + 1}. ${option.name}`);
       const choice = await request.choose(labels);
       const selected = choice ? options[labels.indexOf(choice)] : undefined;
-      if (selected && tabs.includes(tab) && tab.acp === session && !tab.ended && !tab.closing) return pickAcpOption(tab, undefined, selected);
+      if (selected && tabs.includes(tab) && acpSession(tab) === session && !tab.ended && !tab.closing) return pickAcpOption(tab, undefined, selected);
       return;
     }
     if (!option) { request.error('This ACP option is no longer available.'); return; }
-    if (tab.cancelPreference !== request.cancel || tab.acp !== session || tab.closing || tab.ended) return;
+    if (tab.cancelPreference !== request.cancel || acpSession(tab) !== session || tab.closing || tab.ended) return;
     await session.selectOption(option, (_title, values, current) => request.choose(values, current));
   } catch (error) { request.error(String(error)); }
   finally { request.finish(); if (tab.cancelPreference === request.cancel) tab.cancelPreference = undefined; }
@@ -940,8 +951,7 @@ function requestAcpPermission(tab: Tab, request: import('./acp/client').AcpPermi
   if (signal.aborted || !tabs.includes(tab) || tab.closing) return Promise.resolve(undefined);
   return new Promise(resolve => {
     const region = document.createElement('section'); region.className = 'acp-permission'; region.setAttribute('role', 'group'); region.setAttribute('aria-label', 'Agent permission request');
-    const title = document.createElement('strong'); title.textContent = typeof request.toolCall.title === 'string' ? request.toolCall.title : 'Agent requests permission'; region.append(title);
-    if (request.toolCall.rawInput !== undefined) { const detail = document.createElement('pre'); detail.textContent = JSON.stringify(request.toolCall.rawInput, null, 2); region.append(detail); }
+    region.append(renderPermissionDetails(document, request.toolCall));
     const actions = document.createElement('div'); actions.className = 'acp-permission-actions'; region.append(actions);
     let settled = false;
     const finish = (choice?: string) => {
@@ -966,7 +976,7 @@ function requestAcpPermission(tab: Tab, request: import('./acp/client').AcpPermi
     if (token) void notifySession('input', {
       valid: () => !signal.aborted && !unloading && tabs.includes(tab) && tab.token === token && !tab.closing && !tab.ended,
       selected: () => presented === tab && !settings.isOpen,
-      session: tab.acpProfile?.name || 'ACP session', target: { session: tab.id, token },
+      session: profileFor(tab)?.name || 'ACP session', target: { session: tab.id, token },
     });
   });
 }
@@ -1022,12 +1032,9 @@ async function newAcpSession(profile: AcpProfile): Promise<void> {
       void notifySession(kind, { valid: () => valid() && !tab.closing, selected: () => presented === tab && !settings.isOpen, session: profile.name, target: { session: tab.id, token }, preview: failed ? undefined : previewResponse(response) });
     },
   });
-  tab.acp = session;
+  if (tab.backend.kind === 'acp') tab.backend.session = session;
   tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
   tab.receive?.({ type: 'snapshot', state: session.state });
-  tab.root.querySelector('[data-pi-id="status-controls"]')?.setAttribute('aria-label', 'ACP session configuration');
-  const metrics = tab.root.querySelector<HTMLElement>('[data-pi-id="session-metrics"]');
-  if (metrics) { metrics.title = 'ACP-reported context usage'; metrics.setAttribute('aria-label', metrics.title); }
   const onEvent = new Channel<Packet>();
   onEvent.onmessage = packet => { if (!valid()) return; if (packet.kind === 'rpc') session.receive(packet.value); else session.disconnect(packet.message); };
   try {
@@ -1040,14 +1047,14 @@ async function newAcpSession(profile: AcpProfile): Promise<void> {
 }
 async function stopOwned(tab: Tab): Promise<void> {
   if (!tab.token) return;
-  if (!tab.stopTask) tab.stopTask = invoke<void>(tab.acpProfile ? 'stop_acp' : 'stop_pi', { token: tab.token });
+  if (!tab.stopTask) tab.stopTask = invoke<void>(tab.backend.kind === 'acp' ? 'stop_acp' : 'stop_pi', { token: tab.token });
   const task = tab.stopTask;
   try { await task; }
   catch (error) { if (tab.stopTask === task) tab.stopTask = undefined; throw error; }
 }
 async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, initialName?: string): Promise<void> {
-  if (tab.acpProfile) return; // ACP POC never silently reconnects/replaces a session.
-  if (!ready || deletion.blocked(tab.file?.path) || deletion.locked(tab.file?.path) || tab.deleting || tab.starting || tab.closing || (tab.session && !tab.ended) || (!acceptedAction && settings.isOpen) || !workspace) return;
+  if (tab.backend.kind !== 'pi') return; // ACP POC never silently reconnects/replaces a session.
+  if (!ready || deletion.blocked(tab.file?.path) || deletion.locked(tab.file?.path) || tab.deleting || tab.starting || tab.closing || (piSession(tab) && !tab.ended) || (!acceptedAction && settings.isOpen) || !workspace) return;
   tab.starting = true; tab.failed = false; updateTab(tab); error.textContent = ''; tab.notice.hidden = true;
   try { await stopOwned(tab); } catch (e) { tab.starting = false; showNotice(tab, `Could not stop the previous process: ${e}`); updateTab(tab); return; }
   const token = crypto.randomUUID(); tab.token = token; tab.stopTask = undefined; tab.ended = false;
@@ -1076,7 +1083,7 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
         valid: () => !unloading && currentToken() && !tab.closing && !tab.restarting && !tab.deleting && (kind === 'failed' || !tab.ended),
         selected: () => presented === tab && !settings.isOpen,
         // Auto-generated sidebar titles are prompt excerpts, not notification-safe labels.
-        session: tab.session?.state.sessionName || 'Session',
+        session: piSession(tab)?.state.sessionName || 'Session',
         target: { session: tab.id, token },
         preview: kind === 'completed' ? previewResponse(response) : undefined,
       });
@@ -1125,7 +1132,7 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
       updateTab(tab); persistTabs();
     },
   }, mode === 'temporary');
-  tab.session = current;
+  if (tab.backend.kind === 'pi') tab.backend.session = current;
   try {
     if (copyDraft) tab.drafts.select(`unassigned:${tab.id}`, copyDraft);
     tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
@@ -1192,7 +1199,8 @@ async function openSession(info: Pick<SessionSummary, 'path' | 'sessionId' | 'na
 }
 async function restartSession(tab: Tab): Promise<void> {
   if (!ready || tab.deleting || deletion.locked(tab.file?.path) || deletion.blocked(tab.file?.path) || !tabs.includes(tab) || !restartable(tab) || tab.starting || tab.closing || tab.restarting || settings.isOpen) return;
-  const needsConfirmation = !!tab.session && !tab.ended && (tab.session.state.busy || promptPending(tab) || !!tab.inputCount || !!tab.session.state.queue?.pendingCount);
+  const session = piSession(tab);
+  const needsConfirmation = !!session && !tab.ended && (session.state.busy || promptPending(tab) || !!tab.inputCount || !!session.state.queue?.pendingCount);
   tab.restarting = true; updateTab(tab);
   let resumed = false;
   try {
@@ -1202,7 +1210,7 @@ async function restartSession(tab: Tab): Promise<void> {
     await stopOwned(tab);
     tab.cancelPreference?.(); tab.cancelInspector?.();
     if (tab.token) dialogs.cancel(tab.token);
-    tab.receive?.({ type: 'sessionDisconnected' }); tab.session?.rpc.disconnect('Session restarted');
+    tab.receive?.({ type: 'sessionDisconnected' }); piSession(tab)?.rpc.disconnect('Session restarted');
     tab.ended = true;
     resumed = true;
     await launch(tab, undefined, true);
@@ -1256,7 +1264,7 @@ function disposeTab(tab: Tab): void {
   if (active === tab) active = undefined;
   if (presented === tab) { tab.view.setActive(false); presented = undefined; conversation.hidden = true; }
   if (tab.token) dialogs.cancel(tab.token);
-  tab.cancelPreference?.(); tab.cancelInspector?.(); tab.receive?.({ type: 'sessionDisconnected' }); tab.session?.rpc.disconnect('Session closed'); tab.acp?.disconnect('Session closed');
+  tab.cancelPreference?.(); tab.cancelInspector?.(); tab.receive?.({ type: 'sessionDisconnected' }); disconnectBackend(tab, 'Session closed');
   tab.view.dispose();
   try { tab.drafts.discardTemporary(); } catch (e) { persistenceError(e); }
   tab.root.remove(); tab.rowNode.remove();
@@ -1266,7 +1274,7 @@ function detachTab(tab: Tab): void {
   tab.closing = true;
   tab.notices.dispose(); notices.store.resolveOwner(tab.id);
   if (tab.token) dialogs.cancel(tab.token);
-  tab.cancelPreference?.(); tab.cancelInspector?.(); tab.receive?.({ type: 'sessionDisconnected' }); tab.session?.rpc.disconnect('Session closed'); tab.acp?.disconnect('Session closed');
+  tab.cancelPreference?.(); tab.cancelInspector?.(); tab.receive?.({ type: 'sessionDisconnected' }); disconnectBackend(tab, 'Session closed');
   const before = navigationSnapshot();
   navigation.remove(tab); tab.view.dispose();
   try { tab.drafts.discardTemporary(); } catch (e) { persistenceError(e); }
@@ -1281,19 +1289,19 @@ function detachTab(tab: Tab): void {
 }
 async function closeTab(tab: Tab): Promise<void> {
   if (tab.deleting || deletion.locked(tab.file?.path) || tab.closing || tab.starting || tab.restarting || settings.isOpen) return;
-  const state = tab.acp?.state ?? tab.session?.state;
-  const running = (tab.session || tab.acp) && !tab.ended;
-  if ((tab.mode === 'temporary' || (running && (state?.busy || promptPending(tab) || tab.inputCount || state?.queue?.pendingCount))) && !await dialogs.confirm(`Close ${tab.title}?`, tab.acpProfile ? 'This stops this ACP agent and discards Nimrod’s in-memory transcript, draft and pop-outs. Nimrod cannot resume it in this POC. The agent may keep its own saved history; this does not delete it.' : tab.mode === 'temporary' ? 'This stops its agent and discards this temporary session, including its draft, queued messages and pop-outs.' : 'This stops only this session’s agent. Written history and your draft remain; queued and in-flight work will not continue.', undefined, tab.acpProfile ? 'Close ACP session' : tab.mode === 'temporary' ? 'Close temporary session' : 'Close session')) return;
+  const state = tab.backend.session?.state;
+  const running = tab.backend.session && !tab.ended;
+  if ((tab.mode === 'temporary' || (running && (state?.busy || promptPending(tab) || tab.inputCount || piSession(tab)?.state.queue?.pendingCount))) && !await dialogs.confirm(`Close ${tab.title}?`, profileFor(tab) ? 'This stops this ACP agent and discards Nimrod’s in-memory transcript, draft and pop-outs. Nimrod cannot resume it in this POC. The agent may keep its own saved history; this does not delete it.' : tab.mode === 'temporary' ? 'This stops its agent and discards this temporary session, including its draft, queued messages and pop-outs.' : 'This stops only this session’s agent. Written history and your draft remain; queued and in-flight work will not continue.', undefined, profileFor(tab) ? 'Close ACP session' : tab.mode === 'temporary' ? 'Close temporary session' : 'Close session')) return;
   if (tab.closing || !tabs.includes(tab)) return;
   tab.closing = true; updateTab(tab);
   try {
     await nativeDrafts?.flush();
     await stopOwned(tab);
-    tab.receive?.({ type: 'sessionDisconnected' }); tab.session?.rpc.disconnect('Disconnected'); tab.acp?.disconnect('Disconnected');
+    tab.receive?.({ type: 'sessionDisconnected' }); disconnectBackend(tab, 'Disconnected');
     await nativeDrafts?.flush();
     if (tab.token) dialogs.cancel(tab.token);
     detachTab(tab);
-  } catch (e) { tab.closing = false; showNotice(tab, `Could not stop ${tab.acpProfile?.name || 'Pi'}: ${e}`); updateTab(tab); }
+  } catch (e) { tab.closing = false; showNotice(tab, `Could not stop ${profileFor(tab)?.name || 'Pi'}: ${e}`); updateTab(tab); }
 }
 async function pickWorkspace(): Promise<void> {
   if (!ready || settings.isOpen) return;
@@ -1367,10 +1375,8 @@ const keybindingDispatch = installKeybindingDispatch(window, {
     if (!ready) return false;
     if (id === 'new-acp') return acpReady;
     if (id === 'capture-performance') return preferences.performanceEnabled() && !settingsSurface.capturingPerformance;
-    if (id === 'acp-options') return !!presented?.acp?.options.length;
-    if (presented?.acpProfile && id === 'mcp') return false;
-    if (presented?.acpProfile && (id === 'model' || id === 'thinking')) return presented.acp?.supports(id) ?? false;
-    if (['close', 'mcp', 'model', 'thinking', 'restart', 'delete'].includes(id)) return !!presented;
+    if (['mcp', 'model', 'thinking', 'acp-options'].includes(id)) return !!presented && sessionActions(presented).some(action => action.id === id);
+    if (['close', 'restart', 'delete'].includes(id)) return !!presented;
     return true;
   },
   run: (id: ActionId) => {
@@ -1378,16 +1384,14 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'open-recent-project': return palette.projects();
       case 'new': return newSession();
       case 'new-acp': return newAcpSessionPicker();
-      case 'acp-options': return presented ? pickAcpOption(presented) : undefined;
+      case 'acp-options': return presented ? runSessionAction(presented, id) : undefined;
       case 'temporary': return newSession('temporary');
       case 'delete': return presented ? deleteSession(presented) : undefined;
       case 'delete-sessions': return palette.deleteSessions();
       case 'capture-performance': return capturePerformance(true);
       case 'reload-card-plugins': return reloadCardPlugins(true);
       case 'select-theme': return pickTheme();
-      case 'mcp': return presented ? inspectMcp(presented) : undefined;
-      case 'model': return presented ? pickPreference(presented, 'model') : undefined;
-      case 'thinking': return presented ? pickPreference(presented, 'thinking') : undefined;
+      case 'mcp': case 'model': case 'thinking': return presented ? runSessionAction(presented, id) : undefined;
       case 'palette': palette.open(); return;
       case 'close': return presented ? closeTab(presented) : undefined;
       case 'sidebar': required<HTMLButtonElement>('toggle-sidebar').click(); return;

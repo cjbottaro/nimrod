@@ -1,32 +1,7 @@
-import type { HostMessage } from './webview-client';
-import type { JsonRecord } from './types';
+import type { ConversationViewHost } from '../conversation-view-host';
+import type { HostMessage } from './view-state';
 
-/** The existing Pi renderer's small in-process boundary; no VS Code compatibility shim. */
-export interface ViewHost {
-  performance?: import('../performance-diagnostics').PerformanceProbe;
-  /** Explicit ACP behavior; omission preserves the existing Pi interaction contract. */
-  acp?: {
-    label: string;
-    validatePrompt(text: string): string | undefined;
-    modelAvailable(): boolean;
-    thinkingAvailable(): boolean;
-  };
-  cardRenderer?: (data: Readonly<import('./tool-card').ToolCardBlock>) => import('./tool-card').ToolCardRenderer;
-  cardActions?: {
-    copy(text: string): Promise<void>;
-    openLink(href: string): Promise<void>;
-    popOutCode(text: string, language: string): Promise<void>;
-  };
-  attachments?: import('./image-attachments').AttachmentHost;
-  reportNotice?(notice: import('../application-notices').ApplicationNotice): void;
-  resolveNotice?(id: string): void;
-  resolveNoticeCause?(cause: string): void;
-  /** Synchronous local Send intent, before image preparation/RPC; no receipt or submission state. */
-  promptSubmitted?(): void;
-  /** Read live preferences at local submission; changes never navigate on their own. */
-  sendAutoFollow?(): import('./transcript-scroll').SendAutoFollow;
-  postMessage(message: JsonRecord): void;
+/** Pi's compatibility entry supplies its own interaction policy and projection. */
+export interface ViewHost extends Omit<ConversationViewHost, 'interaction' | 'onMessage'> {
   onMessage(listener: (message: HostMessage) => void): void;
-  getState(): unknown;
-  setState(value: unknown): void;
 }

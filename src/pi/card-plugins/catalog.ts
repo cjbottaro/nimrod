@@ -1,5 +1,6 @@
 import { bundledAcpPlugin } from '../../acp/card-plugins';
-import { pluginTargets, matchesTarget } from '../../card-plugin-targets';
+import { pluginTargets, matchesTarget, pluginKinds, targetSpecificity } from '../../card-plugin-targets';
+import { immutableSnapshot } from '../immutable-snapshot';
 import type { CardPluginTarget } from '../../card-plugin-api';
 import type { CardRenderer } from '../card-renderer';
 import { presentationPlugin, type DomCardRenderer } from '../dom-card-renderer';
@@ -21,7 +22,12 @@ export interface ExecutablePluginHost {
   readModule(name: string, expectedManifest: string): Promise<string>;
   importModule?(source: string): Promise<unknown>;
 }
-interface Entry { tools: string[]; renderer: DomCardRenderer<ToolCardBlock>; file: string; executable: boolean; personal?: boolean; targets?: readonly CardPluginTarget[]; }
+interface Entry { tools: string[]; kinds?: readonly string[]; renderer: DomCardRenderer<ToolCardBlock>; file: string; executable: boolean; personal?: boolean; targets?: readonly CardPluginTarget[]; }
+function targetMetadata(renderer: DomCardRenderer<ToolCardBlock>) {
+  const targets = pluginTargets(renderer.targets), kinds = pluginKinds(renderer.kinds);
+  if (kinds.length && !targets.some(target => target.backend === 'acp')) throw new Error('Tool kinds require an ACP target');
+  return { targets, kinds };
+}
 export class CardPluginCatalog {
   private generation = 0;
   private enabled = new Set<string>();
@@ -52,7 +58,7 @@ export class CardPluginCatalog {
           const module = await (host.importModule ?? importCardModule)(source);
           if (generation !== this.generation) return;
           const renderer = executableRenderer(manifest, module);
-          packages.set(manifest.id, { tools: manifest.tools, renderer, file, executable: true, targets: pluginTargets(renderer.targets) });
+          packages.set(manifest.id, { tools: manifest.tools, renderer, file, executable: true, ...targetMetadata(renderer) });
         } else {
           const pkg = parsePluginPackage(text);
           if (packages.has(pkg.id)) throw new Error(`Duplicate renderer ID ${pkg.id}`);
@@ -80,7 +86,7 @@ export class CardPluginCatalog {
             if (generation !== this.generation) return;
             const { renderer, tools } = personalRenderer(module);
             if (packages.has(renderer.id)) throw new Error(`Duplicate renderer ID ${renderer.id}`);
-            packages.set(renderer.id, { renderer, tools, file: item.entry, executable: true, personal: true, targets: pluginTargets(renderer.targets) });
+            packages.set(renderer.id, { renderer, tools, file: item.entry, executable: true, personal: true, ...targetMetadata(renderer) });
             personalLoaded++; if (item.cacheHit) cacheHits++;
           } catch (error) { errors.push(`${item.entry}: ${String(error)}`); }
         }
@@ -104,8 +110,29 @@ export class CardPluginCatalog {
     if (override === 'nimrod.raw') return presentationPlugin({ id: 'nimrod.raw', supports: () => true, mount: () => ({ update: rawToolPresentation, dispose() {} }) });
     const bundled = data.source?.backend === 'acp' ? bundledAcpPlugin(data) : bundledToolRenderer(data);
     if (override === bundled.id || override === 'nimrod.tool') return override === 'nimrod.tool' ? presentationPlugin(defaultToolRenderer) : bundled;
-    const entry = override ? this.packages.get(override) : [...this.packages.values()].find(entry => entry.tools.includes(name) && matchesTarget(entry.targets ?? [{ backend: 'pi' }], data));
-    if (entry && entry.tools.includes(name) && matchesTarget(entry.targets ?? [{ backend: 'pi' }], data)) {
+    // ACP categories are intentionally broad. Select applicable candidates in a
+    // deterministic order, then latch the chosen instance for its whole lifetime.
+    // Pi's legacy first-name/explicit-override behavior is unchanged.
+    const acp = data.source?.backend === 'acp';
+    const matchesMetadata = (entry: Entry) => matchesTarget(entry.targets ?? [{ backend: 'pi' }], data)
+      && (entry.tools.includes(name) || acp && !!entry.kinds?.includes(data.kind || 'other'));
+    const candidates = [...this.packages.values()].filter(matchesMetadata);
+    if (acp) candidates.sort((a, b) => targetSpecificity(b.targets ?? [], data) - targetSpecificity(a.targets ?? [], data)
+      || Number(b.tools.includes(name)) - Number(a.tools.includes(name)));
+    let snapshot: Readonly<ToolCardBlock> | undefined;
+    const applicable = (entry: Entry) => {
+      if (!entry.renderer.matches) return true;
+      try {
+        const result: unknown = entry.renderer.matches(snapshot ??= immutableSnapshot(data));
+        if (result && typeof (result as { then?: unknown }).then === 'function') {
+          void Promise.resolve(result).catch(() => {}); // A rejected async matcher must not escape containment.
+          return false;
+        }
+        return result === true;
+      } catch { return false; } // Faulty selection cannot disable unrelated cards/plugins.
+    };
+    const entry = override ? this.packages.get(override) : candidates.find(applicable);
+    if (entry && matchesMetadata(entry)) {
       if (!entry.executable) return entry.renderer;
       // Fixed renderer selection, but managed work must still honor current package trust.
       return { ...entry.renderer, supports: value => (entry.personal ? this.autoLoad && this.personal.has(entry.file) : this.enabled.has(entry.file) && this.trusted.has(entry.file)) && entry.renderer.supports(value) };

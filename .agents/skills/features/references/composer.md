@@ -4,7 +4,7 @@
 
 ## Harness boundary
 
-The detailed delivery/queue/compaction contract below is Pi-specific. The [ACP POC](acp-harnesses.md#current-foundation) reuses the mounted presentation engine through explicit optional `ViewHost.acp` behavior: text-only local Send, no Pi slash interception, only advertised command completion, no busy steering/queue, and agent-labeled Stop. Busy Enter keeps the newer draft. ACP configuration/turn lifecycle stays in `src/acp/session.ts`, not Pi's controller. The default/omitted view behavior retains Pi's existing path. Mixed-shell/offline-browser fixtures pass in the full gates; native app acceptance remains pending.
+The detailed delivery/queue/compaction contract below is Pi-specific. The [shared view boundary](harness-presentation.md) requires an integration-owned interaction policy; there is no `ViewHost.acp` switch. `src/pi/view-policy.ts` owns Pi slash interception, busy steering/queue mapping, skill interpretation and compaction hints. `src/acp/view-policy.ts` owns advertised-only completion, text-only sending and agent-labeled Stop; busy Enter keeps the newer draft. ACP configuration/turn lifecycle stays in `src/acp/session.ts`, not Pi's controller. `mountPiView` remains a compatibility entry supplying Pi policy/projection. Prior mixed-shell/browser validation predates this extraction; new/updated fixtures are unrun.
 
 ## Specification and acceptance criteria
 
@@ -13,10 +13,10 @@ Idle sends and busy Enter steering clear the editable draft immediately, indepen
 ## Code map
 
 - `src/pi/composer-dom.ts`: keyboard delivery mapping and hint ordering.
-- `src/pi/webview-client.ts`: busy-state hints, keyboard submission, send-local image preparation, receipt-only error reporting and compaction lock.
+- `src/conversation-view.ts`: policy-driven keyboard submission, send-local image preparation, receipt-only error reporting and input lock. Pi compatibility entry: `src/pi/webview-client.ts`.
 - `src/pi/session.ts`: authoritative session-state gate and Pi prompt RPC.
 - `src/pi/steering-transcript.ts`: live pending-turn projection, queue reconciliation and user-turn key aliases.
-- `src/pi/webview-client.ts`: applies every ordered snapshot before coalesced painting, including while hidden; hidden views retain the latest pending presentation for synchronous reveal catch-up. Queue/consumption/receipt/recovery observations are never deferred or discarded. Patches pending-status labels in the existing user article.
+- `src/conversation-view.ts`: applies every ordered snapshot before coalesced painting, including while hidden; hidden views retain the latest pending presentation for synchronous reveal catch-up. Queue/consumption/receipt/recovery observations are never deferred or discarded. Patches pending-status labels in the existing user article.
 
 Image attachment behavior and its text-only queue recovery boundary are covered in [Image paste](image-paste.md). Error/uncertainty presentation follows the [error presentation policy](error-presentation.md); this reference owns delivery semantics, not a separate error surface.
 

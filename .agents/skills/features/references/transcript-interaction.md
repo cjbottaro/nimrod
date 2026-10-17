@@ -10,12 +10,12 @@ Preserve live follow versus older-history reading through incremental updates, c
 
 ## ACP POC reuse
 
-`src/conversation-view.ts` exposes the existing mounted runtime under a shared name; no second scroll/follow engine is introduced. ACP feeds display snapshots and optional continuous dirty-row revisions directly, not Pi events. Structural changes/gaps use the same full fallback, hidden catch-up and disposal boundaries. Inline ACP permission regions live in their owning interaction area, never a background global modal; their layout changes use the existing viewport resize owner. `test/browser/acp-sessions.spec.ts` supplies passing offline mixed-backend disclosure/reader/draft coverage; this is not native app acceptance. See [ACP POC](acp-harnesses.md).
+`src/conversation-view.ts` owns the shared mounted engine; Pi's former entry delegates through its projection/policy. There is no backend-mode flag or second scroll/follow engine. [Harness presentation](harness-presentation.md) owns the contribution boundary and rationale. ACP feeds display snapshots and optional continuous dirty-row revisions directly, not Pi events. Structural changes/gaps use the same full fallback, hidden catch-up and disposal boundaries. Inline ACP permission regions live in their owning interaction area, never a background global modal; their layout changes use the existing viewport resize owner. `test/browser/acp-sessions.spec.ts` supplies mixed-backend disclosure/reader/draft coverage. Prior offline validation predates the latest extraction and permission/mode-control changes; updated fixtures are unrun, not native app acceptance. See [ACP POC](acp-harnesses.md).
 
 ## Code map
 
 - `src/pi/transcript-scroll.ts`: sole deferred transcript-follow owner; capture/request/flush, reader cancellation, resize recovery and active suspension.
-- `src/pi/webview-client.ts`: mounted renderer, snapshot/paint ordering, explicit reset, viewport observers and bottom-navigation bridge.
+- `src/conversation-view.ts`: mounted renderer, snapshot/paint ordering, explicit reset, viewport observers and bottom-navigation bridge. `src/pi/webview-client.ts` is the Pi compatibility entry.
 - `src/pi/tool-card.ts`: independently scrolling per-card output; disclosure state.
 - `src/main.ts`: presented-session activation, modality, native zoom requests and notification navigation.
 - `src/pi/transcript.css`, `src/theme.css`, `src/workspace.css`: fluid surfaces, overflow and focus/layout styling.
@@ -43,7 +43,7 @@ Preserve live follow versus older-history reading through incremental updates, c
 - Supported prompt slash expansions count as messages; `/name`, `/compact`, empty/blocked submissions and Stop do not navigate. Errors, receipts, authoritative user events and image readiness never repeat or undo the local jump.
 - Preference edits/broadcasts alone never move a transcript, disable active following, mutate drafts or restart sessions. Failed saves restore the committed picker value and use the application notice strip.
 
-Code: `src/preferences.ts` / `src-tauri/src/preferences.rs` validate/persist; `index.html` / `src/settings-surface.ts` own the global-only picker, synchronization and live renderer getter; `src/pi/view-host.ts` / `webview-client.ts` apply local intent using the existing scroll owner.
+Code: `src/preferences.ts` / `src-tauri/src/preferences.rs` validate/persist; `index.html` / `src/settings-surface.ts` own the global-only picker, synchronization and live renderer getter; `src/conversation-view-host.ts` / `conversation-view.ts` apply integration-classified local intent using the existing scroll owner.
 
 Coverage added in preferences/native validation, shell Settings synchronization/failure and bundled renderer mode/delivery matrix, upward cancellation, late acknowledgement, slash/control exclusion and gated image-preparation fixtures. Offline browser idle-send cases cover all modes from bottom/history; default busy steering/queue cases retain reading, and idle image cases now expect follow. These changes have **not been run or natively verified** as part of this task; validation/build require explicit request.
 

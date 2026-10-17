@@ -52,10 +52,15 @@ export interface CardPluginInstance<Data = ToolCardData> {
 export interface CardPlugin<Data = ToolCardData> {
   readonly apiVersion: 2;
   readonly id: string;
-  /** Required for automatically discovered personal sources; optional with a separate manifest. */
+  /** Normalized tool names, not ACP categories. Personal sources need tools and/or kinds. */
   readonly tools?: readonly string[];
+  /** ACP categories (execute, edit, etc.), independent of the optional native tool name. */
+  readonly kinds?: readonly string[];
   /** Omitted targets preserve legacy Pi-only matching. An ACP target may name an exact negotiated agent. */
   readonly targets?: readonly CardPluginTarget[];
+  /** Optional mount-time applicability, after metadata matching. False tries another candidate.
+   * Runs on an immutable snapshot; never use input completeness to select a streaming renderer. */
+  matches?(data: Readonly<Data>): boolean;
   /** Compatibility, not input completeness: false latches the mounted card to raw fallback. */
   supports(data: Readonly<Data>): boolean;
   mount(context: CardPluginContext): CardPluginInstance<Data>;

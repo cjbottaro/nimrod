@@ -2,16 +2,16 @@ import { matchSlashCommands } from "./slash-matching";
 
 export interface SlashCommand { name: string; description: string; source: "GUI" | "Extension" | "Template" | "Skill" | "Agent"; }
 
-export function slashCommands(raw: unknown, backend: 'pi' | 'acp' = 'pi'): SlashCommand[] {
-  const commands = new Map<string, SlashCommand>(backend === 'pi' ? [
+export function slashCommands(raw: unknown): SlashCommand[] {
+  const commands = new Map<string, SlashCommand>([
     ["name", { name: "name", description: "Rename this Pi session", source: "GUI" }],
     ["compact", { name: "compact", description: "Compact the active context", source: "GUI" }],
-  ] : []);
+  ]);
   if (Array.isArray(raw)) for (const value of raw) {
     if (!value || typeof value !== "object") continue;
     const { name, description, source } = value as Record<string, unknown>;
     if (typeof name !== "string" || !name || /[\s\u0000-\u001f]/.test(name) || name.startsWith("/") || commands.has(name)) continue;
-    commands.set(name, { name, description: typeof description === "string" ? description : backend === 'acp' ? 'Agent command' : "Pi command", source: backend === 'acp' ? 'Agent' : source === "skill" ? "Skill" : source === "prompt" ? "Template" : "Extension" });
+    commands.set(name, { name, description: typeof description === "string" ? description : "Pi command", source: source === "skill" ? "Skill" : source === "prompt" ? "Template" : "Extension" });
   }
   return [...commands.values()];
 }
@@ -22,8 +22,8 @@ export function slashQuery(text: string, start: number, end: number): string | u
 }
 
 /** Suggestions only insert text; execution remains the normal submission path. */
-export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLElement, onInsert: (text: string) => void, backend: 'pi' | 'acp' = 'pi'): { setCommands(raw: unknown): void; refresh(): void } {
-  let commands = slashCommands(undefined, backend);
+export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLElement, onInsert: (text: string) => void, resolve: (raw: unknown) => SlashCommand[] = slashCommands): { setCommands(raw: unknown): void; refresh(): void } {
+  let commands = resolve(undefined);
   let matches: SlashCommand[] = [];
   let selected = 0;
   let previousQuery: string | undefined;
@@ -112,7 +112,7 @@ export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLEle
   return {
     refresh,
     setCommands(raw) {
-      const next = slashCommands(raw, backend);
+      const next = resolve(raw);
       if (JSON.stringify(next) === JSON.stringify(commands)) return;
       commands = next;
       refresh();

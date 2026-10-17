@@ -2,6 +2,7 @@ export interface PrimaryActionState {
   mainBusy: boolean;
   preparing: boolean;
   sessionUnavailable: boolean;
+  stopLabel?: string;
 }
 
 export type KeyboardSubmissionMode = "normal" | "steer" | "followUp";
@@ -33,8 +34,8 @@ export function renderPrimaryAction(button: HTMLButtonElement, state: PrimaryAct
   const changed = button.dataset.action !== action;
   button.dataset.action = action;
   button.disabled = stopping ? false : state.preparing || state.sessionUnavailable;
-  button.setAttribute("aria-label", stopping ? "Stop Pi" : "Send message");
-  button.title = stopping ? "Stop Pi" : "Send message";
+  button.setAttribute("aria-label", stopping ? state.stopLabel || "Stop Pi" : "Send message");
+  button.title = stopping ? state.stopLabel || "Stop Pi" : "Send message";
   if (changed) button.replaceChildren(icon(button.ownerDocument, action));
 }
 

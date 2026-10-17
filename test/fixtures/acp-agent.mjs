@@ -4,10 +4,11 @@ const sessionId = 'fixture-acp';
 const send = value => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', ...value }) + '\n');
 const response = (id, result) => send({ id, result });
 const update = value => send({ method: 'session/update', params: { sessionId, update: value } });
-let model = 'fixture-small', effort = 'medium', turn, timer;
+let model = 'fixture-small', effort = 'medium', mode = 'ask', turn, timer;
 const configOptions = () => [
   { id: 'model', category: 'model', name: 'Model', type: 'select', currentValue: model, options: [{ value: 'fixture-small', name: 'Fixture small' }, { value: 'fixture-large', name: 'Fixture large' }] },
   { id: 'effort', category: 'thought_level', name: 'Thinking level', type: 'select', currentValue: effort, options: ['low', 'medium', 'high'].map(value => ({ value, name: value })) },
+  { id: 'mode', category: 'mode', name: 'Approval mode', description: 'Offline fixture policy', type: 'select', currentValue: mode, options: [{ value: 'ask', name: 'Fixture ask' }, { value: 'review', name: 'Fixture review' }] },
 ];
 function finish(reason) {
   clearInterval(timer); timer = undefined;
@@ -23,6 +24,7 @@ function execute() {
   timer = setInterval(() => {
     if (!turn) return;
     output += `${String(++count).padStart(2, '0')} fixture output — no command executed\n`;
+    if (count === 1) update({ sessionUpdate: 'config_option_update', configOptions: configOptions() });
     update({ sessionUpdate: 'tool_call_update', toolCallId: id, content: [{ type: 'content', content: { type: 'text', text: output } }] });
     if (count === limit) {
       update({ sessionUpdate: 'tool_call_update', toolCallId: id, status: 'completed', rawOutput: { exitCode: 0 } });
@@ -47,6 +49,7 @@ createInterface({ input: process.stdin }).on('line', line => {
   } else if (message.method === 'session/set_config_option') {
     if (message.params.configId === 'model') model = message.params.value;
     if (message.params.configId === 'effort') effort = message.params.value;
+    if (message.params.configId === 'mode') mode = message.params.value;
     response(message.id, { configOptions: configOptions() });
   } else if (message.method === 'session/prompt') {
     if (turn) { send({ id: message.id, error: { code: -32600, message: 'Turn already active' } }); return; }
@@ -57,9 +60,9 @@ createInterface({ input: process.stdin }).on('line', line => {
       update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Offline context only; no provider request.' } }); finish('end_turn'); return;
     }
     update({ sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'This is an offline fixture, not model reasoning.' } });
-    const toolCall = { toolCallId: `tool-${message.id}`, title: 'Fixture shell output', kind: 'execute', status: 'pending', rawInput: { command: 'printf fixture-only' } };
+    const toolCall = { toolCallId: `tool-${message.id}`, name: 'fixture_shell', title: 'Fixture shell output', kind: 'execute', status: 'pending', rawInput: { command: 'printf fixture-only' } };
     update({ sessionUpdate: 'tool_call', ...toolCall });
-    send({ id: `permission-${message.id}`, method: 'session/request_permission', params: { sessionId, toolCall, options: [
+    send({ id: `permission-${message.id}`, method: 'session/request_permission', params: { sessionId, toolCall: { toolCallId: toolCall.toolCallId }, options: [
       { optionId: 'deny', kind: 'reject_once', name: 'Deny fixture' }, { optionId: 'allow', kind: 'allow_once', name: 'Allow fixture' },
     ] } });
   } else if (message.method === 'session/cancel') finish('cancelled');

@@ -7,7 +7,16 @@ export function pluginTargets(value: unknown): readonly CardPluginTarget[] {
     return { backend: target.backend, ...(target.agent === undefined ? {} : { agent: target.agent }) } as CardPluginTarget;
   });
 }
-export function matchesTarget(targets: readonly CardPluginTarget[], data: Readonly<ToolCardData>): boolean {
+export function targetSpecificity(targets: readonly CardPluginTarget[], data: Readonly<ToolCardData>): number {
   const source = data.source ?? { backend: 'pi' };
-  return targets.some(target => target.backend === source.backend && (target.agent === undefined || target.agent === source.agent));
+  return Math.max(0, ...targets.map(target => target.backend !== source.backend ? 0
+    : target.agent === undefined ? 1 : target.agent === source.agent ? 2 : 0));
+}
+export function matchesTarget(targets: readonly CardPluginTarget[], data: Readonly<ToolCardData>): boolean {
+  return targetSpecificity(targets, data) > 0;
+}
+export function pluginKinds(value: unknown): readonly string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || !value.length || value.length > 50 || value.some(kind => typeof kind !== 'string' || !/^[a-z0-9_-]+$/.test(kind)) || new Set(value).size !== value.length) throw new Error('Invalid card plugin kinds');
+  return [...value];
 }

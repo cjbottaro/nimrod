@@ -9,9 +9,10 @@ export function isPresentationPlugin(plugin: object): boolean { return purePrese
 export function definePresentationPlugin<Data>(definition: {
   id: string;
   supports(data: Readonly<Data>): boolean;
+  matches?(data: Readonly<Data>): boolean;
   mount(): { update(data: Readonly<Data>): CardPresentation; dispose(): void };
 }): CardPlugin<Data> {
-  const plugin: CardPlugin<Data> = { apiVersion: 2, id: definition.id, supports: data => definition.supports(data), mount(context) {
+  const plugin: CardPlugin<Data> = { apiVersion: 2, id: definition.id, matches: definition.matches, supports: data => definition.supports(data), mount(context) {
     const instance = definition.mount();
     return { update(data) { context.renderPresentation(instance.update(data)); }, dispose: () => instance.dispose() };
   } };
@@ -20,6 +21,10 @@ export function definePresentationPlugin<Data>(definition: {
 }
 export function defineToolPlugin(id: string, tools: readonly string[], present: (data: Readonly<ToolCardData>) => CardPresentation): CardPlugin {
   return Object.assign(definePresentationPlugin<ToolCardData>({ id, supports: data => tools.includes(normalizedToolName(data.name)), mount: () => ({ update: present, dispose() {} }) }), { tools });
+}
+/** Protocol-category adapter; tool names and categories remain separate. */
+export function defineKindPlugin(id: string, kinds: readonly string[], present: (data: Readonly<ToolCardData>) => CardPresentation): CardPlugin {
+  return Object.assign(definePresentationPlugin<ToolCardData>({ id, supports: data => data.source?.backend === 'acp' && kinds.includes(data.kind || 'other'), mount: () => ({ update: present, dispose() {} }) }), { kinds, targets: [{ backend: 'acp' as const }] });
 }
 export function rawToolPresentation(block: Readonly<ToolCardData>): CardPresentation {
   const sections: CardPresentation['sections'][number][] = [];

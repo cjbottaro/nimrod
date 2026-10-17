@@ -1,19 +1,20 @@
 import { AcpClient, type AcpPermissionRequest, type AcpSessionUpdate } from './client';
 import { AcpConnectionError, isRecord, type AcpPacket, type AcpRecord } from './connection';
-import type { ConversationState, DisplayMessage, ContentBlock } from '../pi/types';
-import type { HostMessage } from '../pi/webview-client';
-import { immutableSnapshot } from '../pi/immutable-snapshot';
+import type { DisplayMessage, ContentBlock } from '../conversation-model';
+import type { ConversationViewState, ConversationViewMessage } from '../conversation-view-host';
+import { formatNativeSessionStats } from '../pi/session-stats';
+import { patchTool } from './tool-state';
 
 export interface AcpSessionUi {
-  publish(message: HostMessage): void;
+  publish(message: ConversationViewMessage): void;
   changed(): void;
   notice(message: string): void;
   permission(request: AcpPermissionRequest, signal: AbortSignal): Promise<string | undefined>;
   disconnected(message: string): void;
   completed(failed: boolean, response?: string): void;
 }
-export interface AcpOption { id: string; name: string; category?: string; current: string; options: { value: string; name: string }[]; legacy?: 'model' | 'mode'; }
-const emptyControls = () => ({ ready: false, changing: false, model: null, thinkingLevels: [] });
+export interface AcpOption { id: string; name: string; description?: string; category?: string; current: string; options: { value: string; name: string }[]; legacy?: 'model' | 'mode'; }
+export interface AcpSessionState extends ConversationViewState { messages: DisplayMessage[]; busy: boolean; status: string; sessionName?: string; }
 const text = (value: unknown) => typeof value === 'string' ? value : '';
 function stringify(value: unknown): string { return typeof value === 'string' ? value : JSON.stringify(value, null, 2) ?? ''; }
 function contentText(value: unknown): string {
@@ -28,8 +29,7 @@ function contentText(value: unknown): string {
 /** ACP semantics -> shared presentation records, never synthetic Pi RPC events. */
 export class AcpSession {
   readonly client: AcpClient;
-  state: ConversationState = { messages: [], busy: false, status: 'Connecting ACP…', sessionUnavailable: true,
-    modelControls: emptyControls(), extensionStatuses: {}, extensionWidgets: {}, queue: { steering: [], followUp: [], authoritative: false } };
+  state: AcpSessionState = { messages: [], busy: false, status: 'Connecting ACP…', sessionUnavailable: true, controls: [] };
   commands: { name: string; description: string }[] = [];
   options: AcpOption[] = [];
   agent?: string;
@@ -39,6 +39,7 @@ export class AcpSession {
   private echo?: { key: string; expected: string; seen: string };
   private configuring = false;
   private ended = false;
+  private tools = new Map<string, AcpRecord>();
 
   constructor(send: (packet: AcpPacket) => void | Promise<void>, private ui: AcpSessionUi) {
     this.client = new AcpClient(send, {
@@ -46,7 +47,12 @@ export class AcpSession {
       configured: configuration => { this.configure(configuration); this.publish([]); },
       selected: (kind, id) => { this.options = this.options.map(option => option.legacy === kind ? { ...option, current: id } : option); this.controls(); this.publish([]); },
       update: event => this.update(event),
-      permission: ui.permission,
+      permission: (request, signal) => {
+        // A request carries a ToolCallUpdate, often only an ID. Apply it through
+        // the same retained-state owner as transcript updates before presenting.
+        const toolCall = this.updateTool(request.toolCall);
+        return ui.permission({ ...request, toolCall }, signal);
+      },
       disconnected: error => {
         this.ended = true;
         this.finishMessages();
@@ -92,13 +98,13 @@ export class AcpSession {
     this.echo = { key, expected: value, seen: '' };
     this.ui.publish({ type: 'submissionMessage', id, key });
     this.state = { ...this.state, messages: [...this.state.messages, { key, role: 'user', content: value }], busy: true, status: 'Working…' };
-    this.publish();
+    this.controls(); this.publish();
     try {
       const reason = await this.client.prompt(value);
       if (this.ended) return;
       this.finishMessages();
       this.state = { ...this.state, busy: false, status: reason === 'cancelled' ? 'Stopped' : 'Idle' };
-      this.publish();
+      this.controls(); this.publish();
       // This is turn completion, not acceptance acknowledgement. Local Send
       // effects and user preview correlation already happened before dispatch.
       this.receipt(id, 'accepted');
@@ -108,7 +114,7 @@ export class AcpSession {
       this.receipt(id, unknown ? 'unknown' : 'rejected', error instanceof Error ? error.message : String(error));
       this.finishMessages();
       this.state = { ...this.state, busy: false, status: this.ended ? 'Disconnected' : 'Idle' };
-      this.publish();
+      this.controls(); this.publish();
       if (!unknown) this.ui.completed(true);
     } finally { this.echo = undefined; this.group = undefined; }
   }
@@ -121,14 +127,14 @@ export class AcpSession {
     const selectedOption = option.options[values.indexOf(selected)];
     if (!selectedOption) return;
     this.configuring = true;
-    this.state = { ...this.state, modelControls: { ...this.state.modelControls, changing: true } }; this.publish();
+    this.controls(); this.publish([]);
     try {
       if (option.legacy === 'model') await this.deadline(this.client.setModel(selectedOption.value));
       else if (option.legacy === 'mode') await this.deadline(this.client.setMode(selectedOption.value));
       else await this.deadline(this.client.setConfigOption(option.id, selectedOption.value));
     } finally {
       this.configuring = false;
-      this.state = { ...this.state, modelControls: { ...this.state.modelControls, changing: false } }; this.publish();
+      this.controls(); this.publish([]);
     }
   }
   private receipt(id: string, outcome: 'accepted' | 'rejected' | 'unknown', error?: string): void { this.ui.publish({ type: 'submissionReceipt', id, outcome, error }); }
@@ -157,7 +163,9 @@ export class AcpSession {
       }
       const groupKind = `${kind}:${text(content.type)}`;
       const messageId = text(update.messageId) || undefined;
-      if (!this.group || this.group.kind !== groupKind || this.group.messageId !== messageId) this.group = { key: `acp:message:${++this.sequence}`, kind: groupKind, messageId };
+      // Text arrives as deltas. Rich content is a sequence of complete blocks,
+      // not successive replacements for a block sharing the same content type.
+      if (content.type !== 'text' || !this.group || this.group.kind !== groupKind || this.group.messageId !== messageId) this.group = { key: `acp:message:${++this.sequence}`, kind: groupKind, messageId };
       const key = this.group.key;
       const previous = this.state.messages.find(message => message.key === key);
       const thought = kind === 'agent_thought_chunk';
@@ -166,22 +174,11 @@ export class AcpSession {
         const value = (thought ? old?.thinking : old?.text) || '';
         const block: ContentBlock = thought ? { type: 'thinking', thinking: value + text(content.text), thinkingComplete: false } : { type: 'text', text: value + text(content.text) };
         this.replace(key, { key, role: kind === 'user_message_chunk' ? 'user' : 'assistant', content: [block] });
-      } else this.replace(key, { key, role: kind === 'user_message_chunk' ? 'user' : 'assistant', content: stringify(content) });
+      } else this.replace(key, { key, role: kind === 'user_message_chunk' ? 'user' : 'assistant', content: [{ type: 'raw', text: stringify(content) }] });
       return;
     }
     if (kind === 'tool_call' || kind === 'tool_call_update') {
-      if (typeof update.toolCallId !== 'string') throw new Error('Invalid ACP tool identity');
-      this.group = undefined;
-      const key = `acp:tool:${update.toolCallId}`;
-      const previous = this.state.messages.find(message => message.key === key);
-      const retained = previous?.toolNative;
-      const native = immutableSnapshot<AcpRecord>({ ...(isRecord(retained) ? retained : {}), ...update });
-      const status = text(native.status);
-      const terminal = status === 'completed' || status === 'failed';
-      const output = contentText(native.content) || (native.rawOutput === undefined ? '' : stringify(native.rawOutput));
-      this.replace(key, { key, role: 'tool', toolCallId: update.toolCallId, toolName: text(native.kind) || 'other', toolKind: text(native.kind), toolTitle: text(native.title) || 'Tool',
-        toolSource: { backend: 'acp', ...(this.agent ? { agent: this.agent } : {}) }, toolNative: native,
-        toolArguments: native.rawInput, output, hasStreamingOutput: !terminal && !!output, ...(terminal ? { resultOutput: output, toolStatus: 'result' as const } : status === 'in_progress' ? { toolStatus: 'running' as const } : {}), isError: status === 'failed' });
+      this.updateTool(update);
       return;
     }
     if (kind === 'available_commands_update') {
@@ -190,16 +187,32 @@ export class AcpSession {
     } else if (kind === 'config_option_update') this.configure({ configOptions: update.configOptions });
     else if (kind === 'current_mode_update') { this.options = this.options.map(option => option.legacy === 'mode' || option.category === 'mode' ? { ...option, current: text(update.currentModeId) } : option); this.controls(); }
     else if (kind === 'session_info_update' && typeof update.title === 'string') this.state = { ...this.state, sessionName: update.title };
-    else if (kind === 'plan') this.state = { ...this.state, extensionWidgets: { plan: { lines: Array.isArray(update.entries) ? update.entries.filter(isRecord).map(entry => `${text(entry.status)} · ${text(entry.content)}`) : [], placement: 'aboveEditor' } } };
-    else if (kind === 'usage_update' && typeof update.used === 'number' && typeof update.size === 'number') this.state = { ...this.state, sessionStats: { context: { tokens: update.used, contextWindow: update.size, percent: update.size > 0 ? update.used / update.size * 100 : undefined } } };
+    else if (kind === 'plan') this.state = { ...this.state, information: Array.isArray(update.entries) ? update.entries.filter(isRecord).map(entry => ({ label: 'plan', text: `${text(entry.status)} · ${text(entry.content)}` })) : [] };
+    else if (kind === 'usage_update' && typeof update.used === 'number' && typeof update.size === 'number') this.state = { ...this.state, metrics: formatNativeSessionStats({ context: { tokens: update.used, contextWindow: update.size, percent: update.size > 0 ? update.used / update.size * 100 : undefined } }) };
     this.publish([]);
+  }
+  private updateTool(update: AcpRecord): AcpRecord {
+    if (typeof update.toolCallId !== 'string' || !update.toolCallId) throw new Error('Invalid ACP tool identity');
+    this.group = undefined;
+    const key = `acp:tool:${update.toolCallId}`;
+    const native = patchTool(this.tools.get(update.toolCallId), update);
+    this.tools.set(update.toolCallId, native);
+    const status = text(native.status);
+    const terminal = status === 'completed' || status === 'failed';
+    const output = contentText(native.content) || (native.rawOutput === undefined ? '' : stringify(native.rawOutput));
+    this.replace(key, { key, role: 'tool', toolCallId: update.toolCallId,
+      toolName: text(native.name) || undefined, toolKind: text(native.kind) || 'other', toolTitle: text(native.title) || 'Tool',
+      toolSource: { backend: 'acp', ...(this.agent ? { agent: this.agent } : {}) }, toolNative: native,
+      toolArguments: native.rawInput, output, hasStreamingOutput: !terminal && !!output,
+      ...(terminal ? { resultOutput: output, toolStatus: 'result' as const } : status === 'in_progress' ? { toolStatus: 'running' as const } : {}), isError: status === 'failed' });
+    return native;
   }
   private configure(value: AcpRecord): void {
     if (Array.isArray(value.configOptions)) {
       this.options = value.configOptions.filter(isRecord).flatMap(option => {
         if (option.type !== 'select' || typeof option.id !== 'string' || typeof option.name !== 'string' || typeof option.currentValue !== 'string' || !Array.isArray(option.options)) return [];
         const available = option.options.filter(isRecord).flatMap(item => Array.isArray(item.options) ? item.options.filter(isRecord) : [item]).filter(item => typeof item.value === 'string' && typeof item.name === 'string').map(item => ({ value: text(item.value), name: text(item.name) }));
-        return [{ id: option.id, name: option.name, category: text(option.category), current: option.currentValue, options: available }];
+        return [{ id: option.id, name: option.name, description: text(option.description) || undefined, category: text(option.category), current: option.currentValue, options: available }];
       });
     } else if (!this.options.length) {
       if (isRecord(value.models) && Array.isArray(value.models.availableModels)) this.options.push({ id: 'model', name: 'Model', category: 'model', legacy: 'model', current: text(value.models.currentModelId), options: value.models.availableModels.filter(isRecord).map(model => ({ value: text(model.modelId), name: text(model.name) })) });
@@ -207,9 +220,19 @@ export class AcpSession {
     }
     this.controls();
   }
+  controlOption(id: string): AcpOption | undefined {
+    const category = ({ model: 'model', thinking: 'thought_level', mode: 'mode' } as Record<string, string>)[id];
+    return category ? this.options.find(option => option.category === category) : undefined;
+  }
   private controls(): void {
-    const model = this.options.find(option => option.category === 'model'), thinking = this.options.find(option => option.category === 'thought_level');
-    this.state = { ...this.state, modelControls: { ready: true, changing: this.configuring || this.state.busy, model: model ? { id: model.options.find(option => option.value === model.current)?.name || model.current, provider: 'ACP' } : null, thinkingLevel: thinking?.current, thinkingLevels: thinking?.options.map(option => option.value) || [] } };
+    // Configuration-in-flight and agent-working are independent states. A
+    // configuration update during a turn must not latch controls disabled.
+    this.state = { ...this.state, controls: ['model', 'thinking', 'mode'].flatMap(id => {
+      const option = this.controlOption(id);
+      if (!option) return [];
+      const label = option.options.find(value => value.value === option.current)?.name || option.current;
+      return [{ id, label, title: `Select ${option.name}: ${label}${option.description ? ` — ${option.description}` : ''}`, disabled: this.configuring || this.state.busy || this.ended }];
+    }) };
   }
   private finishMessages(): void {
     this.state = { ...this.state, messages: this.state.messages.map(message => {

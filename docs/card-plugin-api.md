@@ -6,7 +6,7 @@ See [installation and trust](card-plugins.md#personal-typescript-plugins). Bundl
 
 ## Entry point
 
-Default-export a renderer object; personal sources also supply `tools` in that export (manifest packages may keep matching in their manifest):
+Default-export a renderer object; personal sources also supply `tools` and/or ACP `kinds` in that export (manifest packages may keep matching in their manifest):
 
 ```ts
 import type { CardPlugin, ToolCardData } from '../path/to/card-plugin-api';
@@ -40,10 +40,11 @@ Use type-only imports for the type contract: they are erased before runtime reso
 
 ## Lifecycle and ownership
 
+- Optional `matches(data)` is mount-time applicability after metadata matching: false or a thrown exception skips to the next candidate. It receives an immutable snapshot. It is not rerun on streaming updates; do not depend on incomplete arguments or later metadata to select a renderer.
 - `supports(data)` establishes compatibility, **not input completeness**. Returning false latches that mounted card to raw fallback. Handle partial streamed arguments in `update` instead.
 - `mount(context)` runs once per mounted card and returns `update(data, state)` / `dispose()`.
 - Presentation updates can be coalesced. Hidden sessions retain mounted instances and catch up with the latest data on reveal, without replaying intermediate updates. Removal cleanup waits for that catch-up; explicit session reset/view disposal still cleans up immediately. Plugin-owned timers/async work are not automatically suspended while hidden.
-- `supports`, `mount`, `update`, `dispose` and `mutate` callbacks are synchronous. Managed event handlers may be async. Rejected async lifecycle promises are errors, not a delayed rendering mechanism.
+- `matches`, `supports`, `mount`, `update`, `dispose` and `mutate` callbacks are synchronous. Managed event handlers may be async. Rejected async lifecycle promises are errors, not a delayed rendering mechanism.
 - Update existing nodes. Keep local fields, disclosure inside your body, focused controls and reading positions intact. Local state is not automatically persisted across reset/window restart.
 - Core owns the outer card, authoritative status/indicator, disclosure, placement and transcript scroll. Modify only your summary/body content. Do not set outer `open`, recreate the shell, focus the composer or implement your own transcript following.
 - Use `context.signal` and `dispose` for timers/requests/resources. Mount/update/managed-callback failures release owned resources and recover only that card. Unmanaged callbacks, module globals and infinite loops are outside this containment guarantee.
@@ -73,7 +74,7 @@ Core always retains raw inputs. `renderPresentation` accepts optional `rawInputs
 
 ## Harness targets and shared runtime
 
-This surface is new in the experimental [ACP POC](acp.md). Public-helper bundling, mounting, scoping and raw-recovery fixtures pass offline; native app acceptance remains pending.
+This surface is new in the experimental [ACP POC](acp.md). The initial public-helper/scoping fixtures passed offline. The latest matching/extraction changes and added fixtures have not yet been run; native app acceptance remains pending.
 
 Executable plugin exports may declare `targets`:
 
@@ -83,22 +84,26 @@ const targets = [{ backend: 'acp' as const, agent: 'copilot' }];
 
 Omitting `targets` keeps existing plugins **Pi-only**. `{ backend: 'acp' }` matches any ACP agent; an optional `agent` matches the exact negotiated `agentInfo.name`, not the user's profile label. Put `targets` on the default-exported plugin object, not in a legacy manifest (its schema is unchanged). Declarative packages remain Pi-only. Pi's existing tool-name overrides do not carry over to ACP.
 
-For ACP, `tools` matches protocol tool kinds such as `execute` or `read`; `data.title` retains the descriptive tool title, `data.arguments` carries `rawInput` and `data.native` retains the patched native tool record. Generic ACP cards work without an agent-specific plugin. Renderer choice remains fixed for a mounted card.
+For ACP, `data.name` is the optional native programmatic tool name; `data.kind` is its independent protocol category (`execute`, `read`, etc.). `tools` matches normalized names, as with Pi; `kinds` matches ACP categories. Either selector can qualify a card. Category-only personal plugins may omit `tools`, but must declare an ACP target. `data.title` retains the human title, `data.arguments` carries `rawInput`, and `data.native` retains patched metadata. Null/omitted optional update fields do not erase earlier values.
+
+**Early POC migration:** change `tools: ['execute']` to `kinds: ['execute']` when you mean the category, or use `defineKindPlugin`. Pi plugin matching and legacy manifest schemas are unchanged; `kinds`/`targets`/`matches` belong on the executable export.
+
+Automatic ACP selection considers matching external plugins before bundled fallbacks: exact agent targets before generic ACP targets, then name matches before category-only matches, then existing catalog order. `matches` can decline a candidate so multiple specialized cards can share a category. Pi keeps its existing catalog order and explicit overrides; an explicit override does not perform candidate search. After selection, `supports` failure still latches to raw fallback rather than remounting another plugin. Selection stays fixed even if later tool metadata changes. Generic ACP cards remain available without any custom plugin.
 
 The [external ACP shell example](../examples/card-plugins/acp-shell/plugin.ts) imports the **same public runtime** as bundled Pi Bash and optional Copilot shell cards:
 
 ```ts
-import { defineToolPlugin, rawToolPresentation, shellPresentation }
+import { defineKindPlugin, rawToolPresentation, shellPresentation }
   from '../path/to/nimrod/src/card-plugin-ui';
 
-const plugin = defineToolPlugin('example.shell', ['execute'], data => {
+const plugin = defineKindPlugin('example.shell', ['execute'], data => {
   const raw = rawToolPresentation(data);
   return shellPresentation({ title: raw.title, sections: raw.sections });
 });
 export default Object.assign(plugin, { targets: [{ backend: 'acp' as const }] });
 ```
 
-`defineToolPlugin` and `definePresentationPlugin` adapt pure presentation callbacks to the normal mount/update/dispose API. `rawToolPresentation` retains live/result sections; `shellPresentation` adds an optional `command` preview and console formatting through the shared keyed-output component. Argument/preview helpers are also public. All use `context.renderPresentation`, so output caps, raw recovery and scroll ownership are the same supported host behavior as custom DOM plugins. Using these helpers is optional.
+`defineToolPlugin` (names), `defineKindPlugin` (ACP categories) and `definePresentationPlugin` adapt pure presentation callbacks to the normal mount/update/dispose API. `rawToolPresentation` retains live/result sections; `shellPresentation` adds an optional `command` preview and console formatting through the shared keyed-output component. Argument/preview helpers are also public. All use `context.renderPresentation`, so output caps, raw recovery and scroll ownership are the same supported host behavior as custom DOM plugins. Using these helpers is optional.
 
 Bundled and external plugins have the same capabilities, not a private built-in-only shell renderer. A separately bundled helper copy may use conservative raw-output inspection rather than the host's pure-adapter bookkeeping optimization; it does not lose rendering/action capabilities. These are local source-module imports, not a hypothetical `@nimrod/card-ui` npm package.
 
@@ -107,5 +112,7 @@ Bundled and external plugins have the same capabilities, not a private built-in-
 Plugins execute as explicitly trusted code in the same webview as Nimrod. Controlled slots and capabilities are supported ownership conventions, **not isolation**: code can reach webview globals. There is no sandbox, CSS isolation or protection from malicious/global effects or a blocked event loop.
 
 Use local classes/styles inside your slots and inherited Nimrod theme variables. There is no package stylesheet/resource loader or supported app-wide styling API. Do not modify unrelated DOM or global styles. Existing bundled classes can change except the output behavior supplied by `registerOutput`; own your custom presentation styling.
+
+Card content plugins do not contribute session commands, permission decisions, configuration controls or transport methods. Those belong to Nimrod's concrete harness integrations; the internal contribution boundary is not a public app-plugin SDK.
 
 External matching currently targets tool cards. Bundled reasoning/parallel renderers use the same DOM API but are not externally selectable yet. Native macOS module loading/actions/focus and Linux behavior still need platform validation; offline WebKit CSP tests are not native Tauri acceptance.

@@ -8,7 +8,7 @@ Read the [human guide](../../../../docs/sessions.md),
 
 ## ACP POC boundary
 
-The saved-history/identity/temporary contracts below remain Pi's. [ACP POC sessions](acp-harnesses.md) carry an immutable frozen `acpProfile`, separate `AcpSession` and native `AcpHost`; they share project navigation but never enter the Pi session catalog or saved layout. Their runtime UUID and memory-only draft/pop-out scope reuse Nimrod's temporary-storage mechanism without promising that the agent disables its own history. New session remains Pi-default; New ACP session is explicit. Close confirms Nimrod state loss and routes to `stop_acp`; window/app teardown stops both hosts independently. No ACP resume/restart/deletion/migration is implemented or accepted. Mixed shell/browser and native pipe/ownership fixtures pass; real-agent/native app acceptance remains pending.
+The saved-history/identity/temporary contracts below remain Pi's. [ACP POC sessions](acp-harnesses.md) carry a frozen launch profile on a tagged `SessionBackend` (`kind: 'acp'`) with its sole `AcpSession` and separate native `AcpHost`; they share project navigation but never enter the Pi session catalog or saved layout. Their runtime UUID and memory-only draft/pop-out scope reuse Nimrod's temporary-storage mechanism without promising that the agent disables its own history. New session remains Pi-default; New ACP session is explicit. Close confirms Nimrod state loss and routes to `stop_acp`; window/app teardown stops both hosts independently. No ACP resume/restart/deletion/migration is implemented or accepted. Prior mixed-shell/browser and native ownership fixtures passed; the latest tagged ownership/presentation extraction and full-duplex fixtures have not been run. Real-agent/native app acceptance remains pending. [Harness presentation](harness-presentation.md) owns the internal integration boundary and rationale.
 
 ## Specification and acceptance criteria
 
@@ -23,7 +23,7 @@ One canonical directory per window with independently owned sessions. New is per
 | `src/command-palette.ts` | Cmd/Ctrl+Shift+P, modal navigation, asynchronous pickers, name step and focus restoration |
 | `src/pi/session.ts` | Pi startup/history/identity, authoritative RPC semantics and disconnect handling |
 | `src/pi/transport.ts` | Ordered response callbacks, uncertain acknowledgements, disconnected transport invalidation |
-| `src/pi/webview-client.ts` | Mounted renderer; explicit sessionReset; send-local preparation cancellation and receipt error reporting |
+| `src/conversation-view.ts` | Shared mounted renderer; explicit sessionReset; send-local preparation cancellation and receipt error reporting (Pi's `webview-client.ts` supplies a compatibility adapter) |
 | `src/pi/session-drafts.ts` | Shared project-local library, per-session selection, provisional promotion and recovery |
 | `src-tauri/src/native_menu.rs` | Native File → Open project; preserve editing/window menus and app-owned macOS Quit |
 | `src-tauri/src/main.rs` | Native menu dispatch, launch validation, close/quit serialization |

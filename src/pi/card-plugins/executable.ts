@@ -1,3 +1,4 @@
+import { pluginKinds, pluginTargets } from '../../card-plugin-targets';
 import type { DomCardRenderer } from '../dom-card-renderer';
 import type { ToolCardBlock } from '../tool-card';
 
@@ -16,7 +17,16 @@ export function parseExecutableManifest(text: string): ExecutableManifest {
 export function personalRenderer(module: unknown): { renderer: DomCardRenderer<ToolCardBlock>; tools: string[] } {
   const definition = module && typeof module === 'object' ? (module as { default?: unknown }).default : undefined;
   if (!definition || typeof definition !== 'object') throw new Error('Personal source must default-export a card plugin');
-  const candidate = definition as { apiVersion?: unknown; id?: unknown; tools?: unknown };
+  const candidate = definition as { apiVersion?: unknown; id?: unknown; tools?: unknown; kinds?: unknown; targets?: unknown };
+  const kinds = pluginKinds(candidate.kinds);
+  if (kinds.length && !pluginTargets(candidate.targets).some(target => target.backend === 'acp')) throw new Error('Tool kinds require an ACP target');
+  if (candidate.tools === undefined && kinds.length) {
+    // Personal sources can select categories without pretending those are tool
+    // names. Legacy manifests keep their existing nonempty-tools schema.
+    if (candidate.apiVersion !== 2 || typeof candidate.id !== 'string' || !/^[a-z][a-z0-9_-]*(?:\.[a-z0-9_-]+)+$/.test(candidate.id) || candidate.id.startsWith('nimrod.')) throw new Error('Invalid personal card plugin identity');
+    const manifest: ExecutableManifest = { apiVersion: 2, id: candidate.id, tools: [], entry: 'personal.js' };
+    return { renderer: executableRenderer(manifest, module), tools: [] };
+  }
   const manifest = parseExecutableManifest(JSON.stringify({ apiVersion: candidate.apiVersion, id: candidate.id, tools: candidate.tools, entry: 'personal.js' }));
   return { renderer: executableRenderer(manifest, module), tools: manifest.tools };
 }
@@ -38,6 +48,6 @@ export function executableRenderer(manifest: ExecutableManifest, module: unknown
   const renderer = module && typeof module === 'object' ? (module as { default?: unknown }).default : undefined;
   if (!renderer || typeof renderer !== 'object') throw new Error('Card module must default-export a renderer');
   const candidate = renderer as Partial<DomCardRenderer<ToolCardBlock>>;
-  if (candidate.apiVersion !== 2 || candidate.id !== manifest.id || typeof candidate.supports !== 'function' || typeof candidate.mount !== 'function') throw new Error('Card module API/identity does not match manifest');
+  if (candidate.apiVersion !== 2 || candidate.id !== manifest.id || typeof candidate.supports !== 'function' || typeof candidate.mount !== 'function' || candidate.matches !== undefined && typeof candidate.matches !== 'function') throw new Error('Card module API/identity does not match manifest');
   return candidate as DomCardRenderer<ToolCardBlock>;
 }

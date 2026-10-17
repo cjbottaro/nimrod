@@ -16,11 +16,14 @@ Pi is the primary integration; [ACP has an experimental source POC](acp-harnesse
 | Navigation/connection | Shared projections, activation and connection deferral | [Session navigation](session-navigation.md) |
 | Pi coordinator/transport | Ordered RPC, identity and result correlation | [Pi transport](pi-transport.md) |
 | Experimental ACP integration | Separate native ownership/JSON-RPC/session semantics; shared presentation, not Pi events | [ACP POC](acp-harnesses.md) |
+| Shared view / harness UI contributions | Presentation mechanics with integration-owned interaction policies, controls and actions | [Harness presentation and rationale](harness-presentation.md) |
 | Transcript/composer | Incremental presentation and user intent | [Cards](transcript-cards.md), [scroll/focus](transcript-interaction.md), [composer](composer.md) |
 | Rust host | Window/token ownership, pipes, shutdown and file validation | [Projects/sessions](projects-and-sessions.md), [Pi transport](pi-transport.md) |
 | Settings/state | JSONC preferences and separate app-managed bookkeeping | [Preferences](preferences.md) |
 | Window presentation | Shared creation/focus composition, explicit theme snapshots, appearance pipeline and prepared-window lifetime | [Window presentation](window-presentation.md) |
 | Native integrations | Startup, references and notifications | [Startup](single-instance.md), [pop-outs](pop-outs.md), [notifications](notifications.md) |
+
+The shared mounted engine consumes presentation records and integration-owned interaction/control/status contributions. It has no Pi/ACP mode switch. Card plugins remain presentation-only; concrete session controllers retain semantic authority. `SessionBackend` is a tagged Pi-or-ACP alternative, not a universal controller. [Harness presentation](harness-presentation.md) records this boundary, its rationale and regression requirements.
 
 There is no extra Node backend; Pi itself requires Node. The reducer and request correlation remain TypeScript so response snapshots apply synchronously in the ordered channel before later events. Rust validates the outer framing/record, TypeScript validates relevant Pi payload content. Small TS/Rust launch/packet shapes are hand-maintained; Pi's open-ended payload remains JSON.
 

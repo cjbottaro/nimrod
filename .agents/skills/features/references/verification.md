@@ -13,7 +13,9 @@ This is the current evidence/acceptance map, not a chronological test log. Featu
 
 ## Current automated validation
 
-Full `mise run check` passes: **786 TS/Node tests**, **152 Rust tests** (2 installed-Pi smokes intentionally ignored), TypeScript compilation, **81-document** link/anchor validation, Rust formatting and Clippy. Full `npm run test:browser` passes **123 offline WebKit tests**.
+**Latest review/extraction changes are not validated.** Shared-view policies/projection, keyed mode controls, scoped plugin applicability, ACP fidelity fixes and full-duplex supervision have new/updated fixtures, but no tests, checks, builds or app launches were run for them. See [harness presentation](harness-presentation.md#regression-guardrails-and-evidence).
+
+Last full gates at **`35cbd6f`**, before those changes: `mise run check` passes: **786 TS/Node tests**, **152 Rust tests** (2 installed-Pi smokes intentionally ignored), TypeScript compilation, **81-document** link/anchor validation, Rust formatting and Clippy. Full `npm run test:browser` passes **123 offline WebKit tests**.
 
 [ACP POC](acp-harnesses.md#current-foundation) coverage includes protocol/session ordering, cancellation/permissions, target-scoped plugins/public shell-helper bundling, independent native pipe ownership and mixed Pi/ACP shell/browser behavior. Browser ACP launches execute the real offline fixture subprocess through mocked Tauri IPC; this does not establish native Tauri window/IPC or installed-agent compatibility. The ACP command's description no longer shadows Pi Resume searches; ranking and Pi lifecycle semantics are unchanged. Five stale Pi browser expectations were independently reproduced on `a3e1919` and corrected to their current contracts (settled result-processing, retained deletion review and no-Send-jump reader intent). Settings-window closing also tolerates the expected WebKit post-close keyup error only after confirmed page closure. No app package/build/launch, real Copilot/second-agent startup, paid model work or native/platform acceptance occurred.
 

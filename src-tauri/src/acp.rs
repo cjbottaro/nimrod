@@ -366,10 +366,10 @@ pub async fn stop_acp(
 
 async fn supervise(
     mut child: Child,
-    mut stdin: tokio::process::ChildStdin,
+    stdin: tokio::process::ChildStdin,
     stdout: tokio::process::ChildStdout,
     stderr: tokio::process::ChildStderr,
-    mut writes: mpsc::Receiver<Write>,
+    writes: mpsc::Receiver<Write>,
     mut stop: oneshot::Receiver<()>,
     output: Output,
 ) -> Result<(), String> {
@@ -377,37 +377,34 @@ async fn supervise(
     let mut errors = FramedRead::new(stderr, LinesCodec::new_with_max_length(64 * 1024));
     let mut stderr_open = true;
     let mut tail = String::new();
-    let reason = loop {
-        tokio::select! {
-            _ = &mut stop => break "ACP session stopped by Nimrod".to_owned(),
-            record = records.next() => match record {
-                Some(Ok(line)) if line.trim().is_empty() => {},
-                Some(Ok(line)) => match serde_json::from_str::<Value>(&line) {
-                    Ok(value) if value.is_object() && value["jsonrpc"] == "2.0" => if output(Packet::Rpc { value }).is_err() { break "ACP frontend disconnected".into(); },
-                    _ => break "Invalid ACP stdout JSON-RPC record".into(),
+    let reason = {
+        // Keep the ordered writer alive across select iterations. A pending
+        // stdin write must not suspend stdout/stderr draining or owned Stop.
+        // Leaving this scope drops stdin and rejects all unfinished writes;
+        // no detached writer can outlive the observed child shutdown.
+        let writer = write_records(stdin, writes);
+        tokio::pin!(writer);
+        loop {
+            tokio::select! {
+                reason = &mut writer => break reason,
+                _ = &mut stop => break "ACP session stopped by Nimrod".to_owned(),
+                record = records.next() => match record {
+                    Some(Ok(line)) if line.trim().is_empty() => {},
+                    Some(Ok(line)) => match serde_json::from_str::<Value>(&line) {
+                        Ok(value) if value.is_object() && value["jsonrpc"] == "2.0" => if output(Packet::Rpc { value }).is_err() { break "ACP frontend disconnected".into(); },
+                        _ => break "Invalid ACP stdout JSON-RPC record".into(),
+                    },
+                    Some(Err(error)) => break format!("Invalid ACP stdout: {error}"),
+                    None => break if tail.is_empty() { "ACP stdout closed".into() } else { format!("ACP stdout closed: {tail}") },
                 },
-                Some(Err(error)) => break format!("Invalid ACP stdout: {error}"),
-                None => break if tail.is_empty() { "ACP stdout closed".into() } else { format!("ACP stdout closed: {tail}") },
-            },
-            request = writes.recv() => {
-                let Some((message, reply)) = request else { break "ACP writer closed".into(); };
-                let mut bytes = serde_json::to_vec(&message).expect("JSON Value serializes"); bytes.push(b'\n');
-                let result = match timeout(Duration::from_secs(5), stdin.write_all(&bytes)).await {
-                    Ok(Ok(())) => Ok(()),
-                    Ok(Err(error)) => Err(format!("ACP stdin failed; delivery is unknown: {error}")),
-                    Err(_) => Err("ACP stdin timed out; delivery is unknown".into()),
-                };
-                let error = result.as_ref().err().cloned(); let _ = reply.send(result);
-                if let Some(error) = error { break error; }
-            },
-            line = errors.next(), if stderr_open => match line {
-                Some(Ok(line)) => tail = line.chars().rev().take(2000).collect::<Vec<_>>().into_iter().rev().collect(),
-                Some(Err(_)) => break "ACP stderr framing failed".into(),
-                None => stderr_open = false,
-            },
+                line = errors.next(), if stderr_open => match line {
+                    Some(Ok(line)) => tail = line.chars().rev().take(2000).collect::<Vec<_>>().into_iter().rev().collect(),
+                    Some(Err(_)) => break "ACP stderr framing failed".into(),
+                    None => stderr_open = false,
+                },
+            }
         }
     };
-    drop(stdin);
     let result = terminate(&mut child).await;
     let message = match &result {
         Ok(()) => reason,
@@ -416,6 +413,27 @@ async fn supervise(
     let _ = output(Packet::Disconnected { message });
     result
 }
+async fn write_records(
+    mut stdin: tokio::process::ChildStdin,
+    mut writes: mpsc::Receiver<Write>,
+) -> String {
+    while let Some((message, reply)) = writes.recv().await {
+        let mut bytes = serde_json::to_vec(&message).expect("JSON Value serializes");
+        bytes.push(b'\n');
+        let result = match timeout(Duration::from_secs(5), stdin.write_all(&bytes)).await {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(error)) => Err(format!("ACP stdin failed; delivery is unknown: {error}")),
+            Err(_) => Err("ACP stdin timed out; delivery is unknown".into()),
+        };
+        let error = result.as_ref().err().cloned();
+        let _ = reply.send(result);
+        if let Some(error) = error {
+            return error;
+        }
+    }
+    "ACP writer closed".into()
+}
+
 async fn terminate(child: &mut Child) -> Result<(), String> {
     if child
         .try_wait()
@@ -510,5 +528,101 @@ mod tests {
         assert!(host.write("one", "first", packet.clone()).await.is_err());
         host.write("two", "second", packet).await.unwrap();
         host.shutdown().await.unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn full_duplex_pipes_drain_output_during_large_writes() {
+        let host = AcpHost::default();
+        let mut command = Command::new("/bin/sh");
+        // Fill stdout before reading stdin. Both directions exceed a pipe's
+        // capacity; serial write-then-read supervision deadlocks until timeout.
+        command.args([
+            "-c",
+            r#"printf '{"jsonrpc":"2.0","method":"fixture/output","params":{"text":"'
+                i=0
+                while [ "$i" -lt 8192 ]; do
+                    printf 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+                    i=$((i + 1))
+                done
+                printf '"}}\n'
+                IFS= read -r request
+                printf '%s\n' "$request"
+                while IFS= read -r request; do :; done"#,
+        ]);
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let output: Output =
+            Arc::new(move |packet| tx.send(packet).map_err(|error| error.to_string()));
+        host.start("duplex", "large".into(), std::env::temp_dir(), command, output)
+            .await
+            .unwrap();
+        let packet = json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"fixture":"x".repeat(1024 * 1024)}});
+        let write = timeout(
+            Duration::from_secs(10),
+            host.write("duplex", "large", packet.clone()),
+        )
+        .await;
+        let observed = timeout(Duration::from_secs(10), async {
+            let mut packets = Vec::new();
+            while packets.len() < 2 {
+                match rx.recv().await {
+                    Some(Packet::Rpc { value }) => packets.push(value),
+                    other => panic!("Expected ACP fixture records, got {other:?}"),
+                }
+            }
+            packets
+        })
+        .await;
+        host.shutdown().await.unwrap();
+        write.unwrap().unwrap();
+        let packets = observed.unwrap();
+        assert_eq!(packets[0]["params"]["text"].as_str().unwrap().len(), 8192 * 64);
+        assert_eq!(
+            packets[1], packet,
+            "partial writes must not restart when reads win"
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn stop_does_not_wait_for_a_blocked_stdin_deadline() {
+        let host = Arc::new(AcpHost::default());
+        let mut command = Command::new("/bin/sh");
+        command.args(["-c", "exec sleep 30"]);
+        host.start(
+            "blocked",
+            "stop".into(),
+            std::env::temp_dir(),
+            command,
+            Arc::new(|_| Ok(())),
+        )
+        .await
+        .unwrap();
+        let writer = host.clone();
+        let mut pending = tokio::spawn(async move {
+            writer
+                .write(
+                    "blocked",
+                    "stop",
+                    json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"fixture":"x".repeat(1024 * 1024)}}),
+                )
+                .await
+        });
+        assert!(
+            timeout(Duration::from_millis(100), &mut pending)
+                .await
+                .is_err()
+        );
+        let stopper = host.clone();
+        let mut stopped =
+            tokio::spawn(async move { stopper.stop_window("blocked", Some("stop"), false).await });
+        let fast = timeout(Duration::from_secs(2), &mut stopped).await;
+        // Do not cancel an in-flight ownership cleanup just to assert latency.
+        if fast.is_err() {
+            stopped.await.unwrap().unwrap();
+        }
+        host.shutdown().await.unwrap();
+        fast.unwrap().unwrap().unwrap();
+        assert!(pending.await.unwrap().is_err());
     }
 }
