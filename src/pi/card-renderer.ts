@@ -22,7 +22,10 @@ export function validatePresentation(value: CardPresentation): CardPresentation 
   for (const section of value.sections) {
     if (!section || typeof section.key !== 'string' || !section.key || keys.has(section.key)
       || typeof section.label !== 'string' || typeof section.text !== 'string'
-      || (section.format !== undefined && !['text', 'markdown', 'diff', 'console'].includes(section.format))) throw new Error('Invalid card section');
+      || (section.format !== undefined && !['text', 'markdown', 'diff', 'console'].includes(section.format))
+      || (section.webLinks !== undefined && typeof section.webLinks !== 'boolean')
+      || (section.webLinks && section.format !== 'markdown')
+      || (section.baseUrl !== undefined && (typeof section.baseUrl !== 'string' || !section.webLinks || section.format !== 'markdown'))) throw new Error('Invalid card section');
     keys.add(section.key);
   }
   if (value.members !== undefined) {

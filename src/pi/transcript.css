@@ -63,6 +63,8 @@ details { margin:8px 0; border:0; border-radius:0; padding:0; }
 :is(.tool-card, .tool-raw-inputs)[open]::after { content:""; position:absolute; left:3px; top:calc(1.5em + 8px); bottom:4px; width:1px; pointer-events:none; background:var(--vscode-editorIndentGuide-background1, color-mix(in srgb, var(--vscode-descriptionForeground) 35%, transparent)); }
 .tool-card .tool-raw-inputs > pre { margin-left:14px; }
 .card-plugin-summary { display:contents; }
+.tool-output-web-markdown { font-family:var(--vscode-font-family, sans-serif); white-space:normal; background:transparent; padding:0; }
+.tool-output-web-markdown > .markdown { white-space:normal; }
 .card-plugin-copy { margin:4px 0; padding:3px 7px; font-size:.8em; }
 .edit-card-preview { display:flex; flex:1; align-items:baseline; gap:12px; }
 .edit-card-filename { flex:none; max-width:70%; overflow:hidden; text-overflow:ellipsis; color:var(--vscode-foreground); }

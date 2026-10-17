@@ -850,6 +850,15 @@ test('background ACP permissions stay in their conversation and cannot approve a
     const reply = f.calls.filter(call => call.command === 'write_acp').map(call => call.args.message as JsonRecord).find(message => message.id === 'permission');
     assert.deepEqual(JSON.parse(JSON.stringify(reply?.result)), { outcome: { outcome: 'cancelled' } });
     assert.equal(acpRoot.querySelector('.acp-permission'), null);
+    target.channel.onmessage({ kind: 'rpc', value: { jsonrpc: '2.0', id: 'fetch-permission', method: 'session/request_permission', params: { sessionId: 'acp-fixture', toolCall: { toolCallId: 'fetch', kind: 'fetch', title: 'Fetch content from this URL.', rawInput: { url: 'https://example.test/docs' } }, options: [{ optionId: 'deny-fetch', name: 'Deny', kind: 'reject_once' }] } } });
+    await f.tick();
+    assert.equal(acpRoot.querySelector('.acp-permission-summary')?.textContent, 'Fetch · example.test/docs');
+    assert.equal(acpRoot.querySelector<HTMLDetailsElement>('.acp-permission-raw')?.open, false);
+    assert.ok(acpRoot.querySelector('.acp-permission-actions + .acp-permission-raw'));
+    assert.equal(f.calls.some(call => call.command === 'write_acp' && (call.args.message as JsonRecord).id === 'fetch-permission'), false);
+    [...acpRoot.querySelectorAll<HTMLButtonElement>('.acp-permission button')].find(button => button.textContent === 'Deny')!.click(); await f.tick();
+    const fetchReply = f.calls.filter(call => call.command === 'write_acp').map(call => call.args.message as JsonRecord).find(message => message.id === 'fetch-permission');
+    assert.deepEqual(JSON.parse(JSON.stringify(fetchReply?.result)), { outcome: { outcome: 'selected', optionId: 'deny-fetch' } });
   } finally { f.win.close(); }
 });
 

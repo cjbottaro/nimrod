@@ -1,3 +1,4 @@
+import { webUrl, displayWebUrl } from '../card-plugin-ui';
 import { immutableSnapshot } from '../pi/immutable-snapshot';
 import type { AcpRecord } from './connection';
 
@@ -32,9 +33,26 @@ function permissionCommands(tool: Readonly<AcpRecord>): string[] | undefined {
   return commands.length ? commands : undefined;
 }
 
+function appendPermissionRaw(document: Document, region: HTMLElement, tool: Readonly<AcpRecord>): void {
+  const raw = document.createElement('details'); raw.className = 'acp-permission-raw';
+  const heading = document.createElement('summary'); heading.textContent = 'Raw details';
+  const identity = document.createElement('small'); identity.textContent = `Tool call: ${String(tool.toolCallId)}`;
+  const pre = document.createElement('pre'); pre.textContent = toolValueText(tool);
+  raw.append(heading, identity, pre); region.append(raw);
+}
 /** Permission details are not a card-plugin surface: choices remain session-owned. */
 export function renderPermissionDetails(document: Document, tool: Readonly<AcpRecord>): HTMLElement {
   const region = document.createElement('div');
+  const input = tool.rawInput && typeof tool.rawInput === 'object' && !Array.isArray(tool.rawInput) ? tool.rawInput as AcpRecord : undefined;
+  const url = tool.kind === 'fetch' ? webUrl(input?.url) : undefined;
+  if (url) {
+    const summary = document.createElement('div'); summary.className = 'acp-permission-summary';
+    const label = document.createElement('strong'); label.textContent = 'Fetch';
+    const detail = document.createElement('span'); detail.className = 'acp-permission-description'; detail.textContent = displayWebUrl(url);
+    summary.append(label, document.createTextNode(' · '), detail); region.append(summary);
+    appendPermissionRaw(document, region, tool);
+    return region;
+  }
   const commands = permissionCommands(tool);
   if (commands) {
     const summary = document.createElement('div'); summary.className = 'acp-permission-summary';
@@ -51,11 +69,7 @@ export function renderPermissionDetails(document: Document, tool: Readonly<AcpRe
       const pre = document.createElement('pre'); pre.className = 'acp-permission-command'; pre.tabIndex = 0; pre.setAttribute('aria-label', 'Command');
       const code = document.createElement('code'); code.textContent = command; pre.append(code); region.append(pre);
     }
-    const raw = document.createElement('details'); raw.className = 'acp-permission-raw';
-    const heading = document.createElement('summary'); heading.textContent = 'Raw details';
-    const identity = document.createElement('small'); identity.textContent = `Tool call: ${String(tool.toolCallId)}`;
-    const pre = document.createElement('pre'); pre.textContent = toolValueText(tool);
-    raw.append(heading, identity, pre); region.append(raw);
+    appendPermissionRaw(document, region, tool);
     return region;
   }
   const title = document.createElement('strong');

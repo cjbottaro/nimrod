@@ -1,5 +1,5 @@
-import type { CardPlugin, CardPresentation, ToolCardData } from '../card-plugin-api';
-import { definePresentationPlugin, rawToolPresentation, shellPresentation, fileReadPresentation, searchPresentation, argumentRecord, firstString } from '../card-plugin-ui';
+import type { CardPlugin, CardPresentation, CardSection, ToolCardData } from '../card-plugin-api';
+import { definePresentationPlugin, rawToolPresentation, shellPresentation, fileReadPresentation, searchPresentation, argumentRecord, firstString, webUrl, markdownWebLink, webSearchPresentation, webFetchPresentation, type WebSource } from '../card-plugin-ui';
 
 function isCopilot(data: Readonly<ToolCardData>): boolean {
   return data.source?.backend === 'acp' && ['copilot', 'copilot-cli'].includes((data.source.agent || '').toLowerCase());
@@ -37,6 +37,95 @@ function copilotSections(data: Readonly<ToolCardData>): CardPresentation['sectio
   });
 }
 
+/** Only transform the exact current native result; unrelated live/standard output stays intact. */
+function nativeResult(data: Readonly<ToolCardData>): { output: Record<string, unknown>; source: string; text?: string } | undefined {
+  const native = object(data.native), output = object(native?.rawOutput);
+  const source = rawToolPresentation(data).sections.find(section => section.key === 'result')?.text;
+  if (!native || !output || source === undefined) return;
+  if (typeof output.content === 'string' && output.content === source) return { output, source, text: output.content };
+  if (native.content != null && (!Array.isArray(native.content) || native.content.length)) return;
+  let serialized = serializedOutputs.get(output);
+  if (serialized === undefined) serialized = JSON.stringify(output, null, 2);
+  if (source !== serialized) return;
+  serializedOutputs.set(output, source);
+  return { output, source, text: typeof output.content === 'string' ? output.content : undefined };
+}
+interface SearchAnswer { text: string; sources: WebSource[]; }
+const searchAnswers = new WeakMap<object, SearchAnswer | null>();
+function searchAnswer(value: unknown): SearchAnswer | undefined {
+  const structured = object(value);
+  if (!structured) return;
+  if (searchAnswers.has(structured)) return searchAnswers.get(structured) || undefined;
+  const text = object(structured.text);
+  if (structured.type !== 'output_text' || typeof text?.value !== 'string') { searchAnswers.set(structured, null); return; }
+  const answer = text.value, sources: WebSource[] = [], sourceIds = new Map<string, number>();
+  const replacements: { start: number; end: number; text: string }[] = [];
+  let codePointOffsets: number[] | undefined;
+  for (const annotation of Array.isArray(text.annotations) ? text.annotations : []) {
+    const item = object(annotation), citation = object(item?.url_citation), url = webUrl(citation?.url);
+    if (!item || !citation || !url) continue;
+    let number = sourceIds.get(url);
+    if (number === undefined) {
+      sources.push({ url, title: typeof citation.title === 'string' && citation.title.trim() ? citation.title : new URL(url).hostname });
+      number = sources.length; sourceIds.set(url, number);
+    }
+    let start = item.start_index, end = item.end_index;
+    if (typeof start !== 'number' || typeof end !== 'number' || !Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end <= start) continue;
+    const marker = /^【[^【】\r\n]+†source】$/;
+    if (!marker.test(answer.slice(start, end))) {
+      // Some producers count Unicode code points rather than JavaScript UTF-16 units.
+      if (!codePointOffsets) {
+        codePointOffsets = [0];
+        for (const point of answer) codePointOffsets.push(codePointOffsets[codePointOffsets.length - 1] + point.length);
+      }
+      if (end >= codePointOffsets.length) continue;
+      const mappedStart = codePointOffsets[start], mappedEnd = codePointOffsets[end];
+      if (!marker.test(answer.slice(mappedStart, mappedEnd))) continue;
+      start = mappedStart; end = mappedEnd;
+    }
+    if (end <= answer.length) replacements.push({ start, end, text: markdownWebLink(`[${number}]`, url) });
+  }
+  replacements.sort((a, b) => a.start - b.start);
+  let result = '', position = 0;
+  for (const replacement of replacements) {
+    if (replacement.start < position) continue;
+    result += answer.slice(position, replacement.start) + replacement.text; position = replacement.end;
+  }
+  const parsed = { text: result + answer.slice(position), sources };
+  searchAnswers.set(structured, parsed); return parsed;
+}
+function webSearch(data: Readonly<ToolCardData>, query: string): CardPresentation {
+  const raw = rawToolPresentation(data), native = !data.isError ? nativeResult(data) : undefined;
+  const answer = native?.text !== undefined ? searchAnswer(native.output.structuredContent) : undefined;
+  const sections = answer ? raw.sections.map(section => section.key === 'result' && section.text === native!.source
+    ? { ...section, label: 'Answer', text: answer.text, format: 'markdown' as const, webLinks: true } : section) : raw.sections;
+  return webSearchPresentation({ query, sections, sources: answer?.sources });
+}
+function fetchSections(data: Readonly<ToolCardData>, requestedUrl: string): CardPresentation['sections'] {
+  const sections = rawToolPresentation(data).sections, native = nativeResult(data);
+  if (!native) return sections;
+  if (data.isError) {
+    return native.output.code === 'failure' && typeof native.output.message === 'string'
+      ? sections.map(section => section.key === 'result' && section.text === native.source ? { ...section, label: 'Error', text: native.output.message as string } : section) : sections;
+  }
+  if (native.text === undefined) return sections;
+  let text = native.text;
+  const rawPrefix = /^Content type [^\r\n]+ cannot be simplified to markdown\. Here is the raw content:\r?\n/.exec(text);
+  if (rawPrefix) text = text.slice(rawPrefix[0].length);
+  const header = /^Contents of (https?:\/\/\S+?)(?: \(redirected from (https?:\/\/\S+?)\))?:\r?\n/.exec(text);
+  const url = webUrl(header?.[1]), from = webUrl(header?.[2]);
+  if (!header || !url || (url !== requestedUrl && from !== requestedUrl)) return sections;
+  text = text.slice(header[0].length);
+  const partial = /\n*<note>(Content truncated\. Call the fetch tool with a start_index of \d+ to get more content\.)<\/note>\s*$/.exec(text);
+  if (partial) text = text.slice(0, partial.index);
+  const result: CardSection[] = [];
+  if (url !== requestedUrl) result.push({ key: 'fetch-redirect', label: 'Redirected to', text: markdownWebLink(url, url), format: 'markdown', webLinks: true });
+  result.push({ key: 'result', label: rawPrefix ? 'Raw content' : 'Content', text, format: rawPrefix ? 'text' : 'markdown',
+    ...(rawPrefix ? {} : { webLinks: true, baseUrl: url }) });
+  if (partial) result.push({ key: 'fetch-partial', label: 'Partial content', text: partial[1] });
+  return sections.flatMap(section => section.key === 'result' && section.text === native.source ? result : [section]);
+}
+
 /** Standards-based fallback needs no agent-specific installation or tool schema. */
 export const acpToolPlugin: CardPlugin = definePresentationPlugin<ToolCardData>({
   id: 'nimrod.acp.tool', supports: data => data.source?.backend === 'acp',
@@ -69,11 +158,20 @@ export const copilotSearchPlugin: CardPlugin = definePresentationPlugin<ToolCard
   id: 'nimrod.acp.copilot-search', supports: data => isCopilot(data) && ['other', 'search'].includes(data.kind || 'other'),
   mount: context => ({ update(data) {
     const input = argumentRecord(data.arguments);
+    if (data.kind === 'search' && typeof input?.query === 'string') return webSearch(data, input.query);
     if (typeof input?.pattern !== 'string' || typeof input.output_mode !== 'string') return rawToolPresentation(data);
     return searchPresentation({ query: input.pattern, projectDirectory: context.projectDirectory, scope: searchScope(input.paths), glob: typeof input.glob === 'string' ? input.glob : undefined,
       sections: copilotSections(data) });
   }, dispose() {} }),
 });
+export const copilotFetchPlugin: CardPlugin = definePresentationPlugin<ToolCardData>({
+  id: 'nimrod.acp.copilot-fetch', supports: data => isCopilot(data) && data.kind === 'fetch',
+  mount: () => ({ update(data) {
+    const input = argumentRecord(data.arguments), url = webUrl(input?.url);
+    if (!url) return rawToolPresentation(data);
+    return webFetchPresentation({ url, startIndex: typeof input?.start_index === 'number' ? input.start_index : undefined, sections: fetchSections(data, url) });
+  }, dispose() {} }),
+});
 export function bundledAcpPlugin(data: Readonly<ToolCardData>): CardPlugin {
-  return [copilotShellPlugin, copilotReadPlugin, copilotSearchPlugin].find(plugin => plugin.supports(data)) || acpToolPlugin;
+  return [copilotShellPlugin, copilotReadPlugin, copilotSearchPlugin, copilotFetchPlugin].find(plugin => plugin.supports(data)) || acpToolPlugin;
 }

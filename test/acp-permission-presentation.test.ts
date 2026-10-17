@@ -61,6 +61,22 @@ test('scalar aliases and input descriptions work without repeating a generic tit
   }
 });
 
+test('fetch permissions use a literal URL-first summary and retain complete details without offering actions', () => {
+  const tool = { toolCallId: 'fetch-call', kind: 'fetch', title: 'Fetch content from this URL.', rawInput: { url: 'https://example.test/docs/page?query=fixture' } };
+  const f = fixture(tool);
+  try {
+    assert.equal(f.preview.querySelector('.acp-permission-summary')?.textContent, 'Fetch · example.test/docs/page?query=fixture');
+    assert.equal(f.preview.querySelector('button, a, script'), null);
+    const raw = f.preview.querySelector<HTMLDetailsElement>('.acp-permission-raw')!;
+    assert.equal(raw.open, false); assert.deepEqual(JSON.parse(raw.querySelector('pre')!.textContent!), tool);
+  } finally { f.close(); }
+  for (const url of ['javascript:alert(1)', 'https://user:secret@example.test/', 'not a URL']) {
+    const unknown = fixture({ ...tool, rawInput: { url } });
+    try { assert.equal(unknown.preview.querySelector('.acp-permission-summary'), null); assert.match(unknown.preview.textContent!, /Inputs/); }
+    finally { unknown.close(); }
+  }
+});
+
 test('unknown, partial and malformed operations keep the existing literal permission fallback', () => {
   for (const tool of [
     { toolCallId: 'missing' },
