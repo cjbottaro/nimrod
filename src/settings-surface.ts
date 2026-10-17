@@ -13,6 +13,7 @@ import { installThemes } from './themes/picker';
 import { installZoom } from './zoom';
 import { installNativeWindowAppearance } from './native-window-appearance';
 import { installPerformanceDiagnostics } from './performance-diagnostics';
+import { createToolCapture } from './tool-capture';
 import type { NotificationDispatch } from './notifications';
 
 export function installSettingsSurface(preferences: Awaited<ReturnType<typeof installPreferences>>, notices: ReturnType<typeof installApplicationNotices>, global = false) {
@@ -90,6 +91,37 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     apply: scale => getCurrentWebview().setZoom(scale),
     error: feedback('zoom', 'App zoom'),
   }, false);
+  const toolCapturePicker = required<HTMLSelectElement>('tool-capture-mode');
+  const toolCaptureStatus = required('tool-capture-status');
+  let toolCapturePath = '', toolCaptureFailure = '';
+  const toolCapture = createToolCapture({
+    write: lines => invoke('append_tool_capture', { lines }),
+    failure: message => {
+      if (unloading) return;
+      toolCaptureFailure = message;
+      toolCaptureStatus.textContent = message;
+      notices.report({ id: 'tool-capture', operation: 'Capture tool activity', message });
+    },
+    recovered: () => { toolCaptureFailure = ''; notices.resolve('tool-capture'); },
+  });
+  function reloadToolCapture(): void {
+    const enabled = preferences.toolCaptureEnabled();
+    toolCapture.setEnabled(enabled && !global);
+    toolCapturePicker.value = enabled ? 'on' : 'off';
+    toolCaptureStatus.textContent = toolCaptureFailure || `${enabled ? 'Tool capture enabled for project windows.' : 'Tool capture is off; existing logs are retained.'}${toolCapturePath ? ` Logs: ${toolCapturePath}` : ''}`;
+  }
+  toolCapturePicker.addEventListener('change', () => {
+    toolCapturePicker.disabled = true;
+    void preferences.saveToolCapture(toolCapturePicker.value === 'on').then(() => notices.resolve('tool-capture-settings'))
+      .catch(error => notices.report({ id: 'tool-capture-settings', operation: 'Save tool capture setting', message: String(error) }))
+      .finally(() => { if (!unloading) { reloadToolCapture(); toolCapturePicker.disabled = false; } });
+  });
+  reloadToolCapture();
+  void invoke<string>('tool_capture_directory').then(path => {
+    if (!unloading) { toolCapturePath = path; reloadToolCapture(); }
+  }).catch(error => {
+    if (!unloading) notices.report({ id: 'tool-capture-path', operation: 'Locate tool capture logs', message: String(error) });
+  });
   const performanceDiagnostics = installPerformanceDiagnostics(window, () => ({
     userAgent: navigator.userAgent.slice(0, 512), fieldSizing: window.CSS?.supports('field-sizing', 'content') ?? false,
     zoom: Number(preferences.zoom()), devicePixelRatio: window.devicePixelRatio, hardwareConcurrency: navigator.hardwareConcurrency || 0,
@@ -277,7 +309,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   const unsubscribe = preferences.subscribe(() => {
     const width = preferences.readState(settingsSidebarWidthKey);
     if (!Object.is(width, settingsSidebarWidth)) { settingsSidebarWidth = width; settingsSidebarResize.reload(); }
-    runtime.reload(); themes.reload(); appearance.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadSendAutoFollow(); keybindingEditor?.reload(); reloadSources();
+    runtime.reload(); themes.reload(); appearance.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadToolCapture(); reloadSendAutoFollow(); keybindingEditor?.reload(); reloadSources();
   });
   reloadSources();
   return {
@@ -287,11 +319,12 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     initializeRuntime(defaults: { pi: string; node: string }) { runtimeDefaults = defaults; runtime.initialize(defaults); },
     notificationError, notificationProgress, capturePerformance,
     performanceProbe: performanceDiagnostics.probe,
+    toolCapture,
     get capturingPerformance() { return capturingPerformance; },
     get performancePath() { return performancePath; },
     openKeybindings() { settings.open(); if (settings.isOpen && settingsNavigation.select('keybindings')) keybindingEditor?.focus(); },
     dispose() {
-      unloading = true; unsubscribe(); performanceDiagnostics.dispose();
+      unloading = true; unsubscribe(); performanceDiagnostics.dispose(); toolCapture.dispose();
       keybindingEditor?.dispose(); settingsNavigation.dispose(); settingsSidebarResize.dispose();
       appearance.dispose(); zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose();
     },

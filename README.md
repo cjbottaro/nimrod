@@ -55,6 +55,7 @@ Without installation, use `./bin/nimrod .`. The launcher opens or focuses a proj
 - [MCP inspector](docs/mcp.md) — read-only session server status, exposure, counts and reported errors.
 - [Command palette](docs/command-palette.md) and [Keybindings](docs/keybindings.md) — searchable commands and customizable shortcuts.
 - [Performance reports](docs/performance-diagnostics.md) — opt-in local timing captures for sluggish typing/scrolling.
+- [Tool activity logs](docs/tool-capture.md) — opt-in append-only Pi/ACP payload capture for bespoke card development.
 - [Settings](docs/settings.md) — global defaults, project overrides, appearance, zoom and runtime paths.
 - [Themes](docs/themes.md) and [Syntax highlighting](docs/syntax-highlighting.md) — bundled palettes, local imports and labeled code.
 - [Translucency](docs/translucency.md) — background opacity, whole-window/sidebar-only surfaces and macOS frosting; Linux blur is compositor-owned.

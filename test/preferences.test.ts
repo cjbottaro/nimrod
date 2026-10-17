@@ -12,6 +12,22 @@ function fixture() {
   return { dom, host, errors, install: () => installPreferences(host, dom.window.localStorage, error => errors.push(error)) };
 }
 
+test('tool capture defaults off, saves globally and retains last valid settings', async () => {
+  const f = fixture(), p = await f.install();
+  try {
+    assert.equal(p.toolCaptureEnabled(), false);
+    f.host.external('// keep capture comment\n{"custom":true}');
+    await p.saveToolCapture(true);
+    assert.equal(p.toolCaptureEnabled(), true);
+    assert.match(f.host.value.text, /keep capture comment/);
+    assert.equal(parseSettings(f.host.value.text).custom, true);
+    assert.throws(() => parseSettings('{"diagnostics.toolCapture":"true"}'));
+    f.host.external('{"diagnostics.toolCapture":null}');
+    assert.equal(p.toolCaptureEnabled(), true);
+    f.host.external('{}'); assert.equal(p.toolCaptureEnabled(), false);
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
 test('JSONC edits preserve comments, unknown fields, and unrelated settings', () => {
   const text = '// Header\n{\n  // Keep this comment\n  "appearance.zoom": 125,\n  "future.option": { "url": "https://test/*text*/", },\n}\n';
   const changed = editSettings(text, { 'appearance.theme': 'dracula', 'runtime.piPath': '/bin/pi' });

@@ -1,3 +1,5 @@
+import type { ToolCaptureSink } from '../tool-capture';
+import { PiToolCapture } from './tool-capture';
 import { measureWork, type PerformanceProbe, type WorkKind } from '../performance-diagnostics';
 import { validateImageContents } from './image-attachments';
 import { PiTransport, RpcResponseError } from './transport';
@@ -16,6 +18,7 @@ export interface PreferencePicker {
 }
 
 export interface SessionUi {
+  toolCapture?: ToolCaptureSink;
   performance?: PerformanceProbe;
   active?(): boolean;
   publish(message: HostMessage): void;
@@ -56,9 +59,12 @@ export class PiSession {
   private notificationOutcome: 'completed' | 'failed' | 'aborted' = 'completed';
   private model: ModelThinkingController;
   private stats: SessionStatsController;
+  private toolCapture: PiToolCapture;
+  private captureSessionId = `temporary:${crypto.randomUUID()}`;
 
   constructor(readonly rpc: PiTransport, private ui: SessionUi, temporary = true) {
     this.state.temporary = temporary;
+    this.toolCapture = new PiToolCapture(ui.toolCapture);
     rpc.onEvent = event => this.measure('pi-event', () => this.event(event));
     this.model = new ModelThinkingController(rpc, {
       isChangeBlocked: () => !!this.state.sessionUnavailable || this.rpc.hasPendingRequest('prompt', 'set_session_name'),
@@ -180,6 +186,7 @@ export class PiSession {
 
   private applyState(data: JsonRecord): void {
     if (this.disconnected) return;
+    if (typeof data.sessionId === 'string' && data.sessionId) this.captureSessionId = data.sessionId;
     this.state = { ...this.state,
       busy: data.isStreaming === true || data.isCompacting === true,
       compacting: data.isCompacting === true,
@@ -190,6 +197,7 @@ export class PiSession {
 
   private event(event: JsonRecord): void {
     if (this.disconnected) return;
+    this.toolCapture.observe(event, this.captureSessionId);
     if (event.type === 'agent_start') { this.notificationRun = true; this.notificationOutcome = 'completed'; this.notificationResponse = undefined; }
     if (event.type === 'message_end' && record(event.message).role === 'assistant') {
       const content = record(event.message).content;

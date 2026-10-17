@@ -8,23 +8,26 @@ import { JSDOM } from 'jsdom';
 import { slashCommands } from '../src/pi/slash-completion';
 import type { AcpPacket, AcpRecord } from '../src/acp/connection';
 import type { ConversationViewMessage } from '../src/conversation-view-host';
+import type { ToolCaptureRecord } from '../src/tool-capture';
 const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 const options = (current = 'small') => [{ id: 'model', category: 'model', name: 'Model', type: 'select', currentValue: current, options: [{ value: 'small', name: 'Small' }, { value: 'large', name: 'Large' }] }];
 async function fixture(permission?: AcpSessionUi['permission']) {
   const sent: AcpPacket[] = [], published: ConversationViewMessage[] = [], completed: boolean[] = [], permissions: AcpPermissionRequest[] = [];
-  const session = new AcpSession(packet => { sent.push(packet); }, { publish: message => published.push(message), changed() {}, notice() {}, permission: async (request, signal) => { permissions.push(request); return permission?.(request, signal); }, disconnected() {}, completed: failed => completed.push(failed) });
+  const captured: ToolCaptureRecord[] = [];
+  const session = new AcpSession(packet => { sent.push(packet); }, { toolCapture: { enabled: true, append: record => captured.push(structuredClone(record)) }, publish: message => published.push(message), changed() {}, notice() {}, permission: async (request, signal) => { permissions.push(request); return permission?.(request, signal); }, disconnected() {}, completed: failed => completed.push(failed) });
   const last = (method: string) => { const value = [...sent].reverse().find(value => value.method === method); assert.ok(value); return value; };
   const reply = (method: string, result: unknown) => session.receive({ jsonrpc: '2.0', id: last(method).id, result });
   const update = (update: AcpRecord) => session.receive({ jsonrpc: '2.0', method: 'session/update', params: { sessionId: 'test-session', update } });
   const pending = session.initialize('/fixture/project');
   reply('initialize', { protocolVersion: 1, agentInfo: { name: 'fixture-agent', version: '1' }, agentCapabilities: {} });
   await flush(); reply('session/new', { sessionId: 'test-session', configOptions: options() }); await pending;
-  return { session, sent, published, completed, permissions, last, reply, update };
+  return { session, sent, published, completed, permissions, captured, last, reply, update };
 }
 test('ACP history replay finalizes reasoning and tools without sends, permission UI or completion alerts', async () => {
-  const sent: AcpPacket[] = [], completed: boolean[] = [];
+  const sent: AcpPacket[] = [], completed: boolean[] = [], captured: ToolCaptureRecord[] = [];
   let permissions = 0;
   const session = new AcpSession(packet => { sent.push(packet); }, {
+    toolCapture: { enabled: true, append: record => captured.push(record) },
     publish() {}, changed() {}, notice() {}, disconnected() {}, completed: failed => completed.push(failed),
     permission: async () => { permissions++; return 'allow'; },
   });
@@ -53,9 +56,30 @@ test('ACP history replay finalizes reasoning and tools without sends, permission
   assert.equal(thought[0].thinkingComplete, true);
   assert.equal(session.state.messages[2].uiPhase, 'stopped');
   assert.equal(permissions, 0);
+  assert.deepEqual(captured, [], 'saved-history replay is not captured as new activity');
   assert.deepEqual(sent.find(packet => packet.id === 'old-permission')?.result, { outcome: { outcome: 'cancelled' } });
   assert.deepEqual(completed, []);
   assert.equal(sent.some(packet => packet.method === 'session/new' || packet.method === 'session/prompt'), false);
+});
+
+test('ACP capture preserves partial native patches and permission details without prose', async () => {
+  const f = await fixture(async () => 'allow');
+  const turn = f.session.handle({ type: 'prompt', id: 'capture', text: 'fixture prompt' });
+  f.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'not captured' } });
+  const start = { sessionUpdate: 'tool_call', toolCallId: 'custom', name: 'extension_tool', kind: 'other', title: 'Custom', rawInput: { arbitrary: [1, 2] } };
+  f.update(start);
+  const patch = { sessionUpdate: 'tool_call_update', toolCallId: 'custom', rawOutput: { arbitrary: true } };
+  f.update(patch);
+  const request = { sessionId: 'test-session', toolCall: { toolCallId: 'custom' }, options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }] };
+  f.session.receive({ jsonrpc: '2.0', id: 'capture-permission', method: 'session/request_permission', params: request });
+  await flush();
+  assert.deepEqual(f.captured.map(r => r.event), ['tool_call', 'tool_call_update', 'session/request_permission']);
+  assert.deepEqual(f.captured[0].payload, start);
+  assert.deepEqual(f.captured[1].payload, patch, 'record the received patch, not merged state');
+  assert.deepEqual(f.captured[2].payload, request, 'record permission details before retained-state merging');
+  assert.deepEqual(f.captured[0].source, { backend: 'acp', agent: 'fixture-agent', version: '1' });
+  assert.equal(JSON.stringify(f.captured).includes('not captured'), false);
+  f.reply('session/prompt', { stopReason: 'end_turn' }); await turn;
 });
 
 test('ACP presentation correlates one local user turn and preserves native tool metadata without Pi events', async () => {

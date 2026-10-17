@@ -1,3 +1,4 @@
+import type { ToolCaptureSink } from '../tool-capture';
 import { AcpClient, type AcpPermissionRequest, type AcpSessionUpdate } from './client';
 import { AcpConnectionError, isRecord, type AcpPacket, type AcpRecord } from './connection';
 import type { DisplayMessage, ContentBlock } from '../conversation-model';
@@ -6,6 +7,7 @@ import { formatNativeSessionStats } from '../pi/session-stats';
 import { patchTool } from './tool-state';
 
 export interface AcpSessionUi {
+  toolCapture?: ToolCaptureSink;
   publish(message: ConversationViewMessage): void;
   changed(): void;
   notice(message: string): void;
@@ -41,6 +43,7 @@ export class AcpSession {
   private configuring = false;
   private ended = false;
   private tools = new Map<string, AcpRecord>();
+  private captureConnectionId = crypto.randomUUID();
 
   constructor(send: (packet: AcpPacket) => void | Promise<void>, private ui: AcpSessionUi) {
     this.client = new AcpClient(send, {
@@ -56,6 +59,7 @@ export class AcpSession {
       selected: (kind, id) => { this.options = this.options.map(option => option.legacy === kind ? { ...option, current: id } : option); this.controls(); this.publish([]); },
       update: event => this.update(event),
       permission: (request, signal) => {
+        this.capture('session/request_permission', request, request.sessionId, text(request.toolCall.toolCallId));
         // A request carries a ToolCallUpdate, often only an ID. Apply it through
         // the same retained-state owner as transcript updates before presenting.
         const toolCall = this.updateTool(request.toolCall);
@@ -188,6 +192,7 @@ export class AcpSession {
       return;
     }
     if (kind === 'tool_call' || kind === 'tool_call_update') {
+      this.capture(kind, update, this.client.sessionId || '', text(update.toolCallId));
       this.updateTool(update);
       return;
     }
@@ -200,6 +205,12 @@ export class AcpSession {
     else if (kind === 'plan') this.state = { ...this.state, information: Array.isArray(update.entries) ? update.entries.filter(isRecord).map(entry => ({ label: 'plan', text: `${text(entry.status)} · ${text(entry.content)}` })) : [] };
     else if (kind === 'usage_update' && typeof update.used === 'number' && typeof update.size === 'number') this.state = { ...this.state, metrics: formatNativeSessionStats({ context: { tokens: update.used, contextWindow: update.size, percent: update.size > 0 ? update.used / update.size * 100 : undefined } }) };
     this.publish([]);
+  }
+  private capture(event: string, payload: unknown, sessionId: string, toolCallId: string): void {
+    if (this.client.phase === 'loading' || !this.ui.toolCapture?.enabled) return;
+    const info = this.client.initialization?.agentInfo;
+    this.ui.toolCapture?.append({ source: { backend: 'acp', agent: this.agent || 'unknown',
+      ...(isRecord(info) && typeof info.version === 'string' ? { version: info.version } : {}) }, sessionId, connectionId: this.captureConnectionId, toolCallId, event, payload });
   }
   private updateTool(update: AcpRecord): AcpRecord {
     if (typeof update.toolCallId !== 'string' || !update.toolCallId) throw new Error('Invalid ACP tool identity');

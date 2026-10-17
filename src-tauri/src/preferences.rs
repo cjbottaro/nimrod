@@ -176,6 +176,12 @@ pub(crate) fn validate(text: &str) -> Result<(), String> {
     {
         return Err("diagnostics.performance must be a boolean".into());
     }
+    if object
+        .get("diagnostics.toolCapture")
+        .is_some_and(|v| !v.is_boolean())
+    {
+        return Err("diagnostics.toolCapture must be a boolean".into());
+    }
     if let Some(opacity) = object.get("appearance.backgroundOpacity") {
         if !opacity
             .as_f64()

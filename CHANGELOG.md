@@ -6,6 +6,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Added
 
+- Opt-in tool activity capture in global Diagnostics: automatic native Pi/extension and ACP tool payload logs, separated by harness/agent and UTC day under Nimrod’s XDG state directory, with timestamped append-only JSONL records for bespoke card development. Logs stay local and are retained until explicitly removed.
 - Experimental ACP session POC alongside Pi: Copilot/custom-agent launch, shared transcript cards, session-local permissions with retained operation details, cancellation and advertised model/thinking/mode configuration and commands. Copilot sidebar entries and drafts survive reopening a project; selecting a restored entry loads its exact saved conversation without sending a prompt. Resume combines Pi with capability-gated Copilot history in associated projects, retaining usable results when another source is slow or unavailable and restoring closed conversations by exact ID. Delete history and Restart remain Pi-only; custom ACP sessions remain runtime-only. Real-agent/native acceptance remains pending.
 - Public card-plugin presentation/shell-output helpers, explicit harness/agent targeting and mount-time applicability, preserving legacy plugins as Pi-only by default.
 

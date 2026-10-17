@@ -49,6 +49,7 @@ export function parseSettings(text: string): Record<string, unknown> {
   if (errors.length || !settings || typeof settings !== 'object' || Array.isArray(settings)) throw new Error('Settings must be a valid JSON/JSONC object.');
   if (settings['notifications.enabled'] !== undefined && typeof settings['notifications.enabled'] !== 'boolean') throw new Error('notifications.enabled must be a boolean.');
   if (settings['diagnostics.performance'] !== undefined && typeof settings['diagnostics.performance'] !== 'boolean') throw new Error('diagnostics.performance must be a boolean.');
+  if (settings['diagnostics.toolCapture'] !== undefined && typeof settings['diagnostics.toolCapture'] !== 'boolean') throw new Error('diagnostics.toolCapture must be a boolean.');
   readWindowAppearance(settings);
   readKeyOverrides(settings[KEYBINDINGS_SETTING]);
   readPluginSettings(settings);
@@ -256,6 +257,8 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
     },
     resetKeybindings() { return patch({ [KEYBINDINGS_SETTING]: {} }, false); },
     cardPlugins() { return readPluginSettings(globalSettings); },
+    toolCaptureEnabled() { return globalSettings['diagnostics.toolCapture'] === true; },
+    saveToolCapture(enabled: boolean) { return patch({ 'diagnostics.toolCapture': enabled }, false); },
     performanceEnabled() { return globalSettings['diagnostics.performance'] === true; },
     savePerformance(enabled: boolean) { return patch({ 'diagnostics.performance': enabled }, false); },
     notificationsEnabled() { return globalSettings['notifications.enabled'] !== false; },

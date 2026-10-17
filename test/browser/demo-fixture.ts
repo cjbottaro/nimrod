@@ -114,6 +114,8 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'deletion_snapshot') return { pending: false, quarantine: [], files: [] };
     if (command === 'confirm_session_deletion' || command === 'acknowledge_deletion') return; // Recorded only, no native file deletion.
     if (command === 'plugin:window|is_focused') return true;
+    if (command === 'tool_capture_directory') return '/fixture/.local/state/nimrod/tool-captures';
+    if (command === 'append_tool_capture') return; // Fixture-only: never writes user files.
     if (command === 'write_performance_report') return '/fixture/.local/state/nimrod/performance-captures/2026-10-14_12-00-00.000Z.json'; // Recorded only; never writes user files.
     if (command === 'prepare_notifications' || command === 'focus_notification_window') return;
     if (command === 'notification_diagnostics') return 'macOS: authorized; desktop alerts: enabled; style: temporary; Notification Center: enabled; app active: yes; foreground handler calls: 1 (requests Banner + List).';
