@@ -59,6 +59,24 @@ test('unsupported SDK mode retains the exact identity without prompting or chang
     assert.equal(f.packets.some(packet => packet.kind === 'connected' || packet.kind === 'event'), false);
   } finally { await f.close(); }
 });
+test('SDK commands use discovery/invocation, retain arguments and choices, and never fall through to prompts', { timeout: 5000 }, async () => {
+  const f = bridge();
+  try {
+    await f.request('initialize'); await f.request('connect', { sessionId: 'fixture-sdk' });
+    assert.equal(f.packets.find(packet => packet.kind === 'commands')?.commands[0].input.choices[0].name, 'show');
+    const menu = await f.request('command', { name: 'permissions' });
+    assert.equal(menu.kind, 'select-subcommand'); assert.equal(menu.options[0].name, 'show');
+    const report = await f.request('command', { name: 'perms', input: 'show  literal\nrest' });
+    assert.equal(report.kind, 'text'); assert.equal(report.text, 'Fixture permission report: show  literal\nrest');
+    await assert.rejects(f.request('command', { name: 'missing' }), /not advertised/);
+    await assert.rejects(f.request('prompt', { text: '/permissions show' }), /invocation API/);
+    await f.request('command', { name: 'discover-fixture' });
+    assert.ok(f.packets.filter(packet => packet.kind === 'commands').at(-1)?.commands.some((command: { name: string }) => command.name === 'new-fixture'));
+    assert.equal((await f.request('command', { name: 'new-fixture' })).message, 'New command works');
+    assert.equal(f.packets.some(packet => packet.kind === 'event' && packet.event.type === 'user.message'), false);
+  } finally { await f.close(); }
+});
+
 test('production SDK discovery deletes only through the supported API and never recreates a missing ID', { timeout: 5000 }, async () => {
   const f = bridge();
   try {

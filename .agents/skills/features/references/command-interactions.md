@@ -23,6 +23,18 @@ Repeated deletion is the deliberate nested-dialog exception: the shared deletion
 Project navigation is another shared page, not a separate modal controller; see [recent-project picker](projects-and-sessions.md#recent-project-picker). Its recent-directory page uses inline project rows and has no OS folder-chooser action; native File Open / Cmd/Ctrl+O is separate.
 Command-list sorting and accepted-command history are independent of page lifecycle; see [Command ranking](command-ranking.md). Subordinate picker order is unchanged.
 
+## Copilot harness choices
+
+[Copilot SDK slash commands](copilot-commands.md) can request modal choices through
+`startSelection(..., standalone:true)` and `chooseItems()`. Rows retain opaque
+IDs and supplied labels/descriptions; standalone pages hide application Back and
+Retry. They reuse Escape, close-time focus restoration and stale-page guards,
+without registering app actions or ranking usage. The shell checks exact session,
+connection, presentation, Settings/modal state and the command's AbortSignal;
+background/late results never open or replace a modal. Switching away, Stop and
+disconnect cancel the owning command interaction. Existing palette model actions
+remain independent. Authored command/palette/shell fixtures are unrun.
+
 ## ACP POC commands
 
 `new-acp` and `acp-options` use this same palette lifecycle/dispatcher, without default shortcuts. Selected-session action descriptors come from the integration's `view-policy.ts`; palette and shortcuts share `sessionActions`/`runSessionAction`, revalidating availability and capturing the originating tab rather than reading a newer selection. Model/thinking/mode Status-area controls send opaque control IDs to session-bound dispatch; the generic engine has no protocol setters. Explicit profile choice/custom literal JSON launch is separate from unchanged Pi-default New. ACP option selections stay bound to their initiating session; the general option chooser closes before opening the selected value page. Supported model/thinking actions delegate to ACP only for that exact backend. Pi-only MCP inspection is omitted/disabled for ACP. Resume aggregates Pi and supported Copilot history through [SessionHistory](session-history.md); Delete consumes target-bound [deletion operations](session-deletion.md#consumer-interface-and-copilot-deletion) for native Pi trees or advertised Copilot single-session deletion. Agent commands stay in advertised composer completion rather than overriding Nimrod commands. Inline permission choices are session interaction controls, not palette pages or background global dialogs. [ACP reference](acp-harnesses.md#command-palette-ownership) owns current scope.

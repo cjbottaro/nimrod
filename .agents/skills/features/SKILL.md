@@ -44,6 +44,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Work area | Canonical reference | User guide |
 | --- | --- | --- |
 | Built-in Copilot SDK, runtime/process ownership, identity/legacy policy and SDK semantics | [Copilot SDK](references/copilot-sdk.md) | [Copilot](../../../docs/copilot.md) |
+| Copilot command discovery, argument suggestions, harness-owned modal choices and command output | [Copilot slash commands](references/copilot-commands.md) | [Copilot commands](../../../docs/copilot.md#slash-commands) |
 | Project identity, recent projects, session lifecycle and draft storage | [Projects/sessions](references/projects-and-sessions.md) | [Projects](../../../docs/projects.md), [Sessions](../../../docs/sessions.md) |
 | Ordering, activation, connection and cleanup selection | [Session navigation](references/session-navigation.md) | [Sidebar navigation](../../../docs/session-sidebar.md#ordering-and-navigation) |
 | Shared session-list/status contract and Pi/Copilot saved-history discovery | [Session history](references/session-history.md) | [Sessions](../../../docs/sessions.md#switch-or-resume), [Copilot history](../../../docs/copilot.md#history-close-and-delete) |

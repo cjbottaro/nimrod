@@ -5,6 +5,11 @@ use serde_json::json;
 fn bridge_records_are_not_acp_or_pi_packets() {
     assert!(validate_message(&json!({"id":"one","method":"prompt","text":"fixture"})).is_ok());
     assert!(validate_message(&json!({"id":"one","method":"connect","sessionId":"exact"})).is_ok());
+    assert!(validate_message(&json!({"id":"one","method":"commands"})).is_ok());
+    assert!(validate_message(&json!({"id":"one","method":"command","name":"permissions","input":"show"})).is_ok());
+    assert!(validate_message(&json!({"id":"one","method":"command","name":"/permissions"})).is_err());
+    assert!(validate_message(&json!({"id":"one","method":"command","name":"permissions show"})).is_err());
+    assert!(validate_message(&json!({"id":"one","method":"command","name":"permissions","input":true})).is_err());
     assert!(validate_message(&json!({"id":"one","method":"session/prompt"})).is_err());
     assert!(validate_message(&json!({"type":"prompt","message":"fixture"})).is_err());
     assert!(validate_message(&json!({"id":"one","method":"connect","sessionId":"  "})).is_err());

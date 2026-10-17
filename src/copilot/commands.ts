@@ -1,0 +1,61 @@
+import type { SlashCommand } from '../pi/slash-completion';
+import { record } from './connection';
+
+export interface CopilotCommand extends SlashCommand {
+  kind: 'builtin' | 'skill' | 'client';
+  aliases: string[];
+  allowDuringAgentExecution: boolean;
+}
+const name = (value: unknown): value is string => typeof value === 'string' && !!value && !/[\s\u0000-\u001f/]/.test(value);
+
+/** Released SDK metadata only; never infer a grammar from descriptions. */
+export function copilotCommands(raw: unknown): CopilotCommand[] {
+  const commands: CopilotCommand[] = [], seen = new Set<string>();
+  if (!Array.isArray(raw)) return commands;
+  for (const value of raw) {
+    if (!record(value) || !name(value.name) || seen.has(value.name.toLowerCase()) || !['builtin', 'skill', 'client'].includes(String(value.kind))) continue;
+    seen.add(value.name.toLowerCase());
+    const input = record(value.input) && typeof value.input.hint === 'string' ? {
+      hint: value.input.hint,
+      required: value.input.required === true,
+      choices: Array.isArray(value.input.choices) ? value.input.choices.filter(record)
+        .filter(choice => typeof choice.name === 'string' && !!choice.name && !/[\r\n\u0000]/.test(choice.name))
+        .map(choice => ({ name: String(choice.name), description: typeof choice.description === 'string' ? choice.description : '' })) : undefined,
+    } : undefined;
+    commands.push({ name: value.name, description: typeof value.description === 'string' ? value.description : 'Copilot command', source: 'Agent',
+      kind: value.kind as CopilotCommand['kind'], aliases: Array.isArray(value.aliases) ? value.aliases.filter(name) : [],
+      allowDuringAgentExecution: value.allowDuringAgentExecution === true, input });
+  }
+  return commands;
+}
+export function copilotSlashCommands(raw: unknown): SlashCommand[] {
+  const commands = copilotCommands(raw), names = new Set(commands.map(command => command.name.toLowerCase()));
+  const result: SlashCommand[] = [...commands];
+  for (const command of commands) for (const alias of command.aliases) {
+    if (names.has(alias.toLowerCase())) continue;
+    names.add(alias.toLowerCase()); result.push({ ...command, name: alias, description: `${command.description} (/${command.name})` });
+  }
+  return result;
+}
+/** Keep the complete raw argument string, including spaces and newlines. */
+export function parseCopilotCommand(text: string): { name: string; input?: string } | undefined {
+  const match = /^\/([^\s/]+)(?:[ \t]([\s\S]*))?$/.exec(text.trimStart());
+  return match ? { name: match[1], ...(match[2] !== undefined ? { input: match[2] } : {}) } : undefined;
+}
+export function findCopilotCommand(commands: readonly CopilotCommand[], name: string): CopilotCommand | undefined {
+  const lower = name.toLowerCase();
+  return commands.find(command => command.name.toLowerCase() === lower)
+    ?? commands.find(command => command.aliases.some(alias => alias.toLowerCase() === lower));
+}
+export interface CommandChoice { id: string; label: string; detail?: string; }
+
+/** Validate result-owned choices; never turn arbitrary result text into an executable choice. */
+export function commandChoices(value: unknown): CommandChoice[] {
+  if (!Array.isArray(value)) throw new Error('Copilot returned invalid command choices.');
+  const seen = new Set<string>();
+  return value.map(option => {
+    if (!record(option) || typeof option.name !== 'string' || !option.name || /[\r\n\u0000]/.test(option.name) || seen.has(option.name)) throw new Error('Copilot returned invalid command choices.');
+    seen.add(option.name);
+    return { id: option.name, label: option.name, detail: [typeof option.group === 'string' ? option.group : '', typeof option.description === 'string' ? option.description : ''].filter(Boolean).join(' · ') };
+  });
+}

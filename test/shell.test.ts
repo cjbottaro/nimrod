@@ -19,6 +19,8 @@ import { copilotSdkScope } from '../src/copilot/session-lifecycle';
 
 // Real shell/renderer/controller bundle, mocked native boundary—not native WebKit acceptance.
 interface ShellOptions {
+  sdkCommands?: JsonRecord[];
+  sdkCommand?: (request: JsonRecord) => Promise<unknown>;
   acpCleanupError?: string;
   acpStartError?: string;
   acpLoadError?: string;
@@ -247,6 +249,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         const request = args.message as JsonRecord;
         const send = (value: JsonRecord) => target.channel.onmessage({ kind: 'rpc', value });
         const event = (type: string, data: JsonRecord) => send({ kind: 'event', event: { id: win.crypto.randomUUID(), type, data } });
+        let result: unknown = null;
         if (request.method === 'connect') {
           target.sessionId = String(request.sessionId ?? 'sdk-fixture');
           send({ kind: 'connected', sessionId: target.sessionId, model: { modelId: 'fixture' }, models: [],
@@ -254,11 +257,14 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
               { id: 'saved-user', type: 'user.message', data: { content: 'Saved Copilot question' } },
               { id: 'saved-assistant', type: 'assistant.message', data: { messageId: 'saved-assistant', content: 'Saved Copilot answer' } },
             ] : [] });
+          send({ kind: 'commands', commands: options.sdkCommands ?? [] });
+        } else if (request.method === 'command') {
+          result = await options.sdkCommand?.(request);
         } else if (request.method === 'prompt') {
           event('user.message', { content: request.text });
           event('assistant.message', { messageId: 'sdk-answer', content: 'SDK fixture response' });
         } else if (request.method === 'cancel') event('session.idle', {});
-        send({ kind: 'result', id: request.id, result: request.method === 'list' ? [] : null });
+        send({ kind: 'result', id: request.id, result: request.method === 'list' ? [] : result ?? null });
         return;
       }
       if (command === 'stop_acp') { if (options.acpCleanupError) throw new Error(options.acpCleanupError); acpSessions.delete(String(args.token)); return; }
@@ -420,6 +426,46 @@ test('Copilot SDK coexists with Pi without changing its draft, default backend o
     assert.equal(f.calls.filter(call => call.command === 'stop_copilot').length, acpStops + 1);
     assert.equal(f.calls.filter(call => call.command === 'stop_pi').length, piStops);
     assert.equal(piPrompt.value, 'Keep Pi draft'); assert.equal(f.rows().length, 2);
+  } finally { f.win.close(); }
+});
+
+test('Copilot slash commands discover arguments, open harness choice modals and render output without Nimrod action dispatch', async () => {
+  const choices = [{ name: 'show', description: 'Show permissions' }, { name: 'reset', description: 'Clear approvals' }];
+  const f = await fixture(undefined, { windowWorkspace: '/project',
+    sdkCommands: [{ name: 'permissions', description: 'Manage permissions', kind: 'builtin', input: { hint: 'Permission operation', choices } }],
+    sdkCommand: async request => request.input === undefined
+      ? { kind: 'select-subcommand', command: 'permissions', title: 'Copilot permissions', options: choices }
+      : { kind: 'text', text: '**Permission report**', markdown: true },
+  });
+  try {
+    f.openPalette();
+    const paletteInput = f.element<HTMLInputElement>('palette-input');
+    const enter = () => paletteInput.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    paletteInput.value = 'New Copilot session'; paletteInput.dispatchEvent(new f.win.Event('input')); enter(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.focus();
+    const type = (value: string) => { prompt.value = value; prompt.setSelectionRange(value.length, value.length); prompt.dispatchEvent(new f.win.Event('input')); };
+    const send = () => f.element<HTMLButtonElement>('send').click();
+    const commands = () => f.calls.filter(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'command');
+    type('/permissions sh');
+    assert.match(f.element('slash-suggestions').textContent!, /Show permissions/);
+    type('/permissions'); send(); await f.tick(); await f.tick();
+    assert.equal(prompt.value, '');
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
+    assert.equal(f.element('palette-title').textContent, 'Copilot permissions');
+    assert.equal(f.element<HTMLButtonElement>('palette-back').hidden, true);
+    assert.equal(f.element<HTMLButtonElement>('palette-refresh').hidden, true);
+    assert.match(f.element('palette-list').textContent!, /Show permissions/);
+    enter(); await f.tick(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+    assert.equal((commands()[1].args.message as JsonRecord).input, 'show');
+    assert.match(f.element('messages').textContent!, /Copilot command.*Permission report/s);
+    assert.equal(f.element('messages').querySelectorAll('.message.user, .message.assistant').length, 0);
+    assert.equal(f.calls.some(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'prompt'), false);
+    type('/permissions'); send(); await f.tick(); await f.tick();
+    paletteInput.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await f.tick();
+    assert.equal(commands().length, 3, 'Escape does not invoke a subcommand');
+    type('A newer draft');
+    assert.equal(prompt.value, 'A newer draft');
   } finally { f.win.close(); }
 });
 

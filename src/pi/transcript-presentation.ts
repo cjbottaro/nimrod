@@ -8,6 +8,7 @@ export function transcriptRolePresentation(role: string, toolName: string): Tran
   if (role === "compactionSummary") return { visibleLabel: "Compaction summary" };
   if (role === "tool") return { ariaLabel: `Tool: ${toolName || "tool"}` };
   if (role === "parallel") return { ariaLabel: "Parallel tool activity" };
+  if (role === "command") return { ariaLabel: "Command output" };
   if (role === "user" || role === "assistant") return { ariaLabel: `${role === "user" ? "User" : "Assistant"} message` };
   return {
     visibleLabel: role === "toolResult" ? `Tool result: ${toolName}` : toolName ? `Tool: ${toolName}` : role,

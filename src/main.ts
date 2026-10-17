@@ -425,6 +425,7 @@ function selectSidebarView(view: SessionView): void {
 function presentConversation(tab: Tab | undefined): void {
   if (presented !== tab) {
     if (presented) {
+      copilotSession(presented)?.cancelCommands();
       const focused = document.activeElement;
       if (focused instanceof HTMLElement && presented.root.contains(focused)) {
         presented.focus = focused;
@@ -1251,6 +1252,19 @@ async function launchCopilot(tab: Tab, acceptedAction = false): Promise<void> {
     },
     notice: message => { if (valid() && !tab.closing) notices.report({ id: `${tab.id}:copilot:${++noticeSequence}`, owner: tab.id, operation: 'Copilot SDK', message }); },
     decision: (kind, request, signal) => requestCopilotDecision(tab, kind, request, signal),
+    commandChoice: async (title, choices, signal) => {
+      const current = () => valid() && copilotSession(tab) === session && presented === tab && !settings.isOpen && !tab.closing && !tab.deleting && !signal.aborted;
+      // A late/background result never opens or replaces a modal interaction.
+      if (!current() || document.querySelector('dialog[open]')) return;
+      const request = palette.startSelection(title, () => {}, undefined, true);
+      if (!request) return;
+      const cancel = () => request.cancel();
+      signal.addEventListener('abort', cancel, { once: true });
+      try {
+        const selected = await request.chooseItems(choices);
+        return current() ? selected : undefined;
+      } finally { signal.removeEventListener('abort', cancel); request.finish(); }
+    },
     disconnected: message => {
       if (!valid()) return;
       tab.ended = true; tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' });

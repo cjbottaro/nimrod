@@ -43,7 +43,7 @@ Without installation, use `./bin/nimrod .`. The launcher opens or focuses a proj
 
 - [Projects](docs/projects.md) — directory-backed windows and recent-project navigation.
 - [Sessions](docs/sessions.md) — persistent and temporary conversations, resume, restart, close and deletion.
-- [Copilot sessions](docs/copilot.md) — official SDK, separate saved identity/drafts, history/Resume, permissions, model/thinking and supported permanent deletion.
+- [Copilot sessions](docs/copilot.md) — official SDK, separate saved identity/drafts, history/Resume, permissions, model/thinking, supported permanent deletion and [harness-owned slash commands](docs/copilot.md#slash-commands) with argument suggestions and modal choices.
 - [ACP sessions (POC)](docs/acp.md) — experimental custom-agent stdio integration and retained legacy Copilot entries.
 - [Session sidebar](docs/session-sidebar.md) — All, Unread and Working views, activity indicators and resizing.
 - [Drafts](docs/drafts.md) — native per-session storage, debounced saves and recovery.

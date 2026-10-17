@@ -12,6 +12,12 @@ linters, checks, builds, packaging, live session loads/deletions, prompts or app
 launches occurred. Real CLI/history/decisions/tools, bounded owned process-group
 shutdown, signed packaging, macOS and Linux native acceptance remain gaps.
 Windows SDK launch is unavailable. Earlier ACP/Pi pass counts do not cover SDK.
+[Copilot command discovery/invocation](copilot-commands.md) additionally has
+unrun metadata/argument, production-bridge, modal/cancellation and shell-output
+fixtures. Released SDK 1.0.22 source exposes those APIs; actual installed
+`/permissions` selection and `/permissions show` results, connection-local output,
+modal focus and macOS/Linux acceptance remain unverified. Host-side model effect
+finalization is explicitly unsupported, not inferred from SDK type presence.
 
 - TypeScript/jsdom shell tests use mocked native IPC.
 - Rust fixture tests use actual pipes, owned subprocesses and generated disposable session files; deletion tests unlink only those fixtures.

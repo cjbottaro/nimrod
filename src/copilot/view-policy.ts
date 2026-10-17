@@ -2,6 +2,7 @@ import type { ConversationInteraction } from '../conversation-view-host';
 import { keyboardSubmissionMode } from '../pi/composer-dom';
 import type { SessionAction } from '../session-backend';
 import type { CopilotSession } from './session';
+import { copilotSlashCommands } from './commands';
 export function copilotSessionActions(session?: CopilotSession): readonly SessionAction[] {
   return [
     ...(session?.supports('model') ? [{ id: 'model' as const, label: 'Select model…', detail: 'Models reported by Copilot SDK' }] : []),
@@ -12,12 +13,13 @@ export function copilotInteraction(validate: (text: string) => string | undefine
   return {
     label: 'Copilot', controlsLabel: 'Copilot SDK configuration', metricsLabel: 'Copilot-reported usage',
     unsupportedImages: 'Copilot SDK sessions currently accept text only. No image was attached.',
-    commands: () => [],
+    commands: copilotSlashCommands,
     keyboardMode: event => keyboardSubmissionMode(event, false),
     composer: state => ({ hint: state.busy ? 'Copilot working · Stop to cancel · Shift+Enter for newline' : 'Enter to send · Shift+Enter for newline', stopLabel: 'Stop Copilot' }),
     prepare(text) {
       const error = validate(text);
-      return error ? { kind: 'reject', error } : { kind: 'request', message: { type: 'prompt' }, preview: true, navigate: true };
+      const command = text.startsWith('/');
+      return error ? { kind: 'reject', error } : { kind: 'request', message: { type: command ? 'command' : 'prompt' }, preview: !command, navigate: !command };
     },
   };
 }

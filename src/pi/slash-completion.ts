@@ -1,6 +1,9 @@
 import { matchSlashCommands } from "./slash-matching";
 
-export interface SlashCommand { name: string; description: string; source: "GUI" | "Extension" | "Template" | "Skill" | "Agent"; }
+export interface SlashCommand {
+  name: string; description: string; source: "GUI" | "Extension" | "Template" | "Skill" | "Agent";
+  input?: { hint: string; required?: boolean; choices?: { name: string; description: string }[] };
+}
 
 export function slashCommands(raw: unknown): SlashCommand[] {
   const commands = new Map<string, SlashCommand>([
@@ -25,6 +28,9 @@ export function slashQuery(text: string, start: number, end: number): string | u
 export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLElement, onInsert: (text: string) => void, resolve: (raw: unknown) => SlashCommand[] = slashCommands): { setCommands(raw: unknown): void; refresh(): void } {
   let commands = resolve(undefined);
   let matches: SlashCommand[] = [];
+  let argumentCommand: SlashCommand | undefined;
+  let argumentPrefix = '';
+  let argumentSelected = false;
   let selected = 0;
   let previousQuery: string | undefined;
   let dismissed: string | undefined;
@@ -47,17 +53,24 @@ export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLEle
       option.setAttribute("aria-selected", String(index === selected));
       option.dataset.index = String(index);
       const name = document.createElement("strong");
-      name.textContent = `/${command.name}`;
+      name.textContent = argumentCommand ? command.name : `/${command.name}`;
       const description = document.createElement("span");
       description.textContent = `${command.source} · ${command.description}`;
       option.title = command.source === "Extension" ? `${command.description} — provided by a Pi extension; RPC UI compatibility depends on that extension.` : command.description;
       option.append(name, description);
       list.append(option);
     });
+    if (argumentCommand?.input?.hint) {
+      const hint = document.createElement('div');
+      hint.setAttribute('role', 'status');
+      hint.textContent = `${argumentCommand.input.required ? 'Required: ' : ''}${argumentCommand.input.hint}`;
+      list.prepend(hint);
+    }
     list.hidden = false;
     input.setAttribute("aria-expanded", "true");
-    input.setAttribute("aria-activedescendant", `${list.id}-${selected}`);
-    const option = list.children[selected] as HTMLElement | undefined;
+    if (matches.length) input.setAttribute("aria-activedescendant", `${list.id}-${selected}`);
+    else input.removeAttribute('aria-activedescendant');
+    const option = list.querySelector<HTMLElement>(`[data-index="${selected}"]`) ?? undefined;
     if (option) {
       if (option.offsetTop < list.scrollTop) list.scrollTop = option.offsetTop;
       else if (option.offsetTop + option.offsetHeight > list.scrollTop + list.clientHeight) {
@@ -66,19 +79,32 @@ export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLEle
     }
   }
   function refresh(): void {
-    const query = slashQuery(input.value, input.selectionStart, input.selectionEnd);
+    let query = slashQuery(input.value, input.selectionStart, input.selectionEnd);
+    argumentCommand = undefined;
+    if (input.selectionStart === input.selectionEnd && input.selectionEnd === input.value.length) {
+      const args = /^\/([^\s/]+)([ \t])([\s\S]*)$/.exec(input.value);
+      const command = args && commands.find(command => command.name.toLowerCase() === args[1].toLowerCase());
+      if (command?.input) {
+        argumentCommand = command; argumentPrefix = input.value.slice(0, args![1].length + 2);
+        query = args![3].toLowerCase();
+      }
+    }
     if (input.readOnly || composing || document.activeElement !== input || query === undefined || dismissed === input.value) { close(); return; }
-    const previous = query === previousQuery ? matches[selected]?.name : undefined;
-    previousQuery = query;
-    matches = matchSlashCommands(commands, query);
-    if (!matches.length) { close(); return; }
+    const context = argumentCommand ? `${argumentCommand.name} ${query}` : query;
+    const previous = context === previousQuery ? matches[selected]?.name : undefined;
+    if (context !== previousQuery) argumentSelected = false;
+    previousQuery = context;
+    matches = matchSlashCommands(argumentCommand
+      ? (argumentCommand.input?.choices ?? []).map(choice => ({ ...choice, source: argumentCommand!.source })) : commands, query);
+    if (!matches.length && !argumentCommand?.input?.hint) { close(); return; }
     selected = Math.max(0, matches.findIndex(command => command.name === previous));
     draw();
   }
+  function queryHasArguments(): boolean { return input.value.slice(argumentPrefix.length).trim().length > 0; }
   function accept(index: number): void {
     const command = matches[index];
     if (!command || input.readOnly) return;
-    const text = `/${command.name} `;
+    const text = argumentCommand ? `${argumentPrefix}${command.name} ` : `/${command.name} `;
     close();
     input.value = text;
     input.setSelectionRange(text.length, text.length);
@@ -95,10 +121,10 @@ export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLEle
     if (event.isComposing || event.keyCode === 229 || list.hidden) return;
     if (event.key === "Escape") {
       event.preventDefault(); event.stopImmediatePropagation(); dismissed = input.value; close();
-    } else if (!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && ["ArrowUp", "ArrowDown", "Tab", "Enter"].includes(event.key)) {
+    } else if (matches.length && !(event.key === 'Enter' && argumentCommand && !argumentSelected && !queryHasArguments()) && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && ["ArrowUp", "ArrowDown", "Tab", "Enter"].includes(event.key)) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (event.key === "Enter" || event.key === "Tab") accept(selected);
-      else { selected = (selected + (event.key === "ArrowDown" ? 1 : -1) + matches.length) % matches.length; draw(); }
+      else { argumentSelected = true; selected = (selected + (event.key === "ArrowDown" ? 1 : -1) + matches.length) % matches.length; draw(); }
     }
   });
   list.addEventListener("mousedown", event => {
