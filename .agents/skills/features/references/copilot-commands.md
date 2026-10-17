@@ -1,8 +1,9 @@
 # Copilot SDK slash commands
 
-**Status: source implemented; authored offline fixtures unrun.** No checks,
-builds, app launches, installed-CLI invocations or model requests were performed.
-The released `@github/copilot-sdk@1.0.22` declarations/implementation are the API
+**Status: source implemented; authored offline fixtures unrun.** No app launches,
+installed-CLI invocations or model requests were performed for the argument-picker
+follow-up. Mandatory post-merge Rust compilation is separate from command/UI
+behavioral verification. The released `@github/copilot-sdk@1.0.22` declarations/implementation are the API
 evidence, not repository-main documentation or real-agent acceptance.
 
 ## Ownership and scope
@@ -43,9 +44,14 @@ queueing, mode switching, new session ownership or permission policy is invented
   directory completion is claimed. SDK directory-completion hints are not yet
   implemented; free-text remains available.
 - Tab/click and Enter on a typed argument accept suggestions only. Arrows select
-  a choice; Enter on a blank argument without arrow selection submits the parent
-  command, allowing no-argument commands to request a picker. Escape dismisses
-  suggestions; IME/modifier and mid-draft editing retain existing behavior.
+  a choice; Enter on a blank argument without arrow selection submits the command
+  intent. If the command advertises literal argument choices, an empty argument
+  opens the shared palette-style picker **before any SDK invocation**. Escape
+  invokes nothing; selection invokes the command once with that exact argument.
+  This applies to all advertised choices, not a `/permissions` name special case.
+  Required finite-choice input can also be supplied this way. Explicit arguments
+  bypass this picker; commands without choices keep their SDK default behavior.
+  Escape dismisses suggestions; IME/modifier and mid-draft editing are unchanged.
 - Local validation precedes draft clearing for unavailable/busy sessions,
   unadvertised commands, required input and attachments. No optimistic literal
   slash user turn, Send-recency bump or forced transcript navigation. Clear the
@@ -73,8 +79,10 @@ SDK session files to persist local output.
 ## Choice lifecycle and concurrency
 
 Each command workflow owns an AbortController and serializes its own invocations.
-Waiting for a returned choice is result-gated because choices are harness-owned
-and unavailable before invocation; there is no RPC gate on clearing the composer.
+Advertised argument choices are available before invocation and must not require
+executing a bare command to discover its default behavior. Separately, waiting
+for a returned `select-subcommand` choice is result-gated because those choices
+are unavailable before invocation. Neither path gates clearing the composer on RPC.
 Other submissions/configuration remain locally unavailable until this workflow
 settles; the draft stays editable. Ordinary agent turns retain SDK `session.idle`
 semantics, separate from local command completion.
@@ -118,9 +126,14 @@ use the existing bounded request timeout/unknown-outcome disconnect contract.
   focus/lifecycle mechanics, command intent and transcript output.
 - `src-tauri/src/copilot_tests.rs`: private command-record admission/rejection.
 
-All additions are **unrun**. Installed CLI 1.0.98 must still establish the actual
-`/permissions` no-argument selection and `/permissions show` text-result shapes;
-macOS/Linux modal/focus/scroll and SDK packaging acceptance are pending. Schema
-support and mock fixtures are not native or live command acceptance.
+The user reported that bare `/permissions` and `/permissions show` both display
+a report in Nimrod, while the Copilot TUI opens a picker for the bare command.
+The initial fixtures incorrectly assumed bare SDK invocation returned
+`select-subcommand`. The offline SDK fixture now models a text default, and
+controller/shell fixtures cover metadata-driven pre-invocation selection,
+explicit-argument bypass, Escape with zero invocations and stale-choice rejection.
+These updated fixtures are **unrun**. Actual installed catalog/command behavior,
+post-fix macOS/Linux modal/focus/scroll and SDK packaging acceptance are pending.
+Schema support, Rust compilation and mocks are not live command/UI acceptance.
 
 User guide: [Copilot slash commands](../../../../docs/copilot.md#slash-commands).

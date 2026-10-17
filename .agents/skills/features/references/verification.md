@@ -8,9 +8,12 @@ This is the current evidence/acceptance map, not a chronological test log. Featu
 
 [Copilot command discovery/invocation](copilot-commands.md) additionally has
 unrun metadata/argument, production-bridge, modal/cancellation and shell-output
-fixtures. Released SDK 1.0.22 source exposes those APIs; actual installed
-`/permissions` selection and `/permissions show` results, connection-local output,
-modal focus and macOS/Linux acceptance remain unverified. Host-side model effect
+fixtures. The user reports bare `/permissions` produces the same report as
+`/permissions show` in Nimrod, unlike the TUI's bare-command picker. The follow-up
+uses advertised argument choices before invocation; revised fixtures model a text
+default and cover zero-invocation cancellation. Those fixtures are unrun, and
+post-fix installed catalog/command behavior, modal focus and macOS/Linux acceptance
+remain unverified. Host-side model effect
 finalization is explicitly unsupported, not inferred from SDK type presence.
 
 - TypeScript/jsdom shell tests use mocked native IPC.

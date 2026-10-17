@@ -23,6 +23,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Bare Copilot slash commands with advertised argument choices open a searchable picker before execution, rather than relying on the SDK's default command result to request one. Explicit arguments still run directly; Escape invokes nothing. This covers `/permissions` without hardcoding a permissions menu.
 - New Copilot sessions honor Copilot’s SDK-reported model/effort preferences independently at creation, omitting unset values rather than guessing defaults. Unknown values show lowercase `default model` / `default effort` before the first message; actual session values supersede creation inputs. Resume preserves saved configuration without applying current new-session defaults.
 - Copilot SDK tool capture includes streamed tool inputs and native permission request/completion events, correlates nested permission tool IDs, retains the reported runtime version, and safely records callbacks received before session identity is known. SDK logs remain separate from Pi and custom ACP captures.
 - Copilot SDK session snapshots, web citation offsets and the shell's self-referential command-choice initializer retain explicit types, fixing TypeScript compilation after the SDK migration and slash-command integration. The configuration snapshot reader has a distinct name from the session's public configuration interface, fixing the subsequent duplicate-member compilation failure.

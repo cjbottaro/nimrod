@@ -76,7 +76,7 @@ export class CopilotSession {
       const invocation = parseCopilotCommand(text);
       const command = invocation && findCopilotCommand(this.commands, invocation.name);
       if (!command) return 'This command is not advertised by Copilot. Nothing was invoked; your draft was kept.';
-      if (command.input?.required && !invocation?.input?.trim()) return `/${command.name} requires input: ${command.input.hint}. Your draft was kept.`;
+      if (command.input?.required && !command.input.choices?.length && !invocation?.input?.trim()) return `/${command.name} requires input: ${command.input.hint}. Your draft was kept.`;
     }
   }
   cancelCommands(): void { this.commandOperation?.abort(); }
@@ -136,8 +136,26 @@ export class CopilotSession {
     this.publish([]);
     try {
       let name = invocation.name, input = invocation.input;
+      const command = findCopilotCommand(this.commands, name);
+      // Some SDK commands default to text output when invoked bare, even though
+      // their TUI presents argument choices. Use advertised metadata before any
+      // invocation; do not execute a default action just to discover its menu.
+      if (!input?.trim() && command?.input?.choices?.length) {
+        if (!this.ui.commandChoice) throw new Error('This Copilot command requires an argument picker that is unavailable.');
+        const choices = commandChoices(command.input.choices);
+        const selected = await this.ui.commandChoice(`Copilot /${command.name}`, choices, operation.signal);
+        if (operation.signal.aborted || this.ended || selected === undefined) {
+          if (!this.ended) this.ui.publish({ type: 'submissionReceipt', id, outcome: 'cancelled' });
+          return;
+        }
+        if (!choices.some(choice => choice.id === selected)) throw new Error('The Copilot command argument is no longer valid.');
+        const current = findCopilotCommand(this.commands, name);
+        if (!current || current.name !== command.name || !current.input?.choices?.some(choice => choice.name === selected)) throw new Error('Copilot command choices changed. Open the picker again.');
+        input = selected;
+      }
       // Each iteration requires a fresh user choice; never retry an invocation.
       while (!operation.signal.aborted && !this.ended) {
+        if (this.state.busy) throw new Error('Copilot started working before the command could be invoked. Nothing was invoked again.');
         const result = await this.connection.request('command', { name, ...(input !== undefined ? { input } : {}) });
         if (operation.signal.aborted || this.ended) return;
         if (!record(result) || typeof result.kind !== 'string') throw new Error('Copilot returned an invalid command result.');

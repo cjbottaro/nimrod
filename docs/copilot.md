@@ -69,13 +69,18 @@ parent command unless you explicitly select an argument with the arrow keys.
 Hints alone never prevent submission. Free-text arguments remain available;
 dynamic argument and directory completion are not currently supported.
 
-Slash commands belong to **Copilot**, not Nimrod's command palette. For example,
-`/permissions` invokes Copilot's command API. If Copilot returns choices, Nimrod
-opens a modal containing its title, choices and descriptions. Use arrows and
-Enter to choose, or Escape to cancel. `/permissions show` can display the returned
-permission report as labelled **Copilot command** output in the transcript,
-without an assistant/model request. The installed CLI's exact behavior still
-needs native verification.
+Slash commands belong to **Copilot**, not Nimrod's application actions. When a
+command has no arguments and advertises argument choices, Nimrod first opens a
+searchable command-palette-style picker. Use arrows and Enter to choose, or
+Escape to cancel without invoking anything. This also works for command aliases
+and whitespace-only arguments. Commands without advertised choices retain their
+SDK default behavior; choices returned by an invocation can also open a picker.
+
+For example, bare `/permissions` opens the picker when Copilot advertises its
+permission operations. `/permissions show` bypasses the picker and displays the
+returned report as labelled **Copilot command** output in the transcript, without
+an assistant/model request. The installed CLI's post-fix behavior still needs
+native verification.
 
 Commands run while idle and consume the submitted draft immediately, without a
 literal user-turn preview or forced transcript navigation. You can edit a newer
