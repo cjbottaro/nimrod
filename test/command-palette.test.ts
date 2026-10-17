@@ -289,7 +289,8 @@ test('session row options share indicators and muted timestamps without visible 
       assert.equal(row.querySelector('small > time')!.textContent, sessionTime(timestamp));
       assert.equal(row.querySelector('time')!.getAttribute('datetime'), new Date(timestamp).toISOString());
       assert.equal(row.getAttribute('aria-label'), `Conversation ${index} — ${status.label}`);
-      assert.equal(row.getAttribute('aria-describedby'), row.querySelector('time')!.id);
+      assert.equal(row.getAttribute('aria-describedby'), `${row.querySelector('time')!.id} ${row.querySelector('.session-row-harness')!.id}`);
+      assert.equal(row.querySelector('small')!.textContent, `${sessionTime(timestamp)} · Pi`);
       assert.ok(!row.textContent!.includes(status.label));
     }
     f.query('working');
@@ -387,9 +388,9 @@ test('session membership is searchable without badges and rows share selected En
     assert.equal(f.list().children[1].querySelector('.session-indicator')!.textContent, '—');
     f.query('closed'); assert.equal(f.list().children.length, 1);
     f.query('');
-    assert.equal(f.list().querySelector('small')!.textContent, sessionTime(100));
+    assert.equal(f.list().querySelector('small')!.textContent, `${sessionTime(100)} · Pi`);
     assert.equal(f.list().children[0].getAttribute('aria-label'), 'A very long title — Working — Open');
-    assert.equal(f.list().children[1].querySelector('small')!.textContent, 'No message time');
+    assert.equal(f.list().children[1].querySelector('small')!.textContent, 'No message time · Pi');
     assert.equal(f.list().children[0].getAttribute('title'), null);
     f.query('preview a.jsonl'); assert.equal(f.list().children.length, 1);
     f.query('open working'); assert.equal(f.list().children.length, 1);

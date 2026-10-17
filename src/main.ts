@@ -22,7 +22,7 @@ import { notificationPreview, sessionNotifications, type NotificationDispatch, t
 import { SessionNavigation, SESSION_VIEWS, type SessionView, type SelectionIntent, type NavigationSnapshot } from './session-navigation';
 import { SessionConnection } from './session-connection';
 import { installSidebarResize, sidebarWidthKey } from './sidebar-resize';
-import { lastUsed, captureSidebarScroll, revealSidebarRow, SessionRecency } from './session-recency';
+import { lastUsed, sortByRecency, captureSidebarScroll, revealSidebarRow, SessionRecency } from './session-recency';
 import { sessionStatus, sessionListLabel, createSessionRowContent, updateSessionRowContent, updateSessionRowTime, installSessionTimeRefresh } from './session-sidebar';
 import { installDeletionReview } from './deletion-review';
 import { SessionDeletion, type DeletionEvent, type DeletionSnapshot } from './session-deletion';
@@ -169,7 +169,7 @@ interface Tab {
   cancelInspector?: () => void;
   preferenceTask?: Promise<void>;
   closeButton: HTMLButtonElement; deleteButton: HTMLButtonElement;
-  row: HTMLButtonElement; rowLabel: HTMLElement; rowIndicator: HTMLElement; rowTime: HTMLTimeElement; rowNode: HTMLElement;
+  row: HTMLButtonElement; rowLabel: HTMLElement; rowIndicator: HTMLElement; rowTime: HTMLTimeElement; rowHarness: HTMLElement; rowNode: HTMLElement;
 }
 function stored(key: string): unknown {
   return localState.has(key) ? localState.get(key) : preferences.readState(key);
@@ -586,9 +586,10 @@ async function paletteSessions(signal: AbortSignal, publish: (page: PalettePage)
   const project = workspace;
   const page = (snapshot: SessionHistorySnapshot): PalettePage => {
     const open = tabs.map(sessionRow);
+    const entries = snapshot.entries.map(entry => resolveSessionListEntry(entry, open));
     return {
       notice: snapshot.pending.length ? `Loading ${snapshot.pending.join(' and ')} history…` : undefined,
-      items: snapshot.entries.map(entry => resolveSessionListEntry(entry, open)).map(entry => ({
+      items: (kind === 'resume' ? sortByRecency(entries, entry => entry.timestamp) : entries).map(entry => ({
         ...sessionListItem(entry),
         run: () => {
           if (workspace !== project || unloading) throw new Error('The history project is no longer open');
@@ -730,7 +731,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
   const rowNode = document.createElement('div'); rowNode.className = 'open-session';
   const row = button('', () => activate(tab, 'row')); row.className = 'session-row'; row.id = `session-${id}`; row.setAttribute('aria-controls', root.id);
   root.setAttribute('aria-labelledby', row.id);
-  const { rowLabel, rowIndicator, rowTime } = createSessionRowContent(row, `session-time-${id}`);
+  const { rowLabel, rowIndicator, rowTime, rowHarness } = createSessionRowContent(row, `session-time-${id}`);
   const deleteButton = button('', () => { void deleteSession(tab); }); deleteButton.className = 'session-delete';
   deleteButton.append(required('delete-session').querySelector('svg')!.cloneNode(true));
   const closeButton = button('×', () => { void closeTab(tab); }); closeButton.className = 'session-close';
@@ -745,7 +746,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
     stop: token => invoke<void>('stop_pi', { token }),
     gate: () => deletion.blocked(tab.file?.path) ? 'unavailable' : tab.deleting || deletion.locked(tab.file?.path) ? 'blocked' : 'ready',
   });
-  const tab: Tab = { id, mode, file, title, backend, lifecycle, lastUsed: Math.max(lastUsed(used), file ? recency.get(file) : 0), root, notice, notices: sessionNotices, closeButton, deleteButton, row, rowLabel, rowIndicator, rowTime, rowNode,
+  const tab: Tab = { id, mode, file, title, backend, lifecycle, lastUsed: Math.max(lastUsed(used), file ? recency.get(file) : 0), root, notice, notices: sessionNotices, closeButton, deleteButton, row, rowLabel, rowIndicator, rowTime, rowHarness, rowNode,
     drafts: drafts.fork(), starting: false, closing: false, restarting: false, deleting: false, deletionExecuting: false, ended: false, awaitingSelection: mode === 'resume' && !lifecycle.connectOnStartup, inputCount: 0, unread: false, failed: deletion.blocked(file?.path),
     view: { setActive() {}, scrollToBottom() {}, dispose() {} } };
   root.addEventListener('focusin', event => { if (event.target instanceof HTMLElement) tab.focus = event.target; });

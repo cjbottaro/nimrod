@@ -646,6 +646,42 @@ test('Resume discovers closed Copilot history, restores its draft and reuses the
   } finally { reopened.win.close(); }
 });
 
+test('Resume sorts incremental mixed-harness history by displayed recency after overlaying open rows', async () => {
+  let release!: () => void;
+  const f = await fixture(undefined, { windowWorkspace: '/project',
+    appState: {
+      [copilotHistoryKey('/project')]: true,
+      'nimrod.tabs.v1:/project': { tabs: [
+        { kind: 'acp', profile: 'copilot', sessionId: 'open-copilot', name: 'Open Copilot', lastUsed: 400 },
+        { path: '/sessions/open.jsonl', sessionId: 'fixture-id', name: 'Open Pi', lastUsed: 500 },
+      ], active: copilotSessionScope('open-copilot') },
+    },
+    acpListGate: new Promise<void>(resolve => { release = resolve; }),
+    catalog: [
+      { path: '/sessions/unknown.jsonl', sessionId: 'unknown', name: 'Unknown Pi', preview: '', modified: 999 },
+      { path: '/sessions/closed.jsonl', sessionId: 'closed', name: 'Closed Pi', preview: '', modified: 900, lastUserMessageAt: 450 },
+      { path: '/sessions/open.jsonl', sessionId: 'fixture-id', name: 'Stale Pi title', preview: '', modified: 100, lastUserMessageAt: 100 },
+    ],
+    acpHistory: [
+      { sessionId: 'open-copilot', cwd: '/project', title: 'Stale Copilot title', updatedAt: new Date(900).toISOString() },
+      { sessionId: 'closed-copilot', cwd: '/project', title: 'Closed Copilot', updatedAt: new Date(600).toISOString() },
+    ],
+  });
+  const titles = () => [...f.element('palette-list').querySelectorAll('.session-row-label')].map(row => row.textContent);
+  try {
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.deepEqual(titles(), ['Open Pi', 'Closed Pi', 'Unknown Pi']);
+    release(); await f.tick(); await f.tick();
+    assert.deepEqual(titles(), ['Closed Copilot', 'Open Pi', 'Closed Pi', 'Open Copilot', 'Unknown Pi']);
+    assert.equal(f.element('palette-list').querySelector('[aria-selected="true"] .session-row-label')!.textContent, 'Open Pi', 'late pages preserve the highlighted identity');
+    const openTitles = [...f.element('palette-list').children].filter(row => row.getAttribute('aria-label')!.endsWith(' — Open'))
+      .map(row => row.querySelector('.session-row-label')!.textContent);
+    assert.deepEqual(openTitles, [...f.element('open-sessions').querySelectorAll('.session-row-label')].map(row => row.textContent));
+    assert.equal(f.element('palette-list').firstElementChild!.querySelector('small')!.lastElementChild!.textContent, 'Copilot ACP');
+  } finally { release(); f.win.close(); }
+});
+
 test('Resume isolates Pi and Copilot discovery failures and keeps successful source rows actionable', async () => {
   for (const failure of [{ acpListError: 'Copilot fixture listing failed' }, { acpListSupported: false },
     { catalogError: 'Pi fixture catalog failed' }]) {
@@ -3453,10 +3489,10 @@ test('Resume marks sidebar membership independently of connectivity and filters 
     for (const [index, option] of pickerRows().slice(0, 2).entries()) {
       const sidebar = f.rows()[index];
       assert.equal(option.querySelector('.session-row-label')!.textContent, sidebar.querySelector('.session-row-label')!.textContent);
-      assert.equal(option.querySelector('small')!.innerHTML.replace(/id="[^"]*"/, ''), sidebar.querySelector('small')!.innerHTML.replace(/id="[^"]*"/, ''));
+      assert.equal(option.querySelector('small')!.innerHTML.replace(/id="[^"]*"/g, ''), sidebar.querySelector('small')!.innerHTML.replace(/id="[^"]*"/g, ''));
       assert.equal(option.querySelector('.session-indicator')!.outerHTML, sidebar.querySelector('.session-indicator')!.outerHTML);
       assert.equal(option.getAttribute('aria-label'), `${sidebar.getAttribute('aria-label')} — Open`);
-      assert.equal(option.getAttribute('aria-describedby'), option.querySelector('time')!.id);
+      assert.equal(option.getAttribute('aria-describedby'), `${option.querySelector('time')!.id} ${option.querySelector('.session-row-harness')!.id}`);
       assert.equal(option.title, '');
     }
     assert.equal(pickerRows()[2].querySelector('time')!.getAttribute('datetime'), new Date(5).toISOString(), 'closed history uses user-message time, not mtime');
@@ -3478,7 +3514,7 @@ test('Resume marks sidebar membership independently of connectivity and filters 
       assert.equal(option.querySelector('small > time')!.getAttribute('datetime'), sidebar.querySelector('small > time')!.getAttribute('datetime'));
       assert.equal(option.querySelector('.session-indicator')!.outerHTML, sidebar.querySelector('.session-indicator')!.outerHTML);
       assert.equal(option.getAttribute('aria-label'), sidebar.getAttribute('aria-label'));
-      assert.equal(option.getAttribute('aria-describedby'), option.querySelector('time')!.id);
+      assert.equal(option.getAttribute('aria-describedby'), `${option.querySelector('time')!.id} ${option.querySelector('.session-row-harness')!.id}`);
       assert.equal(option.title, '', 'shared session rows have no status tooltip');
       assert.doesNotMatch(option.querySelector('small')!.textContent!, /Current|Ready|Inactive/);
     }

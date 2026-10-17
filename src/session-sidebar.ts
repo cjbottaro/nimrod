@@ -64,6 +64,7 @@ export interface SessionRowContent {
   rowLabel: HTMLElement;
   rowIndicator: HTMLElement;
   rowTime: HTMLTimeElement;
+  rowHarness: HTMLElement;
 }
 /** Shared content and styling for the sidebar and both session pickers. */
 export function createSessionRowContent(row: HTMLElement, timeId: string): SessionRowContent {
@@ -73,12 +74,13 @@ export function createSessionRowContent(row: HTMLElement, timeId: string): Sessi
   const heading = doc.createElement('span'); heading.className = 'session-row-heading';
   const rowLabel = doc.createElement('span'); rowLabel.className = 'session-row-label';
   heading.append(rowLabel);
-  const secondary = doc.createElement('small'), rowTime = doc.createElement('time');
-  rowTime.id = timeId; row.setAttribute('aria-describedby', timeId);
-  secondary.append(rowTime); text.append(heading, secondary);
+  const secondary = doc.createElement('small'), rowTime = doc.createElement('time'), rowHarness = doc.createElement('span');
+  rowTime.id = timeId; rowHarness.id = `${timeId}-harness`; rowHarness.className = 'session-row-harness';
+  row.setAttribute('aria-describedby', `${timeId} ${rowHarness.id}`);
+  secondary.append(rowTime, ' · ', rowHarness); text.append(heading, secondary);
   const rowIndicator = doc.createElement('span'); rowIndicator.className = 'session-indicator'; rowIndicator.setAttribute('aria-hidden', 'true');
   row.append(rowIndicator, text);
-  return { row, rowLabel, rowIndicator, rowTime };
+  return { row, rowLabel, rowIndicator, rowTime, rowHarness };
 }
 
 export function updateSessionRowTime(time: HTMLTimeElement, timestamp: unknown, now = Date.now()): void {
@@ -90,9 +92,10 @@ export function updateSessionRowTime(time: HTMLTimeElement, timestamp: unknown, 
 }
 
 export function updateSessionRowContent(content: SessionRowContent, entry: SessionListEntry, showMembership = true): void {
-  const { row, rowLabel, rowIndicator, rowTime } = content;
+  const { row, rowLabel, rowIndicator, rowTime, rowHarness } = content;
   const name = sessionListLabel(entry), status = sessionStatusPresentation(entry.status);
-  if (rowLabel.textContent !== name) rowLabel.textContent = name;
+  if (rowLabel.textContent !== entry.title) rowLabel.textContent = entry.title;
+  if (rowHarness.textContent !== entry.harnessLabel) rowHarness.textContent = entry.harnessLabel;
   updateSessionRowTime(rowTime, entry.timestamp);
   if (rowIndicator.dataset.state !== status.state) rowIndicator.dataset.state = status.state;
   if (rowIndicator.textContent !== status.mark) rowIndicator.textContent = status.mark;

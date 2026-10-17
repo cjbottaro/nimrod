@@ -18,7 +18,7 @@ All, Switch and cycling share one canonical projection. Navigation effects retai
 - `test/session-navigation.test.ts`: deterministic small-layout traversal invariants, tie/legacy recency, membership changes, retained views/counts, selection intents (including focus-free/filter-preserving startup reveal) and connected/recency/batched cleanup.
 - `test/shell.test.ts`, `test/browser/workspace-tabs.spec.ts`: cross-consumer order comparisons through the real shell, optimistic Send recency, filtered/collapsed navigation, mounted renderer/draft/focus preservation and selected-session loading/reconnect with deletion-barrier guards.
 
-This is a project-shell navigation layer, not a generic harness protocol, event bus, application-wide store or framework dependency. Pi remains authoritative for conversation/process activity and RPC results. History discovery retains its separate scope/order.
+This is a project-shell navigation layer, not a generic harness protocol, event bus, application-wide store or framework dependency. Pi remains authoritative for conversation/process activity and RPC results. History discovery retains its separate saved-history membership; Resume shares the sidebar's timestamp validation/newest-first sorting primitive after open-row reconciliation, as specified in [session history](session-history.md).
 
 ## Contracts
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
-import { sessionTime, sessionIndicator, installSessionTimeRefresh, createSessionRowContent, updateSessionRowContent } from '../src/session-sidebar';
+import { sessionTime, sessionIndicator, installSessionTimeRefresh, createSessionRowContent, updateSessionRowContent, updateSessionRowTime } from '../src/session-sidebar';
 import { SessionRecency } from '../src/session-recency';
 import type { SessionListEntry } from '../src/session-list';
 
@@ -59,13 +59,21 @@ test('shared row updates preserve content nodes and expose open membership witho
     assert.equal(content.rowLabel.textContent, 'Long title');
     assert.equal(row.querySelector('.session-row-badge'), null);
     assert.equal(row.getAttribute('aria-label'), 'Long title — Working — Open');
-    assert.equal(row.getAttribute('aria-describedby'), content.rowTime.id);
+    assert.equal(row.getAttribute('aria-describedby'), `${content.rowTime.id} ${content.rowHarness.id}`);
+    assert.equal(content.rowHarness.textContent, 'Pi');
+    assert.equal(content.rowTime.parentElement!.textContent, `${sessionTime(100)} · Pi`);
     updateSessionRowContent(content, { ...presentation, title: 'Renamed' });
     assert.equal(row.querySelector('.session-indicator'), content.rowIndicator);
     assert.equal(row.querySelector('time'), content.rowTime);
     updateSessionRowContent(content, { ...presentation, title: 'Renamed', open: false });
     assert.equal(row.querySelector('.session-row-badge'), null);
     assert.equal(row.getAttribute('aria-label'), 'Renamed — Working');
+    updateSessionRowContent(content, { ...presentation, title: 'Copilot conversation', harnessLabel: 'Copilot ACP' });
+    assert.equal(content.rowLabel.textContent, 'Copilot conversation');
+    assert.equal(content.rowTime.parentElement!.textContent, `${sessionTime(100)} · Copilot ACP`);
+    assert.equal(row.querySelector('.session-row-harness'), content.rowHarness);
+    updateSessionRowTime(content.rowTime, 100, 120_100);
+    assert.equal(content.rowTime.parentElement!.textContent, `${sessionTime(100, 120_100)} · Copilot ACP`);
   } finally { dom.window.close(); }
 });
 

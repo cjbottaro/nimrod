@@ -4,7 +4,10 @@ export function lastUsed(value: unknown): number {
 }
 export function recentSessions<T extends { lastUsed: number }>(sessions: readonly T[]): T[] {
   // Stable ties retain open order, including layouts predating lastUsed.
-  return [...sessions].sort((a, b) => lastUsed(b.lastUsed) - lastUsed(a.lastUsed));
+  return sortByRecency(sessions, session => session.lastUsed);
+}
+export function sortByRecency<T>(sessions: readonly T[], timestamp: (session: T) => unknown): T[] {
+  return [...sessions].sort((a, b) => lastUsed(timestamp(b)) - lastUsed(timestamp(a)));
 }
 export function nextLastUsed(sessions: readonly { lastUsed: number }[], now = Date.now()): number {
   const previous = sessions.reduce((latest, session) => Math.max(latest, lastUsed(session.lastUsed)), 0);

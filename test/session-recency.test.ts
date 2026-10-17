@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
-import { lastUsed, recentSessions, nextLastUsed, captureSidebarScroll, revealSidebarRow } from '../src/session-recency';
+import { lastUsed, recentSessions, sortByRecency, nextLastUsed, captureSidebarScroll, revealSidebarRow } from '../src/session-recency';
 
 test('recency sorts copies with stable legacy ties and validates stored timestamps', () => {
   const sessions = [{ lastUsed: 0 }, { lastUsed: 30 }, { lastUsed: 10 }, { lastUsed: 30 }, { lastUsed: 0 }];
@@ -11,6 +11,14 @@ test('recency sorts copies with stable legacy ties and validates stored timestam
   assert.equal(nextLastUsed(sessions, 30), 31);
   assert.equal(nextLastUsed(sessions, 2), 31, 'clock regression does not reverse use order');
   assert.equal(nextLastUsed(sessions, 100), 100);
+});
+
+test('list timestamp sorting shares sidebar recency rules and keeps unknown times last with stable ties', () => {
+  const entries = [{ timestamp: undefined }, { timestamp: 30 }, { timestamp: NaN },
+    { timestamp: 10 }, { timestamp: 30 }, { timestamp: Number.MAX_SAFE_INTEGER }];
+  const original = [...entries];
+  assert.deepEqual(sortByRecency(entries, entry => entry.timestamp), [entries[1], entries[4], entries[3], entries[0], entries[2], entries[5]]);
+  assert.deepEqual(entries, original);
 });
 
 test('scroll anchoring excludes the moved row, accounts for zoom and reveals only on request', () => {
