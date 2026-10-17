@@ -84,6 +84,44 @@ function fixture() {
   return { dom, win, sent, snapshot, receive, view, flush };
 }
 
+test('empty assistant envelopes stay mounted without visible markers through streaming and hidden catch-up', () => {
+  const f = fixture();
+  try {
+    const document = f.win.document;
+    const empty = { key: 'assistant', role: 'assistant', streaming: true, content: [{ type: 'text', text: '' }] };
+    const tool = { key: 'tool', role: 'tool', toolCallId: 'call', toolName: 'view',
+      toolSource: { backend: 'copilot-sdk' as const, agent: 'copilot' }, toolStatus: 'result' as const, resultOutput: 'file content' };
+    let revision = 0;
+    const update = (row: typeof empty, incremental: boolean) => {
+      f.receive({ type: 'snapshot', state: { messages: [row, tool] },
+        transcript: { base: revision, revision: ++revision, ...(incremental ? { rows: [row] } : {}) } });
+      f.flush();
+    };
+    update(empty, false);
+    const article = document.querySelector<HTMLElement>('[data-key="assistant"]')!;
+    const card = document.querySelector<HTMLDetailsElement>('.tool-card')!;
+    assert.equal(article.hidden, true);
+    card.open = true;
+    const visible = { ...empty, content: [{ type: 'text', text: 'Response' }] };
+    update(visible, true);
+    assert.equal(document.querySelector('[data-key="assistant"]'), article);
+    assert.equal(article.hidden, false);
+    assert.match(article.textContent!, /Response/);
+    update({ ...empty, streaming: false }, true);
+    assert.equal(article.hidden, true, 'authoritative empty content hides previous prose');
+    update(visible, false);
+    assert.equal(article.hidden, false, 'full snapshots use the same visibility rule');
+    f.view.setActive(false);
+    update(empty, true);
+    assert.equal(article.hidden, false, 'hidden-session painting stays suspended');
+    f.view.setActive(true); f.flush();
+    assert.equal(article.hidden, true);
+    assert.equal(document.querySelector('[data-key="assistant"]'), article);
+    assert.equal(document.querySelector('.tool-card'), card);
+    assert.equal(card.open, true);
+  } finally { f.dom.window.close(); }
+});
+
 test('shared controls retain mounted identity, hide unsupported controls and dispatch opaque control IDs', () => {
   const f = fixture();
   try {
