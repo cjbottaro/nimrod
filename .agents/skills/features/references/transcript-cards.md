@@ -35,7 +35,7 @@ Visibility is computed only for changed rows through the existing full/dirty ren
 
 ## SDK observed-payload follow-up
 
-[Observed SDK cards](card-plugins.md#observed-sdk-tool-payloads) owns native error, GitHub MCP, skill and compact permission presentation. SDK input deltas now reuse the eventual execution row; the mounted adapter remains source-compatible while late name/category/MCP metadata changes its content. Authoritative execution/terminal arguments outrank generation fragments, and late starts cannot restart completed cards. Input-only generation does not qualify for auto-open and is stopped on turn finalization. Pi semantics, external renderer selection, one-shell identity and scroll/focus owners remain unchanged. New unit/bridge/offline-browser fixtures are authored but unrun; mandatory post-merge TypeScript/Rust compilation is separate from native card acceptance.
+[Observed SDK cards](card-plugins.md#observed-sdk-tool-payloads) owns native error, GitHub MCP, skill and compact permission presentation. SDK input deltas now reuse the eventual execution row; the mounted adapter remains source-compatible while late name/category/MCP metadata changes its content. Authoritative execution/terminal arguments outrank generation fragments, and late starts cannot restart completed cards. Input-only generation does not qualify for auto-open and is stopped on turn finalization. Pi semantics, external renderer selection, one-shell identity and scroll/focus owners remain unchanged. New unit/bridge/offline-browser fixtures are authored but unrun; native card acceptance remains separate.
 
 ## Web Markdown sections
 

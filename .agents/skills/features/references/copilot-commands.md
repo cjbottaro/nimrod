@@ -2,8 +2,7 @@
 
 **Status: source implemented; authored offline fixtures unrun.** No app launches,
 installed-CLI invocations or model requests were performed for the argument-picker
-follow-up. Mandatory post-merge TypeScript/Rust compilation is separate from command/UI
-behavioral verification. The released `@github/copilot-sdk@1.0.22` declarations/implementation are the API
+follow-up. The released `@github/copilot-sdk@1.0.22` declarations/implementation are the API
 evidence, not repository-main documentation or real-agent acceptance.
 
 ## Ownership and scope

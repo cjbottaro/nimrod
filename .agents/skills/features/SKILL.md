@@ -35,7 +35,7 @@ For every task, assess user-visible impact before completion. Meaningful impleme
 
 Unreleased is a curated description of the final behavior, not an agent activity log: consolidate related iterations, preserve other tasks' entries and never rewrite published history. Follow the canonical [development/changelog policy](references/releases.md#development-and-changelog-policy) for categories, breaking changes, release preparation and prerelease snapshots.
 
-Rapid local development: merge task branches into main, run the mandatory post-merge `mise run check` described below, and build only when requested. Local merges/builds need no version bump, tag or release; the Git revision/dirty metadata distinguishes builds. Changelog maintenance grants no additional permission to run tests/builds, tag, push or publish.
+Rapid local development: merge task branches into main and build only when requested. Local merges/builds need no version bump, tag or release; the Git revision/dirty metadata distinguishes builds. Changelog maintenance grants no additional permission to run tests/builds, tag, push or publish. Repository workflow and validation rules are owned by `AGENTS.md`.
 
 ## Feature index
 
@@ -91,7 +91,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 
 ## Workflow and documentation
 
-- Follow repository `AGENTS.md`: use a dedicated task worktree, automatically commit and merge completed significant work into `main`, and retain the branch/worktree unless cleanup is requested. Cleanup means removing both the task worktree and its local branch after confirming the branch is merged into `main` and the worktree has no uncommitted changes; never force deletion. After every worktree merge, run `mise run check` from the primary checkout on `main`. Fix reported TypeScript or Rust compilation errors in a dedicated task worktree (never directly on `main`), commit/merge the fixes, and rerun on `main` until it passes. Report blockers rather than claiming completion if a safe fix is unavailable. This is the sole automatic validation exception; other tests, checks and builds require an explicit request. When broader validation is requested, use `mise run test`. Include offline browser tests for scrolling changes. No automatic user-app launch/interruption; [build workflow](references/build-cache.md) owns requested publication.
+- Follow repository `AGENTS.md` for worktree, merge, cleanup and required validation policy. When broader validation is requested, use `mise run test`; include offline browser tests for scrolling changes. No automatic user-app launch/interruption; [build workflow](references/build-cache.md) owns requested publication.
 - When feature work touches persistence, draft input, transcript/cards, session activation, sidebar projections or output-scroll/history layout, consult the relevant [performance optimization regression guardrails](../performance-optimizations/SKILL.md#maintaining-and-using-the-catalogue), not only when explicitly optimizing. They identify shared paths to reuse and fixture-extension triggers; this skill's feature references remain authoritative.
 - Keep tests fixture-based. No paid requests, live compaction, user-session deletion or upstream extension changes without authorization.
 - Every palette command must have a registered bindable action and shared dispatcher; empty defaults are allowed. Effective shortcut hints come from the registry. Native-only Open project remains an explicit exception. See [keybindings](references/keybindings.md#invariants).
