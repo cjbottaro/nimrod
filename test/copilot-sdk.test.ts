@@ -169,15 +169,70 @@ test('new and resumed sessions use distinct display seeds but identical usage re
       assert.equal(f.sent.filter(request => ['usage', 'context'].includes(request.method)).map(request => request.method).join(','), 'usage,context');
       assert.match(f.session.state.statusArea!.metricsTitle!, fresh ? /Provisional new-session/ : /not been reported/);
       f.reply('context', null); await flush();
-      assert.equal(f.session.state.statusArea!.metrics, fresh ? '~$0.000 · — / —' : '— · — / —', 'settle only the completed field');
+      assert.equal(f.session.state.statusArea!.metrics, fresh ? '~$0.000 · 0% / —' : '— · — / —', 'an uninitialized read preserves only a fresh zero seed');
       f.reply('usage', {}); await flush();
-      assert.equal(f.session.state.statusArea!.metrics, '— · — / —');
+      assert.equal(f.session.state.statusArea!.metrics, fresh ? '~$0.000 · 0% / —' : '— · — / —');
+      f.event('session.idle', {}); f.reply('usage', {}); f.reply('context', null); await flush();
+      assert.equal(f.session.state.statusArea!.metrics, fresh ? '~$0.000 · 0% / —' : '— · — / —', 'a startup idle boundary is not work');
+      f.event('assistant.turn_start', {});
+      assert.equal(f.session.state.statusArea!.metrics, '— · — / —', 'both modes converge when live work starts');
       f.event('session.usage_info', { currentTokens: 31875, tokenLimit: 125000 });
       assert.equal(f.session.state.statusArea!.metrics, '— · 25.5% / 125k');
       assert.equal(f.sent.some(request => ['prompt', 'command', 'configure'].includes(request.method)), false);
     } finally { f.session.disconnect('fixture complete'); }
   }
 });
+
+test('accepted local Send retires untouched seeds before its result, while rejected drafts do not', async () => {
+  const f = await fixture([], undefined, false, true);
+  try {
+    f.reply('usage', {}); f.reply('context', null); await flush();
+    assert.equal(f.session.state.statusArea!.metrics, '~$0.000 · 0% / —');
+    await f.session.handle({ type: 'prompt', id: 'empty', text: '' });
+    assert.equal(f.session.state.statusArea!.metrics, '~$0.000 · 0% / —');
+    assert.equal(f.sent.some(request => request.method === 'prompt'), false);
+    const sending = f.session.handle({ type: 'prompt', id: 'local', text: 'Fixture only' });
+    assert.equal(f.session.state.statusArea!.metrics, '— · — / —', 'do not await RPC acceptance to retire zeros');
+    assert.equal(f.session.state.busy, true);
+    assert.equal(f.sent.filter(request => request.method === 'prompt').length, 1);
+    f.reply('prompt', { messageId: 'accepted' }); await sending;
+    assert.equal(f.session.state.statusArea!.metrics, '— · — / —');
+    f.event('session.idle', {});
+    f.reply('usage', {}); f.reply('context', null); await flush();
+    assert.equal(f.session.state.statusArea!.metrics, '— · — / —');
+    assert.equal(f.sent.filter(request => request.method === 'prompt').length, 1, 'no prompt replay or hidden initialization work');
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('a valid command Send also consumes the untouched seed without inventing model work', async () => {
+  const f = await fixture([], undefined, false, true);
+  try {
+    f.reply('usage', {}); f.reply('context', null); await flush();
+    f.session.receive({ kind: 'commands', commands: [{ name: 'status', kind: 'builtin' }] });
+    const handling = f.session.handle({ type: 'command', id: 'status', text: '/status' });
+    assert.equal(f.session.state.statusArea!.metrics, '— · — / —');
+    f.reply('command', { kind: 'text', text: 'Fixture status' }); await handling;
+    assert.equal(f.sent.filter(request => request.method === 'command').length, 1);
+    assert.equal(f.sent.some(request => request.method === 'prompt'), false);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+for (const [type, data, agentId] of [
+  ['assistant.turn_start', {}, undefined],
+  ['assistant.message_delta', { messageId: 'answer', deltaContent: 'Working' }, undefined],
+  ['tool.execution_start', { toolCallId: 'child-tool', toolName: 'bash', arguments: {} }, 'child'],
+] as const) {
+  test(`live SDK activity retires untouched usage seeds (${type})`, async () => {
+    const f = await fixture([], undefined, false, true);
+    try {
+      f.reply('usage', {}); f.reply('context', null); await flush();
+      assert.equal(f.session.state.statusArea!.metrics, '~$0.000 · 0% / —');
+      f.session.receive({ kind: 'event', event: { id: 'work', type, data, ...(agentId ? { agentId } : {}) } });
+      assert.equal(f.session.state.statusArea!.metrics, '— · — / —');
+      assert.equal(f.sent.some(request => request.method === 'prompt'), false);
+    } finally { f.session.disconnect('fixture complete'); }
+  });
+}
 
 test('SDK reconnect seeds context and credit snapshots independently without sending a new turn', async () => {
   const f = await fixture([], undefined, false);

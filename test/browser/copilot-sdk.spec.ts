@@ -16,7 +16,7 @@ test('offline SDK bridge uses the shared shell for optimistic send, permissions,
     const sdk = await page.locator('.session-view:not([hidden])').getAttribute('id');
     await expect(page.locator(visible('model'))).toHaveText('small');
     await expect(page.locator(visible('thinking'))).toHaveText('low');
-    await expect(page.locator(visible('session-metrics'))).toHaveText('~$0.000 · — / —');
+    await expect(page.locator(visible('session-metrics'))).toHaveText('~$0.000 · 0% / —');
     expect(demo.calls.some(call => call.command === 'write_copilot' && ['prompt', 'configure'].includes((call.args.message as { method?: string }).method || ''))).toBe(false);
     await page.locator(visible('prompt')).fill('Offline SDK request');
     await page.locator(visible('prompt')).press('Enter');

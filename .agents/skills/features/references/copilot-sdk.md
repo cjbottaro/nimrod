@@ -233,10 +233,24 @@ consumer, separate from model configuration. The shared Status area only consume
   reconciliation, rendering, ownership and disposal.
 - Seeds live only in `CopilotUsage.provisional`, not `credits`/`context`, persisted
   state or harness settings. Apply once after initial configuration/history binding;
-  never replace already reported values. Each successful/missing/error metadata
-  result settles only its own provisional field, with existing stale-result guards.
-  Live context replaces its seed immediately. Null/unavailable values use `—`;
-  model invalidation/disposal retires any provisional context/remaining seed.
+  never replace already reported values. Successful-but-empty initial reads retain
+  a zero seed while that field is still provisional and no locally accepted Send or
+  live SDK work has occurred. This includes null/missing context, zero context
+  without a usable window (0/0), and unreported AIC amounts; it does not hide
+  malformed payloads or contradictory positive amounts.
+  Genuine values replace their field immediately; errors retire its seed to `—`.
+  This changes display provenance only, not RPC ordering or measurement values.
+- The first locally valid Send (prompt or command, before any RPC result), or live
+  root/child assistant/tool/usage activity, ends the untouched lifetime exactly once.
+  Remaining zero modes become unknown immediately, and in-flight pre-work snapshots
+  are fenced so late explicit zeros cannot revive them. Already reported values
+  remain authoritative. Rejected drafts, replayed history and startup idle events
+  do not count as work; a command submitted then cancelled does not re-seed zeros.
+  Later empty reads use `—` through the same reconciliation pipeline as Resume.
+  Live context replaces its seed immediately. Model invalidation fences prior reads
+  and drops measured context but retains an untouched windowless zero seed, so
+  startup model resolution is not mistaken for work. Disposal retires all remaining
+  seeds. No dwell, retry or polling timer.
   Confirmed fields retain their existing error/lifetime semantics. Tooltip detail
   explicitly identifies provisional values, not a measured empty context or zero
   AI credits. No model-window capacity or Auto compact setting is seeded.
@@ -305,7 +319,9 @@ Code: `src/copilot/usage-seed.ts`, `usage.ts`, `status-area.ts`, `session.ts`, t
 read and native method allowlist, plus the generic `metricsTitle` field/render
 dependency. `test/copilot-usage-seed.test.ts` and the SDK controller fixture cover
 new/resume initialization with identical request sequences, independent seed
-retirement, no inferred window, known-data precedence, late results and disposal;
+retirement, retained empty startup reads, real/malformed errors, pre-work result
+fencing, local prompt/command Send before acknowledgement, root/child activity,
+no inferred window, known-data precedence, late results and disposal;
 these additions are unrun and visual flicker acceptance remains a user check.
 Fixtures: `test/copilot-usage.test.ts` covers formatting, partial/missing
 coverage, coalescing/stale responses, reconnect snapshot reads, null cold context,

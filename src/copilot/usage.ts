@@ -15,7 +15,9 @@ export interface CopilotUsage {
 }
 const nonnegative = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0;
 function creditUsage(value: unknown): CopilotCreditUsage {
-  if (!record(value)) return { status: 'unavailable' };
+  if (value === null || value === undefined) return { status: 'unavailable' };
+  if (!record(value)) throw new Error('Invalid Copilot usage metadata');
+  if (value.totalNanoAiu !== null && value.totalNanoAiu !== undefined && !nonnegative(value.totalNanoAiu)) throw new Error('Invalid Copilot credit amount');
   const status = value.aiCreditsStatus === 'complete' || value.aiCreditsStatus === 'partial' || value.aiCreditsStatus === 'unavailable' ? value.aiCreditsStatus : 'unknown';
   const nanoAiu = nonnegative(value.totalNanoAiu) ? value.totalNanoAiu : undefined;
   // A missing amount, unavailable coverage, or an unqualified numeric zero is
@@ -34,18 +36,37 @@ export class CopilotUsageController {
   private contextRequestRevision = 0;
   private contextInFlight = false;
   private seeded = false;
+  private workObserved = false;
   constructor(private read: () => Promise<unknown>, private changed: () => void, private readContext?: () => Promise<unknown>) {}
   get snapshot(): CopilotUsage { return this.state; }
   seed(initial?: CopilotUsageSeed): void {
     if (this.disposed || this.seeded) return;
     this.seeded = true;
     if (!initial) return;
+    const display = (mode: CopilotUsageSeed['credits']): CopilotUsageSeed['credits'] => this.workObserved && mode === 'zero' ? 'unknown' : mode;
     const provisional: CopilotUsageSeed = {
-      credits: this.state.credits ? undefined : initial.credits,
-      context: this.state.context ? undefined : initial.context,
+      credits: this.state.credits ? undefined : display(initial.credits),
+      context: this.state.context ? undefined : display(initial.context),
     };
     if (!provisional.credits && !provisional.context) return;
     this.state = { ...this.state, provisional }; this.changed();
+  }
+  /** Local accepted Send or live SDK work, never an RPC receipt or replayed history. */
+  workStarted(): void {
+    if (this.disposed || this.workObserved) return;
+    this.workObserved = true;
+    // Fence pre-work snapshots, including explicit zero results that arrive late.
+    this.revision++; this.contextRevision++; this.contextRequestRevision++;
+    const previous = this.state.provisional;
+    if (!previous || previous.credits !== 'zero' && previous.context !== 'zero') return;
+    this.state = { ...this.state, provisional: {
+      credits: previous.credits ? 'unknown' : undefined,
+      context: previous.context ? 'unknown' : undefined,
+    } };
+    this.changed();
+  }
+  private keepUnreportedSeed(field: keyof CopilotUsageSeed): boolean {
+    return !this.workObserved && this.state.provisional?.[field] === 'zero';
   }
   private withoutSeed(field: keyof CopilotUsageSeed): CopilotUsageSeed | undefined {
     const previous = this.state.provisional;
@@ -63,6 +84,7 @@ export class CopilotUsageController {
     // A live observation fences an older metadata result even when its values
     // match the currently mounted snapshot.
     this.contextRevision++;
+    if (value.currentTokens === 0 && value.tokenLimit === 0 && this.keepUnreportedSeed('context')) return;
     const previous = this.state.context;
     const provisional = this.withoutSeed('context');
     if (previous && previous.currentTokens === value.currentTokens && previous.tokenLimit === value.tokenLimit && provisional === this.state.provisional) return;
@@ -71,7 +93,9 @@ export class CopilotUsageController {
   clearContext(): void {
     if (this.disposed) return;
     this.contextRevision++;
-    const provisional = this.withoutSeed('context');
+    // A windowless untouched seed belongs to no model yet. Drop measured context
+    // on a model change, but do not turn startup model resolution into work.
+    const provisional = this.keepUnreportedSeed('context') ? this.state.provisional : this.withoutSeed('context');
     if (!this.state.context && provisional === this.state.provisional) return;
     this.state = { ...this.state, context: undefined, provisional }; this.changed();
   }
@@ -98,7 +122,11 @@ export class CopilotUsageController {
       if (current()) {
         if (record(value) && nonnegative(value.currentTokens) && nonnegative(value.tokenLimit))
           this.context({ currentTokens: value.currentTokens, tokenLimit: value.tokenLimit });
-        else this.retireSeed('context');
+        else {
+          const empty = value === null || value === undefined || record(value)
+            && (value.currentTokens == null || value.currentTokens === 0) && (value.tokenLimit == null || value.tokenLimit === 0);
+          if (!empty || !this.keepUnreportedSeed('context')) this.retireSeed('context');
+        }
       }
     } catch {
       // A failed first read retires only its provisional display, never newer
@@ -112,11 +140,16 @@ export class CopilotUsageController {
   private async request(): Promise<void> {
     this.inFlight = true;
     const revision = this.revision;
-    let credits: CopilotCreditUsage;
-    try { credits = creditUsage(await this.read()); }
-    catch { credits = { status: 'unavailable' }; }
+    let credits: CopilotCreditUsage, value: unknown = undefined;
+    let failed = false;
+    try { value = await this.read(); credits = creditUsage(value); }
+    catch { failed = true; credits = { status: 'unavailable' }; }
+    // A successful uninitialized read is not evidence that an untouched session
+    // has lost its seed. Never retain zero over reported positive usage or errors.
+    const positive = record(value) && nonnegative(value.totalNanoAiu) && value.totalNanoAiu > 0;
+    const keep = !failed && !positive && credits.status === 'unavailable' && this.keepUnreportedSeed('credits');
     const provisional = this.withoutSeed('credits');
-    if (!this.disposed && revision === this.revision && (!this.state.credits || this.state.credits.nanoAiu !== credits.nanoAiu || this.state.credits.status !== credits.status || provisional !== this.state.provisional)) {
+    if (!this.disposed && revision === this.revision && !keep && (!this.state.credits || this.state.credits.nanoAiu !== credits.nanoAiu || this.state.credits.status !== credits.status || provisional !== this.state.provisional)) {
       this.state = { ...this.state, credits, provisional }; this.changed();
     }
     this.inFlight = false;

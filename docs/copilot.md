@@ -79,12 +79,16 @@ The Status area uses a compact layout similar to Pi:
 ~$0.123 · 25.5% / 125k
 ```
 
-A new session initially displays `~$0.000 · 0% / —` while usage reads are pending.
-Those zeros are provisional display values, not reported measurements. A reconnect
-starts with unknowns (`— · — / —`) rather than assuming no prior usage. Both then
-use the same update path: credit/context results replace their own field, and an
-unavailable result replaces that field's provisional value with `—`. A quick
-zero-to-dash change is possible. Window size and **Auto compact** are never guessed.
+A new session initially displays `~$0.000 · 0% / —`. Those zeros are provisional
+display values, not measurements, and remain while the session is untouched even
+if successful startup reads return no data. Reported values replace their own
+field immediately; actual API errors become `—` instead of being masked by zeros.
+Your first valid Send (including a command), or live agent activity, immediately
+retires any remaining provisional zeros—without waiting for a result. After that,
+unavailable values use `—`; nothing restores the seed. Replayed history and startup
+idle events do not consume it. A reconnect starts unknown (`— · — / —`) and uses the
+same update path, not a separate implementation. Window size and **Auto compact**
+are never guessed.
 
 - **Estimated USD** is the SDK's accumulated session AI-credit usage converted at
   GitHub's published **$0.01 per AIC**. Hover for the AIC amount, accounting coverage

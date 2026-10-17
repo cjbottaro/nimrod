@@ -13,6 +13,9 @@ import { pickConfiguration } from '../configuration-picker';
 import { commandChoices, copilotCommands, findCopilotCommand, parseCopilotCommand, type CommandChoice, type CopilotCommand } from './commands';
 
 interface Model { id: string; name: string; supportedReasoningEfforts?: string[]; capabilities?: { supports?: { reasoningEffort?: boolean } }; policy?: { state: string }; }
+const usageWorkEvents = new Set(['user.message', 'assistant.turn_start', 'assistant.turn_end', 'assistant.message_delta', 'assistant.message',
+  'assistant.reasoning_delta', 'assistant.reasoning', 'assistant.tool_call_delta', 'assistant.usage', 'tool.execution_start',
+  'tool.execution_partial_result', 'tool.execution_progress', 'tool.execution_complete', 'tool.shell_output', 'session.error']);
 /** Supported host decisions, distinct from the SDK's reported PermissionResult outcomes. */
 export type CopilotDecision = { kind: 'approve-once'; approvedInteractively: true } | { kind: 'reject' } | { kind: 'user-not-available' }
   | { answer: string; wasFreeform: boolean };
@@ -124,6 +127,7 @@ export class CopilotSession {
     this.failed = false; this.stopped = false;
     this.state = { ...this.state, busy: true, status: 'Working…' };
     this.replace(key, { key, role: 'user', content: display });
+    this.usage.workStarted();
     try {
       await this.connection.request('prompt', { text });
       this.ui.publish({ type: 'submissionReceipt', id, outcome: 'accepted' });
@@ -145,6 +149,7 @@ export class CopilotSession {
     this.commandOperation = operation;
     this.state = { ...this.state, status: `Running /${invocation.name}…` };
     this.publish([]);
+    this.usage.workStarted();
     try {
       let name = invocation.name, input = invocation.input;
       const command = findCopilotCommand(this.commands, name);
@@ -314,7 +319,7 @@ export class CopilotSession {
     if (this.events.has(raw.id)) return;
     this.events.add(raw.id);
     const data = raw.data, type = raw.type;
-    if (type === 'assistant.usage' && !this.replaying && !this.state.sessionUnavailable) this.usage.refresh();
+    if (type === 'assistant.usage' && !this.replaying && !this.state.sessionUnavailable) { this.usage.workStarted(); this.usage.refresh(); }
     if (type === 'session.context_cleared' && !raw.agentId) { this.invalidateContext(); if (!this.replaying && !this.state.sessionUnavailable) this.usage.refresh(); }
     if (type === 'session.compaction_complete' && !raw.agentId && !this.replaying && !this.state.sessionUnavailable) this.usage.refreshContext();
     const originLabel = typeof raw.agentId === 'string' && raw.agentId ? `Copilot agent ${raw.agentId}` : undefined;
@@ -406,6 +411,7 @@ export class CopilotSession {
     } else if (type === 'assistant.turn_start' && !raw.agentId && !this.replaying) {
       this.state = { ...this.state, busy: true, status: 'Working…' }; this.publish([]);
     }
+    if (!this.replaying && usageWorkEvents.has(type)) this.usage.workStarted();
   }
   private endTurn(): void {
     const working = this.state.busy;
