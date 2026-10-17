@@ -85,7 +85,8 @@ export class AcpSession {
     const info = this.client.initialization?.agentInfo;
     this.agent = isRecord(info) ? text(info.name) || undefined : undefined;
     if (sessionId !== undefined) { this.state = { ...this.state, status: 'Loading saved ACP session…' }; this.publish([]); }
-    await this.deadline(sessionId === undefined ? this.client.newSession(cwd) : this.client.loadSession(cwd, sessionId));
+    if (sessionId === undefined) await this.deadline(this.client.newSession(cwd));
+    else await this.deadline(this.client.loadSession(cwd, sessionId));
   }
   private async deadline<T>(task: Promise<T>): Promise<T> {
     let timer: ReturnType<typeof setTimeout> | undefined;
