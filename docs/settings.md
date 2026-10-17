@@ -40,6 +40,8 @@ Escape during a drag cancels resizing; the next Escape closes Settings.
 
 ## Diagnostics
 
+**Capture tool activity** is off by default. Enable it to automatically append Pi and ACP tool payloads (including Pi extension tools) to separate daily JSONL logs under Nimrod’s XDG state directory. Logs can contain code, outputs and secrets; nothing is uploaded or automatically deleted. See [Tool activity logs](tool-capture.md).
+
 **Performance diagnostics** are off by default. Enable timing-only in-memory history in global Settings, then choose **Capture performance report** in the affected project window’s command palette when typing or scrolling feels slow. Capture can also be bound to a shortcut. The project window’s notice strip shows capture progress and the saved path; the command’s detail also retains that path. See [Performance reports](performance-diagnostics.md) for privacy, local storage and limitations.
 
 ## Keybindings

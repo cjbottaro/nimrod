@@ -185,6 +185,8 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       if (command === 'list_project_overrides') return [];
       if (command === 'plugin:window|is_focused') return options.focused?.() ?? true;
       if (command === 'plugin:clipboard-manager|write_text' && options.performanceControl?.copyError) throw new Error(options.performanceControl.copyError);
+      if (command === 'tool_capture_directory') return '/fixture/.local/state/nimrod/tool-captures';
+      if (command === 'append_tool_capture') return;
       if (command === 'write_performance_report') {
         if (options.performanceControl?.writeError) throw new Error(options.performanceControl.writeError);
         return '/fixture/.local/state/nimrod/performance-captures/2026-10-14_12-00-00.000Z.json';
@@ -903,6 +905,33 @@ test('palette commands show shortcuts except intentionally unbound actions and r
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'j', metaKey: true, bubbles: true, cancelable: true }));
     await f.tick();
     assert.ok(f.calls.some(call => call.command === 'open_global_settings' && call.args.category === 'keybindings'));
+  } finally { f.win.close(); }
+});
+
+test('tool capture setting enables native Pi logging without changing the mounted conversation', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    assert.equal(f.element<HTMLSelectElement>('tool-capture-mode').value, 'off');
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    f.emit({ type: 'tool_execution_start', toolCallId: 'disabled', toolName: 'extension_tool' }); await f.tick();
+    assert.equal(f.calls.some(c => c.command === 'append_tool_capture'), false);
+    const prompt = f.element<HTMLTextAreaElement>('prompt');
+    prompt.value = 'keep draft'; prompt.dispatchEvent(new f.win.Event('input')); prompt.focus();
+    const view = prompt.closest('.session-view');
+    const starts = f.calls.filter(c => c.command === 'start_pi').length;
+    f.preferences.external('{"diagnostics.toolCapture":true}'); await f.tick();
+    assert.equal(f.element<HTMLSelectElement>('tool-capture-mode').value, 'on');
+    f.emit({ type: 'tool_execution_start', toolCallId: 'custom', toolName: 'extension_tool', args: { value: 1 } });
+    await new Promise(resolve => setTimeout(resolve, 150)); await f.tick();
+    const writes = f.calls.filter(c => c.command === 'append_tool_capture');
+    assert.equal(writes.length, 1);
+    const captured = (writes[0].args.lines as string[]).map(line => JSON.parse(line));
+    assert.equal(captured[0].payload.toolName, 'extension_tool');
+    assert.equal(captured[0].toolCallId, 'custom');
+    assert.equal(prompt.closest('.session-view'), view); assert.equal(prompt.value, 'keep draft');
+    assert.equal(f.win.document.activeElement, prompt);
+    assert.equal(f.calls.filter(c => c.command === 'start_pi').length, starts);
+    f.preferences.external('{}'); await f.tick();
   } finally { f.win.close(); }
 });
 

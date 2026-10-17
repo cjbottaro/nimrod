@@ -27,6 +27,7 @@ mod sessions;
 mod settings_window;
 #[cfg(any(target_os = "macos", all(test, unix)))]
 mod single_instance;
+mod tool_capture;
 mod webview_navigation;
 mod window_appearance;
 mod window_presentation;
@@ -537,6 +538,8 @@ fn main() {
             popouts::code_popout_snapshot,
             popouts::open_popout_link,
             performance_diagnostics::write_performance_report,
+            tool_capture::append_tool_capture,
+            tool_capture::tool_capture_directory,
             preferences::preferences_snapshot,
             project_preferences::scoped_preferences_snapshot,
             project_preferences::project_preferences_settings,

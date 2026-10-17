@@ -127,6 +127,10 @@ Each milestone uses its own `.worktrees/` branch, validates and merges before th
 
 The user built/restarted the baseline and reported existing cards/edit previews look good. That is limited macOS visual feedback, not external executable/plugin acceptance, exhaustive native lifecycle verification or Linux parity.
 
+## Tool payload discovery
+
+Opt-in [tool activity capture](tool-capture.md) records native Pi (including extension tools) and ACP tool events to separate append-only JSONL state logs for card inventory and offline fixture development. It does not alter plugin matching, card snapshots or execution permissions. Capture fixtures are authored but unvalidated.
+
 ## Material constraints
 
 - Pi tool results are flattened to text; structured/non-text result metadata is not currently preserved. The requested-edit proof uses actual structured input substitutions and must not claim an applied-file diff. Rich custom Pi content remains separate transport/history work.
