@@ -18,7 +18,7 @@ export interface CopilotSessionUi {
 /** SDK semantic events project directly to shared presentation, never Pi/ACP events. */
 export class CopilotSession {
   readonly connection: CopilotConnection;
-  state: ConversationViewState & { messages: DisplayMessage[]; sessionName?: string } = {
+  state: Omit<ConversationViewState, 'messages'> & { messages: DisplayMessage[]; sessionName?: string } = {
     messages: [], sessionUnavailable: true, busy: false, status: 'Connecting Copilot…', controls: [],
   };
   private revision = 0;

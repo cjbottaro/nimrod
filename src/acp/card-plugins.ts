@@ -70,8 +70,9 @@ function searchAnswer(value: unknown): SearchAnswer | undefined {
       sources.push({ url, title: typeof citation.title === 'string' && citation.title.trim() ? citation.title : new URL(url).hostname });
       number = sources.length; sourceIds.set(url, number);
     }
-    let start = item.start_index, end = item.end_index;
-    if (typeof start !== 'number' || typeof end !== 'number' || !Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end <= start) continue;
+    const rawStart = item.start_index, rawEnd = item.end_index;
+    if (typeof rawStart !== 'number' || typeof rawEnd !== 'number' || !Number.isSafeInteger(rawStart) || !Number.isSafeInteger(rawEnd) || rawStart < 0 || rawEnd <= rawStart) continue;
+    let start = rawStart, end = rawEnd;
     const marker = /^【[^【】\r\n]+†source】$/;
     if (!marker.test(answer.slice(start, end))) {
       // Some producers count Unicode code points rather than JavaScript UTF-16 units.

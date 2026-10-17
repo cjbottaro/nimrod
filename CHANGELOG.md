@@ -22,6 +22,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Copilot SDK session snapshots and web citation offsets retain their precise types, fixing TypeScript compilation after the SDK migration.
 - Bundled Copilot card adapters recognize the CLI’s reported `Copilot` agent identity, including the existing command-output adapter.
 - Resume session sorts Pi and Copilot history together by displayed recency rather than grouping by source/catalog order. Shared session rows show the harness immediately after the date, below the title.
 - ACP retains nullable tool patches and consecutive rich-content blocks, applies permission patches in wire order without overwriting newer tool updates, restores configuration controls after working turns, and drains agent output while writing large requests or stopping.

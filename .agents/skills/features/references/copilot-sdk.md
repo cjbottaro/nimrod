@@ -116,8 +116,10 @@ No seamless transport switch or concurrent control of one ID is promised.
 
 `src/copilot/session.ts` projects real SDK semantic events directly to existing
 presentation records. Stable SDK message/reasoning IDs and namespaced agent/tool
-IDs retain mounted cards; event IDs deduplicate replay/live overlap. Final
-content supersedes deltas. Tool partial results are replacement snapshots,
+IDs retain mounted cards; event IDs deduplicate replay/live overlap.
+The controller replaces the shared view's permissive `messages` field with
+`DisplayMessage[]`, retaining required stable keys through immutable updates.
+Final content supersedes deltas. Tool partial results are replacement snapshots,
 shell-output events append with monotonic sequence deduplication, and terminal
 results cannot rewind to progress.
 Rich result metadata and unsupported saved attachments remain literal JSON.
