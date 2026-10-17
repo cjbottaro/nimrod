@@ -18,7 +18,7 @@ function fixture(kind: 'pi' | 'copilot') {
     stop: token => { stops.push(token); return stop(token); },
     gate: () => gate,
   };
-  const pi = new PiSession(new PiTransport(() => {}), {
+  const pi = new PiSession(new PiTransport(async () => {}), {
     publish() {}, changed() {}, choose: async () => undefined, input: async () => undefined,
     confirm: async () => false, copy: async () => {}, openLink: async () => {},
     disconnected: reason => disconnected.push(reason ?? ''),
