@@ -51,12 +51,18 @@ class Session {
   model;
   effort;
   configured = false;
+  totalNanoAiu = 0;
   commandCatalog = [
     { name: 'permissions', aliases: ['perms'], description: 'Manage permissions', kind: 'builtin', allowDuringAgentExecution: true,
       input: { hint: 'Permission operation', choices: [{ name: 'show', description: 'Show permissions' }, { name: 'reset', description: 'Clear approvals' }] } },
     { name: 'discover-fixture', description: 'Add a new fixture command', kind: 'builtin', allowDuringAgentExecution: false },
   ];
   rpc = {
+    usage: { getMetrics: async () => {
+      if (process.env.NIMROD_FIXTURE_COPILOT_USAGE_STATE === 'error') throw new Error('Fixture usage metadata unavailable');
+      return { totalNanoAiu: this.totalNanoAiu, aiCreditsStatus: 'complete', totalPremiumRequestCost: 999,
+        modelMetrics: { fixture: { arbitraryPrivateDetail: 'must-not-leave-metadata-boundary' } } };
+    } },
     model: {
       // Listing metadata must not manufacture a selection: real CLI probes
       // returned an empty getCurrent snapshot both before and after this call.
@@ -88,7 +94,7 @@ class Session {
   };
   constructor(config, saved) {
     this.config = config; this.saved = saved; this.listeners = [config.onEvent];
-    if (saved) { this.model = 'large'; this.effort = undefined; }
+    if (saved) { this.model = 'large'; this.effort = undefined; this.totalNanoAiu = 12_300_000_000; }
     else { this.model = config.model; this.effort = config.reasoningEffort; }
   }
   on(listener) { this.listeners.push(listener); return () => { this.listeners = this.listeners.filter(item => item !== listener); }; }
@@ -123,7 +129,11 @@ class Session {
     this.emit('tool.execution_complete', { toolCallId: tool.toolCallId, success: true, result: { content: 'fixture output' } });
     const content = `Offline SDK response.\n\n${Array.from({ length: 30 }, (_, i) => `Paragraph ${i + 1}: offline fixture text.`).join('\n\n')}`;
     this.emit('assistant.message_delta', { messageId: `answer-${turn}`, deltaContent: content });
-    this.emit('assistant.message', { messageId: `answer-${turn}`, content }); this.emit('session.idle', {});
+    this.emit('assistant.message', { messageId: `answer-${turn}`, content });
+    this.totalNanoAiu += 12_300_000_000;
+    this.emit('assistant.usage', { model: this.model || 'fixture', cost: 999, inputTokens: 50000, outputTokens: 10000 });
+    this.emit('session.usage_info', { currentTokens: 31875, tokenLimit: 125000, messagesLength: this.sequence });
+    this.emit('session.idle', {});
   }
   async abort() { this.emit('session.idle', {}); }
   async setModel(model, options) {

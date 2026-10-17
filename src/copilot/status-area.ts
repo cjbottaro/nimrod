@@ -1,4 +1,5 @@
 import type { StatusAreaCapabilities, StatusAreaSnapshot } from '../status-area';
+import { presentCopilotUsage, type CopilotUsage } from './usage';
 
 const capabilities: StatusAreaCapabilities = { metrics: { label: 'Copilot-reported usage' } };
 export interface CopilotStatusAreaState {
@@ -8,7 +9,7 @@ export interface CopilotStatusAreaState {
   readonly supportsThinking: boolean;
   /** Whether the connected session accepts configuration intent (including deferred changes). */
   readonly available: boolean;
-  readonly usage?: { readonly currentTokens: number; readonly tokenLimit: number };
+  readonly usage?: CopilotUsage;
 }
 
 export function createCopilotStatusArea(): (state: CopilotStatusAreaState) => StatusAreaSnapshot {
@@ -25,10 +26,10 @@ export function createCopilotStatusArea(): (state: CopilotStatusAreaState) => St
           title: state.supportsThinking ? 'Select Copilot reasoning effort' : 'Select a model to choose Copilot reasoning effort', disabled: disabled || !state.supportsThinking }] : []),
       ];
     }
-    const metrics = previous && previous.usage === state.usage ? snapshot?.metrics : state.usage
-      ? `${state.usage.currentTokens.toLocaleString()} / ${state.usage.tokenLimit.toLocaleString()} context tokens` : undefined;
-    if (!snapshot || snapshot.controls !== controls || snapshot.metrics !== metrics)
-      snapshot = { capabilities, controlsLabel: 'Copilot configuration', controls: controls || [], metrics };
+    const { metrics, metricsTitle } = previous && previous.usage === state.usage
+      ? { metrics: snapshot?.metrics, metricsTitle: snapshot?.metricsTitle } : presentCopilotUsage(state.usage);
+    if (!snapshot || snapshot.controls !== controls || snapshot.metrics !== metrics || snapshot.metricsTitle !== metricsTitle)
+      snapshot = { capabilities, controlsLabel: 'Copilot configuration', controls: controls || [], metrics, metricsTitle };
     previous = state;
     return snapshot;
   };

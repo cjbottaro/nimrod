@@ -26,4 +26,6 @@ export interface StatusAreaSnapshot {
   readonly subagents?: string;
   readonly information?: readonly StatusAreaInformation[];
   readonly metrics?: string;
+  /** Integration-owned metric detail/units; shared rendering never interprets billing. */
+  readonly metricsTitle?: string;
 }

@@ -15,6 +15,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- Copilot's Status area shows estimated USD equivalent of reported session AI credits and compact context utilization (`25.5% / 125k`), with AIC totals, coverage and full context counters in the tooltip. Partial totals are qualified and missing accounting is not shown as zero; optional usage reads never block chat.
 - ACP command permissions use a compact **Run command · description** summary, exact command previews without duplicate metadata, and collapsed raw details below the existing permission buttons. Long descriptions wrap without truncation; unsupported operations retain the literal fallback.
 - Experimental ACP plugins distinguish tool names (`tools`) from protocol categories (`kinds`); early POC category-based plugins must move their matching to `kinds`. Agent-specific matches take precedence over generic ACP matches.
 

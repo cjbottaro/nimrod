@@ -181,6 +181,33 @@ test('configuration progress reuses queued-turn layout and one shimmering title 
   } finally { f.dom.window.close(); }
 });
 
+test('metric tooltip-only changes invalidate presentation, retain text nodes and catch up without touching the draft', () => {
+  const f = fixture();
+  try {
+    const statusArea = { capabilities: { metrics: { label: 'Fixture reported usage' } }, controlsLabel: 'Fixture', controls: [],
+      metrics: '~$0.123 · 25.5% / 125k', metricsTitle: '12.3 AIC; 31,875 / 125,000 context tokens' };
+    f.snapshot({ messages: [], statusArea });
+    const metrics = f.win.document.querySelector<HTMLElement>('#session-metrics')!;
+    const text = metrics.firstChild;
+    const prompt = f.win.document.querySelector<HTMLTextAreaElement>('#prompt')!;
+    prompt.value = 'Keep draft'; prompt.dispatchEvent(new f.win.Event('input')); prompt.focus();
+    const revised = { ...statusArea, metricsTitle: '12.3001 AIC; 31,876 / 125,000 context tokens' };
+    f.snapshot({ messages: [], statusArea: revised });
+    assert.equal(metrics.title, revised.metricsTitle);
+    assert.equal(metrics.getAttribute('aria-label'), revised.metricsTitle);
+    assert.equal(metrics.firstChild, text, 'rounded display text stays mounted when only exact detail changes');
+    f.view.setActive(false);
+    f.snapshot({ messages: [], statusArea: { ...revised, metricsTitle: 'Latest exact AIC detail' } });
+    assert.equal(metrics.title, revised.metricsTitle);
+    f.view.setActive(true); f.flush();
+    assert.equal(metrics.title, 'Latest exact AIC detail');
+    assert.equal(metrics.firstChild, text);
+    assert.equal(prompt.value, 'Keep draft');
+    assert.equal(f.win.document.activeElement, prompt);
+    assert.equal(f.sent.some(message => message.type === 'prompt'), false);
+  } finally { f.dom.window.close(); }
+});
+
 test('shared raw blocks preserve literal rich-content fallback across hidden catch-up', () => {
   const f = fixture();
   try {

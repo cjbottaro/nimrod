@@ -66,9 +66,9 @@ test('Copilot status separates advertised selectors, transient availability and 
   assert.ok(project(ready).controls.every(control => !control.disabled));
   const noThinking = project({ ...ready, model: 'large', effort: undefined, supportsThinking: false });
   assert.deepEqual(noThinking.controls.map(control => control.id), ['model']);
-  const usage = { currentTokens: 0, tokenLimit: 0 };
+  const usage = { context: { currentTokens: 0, tokenLimit: 0 } };
   const reported = project({ ...ready, usage });
-  assert.equal(reported.metrics, '0 / 0 context tokens');
+  assert.equal(reported.metrics, '— / —');
   assert.equal(project({ ...ready, usage }), reported);
   const disconnected = project({ ...ready, usage, available: false });
   assert.equal(disconnected.metrics, reported.metrics, 'keep the last reported usage on disconnect');

@@ -59,6 +59,32 @@ listed, but connection reports their unsupported mode without changing it or
 sending a prompt; change the mode in Copilot before reconnecting. Generic agent
 protocol infrastructure is retained internally, without a separate creation action.
 
+## Usage metrics
+
+The Status area uses a compact layout similar to Pi:
+
+```text
+~$0.123 · 25.5% / 125k
+```
+
+- **Estimated USD** is the SDK's accumulated session AI-credit usage converted at
+  GitHub's published **$0.01 per AIC**. Hover for the AIC amount, accounting coverage
+  and exact reported context counters. This is usage value, not necessarily an
+  additional charge beyond your subscription allowance.
+- **`25.5% / 125k`** is current context utilization and the reported window limit,
+  not the total tokens billed over the conversation. The window updates from
+  Copilot; it is not hard-coded to 125k. Exact counters remain in the tooltip.
+- **`≥$…`** means partial/unknown coverage: the displayed amount is only a reported
+  subtotal and the full amount may be higher. **`cost unavailable`** means accounting
+  was not reported/read successfully, not that the session was free. A missing
+  context limit displays `— / —` rather than a guessed percentage.
+
+Accounting includes the main agent and subagents and refreshes at usage/idle
+boundaries; it does not add event deltas together. Optional metadata failures do
+not block chat, send a prompt or change configuration. No **Auto compact** label
+is shown without a reliable reported setting. SDK/accounting and native visual
+acceptance for these changes remain pending; new offline fixtures are unrun.
+
 ## Slash commands
 
 Type `/` for commands discovered from your connected Copilot runtime, including

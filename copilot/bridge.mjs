@@ -17,6 +17,7 @@ let session, connecting = false, closing = false, initialized = false;
 let checkingHealth = false;
 let replaying = false, buffered = [];
 let commandRefresh;
+let usageRead;
 let commandExecuting = false;
 async function refreshCommands() {
   if (!session || closing) return;
@@ -117,6 +118,18 @@ async function dispatch(message) {
         catch (error) { send({ kind: 'command-error', error: `Command discovery failed: ${failure(error)}` }); }
         return;
       } finally { connecting = false; }
+    }
+    case 'usage': {
+      if (!session) throw new Error('No connected Copilot session');
+      // Keep the SDK read single-flight even if an optional frontend read times
+      // out first. A later read shares this request instead of piling up RPCs.
+      if (!usageRead) usageRead = (async () => {
+        const metrics = await session.rpc.usage.getMetrics();
+        if (!metrics || typeof metrics !== 'object' || Array.isArray(metrics)) throw new Error('Invalid Copilot usage snapshot');
+        // These totals include main/subagents. Premium-request cost is not USD.
+        return { totalNanoAiu: metrics.totalNanoAiu, aiCreditsStatus: metrics.aiCreditsStatus };
+      })().finally(() => { usageRead = undefined; });
+      return await usageRead;
     }
     case 'commands':
       if (!session) throw new Error('No connected Copilot session');

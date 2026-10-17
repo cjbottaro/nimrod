@@ -14,7 +14,10 @@ const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve()
 const resultOnlyCatalog = catalog.map(({ input: _input, ...command }) => command);
 async function fixture(commandChoice?: CopilotSessionUi['commandChoice'], commands: unknown[] = catalog) {
   const sent: BridgeRequest[] = [], published: ConversationViewMessage[] = [], notices: string[] = [];
-  const session = new CopilotSession(async request => { sent.push(request); }, {
+  const session: CopilotSession = new CopilotSession(async request => {
+    sent.push(request);
+    if (request.method === 'usage') queueMicrotask(() => session.receive({ kind: 'result', id: request.id, result: {} }));
+  }, {
     publish: message => published.push(message), changed() {}, identified() {}, disconnected() {}, completed() { throw new Error('Local command must not announce a completed agent turn'); },
     notice: message => notices.push(message), decision: async () => undefined, commandChoice,
   });
@@ -24,7 +27,7 @@ async function fixture(commandChoice?: CopilotSessionUi['commandChoice'], comman
   };
   const ready = session.initialize(); reply(null, 'initialize'); await flush();
   session.receive({ kind: 'connected', sessionId: 'fixture', events: [], models: [], model: {} });
-  session.receive({ kind: 'commands', commands }); reply(null, 'connect'); await ready;
+  session.receive({ kind: 'commands', commands }); reply(null, 'connect'); await ready; await flush();
   return { session, sent, published, notices, reply };
 }
 
@@ -178,7 +181,7 @@ test('new catalog commands work mechanically; unknown, malformed and unsupported
     for (const result of [{ kind: 'future-host-effect' }, { kind: 'set-model', model: 'other' }, { kind: 'select-subcommand', command: 'future', title: 'Bad', options: [{}] }]) {
       const handling = f.session.handle({ type: 'command', id: 'future', text: '/future' });
       f.reply(result); await handling;
-      assert.match(String(f.published.at(-2)?.error), /No.*fallback|Nothing was retried/);
+      assert.match(String(f.published.filter(message => message.type === 'submissionReceipt' && message.id === 'future').at(-1)?.error), /No.*fallback|Nothing was retried/);
     }
     assert.equal(f.sent.some(request => ['prompt', 'configure'].includes(request.method)), false);
     const done = f.session.handle({ type: 'command', id: 'done', text: '/future' });

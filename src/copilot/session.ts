@@ -4,6 +4,7 @@ import type { ConversationViewMessage, ConversationViewState } from '../conversa
 import type { ToolCaptureSink } from '../tool-capture';
 import { copilotToolResult } from './tool-result';
 import { createCopilotStatusArea } from './status-area';
+import { CopilotUsageController } from './usage';
 import { createCopilotConfiguration } from './session-configuration';
 import { ConfigurationDeferred, ConfigurationSuperseded, type SessionConfigurationController } from '../session-configuration';
 import { pickConfiguration } from '../configuration-picker';
@@ -40,7 +41,7 @@ export class CopilotSession {
   private configuring = false;
   private configurationVersion = 0;
   private projectStatus = createCopilotStatusArea();
-  private usage?: { currentTokens: number; tokenLimit: number };
+  private usage: CopilotUsageController;
   private ended = false;
   private replaying = false;
   private failed = false;
@@ -52,7 +53,7 @@ export class CopilotSession {
   private runtimeVersion?: string;
   constructor(send: (message: BridgeRequest) => Promise<void>, private ui: CopilotSessionUi) {
     this.connection = new CopilotConnection(send, packet => this.packet(packet), reason => {
-      this.ended = true; this.decisions.abort(); this.commandOperation?.abort(); this.configuration?.dispose(); this.finish();
+      this.ended = true; this.decisions.abort(); this.commandOperation?.abort(); this.configuration?.dispose(); this.usage?.dispose(); this.finish();
       this.state = { ...this.state, sessionUnavailable: true, busy: false, status: 'Disconnected' };
       this.publish(); ui.disconnected(reason);
     });
@@ -63,6 +64,7 @@ export class CopilotSession {
       apply: (setting, value, current) => this.applyPreference(setting, value, current), changed: () => this.publish([]),
       error: message => this.ui.notice(`Configuration change failed: ${message}`),
     });
+    this.usage = new CopilotUsageController(() => this.connection.request('usage', {}, 'reject'), () => this.publish([]));
     this.updateStatusArea();
   }
   get canSubmit(): boolean { return !this.ended && !this.state.sessionUnavailable && !this.state.busy && !this.configuring && !this.commandOperation; }
@@ -131,6 +133,7 @@ export class CopilotSession {
   private async runCommand(id: string, text: string): Promise<void> {
     const invocation = parseCopilotCommand(text)!;
     const operation = new AbortController();
+    let invoked = false;
     this.commandOperation = operation;
     this.state = { ...this.state, status: `Running /${invocation.name}…` };
     this.publish([]);
@@ -156,6 +159,7 @@ export class CopilotSession {
       // Each iteration requires a fresh user choice; never retry an invocation.
       while (!operation.signal.aborted && !this.ended) {
         if (this.state.busy) throw new Error('Copilot started working before the command could be invoked. Nothing was invoked again.');
+        invoked = true;
         const result = await this.connection.request('command', { name, ...(input !== undefined ? { input } : {}) });
         if (operation.signal.aborted || this.ended) return;
         if (!record(result) || typeof result.kind !== 'string') throw new Error('Copilot returned an invalid command result.');
@@ -220,6 +224,7 @@ export class CopilotSession {
       if (this.commandOperation === operation) this.commandOperation = undefined;
       if (!this.ended && !this.state.busy) this.state = { ...this.state, status: 'Idle' };
       this.publish([]);
+      if (!this.ended && invoked) this.usage.refresh();
     }
   }
   async selectPreference(kind: 'model' | 'thinking', choose: (values: string[], current?: string) => Promise<string | undefined>): Promise<void> {
@@ -243,8 +248,11 @@ export class CopilotSession {
   }
   private applyConfigurationSnapshot(value: unknown): void {
     if (!record(value)) throw new Error('Invalid Copilot model snapshot');
-    this.model = typeof value.modelId === 'string' ? value.modelId : undefined;
+    const model = typeof value.modelId === 'string' ? value.modelId : undefined;
+    const changed = this.model !== model;
+    this.model = model;
     this.effort = typeof value.reasoningEffort === 'string' ? value.reasoningEffort : undefined;
+    if (changed) this.usage.clearContext();
   }
   private packet(packet: Record<string, unknown>): void {
     if (packet.kind === 'identified') {
@@ -261,6 +269,7 @@ export class CopilotSession {
       finally { this.replaying = false; }
       this.applyConfigurationSnapshot(packet.model);
       this.state = { ...this.state, sessionUnavailable: false, busy: false, status: 'Idle' }; this.publish();
+      this.usage.refresh();
     } else if (packet.kind === 'commands') {
       if (!Array.isArray(packet.commands)) throw new Error('Invalid Copilot command catalog');
       this.commands = copilotCommands(packet.commands); this.publish([]);
@@ -288,6 +297,8 @@ export class CopilotSession {
     if (this.events.has(raw.id)) return;
     this.events.add(raw.id);
     const data = raw.data, type = raw.type;
+    if (type === 'assistant.usage' && !this.replaying && !this.state.sessionUnavailable) this.usage.refresh();
+    if (type === 'session.context_cleared' && !raw.agentId) { this.usage.clearContext(); if (!this.replaying && !this.state.sessionUnavailable) this.usage.refresh(); }
     const originLabel = typeof raw.agentId === 'string' && raw.agentId ? `Copilot agent ${raw.agentId}` : undefined;
     const string = (key: string) => typeof data[key] === 'string' ? data[key] as string : '';
     if (type.startsWith('tool.') || ['assistant.tool_call_delta', 'permission.requested', 'permission.completed'].includes(type)) this.capture(type, raw);
@@ -334,12 +345,15 @@ export class CopilotSession {
       });
     } else if (type === 'session.model_change' && !raw.agentId) {
       this.configurationVersion++;
-      this.model = string('newModel') || undefined;
+      const model = string('newModel') || undefined;
+      const changed = this.model !== model;
+      this.model = model;
       this.effort = typeof data.reasoningEffort === 'string' ? data.reasoningEffort : undefined;
+      if (changed) this.usage.clearContext();
       this.publish([]);
-    } else if (type === 'session.model_deselected' && !raw.agentId) { this.configurationVersion++; this.model = undefined; this.effort = undefined; this.publish([]); }
+    } else if (type === 'session.model_deselected' && !raw.agentId) { this.configurationVersion++; this.model = undefined; this.effort = undefined; this.usage.clearContext(); this.publish([]); }
     else if (type === 'session.usage_info' && !raw.agentId && typeof data.currentTokens === 'number' && typeof data.tokenLimit === 'number') {
-      this.usage = { currentTokens: data.currentTokens, tokenLimit: data.tokenLimit }; this.publish([]);
+      this.usage.context({ currentTokens: data.currentTokens, tokenLimit: data.tokenLimit });
     }
     else if (type === 'session.error') {
       if (!raw.agentId) this.failed = true;
@@ -361,6 +375,7 @@ export class CopilotSession {
     this.finish(); this.echo = undefined; this.cancelDecisions();
     this.state = { ...this.state, busy: false, status: this.stopped ? 'Stopped' : this.failed ? 'Failed' : 'Idle' };
     this.publish([]);
+    if (!this.ended && !this.state.sessionUnavailable) this.usage.refresh();
     if (working && !this.stopped) this.ui.completed(this.failed, this.failed ? undefined : this.response());
   }
   private message(key: string): DisplayMessage | undefined { const index = this.indices.get(key); return index === undefined ? undefined : this.state.messages[index]; }
@@ -394,7 +409,7 @@ export class CopilotSession {
   }
   private updateStatusArea(): void {
     const statusArea = this.projectStatus({ model: this.model, effort: this.effort, supportsModel: this.supports('model'),
-      supportsThinking: this.supports('thinking'), available: !this.ended && !this.state.sessionUnavailable, usage: this.usage });
+      supportsThinking: this.supports('thinking'), available: !this.ended && !this.state.sessionUnavailable, usage: this.usage.snapshot });
     if (this.state.statusArea !== statusArea) this.state = { ...this.state, statusArea };
   }
   private publish(rows?: DisplayMessage[]): void {
