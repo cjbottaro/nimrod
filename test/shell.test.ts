@@ -695,6 +695,8 @@ test('Copilot deletion controls and cleanup history stay unavailable without adv
   try {
     assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, true);
     assert.equal(f.rows()[0].parentElement!.querySelector<HTMLButtonElement>('.session-delete')!.disabled, true);
+    assert.match(f.element<HTMLButtonElement>('delete-session').title, /has not advertised saved-session deletion/);
+    assert.match(f.rows()[0].parentElement!.querySelector<HTMLButtonElement>('.session-delete')!.title, /has not advertised saved-session deletion/);
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Backspace', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
     await f.tick(); await f.tick();
     assert.doesNotMatch(f.element('palette-list').textContent!, /Saved Copilot/);

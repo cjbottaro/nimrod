@@ -23,6 +23,7 @@ export class CopilotSessionHistory implements SessionHistory {
   private initializing?: Promise<void>;
   private launching?: Promise<string>;
   private disposed = false;
+  private deletionRequests = 0;
   private stop: () => Promise<void>;
   get supportsDeletion(): boolean {
     return this.client?.phase === 'ready' && this.client.supportsSessionListing && this.client.supportsSessionDeletion;
@@ -53,7 +54,7 @@ export class CopilotSessionHistory implements SessionHistory {
     this.owner.token = token;
     const client = this.client = new AcpClient(packet => this.host.send(token, packet), {
       disconnected: error => {
-        if (!this.disposed) this.host.error(error);
+        if (!this.disposed && !this.deletionRequests) this.host.error(error);
         void this.stop().catch(error => this.host.error(error));
       },
     });
@@ -92,6 +93,12 @@ export class CopilotSessionHistory implements SessionHistory {
   }
 
   async validateDeletion(sessionId: string): Promise<void> {
+    this.deletionRequests++;
+    try { await this.validateDeletionMembership(sessionId); }
+    finally { this.deletionRequests--; }
+  }
+
+  private async validateDeletionMembership(sessionId: string): Promise<void> {
     await this.initialize();
     if (!this.supportsDeletion) throw new Error('Copilot does not advertise session deletion.');
     const cursors = new Set<string>();
@@ -107,14 +114,18 @@ export class CopilotSessionHistory implements SessionHistory {
   }
 
   async deleteSession(sessionId: string): Promise<void> {
-    // Check fresh exact-project membership even if the review used a cached row.
-    await this.validateDeletion(sessionId);
-    const client = this.client;
-    if (!client) throw new Error('Copilot history connection is unavailable. Deletion was not sent.');
-    try { await this.deadline(client.deleteSession(sessionId), client, 'Copilot deletion timed out; its outcome is unknown.'); }
+    this.deletionRequests++;
+    try {
+      // Check fresh exact-project membership even if the review used a cached row.
+      await this.validateDeletionMembership(sessionId);
+      const client = this.client;
+      if (!client) throw new Error('Copilot history connection is unavailable. Deletion was not sent.');
+      await this.deadline(client.deleteSession(sessionId), client, 'Copilot deletion timed out; its outcome is unknown.');
+    }
     catch (error) {
       throw new Error(`Copilot deletion was not confirmed: ${error}. The session and draft are retained in Nimrod; nothing is retried. Refresh history to verify the outcome before another explicit attempt.`);
     }
+    finally { this.deletionRequests--; }
   }
 
   private async deadline<T>(task: Promise<T>, client: AcpClient, message = 'Copilot history request timed out. Use Refresh to retry.'): Promise<T> {

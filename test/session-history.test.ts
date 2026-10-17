@@ -213,6 +213,17 @@ test('Copilot deletion verifies fresh exact-project membership and uses only the
   } finally { await f.source.dispose(); }
 });
 
+test('deletion-owned connection failures reject to their caller without duplicate discovery feedback', async () => {
+  const f = copilotFixture({ startError: 'Missing executable' });
+  try {
+    await assert.rejects(f.source.deleteSession('saved'), /Missing executable/);
+    assert.deepEqual(f.errors, []);
+    await assert.rejects(f.source.initialize(), /Missing executable/);
+    assert.equal(f.errors.length, 1, 'ordinary discovery retains its own error reporting');
+    assert.equal(f.sent.length, 0);
+  } finally { await f.source.dispose(); }
+});
+
 test('Copilot deletion finds paged history but refuses missing, unsupported and uncertain outcomes without retry', async () => {
   const f = copilotFixture({ capabilities: { loadSession: true, sessionCapabilities: { list: {}, delete: {} } },
     list: (packet, receive) => {
