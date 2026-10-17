@@ -413,9 +413,10 @@ test('Copilot slash commands discover arguments, open harness choice modals and 
   const choices = [{ name: 'show', description: 'Show permissions' }, { name: 'reset', description: 'Clear approvals' }];
   const f = await fixture(undefined, { windowWorkspace: '/project',
     sdkCommands: [{ name: 'permissions', description: 'Manage permissions', kind: 'builtin', input: { hint: 'Permission operation', choices } }],
-    sdkCommand: async request => request.input === undefined
-      ? { kind: 'select-subcommand', command: 'permissions', title: 'Copilot permissions', options: choices }
-      : { kind: 'text', text: '**Permission report**', markdown: true },
+    sdkCommand: async request => {
+      assert.equal(request.input, 'show', 'bare command must not run before choosing an advertised argument');
+      return { kind: 'text', text: '**Permission report**', markdown: true };
+    },
   });
   try {
     f.openPalette();
@@ -431,19 +432,20 @@ test('Copilot slash commands discover arguments, open harness choice modals and 
     type('/permissions'); send(); await f.tick(); await f.tick();
     assert.equal(prompt.value, '');
     assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
-    assert.equal(f.element('palette-title').textContent, 'Copilot permissions');
+    assert.equal(f.element('palette-title').textContent, 'Copilot /permissions');
+    assert.equal(commands().length, 0, 'argument picker opens before SDK invocation');
     assert.equal(f.element<HTMLButtonElement>('palette-back').hidden, true);
     assert.equal(f.element<HTMLButtonElement>('palette-refresh').hidden, true);
     assert.match(f.element('palette-list').textContent!, /Show permissions/);
     enter(); await f.tick(); await f.tick();
     assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
-    assert.equal((commands()[1].args.message as JsonRecord).input, 'show');
+    assert.equal((commands()[0].args.message as JsonRecord).input, 'show');
     assert.match(f.element('messages').textContent!, /Copilot command.*Permission report/s);
     assert.equal(f.element('messages').querySelectorAll('.message.user, .message.assistant').length, 0);
     assert.equal(f.calls.some(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'prompt'), false);
     type('/permissions'); send(); await f.tick(); await f.tick();
     paletteInput.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await f.tick();
-    assert.equal(commands().length, 3, 'Escape does not invoke a subcommand');
+    assert.equal(commands().length, 1, 'Escape invokes neither the bare command nor a subcommand');
     type('A newer draft');
     assert.equal(prompt.value, 'A newer draft');
   } finally { f.win.close(); }

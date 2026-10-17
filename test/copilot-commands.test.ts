@@ -11,7 +11,8 @@ import { installSlashCompletion } from '../src/pi/slash-completion';
 const catalog = [{ name: 'permissions', aliases: ['perms'], description: 'Manage permissions', kind: 'builtin', allowDuringAgentExecution: true,
   input: { hint: 'Choose a permission operation', choices: [{ name: 'show', description: 'Show permissions' }, { name: 'reset', description: 'Clear approvals' }] } }];
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
-async function fixture(commandChoice?: CopilotSessionUi['commandChoice']) {
+const resultOnlyCatalog = catalog.map(({ input: _input, ...command }) => command);
+async function fixture(commandChoice?: CopilotSessionUi['commandChoice'], commands: unknown[] = catalog) {
   const sent: BridgeRequest[] = [], published: ConversationViewMessage[] = [], notices: string[] = [];
   const session = new CopilotSession(async request => { sent.push(request); }, {
     publish: message => published.push(message), changed() {}, identified() {}, disconnected() {}, completed() { throw new Error('Local command must not announce a completed agent turn'); },
@@ -23,7 +24,7 @@ async function fixture(commandChoice?: CopilotSessionUi['commandChoice']) {
   };
   const ready = session.initialize(); reply(null, 'initialize'); await flush();
   session.receive({ kind: 'connected', sessionId: 'fixture', events: [], models: [], model: {} });
-  session.receive({ kind: 'commands', commands: catalog }); reply(null, 'connect'); await ready;
+  session.receive({ kind: 'commands', commands }); reply(null, 'connect'); await ready;
   return { session, sent, published, notices, reply };
 }
 
@@ -83,8 +84,55 @@ test('text commands invoke the SDK once, render labelled output, and never becom
   } finally { f.session.disconnect('fixture complete'); }
 });
 
+test('bare commands with advertised arguments open a picker before invoking, even when the SDK would return text', async () => {
+  let choose!: (value: string | undefined) => void;
+  const f = await fixture(async (title, choices) => {
+    assert.equal(title, 'Copilot /permissions'); assert.equal(choices[0].id, 'show');
+    return new Promise(resolve => { choose = resolve; });
+  });
+  try {
+    const handling = f.session.handle({ type: 'command', id: 'bare', text: '/perms   ' });
+    assert.equal(f.sent.some(request => request.method === 'command'), false, 'no default command invocation before the choice');
+    choose('show'); await flush();
+    assert.equal(f.sent.at(-1)!.name, 'perms'); assert.equal(f.sent.at(-1)!.input, 'show');
+    f.reply({ kind: 'text', text: 'Permission report' }); await handling;
+    assert.equal(f.sent.filter(request => request.method === 'command').length, 1);
+    assert.equal(f.session.state.messages[0].role, 'command');
+    const explicit = f.session.handle({ type: 'command', id: 'explicit', text: '/permissions show' });
+    f.reply({ kind: 'text', text: 'Explicit report' }); await explicit;
+    assert.equal(f.sent.filter(request => request.method === 'command').length, 2);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('cancelling an advertised-argument picker invokes nothing; required choices and stale catalogs stay safe', async () => {
+  for (const cancel of ['escape', 'hidden', 'catalog']) {
+    let choose!: (value: string | undefined) => void;
+    const f = await fixture(async () => new Promise(resolve => { choose = resolve; }));
+    try {
+      f.session.receive({ kind: 'commands', commands: [{ ...catalog[0], input: { ...catalog[0].input, required: true } }] });
+      assert.equal(f.session.validatePrompt('/permissions'), undefined, 'required advertised choices can be supplied by a picker');
+      const handling = f.session.handle({ type: 'command', id: cancel, text: '/permissions' });
+      if (cancel === 'hidden') f.session.cancelCommands();
+      if (cancel === 'catalog') f.session.receive({ kind: 'commands', commands: [] });
+      choose(cancel === 'escape' ? undefined : 'show'); await handling;
+      assert.equal(f.sent.some(request => request.method === 'command'), false);
+      assert.deepEqual(f.session.state.messages, []);
+      assert.equal(f.session.canSubmit, true);
+    } finally { f.session.disconnect('fixture complete'); }
+  }
+});
+
+test('commands without advertised choices retain their bare SDK invocation', async () => {
+  const f = await fixture(undefined, resultOnlyCatalog);
+  try {
+    const handling = f.session.handle({ type: 'command', id: 'bare-text', text: '/permissions' });
+    assert.equal(f.sent.at(-1)!.method, 'command'); assert.equal(f.sent.at(-1)!.input, undefined);
+    f.reply({ kind: 'text', text: 'Default report' }); await handling;
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
 test('harness subcommand choices invoke only the explicitly selected argument', async () => {
-  const f = await fixture(async (title, choices) => { assert.equal(title, 'Permissions'); assert.equal(choices[0].detail, 'Show permissions'); return 'show'; });
+  const f = await fixture(async (title, choices) => { assert.equal(title, 'Permissions'); assert.equal(choices[0].detail, 'Show permissions'); return 'show'; }, resultOnlyCatalog);
   try {
     const handling = f.session.handle({ type: 'command', id: 'choose', text: '/permissions' });
     f.reply({ kind: 'select-subcommand', command: 'permissions', title: 'Permissions', options: catalog[0].input.choices }); await flush();
@@ -98,7 +146,7 @@ test('harness subcommand choices invoke only the explicitly selected argument', 
 test('Escape, hidden-session cancellation and disconnection suppress follow-on invocation and late modals', async () => {
   for (const cancel of ['escape', 'hidden', 'disconnected']) {
     let shown = 0;
-    const f = await fixture(async () => { shown++; return undefined; });
+    const f = await fixture(async () => { shown++; return undefined; }, resultOnlyCatalog);
     const handling = f.session.handle({ type: 'command', id: cancel, text: '/permissions' });
     if (cancel === 'hidden') f.session.cancelCommands();
     if (cancel === 'disconnected') f.session.disconnect('fixture closed');
@@ -112,7 +160,7 @@ test('Escape, hidden-session cancellation and disconnection suppress follow-on i
 
 test('an aborted open picker cannot apply a late choice', async () => {
   let choose!: (value: string) => void, signal!: AbortSignal;
-  const f = await fixture(async (_title, _choices, owned) => { signal = owned; return new Promise(resolve => { choose = resolve; }); });
+  const f = await fixture(async (_title, _choices, owned) => { signal = owned; return new Promise(resolve => { choose = resolve; }); }, resultOnlyCatalog);
   try {
     const handling = f.session.handle({ type: 'command', id: 'late', text: '/permissions' });
     f.reply({ kind: 'select-subcommand', command: 'permissions', title: 'Permissions', options: catalog[0].input.choices }); await flush();
@@ -142,7 +190,7 @@ test('new catalog commands work mechanically; unknown, malformed and unsupported
 });
 
 test('only an explicit interactive agent-prompt result sends model work', async () => {
-  const f = await fixture();
+  const f = await fixture(undefined, resultOnlyCatalog);
   try {
     const handling = f.session.handle({ type: 'command', id: 'expand', text: '/permissions' });
     f.reply({ kind: 'agent-prompt', prompt: 'Harness-expanded content', displayPrompt: 'Visible command request', mode: 'interactive' }); await flush();

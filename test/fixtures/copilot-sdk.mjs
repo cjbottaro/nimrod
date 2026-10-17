@@ -64,9 +64,8 @@ class Session {
     commands: {
       list: async () => ({ commands: this.commandCatalog }),
       invoke: async ({ name, input }) => {
-        if (name === 'permissions') return input === undefined
-          ? { kind: 'select-subcommand', command: name, title: 'Permissions', options: this.commandCatalog[0].input.choices }
-          : { kind: 'text', text: `Fixture permission report: ${input}`, markdown: false };
+        // The CLI can own its picker even when SDK invocation defaults to text.
+        if (name === 'permissions') return { kind: 'text', text: `Fixture permission report: ${input ?? 'show'}`, markdown: false };
         if (name === 'discover-fixture') {
           this.commandCatalog.push({ name: 'new-fixture', kind: 'builtin', description: 'Newly advertised command', allowDuringAgentExecution: false });
           this.emit('commands.changed', { commands: [] }); return { kind: 'completed' };
