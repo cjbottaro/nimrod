@@ -17,7 +17,7 @@ export function copilotInteraction(validate: (text: string) => string | undefine
     unsupportedImages: 'Copilot sessions currently accept text only. No image was attached.',
     commands: copilotSlashCommands,
     keyboardMode: event => keyboardSubmissionMode(event, false),
-    composer: state => ({ hint: state.busy ? 'Copilot working · Stop to cancel · Shift+Enter for newline' : 'Enter to send · Shift+Enter for newline', stopLabel: 'Stop Copilot' }),
+    composer: state => ({ hint: state.busy ? 'Stop to cancel · Shift+Enter for newline' : 'Enter to send · Shift+Enter for newline', stopLabel: 'Stop Copilot' }),
     prepare(text) {
       const error = validate(text);
       const command = text.startsWith('/');

@@ -267,6 +267,50 @@ for (const choice of [{ kind: 'approve-once', approvedInteractively: true }, { k
   });
 }
 
+for (const [request, choice] of [
+  [{ kind: 'read', path: '/fixture/project/test' }, { kind: 'approve-for-session', approval: { kind: 'read' } }],
+  [{ kind: 'write', fileName: '/fixture/project/file' }, { kind: 'approve-for-session', approval: { kind: 'write' } }],
+  [{ kind: 'shell', fullCommandText: 'git status', commands: [{ identifier: 'git', readOnly: true }] },
+    { kind: 'approve-for-session', approval: { kind: 'commands', commandIdentifiers: ['git'] } }],
+  [{ kind: 'mcp', serverName: 'fixture', toolName: 'lookup' },
+    { kind: 'approve-for-session', approval: { kind: 'mcp', serverName: 'fixture', toolName: 'lookup' } }],
+  [{ kind: 'url', url: 'https://example.test/docs' }, { kind: 'approve-for-session', domain: 'example.test' }],
+  [{ kind: 'url', url: 'https://example.test/docs' }, { kind: 'approve-permanently', domain: 'example.test' }],
+  [{ kind: 'read', path: '/fixture/project/test' }, { kind: 'reject', feedback: 'Use another approach' }],
+] as const) {
+  test(`bridge forwards exact scoped permission decisions (${request.kind}/${choice.kind})`, { timeout: 5000 }, async () => {
+    const f = bridge();
+    try {
+      await f.request('initialize'); await f.request('connect');
+      await f.request('prompt', { text: `scoped permission fixture:${JSON.stringify(request)}` });
+      const permission = await f.waitFor(packet => packet.kind === 'permission');
+      for (const value of [
+        { ...choice, unexpected: true }, { kind: 'approve-for-session' },
+        { kind: 'approve-for-session', approval: { kind: 'mcp', serverName: 'fixture', toolName: null } },
+        { kind: 'approve-permanently', domain: 'other.test' },
+      ]) await assert.rejects(f.request('decision', { decisionId: permission.id, value }), /Invalid permission decision/);
+      await f.request('decision', { decisionId: permission.id, value: choice });
+      const result = await f.waitFor(packet => packet.kind === 'event' && packet.event.type === 'assistant.message');
+      assert.deepEqual(JSON.parse(result.event.data.content), choice);
+    } finally { await f.close(); }
+  });
+}
+
+for (const flag of ['managedApprovalRequired', 'requestSandboxBypass']) {
+  test(`bridge refuses standing approvals for ${flag}`, { timeout: 5000 }, async () => {
+    const f = bridge();
+    try {
+      await f.request('initialize'); await f.request('connect');
+      await f.request('prompt', { text: `scoped permission fixture:${JSON.stringify({ kind: 'url', url: 'https://example.test/', [flag]: true })}` });
+      const permission = await f.waitFor(packet => packet.kind === 'permission');
+      for (const kind of ['approve-for-session', 'approve-permanently'])
+        await assert.rejects(f.request('decision', { decisionId: permission.id, value: { kind, domain: 'example.test' } }), /Invalid permission decision/);
+      await f.request('decision', { decisionId: permission.id, value: { kind: 'user-not-available' } });
+      await f.waitFor(packet => packet.kind === 'event' && packet.event.type === 'session.idle');
+    } finally { await f.close(); }
+  });
+}
+
 test('SDK reconnects the exact identity in its authoritative mode without prompting', { timeout: 5000 }, async () => {
   const f = bridge('plan');
   try {

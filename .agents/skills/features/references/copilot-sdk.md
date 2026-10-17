@@ -36,7 +36,7 @@ Nimrod leaves authentication to the installed CLI; no tokens enter settings.
 
 ## Distribution and native ownership
 
-- `copilot/bridge.mjs` imports the bundled official SDK and its concrete `copilot/configuration.mjs` adapter. Both modules are staged checkout-locally, watched by `build.rs` and required by the bundle verifier. The bridge's JSON-line
+- `copilot/bridge.mjs` imports the bundled official SDK, its concrete `copilot/configuration.mjs` adapter and the shared UI/bridge decision-scope validator `copilot/permissions.mjs`. All three modules are staged checkout-locally, watched by `build.rs` and required by the bundle verifier. The bridge's JSON-line
   records are private Nimrod IPC, **not another harness protocol**.
 - `scripts/prepare-copilot.mjs`, called by `src-tauri/build.rs`, stages the bridge,
   SDK dist/package metadata and required dependency packages into ignored
@@ -207,14 +207,85 @@ reported/catalog token amounts without inventing a limit.
 
 `onEvent` is registered before SDK create/resume so early events are buffered.
 Permission and user-input callbacks await explicit choices inside their owning
-conversation, using the shared mounted decision surface. Permissions offer Allow
-once/Deny/Cancel; input presents native choices and optional freeform text.
+conversation. Permissions use the concrete FIFO panel below; questions and plan
+continuations retain the shared mounted decision surface and their existing
+native choices/cancellation.
 
-The supported host decision port is the concrete `CopilotDecision` union, not arbitrary SDK result records. **Allow once** returns `{kind:'approve-once', approvedInteractively:true}`, **Deny** returns `{kind:'reject'}`, and Cancel/unavailable/bridge teardown settles permission callbacks with `{kind:'user-not-available'}`. The bridge accepts only these scoped shapes, rejects legacy outcome values and persistent/session-grant fields, and never falls back to approval. Native `permission.completed.result.kind:'approved'` remains a valid reported outcome and is captured unchanged; decision inputs and reported outcomes are deliberately distinct.
+### Permission choices and panel
+
+`copilot/permissions.mjs` owns the exact options and bridge validation for the
+concrete `CopilotDecision` permission union (declared in `permissions.d.mts`).
+**Allow once** returns `{kind:'approve-once', approvedInteractively:true}`;
+**Deny** returns `{kind:'reject'}`, optionally with literal feedback. Unavailable
+UI/Stop/Close/disconnect never approves; bridge teardown resolves callbacks with
+`{kind:'user-not-available'}`. There is no ordinary **Cancel request** permission
+button: use Deny for rejection or Stop for cancelling the turn. Input/plan
+cancellation remains separate.
+
+**More approval options…** is a local, initially closed disclosure containing
+explicit buttons, not an on-change select that can approve while arrowing:
+
+- Read: `approve-for-session` with `approval:{kind:'read'}`, labelled **Allow all
+  file reads this session**. This is deliberately not described as directory-
+  or project-confined.
+- Write: the same variant with `approval:{kind:'write'}`, labelled **Allow all
+  file writes this session**.
+- Shell: only when the runtime supplied a nonempty valid `commands` catalog;
+  exact de-duplicated `identifier` values form `approval:{kind:'commands',
+  commandIdentifiers:[…]}`. The button names the identifiers and **any arguments**;
+  the current full command text is not misrepresented as the remembered scope.
+- MCP: `approval:{kind:'mcp',serverName,toolName}` for this exact tool, never all
+  tools on a server.
+- HTTP(S) URL: session approval with the parsed hostname in `domain`, or
+  `approve-permanently` with the same domain. The latter explicitly says **saved
+  across sessions**. Paths are not represented as the permission scope;
+  credential-bearing/malformed URLs have no remembered choices.
+- Managed-approval and sandbox-bypass requests offer only one-time approval or
+  rejection, retaining prominent policy/escalation notes. Unknown or incomplete
+  scopes retain literal details and one-time approval/rejection.
+
+Every decision is checked against the bridge's retained original request using
+the same option builder; unrelated domains, broader MCP scopes, mismatched
+approval kinds, injected fields and legacy outcome values are rejected. No
+Nimrod-side remembered permission policy, bulk approval of queued requests,
+automatic replay, or local settings writes. Copilot owns remembered rules and
+their lifetime. Each already-pending callback remains an independent choice
+unless its owning connection cancels it. Native
+`permission.completed.result.kind:'approved'` remains a valid reported outcome,
+not a supported decision input.
+
+Compatibility boundary: CLI 1.0.98's captured malformed-reply diagnostic lists
+`approve-once`, `approve-for-session`, `approve-permanently`, `reject`,
+`user-not-available`. Generated SDK types additionally describe directory-only
+session grants and persisted project-location grants; those are **not exposed**
+until installed-CLI support is verified. The added session/domain decision
+payloads have source/schema evidence and authored unrun fixtures, not live
+runtime acceptance.
+
+`src/copilot/permission-panel.ts` mounts one bounded, independently overflowing
+panel per conversation above the Status area. The oldest request alone is
+actionable, with an exact pending count and collapsed list of other requests.
+Appending/removing queue entries retains the active preview, raw/scoped/feedback
+disclosures, typed feedback and mounted controls. Arrival never focuses, changes
+drafts, navigates sessions or requests transcript following; hidden conversations
+retain their own queues. Choices require the owning conversation to be presented
+and no open modal. If a completed request owned focus, move to the next active
+request's primary button, or the owning composer when the queue empties; never
+focus a hidden/obscured conversation. Abort removes entries without returning an
+approval. The panel has no live-region announcement that leaks background work.
+
+`CopilotSession` tracks outstanding decision IDs at existing receive/settle/cancel
+boundaries. Presentation snapshots override activity text with **Waiting for
+permission…** (or **Waiting for input…**) until all decisions settle, while keeping
+underlying busy/Stop/configuration semantics intact. Dirty-row publications and
+stable Status-area contributions remain on the existing shared view/scroll path;
+streaming never rebuilds the panel, scans the pending queue to recalculate status, or clears its waiting text. The busy composer hint is simply **Stop to cancel · Shift+Enter for newline**, avoiding a contradictory Working label while waiting.
 
 SDK 1.0.98 logs established actual read/shell/fetch failures when the old host returned `approved`, despite the SDK's permissive generated union and old fake accepting it. The production SDK forwards the handler result directly to `permissions.handlePendingPermissionRequest`; no legacy-to-modern conversion is assumed. The offline fake now validates decision forms for shell and URL callbacks, and new bridge fixtures reject the old forms before accepting an explicit single-use choice. Those new fixtures are authored but unrun for this follow-up. No live prompts are replayed or reissued to validate the fix.
 
-Compact permission previews are SDK-owned parsing through `copilot/permission-presentation.ts`, with a shared public display-only `operationPreview` helper. Commands/intention, owning-project paths, URL/MCP scope and supplied diffs/arguments are visible; raw details stays closed after the core choices. Sandbox-bypass reasons and managed-approval requirements remain prominent. Unknown scopes remain literal rather than being hidden or auto-approved. The helper cannot make decisions or invoke tools.
+Compact permission previews are SDK-owned parsing through `src/copilot/permission-presentation.ts`, with a shared public display-only `operationPreview` helper. Commands/intention, owning-project paths, URL/MCP scope and supplied diffs/arguments are visible; raw details stays closed after the core choices. Sandbox-bypass reasons and managed-approval requirements remain prominent. Read-kind requests with native `Search in directory:` / `Search in file:` intentions use **Search directory** / **Search file**, not misleading **Read file** titles. Other read intentions remain visible. Unknown scopes remain literal rather than being hidden or auto-approved. The helper cannot make decisions or invoke tools.
+
+Authored **unrun** follow-up fixtures: `test/copilot-permissions.test.ts` covers option/validator parity, exact scope restrictions, one retained FIFO panel, draft/focus/disclosure retention, feedback, background isolation and cancellation; `test/copilot-sdk-presentation.test.ts` covers search intentions; `test/copilot-bridge.test.ts` forwards modern scoped decisions and rejects policy/mismatched/injected scopes; `test/copilot-sdk.test.ts` covers overlapping waiting states/streaming/cancellation; `test/shell.test.ts` covers mounted routing and draft/status retention. Staging, native build watch and macOS resource verification include `permissions.mjs`. No requested tests/build/app launch or live permission probes were performed; mandatory post-merge compile checking is tracked separately. Native UI, remembered-rule lifetime and macOS/Linux acceptance remain pending.
 Background requests do not navigate/focus or approve. Stop, disconnect and Close
 retire exact connection-bound AbortSignals and settle/reject callbacks safely.
 Notifications reuse shared preference/focus/token checks; replay never alerts.

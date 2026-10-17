@@ -156,6 +156,7 @@ fn main() {
     for path in [
         "copilot/bridge.mjs",
         "copilot/configuration.mjs",
+        "copilot/permissions.mjs",
         "scripts/prepare-copilot.mjs",
         "package-lock.json",
     ] {

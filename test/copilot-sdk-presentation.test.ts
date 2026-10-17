@@ -21,6 +21,8 @@ test('SDK read/shell/URL/MCP permission requests have compact native previews an
   try {
     for (const [request, summary, content] of [
       [{ kind: 'read', path: '/project/src/file.ts', intention: 'Read fixture', toolCallId: 'read' }, 'Read file · src/file.ts', undefined],
+      [{ kind: 'read', path: '/project/test', intention: 'Search in directory: /project/test' }, 'Search directory · test', undefined],
+      [{ kind: 'read', path: '/project/src/file.ts', intention: 'Search in file: /project/src/file.ts' }, 'Search file · src/file.ts', undefined],
       [{ kind: 'read', path: '/outside/file.ts' }, 'Read file · /outside/file.ts', undefined],
       [{ kind: 'shell', fullCommandText: 'printf "<script>literal</script>"\n', intention: 'Inspect fixture' }, 'Run command · Inspect fixture', 'printf "<script>literal</script>"\n'],
       [{ kind: 'url', url: 'https://example.test/docs', intention: 'Fetch content from this URL.' }, 'Fetch · example.test/docs', undefined],

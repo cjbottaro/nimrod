@@ -136,12 +136,18 @@ class Session {
   }
   async permission(request) {
     const decision = await this.config.onPermissionRequest(request);
-    assert.ok(['approve-once', 'reject', 'user-not-available'].includes(decision.kind), 'The live CLI accepts decisions, not legacy permission outcomes');
+    assert.ok(['approve-once', 'approve-for-session', 'approve-permanently', 'reject', 'user-not-available'].includes(decision.kind), 'The live CLI accepts decisions, not legacy permission outcomes');
     if (decision.kind === 'approve-once') assert.equal(decision.approvedInteractively, true, 'Only an explicit UI choice may approve');
     return decision;
   }
   async run(prompt, turn) {
     this.emit('user.message', { content: prompt }); this.emit('assistant.turn_start', {});
+    if (prompt.startsWith('scoped permission fixture:')) {
+      const request = JSON.parse(prompt.slice('scoped permission fixture:'.length));
+      const result = await this.permission(request);
+      this.emit('assistant.message', { messageId: `permission-${turn}`, content: JSON.stringify(result) });
+      this.emit('session.idle', {}); return;
+    }
     if (prompt === 'url permission fixture') {
       await this.permission({ kind: 'url', url: 'https://example.test/permission' });
       this.emit('session.idle', {}); return;

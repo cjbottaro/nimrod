@@ -102,6 +102,7 @@ A **card** needn't have a visible rectangle. A **disclosure** expands/collapses;
 - **Settings gear / Runtime paths / Zoom picker** — Project settings entry in the Project bar, next-launch executable preferences and whole-webview scale selector.
 - **Global default / Project override / Use global default** — Setting provenance and the action that removes a project override, not a copied value.
 - **Desktop notification** — OS-level background alert, distinct from Pi in-app notices. **Background session alerts**, **Send test notification** and **Refresh notification diagnostics** are Settings controls.
+- **Permission panel** — Copilot's session-local approval surface above the Status area: one active request, pending count/list, one-time/scoped approval and denial controls. Not a blocking dialog. [Permission specification](../features/references/copilot-sdk.md#permission-choices-and-panel) owns scope and lifecycle.
 - **Dialog / modal shell** — choice/editing overlay versus its shared outer geometry/style. Project settings is the full-window exception; Global Settings has its own native window.
 
 [Command interactions](../features/references/command-interactions.md), [keybindings](../features/references/keybindings.md), [Settings](../features/references/settings-layout.md), [notifications](../features/references/notifications.md) and [modal layout](../features/references/modal-layout.md) own specifications.

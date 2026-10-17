@@ -115,6 +115,36 @@ test('SDK busy drafts do not dispatch; Stop cancels session-bound decisions with
   f.session.disconnect('fixture complete');
 });
 
+test('SDK status waits for all decisions, survives streaming, and restores underlying activity after choices or cancellation', async () => {
+  const choices: ((value: CopilotDecision) => void)[] = [];
+  const f = await fixture([], async () => new Promise(resolve => choices.push(resolve)));
+  const status = () => {
+    const message = f.published.filter(message => message.type === 'snapshot').at(-1);
+    assert.ok(message?.type === 'snapshot'); return message.state.status;
+  };
+  try {
+    f.event('assistant.turn_start', {});
+    f.session.receive({ kind: 'permission', id: 'one', request: { kind: 'read', path: '/one' } });
+    f.session.receive({ kind: 'permission', id: 'two', request: { kind: 'read', path: '/two' } });
+    assert.equal(status(), 'Waiting for permission…');
+    f.event('assistant.message_delta', { messageId: 'parallel', deltaContent: 'Still streaming' });
+    assert.equal(status(), 'Waiting for permission…');
+    choices[0]({ kind: 'approve-for-session', approval: { kind: 'read' } }); await flush();
+    assert.equal(status(), 'Waiting for permission…');
+    f.reply('decision'); await flush();
+    choices[1]({ kind: 'reject', feedback: 'Different approach' }); await flush();
+    assert.equal(status(), 'Working…');
+    assert.deepEqual(f.last('decision').value, { kind: 'reject', feedback: 'Different approach' });
+    f.reply('decision'); await flush();
+    f.session.receive({ kind: 'input', id: 'three', request: { question: 'Continue?' } });
+    assert.equal(status(), 'Waiting for input…');
+    f.event('session.idle', {});
+    assert.equal(status(), 'Idle');
+    choices[2]({ answer: 'late answer', wasFreeform: true }); await flush();
+    assert.equal(f.sent.filter(request => request.method === 'decision').length, 2, 'cancelled choices never replay');
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
 test('SDK model events outrank older configuration responses and thinking remains model-specific', async () => {
   const f = await fixture();
   assert.equal(f.session.supports('thinking'), true);

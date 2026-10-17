@@ -8,7 +8,10 @@ export function copilotPermissionPreview(document: Document, request: Readonly<R
     title = 'Run command'; description = typeof request.intention === 'string' ? request.intention : undefined;
     content = [request.fullCommandText];
   } else if (request.kind === 'read' && typeof request.path === 'string' && request.path) {
-    title = 'Read file'; description = displayFilePath(request.path, projectDirectory);
+    title = typeof request.intention === 'string' && request.intention.startsWith('Search in directory:') ? 'Search directory'
+      : typeof request.intention === 'string' && request.intention.startsWith('Search in file:') ? 'Search file' : 'Read file';
+    description = displayFilePath(request.path, projectDirectory);
+    if (typeof request.intention === 'string' && !/^(Read file|Search in (directory|file)):/.test(request.intention)) notes.push(request.intention);
   } else if (request.kind === 'write' && typeof request.fileName === 'string' && request.fileName) {
     title = 'Edit file'; description = displayFilePath(request.fileName, projectDirectory);
     if (typeof request.diff === 'string' && request.diff) content = [request.diff];
@@ -29,5 +32,6 @@ export function copilotPermissionPreview(document: Document, request: Readonly<R
     if (typeof request.requestSandboxBypassReason === 'string' && request.requestSandboxBypassReason) notes.push(request.requestSandboxBypassReason);
   }
   if (request.managedApprovalRequired === true) notes.push('Explicit approval required by managed policy');
+  if (request.managedApprovalRequired === true || request.requestSandboxBypass === true) notes.push('Only one-time approval is offered for this request.');
   return operationPreview(document, { title, description, content, notes, raw: request });
 }

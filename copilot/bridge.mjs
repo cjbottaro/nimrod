@@ -1,6 +1,7 @@
 import { createInterface } from 'node:readline';
 import { isAbsolute } from 'node:path';
 import { createCopilotConfiguration } from './configuration.mjs';
+import { validPermissionDecision } from './permissions.mjs';
 
 const [cli, cwd] = process.argv.slice(2);
 if (!cli || !isAbsolute(cli) || !cwd || !isAbsolute(cwd)) throw new Error('An absolute user-installed Copilot executable and project are required.');
@@ -36,7 +37,7 @@ function decision(kind, request) {
   if (closing) return Promise.reject(new Error('Copilot connection is closing'));
   const id = crypto.randomUUID();
   return new Promise((resolve, reject) => {
-    decisions.set(id, { resolve, reject, kind });
+    decisions.set(id, { resolve, reject, kind, request });
     send({ kind, id, request });
   });
 }
@@ -67,11 +68,8 @@ async function dispatch(message) {
     const pending = decisions.get(message.decisionId);
     if (!pending) throw new Error('This Copilot decision is no longer pending.');
     if (pending.kind === 'permission') {
-      const value = message.value;
-      const valid = value?.kind === 'approve-once' && value.approvedInteractively === true
-        || value?.kind === 'reject' || value?.kind === 'user-not-available';
-      if (!valid || Object.keys(value).some(key => !['kind', 'approvedInteractively'].includes(key))
-        || value.kind !== 'approve-once' && value.approvedInteractively !== undefined) throw new Error('Invalid permission decision; expected explicit approve-once, reject or user-not-available');
+      if (!validPermissionDecision(pending.request, message.value))
+        throw new Error('Invalid permission decision; expected an explicit choice scoped to this request');
     } else if (pending.kind === 'input') {
       if (typeof message.value?.answer !== 'string' || typeof message.value?.wasFreeform !== 'boolean') throw new Error('Invalid input answer');
     } else if (typeof message.value?.approved !== 'boolean'

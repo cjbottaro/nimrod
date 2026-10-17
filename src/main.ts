@@ -11,7 +11,7 @@ import { PiSessionHistory, type PiSessionSummary as SessionSummary } from './pi/
 import { loadSessionHistory, type SessionHistory, type SessionHistorySnapshot } from './session-history';
 import { savedSessionKey, resolveSessionListEntry, type SessionListEntry } from './session-list';
 import { renderPermissionDetails } from './acp/tool-state';
-import { copilotPermissionPreview } from './copilot/permission-presentation';
+import { CopilotPermissionPanel } from './copilot/permission-panel';
 import { acpInteraction } from './acp/view-policy';
 import { createPiViewProjection, piInteraction } from './pi/view-policy';
 import { piSession, acpSession, copilotSession, acpProfile as profileFor, sessionActions, sessionConfiguration, type SessionAction, type SessionBackend } from './session-backend';
@@ -66,6 +66,7 @@ import { installSessionPopouts } from './session-popouts';
 import transcript from './pi/transcript.html?raw';
 import './pi/transcript.css';
 import './acp/session.css';
+import './copilot/permission-panel.css';
 import './theme.css';
 import './workspace.css';
 import './keybindings.css';
@@ -1121,12 +1122,26 @@ function requestSessionChoice(tab: Tab, details: HTMLElement, options: { id: str
     });
   });
 }
+const copilotPermissionPanels = new WeakMap<Tab, CopilotPermissionPanel>();
 async function requestCopilotDecision(tab: Tab, kind: 'permission' | 'input' | 'plan', request: Record<string, unknown>, signal: AbortSignal): Promise<CopilotDecision | undefined> {
   if (kind === 'permission') {
-    const details = copilotPermissionPreview(document, request, workspace);
-    const choice = await requestSessionChoice(tab, details, [{ id: 'allow', label: 'Allow once' }, { id: 'deny', label: 'Deny' }], signal);
-    return choice === 'allow' ? { kind: 'approve-once', approvedInteractively: true }
-      : { kind: choice === 'deny' ? 'reject' : 'user-not-available' };
+    if (signal.aborted || !tabs.includes(tab) || tab.closing) return { kind: 'user-not-available' };
+    let panel = copilotPermissionPanels.get(tab);
+    if (!panel) {
+      panel = new CopilotPermissionPanel(document, tab.root.querySelector('[data-pi-id="composer-area"]')!, workspace,
+        () => presented === tab && tabs.includes(tab) && !tab.closing && !document.querySelector('dialog[open]'),
+        delta => { tab.inputCount += delta; if (tabs.includes(tab)) updateTab(tab); },
+        () => tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true }));
+      copilotPermissionPanels.set(tab, panel);
+    }
+    const choice = panel.request(request, signal);
+    const token = tab.token;
+    if (token) void notifySession('input', {
+      valid: () => !signal.aborted && !unloading && tabs.includes(tab) && tab.token === token && !tab.closing && !tab.ended,
+      selected: () => presented === tab && !settings.isOpen,
+      session: 'Copilot', target: { session: tab.id, token },
+    });
+    return await choice ?? { kind: 'user-not-available' };
   }
   const details = document.createElement('div');
   if (kind === 'plan') {

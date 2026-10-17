@@ -23,7 +23,7 @@ const usageWorkEvents = new Set(['user.message', 'assistant.turn_start', 'assist
   'assistant.reasoning_delta', 'assistant.reasoning', 'assistant.tool_call_delta', 'assistant.usage', 'tool.execution_start',
   'tool.execution_partial_result', 'tool.execution_progress', 'tool.execution_complete', 'tool.shell_output', 'session.error']);
 /** Supported host decisions, distinct from the SDK's reported PermissionResult outcomes. */
-export type CopilotDecision = { kind: 'approve-once'; approvedInteractively: true } | { kind: 'reject' } | { kind: 'user-not-available' }
+export type CopilotDecision = import('../../copilot/permissions.mjs').PermissionDecision
   | { answer: string; wasFreeform: boolean } | { approved: boolean; selectedAction?: string; feedback?: string };
 export interface CopilotSessionUi {
   publish(message: ConversationViewMessage): void;
@@ -67,6 +67,8 @@ export class CopilotSession {
   private sessionId = '';
   private echo?: { key: string };
   private decisions = new AbortController();
+  private pendingDecisions = new Map<string, 'permission' | 'input' | 'plan'>();
+  private waitingStatus?: string;
   private captureConnectionId = crypto.randomUUID();
   private runtimeVersion?: string;
   constructor(send: (message: BridgeRequest) => Promise<void>, private ui: CopilotSessionUi) {
@@ -75,7 +77,7 @@ export class CopilotSession {
       return send(message);
     }, packet => this.packet(packet), reason => {
       this.capture('bridge.disconnected', { reason });
-      this.ended = true; this.decisions.abort(); this.commandOperation?.abort(); this.configuration?.dispose(); this.usage?.dispose(); this.finish();
+      this.ended = true; this.cancelDecisions(); this.commandOperation?.abort(); this.configuration?.dispose(); this.usage?.dispose(); this.finish();
       this.state = { ...this.state, sessionUnavailable: true, busy: false, status: 'Disconnected' };
       this.publish(); ui.disconnected(reason);
     });
@@ -338,8 +340,10 @@ export class CopilotSession {
       const id = packet.id;
       const signal = this.decisions.signal;
       this.capture(`${packet.kind}.request`, packet);
+      this.pendingDecisions.set(id, packet.kind); this.updateWaitingStatus();
       void this.ui.decision(packet.kind, packet.request, signal).then(async choice => {
         if (signal.aborted) return;
+        this.pendingDecisions.delete(id); this.updateWaitingStatus(); this.publish([]);
         if (!choice && packet.kind === 'input') {
           this.stopped = true;
           await this.connection.request('cancel');
@@ -348,6 +352,7 @@ export class CopilotSession {
         const fallback = packet.kind === 'plan' ? { approved: false } : { kind: 'user-not-available' };
         await this.connection.request('decision', { decisionId: id, value: choice ?? fallback });
       }).catch(error => { if (!signal.aborted) { this.ui.notice(`Copilot decision failed: ${String(error)}`); this.disconnect(String(error)); } });
+      this.publish([]);
     } else throw new Error('Unknown Copilot bridge record');
   }
   private event(raw: unknown): void {
@@ -482,7 +487,12 @@ export class CopilotSession {
     const message = [...this.state.messages].reverse().find(message => message.role === 'assistant' && !message.originLabel && Array.isArray(message.content) && message.content.some(block => block.type === 'text'));
     return Array.isArray(message?.content) ? message.content.map(block => block.text || '').join('') : undefined;
   }
-  private cancelDecisions(): void { this.decisions.abort(); this.decisions = new AbortController(); }
+  private updateWaitingStatus(): void {
+    this.waitingStatus = this.pendingDecisions.size
+      ? [...this.pendingDecisions.values()].some(kind => kind === 'permission') ? 'Waiting for permission…' : 'Waiting for input…'
+      : undefined;
+  }
+  private cancelDecisions(): void { this.pendingDecisions.clear(); this.waitingStatus = undefined; this.decisions.abort(); this.decisions = new AbortController(); }
   private capture(event: string, payload: Record<string, unknown>): void {
     if (!this.ui.toolCapture?.enabled) return;
     const data = record(payload.data) ? payload.data : record(payload.request) ? payload.request : payload;
@@ -509,7 +519,8 @@ export class CopilotSession {
       this.state = { ...this.state, configurationOperations: this.configuration.operations };
     }
     const base = this.revision++;
-    this.ui.publish({ type: 'snapshot', state: this.state, commands: this.commands, transcript: { base, revision: this.revision, ...(rows ? { rows } : {}) } }); this.ui.changed();
+    const state = this.waitingStatus ? { ...this.state, status: this.waitingStatus } : this.state;
+    this.ui.publish({ type: 'snapshot', state, commands: this.commands, transcript: { base, revision: this.revision, ...(rows ? { rows } : {}) } }); this.ui.changed();
     this.configuration?.update();
   }
 }

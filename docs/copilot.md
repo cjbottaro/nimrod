@@ -25,10 +25,44 @@ working, Enter keeps your draft; there is no steering/queue. **Stop** cancels th
 turn, not the saved conversation. A failed connection retains its row and draft;
 fix the executable/authentication issue, then reconnect explicitly.
 
-Permission requests and questions stay inside their own conversation. Shell requests show **Run command · intention** and the exact command; file requests show project-relative paths (absolute outside the project), and URL requests show **Fetch · URL**. Supplied changes/arguments and sandbox-bypass requirements stay visible; **Raw details** is collapsed beneath the buttons. Unknown scopes retain literal details. Choose **Allow once**, **Deny**, an offered answer
-or freeform text when supported. **Cancel request** never approves. A background
-request does not switch sessions or steal focus; return to its conversation to
-act. Stop/Close/disconnect cancel pending choices.
+## Permissions and questions
+
+Permission requests stay in one compact panel above the Status area. The oldest
+request is shown with a pending count; expand **Other pending requests** to inspect
+the rest. Requests never open a blocking window modal or switch sessions. The
+Status area says **Waiting for permission…** while choices are outstanding.
+
+Choose **Allow once** or **Deny**, or expand **More approval options…**:
+- File reads/writes can be allowed for this session. **All file reads/writes**
+  means exactly that—not access restricted to the displayed file or directory.
+- Commands can be allowed for the runtime-reported command identifiers, with
+  **any arguments**, for this session.
+- MCP approval can remember the exact server/tool for this session.
+- URLs can allow the displayed domain for this session or **always**, explicitly
+  labelled **saved across sessions**. This is a domain grant, not a URL-path grant.
+
+Only applicable choices appear. Managed-policy and sandbox-bypass requests offer
+one-time approval or denial only. Directory-only and saved-project approval are
+not currently exposed because the installed CLI's compatibility with those newer
+SDK variants has not been verified. Copilot owns remembered rules; Nimrod does not
+keep its own approval policy. A session choice does not batch-answer other
+already-pending requests.
+
+**Deny with feedback…** optionally tells the agent why. Use **Stop** to cancel the
+turn; there is no ambiguous Cancel request permission button. Questions and plan
+continuations retain their separate answers and cancellation controls.
+
+Shell requests show their intention and exact command. File requests show
+project-relative paths (absolute outside the project), with **Search directory**
+or **Search file** titles when reported; URL requests show **Fetch · URL**.
+Supplied changes/arguments and sandbox-bypass requirements remain visible.
+**Raw details** stays collapsed beneath the controls; unknown scopes retain
+literal details. Background requests do not steal focus or alter your draft;
+return to their conversation to act. Stop/Close/disconnect cancel pending choices
+without approving. The expanded choices and panel still need installed-CLI/native
+acceptance after a requested build.
+
+## Session configuration
 
 Model, thinking and mode controls use Copilot’s reported catalog and current state,
 and accept selections while connected, including during work. Changes apply

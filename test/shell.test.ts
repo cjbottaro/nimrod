@@ -1090,6 +1090,39 @@ test('SDK tool capture uses the global setting and native append bridge for tool
   } finally { f.win.close(); }
 });
 
+test('Copilot permissions use one session-owned panel, exact scoped decisions and waiting status without changing the draft', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    f.openPalette();
+    const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New Copilot session'; input.dispatchEvent(new f.win.Event('input'));
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    const target = [...f.sdkSessions.values()].find(session => session.sessionId === 'sdk-fixture')!;
+    const draft = f.element<HTMLTextAreaElement>('prompt'); draft.value = 'keep draft'; draft.dispatchEvent(new f.win.Event('input')); draft.focus();
+    const request = (id: string, path: string) => target.channel.onmessage({ kind: 'rpc', value: { kind: 'permission', id, request: { kind: 'read', path, intention: `Search in directory: ${path}` } } });
+    target.channel.onmessage({ kind: 'rpc', value: { kind: 'event', event: { id: 'working-permissions', type: 'assistant.turn_start', data: {} } } });
+    request('first', '/project/test'); request('second', '/project/src');
+    await f.tick();
+    const host = draft.closest('.session-view')!;
+    assert.equal(host.querySelectorAll('.copilot-permission-panel').length, 1);
+    assert.equal(host.querySelectorAll('.copilot-permission-body:not([hidden])').length, 1);
+    assert.match(host.querySelector('.copilot-permission-header')!.textContent!, /2 pending/);
+    assert.match(f.element('activity').textContent!, /Waiting for permission/);
+    assert.doesNotMatch(f.element('keyboard-hint').textContent!, /working/i);
+    assert.equal(f.win.document.activeElement, draft); assert.equal(draft.value, 'keep draft');
+    const allow = [...host.querySelectorAll<HTMLButtonElement>('.copilot-permission-body:not([hidden]) button')].find(button => button.textContent === 'Allow all file reads this session')!;
+    allow.click(); await f.tick();
+    const decisions = f.calls.filter(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'decision');
+    assert.deepEqual((decisions.at(-1)!.args.message as JsonRecord).value, { kind: 'approve-for-session', approval: { kind: 'read' } });
+    assert.match(host.querySelector('.copilot-permission-header')!.textContent!, /1 pending/);
+    target.channel.onmessage({ kind: 'rpc', value: { kind: 'event', event: { id: 'idle-permissions', type: 'session.idle', data: {} } } });
+    await f.tick();
+    assert.equal(host.querySelector('.copilot-permission-panel'), null);
+    assert.equal(draft.value, 'keep draft'); assert.equal(f.win.document.activeElement, draft);
+    assert.equal(f.calls.filter(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'decision').length, 1);
+  } finally { f.win.close(); }
+});
+
 test('performance capture is opt-in, bindable, timing-only and preserves the mounted session', async () => {
   const control = { after: [] as (() => void)[], writeError: undefined as string | undefined, copyError: undefined as string | undefined };
   const f = await fixture(undefined, { windowWorkspace: '/project', performanceControl: control });
