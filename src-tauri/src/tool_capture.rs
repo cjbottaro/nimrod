@@ -263,6 +263,12 @@ mod tests {
             format!("{}\n{}\n", line("pi", "pi", 1), line("pi", "pi", 3))
         );
         assert!(root.join("acp/copilot/2026-10-16.jsonl").is_file());
+        let sdk = line("copilot-sdk", "copilot", 4);
+        write_groups(&root, groups(vec![sdk.clone()]).unwrap()).unwrap();
+        assert_eq!(
+            fs::read_to_string(root.join("copilot-sdk/copilot/2026-10-16.jsonl")).unwrap(),
+            format!("{sdk}\n")
+        );
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

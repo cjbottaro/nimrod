@@ -39,6 +39,7 @@ export class CopilotSession {
   private echo?: { key: string };
   private decisions = new AbortController();
   private captureConnectionId = crypto.randomUUID();
+  private runtimeVersion?: string;
   constructor(send: (message: BridgeRequest) => Promise<void>, private ui: CopilotSessionUi) {
     this.connection = new CopilotConnection(send, packet => this.packet(packet), reason => {
       this.ended = true; this.decisions.abort(); this.finish();
@@ -58,7 +59,8 @@ export class CopilotSession {
   receive(packet: unknown): void { this.connection.receive(packet); }
   disconnect(reason: string): void { this.connection.disconnect(reason); }
   async initialize(sessionId?: string): Promise<void> {
-    await this.connection.request('initialize');
+    const status = await this.connection.request('initialize');
+    if (record(status) && typeof status.version === 'string') this.runtimeVersion = status.version;
     await this.connection.request('connect', sessionId === undefined ? {} : { sessionId });
     if (this.state.sessionUnavailable) throw new Error('Copilot did not publish a connected session');
   }
@@ -154,7 +156,7 @@ export class CopilotSession {
     const data = raw.data, type = raw.type;
     const originLabel = typeof raw.agentId === 'string' && raw.agentId ? `Copilot agent ${raw.agentId}` : undefined;
     const string = (key: string) => typeof data[key] === 'string' ? data[key] as string : '';
-    if (type.startsWith('tool.')) this.capture(type, raw);
+    if (type.startsWith('tool.') || ['assistant.tool_call_delta', 'permission.requested', 'permission.completed'].includes(type)) this.capture(type, raw);
     if (type === 'user.message') {
       const content = string('content'), echo = this.echo;
       const key = echo && !raw.agentId ? echo.key : `copilot:user:${raw.id}`;
@@ -248,8 +250,13 @@ export class CopilotSession {
   }
   private cancelDecisions(): void { this.decisions.abort(); this.decisions = new AbortController(); }
   private capture(event: string, payload: Record<string, unknown>): void {
-    const data = record(payload.data) ? payload.data : payload;
-    if (!this.replaying && this.ui.toolCapture?.enabled) this.ui.toolCapture.append({ source: { backend: 'copilot-sdk', agent: 'copilot' }, sessionId: this.sessionId, connectionId: this.captureConnectionId, toolCallId: typeof data.toolCallId === 'string' ? data.toolCallId : undefined, event, payload });
+    if (this.replaying || !this.ui.toolCapture?.enabled) return;
+    const data = event !== 'permission.request' && record(payload.data) ? payload.data : payload;
+    const permission = record(data.permissionRequest) ? data.permissionRequest : undefined;
+    const toolCallId = typeof data.toolCallId === 'string' ? data.toolCallId : typeof permission?.toolCallId === 'string' ? permission.toolCallId : undefined;
+    this.ui.toolCapture.append({ source: { backend: 'copilot-sdk', agent: 'copilot', ...(this.runtimeVersion ? { version: this.runtimeVersion } : {}) },
+      // SDK callbacks can arrive before create/resume publishes its authoritative identity.
+      sessionId: this.sessionId || `connecting:${this.captureConnectionId}`, connectionId: this.captureConnectionId, toolCallId, event, payload });
   }
   private publish(rows?: DisplayMessage[]): void {
     if (this.replaying) return;
