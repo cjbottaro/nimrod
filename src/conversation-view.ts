@@ -1,4 +1,5 @@
 import { navigateDialogActions } from "./dialog-actions";
+import { ConfigurationTranscript } from './configuration-transcript';
 import { createMainActivityDom, createSubagentActivityDom, renderMainActivity, renderSubagentActivity } from "./pi/activity-dom";
 import { installSlashCompletion } from "./pi/slash-completion";
 
@@ -82,6 +83,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   let composerResizeFrame: number | undefined;
   const rendered = new Map<string, { node: HTMLElement; signature?: string; message?: DisplayMessage }>();
   let steeringTranscript = new SteeringTranscript();
+  let configurationTranscript = new ConfigurationTranscript();
   const expanded = new Map<string, boolean>();
   const toolCards = new Map<string, HTMLDetailsElement>();
   const transcriptScroll = new TranscriptScroll(window, transcriptViewport);
@@ -370,6 +372,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       article.append(label);
     }
     renderSteeringStatus(article, message);
+    if (message.configurationOperation) { renderConfigurationOperation(article, message.configurationOperation); return article; }
     if (message.isError) article.classList.add("error");
     if (message.role === "parallel" && message.parallelCluster) {
       article.append(renderParallelToolCard(document, message.parallelCluster, undefined, cardDomHost()));
@@ -403,6 +406,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     let label = node.querySelector<HTMLElement>(".steering-status");
     node.classList.toggle('queued-turn', message.queued === true);
     node.classList.toggle('sticky-turn', message.sticky === true);
+    if (message.configurationOperation) return;
     const pending = message.steeringStatus === 'sending' || message.steeringStatus === 'pending';
     const showSteering = message.steering && pending;
     if (!message.steeringStatus || (pending && !message.queued && !showSteering)) { label?.remove(); return; }
@@ -418,6 +422,18 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     node.setAttribute("aria-label", `User message: ${status}`);
   }
 
+  function renderConfigurationOperation(node: HTMLElement, operation: import('./session-configuration').ConfigurationOperation): void {
+    let label = node.querySelector<HTMLElement>('.steering-status');
+    if (!label) { label = element('div', 'steering-status'); label.append(element('span', 'delivery-status-text')); node.prepend(label); }
+    const title = label.firstElementChild as HTMLElement;
+    if (title.textContent !== operation.title) title.textContent = operation.title;
+    title.classList.toggle('delivery-status-shimmer', operation.phase === 'queued' || operation.phase === 'applying');
+    let text = node.querySelector<HTMLElement>('.configuration-text');
+    if (!text) { text = element('div', 'configuration-text'); node.append(text); }
+    if (text.textContent !== operation.text) text.textContent = operation.text;
+    node.setAttribute('aria-label', `Nimrod configuration: ${operation.title}`);
+  }
+
   function disposeMessageCards(node: HTMLElement): void {
     for (const card of node.querySelectorAll<HTMLDetailsElement>('.reasoning-card')) disposeReasoningCard(card);
     for (const card of node.querySelectorAll<HTMLDetailsElement>('.parallel-tool-card')) disposeParallelCard(card);
@@ -430,6 +446,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     node.classList.toggle("error", message.isError === true);
     if (message.role === "user") node.setAttribute("aria-label", message.originLabel ? `${message.originLabel} · User message` : "User message");
     renderSteeringStatus(node, message);
+    if (message.configurationOperation) { renderConfigurationOperation(node, message.configurationOperation); return true; }
     if (message.role === "parallel" && message.parallelCluster) {
       const details = node.querySelector<HTMLDetailsElement>(".parallel-tool-card");
       if (!details) return false;
@@ -647,6 +664,9 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   window.addEventListener("unhandledrejection", event => { if (active) reportRenderError(event.reason); }, { signal: listeners.signal });
 
   function queueRender(state: State, rows?: readonly DisplayMessage[]): void {
+    const operations = configurationTranscript.sync(state.configurationOperations);
+    if (operations.structural) rows = undefined;
+    else if (rows && operations.rows.length) rows = [...rows, ...operations.rows];
     pendingState = state;
     if (!rows) { pendingFull = true; pendingRows.clear(); }
     else if (!pendingFull) for (const row of rows) pendingRows.set(safeText(row.key), row);
@@ -680,7 +700,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       rendered.clear();
       queuedTurns.replaceChildren();
       messages.replaceChildren(queuedTurns);
-      const display = steeringTranscript.project(Array.isArray(snapshot.messages) ? snapshot.messages : []);
+      const display = configurationTranscript.project(steeringTranscript.project(Array.isArray(snapshot.messages) ? snapshot.messages : []));
       for (const [index, message] of display.entries()) {
         const key = safeText(message.key) || `message-${index}`;
         try {
@@ -710,7 +730,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     const wasAtBottom = transcriptScroll.capture();
     if (rows?.some(row => !rendered.has(safeText(row.key)))) rows = undefined;
     const full = rows === undefined;
-    const display = rows === undefined ? steeringTranscript.project(Array.isArray(state.messages) ? state.messages : []) : rows;
+    const display = rows === undefined ? configurationTranscript.project(steeringTranscript.project(Array.isArray(state.messages) ? state.messages : [])) : rows;
     const updates: Array<{ key: string; message: DisplayMessage; signature?: string }> = [];
     display.forEach((message, index) => {
       const key = safeText(message.key) || `message-${index}`;
@@ -985,6 +1005,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       for (const entry of rendered.values()) disposeMessageCards(entry.node);
       rendered.clear();
       steeringTranscript = new SteeringTranscript();
+      configurationTranscript = new ConfigurationTranscript();
       queuedTurns.replaceChildren();
       queuedTurns.hidden = true;
       messages.replaceChildren();

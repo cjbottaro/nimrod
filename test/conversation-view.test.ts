@@ -142,6 +142,45 @@ test('status capabilities gate optional surfaces and reconcile revocation during
   } finally { f.dom.window.close(); }
 });
 
+test('configuration progress reuses queued-turn layout and one shimmering title without changing confirmed controls or reading history on replacement', () => {
+  const f = fixture();
+  try {
+    const native = [{ key: 'native', role: 'assistant', content: 'Retained answer' }];
+    const statusArea = { capabilities: {}, controlsLabel: 'Fixture', controls: [{ id: 'model', label: 'Current model', title: 'Select model', disabled: false }] };
+    const operation = { key: 'configuration:fixture', phase: 'queued' as const, title: 'Model change queued', text: 'Model: requested' };
+    f.receive({ type: 'snapshot', state: { messages: native, statusArea }, transcript: { base: 0, revision: 1 } }); f.flush();
+    const assistant = f.win.document.querySelector('article')!;
+    f.receive({ type: 'snapshot', state: { messages: native, statusArea, configurationOperations: [operation] }, transcript: { base: 1, revision: 2, rows: [] } }); f.flush();
+    const row = f.win.document.querySelector<HTMLElement>('.message.configuration')!;
+    const title = row.querySelector<HTMLElement>('.delivery-status-text')!;
+    assert.equal(row.parentElement?.className, 'queued-turns');
+    assert.equal(title.textContent, 'Model change queued');
+    assert.equal(title.classList.contains('delivery-status-shimmer'), true);
+    assert.equal(f.win.document.querySelector('#model')!.textContent, 'Current model');
+    let reads = 0;
+    const replacement = { ...operation, text: 'Model: latest' };
+    f.receive({ type: 'snapshot', state: { get messages() { reads++; return native; }, statusArea, configurationOperations: [replacement] }, transcript: { base: 2, revision: 3, rows: [] } }); f.flush();
+    assert.equal(reads, 0, 'same-key progress is an incremental row update');
+    assert.equal(f.win.document.querySelector('.message.configuration'), row);
+    assert.equal(row.querySelector('.delivery-status-text'), title);
+    assert.equal(row.querySelector('.configuration-text')!.textContent, 'Model: latest');
+    assert.equal(f.win.document.querySelector('article.assistant'), assistant);
+    f.view.setActive(false);
+    const complete = { ...replacement, phase: 'completed' as const, title: 'Configuration changed' };
+    f.receive({ type: 'snapshot', state: { messages: native, statusArea: { ...statusArea, controls: [{ ...statusArea.controls[0], label: 'Latest model' }] }, configurationOperations: [complete] }, transcript: { base: 3, revision: 4, rows: [] } }); f.flush();
+    assert.equal(title.classList.contains('delivery-status-shimmer'), true, 'hidden sessions defer painting');
+    f.view.setActive(true); f.flush();
+    assert.equal(f.win.document.querySelector('.message.configuration'), row);
+    assert.equal(row.querySelector('.delivery-status-text'), title);
+    assert.equal(title.classList.contains('delivery-status-shimmer'), false);
+    assert.equal(row.parentElement?.id, 'messages');
+    assert.equal(f.win.document.querySelector('#model')!.textContent, 'Latest model');
+    assert.equal(f.sent.some(message => message.type === 'prompt'), false);
+    f.receive({ type: 'sessionReset' }); f.flush();
+    assert.equal(f.win.document.querySelector('.message.configuration'), null);
+  } finally { f.dom.window.close(); }
+});
+
 test('shared raw blocks preserve literal rich-content fallback across hidden catch-up', () => {
   const f = fixture();
   try {

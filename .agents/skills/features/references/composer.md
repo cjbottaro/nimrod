@@ -5,7 +5,8 @@
 ## Harness boundary
 
 `src/copilot/view-policy.ts` contributes SDK text-only intent validation and
-idle-only model/thinking controls. Busy Enter keeps the newer draft; Stop calls
+model/thinking intent accepted while connected with idle-only application
+([configuration progress](model-thinking.md) is separate from prompt queues). Busy Enter keeps the newer draft; Stop calls
 SDK abort, with no Pi queue/steer. [Copilot commands](copilot-commands.md) use SDK
 command invocation rather than ordinary prompts or Nimrod action aliases;
 metadata drives argument suggestions and returned choices use a session-bound

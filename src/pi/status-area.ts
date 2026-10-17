@@ -23,7 +23,7 @@ export function createPiStatusArea(): (state: PiStatusState) => StatusAreaSnapsh
       const model = current ? text(current.id) : 'No model';
       const identity = current ? `${text(current.provider)}/${text(current.id)}` : 'unavailable';
       const thinking = config?.ready ? config.thinkingLevel || 'unavailable' : 'Loading…';
-      const disabled = config?.ready !== true || config.changing === true || state.sessionUnavailable === true;
+      const disabled = config?.ready !== true || state.sessionUnavailable === true;
       controls = [
         { id: 'model', label: config?.ready ? model : 'Loading model…', title: config?.ready ? `Select model: ${identity}` : 'Loading model', disabled },
         { id: 'thinking', label: thinking, title: config?.ready ? `Select thinking level: ${thinking}` : 'Loading thinking level', disabled },

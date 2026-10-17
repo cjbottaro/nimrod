@@ -114,10 +114,30 @@ test('ACP applies configuration results in wire order, never over a later update
   await flush();
   f.reply('session/set_config_option', { configOptions: options('large') });
   f.update({ sessionUpdate: 'config_option_update', configOptions: options('small') });
-  await selected;
+  await selected; await flush();
   assert.equal(f.session.options[0].current, 'small');
   assert.equal(f.session.state.statusArea?.controls?.find(control => control.id === 'model')?.label, 'Small');
   assert.equal(f.session.state.statusArea?.controls?.find(control => control.id === 'model')?.disabled, false);
+});
+
+test('dormant ACP configuration accepts one latest-wins intent while working and applies at the real idle boundary', async () => {
+  const f = await fixture();
+  const turn = f.session.handle({ type: 'prompt', id: 'working-config', text: 'Work' });
+  await f.session.selectOption(f.session.options[0], async (_title, choices) => choices[1]);
+  const key = f.session.configuration.operations[0].key;
+  await f.session.selectOption(f.session.options[0], async (_title, choices) => choices[0]);
+  await f.session.selectOption(f.session.options[0], async (_title, choices) => choices[1]);
+  assert.equal(f.session.configuration.operations.length, 1);
+  assert.equal(f.session.configuration.operations[0].key, key);
+  assert.equal(f.session.configuration.operations[0].phase, 'queued');
+  assert.equal(f.sent.some(packet => packet.method === 'session/set_config_option'), false);
+  assert.equal(f.session.state.statusArea.controls[0].label, 'Small');
+  f.reply('session/prompt', { stopReason: 'end_turn' }); await turn; await flush();
+  assert.equal(f.sent.filter(packet => packet.method === 'session/set_config_option').length, 1);
+  f.reply('session/set_config_option', { configOptions: options('large') }); await flush(); await flush();
+  assert.equal(f.session.state.statusArea.controls[0].label, 'Large');
+  assert.equal(f.session.configuration.operations[0].phase, 'completed');
+  f.session.disconnect('fixture complete');
 });
 
 test('ACP completion never injects Pi-only GUI commands', () => {
@@ -240,7 +260,7 @@ test('configuration updates while working do not latch controls disabled after c
   const turn = f.session.handle({ type: 'prompt', id: 'working', text: 'work' });
   const mode = { id: 'approval', name: 'Approval mode', description: 'Agent-owned permission policy', type: 'select', category: 'mode', currentValue: 'ask', options: [{ value: 'ask', name: 'Ask first' }] };
   f.update({ sessionUpdate: 'config_option_update', configOptions: [...options('large'), mode] });
-  assert.ok(f.session.state.statusArea?.controls?.every(control => control.disabled));
+  assert.ok(f.session.state.statusArea?.controls?.every(control => !control.disabled), 'working controls accept deferred intent');
   assert.equal(f.session.controlOption('mode')?.id, 'approval');
   assert.match(f.session.state.statusArea?.controls?.find(control => control.id === 'mode')?.title || '', /Agent-owned permission policy/);
   assert.equal('modelControls' in f.session.state, false);

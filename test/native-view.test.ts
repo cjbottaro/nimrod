@@ -361,13 +361,15 @@ test('model and thinking controls stay available during work but respect readine
       ['selectModel', 'selectThinking', 'selectModel', 'selectThinking']);
     for (const state of [
       { modelControls: { ...controls, ready: false } },
-      { modelControls: { ...controls, changing: true } },
       { modelControls: controls, sessionUnavailable: true },
     ]) {
       f.snapshot({ busy: true, sessionUnavailable: false, ...state });
       assert.equal(model.disabled, true);
       assert.equal(thinking.disabled, true);
     }
+    f.snapshot({ sessionUnavailable: false, modelControls: { ...controls, changing: true } });
+    assert.equal(model.disabled, false, 'an applying configuration can accept replacement intent');
+    assert.equal(thinking.disabled, false);
     assert.equal(f.sent.some(m => m.type === 'prompt' || m.type === 'stop'), false);
   } finally { f.dom.window.close(); }
 });

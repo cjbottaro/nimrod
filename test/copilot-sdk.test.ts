@@ -114,7 +114,7 @@ test('SDK model events outrank older configuration responses and thinking remain
   const selecting = f.session.selectPreference('model', async values => values[1]);
   await flush();
   f.event('session.model_change', { newModel: 'small', reasoningEffort: 'high' });
-  f.reply('configure', { modelId: 'large' }); await selecting;
+  f.reply('configure', { modelId: 'large' }); await selecting; await flush();
   assert.equal(f.session.state.statusArea?.controls.find(control => control.id === 'model')?.label, 'small');
   assert.equal(f.session.state.statusArea?.controls.find(control => control.id === 'thinking')?.label, 'high');
   f.event('session.model_change', { newModel: 'large' });
@@ -136,7 +136,7 @@ test('SDK status publishes root usage and reconciles selector capabilities witho
   f.session.receive({ kind: 'event', event: { id: 'child-usage', agentId: 'child', type: 'session.usage_info', data: { currentTokens: 999, tokenLimit: 999 } } });
   assert.equal(f.session.state.statusArea, reported, 'child usage cannot overwrite root usage');
   f.event('assistant.turn_start', {});
-  assert.ok(f.session.state.statusArea!.controls.every(control => control.disabled));
+  assert.ok(f.session.state.statusArea!.controls.every(control => !control.disabled), 'busy controls accept deferred configuration intent');
   f.event('session.idle', {});
   assert.ok(f.session.state.statusArea!.controls.every(control => !control.disabled));
   f.event('session.model_change', { newModel: 'large' });
@@ -146,6 +146,61 @@ test('SDK status publishes root usage and reconciles selector capabilities witho
   f.session.disconnect('fixture complete');
   assert.equal(f.session.state.statusArea!.metrics, reported.metrics);
   assert.ok(f.session.state.statusArea!.controls.every(control => control.disabled));
+});
+
+test('SDK busy configuration replaces one transcript operation and applies only the latest model at idle', async () => {
+  const f = await fixture();
+  f.event('assistant.turn_start', {});
+  await f.session.selectPreference('model', async values => values[1]);
+  const first = f.session.configuration.operations[0];
+  assert.equal(first.phase, 'queued');
+  assert.equal(f.sent.some(request => request.method === 'configure'), false);
+  await f.session.selectPreference('model', async values => values[0]);
+  await f.session.selectPreference('model', async values => values[1]);
+  assert.equal(f.session.configuration.operations.length, 1);
+  assert.equal(f.session.configuration.operations[0].key, first.key);
+  assert.equal(f.session.state.statusArea!.controls[0].label, 'small');
+  assert.ok(f.session.state.statusArea!.controls.every(control => !control.disabled));
+  f.event('session.idle', {}); await flush();
+  assert.equal(f.sent.filter(request => request.method === 'configure').length, 1);
+  assert.equal(f.last('configure').model, 'large');
+  assert.equal(f.session.state.statusArea!.controls[0].label, 'small', 'do not show requested model before confirmation');
+  f.reply('configure', { modelId: 'large' }); await flush();
+  assert.equal(f.session.state.statusArea!.controls[0].label, 'large');
+  assert.equal(f.session.configuration.operations[0].phase, 'completed');
+  assert.equal(f.session.state.configurationOperations, f.session.configuration.operations);
+  assert.equal(f.sent.some(request => request.method === 'prompt'), false);
+  f.session.disconnect('fixture complete');
+});
+
+test('SDK dependent effort uses the pending target model and waits for its authoritative selection', async () => {
+  const f = await fixture();
+  f.event('session.model_change', { newModel: 'large' }); f.event('assistant.turn_start', {});
+  await f.session.selectPreference('model', async values => values[0]);
+  await f.session.selectPreference('thinking', async values => values[1]);
+  assert.equal(f.session.state.statusArea!.controls[0].label, 'large');
+  assert.equal(f.session.state.statusArea!.controls.length, 1);
+  f.event('session.idle', {}); await flush();
+  assert.equal(f.last('configure').model, 'small');
+  f.reply('configure', { modelId: 'small', reasoningEffort: 'low' }); await flush();
+  assert.equal(f.last('configure').effort, 'high');
+  assert.equal(f.session.state.statusArea!.controls.find(control => control.id === 'thinking')!.label, 'low');
+  f.reply('configure', { modelId: 'small', reasoningEffort: 'high' }); await flush();
+  assert.equal(f.session.state.statusArea!.controls.find(control => control.id === 'thinking')!.label, 'high');
+  assert.equal(f.session.configuration.operations.length, 1);
+  assert.equal(f.session.configuration.operations[0].phase, 'completed');
+  f.session.disconnect('fixture complete');
+});
+
+test('SDK disconnect cancels queued configuration and never replays it on a new owner', async () => {
+  const f = await fixture(); f.event('assistant.turn_start', {});
+  await f.session.selectPreference('model', async values => values[1]);
+  f.session.disconnect('fixture disconnected');
+  assert.equal(f.session.configuration.operations[0].phase, 'cancelled');
+  assert.equal(f.sent.some(request => request.method === 'configure'), false);
+  const replacement = await fixture();
+  assert.deepEqual(replacement.session.configuration.operations, []);
+  replacement.session.disconnect('fixture complete');
 });
 
 test('SDK transport write uncertainty fails pending requests once and never replays them', async () => {

@@ -27,7 +27,7 @@ body.transcript-scrolled::before { opacity:1; }
 .tool-phase { margin:8px 0 4px 14px; color:var(--vscode-descriptionForeground); font-size:.85em; }
 .parallel-tool-list { max-height:12em; overflow:auto; padding-left:14px; list-style:none; } .parallel-tool-row { display:flex; align-items:center; gap:7px; min-width:0; padding:3px 0; } .parallel-tool-card { margin-top:6px; }
 button { color:var(--nimrod-button-foreground, var(--vscode-button-foreground)); background:var(--nimrod-button-background, var(--vscode-button-background)); border:1px solid transparent; border-radius:3px; padding:6px 10px; cursor:pointer; } button:hover { background:var(--nimrod-button-hover-background, var(--vscode-button-hoverBackground)); } button:disabled { opacity:.55; cursor:default; } button:focus-visible, textarea:focus-visible { outline:1px solid var(--vscode-focusBorder); outline-offset:1px; }
-.message { margin:16px 0; border-left:3px solid var(--vscode-panel-border); padding:2px 12px; } .message.user { border-left-color:var(--vscode-textLink-foreground); background:var(--vscode-textBlockQuote-background); padding-top:6px; padding-bottom:6px; }
+.message { margin:16px 0; border-left:3px solid var(--vscode-panel-border); padding:2px 12px; } .message:is(.user, .configuration) { border-left-color:var(--vscode-textLink-foreground); background:var(--vscode-textBlockQuote-background); padding-top:6px; padding-bottom:6px; }
 .composer-attachments { display:flex; gap:8px; padding:4px 10px 8px; overflow-x:auto; max-height:96px; align-items:center; }
 .composer-attachments[hidden] { display:none; }
 .composer-attachment { position:relative; flex:none; width:72px; height:72px; border:1px solid var(--vscode-panel-border); border-radius:6px; overflow:hidden; }
@@ -36,6 +36,7 @@ button { color:var(--nimrod-button-foreground, var(--vscode-button-foreground));
 .transcript-image { margin:8px 0; }
 .transcript-image img { display:block; max-width:100%; max-height:360px; width:auto; height:auto; border-radius:6px; }
 .steering-status { font-size:.78em; color:var(--vscode-descriptionForeground); margin-bottom:6px; }
+.configuration-text { white-space:pre-wrap; overflow-wrap:anywhere; }
 .delivery-status-text { display:inline-block; font:inherit; }
 .delivery-status-shimmer { text-transform:uppercase; letter-spacing:.05em; }
 @supports (background-clip: text) or (-webkit-background-clip: text) {

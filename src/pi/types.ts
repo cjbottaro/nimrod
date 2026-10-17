@@ -44,6 +44,7 @@ export interface ModelControlState {
 }
 
 export interface ConversationState {
+  configurationOperations?: readonly import('../session-configuration').ConfigurationOperation[];
   messages: DisplayMessage[];
   busy: boolean;
   compacting?: boolean;

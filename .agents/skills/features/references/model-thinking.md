@@ -1,42 +1,85 @@
 # Model and thinking preferences
 
-**Status: implemented.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#model-thinking) retain prior execution records.
+**Status: shared configuration port and deferred changes source-implemented; new/updated fixtures unrun.** This reference owns configuration interface/intent semantics and local transcript progress. [Harness presentation](harness-presentation.md#status-area-interface) separately owns the Status-area snapshot; [verification](verification.md) separates offline evidence from native acceptance.
 
 Human guide: [Model and thinking preferences](../../../../docs/model-thinking.md).
 
-[Copilot SDK](copilot-sdk.md) uses its own catalog/current-model snapshot,
-idle-only SDK `setModel` and selected-model supported reasoning efforts.
-`session.model_change`/deselection outrank older operation results; configuration
-failure disconnects rather than presenting unconfirmed state. These choices
-never change backend. SDK thinking is not Pi thinking or an ACP thought selector.
+## Consumer interface
 
-## Specification and acceptance criteria
+`src/session-configuration.ts::SessionConfiguration` is a small session-bound consumer port, not a universal session/controller or wire protocol. `main.ts` and `configuration-picker.ts` no longer dispatch model/effort selection by backend:
 
-Changing Pi-scoped model/thinking preferences stays available during work/compaction and affects upcoming requests, not in-flight streams. Only acknowledged Pi state updates displayed configuration; readiness and mutation guards remain.
+- `capabilities`: supported setting descriptors with opaque IDs, labels, optional dependencies and live `ready` / `deferred` / `unavailable` availability/reasons. The common picker uses `model` and `effort`; concrete ACP options can contribute additional IDs. No common provider/model/effort enum.
+- `get(id)`: current harness-confirmed value, including undefined when unknown. It never returns pending intent as effective state.
+- `choices(id)`: fresh advertised choices bound to this configuration object, setting and dependency values. `set(id, choice)` accepts one of those choices synchronously; it is acceptance of local intent, not an RPC acknowledgement or a success promise.
+- `operations`: immutable-by-convention, reference-stable local progress publications. Owners publish them as `configurationOperations` on the existing synchronous conversation snapshot channel. No additional subscription/event bus, persistence or process ownership.
+
+`SessionConfigurationController` owns only latest-wins intents, dependency ordering, validation and operation publication. `ConfigurationAdapter` retains concrete metadata/readiness, mutation and authoritative reconciliation. `ConfigurationDeferred` is exclusively a **pre-dispatch** readiness-race result: it must never be thrown after a mutation might have been delivered. Adapters also receive a current-intent predicate and recheck it immediately before dispatch; `ConfigurationSuperseded` retires obsolete metadata preparation without sending its mutation. Ready unrelated settings can proceed without waiting behind a deferred independent setting; prerequisites still run first.
+
+The composition helper `sessionConfiguration` accesses the selected concrete owner's port. Session identity, transport, initialization, lifecycle, permissions and prompt/cancel semantics remain bespoke. Status projections read the same confirmed concrete configuration, behind their separate presentation interface.
+
+## Availability and pending intent
+
+- Ready: accept the selection and apply after fresh validation.
+- Deferred: accept the selection immediately, show local progress, and apply when the concrete owner publishes a supported readiness transition. No polling timer, agent stop, reconnect, new prompt or request replay.
+- Unavailable/unsupported: reject before accepting intent. Startup/disconnection do not become a durable queue or trigger automatic Resume.
+- A second selection replaces the still-pending value and updates the same operation key/article/title span. A dispatched mutation cannot be undone; newer choices wait behind it and apply serially after it reconciles. An error/uncertain result clears remaining intents, never automatically retries the mutation.
+- Model is a prerequisite of effort. Effort choices are bound to the effective or pending target model, and are rechecked after asynchronous metadata reads and immediately before dispatch. Replacing a model intent drops an effort queued for the previous target. A picker opened for another target is rejected. No effort clamping or guessing in shared code.
+- Disconnection, Close, Restart, deletion or owner replacement disposes this exact configuration object. Pending progress becomes cancelled; late completion cannot revive it or apply work to another connection. Switching the selected session alone does not cancel already accepted intent; it stays with its owning session.
+- Setters/getters never navigate, focus, clear/restore drafts, touch Send recency, send a prompt or create usage. Existing authoritative configuration results remain the narrow display-confirmation requirement; they are not a general UI gate.
+
+## Local configuration transcript entries
+
+These are Nimrod-owned **configuration changes**, not user/assistant messages, synthetic harness output, tool executions or persisted conversation records. `ConfigurationTranscript` projects them beside the existing steering/queued presentation without modifying canonical harness message arrays.
+
+- Waiting: shimmering `Model change queued` / setting-specific title and literal requested value text.
+- Applying: shimmering `Changing model` / setting-specific or combined configuration title.
+- Completed, failed or cancelled: stop shimmering, retain a terminal marker locally for this connection. Operational error details still go through the originating session notice, not duplicate error turns.
+- Pending entries use the same bottom-sticky, bounded stack, user-like layout and CSS-only text-width shimmer as Queued/Steering. They preserve their keyed article/title span across replacement and application. Completed entries unpin in place and anchor after the then-current transcript tail, retaining position as later conversation arrives. If compaction removes the anchor, retain the local marker at the tail rather than injecting it into harness history.
+- No pending indicator, speculative value or pending tooltip is added to the Status area. It shows only confirmed selections and changes when the concrete integration reconciles authoritative state. Connected controls remain usable during deferred/in-flight changes so another choice can replace pending intent.
+- Every presentation update uses existing `queueRender`, hidden-session catch-up and `TranscriptScroll` capture/request ownership. No Send-style auto-follow, forced bottom navigation, focus change or new scroll owner. Same-key updates add exact dirty rows without reading lazy history; structural insertion/unpin/removal uses full fallback. Reduced motion and hidden/inactive animation pause reuse existing delivery-label CSS.
+- Entries/intent are runtime-only. No draft/queue restoration, reload reconstruction, Pi journal writes, SDK history entries or user-prompt payloads. Explicit session reset removes local entries.
+
+## Concrete mappings
+
+### Pi
+
+`src/pi/session-configuration.ts` wraps `ModelThinkingController`'s direct metadata/mutation API. Model values encode the full provider/id pair; fresh available-model reads are filtered through Pi's configured scope before offering **and** applying. Missing scope never exposes all models.
+
+Main-agent work and compaction do not block configuration. Installed Pi 1.1.0 accepts `set_model` / `set_thinking_level` for upcoming requests; in-flight requests keep their prepared configuration, while a continuation after tools can use the new selection. Preserve main/compaction activity through refresh.
+
+Readiness/disconnection, pending prompt/name acceptance and the concrete changing lock still guard mutation. Those transient locks defer new intent instead of disabling the picker. Requests use fresh state/levels and acknowledged refresh; Pi owns auth, model-switch defaults, persistence and effort clamping. A failed mutation resyncs without retrying. Legacy controller picker methods remain for compatibility/fixtures; live session/palette paths use the shared port and direct mutation API.
+
+Pi exposes levels only for its currently selected model. If another model is pending, wait for it to apply before opening its effort picker rather than inventing target-model capabilities.
+
+### Copilot SDK
+
+`src/copilot/session-configuration.ts` uses the filtered catalog/current root model and supported reasoning efforts. Pending target models can supply their own advertised effort choices. `CopilotSession` owns idle-only SDK configuration, including command/configuration-in-flight guards; the picker can accept intent while those guards defer mutation. Pending work begins after the actual root idle boundary, not a child event or an acceptance response.
+
+Startup still resolves the session catalog before reading model/effort; no explicit startup default is forced. Native `session.model_change`/deselection outrank older results. Mutation failure/uncertainty disconnects rather than continuing with unconfirmed configuration. Shared code checks the reconciled getter before declaring success and never replays a failed request. [Copilot SDK](copilot-sdk.md) owns native transport/API scope.
+
+### Dormant generic ACP
+
+`AcpSession.configuration` maps advertised options, including model/thought-level/mode and opaque remaining option IDs. It queues while the agent/configuration is working and applies through the existing supported ACP method at real idle. Response/update receive order remains authoritative. Thought-level choices are not approximated for a pending different model; wait for its advertised options. This does not restore any ACP product entry points or Copilot ACP support.
 
 ## Code map
 
-- `src/pi/model-thinking-controller.ts`: readiness, single-change lock, fresh Pi state/capabilities, mutation and acknowledged refresh.
-- `src/pi/session.ts`: session-bound pickers, Pi-reported scoped models, configuration blocking only for session unavailability or pending prompt acceptance.
-- `src/status-area.ts`, `src/pi/status-area.ts`, `src/copilot/status-area.ts`: shared capability-driven Status-area snapshot and concrete configuration presentation. [Harness presentation](harness-presentation.md#status-area-interface) owns publication/availability semantics.
-- `src/pi/webview-client.ts`: compatibility entry points; Pi Status-area controls are disabled only before controls are ready, during a preference change, or when the session is unavailable.
-- `src/main.ts`: originating-session binding, serialized picker tasks and lifecycle guards.
-- [Command interactions](command-interactions.md): cancellation, stale metadata, focus and current-value markers.
-- [Keybindings](keybindings.md): model `primary+shift+m` and thinking/effort `primary+shift+e` defaults, effective hints and overrides; native macOS Cmd-M remains Minimize.
+- `src/session-configuration.ts`: port, descriptors, capability/availability, choice provenance/dependencies, serialized latest-wins coordinator, disposal and local operations.
+- `src/configuration-picker.ts`, `src/main.ts`: one session-bound choice path, palette lifecycle and originating-owner revalidation. Picker completion means intent accepted; it does not await a later idle turn.
+- `src/pi/session-configuration.ts`, `src/pi/model-thinking-controller.ts`, `src/pi/session.ts`: concrete Pi port, fresh scoped metadata, guarded direct mutation and acknowledged refresh.
+- `src/copilot/session-configuration.ts`, `src/copilot/session.ts`: SDK catalog/defaults, target-model effort choices, concrete readiness and authoritative native-event precedence.
+- `src/acp/session.ts`: retained internal ACP port and native option execution.
+- `src/configuration-transcript.ts`, `src/conversation-view.ts`: local-only keyed rows, structural/incremental projection, retained title/animation and existing paint/scroll boundaries.
+- `src/status-area.ts`, `src/pi/status-area.ts`, `src/copilot/status-area.ts`: confirmed display only; no speculative pending state.
+- [Command interactions](command-interactions.md) and [keybindings](keybindings.md): cancellation/focus/current markers and existing model `primary+shift+m` / effort `primary+shift+e` actions. No new action or shortcut.
 
-## Invariants
+## Authored verification and remaining gaps
 
-- Main-agent work and compaction do not block either picker. Do not gate configuration on busy/isStreaming/isCompacting or wait for agent_settled.
-- Installed Pi 1.1.0 RPC handlers accept set_model/set_thinking_level without idle checks. AgentSession reads current model/thinking selections in prepareRequest for each upcoming model request. In-flight streams keep their prepared configuration; a continuation after tools can use the new selection within the same run.
-- Pi owns auth validation, model-switch thinking defaults/overrides, capability clamping and persistence. Nimrod never aborts/restarts/replays a prompt to change preferences.
-- Keep readiness/disconnection and pending prompt-acceptance guards, the controller's changing lock and shell task serialization. Fresh state and supported levels are revalidated before mutation, not to establish idle.
-- Model identity includes provider/id and is chosen only from Pi's scoped list. Missing scope must not expose all models.
-- Refresh displayed selections from acknowledged Pi state, never optimistically. A model switch can change the thinking level.
-- Preserve main-agent/compaction activity during refresh. Status controls represent the selected configuration for upcoming requests, not necessarily the request currently streaming.
-- No new storage: Pi owns session model/thinking records.
+**No tests, checks, builds or app launches were run for this implementation.**
 
-## Tests and verification
+- `test/session-configuration.test.ts`: latest-wins queued/in-flight requests, supersession during pre-dispatch validation, stable operation publications, dependency ordering, stale effort choices, revocation, failure/no-retry, dispose/late completion and local projection anchoring.
+- `test/pi-session-configuration.test.ts`: provider identity, scope, changes during work/compaction, preflight deferral and revoked choices. Existing `model-thinking-controller.test.ts` remains the concrete readiness/mutation regression base.
+- `test/copilot-sdk.test.ts`, `test/acp-session.test.ts`: real concrete controllers queue/replace/apply on idle, preserve confirmed status, handle model/effort dependency and cancel on disconnect. SDK native events still outrank old responses.
+- `test/conversation-view.test.ts`: one retained queued-style article/title, unchanged confirmed controls, incremental replacements with forbidden lazy-history reads, hidden terminal catch-up and reset. `test/native-view.test.ts` and `test/status-area.test.ts` reflect request-capable controls during an in-flight change.
+- `test/browser/copilot-sdk.spec.ts`: offline SDK busy changes, sticky/shimmer identity, latest-only mutation, reader offset/newer draft preservation and confirmed status reconciliation. Existing Queued/Steering/hidden-session fixtures remain regression targets.
 
-- `test/model-thinking-controller.test.ts`: changes while busy/compacting, work beginning during a picker/lookup, startup and concurrent-operation guards, disconnect and capability races, failed mutation without optimistic display.
-- `test/native-view.test.ts`: status controls remain enabled during working/compacting snapshots, route picker actions without sending/stopping work, preserve drafts, and disable for readiness/changing/unavailability.
-- Fixture tests do not establish native acceptance; manually changing selections during a real run and Linux/Windows verification remain pending. No paid requests or live compaction for automated validation.
+When explicitly authorized, run `mise run check` and `npm run test:browser` because this changes transcript layout/scroll participation. Native macOS visual/focus/reader behavior, real Pi/Copilot configuration, Linux and possible Windows acceptance remain unverified. No paid prompt, live compaction or user-session operation is authorized by these fixtures.

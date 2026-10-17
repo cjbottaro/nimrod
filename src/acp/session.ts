@@ -6,6 +6,8 @@ import type { ConversationViewState, ConversationViewMessage } from '../conversa
 import { formatNativeSessionStats } from '../pi/session-stats';
 import { patchTool } from './tool-state';
 import type { StatusAreaSnapshot } from '../status-area';
+import { ConfigurationDeferred, ConfigurationSuperseded, SessionConfigurationController } from '../session-configuration';
+import { pickConfiguration } from '../configuration-picker';
 
 export interface AcpSessionUi {
   toolCapture?: ToolCaptureSink;
@@ -33,6 +35,7 @@ function contentText(value: unknown): string {
 /** ACP semantics -> shared presentation records, never synthetic Pi RPC events. */
 export class AcpSession {
   readonly client: AcpClient;
+  readonly configuration: SessionConfigurationController;
   state: AcpSessionState = { messages: [], busy: false, status: 'Connecting ACP…', sessionUnavailable: true,
     statusArea: { capabilities: { metrics: { label: 'ACP-reported context usage' }, information: true }, controlsLabel: 'ACP session configuration', controls: [] } };
   commands: { name: string; description: string }[] = [];
@@ -51,11 +54,11 @@ export class AcpSession {
     this.client = new AcpClient(send, {
       created: configuration => {
         ui.identified?.(text(configuration.sessionId));
-        this.configure(configuration); this.state = { ...this.state, sessionUnavailable: false, status: 'Idle' }; this.publish();
+        this.configure(configuration); this.state = { ...this.state, sessionUnavailable: false, status: 'Idle' }; this.controls(); this.publish();
       },
       loaded: configuration => {
         this.finishMessages(); this.group = undefined;
-        this.configure(configuration); this.state = { ...this.state, sessionUnavailable: false, status: 'Idle' }; this.publish();
+        this.configure(configuration); this.state = { ...this.state, sessionUnavailable: false, status: 'Idle' }; this.controls(); this.publish();
       },
       configured: configuration => { this.configure(configuration); this.publish([]); },
       selected: (kind, id) => { this.options = this.options.map(option => option.legacy === kind ? { ...option, current: id } : option); this.controls(); this.publish([]); },
@@ -69,13 +72,36 @@ export class AcpSession {
       },
       disconnected: error => {
         this.ended = true;
+        this.configuration?.dispose();
         this.finishMessages();
         this.state = { ...this.state, sessionUnavailable: true, busy: false, status: 'Disconnected' };
         this.publish(); ui.disconnected(error.message);
       },
     });
+    this.configuration = new SessionConfigurationController({
+      capabilities: () => this.options.map(option => ({ id: this.configurationId(option), label: option.name,
+        availability: this.ended || this.state.sessionUnavailable ? 'unavailable' as const : this.canSubmit ? 'ready' as const : 'deferred' as const,
+        ...(option.category === 'thought_level' && this.controlOption('model') ? { dependsOn: ['model'] } : {}) })),
+      get: id => this.options.find(option => this.configurationId(option) === id)?.current,
+      choices: async (id, desired) => {
+        const option = this.options.find(option => this.configurationId(option) === id);
+        if (!option) throw new Error('This ACP option is no longer available.');
+        if (id === 'effort' && desired.model && desired.model !== this.controlOption('model')?.current) throw new Error('Wait for the pending ACP model change before choosing its thinking level.');
+        return option.options.map(item => ({ value: item.value, label: item.name }));
+      },
+      apply: async (id, value, current) => {
+        if (!this.canSubmit) throw new ConfigurationDeferred();
+        const option = this.options.find(option => this.configurationId(option) === id);
+        if (!option || !option.options.some(item => item.value === value)) throw new Error('This ACP choice is no longer available.');
+        if (!current()) throw new ConfigurationSuperseded();
+        await this.applyOption(option, value);
+      },
+    }, () => this.publish([]), message => this.ui.notice(`Configuration change failed: ${message}`));
   }
-  get canSubmit(): boolean { return !this.configuring && !this.ended && this.client.phase === 'idle'; }
+  private configurationId(option: AcpOption): string {
+    return option.category === 'model' ? 'model' : option.category === 'thought_level' ? 'effort' : option.category === 'mode' ? 'mode' : `option:${option.id}`;
+  }
+  get canSubmit(): boolean { return !this.state.busy && !this.configuring && !this.ended && this.client.phase === 'idle'; }
   supports(kind: 'model' | 'thinking'): boolean { return this.options.some(option => option.category === (kind === 'model' ? 'model' : 'thought_level')); }
   validatePrompt(value: string): string | undefined {
     if (!this.canSubmit) return 'This ACP session is not idle. Your draft was kept.';
@@ -135,19 +161,17 @@ export class AcpSession {
     } finally { this.echo = undefined; this.group = undefined; }
   }
   async selectOption(option: AcpOption, choose: (title: string, values: string[], current?: string) => Promise<string | undefined>): Promise<void> {
-    if (!this.canSubmit) throw new Error('ACP configuration is available while idle.');
-    const values = option.options.map((value, index) => `${index + 1}. ${value.name}`);
-    const selected = await choose(option.name, values, values[option.options.findIndex(value => value.value === option.current)]);
-    if (!selected) return;
-    if (!this.canSubmit || !this.options.includes(option)) throw new Error('ACP configuration changed while the picker was open. Open it again.');
-    const selectedOption = option.options[values.indexOf(selected)];
-    if (!selectedOption) return;
+    await pickConfiguration(this.configuration, this.configurationId(option), (values, current) => choose(option.name, values, current));
+  }
+  private async applyOption(option: AcpOption, value: string): Promise<void> {
+    if (this.ended || this.state.sessionUnavailable) throw new Error('ACP configuration is unavailable.');
+    if (!this.canSubmit) throw new ConfigurationDeferred();
     this.configuring = true;
     this.controls(); this.publish([]);
     try {
-      if (option.legacy === 'model') await this.deadline(this.client.setModel(selectedOption.value));
-      else if (option.legacy === 'mode') await this.deadline(this.client.setMode(selectedOption.value));
-      else await this.deadline(this.client.setConfigOption(option.id, selectedOption.value));
+      if (option.legacy === 'model') await this.deadline(this.client.setModel(value));
+      else if (option.legacy === 'mode') await this.deadline(this.client.setMode(value));
+      else await this.deadline(this.client.setConfigOption(option.id, value));
     } finally {
       this.configuring = false;
       this.controls(); this.publish([]);
@@ -155,9 +179,11 @@ export class AcpSession {
   }
   private receipt(id: string, outcome: 'accepted' | 'rejected' | 'unknown', error?: string): void { this.ui.publish({ type: 'submissionReceipt', id, outcome, error }); }
   private publish(rows?: DisplayMessage[]): void {
+    if (this.configuration && this.state.configurationOperations !== this.configuration.operations) this.state = { ...this.state, configurationOperations: this.configuration.operations };
     const base = this.revision++;
     this.ui.publish({ type: 'snapshot', state: this.state, commands: this.commands, transcript: { base, revision: this.revision, ...(rows ? { rows } : {}) } });
     this.ui.changed();
+    this.configuration?.update();
   }
   private replace(key: string, next: DisplayMessage): void {
     const index = this.state.messages.findIndex(message => message.key === key);
@@ -248,13 +274,13 @@ export class AcpSession {
     return category ? this.options.find(option => option.category === category) : undefined;
   }
   private controls(): void {
-    // Configuration-in-flight and agent-working are independent states. A
-    // configuration update during a turn must not latch controls disabled.
+    // Controls accept deferred intent during work/configuration. Their displayed
+    // values remain authoritative; progress belongs only to the transcript.
     this.state = { ...this.state, statusArea: { ...this.state.statusArea, controls: ['model', 'thinking', 'mode'].flatMap(id => {
       const option = this.controlOption(id);
       if (!option) return [];
       const label = option.options.find(value => value.value === option.current)?.name || option.current;
-      return [{ id, label, title: `Select ${option.name}: ${label}${option.description ? ` — ${option.description}` : ''}`, disabled: this.configuring || this.state.busy || this.ended }];
+      return [{ id, label, title: `Select ${option.name}: ${label}${option.description ? ` — ${option.description}` : ''}`, disabled: this.state.sessionUnavailable === true || this.ended }];
     }) } };
   }
   private finishMessages(): void {

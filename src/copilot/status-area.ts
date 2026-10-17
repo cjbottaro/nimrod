@@ -6,7 +6,7 @@ export interface CopilotStatusAreaState {
   readonly effort?: string;
   readonly supportsModel: boolean;
   readonly supportsThinking: boolean;
-  /** SDK idle/configuration/command/readiness gates, supplied by the owning session. */
+  /** Whether the connected session accepts configuration intent (including deferred changes). */
   readonly available: boolean;
   readonly usage?: { readonly currentTokens: number; readonly tokenLimit: number };
 }

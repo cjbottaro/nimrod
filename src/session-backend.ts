@@ -22,6 +22,7 @@ export function piSession(owner: Owner): PiSession | undefined { return owner.ba
 export function acpSession(owner: Owner): AcpSession | undefined { return owner.backend.kind === 'acp' ? owner.backend.session : undefined; }
 export function acpProfile(owner: Owner): AcpProfile | undefined { return owner.backend.kind === 'acp' ? owner.backend.profile : undefined; }
 export function copilotSession(owner: Owner): CopilotSession | undefined { return owner.backend.kind === 'copilot-sdk' ? owner.backend.session : undefined; }
+export function sessionConfiguration(owner: Owner): import('./session-configuration').SessionConfiguration | undefined { return owner.backend.session?.configuration; }
 export function sessionActions(owner: Owner): readonly SessionAction[] {
   return owner.backend.kind === 'pi' ? piSessionActions : owner.backend.kind === 'copilot-sdk' ? copilotSessionActions(owner.backend.session) : acpSessionActions(owner.backend.session);
 }

@@ -22,7 +22,7 @@ test('Pi status capabilities retain native configuration, extensions and unknown
   assert.equal(working.subagents, '2 running agents');
   assert.deepEqual(working.information, [{ label: 'note', text: 'Reported note' }, { label: 'widget', text: 'Reported widget' }]);
   const changing = project({ ...state, modelControls: { ...state.modelControls, changing: true } });
-  assert.ok(changing.controls.every(control => control.disabled));
+  assert.ok(changing.controls.every(control => !control.disabled), 'in-flight changes still accept replacement intent');
   assert.equal(changing.information, idle.information);
   const cleared = project({ modelControls: state.modelControls });
   assert.deepEqual(cleared.information, []);

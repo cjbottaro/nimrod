@@ -4,6 +4,9 @@ import type { ConversationViewMessage, ConversationViewState } from '../conversa
 import type { ToolCaptureSink } from '../tool-capture';
 import { copilotToolResult } from './tool-result';
 import { createCopilotStatusArea } from './status-area';
+import { createCopilotConfiguration } from './session-configuration';
+import { ConfigurationDeferred, ConfigurationSuperseded, type SessionConfigurationController } from '../session-configuration';
+import { pickConfiguration } from '../configuration-picker';
 import { commandChoices, copilotCommands, findCopilotCommand, parseCopilotCommand, type CommandChoice, type CopilotCommand } from './commands';
 
 interface Model { id: string; name: string; supportedReasoningEfforts?: string[]; capabilities?: { supports?: { reasoningEffort?: boolean } }; policy?: { state: string }; }
@@ -21,6 +24,7 @@ export interface CopilotSessionUi {
 /** SDK semantic events project directly to shared presentation, never Pi/ACP events. */
 export class CopilotSession {
   readonly connection: CopilotConnection;
+  readonly configuration: SessionConfigurationController;
   state: Omit<ConversationViewState, 'messages'> & { messages: DisplayMessage[]; sessionName?: string } = {
     messages: [], sessionUnavailable: true, busy: false, status: 'Connecting Copilot…',
   };
@@ -47,12 +51,19 @@ export class CopilotSession {
   private captureConnectionId = crypto.randomUUID();
   private runtimeVersion?: string;
   constructor(send: (message: BridgeRequest) => Promise<void>, private ui: CopilotSessionUi) {
-    this.updateStatusArea();
     this.connection = new CopilotConnection(send, packet => this.packet(packet), reason => {
-      this.ended = true; this.decisions.abort(); this.commandOperation?.abort(); this.finish();
+      this.ended = true; this.decisions.abort(); this.commandOperation?.abort(); this.configuration?.dispose(); this.finish();
       this.state = { ...this.state, sessionUnavailable: true, busy: false, status: 'Disconnected' };
       this.publish(); ui.disconnected(reason);
     });
+    this.configuration = createCopilotConfiguration({
+      models: () => this.models.map(model => ({ id: model.id, label: model.name, efforts: model.capabilities?.supports?.reasoningEffort === false ? undefined : model.supportedReasoningEfforts })),
+      model: () => this.model, effort: () => this.effort,
+      availability: () => this.ended || this.state.sessionUnavailable ? 'unavailable' : this.canSubmit ? 'ready' : 'deferred',
+      apply: (setting, value, current) => this.applyPreference(setting, value, current), changed: () => this.publish([]),
+      error: message => this.ui.notice(`Configuration change failed: ${message}`),
+    });
+    this.updateStatusArea();
   }
   get canSubmit(): boolean { return !this.ended && !this.state.sessionUnavailable && !this.state.busy && !this.configuring && !this.commandOperation; }
   supports(kind: 'model' | 'thinking'): boolean {
@@ -194,20 +205,18 @@ export class CopilotSession {
     }
   }
   async selectPreference(kind: 'model' | 'thinking', choose: (values: string[], current?: string) => Promise<string | undefined>): Promise<void> {
-    if (!this.canSubmit) throw new Error('Copilot configuration is available while idle.');
-    const models = this.models, model = this.model;
-    const options = kind === 'model' ? models.map(item => ({ value: item.id, name: `${item.name} (${item.id})` }))
-      : (models.find(item => item.id === model)?.supportedReasoningEfforts ?? []).map(value => ({ value, name: value }));
-    const labels = options.map((option, index) => `${index + 1}. ${option.name}`);
-    const selected = await choose(labels, labels[options.findIndex(option => option.value === (kind === 'model' ? this.model : this.effort))]);
-    if (!selected) return;
-    if (!this.canSubmit || this.models !== models || this.model !== model) throw new Error('Copilot configuration changed. Open the picker again.');
-    const value = options[labels.indexOf(selected)]?.value;
-    if (!value) return;
+    await pickConfiguration(this.configuration, kind === 'model' ? 'model' : 'effort', choose);
+  }
+  private async applyPreference(setting: string, value: string, current: () => boolean): Promise<void> {
+    if (this.ended || this.state.sessionUnavailable) throw new Error('Copilot configuration is unavailable.');
+    if (!this.canSubmit) throw new ConfigurationDeferred();
+    if (setting !== 'model' && setting !== 'effort') throw new Error('This Copilot setting is unsupported.');
+    if (!current()) throw new ConfigurationSuperseded();
+    const model = this.model;
     this.configuring = true; this.publish([]);
     try {
       const version = this.configurationVersion;
-      const result = await this.connection.request('configure', { model: kind === 'model' ? value : model, ...(kind === 'thinking' ? { effort: value } : {}) });
+      const result = await this.connection.request('configure', { model: setting === 'model' ? value : model, ...(setting === 'effort' ? { effort: value } : {}) });
       if (version === this.configurationVersion) this.configuration(result);
     } catch (error) {
       this.disconnect(`Copilot configuration was not confirmed: ${String(error)}. Reconnect explicitly to read the authoritative configuration.`);
@@ -367,14 +376,16 @@ export class CopilotSession {
   }
   private updateStatusArea(): void {
     const statusArea = this.projectStatus({ model: this.model, effort: this.effort, supportsModel: this.supports('model'),
-      supportsThinking: this.supports('thinking'), available: this.canSubmit, usage: this.usage });
+      supportsThinking: this.supports('thinking'), available: !this.ended && !this.state.sessionUnavailable, usage: this.usage });
     if (this.state.statusArea !== statusArea) this.state = { ...this.state, statusArea };
   }
   private publish(rows?: DisplayMessage[]): void {
     if (this.replaying) return;
     this.updateStatusArea();
+    if (this.configuration && this.state.configurationOperations !== this.configuration.operations) this.state = { ...this.state, configurationOperations: this.configuration.operations };
     const base = this.revision++;
     this.ui.publish({ type: 'snapshot', state: this.state, commands: this.commands, transcript: { base, revision: this.revision, ...(rows ? { rows } : {}) } }); this.ui.changed();
+    this.configuration?.update();
   }
 }
 function toolKind(name?: string): string {

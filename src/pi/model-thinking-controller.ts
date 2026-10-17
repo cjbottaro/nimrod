@@ -1,4 +1,5 @@
 import { JsonRecord } from "./types";
+import { ConfigurationDeferred, ConfigurationSuperseded } from '../session-configuration';
 
 export interface ModelIdentity {
   id: string;
@@ -89,6 +90,51 @@ export class ModelThinkingController {
     } finally {
       this.patch({ changing: false });
     }
+  }
+
+  get current(): ModelThinkingState { return this.state; }
+
+  async availableModels(): Promise<ModelIdentity[]> {
+    if (this.disconnected || !this.state.ready) throw new Error('Pi configuration is not ready.');
+    return modelArray(record((await this.rpc.request('get_available_models')).data).models);
+  }
+  async availableThinkingLevels(): Promise<string[]> {
+    if (this.disconnected || !this.state.ready) throw new Error('Pi configuration is not ready.');
+    await this.refresh();
+    return this.getSupportedThinkingLevels();
+  }
+  /** Direct configuration mutations for the session-bound consumer port. */
+  async setConfiguration(kind: 'model' | 'thinking', value: ModelIdentity | string, current: () => boolean = () => true): Promise<void> {
+    if (!this.beginChange()) {
+      if (!this.disconnected && this.state.ready) throw new ConfigurationDeferred();
+      throw new Error('Pi configuration is unavailable.');
+    }
+    try {
+      if (!await this.revalidateAvailable()) {
+        if (!this.disconnected) throw new ConfigurationDeferred();
+        throw new Error('Pi configuration became unavailable before applying.');
+      }
+      if (kind === 'model' && typeof value !== 'string') {
+        const models = await this.availableModels();
+        if (!models.some(model => model.provider === value.provider && model.id === value.id)) throw new Error('The selected Pi model is no longer available.');
+        this.assertDirectAvailable();
+        if (!current()) throw new ConfigurationSuperseded();
+        await this.rpc.request('set_model', { provider: value.provider, modelId: value.id });
+      } else if (kind === 'thinking' && typeof value === 'string') {
+        const levels = await this.getSupportedThinkingLevels();
+        if (!levels.includes(value)) throw new Error('The selected thinking level is no longer supported by the current model.');
+        this.assertDirectAvailable();
+        if (!current()) throw new ConfigurationSuperseded();
+        await this.rpc.request('set_thinking_level', { level: value });
+      } else throw new Error('Invalid Pi configuration choice.');
+      await this.refresh();
+    } catch (error) { await this.resyncAfterFailure(); throw error; }
+    finally { this.patch({ changing: false }); }
+  }
+
+  private assertDirectAvailable(): void {
+    if (this.disconnected) throw new Error('Pi configuration became unavailable before applying.');
+    if (this.host.isChangeBlocked()) throw new ConfigurationDeferred();
   }
 
   private beginChange(): boolean {

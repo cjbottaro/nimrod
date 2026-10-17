@@ -45,7 +45,7 @@ export function createPiViewProjection(): (state: PiViewState) => ConversationVi
       get messages() { return state.messages; },
       deletionLocked: state.deletionLocked, busy: state.busy, status: activity?.text,
       sessionUnavailable: state.sessionUnavailable, recoveryNotice: state.recoveryNotice,
-      inputLocked: state.compacting, statusArea: projectStatus(state), queue,
+      inputLocked: state.compacting, statusArea: projectStatus(state), queue, configurationOperations: state.configurationOperations,
     };
   };
 }

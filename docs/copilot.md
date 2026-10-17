@@ -32,7 +32,11 @@ request does not switch sessions or steal focus; return to its conversation to
 act. Stop/Close/disconnect cancel pending choices.
 
 Model and thinking controls use Copilot’s reported catalog and current state,
-and are available while idle. Connecting resolves the session’s model catalog
+and accept selections while connected, including during work. Changes apply
+when Copilot is idle; a shimmering [configuration change](model-thinking.md)
+entry in the transcript shows waiting/application and updates in place if you
+choose another value. The Status area keeps confirmed values, without a pending
+badge. Connecting resolves the session’s model catalog
 before reading its model/effort, so reported defaults can appear before your
 first message—without sending a prompt or explicitly selecting a model. If
 Copilot still reports no selection, the label remains **Copilot default**;

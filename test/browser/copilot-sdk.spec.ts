@@ -52,6 +52,58 @@ test('offline SDK bridge uses the shared shell for optimistic send, permissions,
   } finally { await demo.close(); }
 });
 
+test('busy SDK configuration updates one queued transcript row and applies at idle without pending status or reader navigation', async ({ page }) => {
+  const demo = await demoFixture(page);
+  try {
+    await page.keyboard.press('Meta+Shift+P');
+    await page.locator('#palette-input').fill('New Copilot session'); await page.locator('#palette-input').press('Enter');
+    await expect(page.locator(visible('model'))).toHaveText('small');
+    const prompt = page.locator(visible('prompt'));
+    const permission = page.locator('.session-view:not([hidden]) .acp-permission');
+    await prompt.fill('First fixture turn'); await prompt.press('Enter');
+    await permission.getByRole('button', { name: 'Allow once', exact: true }).click();
+    await expect(page.locator(visible('messages'))).toContainText('Offline SDK response.');
+    await expect(page.locator(visible('send'))).toHaveAttribute('aria-label', 'Send message');
+    await prompt.fill('Second fixture turn'); await prompt.press('Enter');
+    await permission.getByRole('button', { name: 'Allow once', exact: true }).click();
+    await expect(page.locator(visible('send'))).toHaveAttribute('aria-label', 'Stop Copilot');
+    await page.locator(visible('transcript-viewport')).hover({ position: { x: 20, y: 30 } });
+    await page.mouse.wheel(0, -200);
+    await expect.poll(async () => (await demo.metrics()).gap).toBeGreaterThan(100);
+    const top = (await demo.metrics()).top;
+    await prompt.fill('Keep newer draft');
+    const selectModel = async (label: string) => {
+      await page.locator(visible('model')).click();
+      await page.locator('#palette-input').fill(label); await page.locator('#palette-input').press('Enter');
+    };
+    await selectModel('Fixture large');
+    const row = page.locator('.session-view:not([hidden]) .message.configuration');
+    await expect(row).toHaveCount(1);
+    await expect(row.locator('.delivery-status-shimmer')).toHaveText('Model change queued');
+    await row.evaluate(node => { node.setAttribute('data-fixture-identity', 'configuration'); });
+    await row.locator('.delivery-status-text').evaluate(node => { node.setAttribute('data-fixture-title', 'retained'); });
+    await expect(page.locator(visible('model'))).toHaveText('small');
+    await selectModel('Fixture small');
+    await expect(row.locator('.configuration-text')).toContainText('Fixture small');
+    await selectModel('Fixture large');
+    await expect(row).toHaveCount(1);
+    await expect(row).toHaveAttribute('data-fixture-identity', 'configuration');
+    await expect(row.locator('.delivery-status-text')).toHaveAttribute('data-fixture-title', 'retained');
+    await expect(row.locator('.configuration-text')).toContainText('Fixture large');
+    expect(demo.calls.some(call => call.command === 'write_copilot' && (call.args.message as { method?: string }).method === 'configure')).toBe(false);
+    expect(Math.abs((await demo.metrics()).top - top)).toBeLessThanOrEqual(2);
+    await expect(prompt).toHaveValue('Keep newer draft');
+    await page.locator(visible('send')).click();
+    await expect(page.locator(visible('model'))).toHaveText('large');
+    await expect(row.locator('.delivery-status-shimmer')).toHaveCount(0);
+    await expect(row).toHaveAttribute('data-fixture-identity', 'configuration');
+    await expect(prompt).toHaveValue('Keep newer draft');
+    const configuration = demo.calls.filter(call => call.command === 'write_copilot' && (call.args.message as { method?: string }).method === 'configure');
+    expect(configuration).toHaveLength(1);
+    expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
 test('SDK discovery never resumes automatically; selection uses the exact ID and SDK-only draft', async ({ page }) => {
   const scope = copilotSdkScope('fixture-sdk');
   const demo = await demoFixture(page, { [copilotHistoryKey(process.cwd())]: true }, [], {

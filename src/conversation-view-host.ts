@@ -6,6 +6,7 @@ import type { ParallelToolCluster } from './pi/tool-progress';
 import type { StatusAreaSnapshot } from './status-area';
 
 export interface ConversationViewState {
+  configurationOperations?: readonly import('./session-configuration').ConfigurationOperation[];
   deletionLocked?: boolean;
   messages?: RenderMessage[];
   busy?: boolean;
@@ -95,6 +96,7 @@ export interface RenderBlock extends ToolCardData {
 }
 
 export interface RenderMessage {
+  configurationOperation?: import('./session-configuration').ConfigurationOperation;
   steeringStatus?: SteeringStatus;
   steering?: boolean;
   queued?: boolean;

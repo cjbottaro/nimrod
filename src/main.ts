@@ -13,7 +13,8 @@ import { savedSessionKey, resolveSessionListEntry, type SessionListEntry } from 
 import { renderPermissionDetails } from './acp/tool-state';
 import { acpInteraction } from './acp/view-policy';
 import { createPiViewProjection, piInteraction } from './pi/view-policy';
-import { piSession, acpSession, copilotSession, acpProfile as profileFor, sessionActions, type SessionAction, type SessionBackend } from './session-backend';
+import { piSession, acpSession, copilotSession, acpProfile as profileFor, sessionActions, sessionConfiguration, type SessionAction, type SessionBackend } from './session-backend';
+import { pickConfiguration } from './configuration-picker';
 import { piSessionLifecycle } from './pi/session-lifecycle';
 import type { SessionFile } from './pi/session-file';
 import { startPiSession, type PiLaunchInfo } from './pi/session-startup';
@@ -176,7 +177,6 @@ interface Tab {
   notices: ReturnType<typeof installApplicationNotices>;
   cancelPreference?: () => void;
   cancelInspector?: () => void;
-  preferenceTask?: Promise<void>;
   closeButton: HTMLButtonElement; deleteButton: HTMLButtonElement;
   row: HTMLButtonElement; rowLabel: HTMLElement; rowIndicator: HTMLElement; rowTime: HTMLTimeElement; rowHarness: HTMLElement; rowNode: HTMLElement;
 }
@@ -1040,38 +1040,20 @@ async function inspectMcp(tab: Tab): Promise<void> {
   }
 }
 async function pickPreference(tab: Tab, kind: 'model' | 'thinking'): Promise<void> {
-  if (tab.backend.kind === 'copilot-sdk') return pickCopilotPreference(tab, kind);
-  if (profileFor(tab)) return pickAcpOption(tab, kind);
   const operation = kind === 'model' ? 'Select model' : 'Select thinking level';
   const request = palette.startSelection(operation, () => { void pickPreference(tab, kind); }, message => {
     if (tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:preference:${++noticeSequence}`, owner: tab.id, operation, message });
   });
   if (!request) return;
-  const session = piSession(tab);
-  if (!session || tab.ended || tab.closing || tab.restarting || tab.deleting || deletion.blocked(tab.file?.path)) { request.error('Resume this session before changing its model or thinking level.'); return; }
-  tab.cancelPreference = request.cancel;
-  error.textContent = '';
-  const previous = tab.preferenceTask;
-  const task = (async () => {
-    await previous;
-    if (tab.cancelPreference !== request.cancel || piSession(tab) !== session || tab.ended || tab.restarting || tab.deleting) return;
-    await session.selectPreference(kind, {
-      choose: (_title, options, current) => request.choose(options, current),
-      error: message => {
-        request.error(message);
-        // The selection's owned callback returns the failure to this session,
-        // never to the window's application notice strip.
-      },
-    });
-  })();
-  tab.preferenceTask = task.catch(() => {});
+  const configuration = sessionConfiguration(tab);
+  if (!configuration || tab.ended || tab.closing || tab.restarting || tab.deleting || deletion.blocked(tab.file?.path)) { request.error('Resume this session before changing its model or thinking level.'); return; }
+  tab.cancelPreference?.(); tab.cancelPreference = request.cancel;
+  const valid = () => tabs.includes(tab) && sessionConfiguration(tab) === configuration && tab.cancelPreference === request.cancel
+    && !tab.ended && !tab.closing && !tab.restarting && !tab.deleting;
   try {
-    await task;
-  } catch (error) { request.error(String(error)); }
-  finally {
-    request.finish();
-    if (tab.cancelPreference === request.cancel) tab.cancelPreference = undefined;
-  }
+    await pickConfiguration(configuration, kind === 'model' ? 'model' : 'effort', (options, current) => request.choose(options, current), valid);
+  } catch (error) { if (valid()) request.error(String(error)); }
+  finally { request.finish(); if (tab.cancelPreference === request.cancel) tab.cancelPreference = undefined; }
 }
 async function pickAcpOption(tab: Tab, kind?: 'model' | 'thinking', selectedOption?: import('./acp/session').AcpOption): Promise<void> {
   const session = acpSession(tab);
@@ -1157,24 +1139,6 @@ async function requestCopilotDecision(tab: Tab, kind: 'permission' | 'input', re
     return { answer: input.value, wasFreeform: true };
   }
   return { answer: choices[Number(choice)], wasFreeform: false };
-}
-async function pickCopilotPreference(tab: Tab, kind: 'model' | 'thinking'): Promise<void> {
-  const session = copilotSession(tab);
-  if (!session || tab.ended || tab.closing || tab.deleting) return;
-  const operation = kind === 'model' ? 'Select model' : 'Select thinking level';
-  const request = palette.startSelection(operation, () => { void pickCopilotPreference(tab, kind); }, message => {
-    if (tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:copilot-configuration:${++noticeSequence}`, owner: tab.id, operation, message });
-  });
-  if (!request) return;
-  tab.cancelPreference?.(); tab.cancelPreference = request.cancel;
-  try {
-    await session.selectPreference(kind, async (values, current) => {
-      const value = await request.choose(values, current);
-      if (!tabs.includes(tab) || copilotSession(tab) !== session || tab.ended || tab.closing || tab.deleting) return;
-      return value;
-    });
-  } catch (error) { request.error(String(error)); }
-  finally { request.finish(); if (tab.cancelPreference === request.cancel) tab.cancelPreference = undefined; }
 }
 async function newCopilotSession(): Promise<void> {
   if (!ready || !copilotReady || settings.isOpen || !await ensureWorkspace() || unloading || deletions.pending) return;

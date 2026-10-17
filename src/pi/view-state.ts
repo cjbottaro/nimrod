@@ -1,6 +1,7 @@
 import type { RenderMessage, ConversationViewMessage } from '../conversation-view-host';
 
 export interface PiViewState {
+  configurationOperations?: readonly import('../session-configuration').ConfigurationOperation[];
   deletionLocked?: boolean;
   messages?: RenderMessage[];
   busy?: boolean;

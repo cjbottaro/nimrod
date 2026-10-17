@@ -5,6 +5,9 @@ import { validateImageContents } from './image-attachments';
 import { PiTransport, RpcResponseError } from './transport';
 import { initialConversationState, messagesToDisplay, reduceRpcEvent, sanitizeExtensionUiText, setExtensionStatus, setExtensionWidget } from './reducer';
 import { ModelThinkingController, type ModelIdentity } from './model-thinking-controller';
+import { createPiConfiguration } from './session-configuration';
+import { pickConfiguration } from '../configuration-picker';
+import type { SessionConfigurationController } from '../session-configuration';
 import { SessionStatsController } from './session-stats-controller';
 import { MODEL_SCOPE_STATUS, parseModelScope, scopedModels, type ModelReference } from './pi-model-scope';
 import { TranscriptUpdates } from './transcript-updates';
@@ -57,6 +60,7 @@ export class PiSession {
   private notificationRun = false;
   private notificationResponse?: string;
   private notificationOutcome: 'completed' | 'failed' | 'aborted' = 'completed';
+  readonly configuration: SessionConfigurationController;
   private model: ModelThinkingController;
   private stats: SessionStatsController;
   private toolCapture: PiToolCapture;
@@ -73,6 +77,12 @@ export class PiSession {
       chooseModel: (models, current) => this.chooseModel(models, current, (title, options) => ui.choose(title, options)),
       chooseThinkingLevel: levels => ui.choose('Thinking level', levels),
       showError: e => this.notice(errorText(e)),
+    });
+    this.configuration = createPiConfiguration(this.model, {
+      unavailable: () => this.disconnected || !!this.state.sessionUnavailable,
+      blocked: () => rpc.hasPendingRequest('prompt', 'set_session_name'),
+      scoped: models => scopedModels(models, this.scope),
+      changed: () => this.publish(), error: message => this.notice(message),
     });
     this.stats = new SessionStatsController(rpc, {
       onIdentity: data => {
@@ -94,13 +104,8 @@ export class PiSession {
 
   /** Each picker invocation is bound to this session, including cancellation and errors. */
   async selectPreference(kind: 'model' | 'thinking', picker: PreferencePicker): Promise<void> {
-    const showError = (error: unknown) => { picker.error(errorText(error)); };
-    if (kind === 'model') await this.model.selectModel({
-      chooseModel: (models, current) => this.chooseModel(models, current, picker.choose), showError,
-    });
-    else await this.model.selectThinkingLevel({
-      chooseThinkingLevel: (levels, current) => picker.choose('Select thinking level', levels, current), showError,
-    });
+    try { await pickConfiguration(this.configuration, kind === 'model' ? 'model' : 'effort', (options, current) => picker.choose(kind === 'model' ? 'Select model' : 'Select thinking level', options, current)); }
+    catch (error) { picker.error(errorText(error)); }
   }
 
   async initialize(expectedName?: string): Promise<void> {
@@ -170,10 +175,12 @@ export class PiSession {
   }
 
   publish(): void {
+    if (this.configuration && this.state.configurationOperations !== this.configuration.operations) this.state = { ...this.state, configurationOperations: this.configuration.operations };
     const snapshot = this.measure('timeline-projection', () => this.transcript.snapshot(this.state));
     this.measure('snapshot-delivery', () => this.ui.publish({ type: 'snapshot', build: 'Nimrod PoC', commands: this.commands,
       ...snapshot }));
     this.measure('shell-session-update', () => this.ui.changed(this.state));
+    this.configuration?.update();
   }
 
   private async identify(data: JsonRecord): Promise<void> {
@@ -218,6 +225,7 @@ export class PiSession {
       this.state = { ...this.state, sessionUnavailable: true, extensionStatuses: {}, extensionWidgets: {} };
       this.ui.disconnected?.(errorText(event.error || 'Pi disconnected'));
       this.stats.dispose();
+      this.configuration.dispose();
       this.model.disconnect();
     }
     if (event.type === 'extension_error') this.notice(`Extension error: ${errorText(event.error)}`);
@@ -275,8 +283,8 @@ export class PiSession {
           }
           await this.rpc.request('abort', {}, 0);
           break;
-        case 'selectModel': await this.model.selectModel(); break;
-        case 'selectThinking': await this.model.selectThinkingLevel(); break;
+        case 'selectModel': await this.selectPreference('model', { choose: (title, options) => this.ui.choose(title, options), error: message => this.notice(message) }); break;
+        case 'selectThinking': await this.selectPreference('thinking', { choose: (title, options) => this.ui.choose(title, options), error: message => this.notice(message) }); break;
         case 'openLink': if (typeof message.href === 'string') await this.ui.openLink(message.href); break;
         case 'copyCode':
           if (typeof message.id === 'string' && typeof message.text === 'string') {
@@ -287,6 +295,7 @@ export class PiSession {
         case 'renderError': this.notice('A rendering error occurred; see the developer console.'); console.error(message.error); break;
       }
     } catch (error) { this.notice(errorText(error)); }
+    finally { this.configuration.update(); }
   }
 
   private async submit(message: JsonRecord): Promise<void> {

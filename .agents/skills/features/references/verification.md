@@ -22,6 +22,8 @@ finalization is explicitly unsupported, not inferred from SDK type presence.
 
 ## Current automated validation
 
+Session configuration interface/deferred changes: Pi, Copilot SDK and dormant ACP now expose one consumer port for advertised settings, confirmed getters and latest-wins intent. Configuration progress uses one local queued-style shimmering transcript entry and no pending Status-area indicator. New generic/Pi/SDK/ACP/controller, renderer and offline WebKit fixtures are **unrun**; no checks, builds, app launches or live configuration acceptance were performed. [Model/thinking](model-thinking.md#authored-verification-and-remaining-gaps) owns the fixture map and remaining native macOS/Linux gaps.
+
 ACP product-entry-point removal: generic transport/native/session/card adapters
 remain internal; creation/options actions, keybinding entries and shell factories
 are removed. Regression fixtures assert absent ACP palette/sidebar entries,

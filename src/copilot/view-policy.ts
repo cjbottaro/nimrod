@@ -5,8 +5,8 @@ import type { CopilotSession } from './session';
 import { copilotSlashCommands } from './commands';
 export function copilotSessionActions(session?: CopilotSession): readonly SessionAction[] {
   return [
-    ...(session?.supports('model') ? [{ id: 'model' as const, label: 'Select model…', detail: 'Models reported by Copilot' }] : []),
-    ...(session?.supports('thinking') ? [{ id: 'thinking' as const, label: 'Select thinking level…', detail: 'Reasoning efforts supported by the current Copilot model', keywords: 'effort reasoning' }] : []),
+    ...(session?.configuration.capabilities.some(setting => setting.id === 'model') ? [{ id: 'model' as const, label: 'Select model…', detail: 'Models reported by Copilot' }] : []),
+    ...(session && (session.supports('thinking') || session.configuration.capabilities.some(setting => setting.id === 'effort')) ? [{ id: 'thinking' as const, label: 'Select thinking level…', detail: 'Reasoning efforts supported by the selected or pending Copilot model', keywords: 'effort reasoning' }] : []),
   ];
 }
 export function copilotInteraction(validate: (text: string) => string | undefined): ConversationInteraction {

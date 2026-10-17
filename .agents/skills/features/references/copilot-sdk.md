@@ -147,7 +147,12 @@ This initialization fix has authored fixtures **unrun**; actual installed-CLI
 resolution before a first prompt remains pending native verification.
 
 Models come from client `listModels`; disabled-policy models are excluded. Thinking
-efforts come only from the selected model's catalog. Idle-only `setModel` and
+efforts come only from the selected or pending target model's catalog. The
+session-bound [configuration port](model-thinking.md) accepts latest-wins intent
+during work/configuration/commands, publishes one local shimmering transcript
+entry and defers mutation until real root idle. The Status area stays on
+confirmed selections, without pending indicators. Disconnection cancels intent;
+there is no durable queue or replay. Idle-only `setModel` and
 the pinned release's experimental `session.rpc.model.getCurrent()` read actual
 model/effort state; later native events outrank older results. Failed configuration
 disconnects instead of continuing with unconfirmed settings. No synthetic Pi
@@ -200,6 +205,7 @@ External applications remain uncoordinated.
 
 ## Code map and authored verification
 
+- `src/copilot/session-configuration.ts`: concrete capabilities/choices/readiness behind the shared configuration port; `session.ts` retains SDK mutation/version ordering. Deferred configuration fixtures and the offline browser scenario are authored but **unrun**.
 - `src/copilot/{connection,session,session-lifecycle,view-policy}.ts`: correlation,
   SDK events, persistence/connectivity and interaction contributions.
 - `src/copilot/{session-history,session-deletion}.ts`: discovery and supported
