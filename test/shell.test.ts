@@ -835,11 +835,15 @@ test('background ACP permissions stay in their conversation and cannot approve a
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'permission'; prompt.dispatchEvent(new f.win.Event('input')); prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
     const target = [...f.acpSessions.values()].find(session => session.sessionId === 'acp-fixture')!, acpRoot = f.win.document.querySelector<HTMLElement>('.session-view:not([hidden])')!;
     f.rows()[0].click(); await f.tick(); const piPrompt = f.element<HTMLTextAreaElement>('prompt'); piPrompt.focus();
-    target.channel.onmessage({ kind: 'rpc', value: { jsonrpc: '2.0', id: 'permission', method: 'session/request_permission', params: { sessionId: 'acp-fixture', toolCall: { toolCallId: 'shell', title: 'Run fixture only', rawInput: { command: 'no execution' } }, options: [{ optionId: 'allow', name: 'Allow fixture', kind: 'allow_once' }] } } });
+    target.channel.onmessage({ kind: 'rpc', value: { jsonrpc: '2.0', id: 'permission', method: 'session/request_permission', params: { sessionId: 'acp-fixture', toolCall: { toolCallId: 'shell', kind: 'execute', title: 'Run fixture only', rawInput: { command: 'no execution', commands: ['no execution'] } }, options: [{ optionId: 'allow', name: 'Allow fixture', kind: 'allow_once' }] } } });
     await f.tick();
     assert.equal(acpRoot.hidden, true); assert.equal(f.win.document.activeElement, piPrompt);
     assert.equal(f.element<HTMLDialogElement>('host-dialog').open, false);
     assert.ok(acpRoot.querySelector('.acp-permission'));
+    assert.equal(acpRoot.querySelector('.acp-permission-summary')?.textContent, 'Run command · Run fixture only');
+    assert.equal(acpRoot.querySelectorAll('.acp-permission-command').length, 1);
+    assert.equal(acpRoot.querySelector<HTMLDetailsElement>('.acp-permission-raw')?.open, false);
+    assert.ok(acpRoot.querySelector('.acp-permission-actions + .acp-permission-raw'));
     f.rows()[1].click(); await f.tick();
     const cancel = [...acpRoot.querySelectorAll<HTMLButtonElement>('.acp-permission button')].find(button => button.textContent === 'Cancel request')!;
     cancel.click(); await f.tick();
