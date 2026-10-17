@@ -319,6 +319,11 @@ shell-signature guard prevent transcript scans/layout persistence per delta.
 
 ### Verified mode API behavior and remaining handoff limits
 
+To resume the unfinished work, load the
+[Copilot mode acceptance skill](../../copilot-mode-acceptance/SKILL.md). It owns
+the controlled acceptance plan, authorization gates and remaining investigation
+sequence; this reference owns implemented behavior and evidence.
+
 User-authorized no-prompt probes on 2026-10-17 used SDK 1.0.22, CLI 1.0.98,
 protocol 3 and custom in-memory `SessionFs` providers. Each session had separate
 memory storage; no user conversations were loaded/deleted, no prompts or
