@@ -250,7 +250,7 @@ for (const hidden of [false, true]) for (const empty of [false, true]) {
       assert.equal(document.querySelector('.queued-turns'), null);
       // Later dirty updates must remain lazy and leave the accepted row in place.
       const updated = { ...future, content: 'Later output keeps streaming' };
-      f.receive({ type: 'snapshot', state: { get messages(): never { assert.fail('dirty output must not read history'); }, configurationOperations: operations }, transcript: { base: 3, revision: 4, rows: [updated] } }); f.flush();
+      f.receive({ type: 'snapshot', state: { get messages(): never { return assert.fail('dirty output must not read history'); }, configurationOperations: operations }, transcript: { base: 3, revision: 4, rows: [updated] } }); f.flush();
       assert.deepEqual(keys(), [...native.map(message => message.key), operation.key, 'future']);
       assert.equal(document.querySelector('[data-key="future"]')?.textContent?.includes(updated.content), true);
       assert.equal(prompt.value, 'Keep newer draft');
