@@ -22,6 +22,15 @@ finalization is explicitly unsupported, not inferred from SDK type presence.
 
 ## Current automated validation
 
+Copilot shell compilation follow-up: reproduced `npm run build` failing with
+TS7022/TS7023 and a downstream TS7006 from the self-referential command-choice
+initializer. Explicitly typing the local `CopilotSession` breaks the inference
+cycle; `mise exec -- npm run build` now passes TypeScript and Vite production
+bundling. Vite reports nonfatal chunk-size/mixed-import warnings. No full
+`mise run check`, Rust/native packaging, bundle verification or app launch was
+performed for this follow-up; it establishes frontend compilation, not native or
+command-behavior acceptance.
+
 Copilot ACP removal and naming cleanup: source/fixtures/docs updated, **no tests,
 checks, builds or app launch run**. Copilot now routes only through the SDK;
 generic ACP remains runtime-only. Updated shell/card/browser fixtures require

@@ -105,6 +105,9 @@ use the existing bounded request timeout/unknown-outcome disconnect contract.
   Pi command resolution and submission policy are unchanged.
 - `src/command-palette.ts`, `src/main.ts`: shared described-choice/standalone page
   and exact session-bound modal composition. No command names become app actions.
+  The shell's `session` initializer is explicitly typed `CopilotSession`: its
+  command-choice ownership callback references that same session, so inference
+  alone creates a circular initializer/return-type dependency (TS7022/TS7023).
 - `test/copilot-commands.test.ts`: metadata, argument insertion/Enter/IME/caret,
   raw argument preservation, selection/cancellation/late results, discovery
   updates, explicit agent prompts and no fallback for unsupported effects.

@@ -1199,7 +1199,7 @@ async function launchCopilot(tab: Tab, acceptedAction = false): Promise<void> {
   const token = tab.token;
   const valid = () => !unloading && tabs.includes(tab) && tab.token === token;
   let shellSignature = '';
-  const session = new CopilotSession(message => invoke('write_copilot', { token, message }), {
+  const session: CopilotSession = new CopilotSession(message => invoke('write_copilot', { token, message }), {
     toolCapture: settingsSurface.toolCapture,
     publish: message => { if (valid()) tab.receive?.(message); },
     identified: id => {
