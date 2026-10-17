@@ -6,7 +6,7 @@
 
 ### Local development is not release preparation
 
-- Preserve the current loop: dedicated task worktree → commit → merge into main → explicitly requested local build. Frequent merges and personal builds are expected; neither requires a version bump, tag, changelog rollover or release ceremony.
+- Preserve the current loop: dedicated task worktree → commit → merge into main → mandatory `cargo check` on main (fix and repeat until passing) → explicitly requested local build. Follow the [worktree workflow](../../../../CONTRIBUTING.md#worktree-workflow) for the exact command and task-worktree fix loop. Frequent merges and personal builds are expected; neither requires a version bump, tag, changelog rollover or release ceremony.
 - Local main can contain Unreleased changes beyond the latest public version. Retain the configured package version until deliberate release preparation; existing Git revision/dirty-state build metadata distinguishes local builds without manufacturing versions.
 - A normal main push does not publish; a pushed version tag triggers the release workflow. Manual dispatch is also an explicit remote publication action, not a local build step. Follow existing authorization boundaries; never create/push release tags or publish just because a feature was completed.
 
