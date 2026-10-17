@@ -26,6 +26,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Reopening a project now reconnects its last selected Copilot session through the shared selected-session lifecycle, without sending a prompt or connecting other restored Copilot rows.
 - Model-picker names and secondary details stay aligned when the current-value marker is present.
 - Empty assistant text/reasoning entries no longer leave orphaned accent lines and gaps between cards, including Copilot tool-only messages. Streaming text reveals the same retained entry without rebuilding tool cards.
 

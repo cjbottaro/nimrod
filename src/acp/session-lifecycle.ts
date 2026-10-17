@@ -10,7 +10,6 @@ export function acpSessionLifecycle(readOwner: () => SessionLifecycleOwner, back
     key: undefined,
     draftScope: undefined,
     get connection() { return sessionConnectionState(readOwner(), !!backend.session && !backend.session.state.sessionUnavailable); },
-    connectOnStartup: false,
     eligibility() { return 'unavailable'; },
     connect: (options = {}) => host.connect(options),
     stop: ownedSessionStop(readOwner, host.stop),

@@ -18,7 +18,6 @@ export function piSessionLifecycle(readOwner: () => PiSessionLifecycleOwner, bac
     get key() { const owner = readOwner(); return owner.mode !== 'temporary' && owner.file?.exists ? owner.file.path : undefined; },
     get draftScope() { return this.key === undefined ? undefined : `file:${this.key}`; },
     get connection() { return sessionConnectionState(readOwner(), !!backend.session && !backend.session.state.sessionUnavailable); },
-    connectOnStartup: true,
     eligibility() {
       if (!this.identity) return 'unavailable';
       const gate = host.gate();

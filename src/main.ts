@@ -803,7 +803,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
     gate: () => deletion.blocked(tab.file?.path) ? 'unavailable' : tab.deleting || deletion.locked(tab.file?.path) ? 'blocked' : 'ready',
   });
   const tab: Tab = { id, mode, file, title, backend, lifecycle, lastUsed: Math.max(lastUsed(used), file ? recency.get(file) : 0), root, notice, notices: sessionNotices, closeButton, deleteButton, row, rowLabel, rowIndicator, rowTime, rowHarness, rowNode,
-    drafts: drafts.fork(), starting: false, closing: false, restarting: false, deleting: false, deletionExecuting: false, ended: false, awaitingSelection: mode === 'resume' && !lifecycle.connectOnStartup, inputCount: 0, unread: false, failed: deletion.blocked(file?.path),
+    drafts: drafts.fork(), starting: false, closing: false, restarting: false, deleting: false, deletionExecuting: false, ended: false, awaitingSelection: false, inputCount: 0, unread: false, failed: deletion.blocked(file?.path),
     view: { setActive() {}, scrollToBottom() {}, dispose() {} } };
   root.addEventListener('focusin', event => { if (event.target instanceof HTMLElement) tab.focus = event.target; });
   tab.drafts.select(lifecycle.draftScope ?? (file ? `file:${file.path}` : mode === 'temporary' ? `temporary:${workspace}:${id}` : `unassigned:${id}`));

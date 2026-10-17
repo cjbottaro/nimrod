@@ -159,9 +159,10 @@ but unrun. This is not a claim of complete Copilot TUI command parity.
 ## History, Close and Delete
 
 Nimrod remembers SDK session IDs, titles, recency, sidebar membership and separate
-drafts; Copilot owns conversation history. Reopening a project **does not resume
-conversations automatically**. Selecting an inactive row reconnects its exact ID
-without sending a prompt or continuing pending work.
+drafts; Copilot owns conversation history. Reopening a project reconnects the
+last selected Copilot row automatically. Other restored rows stay disconnected
+until selected. Reconnection uses the exact ID without sending a prompt or
+continuing pending work.
 
 After using built-in Copilot in a project, **Resume session… / ⌘/Ctrl+K** queries
 project-owned SDK discovery alongside Pi. Discovery does not create/load a
