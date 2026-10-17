@@ -120,7 +120,7 @@ test('SDK status waits for all decisions, survives streaming, and restores under
   const f = await fixture([], async () => new Promise(resolve => choices.push(resolve)));
   const status = () => {
     const message = f.published.filter(message => message.type === 'snapshot').at(-1);
-    assert.ok(message?.type === 'snapshot'); return message.state.status;
+    assert.ok(message?.type === 'snapshot' && message.state); return message.state.status;
   };
   try {
     f.event('assistant.turn_start', {});
