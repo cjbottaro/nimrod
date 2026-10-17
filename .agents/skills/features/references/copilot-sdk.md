@@ -36,7 +36,7 @@ Nimrod leaves authentication to the installed CLI; no tokens enter settings.
 
 ## Distribution and native ownership
 
-- `copilot/bridge.mjs` imports the bundled official SDK. The bridge's JSON-line
+- `copilot/bridge.mjs` imports the bundled official SDK and its concrete `copilot/configuration.mjs` adapter. Both modules are staged checkout-locally, watched by `build.rs` and required by the bundle verifier. The bridge's JSON-line
   records are private Nimrod IPC, **not another harness protocol**.
 - `scripts/prepare-copilot.mjs`, called by `src-tauri/build.rs`, stages the bridge,
   SDK dist/package metadata and required dependency packages into ignored
@@ -132,19 +132,42 @@ with no invented steer/queue. Stop calls `abort`; it is not Close/Delete.
 Ambiguous writes/timeouts/results disconnect and retain identity/newer drafts;
 there is no automatic replay or restoring the submitted text.
 
-At connection, `session.rpc.model.list()` resolves the session-owned lazy
-catalog before history/current configuration are read. The pinned generated
-RPC documentation explicitly identifies this read as the prerequisite for
-model-policy readiness before a first turn; client-wide `listModels()` does
-not initialize that session. Then `session.rpc.model.getCurrent()` supplies
-model/effort for the first connected snapshot, without a prompt, model switch,
-explicit default override or persistent preference mutation. It applies equally
-to new/resumed sessions and never replaces an existing selection with the first
-catalog item. If the runtime still omits model/effort, the existing honest
-`Copilot default`/`Model default` presentation remains; no default is inferred.
-Buffered event/history ordering and newer model-event precedence are unchanged.
-This initialization fix has authored fixtures **unrun**; actual installed-CLI
-resolution before a first prompt remains pending native verification.
+New sessions read `client.rpc.user.settings.get()` through the concrete bridge
+configuration adapter (`copilot/configuration.mjs`). Its `settings.model.value`
+and `settings.effortLevel.value` are effective Copilot user preferences, not the
+metadata's registered `default` fields. Non-null strings are passed independently
+to `createSession` as `model` / `reasoningEffort`; null or missing values omit the
+corresponding key. No Nimrod preference, hard-coded model/effort, catalog-order
+inference, settings write, prompt or post-creation model switch is introduced.
+Malformed settings/read failure fail before creating a session through the existing
+owned startup notice path, rather than silently choosing a different default.
+
+Exact-ID Resume never probes or applies current user defaults. The first new-session
+configuration snapshot prefers concrete `getCurrent()` values, filling only
+unreported values with inputs accepted by successful creation. If the runtime
+reports a different model, effort configured for the requested model is not
+attached to it. Subsequent configuration results/root events fully replace this
+initial state, including deselection/unset values; creation defaults are never
+reapplied. Buffered event/history ordering remains unchanged. The shared
+`SessionConfiguration` getters and Status-area projection consume those values;
+the shell/renderer do not query the SDK or interpret its settings.
+
+Unknown values use independent lowercase **`default model`** / **`default effort`**
+labels. When the model is unresolved, show the effort value/placeholder disabled
+until actual supported effort choices are known. A known non-reasoning model
+still omits the unsupported effort control. Reported values retain their exact
+SDK IDs/effort strings, without case coercion.
+
+User-authorized metadata probes against SDK 1.0.22 / CLI 1.0.98 established that
+user settings can return a concrete model with null effort, model metadata can
+omit `defaultReasoningEffort`, and a fresh session's `getCurrent()` can stay `{}`
+both before and after `session.model.list()`. Probe sessions used custom isolated
+filesystem storage and no prompts, model selections or settings writes. Listing
+models must not be treated as resolving a selection; the old fixture assumption
+has been removed, along with the redundant startup session-catalog read. These
+probes establish API/data-shape evidence, not acceptance of the new app behavior.
+New/updated default-reading, null-label, authoritative-override and Resume fixtures
+are **unrun**; native macOS/Linux/new-session acceptance remains pending.
 
 Models come from client `listModels`; disabled-policy models are excluded. Thinking
 efforts come only from the selected or pending target model's catalog. The
@@ -213,12 +236,12 @@ External applications remain uncoordinated.
 - `src/main.ts`, shared session/backend/draft/card interfaces: composition only.
 - `src-tauri/src/copilot.rs`, `copilot/bridge.mjs`: owned native/official SDK boundary.
 - `test/copilot-sdk.test.ts`, `test/copilot-bridge.test.ts`: authored **unrun**
-  semantic, uncertainty, draft-isolation, deletion and lazy startup-model fixtures.
-  The fake SDK leaves new-session defaults unresolved until `session.model.list`,
-  asserts list-before-getCurrent ordering, preserves a different resumed selection,
-  and exercises model-only/still-unresolved reads without prompts or model switches;
-  the production
-  bridge imports an offline fake SDK through a test-only ESM loader.
+  semantic, uncertainty, draft-isolation, deletion and configured startup-default fixtures.
+  The fake SDK accepts configured creation values, exercises empty `getCurrent()`
+  snapshots without catalog side effects, covers independently null/missing defaults,
+  native overrides/read failures/malformed values and preserves different resumed
+  selections without reading current user defaults. The production bridge imports
+  that offline fake SDK through a test-only ESM loader.
 - `src-tauri/src/copilot_tests.rs`: authored **unrun** private-record validation,
   window-generation/token retirement and real-pipe/owned-group shutdown against
   the offline SDK fixture. It never starts an installed CLI.

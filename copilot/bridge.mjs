@@ -1,5 +1,6 @@
 import { createInterface } from 'node:readline';
 import { isAbsolute } from 'node:path';
+import { createCopilotConfiguration } from './configuration.mjs';
 
 const [cli, cwd] = process.argv.slice(2);
 if (!cli || !isAbsolute(cli) || !cwd || !isAbsolute(cwd)) throw new Error('An absolute user-installed Copilot executable and project are required.');
@@ -11,7 +12,8 @@ const client = new CopilotClient({
   workingDirectory: cwd, useLoggedInUser: true, mode: 'copilot-cli',
   clientInfo: { applicationName: 'Nimrod', integrationName: 'nimrod-copilot-sdk' },
 });
-let session, closing = false, initialized = false;
+const configuration = createCopilotConfiguration(client);
+let session, connecting = false, closing = false, initialized = false;
 let checkingHealth = false;
 let replaying = false, buffered = [];
 let commandRefresh;
@@ -85,33 +87,36 @@ async function dispatch(message) {
       await client.deleteSession(message.sessionId);
       return;
     case 'connect': {
-      if (session) throw new Error('This bridge already owns a conversation');
-      if (message.sessionId !== undefined) await membership(message.sessionId);
-      replaying = true;
-      session = message.sessionId === undefined
-        ? await client.createSession({ ...config(), name: 'Copilot session' })
-        : await client.resumeSession(message.sessionId, { ...config(), allowTranscriptRecovery: false, continuePendingWork: false });
-      if (message.sessionId !== undefined && session.sessionId !== message.sessionId) throw new Error('Copilot resumed a different session');
-      send({ kind: 'identified', sessionId: session.sessionId });
-      const mode = await session.rpc.mode.get();
-      if (mode !== 'interactive') throw new Error(`Copilot session mode "${mode}" is not supported by this integration. Change it to interactive in Copilot before reconnecting; no mode was changed or prompt sent.`);
-      // Resolve this session's lazy catalog/defaults before reading its current
-      // configuration. Client-wide listModels() does not initialize the session.
-      // This is a metadata read, not a prompt or an explicit model selection.
-      await session.rpc.model.list();
-      const events = await session.getEvents();
-      const model = await session.rpc.model.getCurrent();
-      const models = await client.listModels();
-      // History and streamed events share IDs. Publish replay first, synchronously
-      // in this channel, before any events received while getEvents was in flight.
-      send({ kind: 'connected', sessionId: session.sessionId, events, model, models });
-      const seen = new Set(events.map(item => item.id));
-      for (const item of buffered) if (!seen.has(item.id)) eventAfterReplay(item);
-      buffered = []; replaying = false;
-      // Command discovery is optional: failure must not disable ordinary chat.
-      try { await refreshCommands(); }
-      catch (error) { send({ kind: 'command-error', error: `Command discovery failed: ${failure(error)}` }); }
-      return;
+      if (session || connecting) throw new Error('This bridge already owns or is connecting a conversation');
+      connecting = true;
+      try {
+        if (message.sessionId !== undefined) await membership(message.sessionId);
+        replaying = true;
+        const defaults = message.sessionId === undefined ? await configuration.defaults() : undefined;
+        if (closing) throw new Error('Copilot connection closed while reading configuration. Nothing was created.');
+        session = message.sessionId === undefined
+          ? await client.createSession({ ...config(), ...defaults, name: 'Copilot session' })
+          : await client.resumeSession(message.sessionId, { ...config(), allowTranscriptRecovery: false, continuePendingWork: false });
+        if (message.sessionId !== undefined && session.sessionId !== message.sessionId) throw new Error('Copilot resumed a different session');
+        send({ kind: 'identified', sessionId: session.sessionId });
+        const mode = await session.rpc.mode.get();
+        if (mode !== 'interactive') throw new Error(`Copilot session mode "${mode}" is not supported by this integration. Change it to interactive in Copilot before reconnecting; no mode was changed or prompt sent.`);
+        const events = await session.getEvents();
+        // Use honored creation inputs only while the initial SDK snapshot omits
+        // them. Later root events/configuration results remain authoritative.
+        const model = await configuration.snapshot(session, defaults);
+        const models = await client.listModels();
+        // History and streamed events share IDs. Publish replay first, synchronously
+        // in this channel, before any events received while getEvents was in flight.
+        send({ kind: 'connected', sessionId: session.sessionId, events, model, models });
+        const seen = new Set(events.map(item => item.id));
+        for (const item of buffered) if (!seen.has(item.id)) eventAfterReplay(item);
+        buffered = []; replaying = false;
+        // Command discovery is optional: failure must not disable ordinary chat.
+        try { await refreshCommands(); }
+        catch (error) { send({ kind: 'command-error', error: `Command discovery failed: ${failure(error)}` }); }
+        return;
+      } finally { connecting = false; }
     }
     case 'commands':
       if (!session) throw new Error('No connected Copilot session');
@@ -148,8 +153,7 @@ async function dispatch(message) {
       return await session.abort();
     case 'configure':
       if (!session) throw new Error('No connected Copilot session');
-      await session.setModel(message.model, message.effort === undefined ? undefined : { reasoningEffort: message.effort });
-      return await session.rpc.model.getCurrent();
+      return await configuration.apply(session, message.model, message.effort);
     default: throw new Error('Unsupported Copilot bridge operation');
   }
 }

@@ -9,7 +9,7 @@ Human guide: [Model and thinking preferences](../../../../docs/model-thinking.md
 `src/session-configuration.ts::SessionConfiguration` is a small session-bound consumer port, not a universal session/controller or wire protocol. `main.ts` and `configuration-picker.ts` no longer dispatch model/effort selection by backend:
 
 - `capabilities`: supported setting descriptors with opaque IDs, labels, optional dependencies and live `ready` / `deferred` / `unavailable` availability/reasons. The common picker uses `model` and `effort`; concrete ACP options can contribute additional IDs. No common provider/model/effort enum.
-- `get(id)`: current harness-confirmed value, including undefined when unknown. It never returns pending intent as effective state.
+- `get(id)`: current harness-confirmed value, including undefined when unknown. Successfully accepted Copilot creation inputs provide initial values until concrete SDK values arrive; they are not reused on Resume or later deselection. It never returns pending intent as effective state.
 - `choices(id)`: fresh advertised choices bound to this configuration object, setting and dependency values. `set(id, choice)` accepts one of those choices synchronously; it is acceptance of local intent, not an RPC acknowledgement or a success promise.
 - `operations`: immutable-by-convention, reference-stable local progress publications. Owners publish them as `configurationOperations` on the existing synchronous conversation snapshot channel. No additional subscription/event bus, persistence or process ownership.
 
@@ -55,7 +55,7 @@ Pi exposes levels only for its currently selected model. If another model is pen
 
 `src/copilot/session-configuration.ts` uses the filtered catalog/current root model and supported reasoning efforts. Pending target models can supply their own advertised effort choices. `CopilotSession` owns idle-only SDK configuration, including command/configuration-in-flight guards; the picker can accept intent while those guards defer mutation. Pending work begins after the actual root idle boundary, not a child event or an acceptance response.
 
-Startup still resolves the session catalog before reading model/effort; no explicit startup default is forced. Native `session.model_change`/deselection outrank older results. Mutation failure/uncertainty disconnects rather than continuing with unconfirmed configuration. Shared code checks the reconciled getter before declaring success and never replays a failed request. [Copilot SDK](copilot-sdk.md) owns native transport/API scope.
+New sessions honor non-null Copilot model/effort preferences read through the SDK; each null value is omitted independently from creation options. Unknown display values are lowercase `default model` / `default effort`, and actual session values supersede creation inputs. Resume never inherits newly configured defaults. `copilot/configuration.mjs` owns that concrete bridge-side policy; live getters/pickers remain behind `SessionConfiguration`, and presentation remains behind `StatusAreaSnapshot`. Native `session.model_change`/deselection outrank older results. Mutation failure/uncertainty disconnects rather than continuing with unconfirmed configuration. Shared code checks the reconciled getter before declaring success and never replays a failed request. [Copilot SDK](copilot-sdk.md) owns native transport/API scope.
 
 ### Dormant generic ACP
 
@@ -66,7 +66,7 @@ Startup still resolves the session catalog before reading model/effort; no expli
 - `src/session-configuration.ts`: port, descriptors, capability/availability, choice provenance/dependencies, serialized latest-wins coordinator, disposal and local operations.
 - `src/configuration-picker.ts`, `src/main.ts`: one session-bound choice path, palette lifecycle and originating-owner revalidation. Picker completion means intent accepted; it does not await a later idle turn.
 - `src/pi/session-configuration.ts`, `src/pi/model-thinking-controller.ts`, `src/pi/session.ts`: concrete Pi port, fresh scoped metadata, guarded direct mutation and acknowledged refresh.
-- `src/copilot/session-configuration.ts`, `src/copilot/session.ts`: SDK catalog/defaults, target-model effort choices, concrete readiness and authoritative native-event precedence.
+- `copilot/configuration.mjs`, `src/copilot/session-configuration.ts`, `src/copilot/session.ts`: concrete SDK defaults/snapshot reconciliation, live interface, target-model effort choices, readiness and authoritative native-event precedence.
 - `src/acp/session.ts`: retained internal ACP port and native option execution.
 - `src/configuration-transcript.ts`, `src/conversation-view.ts`: local-only keyed rows, structural/incremental projection, retained title/animation and existing paint/scroll boundaries.
 - `src/status-area.ts`, `src/pi/status-area.ts`, `src/copilot/status-area.ts`: confirmed display only; no speculative pending state.

@@ -7,6 +7,13 @@ export class CopilotClient {
     assert.equal(options.useLoggedInUser, true);
     this.cwd = options.workingDirectory;
   }
+  defaultsReads = 0;
+  rpc = { user: { settings: { get: async () => {
+    this.defaultsReads++;
+    if (process.env.NIMROD_FIXTURE_COPILOT_MODEL_STATE === 'settings-error') throw new Error('Fixture settings read failed');
+    const defaults = JSON.parse(process.env.NIMROD_FIXTURE_COPILOT_DEFAULTS || '{"model":"small","effortLevel":"low"}');
+    return { settings: Object.fromEntries(Object.entries(defaults).map(([key, value]) => [key, { value, default: null, isDefault: value === null }])) };
+  } } } };
   async start() {}
   async getStatus() { return { version: '1.0.98', protocolVersion: 3 }; }
   async ping() { return { timestamp: Date.now() }; }
@@ -20,12 +27,18 @@ export class CopilotClient {
   }
   async createSession(config) {
     assert.equal(config.name, 'Copilot session');
-    assert.equal(config.model, undefined, 'startup must not override the runtime default');
-    assert.equal(config.reasoningEffort, undefined);
+    assert.equal(this.defaultsReads, 1, 'read configured defaults before creating a session');
+    const defaults = JSON.parse(process.env.NIMROD_FIXTURE_COPILOT_DEFAULTS || '{"model":"small","effortLevel":"low"}');
+    for (const [key, source] of [['model', 'model'], ['reasoningEffort', 'effortLevel']]) {
+      if (defaults[source] === null || defaults[source] === undefined) assert.equal(Object.hasOwn(config, key), false, `omit unset ${key}`);
+      else assert.equal(config[key], defaults[source], `honor the configured ${key}`);
+    }
     return this.session = new Session(config, false);
   }
   async resumeSession(id, config) {
     assert.equal(id, 'fixture-sdk'); assert.equal(config.allowTranscriptRecovery, false); assert.equal(config.continuePendingWork, false);
+    assert.equal(this.defaultsReads, 0, 'resume never probes current user defaults');
+    assert.equal(Object.hasOwn(config, 'model'), false); assert.equal(Object.hasOwn(config, 'reasoningEffort'), false);
     return this.session = new Session(config, true);
   }
   async deleteSession(id) { assert.equal(id, 'fixture-sdk'); assert.equal(this.session, undefined); this.deleted = id; }
@@ -37,7 +50,7 @@ class Session {
   turns = 0;
   model;
   effort;
-  catalogResolved = false;
+  configured = false;
   commandCatalog = [
     { name: 'permissions', aliases: ['perms'], description: 'Manage permissions', kind: 'builtin', allowDuringAgentExecution: true,
       input: { hint: 'Permission operation', choices: [{ name: 'show', description: 'Show permissions' }, { name: 'reset', description: 'Clear approvals' }] } },
@@ -45,18 +58,17 @@ class Session {
   ];
   rpc = {
     model: {
-      list: async () => {
-        this.catalogResolved = true;
-        // Like the runtime, new sessions resolve defaults lazily from their own
-        // catalog, not the client-wide model listing or the display layer.
-        if (!this.saved && process.env.NIMROD_FIXTURE_COPILOT_MODEL_STATE !== 'unresolved') {
-          this.model = 'small';
-          this.effort = process.env.NIMROD_FIXTURE_COPILOT_MODEL_STATE === 'model-only' ? undefined : 'low';
-        }
-        return { list: [{ id: 'small', name: 'Fixture small' }, { id: 'large', name: 'Fixture large' }] };
-      },
+      // Listing metadata must not manufacture a selection: real CLI probes
+      // returned an empty getCurrent snapshot both before and after this call.
+      list: async () => ({ list: [{ id: 'small', name: 'Fixture small' }, { id: 'large', name: 'Fixture large' }] }),
       getCurrent: async () => {
-        assert.equal(this.catalogResolved, true, 'resolve the session catalog before reading its configuration');
+        const state = process.env.NIMROD_FIXTURE_COPILOT_MODEL_STATE;
+        if (!this.saved && !this.configured) {
+          if (state === 'unresolved') return {};
+          if (state === 'model-only') return { modelId: this.model };
+          if (state === 'native-override') return { modelId: 'large' };
+          if (state === 'native-effort') return { modelId: this.model, reasoningEffort: 'high' };
+        }
         return { modelId: this.model, reasoningEffort: this.effort };
       },
     },
@@ -78,6 +90,7 @@ class Session {
   constructor(config, saved) {
     this.config = config; this.saved = saved; this.listeners = [config.onEvent];
     if (saved) { this.model = 'large'; this.effort = undefined; }
+    else { this.model = config.model; this.effort = config.reasoningEffort; }
   }
   on(listener) { this.listeners.push(listener); return () => { this.listeners = this.listeners.filter(item => item !== listener); }; }
   emit(type, data) { const event = { id: `fixture-${this.sequence++}`, type, data }; this.listeners.forEach(listener => listener(event)); }
@@ -115,7 +128,7 @@ class Session {
   }
   async abort() { this.emit('session.idle', {}); }
   async setModel(model, options) {
-    this.model = model; this.effort = options?.reasoningEffort;
+    this.configured = true; this.model = model; this.effort = options?.reasoningEffort;
     this.emit('session.model_change', { newModel: model, reasoningEffort: this.effort });
   }
   async disconnect() { this.disconnected = true; this.listeners = []; }

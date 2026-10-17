@@ -5,8 +5,8 @@ import test from 'node:test';
 import { CopilotSession } from '../src/copilot/session';
 import { createToolCapture } from '../src/tool-capture';
 
-function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) => void, modelState = 'resolved') {
-  const child = spawn(process.execPath, ['--import', './test/fixtures/copilot-sdk-register.mjs', 'copilot/bridge.mjs', '/fixture/copilot', '/fixture/project'], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, NIMROD_FIXTURE_COPILOT_MODE: mode, NIMROD_FIXTURE_COPILOT_MODEL_STATE: modelState } });
+function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) => void, modelState = 'resolved', defaults: Record<string, unknown> = { model: 'small', effortLevel: 'low' }) {
+  const child = spawn(process.execPath, ['--import', './test/fixtures/copilot-sdk-register.mjs', 'copilot/bridge.mjs', '/fixture/copilot', '/fixture/project'], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, NIMROD_FIXTURE_COPILOT_MODE: mode, NIMROD_FIXTURE_COPILOT_MODEL_STATE: modelState, NIMROD_FIXTURE_COPILOT_DEFAULTS: JSON.stringify(defaults) } });
   const packets: Record<string, any>[] = [], pending = new Map<string, { resolve(value: any): void; reject(error: Error): void }>();
   let stderr = '', sequence = 0;
   child.stderr.on('data', chunk => { stderr += chunk; });
@@ -47,7 +47,7 @@ test('production SDK bridge loads only exact project members and disconnects wit
     const connected = f.packets.find(packet => packet.kind === 'connected')!;
     assert.equal(connected.sessionId, 'fixture-sdk');
     assert.equal(connected.events[1].data.content, 'Saved SDK answer');
-    assert.equal(connected.model.modelId, 'large', 'catalog resolution must preserve an existing session selection');
+    assert.equal(connected.model.modelId, 'large', 'new-session defaults must never override a resumed selection');
     assert.equal(connected.model.reasoningEffort, undefined);
     assert.ok(f.packets.findIndex(packet => packet.kind === 'identified') < f.packets.indexOf(connected));
     assert.equal(f.packets.some(packet => packet.kind === 'permission' || packet.kind === 'input'), false);
@@ -56,7 +56,7 @@ test('production SDK bridge loads only exact project members and disconnects wit
   } finally { await f.close(); }
 });
 for (const modelState of ['resolved', 'model-only', 'unresolved']) {
-  test(`new SDK sessions read lazy configuration before any prompt (${modelState})`, { timeout: 5000 }, async () => {
+  test(`new SDK sessions honor configured creation defaults before any prompt (${modelState})`, { timeout: 5000 }, async () => {
     let session: CopilotSession | undefined;
     const f = bridge('interactive', packet => session?.receive(packet), modelState);
     session = new CopilotSession(async message => f.send(message), {
@@ -67,15 +67,102 @@ for (const modelState of ['resolved', 'model-only', 'unresolved']) {
     try {
       await session.initialize();
       const status = session.state.statusArea!;
-      assert.equal(status.controls.find(control => control.id === 'model')?.label, modelState === 'unresolved' ? 'Copilot default' : 'small');
+      assert.equal(status.controls.find(control => control.id === 'model')?.label, 'small');
       const effort = status.controls.find(control => control.id === 'thinking');
-      assert.equal(effort?.label, modelState === 'resolved' ? 'low' : modelState === 'model-only' ? 'Model default' : undefined);
+      assert.equal(effort?.label, 'low');
       assert.ok(status.controls.every(control => !control.disabled));
       assert.equal(session.state.messages.length, 0);
       assert.deepEqual(f.packets.filter(packet => ['event', 'permission', 'input'].includes(packet.kind)), [], 'initialization must not send a prompt or explicitly switch models');
     } finally { session.disconnect('offline startup fixture complete'); await f.close(); }
   });
 }
+
+for (const scenario of [
+  { defaults: { model: null, effortLevel: null }, model: 'default model', effort: 'default effort', disabled: true },
+  { defaults: {}, model: 'default model', effort: 'default effort', disabled: true },
+  { defaults: { model: 'small', effortLevel: null }, model: 'small', effort: 'default effort', disabled: false },
+  { defaults: { model: null, effortLevel: 'high' }, model: 'default model', effort: 'high', disabled: true },
+  { defaults: { model: 'small', effortLevel: 'high', unrelatedSecret: 'must-not-be-published' }, model: 'small', effort: 'high', disabled: false },
+]) {
+  test(`SDK defaults are independent creation inputs and lowercase unknown labels (${JSON.stringify(scenario.defaults)})`, { timeout: 5000 }, async () => {
+    let session: CopilotSession | undefined;
+    const f = bridge('interactive', packet => session?.receive(packet), 'unresolved', scenario.defaults);
+    session = new CopilotSession(async message => f.send(message), {
+      publish() {}, changed() {}, identified() {}, disconnected() {}, notice(message) { assert.fail(message); },
+      completed() { assert.fail('No startup turn'); }, decision: async () => { assert.fail('No startup decision'); },
+    });
+    try {
+      await session.initialize();
+      const controls = session.state.statusArea!.controls;
+      assert.equal(controls.find(control => control.id === 'model')?.label, scenario.model);
+      assert.equal(controls.find(control => control.id === 'thinking')?.label, scenario.effort);
+      assert.equal(controls.find(control => control.id === 'thinking')?.disabled, scenario.disabled);
+      assert.equal(session.configuration.get('model'), scenario.defaults.model ?? undefined);
+      assert.equal(session.configuration.get('effort'), scenario.defaults.effortLevel ?? undefined);
+      assert.equal(JSON.stringify(f.packets).includes('must-not-be-published'), false);
+      assert.equal(session.state.messages.length, 0);
+      assert.equal(f.packets.some(packet => ['permission', 'input', 'event'].includes(packet.kind)), false);
+    } finally { session.disconnect('offline defaults fixture complete'); await f.close(); }
+  });
+}
+
+for (const modelState of ['native-override', 'native-effort']) {
+  test(`SDK initial authoritative state outranks configured defaults (${modelState})`, { timeout: 5000 }, async () => {
+    const f = bridge('interactive', undefined, modelState);
+    try {
+      await f.request('initialize'); await f.request('connect');
+      const model = f.packets.find(packet => packet.kind === 'connected')!.model;
+      assert.equal(model.modelId, modelState === 'native-override' ? 'large' : 'small');
+      assert.equal(model.reasoningEffort, modelState === 'native-override' ? undefined : 'high');
+    } finally { await f.close(); }
+  });
+}
+
+test('SDK creation defaults never revive an omitted value in a later configuration result', { timeout: 5000 }, async () => {
+  const f = bridge('interactive', undefined, 'unresolved', { model: 'small', effortLevel: 'high' });
+  try {
+    await f.request('initialize'); await f.request('connect');
+    assert.equal(f.packets.find(packet => packet.kind === 'connected')!.model.reasoningEffort, 'high');
+    const changed = await f.request('configure', { model: 'large' });
+    assert.equal(changed.modelId, 'large');
+    assert.equal(changed.reasoningEffort, undefined);
+  } finally { await f.close(); }
+});
+
+for (const defaults of [{ model: 42, effortLevel: null }, { model: 'small', effortLevel: {} }]) {
+  test(`malformed configured defaults fail before session creation (${JSON.stringify(defaults)})`, { timeout: 5000 }, async () => {
+    const f = bridge('interactive', undefined, 'resolved', defaults);
+    try {
+      await f.request('initialize'); await assert.rejects(f.request('connect'), /invalid .* setting/);
+      assert.equal(f.packets.some(packet => packet.kind === 'identified'), false);
+    } finally { await f.close(); }
+  });
+}
+
+test('SDK concurrent connect requests cannot duplicate creation while defaults are being read', { timeout: 5000 }, async () => {
+  const f = bridge();
+  try {
+    await f.request('initialize');
+    const [first, second] = await Promise.allSettled([f.request('connect'), f.request('connect')]);
+    assert.equal(first.status, 'fulfilled');
+    assert.equal(second.status, 'rejected');
+    if (second.status === 'rejected') assert.match(String(second.reason), /already owns or is connecting/);
+    assert.equal(f.packets.filter(packet => packet.kind === 'identified').length, 1);
+  } finally { await f.close(); }
+});
+
+test('SDK settings failure prevents creation, but never affects exact-ID Resume', { timeout: 5000 }, async () => {
+  const f = bridge('interactive', undefined, 'settings-error');
+  try {
+    await f.request('initialize'); await assert.rejects(f.request('connect'), /settings read failed/);
+    assert.equal(f.packets.some(packet => packet.kind === 'identified' || packet.kind === 'connected'), false);
+  } finally { await f.close(); }
+  const resumed = bridge('interactive', undefined, 'settings-error');
+  try {
+    await resumed.request('initialize'); await resumed.request('connect', { sessionId: 'fixture-sdk' });
+    assert.equal(resumed.packets.find(packet => packet.kind === 'connected')!.model.modelId, 'large');
+  } finally { await resumed.close(); }
+});
 
 test('production SDK bridge tool and permission packets reach the JSONL capture sink unchanged', { timeout: 5000 }, async () => {
   const lines: string[] = [], errors: string[] = [];

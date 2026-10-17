@@ -29,6 +29,23 @@ test('Pi status capabilities retain native configuration, extensions and unknown
   assert.equal(cleared.subagents, undefined);
 });
 
+test('Copilot unknown model/effort values have independent lowercase placeholders without guessed capabilities', () => {
+  const project = createCopilotStatusArea();
+  const unresolved = { supportsModel: true, supportsThinking: false, available: true };
+  const both = project(unresolved);
+  assert.deepEqual(both.controls.map(control => control.label), ['default model', 'default effort']);
+  assert.equal(both.controls[0].disabled, false);
+  assert.equal(both.controls[1].disabled, true, 'unknown model cannot invent selectable effort levels');
+  assert.equal(project({ ...unresolved }), both);
+  const effortOnly = project({ ...unresolved, effort: 'high' });
+  assert.deepEqual(effortOnly.controls.map(control => control.label), ['default model', 'high']);
+  const modelOnly = project({ ...unresolved, model: 'small', supportsThinking: true });
+  assert.deepEqual(modelOnly.controls.map(control => control.label), ['small', 'default effort']);
+  assert.equal(modelOnly.controls[1].disabled, false);
+  const knownUnsupported = project({ ...unresolved, model: 'large' });
+  assert.deepEqual(knownUnsupported.controls.map(control => control.label), ['large']);
+});
+
 test('Copilot status separates advertised selectors, transient availability and reported usage', () => {
   const project = createCopilotStatusArea();
   const state = { supportsModel: false, supportsThinking: false, available: false };

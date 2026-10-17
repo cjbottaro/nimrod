@@ -20,8 +20,9 @@ export function createCopilotStatusArea(): (state: CopilotStatusAreaState) => St
       || previous.supportsThinking !== state.supportsThinking || previous.available !== state.available) {
       const disabled = !state.available;
       controls = [
-        ...(state.supportsModel ? [{ id: 'model', label: state.model || 'Copilot default', title: 'Select Copilot model', disabled }] : []),
-        ...(state.supportsThinking ? [{ id: 'thinking', label: state.effort || 'Model default', title: 'Select Copilot reasoning effort', disabled }] : []),
+        ...(state.supportsModel ? [{ id: 'model', label: state.model || 'default model', title: 'Select Copilot model', disabled }] : []),
+        ...(state.supportsThinking || state.supportsModel && !state.model ? [{ id: 'thinking', label: state.effort || 'default effort',
+          title: state.supportsThinking ? 'Select Copilot reasoning effort' : 'Select a model to choose Copilot reasoning effort', disabled: disabled || !state.supportsThinking }] : []),
       ];
     }
     const metrics = previous && previous.usage === state.usage ? snapshot?.metrics : state.usage

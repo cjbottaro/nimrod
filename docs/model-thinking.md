@@ -15,6 +15,16 @@ The **Status area shows confirmed values only**. There is no pending badge or sp
 
 Changing models can change thinking effort according to the harness's defaults and supported levels. Selecting another pending model drops effort queued for the previous target. Copilot can offer efforts advertised for a pending target model; for Pi, wait until the model changes before choosing its supported thinking levels. Nimrod revalidates choices before applying, rather than silently carrying an incompatible effort across models.
 
+## Copilot new-session defaults
+
+New Copilot sessions use Copilot’s configured model/effort preferences, read through
+the SDK. Each setting is independent: non-null values are supplied at creation;
+unset values are omitted and display lowercase **default model** / **default effort**
+until Copilot reports a concrete value. No default is guessed from the catalog.
+When the model is unknown, the effort value/placeholder stays visible but cannot
+be selected until its supported choices are known. Resuming saved sessions never
+applies current new-session defaults.
+
 ## Limits and lifecycle
 
 Models and efforts come from the harness. Pi models stay inside Pi's configured scope; Copilot uses its reported catalog. Nimrod never guesses unknown selections, stops/restarts work to apply a change, or automatically retries an uncertain mutation.

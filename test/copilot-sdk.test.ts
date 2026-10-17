@@ -142,7 +142,11 @@ test('SDK status publishes root usage and reconciles selector capabilities witho
   f.event('session.model_change', { newModel: 'large' });
   assert.deepEqual(f.session.state.statusArea!.controls.map(control => control.id), ['model']);
   f.event('session.model_deselected', {});
-  assert.equal(f.session.state.statusArea!.controls[0].label, 'Copilot default');
+  assert.equal(f.session.state.statusArea!.controls[0].label, 'default model');
+  assert.equal(f.session.state.statusArea!.controls[1].label, 'default effort');
+  assert.equal(f.session.state.statusArea!.controls[1].disabled, true);
+  assert.equal(f.session.configuration.get('model'), undefined);
+  assert.equal(f.session.configuration.get('effort'), undefined);
   f.session.disconnect('fixture complete');
   assert.equal(f.session.state.statusArea!.metrics, reported.metrics);
   assert.ok(f.session.state.statusArea!.controls.every(control => control.disabled));

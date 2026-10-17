@@ -5,7 +5,7 @@
 ## Specification and acceptance criteria
 
 Copilot runtime assets are staged checkout-locally by `build.rs` through
-`scripts/prepare-copilot.mjs`: pinned SDK/bridge and required dependencies,
+`scripts/prepare-copilot.mjs`: pinned SDK, bridge/configuration modules and required dependencies,
 including eager koffi native imports, **without optional Copilot CLI runtimes**.
 Staging currently requires a native same-platform/architecture build and fails
 instead of packaging a host binary for a different target. Native files receive

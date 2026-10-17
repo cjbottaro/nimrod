@@ -36,12 +36,15 @@ and accept selections while connected, including during work. Changes apply
 when Copilot is idle; a shimmering [configuration change](model-thinking.md)
 entry in the transcript shows waiting/application and updates in place if you
 choose another value. The Status area keeps confirmed values, without a pending
-badge. Connecting resolves the session’s model catalog
-before reading its model/effort, so reported defaults can appear before your
-first message—without sending a prompt or explicitly selecting a model. If
-Copilot still reports no selection, the label remains **Copilot default**;
-missing effort stays **Model default**, not a guessed level. Thinking appears
-only for a model that advertises efforts. Tool/reasoning cards, disclosures, scroll behavior, draft storage and
+badge. New sessions read Copilot’s own configured model and effort through the
+SDK and use each non-null value at creation—no separate Nimrod preference or
+hidden prompt. If either is unset and Copilot has not reported a concrete session
+value, it independently displays **default model** or **default effort**, in
+lowercase. Actual session-reported values replace the initial creation values.
+While the model is unresolved, the effort value/placeholder is visible but
+unavailable for selection until supported choices are known; known models without
+reasoning support omit the effort control. Resume keeps its saved configuration
+rather than applying today’s new-session defaults. Tool/reasoning cards, disclosures, scroll behavior, draft storage and
 notification preferences reuse the existing shell. Unknown rich results remain
 literal data; no tool payload grants additional permission.
 Copilot inspection/web cards reuse shared components, including cited web answers

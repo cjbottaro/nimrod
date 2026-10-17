@@ -23,7 +23,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
-- Copilot resolves its session model catalog before reading startup configuration, allowing reported model/effort defaults to appear before the first message without sending a prompt or overriding Copilot’s selection. Unresolved values retain honest default labels.
+- New Copilot sessions honor Copilot’s SDK-reported model/effort preferences independently at creation, omitting unset values rather than guessing defaults. Unknown values show lowercase `default model` / `default effort` before the first message; actual session values supersede creation inputs. Resume preserves saved configuration without applying current new-session defaults.
 - Copilot SDK tool capture includes streamed tool inputs and native permission request/completion events, correlates nested permission tool IDs, retains the reported runtime version, and safely records callbacks received before session identity is known. SDK logs remain separate from Pi and custom ACP captures.
 - Copilot SDK session snapshots, web citation offsets and the shell's self-referential command-choice initializer retain explicit types, fixing TypeScript compilation after the SDK migration and slash-command integration. The configuration snapshot reader has a distinct name from the session's public configuration interface, fixing the subsequent duplicate-member compilation failure.
 - Bundled Copilot card adapters recognize the CLI’s reported `Copilot` agent identity, including the existing command-output adapter.

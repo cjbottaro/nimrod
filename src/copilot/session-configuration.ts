@@ -14,7 +14,9 @@ export function createCopilotConfiguration(host: {
       const models = host.models(), model = models.find(item => item.id === (desired.model ?? host.model()));
       return [
         ...(models.length ? [{ id: 'model', label: 'Model', availability: host.availability() }] : []),
-        ...(model?.efforts?.length ? [{ id: 'effort', label: 'Thinking level', availability: host.availability(), dependsOn: ['model'] }] : []),
+        ...(model?.efforts?.length ? [{ id: 'effort', label: 'Thinking level', availability: host.availability(), dependsOn: ['model'] }]
+          : !desired.model && !host.model() && models.length ? [{ id: 'effort', label: 'Thinking level', availability: 'unavailable' as const,
+            reason: 'Select a model before choosing Copilot reasoning effort.', dependsOn: ['model'] }] : []),
       ];
     },
     get: setting => setting === 'model' ? host.model() : setting === 'effort' ? host.effort() : undefined,

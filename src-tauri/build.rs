@@ -155,6 +155,7 @@ fn main() {
         .to_path_buf();
     for path in [
         "copilot/bridge.mjs",
+        "copilot/configuration.mjs",
         "scripts/prepare-copilot.mjs",
         "package-lock.json",
     ] {

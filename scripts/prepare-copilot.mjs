@@ -14,7 +14,8 @@ if (platform !== process.platform || arch !== process.arch)
 // must never survive a previous staging run.
 await rm(destination, { recursive: true, force: true });
 await mkdir(destination, { recursive: true });
-await cp(new URL('../copilot/bridge.mjs', import.meta.url), new URL('bridge.mjs', destination));
+for (const file of ['bridge.mjs', 'configuration.mjs'])
+  await cp(new URL(`../copilot/${file}`, import.meta.url), new URL(file, destination));
 // Ship the SDK and its dependencies, never the SDK's optional Copilot runtime.
 for (const name of ['@github/copilot-sdk', 'vscode-jsonrpc', 'zod', 'koffi', `@koromix/koffi-${platform}-${arch}`]) {
   let directory = dirname(require.resolve(name));
