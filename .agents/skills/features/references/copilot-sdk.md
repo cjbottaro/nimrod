@@ -245,11 +245,19 @@ selection approves:
   file reads this session**. This is deliberately not described as directory-
   or project-confined.
 - Write: the same variant with `approval:{kind:'write'}`, labelled **Allow all
-  file writes this session**.
-- Shell: only when the runtime supplied a nonempty valid `commands` catalog;
-  exact de-duplicated `identifier` values form `approval:{kind:'commands',
-  commandIdentifiers:[…]}`. The choice names the identifiers and **any arguments**;
-  the current full command text is not misrepresented as the remembered scope.
+  file writes this session**, only with native `canOfferSessionApproval:true`.
+- Shell: only with native `canOfferSessionApproval:true` and a nonempty valid
+  `commands` catalog; false, absent or malformed capability values offer only
+  one-time approval/denial. Exact de-duplicated `commands[].identifier` values
+  form `approval:{kind:'commands',commandIdentifiers:[…]}`. The primary label is
+  **Allow for this session**, with searchable, wrapping secondary scope details.
+  `commandSegments[].identifier` supplies parsed **Commands** context when valid
+  and distinct from the approval identifiers; missing/malformed segments fall
+  back to the exact scope. **Approval scope(s)** always retains the literal rule
+  identifiers, listed individually for multiple rules. Never parse command text,
+  substitute shorter segment identifiers into the grant, or imply **any arguments**
+  merely because a command is allowed for a session. Some real `commands` entries
+  contain the complete invocation, not an executable name.
 - MCP: `approval:{kind:'mcp',serverName,toolName}` for this exact tool, never all
   tools on a server.
 - HTTP(S) URL: session approval with the parsed hostname in `domain`, or
@@ -262,7 +270,7 @@ selection approves:
 
 Every decision is checked against the bridge's retained original request using
 the same option builder; unrelated domains, broader MCP scopes, mismatched
-approval kinds, injected fields and legacy outcome values are rejected. No
+approval kinds, capability-disabled shell/write grants, injected fields and legacy outcome values are rejected. No
 Nimrod-side remembered permission policy, bulk approval of queued requests,
 automatic replay, or local settings writes. Copilot owns remembered rules and
 their lifetime. Each already-pending callback remains an independent choice
@@ -292,7 +300,7 @@ the same open shell without closing/reopening it. The header shows **N more**
 (excluding the current request), or **Last request**. New arrivals update only
 the count/banner: keep the current filter, selection, preview/raw disclosure and
 any nested feedback input. Advancing resets the filter for the next request.
-Long scope labels wrap instead of truncating away important grant information.
+Long scope labels and secondary details wrap instead of truncating away important grant information. Shell permission options carry their secondary `detail` from the shared scope builder through the existing palette item metadata; filtering includes both parsed context and exact grant scope.
 
 Escape/native cancellation dismisses the presentation **without answering**;
 pending SDK callbacks, waiting status and the banner remain. New arrivals do not
@@ -322,7 +330,7 @@ underlying busy/Stop/configuration semantics intact. Dirty-row publications and
 stable Status-area contributions remain on the existing shared view/scroll path;
 streaming never rebuilds the picker, scans the pending queue to recalculate status, or clears its waiting text. The busy composer hint is simply **Stop to cancel · Shift+Enter for newline**, avoiding a contradictory Working label while waiting.
 
-SDK 1.0.98 logs established actual read/shell/fetch failures when the old host returned `approved`, despite the SDK's permissive generated union and old fake accepting it. The production SDK forwards the handler result directly to `permissions.handlePendingPermissionRequest`; no legacy-to-modern conversion is assumed. The offline fake now validates decision forms for shell and URL callbacks, and new bridge fixtures reject the old forms before accepting an explicit single-use choice. Those new fixtures are authored but unrun for this follow-up. No live prompts are replayed or reissued to validate the fix.
+SDK 1.0.98 logs established actual read/shell/fetch failures when the old host returned `approved`, despite the SDK's permissive generated union and old fake accepting it. The production SDK forwards the handler result directly to `permissions.handlePendingPermissionRequest`; no legacy-to-modern conversion is assumed. The offline fake now validates decision forms for shell and URL callbacks and requires the explicit native capability for shell/write session grants, and new bridge fixtures reject the old forms before accepting an explicit single-use choice. Those new fixtures are authored but unrun for this follow-up. No live prompts are replayed or reissued to validate the fix.
 
 Compact permission previews are SDK-owned parsing through `src/copilot/permission-presentation.ts`, with a shared public display-only `operationPreview` helper. Commands/intention, owning-project paths, URL/MCP scope and supplied diffs/arguments are visible; raw details stays initially closed in the operation context above the choice list. Sandbox-bypass reasons and managed-approval requirements remain prominent. Read-kind requests with native `Search in directory:` / `Search in file:` intentions use **Search directory** / **Search file**, not misleading **Read file** titles. Other read intentions remain visible. Unknown scopes remain literal rather than being hidden or auto-approved. The helper cannot make decisions or invoke tools.
 

@@ -85,7 +85,7 @@ export class CopilotPermissionInteraction {
     if (this.shown === entry) return; // Arrival retains query, selection, preview/disclosures and child input.
     this.shown = entry;
     page.show({ items: [
-      ...entry.options.map(option => ({ id: option.id, label: option.label,
+      ...entry.options.map(option => ({ id: option.id, label: option.label, detail: option.detail,
         run: () => { if (this.canChoose(entry)) entry.finish(option.decision); } })),
       { id: 'deny', label: 'Deny', run: () => { if (this.canChoose(entry)) entry.finish({ kind: 'reject' }); } },
       { id: 'feedback', label: 'Deny with feedback…', detail: 'Give a reason or suggest what to do instead',

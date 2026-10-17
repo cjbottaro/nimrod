@@ -3,7 +3,9 @@
 export function permissionOptions(request) {
   const options = [{ id: 'once', label: 'Allow once', decision: { kind: 'approve-once', approvedInteractively: true } }];
   if (request.managedApprovalRequired === true || request.requestSandboxBypass === true) return options;
-  let approval, label;
+  // These SDK request kinds explicitly advertise whether standing approval is allowed.
+  if (['shell', 'write'].includes(request.kind) && request.canOfferSessionApproval !== true) return options;
+  let approval, label, detail;
   if (request.kind === 'read' && typeof request.path === 'string' && request.path.trim()) {
     approval = { kind: 'read' }; label = 'Allow all file reads this session';
   } else if (request.kind === 'write' && typeof request.fileName === 'string' && request.fileName.trim()) {
@@ -12,7 +14,17 @@ export function permissionOptions(request) {
     && request.commands.every(command => command && typeof command.identifier === 'string' && command.identifier.trim())) {
     const commandIdentifiers = [...new Set(request.commands.map(command => command.identifier))];
     approval = { kind: 'commands', commandIdentifiers };
-    label = `Allow commands this session: ${commandIdentifiers.join(', ')} (any arguments)`;
+    label = 'Allow for this session';
+    const segments = Array.isArray(request.commandSegments) && request.commandSegments.length
+      && request.commandSegments.every(segment => segment && typeof segment.identifier === 'string' && segment.identifier.trim())
+      ? [...new Set(request.commandSegments.map(segment => segment.identifier))] : [];
+    // Segments describe the invocation; only commands[].identifier defines the returned grant.
+    // Never shorten/broaden a permission rule to match its presentation.
+    const sameIdentifiers = segments.length === commandIdentifiers.length
+      && segments.every((identifier, index) => identifier === commandIdentifiers[index]);
+    const scope = commandIdentifiers.length === 1 ? `Approval scope: ${commandIdentifiers[0]}`
+      : `Approval scopes:\n${commandIdentifiers.map(identifier => `• ${identifier}`).join('\n')}`;
+    detail = segments.length && !sameIdentifiers ? `Commands: ${segments.join(', ')}\n${scope}` : scope;
   } else if (request.kind === 'mcp' && typeof request.serverName === 'string' && request.serverName.trim()
     && typeof request.toolName === 'string' && request.toolName.trim()) {
     approval = { kind: 'mcp', serverName: request.serverName, toolName: request.toolName };
@@ -28,7 +40,7 @@ export function permissionOptions(request) {
     } catch { /* Malformed/unknown scopes retain only one-time approval. */ }
     return options;
   }
-  if (approval) options.push({ id: 'session', label, decision: { kind: 'approve-for-session', approval } });
+  if (approval) options.push({ id: 'session', label, ...(detail ? { detail } : {}), decision: { kind: 'approve-for-session', approval } });
   return options;
 }
 function exact(value, expected) {

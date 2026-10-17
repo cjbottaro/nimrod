@@ -5,6 +5,6 @@ export type PermissionDecision =
   | { kind: 'approve-permanently'; domain: string }
   | { kind: 'reject'; feedback?: string }
   | { kind: 'user-not-available' };
-export interface PermissionOption { id: string; label: string; decision: PermissionDecision }
+export interface PermissionOption { id: string; label: string; detail?: string; decision: PermissionDecision }
 export function permissionOptions(request: Readonly<Record<string, unknown>>): PermissionOption[];
 export function validPermissionDecision(request: Readonly<Record<string, unknown>>, value: unknown): value is PermissionDecision;

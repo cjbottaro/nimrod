@@ -11,8 +11,8 @@ import { stubDialogs } from './dialog-fixture';
 test('Copilot offers exact, labelled session rules and explicitly saved URL domains', () => {
   for (const [request, expected] of [
     [{ kind: 'read', path: '/project/test' }, { kind: 'approve-for-session', approval: { kind: 'read' } }],
-    [{ kind: 'write', fileName: '/project/file' }, { kind: 'approve-for-session', approval: { kind: 'write' } }],
-    [{ kind: 'shell', fullCommandText: 'git status', commands: [{ identifier: 'git', readOnly: true }, { identifier: 'git', readOnly: false }] },
+    [{ kind: 'write', fileName: '/project/file', canOfferSessionApproval: true }, { kind: 'approve-for-session', approval: { kind: 'write' } }],
+    [{ kind: 'shell', canOfferSessionApproval: true, fullCommandText: 'git status', commands: [{ identifier: 'git', readOnly: true }, { identifier: 'git', readOnly: false }] },
       { kind: 'approve-for-session', approval: { kind: 'commands', commandIdentifiers: ['git'] } }],
     [{ kind: 'mcp', serverName: 'github', toolName: 'search' },
       { kind: 'approve-for-session', approval: { kind: 'mcp', serverName: 'github', toolName: 'search' } }],
@@ -25,7 +25,9 @@ test('Copilot offers exact, labelled session rules and explicitly saved URL doma
   }
   const read = permissionOptions({ kind: 'read', path: '/project/file' });
   assert.match(read[1].label, /all file reads this session/); // Not a directory-confined grant.
-  assert.match(permissionOptions({ kind: 'shell', fullCommandText: 'git status', commands: [{ identifier: 'git' }] })[1].label, /any arguments/);
+  const shell = permissionOptions({ kind: 'shell', canOfferSessionApproval: true, fullCommandText: 'git status', commands: [{ identifier: 'git' }] })[1];
+  assert.equal(shell.label, 'Allow for this session'); assert.equal(shell.detail, 'Approval scope: git');
+  assert.doesNotMatch(JSON.stringify(shell), /any arguments/);
   const url = { kind: 'url', url: 'https://example.test/docs' };
   const options = permissionOptions(url);
   assert.deepEqual(options[1].decision, { kind: 'approve-for-session', domain: 'example.test' });
@@ -53,6 +55,46 @@ test('managed, elevated, unknown and malformed scopes retain only explicit one-t
     for (const value of [{ kind: 'approved' }, { kind: 'approve-once' }, { kind: 'reject', feedback: 42 }, { kind: 'reject', approval: {} }])
       assert.equal(validPermissionDecision(request, value), false);
   }
+});
+
+test('shell/write session approval requires an explicit capability, including in the bridge validator', () => {
+  for (const capability of [false, undefined, null, 'true', 1]) {
+    for (const request of [
+      { kind: 'shell', fullCommandText: 'git worktree add /fixture/tree', commands: [{ identifier: 'git worktree add /fixture/tree' }],
+        commandSegments: [{ identifier: 'git worktree', fullCommandText: 'git worktree add /fixture/tree' }], canOfferSessionApproval: capability },
+      { kind: 'write', fileName: '/fixture/file', canOfferSessionApproval: capability },
+    ]) {
+      assert.deepEqual(permissionOptions(request).map(option => option.id), ['once']);
+      assert.equal(validPermissionDecision(request, { kind: 'approve-for-session', approval: request.kind === 'write'
+        ? { kind: 'write' } : { kind: 'commands', commandIdentifiers: ['git worktree add /fixture/tree'] } }), false);
+      assert.equal(validPermissionDecision(request, { kind: 'approve-once', approvedInteractively: true }), true);
+      assert.equal(validPermissionDecision(request, { kind: 'reject' }), true);
+    }
+  }
+});
+
+test('shell presentation uses parsed context but preserves literal approval scopes and conservative fallbacks', () => {
+  const full = 'git worktree add /fixture/tree -b task/example';
+  const request = { kind: 'shell', canOfferSessionApproval: true, fullCommandText: full,
+    commands: [{ identifier: full }, { identifier: full }],
+    commandSegments: [{ identifier: 'git worktree', fullCommandText: full }] };
+  const option = permissionOptions(request)[1];
+  assert.equal(option.label, 'Allow for this session');
+  assert.equal(option.detail, `Commands: git worktree\nApproval scope: ${full}`);
+  assert.deepEqual(option.decision, { kind: 'approve-for-session', approval: { kind: 'commands', commandIdentifiers: [full] } });
+  assert.equal(validPermissionDecision(request, { kind: 'approve-for-session', approval: { kind: 'commands', commandIdentifiers: ['git worktree'] } }), false);
+  for (const commandSegments of [undefined, [], [{ identifier: '' }], [{ identifier: 'git' }, null]]) {
+    const fallback = permissionOptions({ ...request, commandSegments })[1];
+    assert.equal(fallback.detail, `Approval scope: ${full}`); assert.deepEqual(fallback.decision, option.decision);
+  }
+  const compound = permissionOptions({ kind: 'shell', canOfferSessionApproval: true, fullCommandText: 'cd /fixture && rg pattern .',
+    commands: [{ identifier: 'cd /fixture && rg pattern .' }],
+    commandSegments: [{ identifier: 'cd' }, { identifier: 'rg' }, { identifier: 'rg' }] })[1];
+  assert.equal(compound.detail, 'Commands: cd, rg\nApproval scope: cd /fixture && rg pattern .');
+  const multiple = permissionOptions({ ...request, commands: [{ identifier: 'git status' }, { identifier: 'git diff' }], commandSegments: [] })[1];
+  assert.equal(multiple.detail, 'Approval scopes:\n• git status\n• git diff');
+  assert.equal(permissionOptions({ kind: 'shell', canOfferSessionApproval: true, fullCommandText: full,
+    commands: [], commandSegments: request.commandSegments }).length, 1, 'segments alone cannot manufacture a grant');
 });
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -136,6 +178,27 @@ test('sequential permissions retain one modal, details/query on arrivals and exa
     assert.deepEqual(await three, { kind: 'approve-permanently', domain: 'example.test' });
     assert.deepEqual(f.counts(), { pending: 0, opens: 2, closes: 2 });
     assert.equal(f.notices.strip.hidden, true); assert.equal(f.document.activeElement, f.draft);
+  } finally { owner.abort(); f.dispose(); }
+});
+
+test('shell scope details are searchable picker metadata and never change the approved identifiers', async () => {
+  const f = fixture(), owner = new AbortController();
+  try {
+    const full = 'git worktree add /fixture/tree -b task/example';
+    const request = { kind: 'shell', canOfferSessionApproval: true, fullCommandText: full,
+      commands: [{ identifier: full }], commandSegments: [{ identifier: 'git worktree', fullCommandText: full }] };
+    const result = f.interaction.request(request, owner.signal);
+    const row = [...f.document.querySelectorAll('#palette-list > [role=option]')]
+      .find(row => row.querySelector('.palette-item-label')?.textContent === 'Allow for this session')!;
+    assert.ok(row);
+    assert.equal(row.querySelector('.palette-item-label')!.textContent, 'Allow for this session');
+    assert.equal(row.querySelector('.palette-item-description')!.textContent, `Commands: git worktree\nApproval scope: ${full}`);
+    f.query('git worktree'); assert.equal(f.document.querySelectorAll('#palette-list > [role=option]').length, 1);
+    f.click('Allow for this session');
+    assert.deepEqual(await result, { kind: 'approve-for-session', approval: { kind: 'commands', commandIdentifiers: [full] } });
+    const disabled = f.interaction.request({ ...request, canOfferSessionApproval: false }, owner.signal);
+    assert.doesNotMatch(f.document.querySelector('#palette-list')!.textContent!, /Allow for this session/);
+    f.click('Deny'); assert.deepEqual(await disabled, { kind: 'reject' });
   } finally { owner.abort(); f.dispose(); }
 });
 

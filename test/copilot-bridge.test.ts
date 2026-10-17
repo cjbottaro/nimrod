@@ -293,9 +293,12 @@ for (const choice of [{ kind: 'approve-once', approvedInteractively: true }, { k
 
 for (const [request, choice] of [
   [{ kind: 'read', path: '/fixture/project/test' }, { kind: 'approve-for-session', approval: { kind: 'read' } }],
-  [{ kind: 'write', fileName: '/fixture/project/file' }, { kind: 'approve-for-session', approval: { kind: 'write' } }],
-  [{ kind: 'shell', fullCommandText: 'git status', commands: [{ identifier: 'git', readOnly: true }] },
+  [{ kind: 'write', fileName: '/fixture/project/file', canOfferSessionApproval: true }, { kind: 'approve-for-session', approval: { kind: 'write' } }],
+  [{ kind: 'shell', canOfferSessionApproval: true, fullCommandText: 'git status', commands: [{ identifier: 'git', readOnly: true }] },
     { kind: 'approve-for-session', approval: { kind: 'commands', commandIdentifiers: ['git'] } }],
+  [{ kind: 'shell', canOfferSessionApproval: true, fullCommandText: 'git worktree add /fixture/tree',
+    commands: [{ identifier: 'git worktree add /fixture/tree' }], commandSegments: [{ identifier: 'git worktree' }] },
+    { kind: 'approve-for-session', approval: { kind: 'commands', commandIdentifiers: ['git worktree add /fixture/tree'] } }],
   [{ kind: 'mcp', serverName: 'fixture', toolName: 'lookup' },
     { kind: 'approve-for-session', approval: { kind: 'mcp', serverName: 'fixture', toolName: 'lookup' } }],
   [{ kind: 'url', url: 'https://example.test/docs' }, { kind: 'approve-for-session', domain: 'example.test' }],
@@ -310,6 +313,7 @@ for (const [request, choice] of [
       const permission = await f.waitFor(packet => packet.kind === 'permission');
       for (const value of [
         { ...choice, unexpected: true }, { kind: 'approve-for-session' },
+        { kind: 'approve-for-session', approval: { kind: 'commands', commandIdentifiers: ['git worktree'] } },
         { kind: 'approve-for-session', approval: { kind: 'mcp', serverName: 'fixture', toolName: null } },
         { kind: 'approve-permanently', domain: 'other.test' },
       ]) await assert.rejects(f.request('decision', { decisionId: permission.id, value }), /Invalid permission decision/);
@@ -318,6 +322,26 @@ for (const [request, choice] of [
       assert.deepEqual(JSON.parse(result.event.data.content), choice);
     } finally { await f.close(); }
   });
+}
+
+for (const capability of [false, undefined, 'true']) {
+  for (const kind of ['shell', 'write']) {
+    test(`bridge refuses ${kind} session grants without an explicit capability (${String(capability)})`, { timeout: 5000 }, async () => {
+      const f = bridge();
+      try {
+        const request = kind === 'shell' ? { kind, fullCommandText: 'git status', commands: [{ identifier: 'git status' }],
+          commandSegments: [{ identifier: 'git', fullCommandText: 'git status' }], canOfferSessionApproval: capability }
+          : { kind, fileName: '/fixture/file', canOfferSessionApproval: capability };
+        await f.request('initialize'); await f.request('connect');
+        await f.request('prompt', { text: `scoped permission fixture:${JSON.stringify(request)}` });
+        const permission = await f.waitFor(packet => packet.kind === 'permission');
+        const approval = kind === 'shell' ? { kind: 'commands', commandIdentifiers: ['git status'] } : { kind: 'write' };
+        await assert.rejects(f.request('decision', { decisionId: permission.id, value: { kind: 'approve-for-session', approval } }), /Invalid permission decision/);
+        await f.request('decision', { decisionId: permission.id, value: { kind: 'reject' } });
+        await f.waitFor(packet => packet.kind === 'event' && packet.event.type === 'session.idle');
+      } finally { await f.close(); }
+    });
+  }
 }
 
 for (const flag of ['managedApprovalRequired', 'requestSandboxBypass']) {

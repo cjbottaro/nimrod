@@ -61,6 +61,43 @@ test('offline SDK bridge uses the shared shell for optimistic send, permissions,
   } finally { await demo.close(); }
 });
 
+test('shell session choices use secondary parsed/scope details and honor the native capability flag', async ({ page }) => {
+  const demo = await demoFixture(page);
+  try {
+    await page.keyboard.press('Meta+Shift+P');
+    await page.locator('#palette-input').fill('New Copilot session'); await page.locator('#palette-input').press('Enter');
+    await expect(page.locator(visible('send'))).toBeEnabled();
+    const full = 'git worktree add /fixture/tree -b task/example';
+    const request = { kind: 'shell', canOfferSessionApproval: true, fullCommandText: full,
+      commands: [{ identifier: full }], commandSegments: [{ identifier: 'git worktree', fullCommandText: full }] };
+    const send = async (value: object) => {
+      await page.locator(visible('prompt')).fill(`scoped permission fixture:${JSON.stringify(value)}`);
+      await page.locator(visible('prompt')).press('Enter');
+    };
+    await send(request);
+    const picker = page.locator('#command-palette');
+    const session = picker.getByRole('option').filter({ hasText: 'Allow for this session' });
+    await expect(session.locator('.palette-item-label')).toHaveText('Allow for this session');
+    await expect(session.locator('.palette-item-description')).toHaveText(`Commands: git worktree\nApproval scope: ${full}`);
+    expect(await session.locator('.palette-item-description').evaluate(node => getComputedStyle(node).whiteSpace)).toBe('pre-wrap');
+    await picker.locator('#palette-input').fill('git worktree');
+    await expect(picker.getByRole('option')).toHaveCount(1);
+    await session.click();
+    await expect(picker).toBeHidden(); await expect(page.locator(visible('send'))).toHaveAttribute('aria-label', 'Send message');
+    const decisions = () => demo.calls.filter(call => call.command === 'write_copilot' && (call.args.message as { method?: string }).method === 'decision');
+    expect((decisions()[0].args.message as { value: unknown }).value).toEqual({
+      kind: 'approve-for-session', approval: { kind: 'commands', commandIdentifiers: [full] },
+    });
+    await send({ ...request, canOfferSessionApproval: false });
+    await expect(picker).toBeVisible(); await expect(session).toHaveCount(0);
+    await expect(picker.getByRole('option')).toHaveCount(3);
+    await picker.getByRole('option', { name: 'Deny', exact: true }).click();
+    await expect(picker).toBeHidden();
+    expect((decisions()[1].args.message as { value: unknown }).value).toEqual({ kind: 'reject' });
+    expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
 test('permission picker retains one shell, nests feedback and resumes through a pinned banner above independent errors', async ({ page }) => {
   const demo = await demoFixture(page);
   try {
