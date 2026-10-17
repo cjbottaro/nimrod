@@ -37,6 +37,46 @@ fn bridge_records_are_not_acp_or_pi_packets() {
     );
 }
 
+#[test]
+fn configuration_records_accept_current_setting_value_contract() {
+    for (setting, value) in [
+        ("model", "large"),
+        ("effort", "high"),
+        ("mode", "plan"),
+        ("context-tier", "long_context"),
+    ] {
+        let message = json!({
+            "id": "configuration",
+            "method": "configure",
+            "setting": setting,
+            "value": value,
+        });
+        assert!(validate_message(&message).is_ok(), "{message}");
+    }
+}
+
+#[test]
+fn configuration_records_reject_legacy_and_malformed_payloads() {
+    for payload in [
+        json!({"model":"large"}),
+        json!({"setting":"model","model":"large"}),
+        json!({"value":"large"}),
+        json!({"setting":"model"}),
+        json!({"setting":null,"value":"large"}),
+        json!({"setting":true,"value":"large"}),
+        json!({"setting":"unsupported","value":"large"}),
+        json!({"setting":"model","value":null}),
+        json!({"setting":"effort","value":true}),
+        json!({"setting":"mode","value":1}),
+        json!({"setting":"context-tier","value":{}}),
+    ] {
+        let mut message = payload;
+        message["id"] = json!("configuration");
+        message["method"] = json!("configure");
+        assert!(validate_message(&message).is_err(), "{message}");
+    }
+}
+
 #[tokio::test]
 async fn reload_generations_rotate_without_affecting_other_windows() {
     let host = CopilotHost::default();

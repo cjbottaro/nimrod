@@ -29,6 +29,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Copilot model, thinking-level, mode and context-window changes no longer fail with “Unsupported Copilot SDK bridge operation” and disconnect the session before reaching Copilot.
+
 - Copilot's built-in GitHub MCP web searches now reach the rich answer/citation cards instead of the generic MCP fallback; unrelated MCP query tools retain their own presentation.
 - Reopening a project now reconnects its last selected Copilot session through the shared selected-session lifecycle, without sending a prompt or connecting other restored Copilot rows.
 - Model-picker names and secondary details stay aligned when the current-value marker is present.
