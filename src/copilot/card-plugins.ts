@@ -1,6 +1,6 @@
-import type { CardPlugin, CardPresentation, CardSection, ToolCardData } from '../card-plugin-api';
+import type { CardPlugin, CardPresentation, CardSection, CardPluginContext, ToolCardData } from '../card-plugin-api';
 import { copilotToolResult } from './tool-result';
-import { definePresentationPlugin, rawToolPresentation, shellPresentation, fileReadPresentation, searchPresentation, argumentRecord, firstString, webUrl, markdownWebLink, webSearchPresentation, webFetchPresentation, type WebSource } from '../card-plugin-ui';
+import { definePresentationPlugin, rawToolPresentation, shellPresentation, fileReadPresentation, searchPresentation, argumentRecord, firstString, webUrl, markdownWebLink, webSearchPresentation, webFetchPresentation, type WebSource, namedToolPresentation, codeSearchText, type CodeSearchFile } from '../card-plugin-ui';
 
 function isCopilot(data: Readonly<ToolCardData>): boolean {
   return data.source?.backend === 'copilot-sdk' && ['copilot', 'copilot-cli'].includes((data.source?.agent || '').toLowerCase());
@@ -26,7 +26,19 @@ function searchScope(value: unknown): string | string[] | undefined {
 const serializedOutputs = new WeakMap<object, string>();
 function copilotSections(data: Readonly<ToolCardData>): CardPresentation['sections'] {
   const sections = rawToolPresentation(data).sections;
-  const native = !data.isError ? nativeResult(data) : undefined;
+  if (data.isError) {
+    const errors = sections.map(section => section.key === 'result' ? { ...section, label: 'Error', format: 'text' as const } : section);
+    const complete = object(object(data.native)?.['tool.execution_complete']);
+    const error = object(complete?.error), result = object(complete?.result);
+    const message = typeof error?.message === 'string' ? error.message : typeof result?.message === 'string' ? result.message : undefined;
+    const expected = error ? serializedOutputs.get(error) ?? JSON.stringify(error, null, 2) : result ? serializedOutputs.get(result) ?? copilotToolResult(result) : undefined;
+    if (message !== undefined && expected !== undefined) {
+      if (error) serializedOutputs.set(error, expected); else if (result) serializedOutputs.set(result, expected);
+      return errors.map(section => section.key === 'result' && section.text === expected ? { ...section, text: message } : section);
+    }
+    return errors;
+  }
+  const native = nativeResult(data);
   return native?.text !== undefined ? sections.map(section => section.key === 'result' && section.text === native.source ? { ...section, text: native.text as string } : section) : sections;
 }
 
@@ -87,19 +99,16 @@ function searchAnswer(value: unknown): SearchAnswer | undefined {
   searchAnswers.set(structured, parsed); return parsed;
 }
 function webSearch(data: Readonly<ToolCardData>, query: string): CardPresentation {
-  const raw = rawToolPresentation(data), native = !data.isError ? nativeResult(data) : undefined;
+  const raw = { ...rawToolPresentation(data), sections: data.isError ? copilotSections(data) : rawToolPresentation(data).sections }, native = !data.isError ? nativeResult(data) : undefined;
   const answer = native?.text !== undefined ? searchAnswer(native.output.structuredContent) : undefined;
   const sections = answer ? raw.sections.map(section => section.key === 'result' && section.text === native!.source
     ? { ...section, label: 'Answer', text: answer.text, format: 'markdown' as const, webLinks: true } : section) : raw.sections;
   return webSearchPresentation({ query, sections, sources: answer?.sources });
 }
 function fetchSections(data: Readonly<ToolCardData>, requestedUrl: string): CardPresentation['sections'] {
+  if (data.isError) return copilotSections(data);
   const sections = rawToolPresentation(data).sections, native = nativeResult(data);
   if (!native) return sections;
-  if (data.isError) {
-    return native.output.code === 'failure' && typeof native.output.message === 'string'
-      ? sections.map(section => section.key === 'result' && section.text === native.source ? { ...section, label: 'Error', text: native.output.message as string } : section) : sections;
-  }
   if (native.text === undefined) return sections;
   let text = native.text;
   const rawPrefix = /^Content type [^\r\n]+ cannot be simplified to markdown\. Here is the raw content:\r?\n/.exec(text);
@@ -118,52 +127,81 @@ function fetchSections(data: Readonly<ToolCardData>, requestedUrl: string): Card
   return sections.flatMap(section => section.key === 'result' && section.text === native.source ? result : [section]);
 }
 
-/** Copilot operations without a bespoke presentation retain their literal output. */
-export const copilotToolPlugin: CardPlugin = definePresentationPlugin<ToolCardData>({
-  id: 'nimrod.copilot.tool', supports: data => data.source?.backend === 'copilot-sdk',
-  mount: () => ({ update: data => rawToolPresentation(data), dispose() {} }),
-});
-/** Optional Copilot adapter. Parsing is deliberately separate from Pi's Bash plugin. */
-export const copilotShellPlugin: CardPlugin = definePresentationPlugin<ToolCardData>({
-  id: 'nimrod.copilot.shell', supports: data => isCopilot(data) && data.kind === 'execute',
-  mount: () => ({ update(data) {
-    const raw = rawToolPresentation(data);
-    return shellPresentation({ title: raw.title, command: firstString(argumentRecord(data.arguments), ['command', 'cmd']), sections: raw.sections });
-  }, dispose() {} }),
-});
-/** Category-level selection stays fixed while incomplete read/find inputs arrive. */
-export const copilotReadPlugin: CardPlugin = definePresentationPlugin<ToolCardData>({
-  id: 'nimrod.copilot.read', supports: data => isCopilot(data) && data.kind === 'read',
-  mount: context => ({ update(data) {
-    const input = argumentRecord(data.arguments);
-    if (typeof input?.path === 'string' && input.path.trim()) {
-      return fileReadPresentation({ path: input.path, projectDirectory: context.projectDirectory, range: requestedRange(input.view_range), sections: copilotSections(data) });
+const repositoryResults = new WeakMap<object, string | null>();
+function repositoryResult(output: Record<string, unknown>): string | undefined {
+  if (repositoryResults.has(output)) return repositoryResults.get(output) ?? undefined;
+  const structured = object(output.structuredContent);
+  if (!structured || !Array.isArray(structured.items)) { repositoryResults.set(output, null); return; }
+  const files: CodeSearchFile[] = [];
+  for (const item of structured.items) {
+    const file = object(item);
+    if (!file || typeof file.path !== 'string' || !file.path || file.text_matches !== undefined && !Array.isArray(file.text_matches)) { repositoryResults.set(output, null); return; }
+    const fragments: string[] = [];
+    for (const match of (file.text_matches as unknown[] | undefined) || []) {
+      const fragment = object(match)?.fragment;
+      if (typeof fragment !== 'string') { repositoryResults.set(output, null); return; }
+      fragments.push(fragment);
     }
-    if (typeof input?.pattern === 'string' && searchScope(input.paths)) {
-      return searchPresentation({ title: 'Find files', query: input.pattern, projectDirectory: context.projectDirectory, scope: searchScope(input.paths), sections: copilotSections(data) });
+    files.push({ path: file.path, fragments });
+  }
+  const text = codeSearchText({ files, totalCount: typeof structured.total_count === 'number' ? structured.total_count : undefined, incomplete: structured.incomplete_results === true,
+    notice: typeof output.content === 'string' && output.content.startsWith('Output too large to read at once (') && output.content.includes('Saved to:') ? 'Agent text preview was clipped; showing structured results.' : undefined });
+  repositoryResults.set(output, text); return text;
+}
+/** Late names/categories/SDK metadata update content inside the same mounted adapter. */
+function copilotPresentation(data: Readonly<ToolCardData>, context: CardPluginContext): CardPresentation {
+  const raw = rawToolPresentation(data);
+  if (!isCopilot(data)) return raw;
+  const input = argumentRecord(data.arguments), start = object(object(data.native)?.['tool.execution_start']);
+  const sections = data.isError ? copilotSections(data) : raw.sections;
+  if (typeof start?.mcpServerName === 'string' && typeof start.mcpToolName === 'string') {
+    if (start.mcpServerName === 'github-mcp-server' && start.mcpToolName === 'search_code' && typeof input?.query === 'string') {
+      const native = !data.isError ? nativeResult(data) : undefined;
+      const text = native ? repositoryResult(native.output) : undefined;
+      return namedToolPresentation({ title: 'GitHub code search', preview: input.query, sections: text !== undefined
+        ? raw.sections.map(section => section.key === 'result' && section.text === native!.source ? { ...section, label: 'Results', text } : section) : sections });
     }
-    return rawToolPresentation(data);
-  }, dispose() {} }),
-});
-/** Local grep and web search retain separate payload parsing within search categories. */
-export const copilotSearchPlugin: CardPlugin = definePresentationPlugin<ToolCardData>({
-  id: 'nimrod.copilot.search', supports: data => isCopilot(data) && ['other', 'search'].includes(data.kind || 'other'),
-  mount: context => ({ update(data) {
-    const input = argumentRecord(data.arguments);
-    if (data.kind === 'search' && typeof input?.query === 'string') return webSearch(data, input.query);
-    if (typeof input?.pattern !== 'string' || typeof input.output_mode !== 'string') return rawToolPresentation(data);
-    return searchPresentation({ query: input.pattern, projectDirectory: context.projectDirectory, scope: searchScope(input.paths), glob: typeof input.glob === 'string' ? input.glob : undefined,
-      sections: copilotSections(data) });
-  }, dispose() {} }),
-});
-export const copilotFetchPlugin: CardPlugin = definePresentationPlugin<ToolCardData>({
-  id: 'nimrod.copilot.fetch', supports: data => isCopilot(data) && data.kind === 'fetch',
-  mount: () => ({ update(data) {
-    const input = argumentRecord(data.arguments), url = webUrl(input?.url);
-    if (!url) return rawToolPresentation(data);
-    return webFetchPresentation({ url, startIndex: typeof input?.start_index === 'number' ? input.start_index : undefined, sections: fetchSections(data, url) });
-  }, dispose() {} }),
-});
+    if (start.mcpServerName === 'github-mcp-server' && start.mcpToolName === 'get_file_contents'
+      && typeof input?.owner === 'string' && typeof input.repo === 'string' && typeof input.path === 'string') {
+      return namedToolPresentation({ title: 'GitHub contents', preview: `${input.owner}/${input.repo}/${input.path}`, sections: data.isError ? sections : copilotSections(data) });
+    }
+    return namedToolPresentation({ title: raw.title, preview: `${start.mcpServerName} · ${start.mcpToolName}`, sections });
+  }
+  if (data.kind === 'execute') {
+    const command = firstString(input, ['command', 'cmd']);
+    return data.isError ? namedToolPresentation({ title: raw.title, preview: command, sections }) : shellPresentation({ title: raw.title, command, sections });
+  }
+  if (data.kind === 'read') {
+    if (typeof input?.path === 'string' && input.path.trim()) return fileReadPresentation({ path: input.path, projectDirectory: context.projectDirectory, range: requestedRange(input.view_range), sections: copilotSections(data) });
+    if (typeof input?.pattern === 'string' && searchScope(input.paths)) return searchPresentation({ title: 'Find files', query: input.pattern, projectDirectory: context.projectDirectory, scope: searchScope(input.paths), sections: copilotSections(data) });
+  }
+  if (data.kind === 'search' && typeof input?.query === 'string') return webSearch(data, input.query);
+  if (typeof input?.pattern === 'string' && typeof input.output_mode === 'string') return searchPresentation({ query: input.pattern, projectDirectory: context.projectDirectory,
+    scope: searchScope(input.paths), glob: typeof input.glob === 'string' ? input.glob : undefined, sections: copilotSections(data) });
+  if (data.kind === 'fetch') {
+    const url = webUrl(input?.url);
+    if (url) return webFetchPresentation({ url, startIndex: typeof input?.start_index === 'number' ? input.start_index : undefined, sections: fetchSections(data, url) });
+  }
+  if (data.name === 'skill' && typeof input?.skill === 'string') return namedToolPresentation({ title: 'Use skill', preview: input.skill, sections: copilotSections(data) });
+  return { ...raw, sections };
+}
+function adapter(id: string, generic = false): CardPlugin {
+  return definePresentationPlugin<ToolCardData>({ id, supports: data => generic ? data.source?.backend === 'copilot-sdk' : isCopilot(data),
+    mount: context => ({ update(data) {
+      const presentation = copilotPresentation(data, context);
+      // Keep the retained Raw inputs node in one place through generation, execution and errors.
+      return isCopilot(data) ? { ...presentation, rawInputsPlacement: 'after' as const } : presentation;
+    }, dispose() {} }) });
+}
+export const copilotToolPlugin = adapter('nimrod.copilot.tool', true);
+export const copilotShellPlugin = adapter('nimrod.copilot.shell');
+export const copilotReadPlugin = adapter('nimrod.copilot.read');
+export const copilotSearchPlugin = adapter('nimrod.copilot.search');
+export const copilotFetchPlugin = adapter('nimrod.copilot.fetch');
 export function bundledCopilotPlugin(data: Readonly<ToolCardData>): CardPlugin {
-  return [copilotShellPlugin, copilotReadPlugin, copilotSearchPlugin, copilotFetchPlugin].find(plugin => plugin.supports(data)) || copilotToolPlugin;
+  if (!isCopilot(data)) return copilotToolPlugin;
+  if (data.kind === 'execute') return copilotShellPlugin;
+  if (data.kind === 'read') return copilotReadPlugin;
+  if (data.kind === 'fetch') return copilotFetchPlugin;
+  return ['other', 'search'].includes(data.kind || 'other') ? copilotSearchPlugin : copilotToolPlugin;
 }

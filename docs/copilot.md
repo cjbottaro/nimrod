@@ -25,8 +25,7 @@ working, Enter keeps your draft; there is no steering/queue. **Stop** cancels th
 turn, not the saved conversation. A failed connection retains its row and draft;
 fix the executable/authentication issue, then reconnect explicitly.
 
-Permission requests and questions stay inside their own conversation. Review
-literal operation details and choose **Allow once**, **Deny**, an offered answer
+Permission requests and questions stay inside their own conversation. Shell requests show **Run command · intention** and the exact command; file requests show project-relative paths (absolute outside the project), and URL requests show **Fetch · URL**. Supplied changes/arguments and sandbox-bypass requirements stay visible; **Raw details** is collapsed beneath the buttons. Unknown scopes retain literal details. Choose **Allow once**, **Deny**, an offered answer
 or freeform text when supported. **Cancel request** never approves. A background
 request does not switch sessions or steal focus; return to its conversation to
 act. Stop/Close/disconnect cancel pending choices.
@@ -48,8 +47,21 @@ rather than applying today’s new-session defaults. Tool/reasoning cards, discl
 notification preferences reuse the existing shell. Unknown rich results remain
 literal data; no tool payload grants additional permission.
 Copilot inspection/web cards reuse shared components, including cited web answers
-and fetched-content previews when supported by native results. The raw output
-remains available; links open only through an explicit action.
+and fetched-content previews when supported by native results. Tool cards appear
+while their inputs stream and transition in place when execution begins; late
+metadata does not restart completed cards. Failures show the reported error
+message, with original JSON available in **Raw output**. **Raw inputs** stays
+beneath the result through generation, execution and errors.
+
+**GitHub code search** cards show the query, returned/total counts when supplied,
+incomplete-result notices, paths and literal code snippets instead of repeated
+JSON. **GitHub contents** shows the repository/path; **Use skill** shows the skill
+name and native outcome. Unknown result shapes keep the generic fallback.
+Clipped agent-text previews are distinguished from structured search results.
+Cards do not repair external MCP header/rate-limit errors or install missing
+Copilot skills. Full original output remains available; links open only through
+an explicit action. These follow-up card/permission changes still need native
+acceptance after a requested build.
 
 Current limits: text-only input; no Restart, steering, queue, Pi MCP inspector
 or in-place harness switching. Slash commands use the SDK's supported interface,

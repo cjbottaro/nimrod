@@ -54,11 +54,13 @@ test('offline Copilot web cards render cited answers, partial fetches and URL pe
     await page.locator(visible('prompt')).press('Enter');
     const permission = page.locator('.acp-permission').filter({ hasText: 'https://example.test/permission' });
     await expect(permission).toBeVisible();
+    await expect(permission.locator('.acp-permission-summary')).toHaveText('Fetch · example.test/permission');
+    await expect(permission.locator('.acp-permission-raw')).not.toHaveAttribute('open', '');
     expect(demo.calls.some(call => call.command === 'write_copilot' && (call.args.message as { method?: string }).method === 'decision')).toBe(false);
     await permission.getByRole('button', { name: 'Deny', exact: true }).click();
     await expect.poll(() => demo.calls.some(call => call.command === 'write_copilot' && (call.args.message as { method?: string }).method === 'decision')).toBe(true);
     const reply = demo.calls.find(call => call.command === 'write_copilot' && (call.args.message as { method?: string }).method === 'decision')!.args.message as { value: unknown };
-    expect(reply.value).toEqual({ kind: 'denied-interactively-by-user' });
+    expect(reply.value).toEqual({ kind: 'reject' });
     expect(demo.errors).toEqual([]);
   } finally { await demo.close(); }
 });

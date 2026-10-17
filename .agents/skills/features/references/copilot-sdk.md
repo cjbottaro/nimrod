@@ -119,7 +119,7 @@ presentation records. Stable SDK message/reasoning IDs and namespaced agent/tool
 IDs retain mounted cards; event IDs deduplicate replay/live overlap.
 The controller replaces the shared view's permissive `messages` field with
 `DisplayMessage[]`, retaining required stable keys through immutable updates.
-Final content supersedes deltas. Tool partial results are replacement snapshots,
+Final content supersedes deltas. Tool-input deltas create one agent/tool-ID-keyed generation row, accumulating only raw input text; complete execution arguments supersede them and late fragments cannot rewind execution. Late start metadata may fill inputs/names without rewinding a terminal result. Idle/Stop finalizes unstarted generation as interrupted. Tool-native snapshots and authoritative input subtrees use the existing detached immutable branding so later output/model updates do not recopy or reparse unchanged rich results. Tool partial results are replacement snapshots,
 shell-output events append with monotonic sequence deduplication, and terminal
 results cannot rewind to progress.
 Rich result metadata and unsupported saved attachments remain literal JSON.
@@ -197,6 +197,12 @@ invented costs/queue capabilities.
 Permission and user-input callbacks await explicit choices inside their owning
 conversation, using the shared mounted decision surface. Permissions offer Allow
 once/Deny/Cancel; input presents native choices and optional freeform text.
+
+The supported host decision port is the concrete `CopilotDecision` union, not arbitrary SDK result records. **Allow once** returns `{kind:'approve-once', approvedInteractively:true}`, **Deny** returns `{kind:'reject'}`, and Cancel/unavailable/bridge teardown settles permission callbacks with `{kind:'user-not-available'}`. The bridge accepts only these scoped shapes, rejects legacy outcome values and persistent/session-grant fields, and never falls back to approval. Native `permission.completed.result.kind:'approved'` remains a valid reported outcome and is captured unchanged; decision inputs and reported outcomes are deliberately distinct.
+
+SDK 1.0.98 logs established actual read/shell/fetch failures when the old host returned `approved`, despite the SDK's permissive generated union and old fake accepting it. The production SDK forwards the handler result directly to `permissions.handlePendingPermissionRequest`; no legacy-to-modern conversion is assumed. The offline fake now validates decision forms for shell and URL callbacks, and new bridge fixtures reject the old forms before accepting an explicit single-use choice. Those new fixtures are authored but unrun for this follow-up. No live prompts are replayed or reissued to validate the fix.
+
+Compact permission previews are SDK-owned parsing through `copilot/permission-presentation.ts`, with a shared public display-only `operationPreview` helper. Commands/intention, owning-project paths, URL/MCP scope and supplied diffs/arguments are visible; raw details stays closed after the core choices. Sandbox-bypass reasons and managed-approval requirements remain prominent. Unknown scopes remain literal rather than being hidden or auto-approved. The helper cannot make decisions or invoke tools.
 Background requests do not navigate/focus or approve. Stop, disconnect and Close
 retire exact connection-bound AbortSignals and settle/reject callbacks safely.
 Notifications reuse shared preference/focus/token checks; replay never alerts.
@@ -205,7 +211,7 @@ Capture logs native `tool.*`, streamed tool-input deltas and permission request/
 Plugin source/target is **`copilot-sdk`**, distinct from ACP. Existing Pi-only
 defaults/overrides remain Pi-only; exact-agent plugins rank above generic SDK
 targets. Bundled Copilot shell/read/search/web helpers accept both explicit sources;
-raw results/inputs remain recoverable. Plugins never decide permissions.
+raw results/inputs remain recoverable. Actual native `completion.error.message` failures are rendered literally across supported card families, while exact original error JSON remains recoverable. GitHub MCP cards use actual server/tool metadata for query/count/path/snippet or owner/repo/path previews; skills use their real names. Unknown shapes remain generic. See [observed payloads](card-plugins.md#observed-sdk-tool-payloads). Plugins never decide permissions.
 `tool-result.ts` retains distinct content/detailed content and rich metadata;
 shared web adapters read the original SDK result directly, with no ACP envelope.
 Indexed row lookup, dirty-row publications, stable unchanged controls and the

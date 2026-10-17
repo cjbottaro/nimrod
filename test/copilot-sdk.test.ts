@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CopilotSession, type CopilotSessionUi } from '../src/copilot/session';
+import { CopilotSession, type CopilotSessionUi, type CopilotDecision } from '../src/copilot/session';
 import { CopilotConnection, type BridgeRequest } from '../src/copilot/connection';
 import { copilotSdkScope } from '../src/copilot/session-lifecycle';
 import { SessionDrafts } from '../src/pi/session-drafts';
@@ -89,7 +89,7 @@ test('SDK optimistic echo, native tools, content-only controls and one completio
 });
 
 test('SDK busy drafts do not dispatch; Stop cancels session-bound decisions without approving them', async () => {
-  let resolve!: (value: Record<string, unknown>) => void;
+  let resolve!: (value: CopilotDecision) => void;
   let signal!: AbortSignal;
   const f = await fixture([], async (_kind, _request, owned) => { signal = owned; return new Promise(done => { resolve = done; }); });
   const first = f.session.handle({ type: 'prompt', id: 'first', text: 'One' });
@@ -100,7 +100,7 @@ test('SDK busy drafts do not dispatch; Stop cancels session-bound decisions with
   f.session.receive({ kind: 'permission', id: 'permission', request: { kind: 'shell', fullCommandText: 'fixture' } });
   const stopping = f.session.handle({ type: 'stop' });
   assert.equal(signal.aborted, true);
-  resolve({ kind: 'approved' }); await flush();
+  resolve({ kind: 'approve-once', approvedInteractively: true }); await flush();
   assert.equal(f.sent.some(request => request.method === 'decision'), false);
   f.reply('cancel'); await stopping;
   f.event('session.idle', {});

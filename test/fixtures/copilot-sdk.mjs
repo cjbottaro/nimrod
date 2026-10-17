@@ -103,10 +103,16 @@ class Session {
     queueMicrotask(() => { void this.run(prompt, turn).catch(error => { this.emit('session.error', { message: String(error) }); this.emit('session.idle', {}); }); });
     return { messageId: `turn-${turn}` };
   }
+  async permission(request) {
+    const decision = await this.config.onPermissionRequest(request);
+    assert.ok(['approve-once', 'reject', 'user-not-available'].includes(decision.kind), 'The live CLI accepts decisions, not legacy permission outcomes');
+    if (decision.kind === 'approve-once') assert.equal(decision.approvedInteractively, true, 'Only an explicit UI choice may approve');
+    return decision;
+  }
   async run(prompt, turn) {
     this.emit('user.message', { content: prompt }); this.emit('assistant.turn_start', {});
     if (prompt === 'url permission fixture') {
-      await this.config.onPermissionRequest({ kind: 'url', url: 'https://example.test/permission' });
+      await this.permission({ kind: 'url', url: 'https://example.test/permission' });
       this.emit('session.idle', {}); return;
     }
     if (prompt === 'input fixture') {
@@ -116,8 +122,8 @@ class Session {
     }
     const tool = { toolCallId: `tool-${turn}`, toolName: 'bash', arguments: { command: 'printf fixture-only' } };
     this.emit('tool.execution_start', tool);
-    const permission = await this.config.onPermissionRequest({ kind: 'shell', toolCallId: tool.toolCallId, fullCommandText: 'printf fixture-only' });
-    if (permission.kind !== 'approved') { this.emit('session.idle', {}); return; }
+    const permission = await this.permission({ kind: 'shell', toolCallId: tool.toolCallId, fullCommandText: 'printf fixture-only' });
+    if (permission.kind !== 'approve-once') { this.emit('session.idle', {}); return; }
     this.emit('tool.execution_partial_result', { toolCallId: tool.toolCallId, partialOutput: 'fixture output' });
     if (turn > 1) return;
     this.emit('tool.execution_complete', { toolCallId: tool.toolCallId, success: true, result: { content: 'fixture output' } });

@@ -1,5 +1,5 @@
 import { AcpSession } from './acp/session';
-import { CopilotSession } from './copilot/session';
+import { CopilotSession, type CopilotDecision } from './copilot/session';
 import { CopilotSessionHistory, copilotHistoryKey } from './copilot/session-history';
 import { copilotSessionDeletion } from './copilot/session-deletion';
 import { copilotSessionLifecycle, copilotSdkScope } from './copilot/session-lifecycle';
@@ -11,6 +11,7 @@ import { PiSessionHistory, type PiSessionSummary as SessionSummary } from './pi/
 import { loadSessionHistory, type SessionHistory, type SessionHistorySnapshot } from './session-history';
 import { savedSessionKey, resolveSessionListEntry, type SessionListEntry } from './session-list';
 import { renderPermissionDetails } from './acp/tool-state';
+import { copilotPermissionPreview } from './copilot/permission-presentation';
 import { acpInteraction } from './acp/view-policy';
 import { createPiViewProjection, piInteraction } from './pi/view-policy';
 import { piSession, acpSession, copilotSession, acpProfile as profileFor, sessionActions, sessionConfiguration, type SessionAction, type SessionBackend } from './session-backend';
@@ -1116,15 +1117,16 @@ function requestSessionChoice(tab: Tab, details: HTMLElement, options: { id: str
     });
   });
 }
-async function requestCopilotDecision(tab: Tab, kind: 'permission' | 'input', request: Record<string, unknown>, signal: AbortSignal): Promise<Record<string, unknown> | undefined> {
-  const details = document.createElement('div');
-  const title = document.createElement('strong'); title.textContent = kind === 'permission' ? 'Copilot requests permission' : typeof request.question === 'string' ? request.question : 'Copilot requests input';
-  details.append(title);
+async function requestCopilotDecision(tab: Tab, kind: 'permission' | 'input', request: Record<string, unknown>, signal: AbortSignal): Promise<CopilotDecision | undefined> {
   if (kind === 'permission') {
-    const raw = document.createElement('pre'); raw.textContent = JSON.stringify(request, null, 2); details.append(raw);
+    const details = copilotPermissionPreview(document, request, workspace);
     const choice = await requestSessionChoice(tab, details, [{ id: 'allow', label: 'Allow once' }, { id: 'deny', label: 'Deny' }], signal);
-    return { kind: choice === 'allow' ? 'approved' : 'denied-interactively-by-user' };
+    return choice === 'allow' ? { kind: 'approve-once', approvedInteractively: true }
+      : { kind: choice === 'deny' ? 'reject' : 'user-not-available' };
   }
+  const details = document.createElement('div');
+  const title = document.createElement('strong'); title.textContent = typeof request.question === 'string' ? request.question : 'Copilot requests input';
+  details.append(title);
   const choices = Array.isArray(request.choices) ? request.choices.filter((value): value is string => typeof value === 'string') : [];
   const input = document.createElement('textarea'); input.setAttribute('aria-label', 'Answer Copilot');
   const freeform = request.allowFreeform !== false;

@@ -21,7 +21,10 @@ test('offline SDK bridge uses the shared shell for optimistic send, permissions,
     await page.locator(visible('prompt')).press('Enter');
     await expect(page.locator(visible('prompt'))).toHaveValue('');
     const permission = page.locator(`#${sdk} .acp-permission`);
-    await expect(permission).toContainText('printf fixture-only');
+    await expect(permission.locator('.acp-permission-summary')).toHaveText('Run command');
+    await expect(permission.locator('.acp-permission-command')).toHaveText('printf fixture-only');
+    await expect(permission.locator('.acp-permission-actions + .acp-permission-raw')).toHaveCount(1);
+    await expect(permission.locator('.acp-permission-raw')).not.toHaveAttribute('open', '');
     await expect(page.locator(`#${sdk} .message.user`)).toHaveCount(1);
     await page.locator(`#open-sessions .session-row[aria-controls="${pi}"]`).click();
     await expect(permission).toBeHidden();

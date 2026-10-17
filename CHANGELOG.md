@@ -6,6 +6,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Added
 
+- Copilot SDK cards for GitHub MCP code-search results and repository contents, skill-name previews, and compact command/file/URL/MCP permission details with raw recovery.
 - Choose model/thinking settings while connected even when the harness must wait to apply them. Deferred changes use one Queued/Steering-style shimmering transcript entry that updates in place when you choose again; the Status area shows only confirmed values, with no pending badge. Pi retains changes during work/compaction; Copilot applies at idle. Model/effort dependencies are revalidated and pending intent is cancelled on disconnect rather than replayed.
 - Copilot web-search cards with formatted answers, numbered citations and source lists; fetch cards with compact URLs, readable page/raw-source content, visible redirects/truncation/errors, and literal SDK permission requests. Web links open through Nimrod’s existing handler; original output remains available in Raw output.
 - Compact Copilot cards for file reads, text searches and filename-pattern searches, with project-relative paths inside the project (absolute paths outside), path-then-line-range read summaries, query-first search summaries and cleaner plain-content results backed by exact raw-output recovery. Shared read/search presentation helpers are also available to external card plugins.
@@ -23,6 +24,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Copilot permission choices use the CLI’s decision variants (`approve-once`, `reject`, `user-not-available`) rather than legacy outcome values that caused real tool failures. Only explicit Allow once approves a request; persistent grants are not inferred.
+- Copilot tool errors show their native message instead of JSON, streamed inputs update the eventual execution card, and late metadata no longer restarts or degrades completed cards.
 - Bare Copilot slash commands with advertised argument choices open a searchable picker before execution, rather than relying on the SDK's default command result to request one. Explicit arguments still run directly; Escape invokes nothing. This covers `/permissions` without hardcoding a permissions menu.
 - New Copilot sessions honor Copilot’s SDK-reported model/effort preferences independently at creation, omitting unset values rather than guessing defaults. Unknown values show lowercase `default model` / `default effort` before the first message; actual session values supersede creation inputs. Resume preserves saved configuration without applying current new-session defaults.
 - Copilot SDK tool capture includes streamed tool inputs and native permission request/completion events, correlates nested permission tool IDs, retains the reported runtime version, and safely records callbacks received before session identity is known. SDK logs remain separate from Pi and custom ACP captures.

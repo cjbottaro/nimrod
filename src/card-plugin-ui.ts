@@ -3,6 +3,9 @@ import type { CardPlugin, CardPluginContext, CardPresentation, ToolCardData } fr
 import { normalizedToolName } from './pi/card-plugins/tool-input';
 import { displayFilePath } from './card-display-path';
 export { displayFilePath } from './card-display-path';
+export { operationPreview } from './card-operation-ui';
+export { namedToolPresentation, codeSearchText } from './card-result-ui';
+export type { CodeSearchFile } from './card-result-ui';
 export { webUrl, displayWebUrl, markdownWebLink, constrainWebLinks, webSearchPresentation, webFetchPresentation } from './card-web-ui';
 export type { WebSource } from './card-web-ui';
 export { argumentRecord, firstString, fieldCountPreview, normalizedToolName } from './pi/card-plugins/tool-input';

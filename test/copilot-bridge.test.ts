@@ -8,10 +8,12 @@ import { createToolCapture } from '../src/tool-capture';
 function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) => void, modelState = 'resolved', defaults: Record<string, unknown> = { model: 'small', effortLevel: 'low' }) {
   const child = spawn(process.execPath, ['--import', './test/fixtures/copilot-sdk-register.mjs', 'copilot/bridge.mjs', '/fixture/copilot', '/fixture/project'], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, NIMROD_FIXTURE_COPILOT_MODE: mode, NIMROD_FIXTURE_COPILOT_MODEL_STATE: modelState, NIMROD_FIXTURE_COPILOT_DEFAULTS: JSON.stringify(defaults) } });
   const packets: Record<string, any>[] = [], pending = new Map<string, { resolve(value: any): void; reject(error: Error): void }>();
+  const waiting = new Set<{ predicate(packet: Record<string, any>): boolean; resolve(packet: Record<string, any>): void; reject(error: Error): void }>();
   let stderr = '', sequence = 0;
   child.stderr.on('data', chunk => { stderr += chunk; });
   createInterface({ input: child.stdout }).on('line', line => {
     const packet = JSON.parse(line); packets.push(packet); receive?.(packet);
+    for (const waiter of waiting) if (waiter.predicate(packet)) { waiting.delete(waiter); waiter.resolve(packet); }
     if (packet.kind !== 'result') return;
     const request = pending.get(packet.id); pending.delete(packet.id);
     if (packet.error) request?.reject(new Error(packet.error)); else request?.resolve(packet.result);
@@ -19,10 +21,16 @@ function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) =>
   child.on('error', error => { for (const request of pending.values()) request.reject(error); pending.clear(); });
   const exited = new Promise<number | null>(resolve => child.once('exit', code => {
     for (const request of pending.values()) request.reject(new Error(`Offline bridge exited: ${stderr}`));
-    pending.clear(); resolve(code);
+    pending.clear();
+    for (const waiter of waiting) waiter.reject(new Error(`Offline bridge exited: ${stderr}`)); waiting.clear();
+    resolve(code);
   }));
   return {
     packets,
+    waitFor(predicate: (packet: Record<string, any>) => boolean): Promise<Record<string, any>> {
+      const existing = packets.find(predicate);
+      return existing ? Promise.resolve(existing) : new Promise((resolve, reject) => waiting.add({ predicate, resolve, reject }));
+    },
     send(message: object) { child.stdin.write(`${JSON.stringify(message)}\n`); },
     request(method: string, parameters: Record<string, unknown> = {}): Promise<any> {
       const id = String(++sequence);
@@ -174,7 +182,7 @@ test('production SDK bridge tool and permission packets reach the JSONL capture 
   const f = bridge('interactive', packet => session?.receive(packet));
   session = new CopilotSession(async message => f.send(message), {
     publish() {}, changed() {}, identified() {}, disconnected() {}, notice: message => errors.push(message),
-    completed: () => completed(), decision: async () => ({ kind: 'approved' }), toolCapture: capture,
+    completed: () => completed(), decision: async () => ({ kind: 'approve-once', approvedInteractively: true } as const), toolCapture: capture,
   });
   try {
     await session.initialize();
@@ -189,6 +197,24 @@ test('production SDK bridge tool and permission packets reach the JSONL capture 
     assert.deepEqual(errors, []);
   } finally { session.disconnect('offline capture fixture complete'); capture.dispose(); await f.close(); }
 });
+
+for (const choice of [{ kind: 'approve-once', approvedInteractively: true }, { kind: 'reject' }, { kind: 'user-not-available' }]) {
+  test(`SDK permissions send live CLI decision variants, not legacy outcomes (${choice.kind})`, { timeout: 5000 }, async () => {
+    const f = bridge();
+    try {
+      await f.request('initialize'); await f.request('connect');
+      await f.request('prompt', { text: 'Offline permission fixture only' });
+      const permission = await f.waitFor(packet => packet.kind === 'permission');
+      for (const invalid of [{ kind: 'approved' }, { kind: 'denied-interactively-by-user' }, { kind: 'approve-once' }, { kind: 'approve-for-session' }, { kind: 'approve-once', approvedInteractively: true, approval: { scope: 'permanent' } }]) {
+        await assert.rejects(f.request('decision', { decisionId: permission.id, value: invalid }), /Invalid permission decision/);
+      }
+      assert.equal(f.packets.some(packet => packet.kind === 'event' && packet.event.type === 'tool.execution_partial_result'), false);
+      await f.request('decision', { decisionId: permission.id, value: choice });
+      await f.waitFor(packet => packet.kind === 'event' && packet.event.type === 'session.idle');
+      assert.equal(f.packets.some(packet => packet.kind === 'event' && packet.event.type === 'tool.execution_partial_result'), choice.kind === 'approve-once');
+    } finally { await f.close(); }
+  });
+}
 
 test('unsupported SDK mode retains the exact identity without prompting or changing mode', { timeout: 5000 }, async () => {
   const f = bridge('plan');

@@ -27,6 +27,10 @@ One mounted card per invocation survives placement/lifecycle updates, preserving
 
 Each Pi built-in selects its own metadata-matched mounted plugin; [card plugins](card-plugins.md#built-in-tool-dogfooding) owns the IDs, matching and implementation map. Read summaries can show requested line ranges, and write bodies show literal input-backed **Requested content** alongside Pi output, not a claim of successful execution. File/search/list output remains literal. The shared generic fallback/override remains available for unknown/custom tools.
 
+## SDK observed-payload follow-up
+
+[Observed SDK cards](card-plugins.md#observed-sdk-tool-payloads) owns native error, GitHub MCP, skill and compact permission presentation. SDK input deltas now reuse the eventual execution row; the mounted adapter remains source-compatible while late name/category/MCP metadata changes its content. Authoritative execution/terminal arguments outrank generation fragments, and late starts cannot restart completed cards. Input-only generation does not qualify for auto-open and is stopped on turn finalization. Pi semantics, external renderer selection, one-shell identity and scroll/focus owners remain unchanged. New unit/bridge/offline-browser fixtures are authored but unrun; mandatory post-merge Rust compilation is separate from native card acceptance.
+
 ## Web Markdown sections
 
 [Copilot web cards](card-plugins.md#copilot-web-cards) dogfood shared Markdown sections for search answers/sources and known fetched pages. Optional API-v2 `CardSection.webLinks`/`baseUrl` constrain links to HTTP(S) and resolve them against the page rather than project files, without changing default Pi/local Markdown. Opt-in web Markdown uses regular text typography and existing keyed viewports/caps; link policy joins text/format in update invalidation. Original flattened output remains in Raw output when transformed. Native schema/citation/redirect/partial/error parsing and compact fetch permissions are owned by the plugin reference. New unit/shell/offline-browser fixtures are unrun; native/platform acceptance remains pending.

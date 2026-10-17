@@ -1,4 +1,5 @@
 import { CopilotConnection, record, type BridgeRequest } from './connection';
+import { immutableSnapshot } from '../pi/immutable-snapshot';
 import type { DisplayMessage } from '../conversation-model';
 import type { ConversationViewMessage, ConversationViewState } from '../conversation-view-host';
 import type { ToolCaptureSink } from '../tool-capture';
@@ -10,6 +11,9 @@ import { pickConfiguration } from '../configuration-picker';
 import { commandChoices, copilotCommands, findCopilotCommand, parseCopilotCommand, type CommandChoice, type CopilotCommand } from './commands';
 
 interface Model { id: string; name: string; supportedReasoningEfforts?: string[]; capabilities?: { supports?: { reasoningEffort?: boolean } }; policy?: { state: string }; }
+/** Supported host decisions, distinct from the SDK's reported PermissionResult outcomes. */
+export type CopilotDecision = { kind: 'approve-once'; approvedInteractively: true } | { kind: 'reject' } | { kind: 'user-not-available' }
+  | { answer: string; wasFreeform: boolean };
 export interface CopilotSessionUi {
   publish(message: ConversationViewMessage): void;
   changed(): void;
@@ -17,7 +21,7 @@ export interface CopilotSessionUi {
   disconnected(reason: string): void;
   completed(failed: boolean, response?: string): void;
   notice(message: string): void;
-  decision(kind: 'permission' | 'input', request: Record<string, unknown>, signal: AbortSignal): Promise<Record<string, unknown> | undefined>;
+  decision(kind: 'permission' | 'input', request: Record<string, unknown>, signal: AbortSignal): Promise<CopilotDecision | undefined>;
   commandChoice?(title: string, choices: readonly CommandChoice[], signal: AbortSignal): Promise<string | undefined>;
   toolCapture?: ToolCaptureSink;
 }
@@ -279,7 +283,7 @@ export class CopilotSession {
           await this.connection.request('cancel');
           return;
         }
-        await this.connection.request('decision', { decisionId: id, value: choice ?? { kind: 'denied-interactively-by-user' } });
+        await this.connection.request('decision', { decisionId: id, value: choice ?? { kind: 'user-not-available' } });
       }).catch(error => { if (!signal.aborted) { this.ui.notice(`Copilot decision failed: ${String(error)}`); this.disconnect(String(error)); } });
     } else throw new Error('Unknown Copilot bridge record');
   }
@@ -291,7 +295,17 @@ export class CopilotSession {
     const originLabel = typeof raw.agentId === 'string' && raw.agentId ? `Copilot agent ${raw.agentId}` : undefined;
     const string = (key: string) => typeof data[key] === 'string' ? data[key] as string : '';
     if (type.startsWith('tool.') || ['assistant.tool_call_delta', 'permission.requested', 'permission.completed'].includes(type)) this.capture(type, raw);
-    if (type === 'user.message') {
+    if (type === 'assistant.tool_call_delta') {
+      const id = string('toolCallId'); if (!id || typeof data.inputDelta !== 'string') throw new Error('Invalid Copilot tool input identity or fragment');
+      const key = `copilot:tool:${raw.agentId || 'main'}:${id}`, previous = this.message(key);
+      // Input fragments are generation, never permission to rewind authoritative execution.
+      if (previous?.toolStatus !== undefined) return;
+      const name = string('toolName') || previous?.toolName;
+      this.replace(key, { ...previous, key, role: 'tool', originLabel, toolCallId: raw.agentId ? `${String(raw.agentId)}:${id}` : id,
+        toolName: name, toolTitle: previous?.toolTitle || name, toolKind: toolKind(name), toolSource: { backend: 'copilot-sdk', agent: 'copilot' },
+        toolArguments: (typeof previous?.toolArguments === 'string' ? previous.toolArguments : '') + string('inputDelta'),
+        toolNative: immutableSnapshot({ ...(record(previous?.toolNative) ? previous.toolNative : {}), ...(raw.agentId ? { agentId: raw.agentId } : {}), [type]: data }), streaming: true, uiPhase: 'thinking' });
+    } else if (type === 'user.message') {
       const content = string('content'), echo = this.echo;
       const key = echo && !raw.agentId ? echo.key : `copilot:user:${raw.id}`;
       this.replace(key, { key, role: 'user', originLabel, content: Array.isArray(data.attachments) && data.attachments.length ? [
@@ -315,7 +329,15 @@ export class CopilotSession {
       const key = `copilot:tool:${raw.agentId || 'main'}:${id}`, previous = this.message(key);
       const native = record(previous?.toolNative) ? previous.toolNative : {};
       const complete = type === 'tool.execution_complete', start = type === 'tool.execution_start';
-      if ((previous?.toolStatus === 'result' || previous?.toolStatus === 'finished') && !complete) return;
+      if ((previous?.toolStatus === 'result' || previous?.toolStatus === 'finished') && !complete) {
+        if (start) {
+          const name = string('toolName') || previous.toolName;
+          const retained: Readonly<Record<string, unknown>> = immutableSnapshot({ ...native, [type]: data });
+          this.replace(key, { ...previous, toolName: name, toolTitle: string('toolTitle') || previous.toolTitle || name,
+            toolKind: toolKind(name), toolArguments: Object.hasOwn(data, 'arguments') ? (retained[type] as Record<string, unknown>).arguments : previous.toolArguments, toolNative: retained });
+        }
+        return;
+      }
       if (type === 'tool.shell_output' && typeof data.sequence === 'number') {
         const sequence = this.shellSequences.get(key);
         if (sequence !== undefined && data.sequence <= sequence) return;
@@ -323,11 +345,12 @@ export class CopilotSession {
       }
       const result = record(data.result) ? data.result : undefined;
       const error = record(data.error) ? data.error : undefined;
-      const name = start ? string('toolName') : previous?.toolName;
+      const name = start ? string('toolName') || previous?.toolName : previous?.toolName;
+      const retained: Readonly<Record<string, unknown>> = immutableSnapshot({ ...native, ...(raw.agentId ? { agentId: raw.agentId } : {}), [type]: data });
       this.replace(key, { ...previous, key, role: 'tool', originLabel, toolCallId: raw.agentId ? `${String(raw.agentId)}:${id}` : id, toolName: name,
         toolSource: { backend: 'copilot-sdk', agent: 'copilot' }, toolTitle: start ? string('toolTitle') || name : previous?.toolTitle,
-        toolKind: toolKind(name), toolArguments: start ? data.arguments : previous?.toolArguments,
-        toolNative: { ...native, ...(raw.agentId ? { agentId: raw.agentId } : {}), [type]: data }, streaming: !complete, toolStatus: complete ? 'result' : 'running',
+        toolKind: toolKind(name), toolArguments: start && Object.hasOwn(data, 'arguments') ? (retained[type] as Record<string, unknown>).arguments : previous?.toolArguments,
+        toolNative: retained, streaming: !complete, uiPhase: undefined, toolStatus: complete ? 'result' : 'running',
         ...(type === 'tool.shell_output' ? { output: (previous?.output || '') + string('text'), hasStreamingOutput: true } : {}),
         ...(type === 'tool.execution_partial_result' ? { output: string('partialOutput'), hasStreamingOutput: true } : {}),
         ...(complete ? { isError: data.success === false, resultOutput: result ? copilotToolResult(result) : JSON.stringify(error ?? data, null, 2) } : {}),
@@ -375,7 +398,7 @@ export class CopilotSession {
     for (const message of this.state.messages) {
       const content = Array.isArray(message.content) ? message.content.map(block => block.type === 'thinking' && !block.thinkingComplete ? { ...block, thinkingComplete: true } : block) : message.content;
       if (message.streaming || Array.isArray(content) && content.some((block, index) => Array.isArray(message.content) && block !== message.content[index]))
-        this.replace(message.key, { ...message, content, streaming: false, ...(message.toolStatus === 'running' ? { toolStatus: 'finished' as const, uiPhase: 'stopped' as const } : {}) });
+        this.replace(message.key, { ...message, content, streaming: false, ...(message.toolStatus === 'running' || message.role === 'tool' && message.uiPhase === 'thinking' ? { toolStatus: 'finished' as const, uiPhase: 'stopped' as const } : {}) });
     }
   }
   private response(): string | undefined {
@@ -409,7 +432,7 @@ export class CopilotSession {
 function toolKind(name?: string): string {
   if (['bash', 'powershell', 'shell'].includes(name || '')) return 'execute';
   if (['view', 'read_file', 'glob'].includes(name || '')) return 'read';
-  if (['grep', 'web_search'].includes(name || '')) return 'search';
+  if (['grep', 'rg', 'web_search'].includes(name || '')) return 'search';
   if (name === 'web_fetch') return 'fetch';
   if (['edit', 'create', 'apply_patch'].includes(name || '')) return 'edit';
   return 'other';

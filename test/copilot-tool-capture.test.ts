@@ -24,7 +24,7 @@ function fixture(enabled = true) {
     if (request.method === 'decision') queueMicrotask(() => session.receive({ kind: 'result', id: request.id, result: null }));
   }, {
     publish() {}, changed() {}, identified() {}, disconnected() {}, completed() {}, notice: message => errors.push(message),
-    decision: async kind => kind === 'permission' ? { kind: 'denied-interactively-by-user' } : { answer: 'private input', wasFreeform: true },
+    decision: async kind => kind === 'permission' ? { kind: 'reject' as const } : { answer: 'private input', wasFreeform: true },
     toolCapture: capture,
   });
   const initializing = session.initialize('sdk-fixture');

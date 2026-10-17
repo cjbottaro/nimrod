@@ -31,5 +31,6 @@
 .acp-permission-raw > summary { color: var(--vscode-descriptionForeground); cursor: pointer; }
 .acp-permission-raw > small { margin-top: 6px; }
 .acp-permission-raw > pre { margin: 6px 0 0; font-family: var(--vscode-editor-font-family, monospace); }
+.permission-note { margin:6px 0 0; font-size:12px; }
 .acp-permission-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .acp-permission-actions button { padding: 4px 8px; }
