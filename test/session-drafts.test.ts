@@ -3,6 +3,16 @@ import test from 'node:test';
 import { SessionDrafts } from '../src/pi/session-drafts';
 import { restoreComposerState } from '../src/pi/webview-state';
 
+test('shared scope deletion also clears the matching legacy resume pointer', () => {
+  const store = new SessionDrafts(null, null, () => {});
+  const path = '/sessions/deleted.jsonl';
+  store.remember({ path, cwd: '/project', sessionId: 'deleted' });
+  store.select(`file:${path}`); store.write({ draft: 'Delete only this draft' });
+  store.deleteScope(`file:${path}`);
+  assert.equal(store.last, undefined);
+  assert.equal(store.read(), undefined);
+});
+
 test('provisional drafts promote to exact files without importing legacy text', () => {
   let saved: any;
   const store = new SessionDrafts(null, { draft: 'legacy' }, value => { saved = value; });

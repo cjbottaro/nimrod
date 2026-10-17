@@ -66,11 +66,13 @@ Saved Copilot deletion is available only when the agent advertises the required 
 
 For the built-in Copilot profile, the row/Project bar trash controls, **Delete session…** / **⌘/Ctrl+Backspace**, and **Delete sessions…** / **⌘/Ctrl+Shift+Backspace** use Copilot's advertised ACP deletion method. This requires session listing, loading and deletion support in your installed version. Unsupported controls remain unavailable, and the cleanup picker omits unsupported Copilot history. Custom profiles remain unsupported.
 
+**Copilot 1.0.98 does not advertise deletion in the installed version inspected locally.** Its trash controls remain disabled and explain the missing support. The local CLI also exposes no `copilot sessions delete` command. This implementation does not enable deletion for that version: Nimrod has no established supported alternative and will not remove Copilot's private files or send a prompt to emulate deletion. **Close** removes the sidebar entry while retaining saved history and drafts.
+
 The review names **one saved Copilot session**, not a descendants tree. Cancel/Escape keeps everything without stopping work. Confirming retains the dialog while Nimrod stops that conversation's owned agent, checks fresh project-history membership and requests permanent deletion. It neither creates/loads a conversation nor sends a prompt to delete closed history. Unrelated sessions and project discovery stay running. Nimrod does not inspect or remove Copilot's private files itself, and cannot coordinate external writers.
 
 Only a confirmed response removes the session's sidebar entry, saved draft and runtime references. Failed shutdown, missing history or an unconfirmed result retains the row/draft and reports an error. A stopped row stays disconnected until explicit selection; nothing retries or creates a replacement conversation. If a response is lost, deletion may have happened: use Refresh to verify history before another explicit attempt. A remembered row whose history was actually removed can fail a later explicit load without losing its draft.
 
-The cleanup picker remains open after each review, retaining its query and surviving rows. Accepting a deletion freezes unfinished discovery; use Refresh to finish loading other pages/sources. These deletion fixtures have not been run; installed-Copilot deletion and native platform acceptance remain pending.
+The cleanup picker remains open after each review, retaining its query and surviving rows. Accepting a deletion freezes unfinished discovery; use Refresh to finish loading other pages/sources. These deletion fixtures have not been run; successful deletion with an agent advertising support and native platform acceptance remain pending.
 
 ## Resume Copilot history
 

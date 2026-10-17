@@ -54,6 +54,8 @@ The **trash icon left of Close** targets that row without switching to or resumi
 
 This section describes **Pi's tree deletion**. Built-in Copilot uses the same controls and shortcut as **Delete session…** when its agent advertises support, reviewing only one saved session; see [Delete Copilot history](acp.md#delete-copilot-history). Restart support is independent of deletion.
 
+The locally inspected Copilot 1.0.98 does not advertise deletion, so its controls remain disabled with an explanation. Closing a Copilot session is still available and does not delete its saved history or draft.
+
 1. Open deletion review.
 2. Inspect the selected session and its descendants, including any in other projects.
 3. Choose **Delete N sessions** to stop affected agents and permanently remove the tree, or Cancel/Escape to retain everything without stopping work.

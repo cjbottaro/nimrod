@@ -48,7 +48,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Shared session-list/status contract and Pi/Copilot saved-history discovery | [Session history](references/session-history.md) | [Sessions](../../../docs/sessions.md#switch-or-resume), [Copilot history](../../../docs/acp.md#resume-copilot-history) |
 | All/Unread/Working membership, indicators and recency | [Sidebar views](references/sidebar-attention.md) | [Session sidebar](../../../docs/session-sidebar.md) |
 | Shared sidebar resize mechanics | [Sidebar resizing](references/sidebar-resize.md) | [Resize](../../../docs/session-sidebar.md#resize) |
-| Shared deletion operations, Pi tree transactions, Copilot deletion and recovery | [Session deletion](references/session-deletion.md) | [Deletion](../../../docs/sessions.md#delete-session-tree), [Copilot deletion](../../../docs/acp.md#delete-copilot-history) |
+| Shared deletion coordinator, Pi tree transactions, Copilot deletion and recovery | [Session deletion](references/session-deletion.md) | [Deletion](../../../docs/sessions.md#delete-session-tree), [Copilot deletion](../../../docs/acp.md#delete-copilot-history) |
 | CLI forwarding and native instance ownership | [Single instance](references/single-instance.md) | [Terminal launches](../../../docs/projects.md#terminal-launches) |
 | Session-local notices and window/application strip, routing, deduplication, wording and lifecycle | [Error presentation](references/error-presentation.md) | [Error messages](../../../docs/error-messages.md) |
 | Pi framing, response order and result correlation | [Pi transport](references/pi-transport.md) | [Writing messages](../../../docs/writing-messages.md) |

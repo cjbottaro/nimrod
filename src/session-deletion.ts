@@ -12,7 +12,7 @@ export interface DeletionPanel {
   deleted(): void;
   failed(message: string): void;
 }
-interface Dependencies {
+export interface SessionDeletionDependencies {
   panels(): DeletionPanel[];
   acknowledge(id: string, sessions: SessionDeletionReport[]): Promise<void>;
   snapshot(): Promise<DeletionSnapshot>;
@@ -20,6 +20,7 @@ interface Dependencies {
   recover(path: string, sessionId: string): Promise<void>;
   changed(): void;
   deleted?(files: string[]): void;
+  recovered?(file: string): void;
   loadingReview?(): void;
   review?(id: string, tree: DeletionTreeSession[]): Promise<boolean>;
   confirm?(id: string, confirmed: boolean): Promise<void>;
@@ -36,7 +37,7 @@ export class SessionDeletion {
   private disposed = false;
   private runningHere = false;
   private confirmedDeleted = new Set<string>();
-  constructor(private readonly deps: Dependencies) {}
+  constructor(private readonly deps: SessionDeletionDependencies) {}
   blocked(file: string | undefined): boolean { return !!file && (this.stateInvalid || this.quarantine.has(file)); }
   locked(file: string | undefined): boolean { return !!file && this.lockedFiles.has(file); }
   removed(file: string): boolean { return this.confirmedDeleted.has(file); }
@@ -136,7 +137,7 @@ export class SessionDeletion {
   async recover(file: string, sessionId: string): Promise<void> {
     if (this.disposed || this.stateInvalid || this.locked(file)) throw new Error('This session is locked for deletion or deletion state is invalid; recovery is blocked.');
     await this.deps.recover(file, sessionId);
-    this.quarantine.delete(file); this.confirmedDeleted.delete(file); this.deps.changed();
+    this.quarantine.delete(file); this.confirmedDeleted.delete(file); this.deps.recovered?.(file); this.deps.changed();
   }
   dispose(): void { this.disposed = true; this.deps.cancelReview?.(); }
 }

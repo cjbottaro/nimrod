@@ -1,8 +1,9 @@
 import { AcpSession } from './acp/session';
 import { CopilotSessionHistory, copilotHistoryKey } from './acp/session-history';
-import { CopilotSessionDeletion } from './acp/session-deletion';
+import { copilotSessionDeletion } from './acp/session-deletion';
 import { piSessionDeletion } from './pi/session-deletion';
-import type { SessionDeletionOperation, SessionDeletionSource } from './session-deletion-operation';
+import { SessionDeletionCoordinator } from './session-deletion-coordinator';
+import type { SessionDeletionOperation, SessionDeletionTarget } from './session-deletion-operation';
 import { PiSessionHistory, type PiSessionSummary as SessionSummary } from './pi/session-history';
 import { loadSessionHistory, type SessionHistory, type SessionHistorySnapshot } from './session-history';
 import { savedSessionKey, resolveSessionListEntry, type SessionListEntry } from './session-list';
@@ -28,7 +29,7 @@ import { installSidebarResize, sidebarWidthKey } from './sidebar-resize';
 import { lastUsed, sortByRecency, captureSidebarScroll, revealSidebarRow, SessionRecency } from './session-recency';
 import { sessionStatus, sessionListLabel, createSessionRowContent, updateSessionRowContent, updateSessionRowTime, installSessionTimeRefresh } from './session-sidebar';
 import { installDeletionReview } from './deletion-review';
-import { SessionDeletion, type DeletionEvent, type DeletionSnapshot } from './session-deletion';
+import type { DeletionEvent, DeletionSnapshot } from './session-deletion';
 import { presentActivity } from './pi/activity-state';
 import { messageChanges, messageVersion } from './pi/conversation-index';
 import type { ConversationState } from './pi/types';
@@ -219,47 +220,14 @@ const selectedConnection = new SessionConnection<Tab>({
   connect: tab => tab.lifecycle.connect({ acceptedAction: true }),
   failed: (tab, error) => { if (tabs.includes(tab)) showNotice(tab, `Could not connect ${tab.lifecycle.label}: ${error}`, true); },
 });
-const deletion = new SessionDeletion({
-  panels: () => tabs.filter(tab => tab.file?.exists && tab.mode !== 'temporary').map(tab => ({
-    file: tab.file!.path,
-    lock: locked => { tab.deleting = locked; if (!locked) tab.deletionExecuting = false; tab.receive?.({ type: 'deletionLock', locked }); updateTab(tab); },
-    executionStarted: () => { tab.deletionExecuting = true; updateTab(tab); },
-    report: () => {
-      const composer = restoreComposerState(tab.drafts.read());
-      return { file: tab.file!.path, token: tab.token, title: tab.title, busy: deletionBusy(tab), hasDraft: !!(composer.draft.trim() || composer.attachments?.length || composer.recovered.length) };
-    },
-    deleted: () => removeDeletedSessions([tab.file!.path]),
-    failed: message => {
-      tab.ended = true; piSession(tab)?.rpc.disconnect('Session deletion did not complete');
-      showNotice(tab, message);
-    },
-  })),
-  acknowledge: (id, sessions) => {
-    if (!ready || unloading) return Promise.reject(new Error('Project window is not ready to acknowledge deletion'));
-    return invoke('acknowledge_deletion', { id, sessions });
+const deletions = new SessionDeletionCoordinator({
+  canRun: (reference, target) => {
+    if (!ready || unloading || settings.isOpen) return false;
+    const tab = tabs.find(tab => tab.lifecycle.key === target.key);
+    return !tab || !!tab.lifecycle.identity && savedSessionKey(tab.lifecycle.identity) === savedSessionKey(reference)
+      && !tab.deleting && !tab.starting && !tab.closing && !tab.restarting;
   },
-  snapshot: () => invoke<DeletionSnapshot>('deletion_snapshot'),
-  run: (root, sessionId) => invoke('delete_session_tree', { root, sessionId }),
-  recover: (path, sessionId) => invoke('recover_deletion_session', { path, sessionId }),
-  changed: () => {
-    for (const tab of tabs) updateTab(tab);
-    controls();
-    selectedConnection.barriersChanged();
-  },
-  deleted: removeDeletedSessions,
-  loadingReview: deletionReview.loading,
-  review: (id, sessions) => deletionReview.review({ id, sessions }),
-  confirm: (id, confirmed) => invoke('confirm_session_deletion', { id, confirmed }),
-  cancelReview: () => { if (!copilotDeletion.pending) deletionReview.cancel(); },
-  progressReview: deletionReview.progress,
-  error: message => { error.textContent = message; },
-});
-const copilotDeletion = new CopilotSessionDeletion({
-  history: () => copilotHistory,
-  participants: sessionId => tabs.filter(tab => {
-    const identity = tab.lifecycle.identity;
-    return identity && 'kind' in identity && identity.sessionId === sessionId;
-  }).map(tab => ({
+  participants: key => tabs.filter(tab => tab.lifecycle.key === key).map(tab => ({
     lock: (locked, executing) => {
       if (!tabs.includes(tab)) return;
       tab.deleting = locked; tab.deletionExecuting = executing;
@@ -275,31 +243,44 @@ const copilotDeletion = new CopilotSessionDeletion({
       tab.receive?.({ type: 'sessionDisconnected' });
     },
   })),
-  review: (sessionId, title) => deletionReview.review({
-    id: sessionId, title: 'Delete Copilot session',
-    description: 'Stops this session’s Nimrod-owned agent and permanently deletes this saved Copilot session, its draft and references. Other sessions are not included. This cannot be undone.',
-    sessions: [{ file: sessionId, title, cwd: workspace }],
-  }),
-  progress: () => deletionReview.progress('deleting'),
-  closeReview: deletionReview.cancel,
-  deleted: removeDeletedCopilotSession,
+  review: { loadingReview: deletionReview.loading, review: deletionReview.review, progress: deletionReview.progress, closeReview: deletionReview.cancel },
+  deleted: removeDeletedSessions,
   changed: () => {
     for (const tab of tabs) updateTab(tab);
     controls(); selectedConnection.barriersChanged();
   },
+  error: message => { notices.report({ id: `delete:${++noticeSequence}`, operation: 'Delete session', message }); },
 });
-const deletionSources: readonly SessionDeletionSource[] = [piSessionDeletion(deletion), copilotDeletion];
-function deletionOperation(reference: SavedSessionIdentity, title: string): SessionDeletionOperation | undefined {
-  for (const source of deletionSources) {
-    const operation = source.operation(reference, title);
-    if (operation) return operation;
-  }
-}
+const piDeletion = deletions.register(context => piSessionDeletion({
+  panels: () => tabs.filter(tab => tab.file?.exists && tab.mode !== 'temporary').map(tab => ({
+    file: tab.file!.path,
+    lock: locked => { tab.deleting = locked; if (!locked) tab.deletionExecuting = false; tab.receive?.({ type: 'deletionLock', locked }); updateTab(tab); },
+    executionStarted: () => { tab.deletionExecuting = true; updateTab(tab); },
+    report: () => {
+      const composer = restoreComposerState(tab.drafts.read());
+      return { file: tab.file!.path, token: tab.token, title: tab.title, busy: deletionBusy(tab), hasDraft: !!(composer.draft.trim() || composer.attachments?.length || composer.recovered.length) };
+    },
+    deleted: () => context.removed([{ key: tab.file!.path, draftScope: `file:${tab.file!.path}` }]),
+    failed: message => {
+      tab.ended = true; piSession(tab)?.rpc.disconnect('Session deletion did not complete');
+      showNotice(tab, message);
+    },
+  })),
+  acknowledge: (id, sessions) => {
+    if (!ready || unloading) return Promise.reject(new Error('Project window is not ready to acknowledge deletion'));
+    return invoke('acknowledge_deletion', { id, sessions });
+  },
+  snapshot: () => invoke<DeletionSnapshot>('deletion_snapshot'),
+  run: (root, sessionId) => invoke('delete_session_tree', { root, sessionId }),
+  recover: (path, sessionId) => invoke('recover_deletion_session', { path, sessionId }),
+  confirm: (id, confirmed) => invoke('confirm_session_deletion', { id, confirmed }),
+}, context));
+const deletion = piDeletion.transaction;
+deletions.register(context => copilotSessionDeletion(() => copilotHistory, context));
 function tabDeletion(tab: Tab | undefined): SessionDeletionOperation | undefined {
   const reference = tab?.lifecycle.identity;
-  return reference && tab ? deletionOperation(reference, tab.title) : undefined;
+  return reference && tab ? deletions.operation(reference, tab.title) : undefined;
 }
-function deletionPending(): boolean { return deletion.pending || copilotDeletion.pending; }
 // A global (Any-target) listener also receives emit_to events for OTHER windows.
 let notificationNavigation = 0;
 const unlistenNotificationClicks = await listen<NotificationClick>('nimrod-notification-click', event => {
@@ -335,7 +316,7 @@ window.addEventListener('unload', () => {
   settingsSurface.dispose();
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
   pluginLoading.dispose();
-  sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); unlistenLinkErrors(); deletion.dispose(); copilotDeletion.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
+  sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); unlistenLinkErrors(); deletions.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
   for (const tab of tabs) { tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.lifecycle.disconnect('Window closed'); }
   keybindingDispatch.dispose(); unlistenProjectSettings();
   unlistenProjectPicker(); palette.dispose();
@@ -469,7 +450,7 @@ function deletionBusy(tab: Tab): boolean {
 }
 function restartable(tab: Tab): boolean { return tab.backend.kind === 'pi' && !!tab.file?.exists && tab.mode !== 'temporary'; }
 function deletable(tab: Tab | undefined): boolean {
-  return ready && !deletionPending() && !!tab && tabs.includes(tab) && !!tabDeletion(tab)?.available() &&
+  return ready && !deletions.pending && !!tab && tabs.includes(tab) && !!tabDeletion(tab)?.available() &&
     !tab.deleting && !tab.starting && !tab.closing && !tab.restarting;
 }
 function restartControl(): void {
@@ -480,7 +461,7 @@ function restartControl(): void {
   remove.disabled = !deletable(active);
   const operation = tabDeletion(active);
   remove.setAttribute('aria-label', operation?.label.replace('…', '') || 'Delete session');
-  const unavailable = !active ? 'no open session' : deletionPending() ? 'deletion pending'
+  const unavailable = !active ? 'no open session' : deletions.pending ? 'deletion pending'
     : !operation?.available() ? operation?.unavailableReason || 'requires saved history and harness deletion support'
     : active.starting || active.closing || active.restarting ? 'session lifecycle operation pending' : undefined;
   remove.title = `${operation?.label || 'Delete session…'}${unavailable ? ` — ${unavailable}` : ''}`;
@@ -611,7 +592,7 @@ function startCopilotHistory(): CopilotSessionHistory | undefined {
       send: (token, message) => invoke('write_acp', { token, message }),
       stop: token => invoke('stop_acp', { token }),
       error: error => {
-        if (!copilotDeletion.pending) historyError('copilot', 'Copilot', String(error));
+        historyError('copilot', 'Copilot', String(error));
         if (!unloading) { for (const tab of tabs) updateTab(tab); controls(); }
       },
     });
@@ -628,8 +609,7 @@ function rememberCopilot(): void {
 }
 function sessionListItem(entry: SessionListEntry) {
   return {
-    // Pi deletion reconciliation still consumes exact file paths, not display keys.
-    id: entry.reference && 'path' in entry.reference ? entry.reference.path : entry.key,
+    id: entry.reference ? deletions.operation(entry.reference, entry.title)?.target.key || entry.key : entry.key,
     label: sessionListLabel(entry), detail: entry.harnessLabel, keywords: entry.keywords,
     sessionRow: entry,
   };
@@ -646,8 +626,8 @@ async function paletteSessions(signal: AbortSignal, publish: (page: PalettePage)
   const page = (snapshot: SessionHistorySnapshot): PalettePage => {
     const open = tabs.map(sessionRow);
     const entries = snapshot.entries.map(entry => resolveSessionListEntry(entry, open))
-      .filter(entry => !copilotDeletion.removed(entry.key))
-      .filter(entry => kind !== 'delete' || !!entry.reference && !!deletionOperation(entry.reference, entry.title));
+      .filter(entry => !deletions.removed(sessionListItem(entry).id))
+      .filter(entry => kind !== 'delete' || !!entry.reference && !!deletions.operation(entry.reference, entry.title)?.supported);
     return {
       notice: snapshot.pending.length ? `Loading ${snapshot.pending.join(' and ')} history…` : undefined,
       items: (kind === 'resume' ? sortByRecency(entries, entry => entry.timestamp) : entries).map(entry => ({
@@ -710,7 +690,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
   },
   sessions: (signal, publish) => paletteSessions(signal, publish),
   deleteSessions: (signal, publish) => paletteSessions(signal, publish, 'delete'),
-  sessionDeleted: id => deletion.removed(id) || copilotDeletion.removed(id),
+  sessionDeleted: id => deletions.removed(id),
   openSessions: openSessionPicker,
   projects: paletteProjects,
   commands: () => {
@@ -976,7 +956,10 @@ function updateTabPresentation(tab: Tab): void {
   updateSessionRowContent(tab, entry, false);
   tab.row.disabled = !ready;
   tab.row.setAttribute('aria-current', String(tab === presented)); tab.closeButton.setAttribute('aria-label', `Close ${name}`); tab.closeButton.disabled = !ready || tab.deleting || deletion.locked(tab.file?.path) || tab.closing || tab.starting || tab.restarting;
-  tab.deleteButton.setAttribute('aria-label', `${tabDeletion(tab)?.label.replace('…', '') || 'Delete session'} for ${name}`); tab.deleteButton.disabled = !deletable(tab);
+  const remove = tabDeletion(tab);
+  tab.deleteButton.setAttribute('aria-label', `${remove?.label.replace('…', '') || 'Delete session'} for ${name}`);
+  tab.deleteButton.disabled = !deletable(tab);
+  tab.deleteButton.title = `${remove?.label || 'Delete session…'}${!remove?.available() && remove?.unavailableReason ? ` — ${remove.unavailableReason}` : ''}`;
   if (presented === tab) presentConversation(tab);
   renderSidebar();
 }
@@ -1351,7 +1334,7 @@ async function newSession(mode: LaunchMode = 'saved', copyDraft?: string, initia
 async function openSavedSession(entry: SessionListEntry): Promise<void> {
   const reference = entry.reference;
   if (!reference) throw new Error('This session has no saved identity');
-  if (copilotDeletion.removed(entry.key)) throw new Error('The selected session was deleted. Refresh history and choose another session.');
+  if (deletions.removed(sessionListItem(entry).id)) throw new Error('The selected session was deleted. Refresh history and choose another session.');
   if ('path' in reference) return openSession({ ...reference, name: entry.title, lastUserMessageAt: entry.timestamp });
   if (!ready || unloading || settings.isOpen || !workspace) return;
   rememberCopilot();
@@ -1420,44 +1403,25 @@ async function restartSession(tab: Tab): Promise<void> {
   }
 }
 async function deleteSavedSession(saved: SavedSessionIdentity, title: string): Promise<void> {
-  if (unloading || settings.isOpen || !ready || deletionPending()) throw new Error('Session deletion is currently unavailable.');
-  const operation = deletionOperation(saved, title);
-  if (!operation?.available()) throw new Error('Deletion is unavailable for this session. Refresh history or recover guarded Pi history through Resume session.');
-  const tab = tabs.find(tab => {
-    const identity = tab.lifecycle.identity;
-    return identity && (savedSessionKey(identity) === savedSessionKey(saved) ||
-      'path' in saved && 'path' in identity && saved.path === identity.path);
-  });
-  if (tab && (savedSessionKey(tab.lifecycle.identity!) !== savedSessionKey(saved) || !deletable(tab)))
-    throw new Error('This session cannot be deleted during another lifecycle operation or after its saved identity changes.');
+  if (unloading || settings.isOpen || !ready || deletions.pending) throw new Error('Session deletion is currently unavailable.');
+  const operation = deletions.operation(saved, title);
+  if (!operation?.available()) throw new Error(operation?.unavailableReason || 'Deletion is unavailable for this session. Refresh history or finish its pending lifecycle operation.');
   await operation.run();
 }
 async function deleteSession(tab: Tab): Promise<void> {
   if (settings.isOpen || !deletable(tab)) return;
-  try { await tabDeletion(tab)!.run(); }
-  catch (error) {
-    if (!unloading) notices.report({ id: `delete:${++noticeSequence}`, operation: 'Delete session', message: `${tab.title}: ${error}` });
-  }
+  await tabDeletion(tab)!.run();
 }
-function removeDeletedCopilotSession(sessionId: string): void {
-  const before = navigationSnapshot(), selected = active;
-  const scope = copilotSessionScope(sessionId);
-  const removed = tabs.filter(tab => tab.lifecycle.key === scope);
-  for (const tab of removed) disposeTab(tab);
-  try { drafts.deleteScope(scope); } catch (error) { persistenceError(error); }
-  void nativeDrafts?.flush().catch(draftPersistenceError);
-  if (selected && removed.includes(selected)) selectCleanupReplacement(before);
-  controls(); persistTabs(); syncPopouts();
-}
-function removeDeletedSessions(files: string[]): void {
-  const deleted = new Set(files), before = navigationSnapshot(), selected = active;
-  if (recency.delete(files) && workspace) save(recencyKey(), recency.dump());
-  const removed = tabs.filter(tab => tab.file && deleted.has(tab.file.path));
+function removeDeletedSessions(targets: readonly SessionDeletionTarget[]): void {
+  const keys = targets.map(target => target.key);
+  const deleted = new Set(keys), before = navigationSnapshot(), selected = active;
+  if (recency.delete(keys) && workspace) save(recencyKey(), recency.dump());
+  const removed = tabs.filter(tab => tab.lifecycle.key !== undefined && deleted.has(tab.lifecycle.key));
   // Dispose the entire subtree before selecting or persisting a replacement.
   for (const tab of removed) disposeTab(tab);
-  for (const file of files) {
-    try { drafts.deleteFile(file); } catch (e) { persistenceError(e); }
-    if ((stored(lastKey) as LastSession | null)?.path === file) save(lastKey, null);
+  for (const target of targets) {
+    try { drafts.deleteScope(target.draftScope); } catch (e) { persistenceError(e); }
+    if ((stored(lastKey) as LastSession | null)?.path === target.key) save(lastKey, null);
   }
   void nativeDrafts?.flush().catch(draftPersistenceError);
   if (selected && removed.includes(selected)) selectCleanupReplacement(before);
