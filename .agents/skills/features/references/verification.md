@@ -13,6 +13,8 @@ This is the current evidence/acceptance map, not a chronological test log. Featu
 
 ## Current automated validation
 
+**Latest plugin-revocation and permission-order fixes are unvalidated.** New fixtures cover selection during suspended revoking reloads, batched request/update ordering, same-batch cancellation and synchronous request errors. No tests, checks or builds were run for this follow-up; the prior gate results below do not cover it. No app artifact was republished for this follow-up.
+
 Full validation of the shared-view extraction from **`337ff7c`**, with the fixture expectation/Rust-formatting follow-up: `mise run check` passes **798 TS/Node tests**, **154 Rust tests** (2 installed-Pi smokes intentionally ignored), TypeScript compilation, **82-document** link/anchor validation, Rust formatting and Clippy. Full `npm run test:browser` passes **123 offline WebKit tests**. This includes shared-view policy/projection, mode controls, scoped plugin applicability, partial permissions, null patches, rich-content retention, busy configuration and full-duplex/blocked-stdin fixtures. See [harness presentation](harness-presentation.md#regression-guardrails-and-evidence).
 
 The new projection test initially expected a shortened subagent label; its assertion now preserves Pi's unchanged `2 running agents` text. One full browser run failed the external TypeScript plugin local-input assertion after the card collapsed; three focused repetitions and the full rerun passed without changes to that test or production code. This remains an intermittent disclosure/timing caveat, not a claimed fix.

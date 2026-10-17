@@ -103,6 +103,14 @@ export class CardPluginCatalog {
 
   dispose(): void { this.generation++; this.enabled.clear(); this.trusted.clear(); this.personal.clear(); this.packages.clear(); }
 
+  /** Reload updates permissions before publishing replacement entries. Retained
+   * entries must use current permissions for every managed callback. */
+  private callbacksAllowed(entry: Entry): boolean {
+    return !entry.executable || (entry.personal
+      ? this.autoLoad && this.personal.has(entry.file)
+      : this.enabled.has(entry.file) && this.trusted.has(entry.file));
+  }
+
   select(data: Readonly<ToolCardBlock>): ToolCardRenderer {
     const name = normalizedToolName(data.name);
     // Existing tool-only overrides belong to Pi. ACP never inherits a Pi match.
@@ -121,6 +129,7 @@ export class CardPluginCatalog {
       || Number(b.tools.includes(name)) - Number(a.tools.includes(name)));
     let snapshot: Readonly<ToolCardBlock> | undefined;
     const applicable = (entry: Entry) => {
+      if (!this.callbacksAllowed(entry)) return false;
       if (!entry.renderer.matches) return true;
       try {
         const result: unknown = entry.renderer.matches(snapshot ??= immutableSnapshot(data));
@@ -135,7 +144,7 @@ export class CardPluginCatalog {
     if (entry && matchesMetadata(entry)) {
       if (!entry.executable) return entry.renderer;
       // Fixed renderer selection, but managed work must still honor current package trust.
-      return { ...entry.renderer, supports: value => (entry.personal ? this.autoLoad && this.personal.has(entry.file) : this.enabled.has(entry.file) && this.trusted.has(entry.file)) && entry.renderer.supports(value) };
+      return { ...entry.renderer, supports: value => this.callbacksAllowed(entry) && entry.renderer.supports(value) };
     }
     if (override) return { apiVersion: 2, id: override, supports: () => false, mount() { throw new Error('Missing or incompatible renderer'); } };
     return bundled;

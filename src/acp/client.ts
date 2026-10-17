@@ -15,7 +15,8 @@ export interface AcpClientHooks {
   selected?(kind: 'model' | 'mode', id: string): void;
   /** Synchronous ordered delivery, not a coalesced paint callback. */
   update?(event: AcpSessionUpdate): void;
-  /** Return an offered optionId; undefined cancels. Never defaults to approval. */
+  /** Called synchronously in receive order so tool patches precede later records.
+   * Return a promise for an offered optionId or undefined to cancel; never default to approval. */
   permission?(request: AcpPermissionRequest, signal: AbortSignal): Promise<string | undefined>;
   disconnected?(error: Error): void;
 }

@@ -17,6 +17,37 @@ test('ACP applies response state synchronously before the next notification', as
   await pending;
 });
 
+test('ACP invokes incoming handlers in wire order without waiting for their replies', async () => {
+  const sent: AcpPacket[] = [], order: string[] = [];
+  let finish!: (value: unknown) => void;
+  const connection = new AcpConnection(packet => { sent.push(packet); }, {
+    request: () => {
+      order.push('request patch');
+      return new Promise(resolve => { finish = resolve; });
+    },
+    notification: () => order.push('newer notification'),
+  });
+  connection.receive({ jsonrpc: '2.0', id: 'permission', method: 'session/request_permission', params: {} });
+  connection.receive({ jsonrpc: '2.0', method: 'session/update', params: {} });
+  assert.deepEqual(order, ['request patch', 'newer notification']);
+  await flush();
+  assert.equal(sent.length, 0, 'notification processing never waits for the user choice');
+  finish({ choice: 'deny' }); await flush();
+  assert.deepEqual(sent, [{ jsonrpc: '2.0', id: 'permission', result: { choice: 'deny' } }]);
+});
+
+test('synchronous incoming-handler errors stay request-local', async () => {
+  for (const error of [new AcpResponseError(-32602, 'Invalid request'), new Error('private detail')]) {
+    const sent: AcpPacket[] = [];
+    const connection = new AcpConnection(packet => { sent.push(packet); }, { request() { throw error; } });
+    connection.receive({ jsonrpc: '2.0', id: 'bad-request', method: 'agent/question', params: {} });
+    assert.equal(connection.connected, true);
+    await flush();
+    assert.deepEqual(sent, [{ jsonrpc: '2.0', id: 'bad-request', error: error instanceof AcpResponseError
+      ? { code: -32602, message: 'Invalid request' } : { code: -32603, message: 'Client request failed' } }]);
+  }
+});
+
 test('ACP separates explicit rejection from unknown delivery and never retries', async () => {
   const sent: AcpPacket[] = [];
   const connection = new AcpConnection(packet => { sent.push(packet); });

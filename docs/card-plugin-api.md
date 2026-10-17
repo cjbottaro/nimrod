@@ -40,7 +40,7 @@ Use type-only imports for the type contract: they are erased before runtime reso
 
 ## Lifecycle and ownership
 
-- Optional `matches(data)` is mount-time applicability after metadata matching: false or a thrown exception skips to the next candidate. It receives an immutable snapshot. It is not rerun on streaming updates; do not depend on incomplete arguments or later metadata to select a renderer.
+- Optional `matches(data)` is mount-time applicability after metadata matching: false or a thrown exception skips to the next candidate. It receives an immutable snapshot and runs only while the plugin is currently enabled/trusted, even if a reload still retains the old catalog. It is not rerun on streaming updates; do not depend on incomplete arguments or later metadata to select a renderer.
 - `supports(data)` establishes compatibility, **not input completeness**. Returning false latches that mounted card to raw fallback. Handle partial streamed arguments in `update` instead.
 - `mount(context)` runs once per mounted card and returns `update(data, state)` / `dispose()`.
 - Presentation updates can be coalesced. Hidden sessions retain mounted instances and catch up with the latest data on reveal, without replaying intermediate updates. Removal cleanup waits for that catch-up; explicit session reset/view disposal still cleans up immediately. Plugin-owned timers/async work are not automatically suspended while hidden.

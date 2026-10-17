@@ -77,6 +77,8 @@ Each invocation mounts its own plugin instance. These use the same API-v2 lifecy
 
 `nimrod.tool` is the generic fallback/override (input preview and literal output); `nimrod.raw` shows literal output without an input preview. To keep console formatting, choose `nimrod.bash` rather than forcing the generic renderer. Missing/incompatible explicit choices use raw fallback rather than silently choosing another plugin. A tool-specific renderer ID only applies to its matching tool names.
 
+New-card applicability callbacks obey current enablement/trust even while the replacement catalog is loading. Revoked or disabled plugins cannot run matching callbacks through retained old entries.
+
 Already-mounted cards retain their renderer on reload. Disabling autoload or removing an entry on reload stops its managed callbacks/actions on the next event/update, disposing that card to raw fallback. Unmanaged/global effects or already accepted native actions cannot be undone; reopen the window for full webview teardown.
 
 ## Existing manifest packages

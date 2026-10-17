@@ -115,6 +115,52 @@ test('ID-only permissions resolve retained metadata; permission patches also upd
   f.reply('session/prompt', { stopReason: 'end_turn' }); await turn;
 });
 
+test('batched permission patches precede newer tool updates while the user choice remains pending', async () => {
+  let choose!: (value: string | undefined) => void;
+  const f = await fixture(() => new Promise(resolve => { choose = resolve; }));
+  const turn = f.session.handle({ type: 'prompt', id: 'batched', text: 'review' });
+  f.update({ sessionUpdate: 'tool_call', toolCallId: 'ordered', kind: 'edit', title: 'Initial title', rawInput: { path: '/fixture/initial' } });
+  const before = f.published.length;
+  // No await between the incoming request and notification: one native delivery batch.
+  f.session.receive({ jsonrpc: '2.0', id: 'permission-batch', method: 'session/request_permission', params: {
+    sessionId: 'test-session', toolCall: { toolCallId: 'ordered', title: 'Permission title', rawInput: { path: '/fixture/permission' } },
+    options: [{ optionId: 'deny', name: 'Reject', kind: 'reject_once' }],
+  } });
+  f.update({ sessionUpdate: 'tool_call_update', toolCallId: 'ordered', title: 'Newer title', rawInput: { path: '/fixture/newer' } });
+  const tool = () => f.session.state.messages.find(message => message.toolCallId === 'ordered')!;
+  assert.equal(f.permissions.length, 1, 'the permission hook starts synchronously');
+  assert.equal(f.permissions[0].toolCall.title, 'Permission title');
+  assert.deepEqual(f.permissions[0].toolCall.rawInput, { path: '/fixture/permission' });
+  assert.deepEqual(f.published.slice(before).filter(message => message.type === 'snapshot')
+    .map(message => message.state?.messages?.find(row => row.toolCallId === 'ordered')?.toolTitle), ['Permission title', 'Newer title']);
+  assert.equal(tool().toolTitle, 'Newer title');
+  await flush();
+  assert.equal(tool().toolTitle, 'Newer title', 'microtasks cannot replay an older permission patch');
+  assert.deepEqual(tool().toolArguments, { path: '/fixture/newer' });
+  assert.equal(f.sent.some(packet => packet.id === 'permission-batch'), false, 'no response before the user chooses');
+  choose('deny'); await flush();
+  assert.deepEqual(f.sent.filter(packet => packet.id === 'permission-batch'), [{ jsonrpc: '2.0', id: 'permission-batch', result: { outcome: { outcome: 'selected', optionId: 'deny' } } }]);
+  assert.equal(tool().toolTitle, 'Newer title', 'reply completion does not mutate tool state');
+  assert.deepEqual(f.permissions[0].toolCall.rawInput, { path: '/fixture/permission' }, 'the pending decision retains its own immutable operation details');
+  f.reply('session/prompt', { stopReason: 'end_turn' }); await turn;
+});
+
+test('same-batch Stop cancels a synchronously started permission and ignores a late choice', async () => {
+  let choose!: (value: string | undefined) => void;
+  let signal: AbortSignal | undefined;
+  const f = await fixture((_request, current) => { signal = current; return new Promise(resolve => { choose = resolve; }); });
+  const turn = f.session.handle({ type: 'prompt', id: 'stop-batch', text: 'review' });
+  f.session.receive({ jsonrpc: '2.0', id: 'permission-stop', method: 'session/request_permission', params: {
+    sessionId: 'test-session', toolCall: { toolCallId: 'stopped', title: 'Pending operation' },
+    options: [{ optionId: 'allow', name: 'Allow once', kind: 'allow_once' }],
+  } });
+  f.session.client.cancel();
+  assert.equal(signal?.aborted, true);
+  choose('allow'); await flush();
+  assert.deepEqual(f.sent.filter(packet => packet.id === 'permission-stop'), [{ jsonrpc: '2.0', id: 'permission-stop', result: { outcome: { outcome: 'cancelled' } } }]);
+  f.reply('session/prompt', { stopReason: 'cancelled' }); await turn;
+});
+
 test('consecutive rich content blocks survive JSON fallback, with or without a message ID', async () => {
   const f = await fixture();
   const blocks = [

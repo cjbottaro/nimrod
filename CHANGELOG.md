@@ -18,4 +18,5 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
-- ACP retains nullable tool patches and consecutive rich-content blocks, restores configuration controls after working turns, and drains agent output while writing large requests or stopping.
+- ACP retains nullable tool patches and consecutive rich-content blocks, applies permission patches in wire order without overwriting newer tool updates, restores configuration controls after working turns, and drains agent output while writing large requests or stopping.
+- Disabled or revoked card plugins cannot run applicability callbacks through old catalog entries while a reload is pending.

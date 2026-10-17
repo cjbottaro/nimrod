@@ -22,6 +22,7 @@ interface Pending {
 
 export interface AcpConnectionHandlers {
   notification?(method: string, params: unknown): void;
+  /** Invoked synchronously in wire order; return a promise only for the reply wait. */
   request?(method: string, params: unknown, signal: AbortSignal): unknown | Promise<unknown>;
   disconnected?(error: AcpConnectionError): void;
 }
@@ -121,13 +122,18 @@ export class AcpConnection {
     if (this.incoming.has(id)) throw new Error('Duplicate active ACP request ID');
     const controller = new AbortController();
     this.incoming.set(id, controller);
-    // Defer handlers, but reserve their ID synchronously. Incoming and outgoing
-    // ID spaces are independent, including when the agent uses the same number.
-    void Promise.resolve().then(() => {
-      if (controller.signal.aborted) return;
+    // Reserve the ID before invoking the handler, including reentrant delivery.
+    // Retained-state processing must precede the next wire record; only awaiting
+    // the reply (e.g. a user's permission choice) belongs on the promise path.
+    let response: unknown;
+    try {
       if (!this.handlers.request) throw new AcpResponseError(-32601, 'Method not found');
-      return this.handlers.request(method, params, controller.signal);
-    }).then(result => {
+      response = this.handlers.request(method, params, controller.signal);
+    } catch (error) {
+      // Request-local failures still become RPC errors, not disconnections.
+      response = Promise.reject(error);
+    }
+    void Promise.resolve(response).then(result => {
       if (controller.signal.aborted || this.failure) return;
       this.incoming.delete(id);
       this.write({ jsonrpc: '2.0', id, result: result ?? null });
