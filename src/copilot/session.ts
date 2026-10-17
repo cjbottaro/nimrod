@@ -292,6 +292,8 @@ export class CopilotSession {
   }
   private applyConfigurationSnapshot(value: unknown): void {
     if (!record(value)) throw new Error('Invalid Copilot configuration snapshot');
+    if (value.mode !== undefined && !['interactive', 'plan', 'autopilot'].includes(String(value.mode)))
+      throw new Error('Copilot returned an unknown session mode.');
     const snapshot = record(value.model) ? value.model : value;
     const model = typeof snapshot.modelId === 'string' ? snapshot.modelId : undefined;
     const changed = this.model !== model;
@@ -454,14 +456,27 @@ export class CopilotSession {
     } else if (type === 'session.title_changed' && !raw.agentId) { this.state = { ...this.state, sessionName: string('title') }; this.publish([]); }
     else if (type === 'session.idle' && !raw.agentId) {
       if (this.replaying) return;
+      if (data.mode !== undefined && !['interactive', 'plan', 'autopilot'].includes(String(data.mode)))
+        throw new Error('Copilot returned an unknown idle mode.');
+      if (data.aborted !== undefined && typeof data.aborted !== 'boolean')
+        throw new Error('Copilot returned an invalid idle abort flag.');
+      if (data.aborted === true) this.stopped = true;
+      // Match the SDK response waiter: an Autopilot idle is between continuations,
+      // not completion. An explicitly aborted loop is terminal in every mode.
+      if (data.mode === 'autopilot' && data.aborted !== true) return;
       this.endTurn();
     } else if (type === 'assistant.turn_start' && !raw.agentId && !this.replaying) {
+      if (this.stopped || this.failed) return;
       this.state = { ...this.state, busy: true, status: 'Working…' }; this.publish([]);
     }
     if (!this.replaying && usageWorkEvents.has(type)) this.usage.workStarted();
   }
   private endTurn(): void {
     const working = this.state.busy;
+    if (!working) {
+      if (this.pendingDecisions.size) { this.cancelDecisions(); this.publish([]); }
+      return;
+    }
     this.finish(); this.echo = undefined; this.cancelDecisions();
     this.state = { ...this.state, busy: false, status: this.stopped ? 'Stopped' : this.failed ? 'Failed' : 'Idle' };
     this.publish([]);

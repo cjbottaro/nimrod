@@ -56,6 +56,108 @@ test('SDK replay is read-only and final content wins over buffered deltas', asyn
   f.session.disconnect('fixture complete');
 });
 
+test('Autopilot intermediate idle retains work, decisions and cards until the SDK terminal boundary', async () => {
+  let answer!: (value: CopilotDecision) => void;
+  let signal!: AbortSignal;
+  const f = await fixture([], async (_kind, _request, owned) => {
+    signal = owned;
+    return new Promise(resolve => { answer = resolve; });
+  });
+  try {
+    f.event('session.mode_changed', { newMode: 'autopilot' });
+    const sending = f.session.handle({ type: 'prompt', id: 'autonomous', text: 'One task' });
+    f.reply('prompt'); await sending;
+    f.event('tool.execution_start', { toolCallId: 'active', toolName: 'bash', arguments: {} });
+    f.session.receive({ kind: 'input', id: 'question', request: { question: 'Choose' } });
+    await f.session.selectPreference('mode', async () => 'Plan');
+    const before = f.session.state.messages;
+    for (let i = 0; i < 3; i++) {
+      f.event('session.idle', { mode: 'autopilot' });
+      f.event('session.task_complete', { success: false, reason: 'Completion review rejected' });
+      f.event('session.autopilot_objective_changed', { operation: 'update', status: 'active' });
+    }
+    assert.equal(f.session.state.busy, true);
+    assert.equal(f.session.canSubmit, false);
+    assert.equal(f.session.state.messages, before);
+    assert.equal(signal.aborted, false);
+    assert.deepEqual(f.completed, []);
+    assert.equal(f.sent.some(request => request.method === 'configure'), false);
+    answer({ answer: 'Continue', wasFreeform: true }); await flush();
+    f.reply('decision'); await flush();
+    f.event('assistant.turn_start', {});
+    f.event('session.task_complete', { success: true });
+    assert.deepEqual(f.completed, [], 'task completion metadata is not physical quiescence');
+    f.event('session.idle', { mode: 'interactive' }); await flush();
+    assert.deepEqual(f.completed, [false]);
+    assert.equal(f.last('configure').value, 'plan');
+    f.reply('configure', { model: { modelId: 'small', reasoningEffort: 'low' }, mode: 'plan' }); await flush();
+    const reads = f.sent.filter(request => request.method === 'usage').length;
+    f.event('session.idle', { mode: 'interactive' }); await flush();
+    assert.deepEqual(f.completed, [false]);
+    assert.equal(f.sent.filter(request => request.method === 'usage').length, reads);
+    assert.equal(f.sent.filter(request => request.method === 'prompt').length, 1);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('Autopilot abort is terminal even while the selected mode stays sticky', async () => {
+  const f = await fixture();
+  try {
+    f.event('session.mode_changed', { newMode: 'autopilot' });
+    const sending = f.session.handle({ type: 'prompt', id: 'stop-task', text: 'Stop this task' });
+    f.reply('prompt'); await sending;
+    const stopping = f.session.handle({ type: 'stop' });
+    f.event('session.idle', { mode: 'autopilot' });
+    assert.equal(f.session.state.busy, true, 'wait for abort rather than an unrelated intermediate idle');
+    f.event('session.idle', { mode: 'autopilot', aborted: true });
+    f.reply('cancel'); await stopping;
+    f.event('session.task_complete', { success: true });
+    f.event('assistant.turn_start', {});
+    f.event('session.idle', { mode: 'interactive' });
+    assert.equal(f.session.state.busy, false);
+    assert.equal(f.session.state.status, 'Stopped');
+    assert.equal(f.session.configuration.get('mode'), 'autopilot');
+    assert.deepEqual(f.completed, []);
+    const next = f.session.handle({ type: 'prompt', id: 'next-task', text: 'New task' });
+    f.reply('prompt'); await next;
+    f.event('session.idle', {});
+    assert.deepEqual(f.completed, [false]);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('Autopilot root errors terminate once; child and replay events never terminate root work', async () => {
+  const f = await fixture([
+    { id: 'old-task', type: 'session.task_complete', data: { success: true } },
+    { id: 'old-idle', type: 'session.idle', data: { mode: 'autopilot' } },
+  ]);
+  try {
+    assert.deepEqual(f.completed, []);
+    const sending = f.session.handle({ type: 'prompt', id: 'error-task', text: 'Task' });
+    f.reply('prompt'); await sending;
+    for (const type of ['session.idle', 'session.task_complete', 'session.error']) {
+      f.session.receive({ kind: 'event', event: { id: `child-${type}`, agentId: 'child', type, data: { message: 'Child failed', success: true } } });
+    }
+    assert.equal(f.session.state.busy, true);
+    f.event('session.error', { message: 'Root failed' });
+    f.event('session.idle', { mode: 'autopilot' });
+    f.event('session.idle', {});
+    assert.deepEqual(f.completed, [true]);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('unknown Copilot snapshot and idle modes fail rather than looking interactive', async () => {
+  for (const source of ['snapshot', 'idle']) {
+    const f = await fixture();
+    try {
+      if (source === 'snapshot') {
+        await f.session.selectPreference('mode', async () => 'Plan');
+        f.reply('configure', { mode: 'unknown-mode' }); await flush();
+      } else f.event('session.idle', { mode: 'unknown-mode' });
+      assert.equal(f.session.state.sessionUnavailable, true);
+      assert.deepEqual(f.completed, []);
+    } finally { f.session.disconnect('fixture complete'); }
+  }
+});
+
 test('SDK optimistic echo, native tools, content-only controls and one completion retain identity', async () => {
   const f = await fixture();
   const sending = f.session.handle({ type: 'prompt', id: 'local', text: 'Hello' });

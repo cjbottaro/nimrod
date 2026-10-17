@@ -308,6 +308,58 @@ shared web adapters read the original SDK result directly, with no ACP envelope.
 Indexed row lookup, dirty-row publications, stable unchanged controls and the
 shell-signature guard prevent transcript scans/layout persistence per delta.
 
+## Plan and Autopilot lifecycle
+
+Mode selection reuses `SessionConfiguration` with opaque choices. Copilot owns
+planning and continuation; shared transcript, navigation and notification code
+consume semantic Working/completion state only. No universal Plan/Autopilot
+interface or host-generated continuation prompt is introduced.
+
+The pinned SDK's response waiter ignores root `session.idle` with
+`data.mode === 'autopilot'`. Nimrod follows that exact boundary in both the
+controller and bridge: intermediate idle neither completes/notifies nor cancels
+pending decisions, finalizes cards, or releases deferred configuration. The
+event's mode is not a new confirmed selection: sticky session mode continues to
+come from `mode.get`/`session.mode_changed`. Missing mode retains the SDK waiter's
+legacy terminal behavior. Unknown snapshot/event modes fail explicitly.
+
+A non-Autopilot root idle ends active work once. An explicitly
+`aborted: true` idle is terminal even in Autopilot, reports Stopped and does not
+notify success. Stop still calls SDK abort and waits for terminal evidence, not
+the mere cancellation request. Root errors terminate as failures. Duplicate
+terminal idle does not repeat completion refreshes. Late turn-start after
+Stop/failure cannot revive work; a new explicit prompt resets those flags.
+Child events and replay never complete the root run.
+
+`session.task_complete` is completion-review metadata, not independently
+quiescence: its `success` may be false. Objective updates can describe active,
+paused, cap-reached or completed objectives. Neither event is used to invent a
+terminal boundary or resume work. They remain available in native debug capture.
+The SDK waiter is source evidence; native final-event ordering, sticky-mode
+completion, limit exhaustion and abort behavior still require acceptance.
+Do not infer acceptance from synthetic fixtures.
+
+Exit-plan choices remain scoped to their request/connection. The UI rejects
+missing/malformed action lists; the bridge rejects approval without an advertised
+action, unadvertised actions and a selected action on rejection. Cancellation is
+`{approved:false}`. A successful decision returns the exact action once, never
+a synthetic implementation prompt. Permissions retain their separately
+documented scoped approval semantics; Autopilot never grants permissions.
+
+Mode mutation uses a fresh expected mode. Unsupported `confirmation`,
+`deferImplementation` or `armInteractiveContinuation` results name the missing
+operation and disconnect rather than guessing follow-up work. There is no
+supported host continuation implementation for those effects in this integration.
+The unrelated `onAutoModeSwitchRequest` callback is model fallback after rate
+limits, not Autopilot. Resume retains `continuePendingWork:false`.
+
+Authored, unrun regressions: `test/copilot-modes.test.ts`,
+`test/copilot-sdk.test.ts` and `test/copilot-bridge.test.ts` cover mutation
+preconditions/effects, intermediate/terminal idle, abort, root/child separation,
+replay, retained cards/decisions, deferred configuration and request-scoped plan
+choices. No app launch, paid prompt, browser test or native acceptance was
+performed for this change.
+
 ## Usage metrics
 
 **Status: source-implemented; new/updated fixtures unrun.** `src/copilot/usage.ts`

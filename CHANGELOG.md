@@ -29,6 +29,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Copilot Autopilot keeps Working state, pending questions, tool cards and queued configuration across intermediate idle events instead of prematurely announcing completion. Explicit aborts finish as Stopped, repeated terminal events do not repeat completion, and plan approvals are validated against the owning request's offered actions.
+
 - Copilot model, thinking-level, mode and context-window changes no longer fail with “Unsupported Copilot SDK bridge operation” and disconnect the session before reaching Copilot.
 
 - Copilot's built-in GitHub MCP web searches now reach the rich answer/citation cards instead of the generic MCP fallback; unrelated MCP query tools retain their own presentation.

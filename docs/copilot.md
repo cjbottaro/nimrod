@@ -114,6 +114,29 @@ creation action. A mode transition that asks the host for an unsupported extra
 model confirmation or automatic continuation reports the limitation and
 disconnects rather than guessing or submitting follow-on work.
 
+### Plan and Autopilot
+
+**Plan** asks Copilot to investigate and prepare a plan before implementing.
+Review its plan in the owning conversation, then choose one of Copilot's offered
+actions, such as **Continue interactively**, **Continue with Autopilot** or
+**Finish planning**. **Cancel request** declines the transition. A background
+plan request never switches sessions or steals focus.
+
+**Autopilot** lets Copilot continue through successive steps from one prompt.
+Nimrod keeps the session Working across intermediate pauses, retaining tool
+cards and pending questions rather than announcing completion at each step.
+Queued configuration waits for the task's terminal boundary. **Stop** aborts
+the run without changing the saved mode or replacing your newer draft.
+
+Mode is separate from model, thinking effort and permissions. Autopilot does not
+grant tool access: permission choices and questions still belong to this session.
+Nimrod never sends hidden "continue" prompts or replays your task, and reconnecting
+does not automatically continue pending work.
+
+The intermediate-idle handling follows the pinned SDK's completion waiter.
+Real CLI completion, sticky Autopilot mode, limits and Stop still need native
+acceptance; this is not a claim of full terminal-UI parity.
+
 ## Usage metrics
 
 The Status area uses a compact layout similar to Pi:
