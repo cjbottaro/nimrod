@@ -109,6 +109,7 @@ export interface RenderMessage {
   uiPhase?: "thinking" | "stopped";
   key?: string;
   role?: string;
+  originLabel?: string;
   parallelCluster?: ParallelToolCluster;
   content?: unknown | RenderBlock[];
   toolCallId?: string;

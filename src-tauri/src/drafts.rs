@@ -88,6 +88,10 @@ impl Drafts {
             || record.key.starts_with("unassigned:")
             || record
                 .key
+                .strip_prefix("copilot-sdk:")
+                .is_some_and(|id| !id.is_empty())
+            || record
+                .key
                 .strip_prefix("acp:copilot:")
                 .is_some_and(|id| !id.is_empty()))
             || record.key.len() > 32768

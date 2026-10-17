@@ -1,6 +1,11 @@
 # Tool activity logs
 
-Enable **Capture tool activity** in **Global Settings → Diagnostics** to automatically collect local JSON Lines logs for card/plugin development. It is off by default and covers both **Pi, including extension tools**, and **ACP agents such as Copilot**.
+Built-in Copilot SDK uses source backend `copilot-sdk`, agent `copilot`, in the
+same opt-in local capture pipeline. It records native live `tool.*` and
+permission-request data, not conversation prose or saved-history replay. Legacy
+Copilot/custom ACP captures remain `acp`; schemas are not translated into Pi.
+
+Enable **Capture tool activity** in **Global Settings → Diagnostics** to automatically collect local JSON Lines logs for card/plugin development. It is off by default and covers **Pi, including extension tools**, **official SDK Copilot**, and **custom/legacy ACP agents**.
 
 No manual inspection/capture action is needed. Enable it, work normally, then give your coding assistant the relevant log paths and time window to inventory tool payloads and develop bespoke cards.
 
@@ -10,7 +15,7 @@ No manual inspection/capture action is needed. Enable it, work normally, then gi
 - ACP tool-call patches and live permission-request tool details/options.
 - UTC receipt timestamps, sequence numbers, capture/session/connection identity, tool-call IDs when available, backend and agent identity, and reported agent versions when available.
 
-Pi and ACP retain their native event names and payload shapes; tools do not have to be known to Nimrod in advance. Pi generation events omit their full assistant-message `partial` snapshot, retaining only tool-event data. Normal prompts, assistant prose, reasoning streams and saved-history replay are not collected.
+Pi, SDK and ACP retain their native event names and payload shapes; tools do not have to be known to Nimrod in advance. Pi generation events omit their full assistant-message `partial` snapshot, retaining only tool-event data. Normal prompts, assistant prose, reasoning streams and saved-history replay are not collected.
 
 **Tool payloads themselves can contain source code, commands, outputs, secrets, or embedded prompt/reasoning text.** Logs are not redacted or uploaded. Share them only deliberately.
 

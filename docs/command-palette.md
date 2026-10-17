@@ -8,7 +8,7 @@ Open with **⌘/Ctrl+Shift+P**, type an action or description, then press Enter 
 
 ## Harness-aware commands
 
-**New session** stays Pi-default. **New ACP session…** explicitly opens the [experimental ACP POC](acp.md); **ACP session options…** appears for a selected ACP session with advertised selectors. Both are bindable without default shortcuts. Switch session includes both backends; Resume combines Pi with [supported Copilot history](acp.md#resume-copilot-history) in projects that have used the built-in Copilot option. Delete uses Pi's tree review or [advertised Copilot single-session deletion](acp.md#delete-copilot-history); unsupported history is omitted from the cleanup picker. Model/thinking and Pi MCP commands follow the selected session's actual support. Application commands remain Nimrod-owned, not agent slash commands.
+**New session** stays Pi-default. **New Copilot session** creates [official-SDK Copilot](copilot.md); **New ACP session…** offers a custom [experimental ACP profile](acp.md). **ACP session options…** appears only for ACP's advertised selectors. All three integration-specific commands are unbound by default. Switch includes open sessions; Resume combines independent Pi/SDK/legacy history sources. Delete uses Pi tree review, SDK permanent deletion, or legacy ACP's advertised single-session deletion; unsupported history is omitted. Model/thinking and Pi MCP commands reflect the selected backend's actual support. Commands remain Nimrod-owned, not agent slash commands.
 
 ## Pickers and cancellation
 

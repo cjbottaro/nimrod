@@ -6,6 +6,12 @@ Read the [human guide](../../../../docs/notifications.md) and [architecture](arc
 
 ## Specification and acceptance criteria
 
+Copilot SDK reuses the existing notification consumer for native session idle,
+error and permission/user-input requests. Only live owned turns/decisions can
+alert; replay, Stop and stale window/token callbacks cannot. SDK emits no
+synthetic Pi/ACP events. Source wiring and offline fixtures are authored/unrun;
+native notification acceptance is not established by this migration.
+
 Live background completion/input/failure triggers passive delivery; only an explicit valid click navigates the exact still-open runtime target to bottom. Native focus/lifecycle/preferences revalidate at dispatch, and historical/stale events never replay.
 
 ## Code map

@@ -4,6 +4,15 @@
 
 ## Consumer contracts
 
+Built-in [Copilot SDK history](copilot-sdk.md#identity-history-and-drafts) is
+`src/copilot/session-history.ts`: project-owned SDK `listSessions`, independently
+checked `context.workingDirectory`, nonremote filtering, separate
+`nimrod.history.copilot-sdk.v1:<cwd>` association and `copilot-sdk:` keys.
+It never creates/resumes during discovery; selection resumes the exact ID.
+The ACP source/association detailed below is **legacy only** and remains
+explicitly labeled. SDK/legacy open conflicts block connection, never alias
+drafts. All new SDK history/bridge/shell fixtures are authored **unrun**.
+
 `src/session-list.ts::SessionListEntry` is the shared input for the Session sidebar, Switch and Resume pickers: project-local source-qualified `key`, `title`, `harnessLabel`, optional numeric `timestamp`, `open`, typed `SessionStatus`, optional saved `reference` and search `keywords`. Absent reference means no durable identity yet, not necessarily an explicitly temporary session. Pi references retain their exact path and ID; Copilot references retain the immutable built-in profile and saved ID. Keys include the saved ID so a replaced Pi file cannot inherit another session's open presentation.
 
 Status describes the primary displayed condition, not all simultaneous state. The shell's `sessionRow` projects existing authoritative connection/activity/attention/deletion inputs through `sessionStatus` with unchanged precedence. `src/session-sidebar.ts` alone maps status to accessible wording and glyphs. History entries are closed; `resolveSessionListEntry` overlays the matching open session's current title/time/status while retaining history search metadata. Open membership remains independent of connection. The sidebar does not repeat its implicit Open membership in its accessible name; pickers do. Neither list discovery nor rendering owns a second lifecycle state machine.

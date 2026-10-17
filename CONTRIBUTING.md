@@ -13,6 +13,27 @@ mise run dev
 
 macOS needs Xcode Command Line Tools. See [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for Linux or possible Windows development. Keep the JS/Rust Tauri packages on compatible major/minor versions and update both lockfiles deliberately.
 
+### Copilot SDK runtime
+
+Built-in Copilot pins `@github/copilot-sdk@1.0.22`, whose released metadata names
+CLI 1.0.98. Install/authenticate that CLI separately and set
+`runtime.copilotPath` if discovery fails. Node must satisfy
+`^20.19.0 || >=22.12.0`; mise's 25.9.0 does. Users never install the SDK.
+The bridge explicitly passes the resolved CLI path to
+`RuntimeConnection.forStdio`, so it cannot fall back to SDK-bundled CLI packages.
+
+After `npm ci`, native Cargo asset preparation runs `scripts/prepare-copilot.mjs`
+to stage the bridge, SDK dist, zod/vscode-jsonrpc and koffi with its platform
+native package. The SDK eagerly imports koffi even with stdio. Do not omit
+optional dependencies from installation: the native koffi package is required.
+Only those runtime dependencies ship; optional `@github/copilot-*` CLI binaries
+are deliberately excluded. Staging retains dependency licenses and signs native
+files for requested macOS builds; the bundle verifier checks resources/signatures.
+Generated resources stay checkout-local/ignored. No build or staging was run for
+this migration. Native macOS/Linux SDK acceptance remains pending; Windows
+SDK execution is unavailable until owned process-tree teardown exists.
+See [SDK implementation](.agents/skills/features/references/copilot-sdk.md).
+
 ## Worktree workflow
 
 Work on a dedicated branch/worktree under `.worktrees/`, never directly on `main`. After completing significant work, commit it on the task branch and merge into `main` without a separate approval step. This is a lightweight local operation: do not run tests, checks or builds unless explicitly requested. Preserve unrelated changes and report merge blockers rather than forcing or discarding work. Do not push without permission. Retain the task branch and worktree after merging; remove them only when explicitly requested. “Cleanup” after merging means removing the task's worktree with `git worktree remove` and deleting its local branch with `git branch -d`. First confirm the branch is merged into `main` and the worktree has no uncommitted changes; never force removal or branch deletion, or discard unmerged or uncommitted work.

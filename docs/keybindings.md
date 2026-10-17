@@ -19,6 +19,7 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 | Open recent project… | Cmd/Ctrl+Shift+O |
 | New session (Pi default) | Cmd/Ctrl+N |
 | New ACP session… (experimental) | Unbound by default |
+| New Copilot session (SDK) | Unbound by default |
 | ACP session options… | Unbound by default |
 | New named session… | Cmd+Option+N / Ctrl+Alt+N |
 | New temporary session | Cmd/Ctrl+Shift+N |

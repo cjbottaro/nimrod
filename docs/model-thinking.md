@@ -1,5 +1,10 @@
 # Model and thinking preferences
 
+[Copilot SDK](copilot.md) exposes idle-only model choices from its catalog and
+reasoning efforts supported by the selected model. Native changes override older
+picker results; failures do not silently keep unconfirmed live configuration.
+This does not switch harnesses or inherit Pi queue/thinking semantics.
+
 Click the model or thinking-level button in the **Status area**, or use **Select model…** / **Select thinking level…** in the command palette. Default shortcuts are **⌘/Ctrl Shift+M** for model and **⌘/Ctrl Shift+E** for thinking level (also searchable as “effort”).
 
 For [ACP POC sessions](acp.md), only agent-advertised selectors appear and configuration changes require idle. The behavior below describes the bespoke Pi integration.

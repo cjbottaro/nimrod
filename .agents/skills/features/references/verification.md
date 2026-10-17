@@ -4,6 +4,15 @@ This is the current evidence/acceptance map, not a chronological test log. Featu
 
 ## Evidence boundaries
 
+**Built-in Copilot SDK migration is entirely unvalidated at runtime.** SDK
+1.0.22 package/source declares CLI 1.0.98 and protocol 3 compatibility; this is
+source evidence only. New SDK controller/production-bridge fixtures and
+updated shell/browser scenarios are authored **unrun**. No tests, typechecks,
+linters, checks, builds, packaging, live session loads/deletions, prompts or app
+launches occurred. Real CLI/history/decisions/tools, bounded owned process-group
+shutdown, signed packaging, macOS and Linux native acceptance remain gaps.
+Windows SDK launch is unavailable. Earlier ACP/Pi pass counts do not cover SDK.
+
 - TypeScript/jsdom shell tests use mocked native IPC.
 - Rust fixture tests use actual pipes, owned subprocesses and generated disposable session files; deletion tests unlink only those fixtures.
 - Automated Playwright WebKit exercises real browser layout/events with an offline child fixture and mock Tauri operations. Its CSS zoom is not native WKWebView zoom.

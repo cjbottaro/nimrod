@@ -4,6 +4,15 @@
 
 ## Specification and acceptance criteria
 
+Copilot runtime assets are staged checkout-locally by `build.rs` through
+`scripts/prepare-copilot.mjs`: pinned SDK/bridge and required dependencies,
+including eager koffi native imports, **without optional Copilot CLI runtimes**.
+Staging currently requires a native same-platform/architecture build and fails
+instead of packaging a host binary for a different target. Native files receive
+macOS signatures and the bundle verifier checks their signatures/resources.
+No SDK build/staging/signature verification occurred in this task. See
+[SDK runtime evidence](copilot-sdk.md#distribution-and-native-ownership).
+
 Explicitly requested builds use checkout-local targets and publish verified whole artifacts to the primary CLI destination; no automatic packaging, branch changes or app launch. Compiler-cache reuse must never depend on shared target directories.
 
 ## Code map and invariants

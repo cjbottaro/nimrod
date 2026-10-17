@@ -352,12 +352,20 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     container.append(image); return container;
   }
 
+  const messageOrigins = new WeakMap<HTMLElement, HTMLElement>();
+  function renderMessageOrigin(node: HTMLElement, message: DisplayMessage): void {
+    let label = messageOrigins.get(node);
+    if (!message.originLabel) { label?.remove(); messageOrigins.delete(node); return; }
+    if (!label) { label = element('div', 'message-origin'); messageOrigins.set(node, label); node.prepend(label); }
+    if (label.textContent !== message.originLabel) label.textContent = message.originLabel;
+  }
   function renderMessage(message: DisplayMessage): HTMLElement {
     const role = safeText(message.role);
     const article = element("article", `message ${role}`);
+    renderMessageOrigin(article, message);
     article.dataset.key = safeText(message.key);
     const presentation = transcriptRolePresentation(role, safeText(message.toolName));
-    if (presentation.ariaLabel) article.setAttribute("aria-label", presentation.ariaLabel);
+    if (presentation.ariaLabel) article.setAttribute("aria-label", message.originLabel ? `${message.originLabel} · ${presentation.ariaLabel}` : presentation.ariaLabel);
     if (presentation.visibleLabel) {
       const label = element("div", "label");
       label.textContent = presentation.visibleLabel;
@@ -420,8 +428,9 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   /** Patches tool cards in their existing article so active spinner nodes never disconnect. */
   function patchMessage(node: HTMLElement, message: DisplayMessage): boolean {
     if (node.dataset.key !== safeText(message.key) || node.classList.contains(safeText(message.role)) === false) return false;
+    renderMessageOrigin(node, message);
     node.classList.toggle("error", message.isError === true);
-    if (message.role === "user") node.setAttribute("aria-label", "User message");
+    if (message.role === "user") node.setAttribute("aria-label", message.originLabel ? `${message.originLabel} · User message` : "User message");
     renderSteeringStatus(node, message);
     if (message.role === "parallel" && message.parallelCluster) {
       const details = node.querySelector<HTMLDetailsElement>(".parallel-tool-card");
@@ -432,7 +441,8 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     if (message.role === "tool") {
       const tool = Array.from(node.children).find((child): child is HTMLDetailsElement => child instanceof HTMLDetailsElement && child.classList.contains("tool-card"));
       if (!tool) return false;
-      node.setAttribute("aria-label", transcriptRolePresentation("tool", safeText(message.toolName)).ariaLabel!);
+      const label = transcriptRolePresentation("tool", safeText(message.toolName)).ariaLabel!;
+      node.setAttribute("aria-label", message.originLabel ? `${message.originLabel} · ${label}` : label);
       const block = toolMessageBlock(message);
       updateToolCard(document, tool, block);
       applyToolDetailsLifecycle(tool, block);
@@ -1094,4 +1104,3 @@ function stringArray(value: unknown): string[] {
 declare global {
   interface Window { __PI_GUI_RESTORE__?: unknown; __PI_GUI_INITIAL_FOCUS__?: boolean; }
 }
-

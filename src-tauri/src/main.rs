@@ -3,6 +3,7 @@ mod acp;
 mod card_plugins;
 mod cli;
 mod command_usage;
+mod copilot;
 mod drafts;
 mod keybindings;
 mod links;
@@ -408,8 +409,16 @@ fn request_exit(app: &tauri::AppHandle) {
         let host = app.state::<WorkspaceHost>();
         let compiler = app.state::<plugin_compiler::Compiler>();
         let acp = app.state::<acp::AcpHost>();
-        let (result, acp_result, ()) =
-            tokio::join!(host.shutdown(), acp.shutdown(), compiler.shutdown());
+        let copilot = app.state::<copilot::CopilotHost>();
+        let (result, acp_result, copilot_result, ()) = tokio::join!(
+            host.shutdown(),
+            acp.shutdown(),
+            copilot.shutdown(),
+            compiler.shutdown()
+        );
+        if let Err(error) = copilot_result {
+            eprintln!("Nimrod Copilot shutdown: {error}");
+        }
         if let Err(error) = acp_result {
             eprintln!("Nimrod ACP shutdown: {error}");
         }
@@ -449,6 +458,7 @@ fn main() {
     let builder = tauri::Builder::default()
         .manage(WorkspaceHost::default())
         .manage(acp::AcpHost::default())
+        .manage(copilot::CopilotHost::default())
         .manage(WorkspaceWindows::default())
         .manage(project_preferences::ProjectPreferences::default())
         .manage(settings_window::SettingsWindow::default())
@@ -566,6 +576,9 @@ fn main() {
             acp::start_acp,
             acp::write_acp,
             acp::stop_acp,
+            copilot::start_copilot,
+            copilot::write_copilot,
+            copilot::stop_copilot,
             session_file_info,
             write_pi,
             stop_pi,
@@ -672,6 +685,9 @@ fn main() {
                 let window = window.clone();
                 tauri::async_runtime::spawn(async move {
                     let app = window.app_handle();
+                    app.state::<copilot::CopilotHost>()
+                        .retire_window(window.label())
+                        .await;
                     popouts::close_project(app, window.label()).await;
                     let store = app.state::<drafts::Drafts>().inner().clone();
                     if let Err(error) =
@@ -681,19 +697,22 @@ fn main() {
                     {
                         eprintln!("Draft window flush: {error}");
                     }
-                    if let Err(error) = app
-                        .state::<WorkspaceHost>()
-                        .close_window(window.label())
-                        .await
-                    {
+                    let pi = app.state::<WorkspaceHost>();
+                    let acp = app.state::<acp::AcpHost>();
+                    let copilot = app.state::<copilot::CopilotHost>();
+                    let (pi_result, acp_result, copilot_result) = tokio::join!(
+                        pi.close_window(window.label()),
+                        acp.stop_window(window.label(), None, true),
+                        copilot.stop_window(window.label(), None, true),
+                    );
+                    if let Err(error) = pi_result {
                         eprintln!("Nimrod window shutdown: {error}");
                     }
-                    if let Err(error) = app
-                        .state::<acp::AcpHost>()
-                        .stop_window(window.label(), None, true)
-                        .await
-                    {
+                    if let Err(error) = acp_result {
                         eprintln!("Nimrod ACP window shutdown: {error}");
+                    }
+                    if let Err(error) = copilot_result {
+                        eprintln!("Nimrod Copilot window shutdown: {error}");
                     }
                     let store = app.state::<drafts::Drafts>().inner().clone();
                     if let Err(error) =

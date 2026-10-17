@@ -2,7 +2,7 @@ import type { CardPlugin, CardPresentation, ToolCardData } from '../card-plugin-
 import { definePresentationPlugin, rawToolPresentation, shellPresentation, fileReadPresentation, searchPresentation, argumentRecord, firstString } from '../card-plugin-ui';
 
 function isCopilot(data: Readonly<ToolCardData>): boolean {
-  return data.source?.backend === 'acp' && ['copilot', 'copilot-cli'].includes((data.source.agent || '').toLowerCase());
+  return ['acp', 'copilot-sdk'].includes(data.source?.backend || '') && ['copilot', 'copilot-cli'].includes((data.source?.agent || '').toLowerCase());
 }
 function object(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
@@ -25,6 +25,10 @@ function searchScope(value: unknown): string | string[] | undefined {
 const serializedOutputs = new WeakMap<object, string>();
 function copilotSections(data: Readonly<ToolCardData>): CardPresentation['sections'] {
   const sections = rawToolPresentation(data).sections;
+  if (data.source?.backend === 'copilot-sdk') {
+    const complete = object(object(data.native)?.['tool.execution_complete']), result = object(complete?.result);
+    return !data.isError && typeof result?.content === 'string' ? sections.map(section => section.key === 'result' ? { ...section, text: result.content as string } : section) : sections;
+  }
   const native = object(data.native), output = object(native?.rawOutput);
   if (data.isError || !native || !output || typeof output.content !== 'string'
     || (native.content != null && (!Array.isArray(native.content) || native.content.length > 0))) return sections;
@@ -39,7 +43,7 @@ function copilotSections(data: Readonly<ToolCardData>): CardPresentation['sectio
 
 /** Standards-based fallback needs no agent-specific installation or tool schema. */
 export const acpToolPlugin: CardPlugin = definePresentationPlugin<ToolCardData>({
-  id: 'nimrod.acp.tool', supports: data => data.source?.backend === 'acp',
+  id: 'nimrod.acp.tool', supports: data => ['acp', 'copilot-sdk'].includes(data.source?.backend || ''),
   mount: () => ({ update: data => rawToolPresentation(data), dispose() {} }),
 });
 /** Optional Copilot adapter. Parsing is deliberately separate from Pi's Bash plugin. */

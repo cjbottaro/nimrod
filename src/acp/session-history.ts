@@ -17,7 +17,7 @@ export interface CopilotHistoryHost {
 /** Project-owned history connection; never a controller of a conversation. */
 export class CopilotSessionHistory implements SessionHistory {
   readonly id = 'copilot';
-  readonly label = 'Copilot';
+  readonly label = 'Copilot (legacy ACP)';
   private owner: { token?: string } = {};
   private client?: AcpClient;
   private initializing?: Promise<void>;
@@ -85,7 +85,7 @@ export class CopilotSessionHistory implements SessionHistory {
         const reference = { kind: 'acp' as const, profile: 'copilot' as const, sessionId: session.sessionId };
         return {
           key: savedSessionKey(reference), reference, title: session.title?.trim() || 'Untitled Copilot session',
-          harnessLabel: 'Copilot ACP', timestamp: session.updatedAt ? lastUsed(Date.parse(session.updatedAt)) || undefined : undefined,
+          harnessLabel: 'Copilot (legacy ACP)', timestamp: session.updatedAt ? lastUsed(Date.parse(session.updatedAt)) || undefined : undefined,
           status: 'closed', open: false, keywords: session.sessionId,
         };
       }),

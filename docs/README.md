@@ -7,7 +7,8 @@
 
 - [Projects](projects.md) — open directories, recent projects and terminal launches.
 - [Sessions](sessions.md) — create, switch, resume, restart, close and delete conversations.
-- [ACP sessions (POC)](acp.md) — experimental Copilot/custom agents, permissions, configuration and current limits.
+- [Copilot sessions](copilot.md) — official SDK, installed CLI setup, saved history, decisions and legacy ACP policy.
+- [ACP sessions (POC)](acp.md) — custom agents and explicitly retained legacy Copilot ACP entries.
 - [Session sidebar](session-sidebar.md) — All, Unread and Working views, indicators and width.
 - [Drafts](drafts.md) — native storage, debounce, recovery and ignored legacy drafts.
 - [Writing messages](writing-messages.md) — send, steer, queue, Stop, slash commands and recovery.
@@ -24,7 +25,7 @@
 - [MCP inspector](mcp.md) — read-only session server status and reported diagnostics.
 - [Keybindings](keybindings.md) — shortcuts, reassignment and configuration syntax.
 - [Performance reports](performance-diagnostics.md) — opt-in timing diagnostics and local slowdown captures.
-- [Tool activity logs](tool-capture.md) — automatic, opt-in Pi/ACP tool payload logs for card development.
+- [Tool activity logs](tool-capture.md) — automatic, opt-in Pi/SDK/ACP tool payload logs for card development.
 - [Settings](settings.md) — categories, zoom, runtime paths and local files.
 - [Themes](themes.md) — live previews, bundled themes and standalone imports.
 - [Translucency](translucency.md) — background opacity, surface selection and platform-specific blur.

@@ -15,7 +15,7 @@ Apply the [optimistic interaction policy](references/architecture.md#optimistic-
 
 ## Harness integration direction
 
-**ACP has an offline-validated experimental baseline; the latest plugin-revocation/permission-order fixes, Copilot sidebar restoration, Resume discovery and deletion await validation. Real-agent compatibility and native app acceptance are pending.** Follow [ACP harness support](references/acp-harnesses.md) for decisions, staged implementation, the single-worktree/checkpoint strategy and evidence boundaries. Copilot CLI is the first concrete target; a second ACP agent must establish interoperability. Pi remains the primary integration and retains its native transport/session semantics. ACP is a reusable integration alongside Pi, not a mandatory internal protocol for every harness.
+**Curated harnesses are bespoke-first: Pi native RPC and built-in [Copilot SDK](references/copilot-sdk.md).** The SDK migration is source-implemented with authored fixtures **unrun**; installed-CLI, packaging and native acceptance remain pending. [Generic ACP](references/acp-harnesses.md) stays an experimental fallback and preserves explicit legacy Copilot ACP identities/drafts. Its historical POC worktree/abandonment strategy does not govern this separate SDK task.
 
 **Product scope is Pi-first, not universal harness parity.** Build a small curated set of bespoke integrations plus a capability-driven generic ACP baseline; the [target portfolio and scope rules](references/harness-presentation.md#target-portfolio-and-scope) distinguish intended experience from implemented support. Use supported ACP/SDK/native interfaces where practical. Omit inaccessible capabilities rather than reverse-engineering or emulating them; expose cross-harness equivalents only where their actual semantics make sense. Experience tiers describe richness and polish, never weaker correctness or ownership guarantees. Harness identity is separate from its integration mechanism; Nimrod owns integration correctness, while card plugins enhance presentation.
 
@@ -23,9 +23,9 @@ Apply the [optimistic interaction policy](references/architecture.md#optimistic-
 
 Session backends are immutable; model/thinking changes never switch harnesses. Preserve bespoke harness functionality behind a shared transcript/plugin runtime and one Nimrod-owned command palette. Plugin sets may be harness/agent-specific, but shared UI components must be public and dogfooded equally by bundled and external plugins; see the [plugin boundary](references/card-plugins.md#multi-harness-plugin-boundary). [Harness presentation](references/harness-presentation.md) owns the internal interaction/control/action contributions and rationale; these are distinct from public card-content plugins.
 
-Generic ACP support need not be the ceiling. Harnesses offering SDKs, native RPC or other supported interfaces may warrant **bespoke integrations** for richer lifecycle/history control, configuration, tool detail or other concrete capability gaps. Copilot SDK support is a potential later example, not a commitment. Prefer evidence of user benefit over adding another backend for its own sake; extract shared presentation/session boundaries from concrete integrations rather than inventing a universal harness framework.
+Generic ACP is not the ceiling or mandatory route for curated harnesses. Use supported bespoke SDK/native interfaces for concrete lifecycle/history, configuration and tool benefits; Copilot now uses the pinned released SDK. Extract shared consumer boundaries from concrete integrations rather than inventing a universal harness framework.
 
-A bespoke backend would be an alternative controller for that harness, not a second concurrent controller of the same live session. Do not promise seamless ACP/SDK switching until session identity, history, configuration and ownership interoperability are verified. Harnesses remain authoritative, and controls must reflect actual capabilities rather than approximating Pi semantics.
+Each bespoke backend is an alternative controller for that harness, not a second concurrent controller of the same live session. Do not promise seamless ACP/SDK switching until session identity, history, configuration and ownership interoperability are verified. Harnesses remain authoritative, and controls must reflect actual capabilities rather than approximating Pi semantics.
 
 ## Changelog and release policy
 
@@ -43,12 +43,13 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 
 | Work area | Canonical reference | User guide |
 | --- | --- | --- |
+| Built-in Copilot SDK, runtime/process ownership, identity/legacy policy and SDK semantics | [Copilot SDK](references/copilot-sdk.md) | [Copilot](../../../docs/copilot.md) |
 | Project identity, recent projects, session lifecycle and draft storage | [Projects/sessions](references/projects-and-sessions.md) | [Projects](../../../docs/projects.md), [Sessions](../../../docs/sessions.md) |
 | Ordering, activation, connection and cleanup selection | [Session navigation](references/session-navigation.md) | [Sidebar navigation](../../../docs/session-sidebar.md#ordering-and-navigation) |
-| Shared session-list/status contract and Pi/Copilot saved-history discovery | [Session history](references/session-history.md) | [Sessions](../../../docs/sessions.md#switch-or-resume), [Copilot history](../../../docs/acp.md#resume-copilot-history) |
+| Shared session-list/status contract and Pi/Copilot saved-history discovery | [Session history](references/session-history.md) | [Sessions](../../../docs/sessions.md#switch-or-resume), [Copilot history](../../../docs/copilot.md#history-close-and-delete) |
 | All/Unread/Working membership, indicators and recency | [Sidebar views](references/sidebar-attention.md) | [Session sidebar](../../../docs/session-sidebar.md) |
 | Shared sidebar resize mechanics | [Sidebar resizing](references/sidebar-resize.md) | [Resize](../../../docs/session-sidebar.md#resize) |
-| Shared deletion coordinator, Pi tree transactions, Copilot deletion and recovery | [Session deletion](references/session-deletion.md) | [Deletion](../../../docs/sessions.md#delete-session-tree), [Copilot deletion](../../../docs/acp.md#delete-copilot-history) |
+| Shared deletion coordinator, Pi tree transactions, Copilot deletion and recovery | [Session deletion](references/session-deletion.md) | [Deletion](../../../docs/sessions.md#delete-session-tree), [Copilot deletion](../../../docs/copilot.md#history-close-and-delete) |
 | CLI forwarding and native instance ownership | [Single instance](references/single-instance.md) | [Terminal launches](../../../docs/projects.md#terminal-launches) |
 | Session-local notices and window/application strip, routing, deduplication, wording and lifecycle | [Error presentation](references/error-presentation.md) | [Error messages](../../../docs/error-messages.md) |
 | Pi framing, response order and result correlation | [Pi transport](references/pi-transport.md) | [Writing messages](../../../docs/writing-messages.md) |

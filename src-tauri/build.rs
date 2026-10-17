@@ -148,6 +148,35 @@ fn source_identity(manifest: &Path) {
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-env-changed=APPLE_SIGNING_IDENTITY");
+    let root = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap())
+        .parent()
+        .unwrap()
+        .to_path_buf();
+    for path in [
+        "copilot/bridge.mjs",
+        "scripts/prepare-copilot.mjs",
+        "package-lock.json",
+    ] {
+        println!("cargo:rerun-if-changed={}", root.join(path).display());
+    }
+    let status = std::process::Command::new("node")
+        .arg(root.join("scripts/prepare-copilot.mjs"))
+        .env(
+            "NIMROD_COPILOT_TARGET_OS",
+            std::env::var("CARGO_CFG_TARGET_OS").unwrap(),
+        )
+        .env(
+            "NIMROD_COPILOT_TARGET_ARCH",
+            std::env::var("CARGO_CFG_TARGET_ARCH").unwrap(),
+        )
+        .current_dir(&root)
+        .status()
+        .expect("Node is required to stage the bundled Copilot SDK");
+    assert!(
+        status.success(),
+        "Could not stage the pinned Copilot SDK (run npm ci)"
+    );
     source_identity(&PathBuf::from(
         std::env::var_os("CARGO_MANIFEST_DIR").unwrap(),
     ));

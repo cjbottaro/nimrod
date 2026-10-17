@@ -28,7 +28,7 @@ export interface PreferencesHost {
   migrate(text: string, entries: Record<string, unknown>): Promise<PreferencesSnapshot>;
   listen(receive: (snapshot: PreferencesSnapshot) => void): Promise<() => void>;
 }
-export const PROJECT_SETTING_KEYS = ['appearance.theme', 'runtime.piPath', 'runtime.nodePath'] as const;
+export const PROJECT_SETTING_KEYS = ['appearance.theme', 'runtime.piPath', 'runtime.nodePath', 'runtime.copilotPath'] as const;
 // Retain these old project-file entries without applying or migrating them.
 const LEGACY_PROJECT_SETTING_KEYS = ['appearance.zoom', 'appearance.autoFollowAfterSending'];
 export type ProjectSettingKey = typeof PROJECT_SETTING_KEYS[number];
@@ -57,7 +57,7 @@ export function parseSettings(text: string): Record<string, unknown> {
   if (sendAutoFollow !== undefined && !['always', 'whenIdle', 'never'].includes(sendAutoFollow as string)) throw new Error('appearance.autoFollowAfterSending must be always, whenIdle or never.');
   const zoom = settings['appearance.zoom'];
   if (zoom !== undefined && !ZOOM_LEVELS.includes(zoom)) throw new Error('Invalid appearance.zoom percentage.');
-  for (const key of ['runtime.piPath', 'runtime.nodePath']) {
+  for (const key of ['runtime.piPath', 'runtime.nodePath', 'runtime.copilotPath']) {
     if (settings[key] !== undefined) runtimePaths({ pi: settings[key], node: settings[key] });
   }
   if (settings['appearance.theme'] !== undefined && typeof settings['appearance.theme'] !== 'string') throw new Error('appearance.theme must be a string.');
@@ -201,9 +201,9 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
     isOverridden(key: ProjectSettingKey) { return Object.hasOwn(projectSettings, key); },
     useGlobal(key: ProjectSettingKey) { return patch({ [key]: undefined }, true); },
     subscribe(callback: () => void) { subscribers.add(callback); return () => { subscribers.delete(callback); }; },
-    runtime(defaults: { pi: string; node: string }) { return { version: 1 as const, pi: settings['runtime.piPath'] as string ?? defaults.pi, node: settings['runtime.nodePath'] as string ?? defaults.node }; },
-    saveRuntime(paths: { pi: string; node: string }, fields: ('pi' | 'node')[] = ['pi', 'node']) {
-      return patch(Object.fromEntries(fields.map(key => [key === 'pi' ? 'runtime.piPath' : 'runtime.nodePath', paths[key]])));
+    runtime(defaults: { pi: string; node: string; copilot?: string }) { return { version: 1 as const, pi: settings['runtime.piPath'] as string ?? defaults.pi, node: settings['runtime.nodePath'] as string ?? defaults.node, copilot: settings['runtime.copilotPath'] as string ?? defaults.copilot ?? 'copilot' }; },
+    saveRuntime(paths: { pi: string; node: string; copilot?: string }, fields: ('pi' | 'node' | 'copilot')[] = ['pi', 'node', ...(paths.copilot === undefined ? [] : ['copilot' as const])]) {
+      return patch(Object.fromEntries(fields.map(key => [key === 'pi' ? 'runtime.piPath' : key === 'node' ? 'runtime.nodePath' : 'runtime.copilotPath', paths[key]])));
     },
     theme(): ThemeLibrary { return readLibrary({ version: 1, selected: settings['appearance.theme'] ?? 'nimrod', imports: settings['appearance.importedThemes'] ?? [] }); },
     saveTheme(library: ThemeLibrary) {

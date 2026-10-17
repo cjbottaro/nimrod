@@ -1,5 +1,11 @@
 # Drafts and composer responsiveness
 
+SDK Copilot drafts use a separate `copilot-sdk:` identity scope. Older
+`acp:copilot:` drafts remain tied to explicit legacy ACP entries; there is no
+automatic copying, transport migration or deletion of the other draft.
+Close keeps each saved draft; confirmed deletion cleans only the target scope.
+See [Copilot history and legacy policy](copilot.md#older-copilot-acp-entries).
+
 Nimrod keeps saved-session drafts in Rust-managed files beneath the app-state directory:
 
 ```text
@@ -8,7 +14,7 @@ Nimrod keeps saved-session drafts in Rust-managed files beneath the app-state di
 
 An absolute `XDG_STATE_HOME` override changes the root, as with other app state. Drafts are separate from `state.json` and Pi's conversation files.
 
-Built-in [Copilot sidebar sessions](acp.md#persistence-and-current-limits) also use native draft storage, scoped by project, Copilot identity and session ID rather than a Pi file path. Their drafts survive quit/reopen and Close; custom ACP drafts remain runtime-only.
+Built-in [SDK Copilot sidebar sessions](copilot.md#history-close-and-delete) also use native draft storage, scoped by project, Copilot identity and session ID rather than a Pi file path. Their drafts survive quit/reopen and Close; custom ACP drafts remain runtime-only.
 
 Typing updates the draft immediately in memory and asynchronously stages the current session's record in Rust. Disk saves are debounced by 300 ms, with a 2-second maximum wait during continuous typing. Only the changed draft is written, using atomic replacement. Abrupt termination can lose recent unsaved typing or changes not yet delivered to Rust. Errors are shown without discarding the in-memory draft.
 

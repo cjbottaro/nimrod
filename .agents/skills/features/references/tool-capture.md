@@ -4,6 +4,12 @@
 
 ## Consumer and minimum contract
 
+[Copilot SDK](copilot-sdk.md) forwards original live `tool.*` data and permission
+request payloads from `src/copilot/session.ts`, under source backend
+`copilot-sdk`, agent `copilot`, with stable connection/session IDs. Replay is
+excluded. The same sink/storage/queue is reused, without translating to Pi/ACP.
+SDK capture fixtures are authored/unrun; enabling capture never starts work.
+
 The consumer is a local card-design/debugging workflow: inspect observed tool names, native payload shapes and lifecycle changes, then derive bespoke card plugins and offline fixtures. This is not a universal harness protocol, conversation recorder or execution API.
 
 `src/tool-capture.ts` owns `ToolCaptureSink`: a read-only `enabled` flag and synchronous, nonthrowing `append(ToolCaptureRecord): void`. A record supplies `source` (backend, agent, optional reported version), session ID, optional stable connection ID/tool-call ID, native event name and selected native JSON payload. Integrations decide what tool activity means; the sink never interprets tool names, schemas, capabilities or permissions. Adding an integration requires supplying source identity and forwarding its native tool events to this port, not adding a storage backend or normalizing its events into Pi/ACP.

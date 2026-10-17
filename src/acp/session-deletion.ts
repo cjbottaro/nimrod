@@ -12,7 +12,7 @@ export function copilotSessionDeletion(history: () => CopilotDeletionHistory | u
   return {
     pending: false,
     operation(reference, title) {
-      if (!('kind' in reference) || reference.profile !== 'copilot') return;
+      if (!('kind' in reference) || reference.kind !== 'acp' || reference.profile !== 'copilot') return;
       const { sessionId } = reference;
       const scope = copilotSessionScope(sessionId);
       const target = { key: scope, draftScope: scope };

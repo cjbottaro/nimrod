@@ -4,6 +4,12 @@
 
 Human guide: [Model and thinking preferences](../../../../docs/model-thinking.md).
 
+[Copilot SDK](copilot-sdk.md) uses its own catalog/current-model snapshot,
+idle-only SDK `setModel` and selected-model supported reasoning efforts.
+`session.model_change`/deselection outrank older operation results; configuration
+failure disconnects rather than presenting unconfirmed state. These choices
+never change backend. SDK thinking is not Pi thinking or an ACP thought selector.
+
 ## Specification and acceptance criteria
 
 Changing Pi-scoped model/thinking preferences stays available during work/compaction and affects upcoming requests, not in-flight streams. Only acknowledged Pi state updates displayed configuration; readiness and mutation guards remain.

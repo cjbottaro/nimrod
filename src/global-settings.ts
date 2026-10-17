@@ -34,7 +34,7 @@ export async function mountGlobalSettings() {
     const links = document.createElement('div'); links.className = 'settings-project-links';
     section.append(heading, description, links); document.getElementById('settings-panel-appearance')!.append(section);
     let generation = 0, projectSignature: string | undefined;
-    const labels: Record<string, string> = { 'appearance.theme': 'Theme', 'runtime.piPath': 'Pi path', 'runtime.nodePath': 'Node path' };
+    const labels: Record<string, string> = { 'appearance.theme': 'Theme', 'runtime.piPath': 'Pi path', 'runtime.nodePath': 'Node path', 'runtime.copilotPath': 'Copilot path' };
     async function reloadProjects() {
       const request = ++generation;
       try {

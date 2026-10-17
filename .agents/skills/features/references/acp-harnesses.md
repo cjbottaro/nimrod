@@ -4,6 +4,13 @@
 
 ## POC workstream and abandonment checkpoint
 
+**Current scope after the SDK migration:** New ACP session offers custom profiles
+only. Built-in creation/history/deletion now use [Copilot SDK](copilot-sdk.md).
+The Copilot ACP contracts below apply only to preserved legacy identities and
+their original draft/history association. No automatic conversion/load occurs.
+The historical POC branch/checkpoint instructions in this section belong to that
+workstream, not the separate SDK migration task or its ordinary local merge.
+
 Continue all POC stages on `feature/acp-foundation` in `.worktrees/acp-foundation/`, with incremental commits and no intermediate merges into `main`. Sub-worktrees, if needed, integrate into this task branch first. The retained local branch `checkpoint/pre-acp-poc` points to **`784e80f`**, the last commit before ACP implementation; **`a3e1919`** is the already-merged isolated foundation and the starting point for the rest of the POC. Do not reset/discard unrelated work to abandon the effort: leave the task worktree/branch intact and revert selected merged ACP commits explicitly if needed. No branch/worktree cleanup is authorized. The retained nested `.worktrees/pi-baseline` worktree on `validation/acp-poc-baseline` at `a3e1919` was used to reproduce pre-existing Pi browser fixture failures independently of ACP changes.
 
 POC target: launch an owned ACP agent beside Pi, stream into the shared transcript/card runtime, submit/cancel text, choose permissions, switch/close independently and expose supported configuration/commands. Copilot is the first target, with a generic configurable launch profile. Saved ACP discovery/resume/deletion and attachments may remain explicit limitations. Live requests, checks and app builds/launches still require explicit authorization; code completion alone is not native compatibility evidence.

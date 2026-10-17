@@ -1,8 +1,15 @@
 # Consumer-oriented integration interfaces
 
-**Status: architectural direction with an incremental implementation, not a universal harness SDK.** Pi and ACP remain concrete integrations. This reference owns how we identify, define and extract internal interfaces; [harness presentation](harness-presentation.md) owns the existing presentation contracts, and feature references own behavior. No new user-visible capability or harness parity is implied.
+**Status: architectural direction with an incremental implementation, not a universal harness SDK.** Pi, Copilot SDK and ACP remain concrete integrations. This reference owns how we identify, define and extract internal interfaces; [harness presentation](harness-presentation.md) owns the existing presentation contracts, and feature references own behavior. No new user-visible capability or harness parity is implied.
 
 ## Decision
+
+The [Copilot SDK](copilot-sdk.md) implements the existing persistence,
+connectivity, history, deletion, interaction-policy and presentation ports
+through concrete `src/copilot/` adapters. Its semantic events, identity namespace
+and SDK-owned CLI lifecycle stay separate from ACP. Launch composition now also
+includes `main.ts::launchCopilot`; no universal launch controller was introduced.
+The SDK fixtures are authored/unrun, not covered by older Pi/ACP pass results.
 
 **Shared interfaces describe what a Nimrod consumer needs; concrete implementations retain what each harness means.** Avoid both backend switches scattered through shared UI and a single all-purpose `Harness` controller. A small curated integration portfolio can share shell mechanics without sharing protocol, history or configuration semantics.
 

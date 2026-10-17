@@ -1,12 +1,12 @@
 # ACP sessions (experimental POC)
 
-Nimrod has an experimental Agent Client Protocol integration alongside its bespoke Pi integration. **The earlier POC/shared-view baseline passed offline checks and browser tests; the latest correctness fixes and Copilot sidebar restoration have not been validated. It has not been accepted with Copilot or another real agent in the native app.** It is not a broad compatibility guarantee.
+Nimrod retains experimental generic ACP alongside bespoke Pi and [official SDK Copilot](copilot.md). **New built-in Copilot sessions no longer use ACP.** The Copilot-specific persistence/history/deletion sections below apply only to preserved **legacy ACP** entries and drafts, not SDK sessions. Earlier ACP baseline checks do not validate the SDK migration or native/real-agent compatibility.
 
 ## Start an ACP session
 
 Open a project, then **⌘/Ctrl+Shift+P → New ACP session…**. This command has no default shortcut; it can be bound in [Keybindings](keybindings.md).
 
-- **Copilot CLI** launches your installed `copilot --acp --stdio`. Install and authenticate Copilot in a terminal first; Nimrod does not provide an ACP login flow.
+- **New Copilot session** is a separate [SDK command](copilot.md). Existing legacy ACP rows still launch `copilot --acp --stdio` on explicit selection; they are not migrated automatically.
 - **Custom ACP agent…** accepts a JSON launch profile. `command` is an executable name on PATH or an absolute path; `args` is a literal array, not a shell command. For example:
 
   ```json
@@ -60,11 +60,11 @@ Restored entries start disconnected, including the remembered selected row. Clic
 
 Custom ACP profiles/sessions retain the earlier runtime-only Nimrod lifecycle. Close, reload or quit discards their transcript, draft and pop-outs. The agent may retain its own history; Nimrod does not delete it.
 
-Saved Copilot deletion is available only when the agent advertises the required support; see [Delete Copilot history](#delete-copilot-history). Restart remains Pi-only; custom-agent history discovery/deletion remains unavailable. The POC also lacks attachment sending, client-hosted filesystem/terminal services, login/elicitation flows and some protocol extensions. Agents must be able to execute their own tools without those client services. No Copilot SDK backend or in-place backend switching is implemented.
+Legacy ACP Copilot deletion is available only when the agent advertises the required support; see [Delete Copilot history](#delete-copilot-history). New SDK sessions use their own supported deletion API, not that optional ACP capability. Restart remains Pi-only; custom-agent history discovery/deletion remains unavailable. The POC also lacks attachment sending, client-hosted filesystem/terminal services, login/elicitation flows and some protocol extensions. Agents must execute their own tools. No in-place ACP/SDK switching or draft aliasing is implemented.
 
 ## Delete Copilot history
 
-For the built-in Copilot profile, the row/Project bar trash controls, **Delete session…** / **⌘/Ctrl+Backspace**, and **Delete sessions…** / **⌘/Ctrl+Shift+Backspace** use Copilot's advertised ACP deletion method. This requires session listing, loading and deletion support in your installed version. Unsupported controls remain unavailable, and the cleanup picker omits unsupported Copilot history. Custom profiles remain unsupported.
+For retained legacy Copilot ACP entries, the row/Project bar trash controls, **Delete session…** / **⌘/Ctrl+Backspace**, and **Delete sessions…** / **⌘/Ctrl+Shift+Backspace** use Copilot's advertised ACP deletion method. This requires session listing, loading and deletion support in your installed version. Unsupported controls remain unavailable, and the cleanup picker omits unsupported Copilot history. Custom profiles remain unsupported.
 
 **Copilot 1.0.98 does not advertise deletion in the installed version inspected locally.** Its trash controls remain disabled and explain the missing support. The local CLI also exposes no `copilot sessions delete` command. This implementation does not enable deletion for that version: Nimrod has no established supported alternative and will not remove Copilot's private files or send a prompt to emulate deletion. **Close** removes the sidebar entry while retaining saved history and drafts.
 
@@ -76,11 +76,11 @@ The cleanup picker remains open after each review, retaining its query and survi
 
 ## Resume Copilot history
 
-**Resume session… / ⌘/Ctrl+K** combines Pi history with Copilot history for projects that have used the built-in Copilot option. Creating a built-in Copilot session or restoring a remembered Copilot sidebar entry establishes that project association. The association survives closing every Copilot row; custom profiles do not establish it.
+**Resume session… / ⌘/Ctrl+K** retains legacy ACP Copilot history for projects with its historical association or restored legacy entries. New SDK creation establishes a separate association and [SDK history source](copilot.md#history-close-and-delete). Associations survive closing every corresponding row; custom ACP profiles establish neither.
 
 For an associated open project, Nimrod runs one additional owned Copilot process for history discovery. It initializes without creating or loading a conversation or sending a prompt, stays available while the project is open, and stops when the project closes. Opening Resume or choosing Refresh requests fresh agent-owned history, including subsequent pages; Nimrod does not keep a persistent history-list cache or read Copilot's private session files.
 
-Copilot rows show **Copilot ACP** immediately after the date, below the title. Closed entries have a dash indicator; already-open entries show the same title, time and activity as the sidebar and reuse that session when selected. Closed row times use Copilot's reported update time when available, not an inferred user-message timestamp. Resume sorts Pi and Copilot together by the displayed time, newest first; entries without a known time appear last.
+Legacy Copilot history rows show **Copilot (legacy ACP)** immediately after the date, below the title. Closed entries have a dash indicator; already-open entries show the same title, time and activity as the sidebar and reuse that session when selected. Closed row times use Copilot's reported update time when available, not an inferred user-message timestamp. Resume sorts Pi and Copilot together by the displayed time, newest first; entries without a known time appear last.
 
 Selecting a closed entry immediately opens its sidebar row and restores its draft, then loads that exact saved ID in the conversation's separate agent process. Replay never sends a prompt or restores in-flight work. Earlier conversations lost from Nimrod's sidebar may be recoverable if Copilot exposes them for the project's exact directory; discovery completeness depends on the installed agent/version.
 

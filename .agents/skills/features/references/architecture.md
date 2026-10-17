@@ -6,7 +6,7 @@
 
 Nimrod is a directory-backed agent workspace, not an IDE or generic chat frontend. One canonical directory belongs to each project window and is every session's exact cwd. Nested worktrees with other cwd values require separate windows. User terminology is Project/Project bar; existing workspace identifiers, IPC labels and storage keys remain compatibility details.
 
-Pi is the primary integration; [ACP has an experimental source POC](acp-harnesses.md), not established real-agent/platform compatibility. Session backends are immutable. Keep concrete integrations instead of inventing a universal harness protocol: Pi retains its native transport/session semantics, ACP its standardized protocol. Harnesses own conversation history, tools, models, configuration and semantic lifecycle; Nimrod owns presentation, local drafts, native windows, process ownership and explicit supported deletion.
+Pi is primary; curated integrations are bespoke-first: Pi native RPC and the pinned official [Copilot SDK](copilot-sdk.md). [Generic ACP](acp-harnesses.md) is a separate experimental fallback, preserving explicit legacy Copilot identities rather than silently migrating them. SDK fixtures/packaging/native acceptance are pending. Session backends are immutable: SDK events project directly to shared consumer presentation, never fabricated ACP/Pi events. Harnesses own conversation history, tools, models, configuration and semantic lifecycle; Nimrod owns presentation, local drafts, native windows, process ownership and explicit supported deletion.
 
 ## Responsibility map
 

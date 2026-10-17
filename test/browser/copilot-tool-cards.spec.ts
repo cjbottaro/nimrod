@@ -1,16 +1,13 @@
 import { expect, test } from '@playwright/test';
 import { demoFixture, visible } from './demo-fixture';
 
-test('offline Copilot read/search cards keep compact previews, exact raw recovery and inspected output', async ({ page }) => {
-  const demo = await demoFixture(page, {}, [], undefined, undefined, { acpAgentName: 'Copilot' });
+test('offline legacy Copilot ACP cards keep compact previews, exact raw recovery and inspected output', async ({ page }) => {
+  const state = { [`nimrod.tabs.v1:${process.cwd()}`]: { tabs: [{ kind: 'acp', profile: 'copilot', sessionId: 'fixture-acp', name: 'Legacy Copilot cards' }] } };
+  const demo = await demoFixture(page, state, [], undefined, undefined, { acpAgentName: 'Copilot' });
   try {
-    await page.keyboard.press('Meta+Shift+P');
-    await page.locator('#palette-input').fill('New ACP session');
-    await page.locator('#palette-input').press('Enter');
-    await expect(page.locator('#palette-title')).toHaveText('New ACP session (POC)');
-    await page.locator('#palette-input').press('Enter');
+    await page.locator('#open-sessions .session-row').filter({ hasText: 'Legacy Copilot cards' }).click();
     await expect(page.locator(visible('send'))).toBeEnabled();
-    const connection = demo.calls.find(call => call.command === 'write_acp' && (call.args.message as { method?: string }).method === 'session/new')!;
+    const connection = demo.calls.find(call => call.command === 'write_acp' && (call.args.message as { method?: string }).method === 'session/load')!;
     const token = connection.args.token as string;
     const project = (demo.calls.find(call => call.command === 'start_acp' && call.args.token === token)!.args.config as { cwd: string }).cwd;
     const emit = (updates: object[]) => page.evaluate(({ token, updates }) => {

@@ -24,6 +24,7 @@ export interface ContentBlock {
 export interface DisplayMessage {
   key: string;
   role: string;
+  originLabel?: string;
   parallelCluster?: import("./pi/tool-progress").ParallelToolCluster;
   /** Parsed, core-owned immutable inputs for standalone tool envelopes. */
   toolArguments?: unknown;
@@ -43,4 +44,3 @@ export interface DisplayMessage {
   resultOutput?: string;
   toolStatus?: "running" | "finished" | "result";
 }
-

@@ -4,6 +4,12 @@
 
 Human guide: [Projects and sessions](../../../../docs/session-sidebar.md#ordering-and-navigation).
 
+[Copilot SDK](copilot-sdk.md) uses the same coordinator and canonical open-session
+projection. Saved SDK rows restore inactive and connect only on explicit exact-ID
+selection; discovery never loads them. SDK callbacks do not repeat navigation
+after acceptance. SDK and legacy ACP references use different keys/draft scopes;
+conflicting raw IDs block connection rather than switching the selected backend.
+
 ## Specification and acceptance criteria
 
 All, Switch and cycling share one canonical projection. Navigation effects retain mounted state, all visible saved selections request the shared connection coordinator, and batched cleanup uses one connected-first replacement policy.

@@ -25,7 +25,7 @@ export interface ExecutablePluginHost {
 interface Entry { tools: string[]; kinds?: readonly string[]; renderer: DomCardRenderer<ToolCardBlock>; file: string; executable: boolean; personal?: boolean; targets?: readonly CardPluginTarget[]; }
 function targetMetadata(renderer: DomCardRenderer<ToolCardBlock>) {
   const targets = pluginTargets(renderer.targets), kinds = pluginKinds(renderer.kinds);
-  if (kinds.length && !targets.some(target => target.backend === 'acp')) throw new Error('Tool kinds require an ACP target');
+  if (kinds.length && !targets.some(target => target.backend !== 'pi')) throw new Error('Tool kinds require an ACP or Copilot SDK target');
   return { targets, kinds };
 }
 export class CardPluginCatalog {
@@ -114,14 +114,14 @@ export class CardPluginCatalog {
   select(data: Readonly<ToolCardBlock>): ToolCardRenderer {
     const name = normalizedToolName(data.name);
     // Existing tool-only overrides belong to Pi. ACP never inherits a Pi match.
-    const override = data.source?.backend === 'acp' ? undefined : Object.hasOwn(this.config.overrides, name) ? this.config.overrides[name] : undefined;
+    const override = data.source && data.source.backend !== 'pi' ? undefined : Object.hasOwn(this.config.overrides, name) ? this.config.overrides[name] : undefined;
     if (override === 'nimrod.raw') return presentationPlugin({ id: 'nimrod.raw', supports: () => true, mount: () => ({ update: rawToolPresentation, dispose() {} }) });
-    const bundled = data.source?.backend === 'acp' ? bundledAcpPlugin(data) : bundledToolRenderer(data);
+    const bundled = data.source && data.source.backend !== 'pi' ? bundledAcpPlugin(data) : bundledToolRenderer(data);
     if (override === bundled.id || override === 'nimrod.tool') return override === 'nimrod.tool' ? presentationPlugin(defaultToolRenderer) : bundled;
     // ACP categories are intentionally broad. Select applicable candidates in a
     // deterministic order, then latch the chosen instance for its whole lifetime.
     // Pi's legacy first-name/explicit-override behavior is unchanged.
-    const acp = data.source?.backend === 'acp';
+    const acp = !!data.source && data.source.backend !== 'pi';
     const matchesMetadata = (entry: Entry) => matchesTarget(entry.targets ?? [{ backend: 'pi' }], data)
       && (entry.tools.includes(name) || acp && !!entry.kinds?.includes(data.kind || 'other'));
     const candidates = [...this.packages.values()].filter(matchesMetadata);

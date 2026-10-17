@@ -1,6 +1,11 @@
 import { AcpSession } from './acp/session';
-import { CopilotSessionHistory, copilotHistoryKey } from './acp/session-history';
-import { copilotSessionDeletion } from './acp/session-deletion';
+import { CopilotSession } from './copilot/session';
+import { CopilotSessionHistory, copilotHistoryKey } from './copilot/session-history';
+import { copilotSessionDeletion } from './copilot/session-deletion';
+import { copilotSessionLifecycle, copilotSdkScope } from './copilot/session-lifecycle';
+import { copilotInteraction } from './copilot/view-policy';
+import { CopilotSessionHistory as LegacyCopilotHistory, copilotHistoryKey as legacyCopilotHistoryKey } from './acp/session-history';
+import { copilotSessionDeletion as legacyCopilotDeletion } from './acp/session-deletion';
 import { piSessionDeletion } from './pi/session-deletion';
 import { SessionDeletionCoordinator } from './session-deletion-coordinator';
 import type { SessionDeletionOperation, SessionDeletionTarget } from './session-deletion-operation';
@@ -10,7 +15,7 @@ import { savedSessionKey, resolveSessionListEntry, type SessionListEntry } from 
 import { renderPermissionDetails } from './acp/tool-state';
 import { acpInteraction } from './acp/view-policy';
 import { createPiViewProjection, piInteraction } from './pi/view-policy';
-import { piSession, acpSession, acpProfile as profileFor, sessionActions, type SessionAction, type SessionBackend } from './session-backend';
+import { piSession, acpSession, copilotSession, acpProfile as profileFor, sessionActions, type SessionAction, type SessionBackend } from './session-backend';
 import { piSessionLifecycle } from './pi/session-lifecycle';
 import type { SessionFile } from './pi/session-file';
 import { startPiSession, type PiLaunchInfo } from './pi/session-startup';
@@ -128,9 +133,12 @@ const attachmentStore = new AttachmentStore();
 const temporaryImages = new Map<string, Blob>();
 let ready = false;
 let acpReady = false;
+let copilotReady = false;
+let copilotGeneration = '';
 let unloading = false;
 let workspace: string | undefined;
 let copilotHistory: CopilotSessionHistory | undefined;
+let legacyCopilotHistory: LegacyCopilotHistory | undefined;
 let homeDirectory: string | undefined;
 let opening: Promise<boolean> | undefined;
 let sidebarVisible = stored('nimrod.sidebar.visible') !== false;
@@ -223,6 +231,7 @@ const selectedConnection = new SessionConnection<Tab>({
 const deletions = new SessionDeletionCoordinator({
   canRun: (reference, target) => {
     if (!ready || unloading || settings.isOpen) return false;
+    if ('kind' in reference && tabs.some(tab => tab.backend.kind !== 'pi' && tab.backend.kind !== reference.kind && tab.lifecycle.identity?.sessionId === reference.sessionId)) return false;
     const tab = tabs.find(tab => tab.lifecycle.key === target.key);
     return !tab || !!tab.lifecycle.identity && savedSessionKey(tab.lifecycle.identity) === savedSessionKey(reference)
       && !tab.deleting && !tab.starting && !tab.closing && !tab.restarting;
@@ -276,7 +285,8 @@ const piDeletion = deletions.register(context => piSessionDeletion({
   confirm: (id, confirmed) => invoke('confirm_session_deletion', { id, confirmed }),
 }, context));
 const deletion = piDeletion.transaction;
-deletions.register(context => copilotSessionDeletion(() => copilotHistory, context));
+deletions.register(context => copilotSessionDeletion(() => copilotHistory, context, id => tabs.some(tab => tab.backend.kind === 'acp' && tab.lifecycle.identity?.sessionId === id)));
+deletions.register(context => legacyCopilotDeletion(() => legacyCopilotHistory, context));
 function tabDeletion(tab: Tab | undefined): SessionDeletionOperation | undefined {
   const reference = tab?.lifecycle.identity;
   return reference && tab ? deletions.operation(reference, tab.title) : undefined;
@@ -312,6 +322,7 @@ const disposeTimeRefresh = installSessionTimeRefresh(window, () => { for (const 
 window.addEventListener('unload', () => {
   unloading = true;
   void copilotHistory?.dispose().catch(error => console.error('Could not stop Copilot history discovery', error));
+  void legacyCopilotHistory?.dispose().catch(error => console.error('Could not stop legacy Copilot history discovery', error));
   notices.dispose();
   settingsSurface.dispose();
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
@@ -436,13 +447,13 @@ function presentConversation(tab: Tab | undefined): void {
   if (sessionName.textContent !== title) sessionName.textContent = title;
   if (sessionIdentity.title !== title) sessionIdentity.title = title;
   const badge = required('mode-badge');
-  badge.textContent = !tab ? '' : profileFor(tab) ? `${profileFor(tab)!.name} · ACP POC` : tab.mode === 'temporary' ? 'Pi · temporary' : tab.file?.exists ? 'Pi' : 'Pi · awaiting first save';
+  badge.textContent = !tab ? '' : tab.backend.kind === 'copilot-sdk' ? 'Copilot · SDK' : profileFor(tab) ? `${profileFor(tab)!.name} · ACP POC` : tab.mode === 'temporary' ? 'Pi · temporary' : tab.file?.exists ? 'Pi' : 'Pi · awaiting first save';
   badge.title = tab?.file?.path || '';
   restartControl();
 }
 function promptPending(tab: Tab): boolean {
   const backend = tab.backend;
-  return backend.kind === 'acp' ? backend.session?.client.phase === 'working' : backend.session?.rpc.hasPendingRequest('prompt', 'set_session_name') ?? false;
+  return backend.kind === 'acp' ? backend.session?.client.phase === 'working' : backend.kind === 'copilot-sdk' ? backend.session?.state.busy === true : backend.session?.rpc.hasPendingRequest('prompt', 'set_session_name') ?? false;
 }
 function deletionBusy(tab: Tab): boolean {
   const state = piSession(tab)?.state;
@@ -465,7 +476,7 @@ function restartControl(): void {
     : !operation?.available() ? operation?.unavailableReason || 'requires saved history and harness deletion support'
     : active.starting || active.closing || active.restarting ? 'session lifecycle operation pending' : undefined;
   remove.title = `${operation?.label || 'Delete session…'}${unavailable ? ` — ${unavailable}` : ''}`;
-  button.title = !active ? 'Restart session — no open session' : profileFor(active) ? 'Restart session — unavailable in the ACP POC' : deletion.blocked(active.file?.path) ? 'Restart session — recover through Resume session first' : active.mode === 'temporary'
+  button.title = !active ? 'Restart session — no open session' : active.backend.kind === 'copilot-sdk' ? 'Restart session — unavailable for Copilot SDK; Close and Resume explicitly' : profileFor(active) ? 'Restart session — unavailable in the ACP POC' : deletion.blocked(active.file?.path) ? 'Restart session — recover through Resume session first' : active.mode === 'temporary'
     ? 'Restart session — unavailable for temporary sessions' : !active.file?.exists
     ? 'Restart session — available after the first save' : active.restarting ? 'Restarting session…' : 'Restart session';
 }
@@ -532,8 +543,9 @@ async function enterWorkspace(path: string): Promise<void> {
     const t = readSavedSidebarSession(value);
     if (!t) continue;
     if ('kind' in t) {
-      if (tabs.some(tab => tab.lifecycle.key === copilotSessionScope(t.sessionId))) continue;
-      const tab = createTab('resume', undefined, typeof t.name === 'string' ? t.name : 'Copilot session', lastUsed(t.lastUsed), COPILOT_PROFILE, t.sessionId);
+      const sdk = t.kind === 'copilot-sdk';
+      if (tabs.some(tab => tab.lifecycle.key === (sdk ? copilotSdkScope(t.sessionId) : copilotSessionScope(t.sessionId)))) continue;
+      const tab = createTab('resume', undefined, typeof t.name === 'string' ? t.name : 'Copilot session', lastUsed(t.lastUsed), sdk ? undefined : COPILOT_PROFILE, t.sessionId, sdk);
       tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
       continue;
     }
@@ -551,8 +563,10 @@ async function enterWorkspace(path: string): Promise<void> {
     tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
   }
   ready = true;
-  if (tabs.some(tab => { const identity = tab.lifecycle.identity; return identity && 'kind' in identity; })) rememberCopilot();
+  if (tabs.some(tab => tab.backend.kind === 'copilot-sdk')) rememberCopilot();
   else startCopilotHistory();
+  if (tabs.some(tab => tab.backend.kind === 'acp' && tab.backend.profile === COPILOT_PROFILE)) save(legacyCopilotHistoryKey(path), true);
+  startLegacyCopilotHistory();
   const selected = tabs.find(t => t.lifecycle.key === layout?.active) || navigation.all()[0];
   if (selected) activate(selected, 'startup');
   controls();
@@ -580,25 +594,25 @@ function historyError(source: string, label: string, message: string): void {
   if (!unloading) notices.report({ id: `history:${source}`, operation: `Read ${label} history`, message });
 }
 function startCopilotHistory(): CopilotSessionHistory | undefined {
-  if (!workspace || unloading || !acpReady || stored(copilotHistoryKey(workspace)) !== true) return;
+  if (!workspace || unloading || !copilotReady || stored(copilotHistoryKey(workspace)) !== true) return;
   if (!copilotHistory) {
     const project = workspace;
     copilotHistory = new CopilotSessionHistory(project, {
       start: (token, receive, disconnected) => {
         const onEvent = new Channel<Packet>();
         onEvent.onmessage = packet => { if (packet.kind === 'rpc') receive(packet.value); else disconnected(packet.message); };
-        return invoke('start_acp', { token, config: { cwd: project, command: COPILOT_PROFILE.command, args: COPILOT_PROFILE.args, env: COPILOT_PROFILE.env, node: runtime.current().node }, onEvent });
+        return invoke('start_copilot', { token, config: { cwd: project, node: runtime.current().node, cli: runtime.current().copilot, generation: copilotGeneration }, onEvent });
       },
-      send: (token, message) => invoke('write_acp', { token, message }),
-      stop: token => invoke('stop_acp', { token }),
+      send: (token, message) => invoke('write_copilot', { token, message }),
+      stop: token => invoke('stop_copilot', { token }),
       error: error => {
-        historyError('copilot', 'Copilot', String(error));
+        historyError('copilot-sdk', 'Copilot', String(error));
         if (!unloading) { for (const tab of tabs) updateTab(tab); controls(); }
       },
     });
     void copilotHistory.initialize().then(() => {
       if (!unloading) { for (const tab of tabs) updateTab(tab); controls(); }
-    }).catch(error => historyError('copilot', 'Copilot', String(error)));
+    }).catch(error => historyError('copilot-sdk', 'Copilot', String(error)));
   }
   return copilotHistory;
 }
@@ -606,6 +620,26 @@ function rememberCopilot(): void {
   if (!workspace) return;
   save(copilotHistoryKey(workspace), true);
   startCopilotHistory();
+}
+function startLegacyCopilotHistory(): LegacyCopilotHistory | undefined {
+  if (!workspace || unloading || !acpReady || stored(legacyCopilotHistoryKey(workspace)) !== true) return;
+  if (!legacyCopilotHistory) {
+    const project = workspace;
+    legacyCopilotHistory = new LegacyCopilotHistory(project, {
+      start: (token, receive, disconnected) => {
+        const onEvent = new Channel<Packet>();
+        onEvent.onmessage = packet => { if (packet.kind === 'rpc') receive(packet.value); else disconnected(packet.message); };
+        return invoke('start_acp', { token, config: { cwd: project, command: COPILOT_PROFILE.command, args: COPILOT_PROFILE.args, env: COPILOT_PROFILE.env, node: runtime.current().node }, onEvent });
+      },
+      send: (token, message) => invoke('write_acp', { token, message }),
+      stop: token => invoke('stop_acp', { token }),
+      error: error => historyError('copilot', 'Copilot (legacy ACP)', String(error)),
+    });
+    void legacyCopilotHistory.initialize().then(() => {
+      if (!unloading) { for (const tab of tabs) updateTab(tab); controls(); }
+    }).catch(error => historyError('copilot', 'Copilot (legacy ACP)', String(error)));
+  }
+  return legacyCopilotHistory;
 }
 function sessionListItem(entry: SessionListEntry) {
   return {
@@ -617,10 +651,15 @@ function sessionListItem(entry: SessionListEntry) {
 async function paletteSessions(signal: AbortSignal, publish: (page: PalettePage) => void, kind: 'resume' | 'delete' = 'resume'): Promise<PalettePage> {
   if (!workspace) return { items: [], notice: 'Open a project first.' };
   const sources: SessionHistory[] = [piHistory];
+  if (stored(legacyCopilotHistoryKey(workspace!)) === true) {
+    const legacy = startLegacyCopilotHistory();
+    if (legacy) sources.push(legacy);
+    else historyError('copilot', 'Copilot (legacy ACP)', 'The legacy ACP host is unavailable. Existing identities and drafts remain; use Refresh after resolving it.');
+  }
   if (stored(copilotHistoryKey(workspace)) === true) {
     const history = startCopilotHistory();
     if (history) sources.push(history);
-    else historyError('copilot', 'Copilot', 'Copilot history is unavailable while the ACP host is unavailable or initializing. Use Refresh after resolving the problem. Pi history remains available.');
+    else historyError('copilot-sdk', 'Copilot', 'Copilot history is unavailable while the SDK host is unavailable or initializing. Use Refresh after resolving the problem. Pi history remains available.');
   }
   const project = workspace;
   const page = (snapshot: SessionHistorySnapshot): PalettePage => {
@@ -703,7 +742,8 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     { id: 'resume', label: 'Resume session…', detail: 'Open a saved conversation in this project', next: true, run: () => palette.sessions() },
     { id: 'delete-sessions', label: 'Delete sessions…', detail: 'Repeatedly review and delete supported saved sessions in this project', next: true, run: () => palette.deleteSessions() },
     { id: 'new', label: 'New session', detail: 'Pi · persistent conversation (default harness)', run: () => newSession() },
-    ...(acpReady ? [{ id: 'new-acp', label: 'New ACP session…', detail: 'Experimental · Copilot or a custom ACP agent · text only', next: true, run: newAcpSessionPicker }] : []),
+    ...(copilotReady ? [{ id: 'new-copilot', label: 'New Copilot session', detail: 'Official Copilot SDK · installed and authenticated CLI · text only', run: newCopilotSession }] : []),
+    ...(acpReady ? [{ id: 'new-acp', label: 'New ACP session…', detail: 'Experimental · custom ACP agent · text only', next: true, run: newAcpSessionPicker }] : []),
     { id: 'new-named', label: 'New named session…', detail: 'Choose a name before starting', next: true, run: newNamedSession },
     ...(tabs.length ? [{ id: 'switch-session', label: 'Switch session…', detail: 'All open sessions, regardless of sidebar view', next: true, run: () => palette.openSessions() }] : []),
     ...(active ? sessionCommands(active) : []),
@@ -763,7 +803,7 @@ const unlistenProjectPicker = await listen('nimrod-open-project', () => { void t
 function button(text: string, click: () => void): HTMLButtonElement {
   const node = document.createElement('button'); node.type = 'button'; node.textContent = text; node.addEventListener('click', click); return node;
 }
-function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'temporary' ? 'Temporary session' : 'Session', used = 0, acpProfile?: AcpProfile, acpSessionId?: string): Tab {
+function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'temporary' ? 'Temporary session' : 'Session', used = 0, acpProfile?: AcpProfile, acpSessionId?: string, sdk = false): Tab {
   const id = crypto.randomUUID();
   const root = document.createElement('section'); root.className = 'session-view'; root.id = `panel-${id}`; root.setAttribute('role', 'region'); root.hidden = true;
   root.innerHTML = transcript;
@@ -780,8 +820,12 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
   deleteButton.append(required('delete-session').querySelector('svg')!.cloneNode(true));
   const closeButton = button('×', () => { void closeTab(tab); }); closeButton.className = 'session-close';
   rowNode.append(row, deleteButton, closeButton); required('open-sessions').append(rowNode);
-  const backend: SessionBackend = acpProfile ? { kind: 'acp', profile: acpProfile, savedSessionId: acpSessionId } : { kind: 'pi' };
-  const lifecycle: SessionLifecycle = backend.kind === 'acp' ? acpSessionLifecycle(() => tab, backend, {
+  const backend: SessionBackend = sdk ? { kind: 'copilot-sdk', savedSessionId: acpSessionId } : acpProfile ? { kind: 'acp', profile: acpProfile, savedSessionId: acpSessionId } : { kind: 'pi' };
+  const lifecycle: SessionLifecycle = backend.kind === 'copilot-sdk' ? copilotSessionLifecycle(() => tab, backend, {
+    connect: options => launchCopilot(tab, options.acceptedAction),
+    stop: token => invoke<void>('stop_copilot', { token }),
+    gate: () => copilotReady && !tab.deleting && !deletions.pending ? 'ready' : 'blocked',
+  }) : backend.kind === 'acp' ? acpSessionLifecycle(() => tab, backend, {
     connect: options => launchAcp(tab, options.acceptedAction),
     stop: token => invoke<void>('stop_acp', { token }),
     gate: () => acpReady && !tab.deleting ? 'ready' : 'blocked',
@@ -809,7 +853,8 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
   const projectPi = createPiViewProjection();
   tab.view = mountConversationView({
     projectDirectory: workspace,
-    interaction: acpProfile ? acpInteraction(acpProfile.name, text => tab.starting || !acpSession(tab)
+    interaction: sdk ? copilotInteraction(text => tab.starting || !copilotSession(tab)
+      ? 'Copilot is still connecting. Your draft was kept.' : copilotSession(tab)!.validatePrompt(text)) : acpProfile ? acpInteraction(acpProfile.name, text => tab.starting || !acpSession(tab)
       ? 'ACP is still connecting. Your draft was kept.' : acpSession(tab)!.validatePrompt(text)) : piInteraction,
     sendAutoFollow: () => preferences.sendAutoFollow(),
     performance: settingsSurface.performanceProbe,
@@ -831,7 +876,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
         await popouts.settled();
       },
     },
-    attachments: acpProfile ? undefined : {
+    attachments: acpProfile || sdk ? undefined : {
       readClipboard: readClipboardImage,
       put: async (blob, name) => {
         if (mode !== 'temporary') return attachmentStore.put(blob, name);
@@ -858,7 +903,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
       // Best-effort durability of cleared drafts, not a gate on prompt dispatch.
       if (tab.mode !== 'temporary' && (previous?.recovered !== next?.recovered || previous?.attachments !== next?.attachments || (previous?.draft && !next?.draft))) void nativeDrafts?.flush().catch(draftPersistenceError);
     },
-    onMessage: receive => { tab.receive = message => receive(acpProfile || !message.state ? message : { ...message, state: projectPi(message.state) }); },
+    onMessage: receive => { tab.receive = message => receive(acpProfile || sdk || !message.state ? message : { ...message, state: projectPi(message.state) }); },
     promptSubmitted: () => {
       if (!unloading && tabs.includes(tab) && tab.backend.session && !tab.ended && !tab.closing && !tab.restarting && !tab.deleting) touchTab(tab);
     },
@@ -882,10 +927,11 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
         return;
       }
       if (message.type === 'inspectMcp') { void runSessionAction(tab, 'mcp'); return; }
-      const backend = tab.backend, session = backend.session;
-      if (!session) return;
-      if (backend.kind === 'acp') void session.handle(message).catch(error => showNotice(tab, String(error)));
+      const backend = tab.backend;
+      if (!backend.session) return;
+      if (backend.kind !== 'pi') void backend.session.handle(message).catch(error => showNotice(tab, String(error)));
       else {
+        const session = backend.session;
         void session.handle(message).finally(() => { if (tabs.includes(tab) && tab.backend.session === session) updateTab(tab); });
         updateTab(tab);
       }
@@ -929,7 +975,7 @@ function sessionRow(tab: Tab): SessionListEntry {
   const reference = tab.lifecycle.identity;
   return {
     key: reference ? savedSessionKey(reference) : tab.id,
-    title: tab.title, harnessLabel: profileFor(tab) ? `${profileFor(tab)!.name} ACP` : 'Pi',
+    title: tab.title, harnessLabel: tab.backend.kind === 'copilot-sdk' ? 'Copilot SDK' : profileFor(tab) ? `${profileFor(tab)!.name} ACP` : 'Pi',
     timestamp: tab.lastUsed || undefined, open: true, status: status(tab), reference,
   };
 }
@@ -1026,6 +1072,7 @@ async function inspectMcp(tab: Tab): Promise<void> {
   }
 }
 async function pickPreference(tab: Tab, kind: 'model' | 'thinking'): Promise<void> {
+  if (tab.backend.kind === 'copilot-sdk') return pickCopilotPreference(tab, kind);
   if (profileFor(tab)) return pickAcpOption(tab, kind);
   const operation = kind === 'model' ? 'Select model' : 'Select thinking level';
   const request = palette.startSelection(operation, () => { void pickPreference(tab, kind); }, message => {
@@ -1083,10 +1130,13 @@ async function pickAcpOption(tab: Tab, kind?: 'model' | 'thinking', selectedOpti
   finally { request.finish(); if (tab.cancelPreference === request.cancel) tab.cancelPreference = undefined; }
 }
 function requestAcpPermission(tab: Tab, request: import('./acp/client').AcpPermissionRequest, signal: AbortSignal): Promise<string | undefined> {
+  return requestSessionChoice(tab, renderPermissionDetails(document, request.toolCall), request.options.map(option => ({ id: option.optionId, label: option.name, kind: option.kind })), signal);
+}
+function requestSessionChoice(tab: Tab, details: HTMLElement, options: { id: string; label: string; kind?: string }[], signal: AbortSignal): Promise<string | undefined> {
   if (signal.aborted || !tabs.includes(tab) || tab.closing) return Promise.resolve(undefined);
   return new Promise(resolve => {
     const region = document.createElement('section'); region.className = 'acp-permission'; region.setAttribute('role', 'group'); region.setAttribute('aria-label', 'Agent permission request');
-    const details = renderPermissionDetails(document, request.toolCall); region.append(details);
+    region.append(details);
     const actions = document.createElement('div'); actions.className = 'acp-permission-actions'; region.append(actions);
     const raw = details.querySelector('.acp-permission-raw'); if (raw) region.append(raw);
     let settled = false;
@@ -1099,9 +1149,9 @@ function requestAcpPermission(tab: Tab, request: import('./acp/client').AcpPermi
       resolve(choice);
     };
     const abort = () => finish();
-    for (const option of request.options) {
-      const control = button(option.name, () => { if (!signal.aborted && presented === tab && !tab.closing && !document.querySelector('dialog[open]')) finish(option.optionId); });
-      control.dataset.permissionKind = option.kind; actions.append(control);
+    for (const option of options) {
+      const control = button(option.label, () => { if (!signal.aborted && presented === tab && !tab.closing && !document.querySelector('dialog[open]')) finish(option.id); });
+      if (option.kind) control.dataset.permissionKind = option.kind; actions.append(control);
     }
     actions.append(button('Cancel request', () => finish()));
     signal.addEventListener('abort', abort, { once: true });
@@ -1112,19 +1162,132 @@ function requestAcpPermission(tab: Tab, request: import('./acp/client').AcpPermi
     if (token) void notifySession('input', {
       valid: () => !signal.aborted && !unloading && tabs.includes(tab) && tab.token === token && !tab.closing && !tab.ended,
       selected: () => presented === tab && !settings.isOpen,
-      session: profileFor(tab)?.name || 'ACP session', target: { session: tab.id, token },
+      session: tab.backend.kind === 'copilot-sdk' ? 'Copilot' : profileFor(tab)?.name || 'ACP session', target: { session: tab.id, token },
     });
   });
+}
+async function requestCopilotDecision(tab: Tab, kind: 'permission' | 'input', request: Record<string, unknown>, signal: AbortSignal): Promise<Record<string, unknown> | undefined> {
+  const details = document.createElement('div');
+  const title = document.createElement('strong'); title.textContent = kind === 'permission' ? 'Copilot requests permission' : typeof request.question === 'string' ? request.question : 'Copilot requests input';
+  details.append(title);
+  if (kind === 'permission') {
+    const raw = document.createElement('pre'); raw.textContent = JSON.stringify(request, null, 2); details.append(raw);
+    const choice = await requestSessionChoice(tab, details, [{ id: 'allow', label: 'Allow once' }, { id: 'deny', label: 'Deny' }], signal);
+    return { kind: choice === 'allow' ? 'approved' : 'denied-interactively-by-user' };
+  }
+  const choices = Array.isArray(request.choices) ? request.choices.filter((value): value is string => typeof value === 'string') : [];
+  const input = document.createElement('textarea'); input.setAttribute('aria-label', 'Answer Copilot');
+  const freeform = request.allowFreeform !== false;
+  if (freeform) details.append(input);
+  const choice = await requestSessionChoice(tab, details, [
+    ...choices.map((label, index) => ({ id: String(index), label })),
+    ...(freeform ? [{ id: 'freeform', label: 'Submit answer' }] : []),
+  ], signal);
+  if (choice === undefined) return;
+  if (choice === 'freeform') {
+    if (!input.value.trim()) throw new Error('No answer was supplied. The Copilot request was interrupted.');
+    return { answer: input.value, wasFreeform: true };
+  }
+  return { answer: choices[Number(choice)], wasFreeform: false };
+}
+async function pickCopilotPreference(tab: Tab, kind: 'model' | 'thinking'): Promise<void> {
+  const session = copilotSession(tab);
+  if (!session || tab.ended || tab.closing || tab.deleting) return;
+  const operation = kind === 'model' ? 'Select model' : 'Select thinking level';
+  const request = palette.startSelection(operation, () => { void pickCopilotPreference(tab, kind); }, message => {
+    if (tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:copilot-configuration:${++noticeSequence}`, owner: tab.id, operation, message });
+  });
+  if (!request) return;
+  tab.cancelPreference?.(); tab.cancelPreference = request.cancel;
+  try {
+    await session.selectPreference(kind, async (values, current) => {
+      const value = await request.choose(values, current);
+      if (!tabs.includes(tab) || copilotSession(tab) !== session || tab.ended || tab.closing || tab.deleting) return;
+      return value;
+    });
+  } catch (error) { request.error(String(error)); }
+  finally { request.finish(); if (tab.cancelPreference === request.cancel) tab.cancelPreference = undefined; }
+}
+async function newCopilotSession(): Promise<void> {
+  if (!ready || !copilotReady || settings.isOpen || !await ensureWorkspace() || unloading || deletions.pending) return;
+  rememberCopilot();
+  const tab = createTab('saved', undefined, 'Copilot session', navigation.nextRecency(), undefined, undefined, true);
+  activate(tab);
+  await tab.lifecycle.connect({ acceptedAction: true });
+}
+function conflictingCopilotIdentity(tab: Tab, id: string): boolean {
+  return tabs.some(other => other !== tab && other.backend.kind !== 'pi' && other.lifecycle.identity?.sessionId === id);
+}
+async function launchCopilot(tab: Tab, acceptedAction = false): Promise<void> {
+  if (tab.backend.kind !== 'copilot-sdk' || !ready || !copilotReady || unloading || !workspace || !tabs.includes(tab) || deletions.pending || tab.deleting || tab.starting || tab.closing || tab.restarting || tab.backend.session && !tab.ended || !acceptedAction && settings.isOpen) return;
+  const backend = tab.backend, project = workspace, savedId = backend.savedSessionId;
+  if (savedId && conflictingCopilotIdentity(tab, savedId)) { showNotice(tab, 'This ID is already represented by another Copilot connection or legacy ACP identity. Close that entry before connecting; no identity or draft was migrated.'); return; }
+  tab.awaitingSelection = false; tab.starting = true; updateTab(tab);
+  try { await tab.lifecycle.stop(); }
+  catch (error) { tab.starting = false; showNotice(tab, `Could not stop the previous Copilot connection: ${String(error)}`, !!savedId); updateTab(tab); return; }
+  if (unloading || !tabs.includes(tab) || tab.closing || workspace !== project) { tab.starting = false; return; }
+  tab.cancelPreference?.(); tab.lifecycle.disconnect('Reconnecting Copilot');
+  tab.token = crypto.randomUUID(); tab.ended = false;
+  const token = tab.token;
+  const valid = () => !unloading && tabs.includes(tab) && tab.token === token;
+  let shellSignature = '';
+  const session = new CopilotSession(message => invoke('write_copilot', { token, message }), {
+    toolCapture: settingsSurface.toolCapture,
+    publish: message => { if (valid()) tab.receive?.(message); },
+    identified: id => {
+      if (!valid()) throw new Error('Copilot connection is no longer owned');
+      if (savedId !== undefined && id !== savedId || conflictingCopilotIdentity(tab, id)) throw new Error('Copilot returned a conflicting identity. No draft was migrated or replaced.');
+      tab.drafts.bindScope(copilotSdkScope(id)); backend.savedSessionId = id; persistTabs();
+    },
+    changed: () => {
+      if (!valid()) return;
+      const state = session.state;
+      const first = state.messages.find(message => message.role === 'user' && !message.originLabel);
+      // The initial SDK name makes empty sessions durable, not meaningfully titled.
+      const name = state.sessionName === 'Copilot session' ? undefined : state.sessionName;
+      tab.title = name || (typeof first?.content === 'string' ? first.content.trim().replace(/\s+/g, ' ').slice(0, 70) : '') || tab.title;
+      const signature = JSON.stringify([state.busy, state.sessionUnavailable, tab.title]);
+      if (signature !== shellSignature) { shellSignature = signature; if (state.busy) tab.failed = false; updateTab(tab); if (tab.lifecycle.identity) persistTabs(); }
+    },
+    notice: message => { if (valid() && !tab.closing) notices.report({ id: `${tab.id}:copilot:${++noticeSequence}`, owner: tab.id, operation: 'Copilot SDK', message }); },
+    decision: (kind, request, signal) => requestCopilotDecision(tab, kind, request, signal),
+    disconnected: message => {
+      if (!valid()) return;
+      tab.ended = true; tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' });
+      if (!tab.closing && !tab.deleting) showNotice(tab, `${message}. Your draft and any saved identity remain. Nothing was replayed or replaced by a new session.`, !!tab.lifecycle.identity);
+      void tab.lifecycle.stop().catch(error => { if (valid()) showNotice(tab, `Could not stop Copilot: ${String(error)}`, !!tab.lifecycle.identity); });
+      updateTab(tab);
+    },
+    completed: (failed, response) => {
+      if (!valid() || tab.closing || tab.deleting) return;
+      if (failed) tab.failed = true; else if (presented !== tab || settings.isOpen) tab.unread = true;
+      updateTab(tab);
+      void notifySession(failed ? 'failed' : 'completed', { valid: () => valid() && !tab.closing, selected: () => presented === tab && !settings.isOpen, session: 'Copilot', target: { session: tab.id, token }, preview: failed ? undefined : previewResponse(response) });
+    },
+  });
+  backend.session = session;
+  tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
+  tab.receive?.({ type: 'snapshot', state: session.state });
+  const onEvent = new Channel<Packet>();
+  onEvent.onmessage = packet => { if (!valid()) return; if (packet.kind === 'rpc') session.receive(packet.value); else session.disconnect(packet.message); };
+  try {
+    const confirmed = await invoke<string>('start_copilot', { token, config: { cwd: project, node: runtime.current().node, cli: runtime.current().copilot, generation: copilotGeneration }, onEvent });
+    if (!valid() || confirmed !== project) throw new Error('Native SDK host did not confirm this project');
+    await session.initialize(savedId);
+    if (valid()) notices.resolve(`${tab.id}:connection`);
+  } catch (error) {
+    session.disconnect(String(error));
+    try { await tab.lifecycle.stop(); } catch (error) { if (valid()) showNotice(tab, String(error), !!savedId); }
+  } finally { tab.starting = false; if (valid()) { updateTab(tab); controls(); } }
 }
 async function newAcpSessionPicker(): Promise<void> {
   if (!acpReady) return;
   if (!ready || settings.isOpen || !await ensureWorkspace() || unloading) return;
   const request = palette.startSelection('New ACP session (POC)', () => { void newAcpSessionPicker(); });
   if (!request) return;
-  const choice = await request.choose(['Copilot CLI (installed and authenticated)', 'Custom ACP agent…']);
+  const choice = await request.choose(['Custom ACP agent…']);
   request.finish();
-  if (choice === 'Copilot CLI (installed and authenticated)') await newAcpSession(COPILOT_PROFILE);
-  else if (choice === 'Custom ACP agent…') {
+  if (choice === 'Custom ACP agent…') {
     const value = await dialogs.input('ACP launch profile (JSON; not a shell command)', JSON.stringify({ name: 'ACP agent', command: '/absolute/path/to/agent', args: ['--acp'], env: {} }, null, 2));
     if (!value) return;
     try { await newAcpSession(parseAcpProfile(JSON.parse(value))); } catch (error) { notices.report({ id: `acp-profile:${++noticeSequence}`, operation: 'Create ACP session', message: String(error) }); }
@@ -1132,14 +1295,13 @@ async function newAcpSessionPicker(): Promise<void> {
 }
 async function newAcpSession(profile: AcpProfile): Promise<void> {
   if (!ready || !acpReady || unloading || settings.isOpen || !workspace) return;
-  if (profile === COPILOT_PROFILE) rememberCopilot();
   const tab = createTab(profile === COPILOT_PROFILE ? 'saved' : 'temporary', undefined, `${profile.name} session`, 0, profile);
   activate(tab); touchTab(tab);
   await tab.lifecycle.connect({ acceptedAction: true });
 }
 async function launchAcp(tab: Tab, acceptedAction = false): Promise<void> {
   const profile = profileFor(tab);
-  if (!profile || !ready || !acpReady || unloading || !workspace || !tabs.includes(tab) || tab.deleting || tab.starting || tab.closing || tab.restarting || (tab.backend.session && !tab.ended) || (!acceptedAction && settings.isOpen)) return;
+  if (!profile || !ready || !acpReady || unloading || !workspace || !tabs.includes(tab) || deletions.pending || tab.deleting || tab.starting || tab.closing || tab.restarting || (tab.backend.session && !tab.ended) || (!acceptedAction && settings.isOpen)) return;
   const project = workspace;
   tab.awaitingSelection = false;
   tab.starting = true; updateTab(tab);
@@ -1147,6 +1309,7 @@ async function launchAcp(tab: Tab, acceptedAction = false): Promise<void> {
   catch (error) { tab.starting = false; showNotice(tab, `Could not stop the previous ACP process: ${error}`, !!tab.lifecycle.identity); updateTab(tab); return; }
   if (unloading || !tabs.includes(tab) || tab.closing || workspace !== project) { tab.starting = false; return; }
   const savedId = tab.lifecycle.identity?.sessionId;
+  if (savedId && conflictingCopilotIdentity(tab, savedId)) { tab.starting = false; showNotice(tab, 'This saved ID already has another Copilot representation. Close that entry before connecting. No session or draft was migrated.'); return; }
   tab.cancelPreference?.();
   tab.lifecycle.disconnect('Reconnecting session');
   tab.starting = true; tab.token = crypto.randomUUID(); tab.ended = false; updateTab(tab);
@@ -1158,7 +1321,7 @@ async function launchAcp(tab: Tab, acceptedAction = false): Promise<void> {
     publish: message => { if (valid()) tab.receive?.(message); },
     identified: id => {
       if (!valid() || tab.backend.kind !== 'acp' || profile !== COPILOT_PROFILE) return;
-      if (tabs.some(other => other !== tab && other.lifecycle.key === copilotSessionScope(id))) throw new Error('Copilot returned an already-open session identity. No draft was replaced.');
+      if (conflictingCopilotIdentity(tab, id)) throw new Error('Copilot returned an already-open session identity. No draft was replaced.');
       tab.drafts.bindScope(copilotSessionScope(id));
       tab.backend.savedSessionId = id;
       persistTabs();
@@ -1219,7 +1382,7 @@ async function launchPi(tab: Tab, copyDraft?: string, acceptedAction = false, in
   const currentToken = () => tabs.includes(tab) && tab.token === token;
   const rpc = new PiTransport(message => invoke('write_pi', { token, message }));
   const mode = tab.file?.exists ? 'resume' : tab.mode;
-  const config = { cwd: workspace, ...runtime.current(), mode, sessionName: initialName, sessionFile: mode === 'resume' ? tab.file?.path : undefined, sessionId: mode === 'resume' ? tab.file?.sessionId || undefined : undefined };
+  const config = { cwd: workspace, pi: runtime.current().pi, node: runtime.current().node, mode, sessionName: initialName, sessionFile: mode === 'resume' ? tab.file?.path : undefined, sessionId: mode === 'resume' ? tab.file?.sessionId || undefined : undefined };
   let launchInfo: PiLaunchInfo;
   let identityGeneration = 0;
   let confirmedRaw: { path: string; sessionId: string } | undefined;
@@ -1338,10 +1501,16 @@ async function openSavedSession(entry: SessionListEntry): Promise<void> {
   if (deletions.removed(sessionListItem(entry).id)) throw new Error('The selected session was deleted. Refresh history and choose another session.');
   if ('path' in reference) return openSession({ ...reference, name: entry.title, lastUserMessageAt: entry.timestamp });
   if (!ready || unloading || settings.isOpen || !workspace) return;
-  rememberCopilot();
-  const existing = tabs.find(tab => tab.lifecycle.key === copilotSessionScope(reference.sessionId));
-  if (existing) { activate(existing); return; }
-  const tab = createTab('resume', undefined, entry.title, lastUsed(entry.timestamp), COPILOT_PROFILE, reference.sessionId);
+  const sdk = reference.kind === 'copilot-sdk';
+  if (deletions.pending) throw new Error('Finish the deletion review before opening another Copilot connection.');
+  if (sdk) rememberCopilot();
+  // A legacy identity is not silently reinterpreted, even if raw IDs coincide.
+  const existing = tabs.find(tab => tab.lifecycle.identity && 'kind' in tab.lifecycle.identity && tab.lifecycle.identity.sessionId === reference.sessionId);
+  if (existing) {
+    if (existing.backend.kind !== reference.kind) throw new Error('This ID has an open legacy ACP representation. Select it explicitly in Switch session, or close it before SDK Resume. Its identity and separate draft are not migrated.');
+    activate(existing); return;
+  }
+  const tab = createTab('resume', undefined, entry.title, lastUsed(entry.timestamp), sdk ? undefined : COPILOT_PROFILE, reference.sessionId, sdk);
   tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
   activate(tab);
 }
@@ -1482,7 +1651,7 @@ async function closeTab(tab: Tab): Promise<void> {
     await nativeDrafts?.flush();
     if (tab.token) dialogs.cancel(tab.token);
     detachTab(tab);
-  } catch (e) { tab.closing = false; showNotice(tab, `Could not stop ${profileFor(tab)?.name || 'Pi'}: ${e}`); updateTab(tab); }
+  } catch (e) { tab.closing = false; showNotice(tab, `Could not stop ${tab.lifecycle.label}: ${e}`); updateTab(tab); }
 }
 async function pickWorkspace(): Promise<void> {
   if (!ready || settings.isOpen) return;
@@ -1555,6 +1724,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
     if (id === 'project-settings') return !!workspace;
     if (!ready) return false;
     if (id === 'new-acp') return acpReady;
+    if (id === 'new-copilot') return copilotReady;
     if (id === 'capture-performance') return preferences.performanceEnabled() && !settingsSurface.capturingPerformance;
     if (['mcp', 'model', 'thinking', 'acp-options'].includes(id)) return !!presented && sessionActions(presented).some(action => action.id === id);
     if (['close', 'restart', 'delete'].includes(id)) return !!presented;
@@ -1565,6 +1735,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'open-recent-project': return palette.projects();
       case 'new': return newSession();
       case 'new-acp': return newAcpSessionPicker();
+      case 'new-copilot': return newCopilotSession();
       case 'acp-options': return presented ? runSessionAction(presented, id) : undefined;
       case 'temporary': return newSession('temporary');
       case 'delete': return presented ? deleteSession(presented) : undefined;
@@ -1600,9 +1771,15 @@ async function boot(): Promise<void> {
     // ACP cleanup/availability is independent: an old/unavailable ACP host must
     // not prevent Pi from booting. New ACP sessions stay disabled until reaped.
     void invoke('stop_acp').then(() => {
-      if (!unloading) { acpReady = true; selectedConnection.barriersChanged(); startCopilotHistory(); }
+      if (!unloading) { acpReady = true; selectedConnection.barriersChanged(); startLegacyCopilotHistory(); }
     }).catch(error => {
       if (!unloading) notices.report({ id: 'acp-startup', operation: 'Initialize ACP', message: `ACP is unavailable; Pi remains available. ${String(error)}` });
+    });
+    void invoke<string>('stop_copilot').then(generation => {
+      if (typeof generation !== 'string' || !generation) throw new Error('Native Copilot host did not confirm a new window generation');
+      if (!unloading) { copilotGeneration = generation; copilotReady = true; selectedConnection.barriersChanged(); startCopilotHistory(); }
+    }).catch(error => {
+      if (!unloading) notices.report({ id: 'copilot-startup', operation: 'Initialize Copilot SDK', message: `Copilot is unavailable; Pi and custom ACP remain independent. ${String(error)}` });
     });
     await zoom.ready;
     const defaults = await invoke<{ pi: string; node: string; cwd: string; home?: string }>('runtime_defaults');

@@ -8,7 +8,12 @@ use std::{
 };
 use tauri::{Emitter, Manager};
 
-pub const KEYS: &[&str] = &["appearance.theme", "runtime.piPath", "runtime.nodePath"];
+pub const KEYS: &[&str] = &[
+    "appearance.theme",
+    "runtime.piPath",
+    "runtime.nodePath",
+    "runtime.copilotPath",
+];
 
 #[derive(Clone, Default, PartialEq)]
 struct Document {

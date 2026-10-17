@@ -4,6 +4,12 @@
 
 ## Specification and acceptance criteria
 
+`runtime.copilotPath` is a global/project Runtime executable preference beside
+Pi/Node; fallback is `copilot`. Native and TypeScript project-key validation,
+provenance/reset, explicit Save and future-launch snapshots include it. It never
+changes an active session or stores authentication. The bundled SDK is pinned
+by the application, never selected by a user-installed SDK path.
+
 Separate user-editable JSONC settings from app-managed state and session-local drafts. Preferences synchronize across windows without recreating conversations, restarting agents, settling submissions or replaying prompts. Runtime edits require explicit Save and affect a future launch snapshot only.
 
 Missing keys use defaults; malformed external files retain the last valid snapshot (defaults on fresh launch), flag the gear and expose errors. Correcting a file clears the error. UI saves preserve comments/unrelated keys and reject malformed/conflicting source, not silently retry.

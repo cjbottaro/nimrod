@@ -4,20 +4,19 @@ import { copilotSessionScope } from '../../src/acp/profiles';
 import { copilotHistoryKey } from '../../src/acp/session-history';
 
 async function newAcp(page: Page) {
-  await page.keyboard.press('Meta+Shift+P');
-  await page.locator('#palette-input').fill('New ACP session');
-  await page.locator('#palette-input').press('Enter');
-  await expect(page.locator('#palette-title')).toHaveText('New ACP session (POC)');
-  await page.locator('#palette-input').press('Enter');
+  await page.locator('#open-sessions .session-row').filter({ hasText: 'Legacy offline Copilot' }).click();
   await expect(page.locator('#mode-badge')).toHaveText(/Copilot.*ACP/);
   await expect(page.locator(visible('send'))).toBeEnabled();
   return page.locator('.session-view:not([hidden])').getAttribute('id');
 }
+const legacyState = () => ({
+  [`nimrod.tabs.v1:${process.cwd()}`]: { tabs: [{ kind: 'acp', profile: 'copilot', sessionId: 'fixture-acp', name: 'Legacy offline Copilot' }] },
+});
 
 test('offline ACP and Pi keep independent drafts, permissions, configuration and shutdown', async ({ page }) => {
-  const demo = await demoFixture(page);
+  const demo = await demoFixture(page, legacyState());
   try {
-    const piId = await page.locator('.session-view').getAttribute('id');
+    const piId = await page.locator('.session-view:not([hidden])').getAttribute('id');
     await page.locator(visible('prompt')).fill('Pi draft must survive');
     const acpId = await newAcp(page);
     await expect(page.locator('#open-sessions .session-row')).toHaveCount(2);
@@ -132,7 +131,7 @@ test('Resume discovers paginated offline Copilot history and loads its exact ID 
 });
 
 test('ACP shared transcript preserves disclosure and reader intent while tools stream and Stop keeps the new draft', async ({ page }) => {
-  const demo = await demoFixture(page);
+  const demo = await demoFixture(page, legacyState());
   try {
     const acpId = await newAcp(page);
     await page.locator(visible('prompt')).fill('First offline request'); await page.locator(visible('prompt')).press('Enter');

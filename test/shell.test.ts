@@ -15,6 +15,7 @@ import { ACTIONS } from '../src/keybindings';
 import { INTENTIONALLY_UNBOUND_ACTIONS } from './keybindings-fixture';
 import { copilotSessionScope } from '../src/acp/profiles';
 import { copilotHistoryKey } from '../src/acp/session-history';
+import { copilotSdkScope } from '../src/copilot/session-lifecycle';
 
 // Real shell/renderer/controller bundle, mocked native boundary—not native WebKit acceptance.
 interface ShellOptions {
@@ -108,6 +109,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   let activeConfig: JsonRecord = {};
   const sessions = new Map<string, { channel: typeof channel; config: JsonRecord; file: string; name?: string }>();
   const acpSessions = new Map<string, { channel: typeof channel; promptId?: unknown; sessionId?: string }>();
+  const sdkSessions = new Map<string, { channel: typeof channel; sessionId?: string }>();
   let workspace = options.windowWorkspace;
   let selectedModel: JsonRecord | null = null;
   let thinkingLevel = 'medium';
@@ -235,6 +237,30 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         acpSessions.set(String(args.token), { channel: args.onEvent as typeof channel });
         return (args.config as JsonRecord).cwd;
       }
+      if (command === 'start_copilot') {
+        sdkSessions.set(String(args.token), { channel: args.onEvent as typeof channel });
+        return (args.config as JsonRecord).cwd;
+      }
+      if (command === 'stop_copilot') { sdkSessions.delete(String(args.token)); return 'sdk-generation'; }
+      if (command === 'write_copilot') {
+        const target = sdkSessions.get(String(args.token)); assert.ok(target);
+        const request = args.message as JsonRecord;
+        const send = (value: JsonRecord) => target.channel.onmessage({ kind: 'rpc', value });
+        const event = (type: string, data: JsonRecord) => send({ kind: 'event', event: { id: win.crypto.randomUUID(), type, data } });
+        if (request.method === 'connect') {
+          target.sessionId = String(request.sessionId ?? 'sdk-fixture');
+          send({ kind: 'connected', sessionId: target.sessionId, model: { modelId: 'fixture' }, models: [],
+            events: request.sessionId ? [
+              { id: 'saved-user', type: 'user.message', data: { content: 'Saved Copilot question' } },
+              { id: 'saved-assistant', type: 'assistant.message', data: { messageId: 'saved-assistant', content: 'Saved Copilot answer' } },
+            ] : [] });
+        } else if (request.method === 'prompt') {
+          event('user.message', { content: request.text });
+          event('assistant.message', { messageId: 'sdk-answer', content: 'SDK fixture response' });
+        } else if (request.method === 'cancel') event('session.idle', {});
+        send({ kind: 'result', id: request.id, result: request.method === 'list' ? [] : null });
+        return;
+      }
       if (command === 'stop_acp') { if (options.acpCleanupError) throw new Error(options.acpCleanupError); acpSessions.delete(String(args.token)); return; }
       if (command === 'write_acp') {
         const target = acpSessions.get(String(args.token)); assert.ok(target);
@@ -333,7 +359,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   return { dom, win, tick, calls, element, openSettings, back, preferences, openPalette, rows,
     confirm: async () => { await tick(); element<HTMLDialogElement>('host-dialog').close('ok'); await tick(); await tick(); },
     saved: (): { drafts: Record<string, any>; last: unknown } => ({ drafts: Object.fromEntries([...nativeDrafts].filter(([, record]) => record.value !== null).map(([key, record]) => [key, record.value])), last: preferences.value.state['nimrod.last-session.v1'] }),
-    sessions, acpSessions,
+    sessions, acpSessions, sdkSessions,
     deletionEvent: (event: DeletionEvent, target?: string) => deletionEvent?.(event, target),
     projectPicker: (target?: string) => projectPicker?.(target),
     linkError: (message: string, target?: string) => linkError?.(message, target),
@@ -356,27 +382,27 @@ test('an unavailable ACP host cannot prevent Pi startup or enable ACP launches',
   } finally { f.win.close(); }
 });
 
-test('ACP POC coexists with Pi without changing its draft, default backend or stop routing', async () => {
+test('Copilot SDK coexists with Pi without changing its draft, default backend or stop routing', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   const enter = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
   try {
     f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
     const piRoot = f.win.document.querySelector<HTMLElement>('.session-view')!, pi = f.captureChannel();
     const piPrompt = f.element<HTMLTextAreaElement>('prompt'); piPrompt.value = 'Keep Pi draft'; piPrompt.dispatchEvent(new f.win.Event('input'));
-    f.openPalette(); const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New ACP session'; input.dispatchEvent(new f.win.Event('input')); enter(); await f.tick(); await f.tick();
-    enter(); await f.tick(); await f.tick(); await f.tick();
+    f.openPalette(); const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New Copilot session'; input.dispatchEvent(new f.win.Event('input')); enter(); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(call => call.command === 'start_pi').length, 1);
-    assert.equal(f.calls.filter(call => call.command === 'start_acp').length, 2, 'one discovery process plus one conversation');
-    assert.match(f.element('mode-badge').textContent!, /Copilot.*ACP/);
+    assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, 2, 'one discovery process plus one conversation');
+    assert.equal(f.calls.some(call => call.command === 'start_acp'), false);
+    assert.match(f.element('mode-badge').textContent!, /Copilot.*SDK/);
     const acpRoot = f.win.document.querySelector('.session-view:not([hidden])')!;
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'ACP request'; prompt.dispatchEvent(new f.win.Event('input'));
     prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
     assert.equal(acpRoot.querySelectorAll('.message.user').length, 1, 'echo reconciles the local user turn');
-    assert.match(f.element('messages').textContent!, /ACP fixture response/);
+    assert.match(f.element('messages').textContent!, /SDK fixture response/);
     prompt.value = 'New ACP draft'; prompt.dispatchEvent(new f.win.Event('input'));
     prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
     assert.equal(prompt.value, 'New ACP draft');
-    assert.equal(f.calls.filter(call => call.command === 'write_acp' && (call.args.message as JsonRecord).method === 'session/prompt').length, 1);
+    assert.equal(f.calls.filter(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'prompt').length, 1);
     f.element<HTMLButtonElement>('send').click(); await f.tick(); await f.tick();
     assert.equal(prompt.value, 'New ACP draft');
     f.rows()[0].click(); await f.tick();
@@ -386,27 +412,27 @@ test('ACP POC coexists with Pi without changing its draft, default backend or st
     f.rows()[1].click(); await f.tick();
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'n', metaKey: true, bubbles: true, cancelable: true })); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(call => call.command === 'start_pi').length, 2, 'New stays explicitly Pi-default, not selected-session-derived');
-    assert.equal(f.calls.filter(call => call.command === 'start_acp').length, 2);
+    assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, 2);
     f.rows()[1].click(); await f.tick();
     const piStops = f.calls.filter(call => call.command === 'stop_pi').length;
-    const acpStops = f.calls.filter(call => call.command === 'stop_acp').length;
-    f.rows()[1].parentElement!.querySelector<HTMLButtonElement>('.session-close')!.click(); await f.confirm();
-    assert.equal(f.calls.filter(call => call.command === 'stop_acp').length, acpStops + 1);
+    const acpStops = f.calls.filter(call => call.command === 'stop_copilot').length;
+    f.rows()[1].parentElement!.querySelector<HTMLButtonElement>('.session-close')!.click(); await f.tick(); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'stop_copilot').length, acpStops + 1);
     assert.equal(f.calls.filter(call => call.command === 'stop_pi').length, piStops);
     assert.equal(piPrompt.value, 'Keep Pi draft'); assert.equal(f.rows().length, 2);
   } finally { f.win.close(); }
 });
 
-test('Copilot sidebar identity, title, recency and draft survive reopening without automatic startup or prompt replay', async () => {
-  const key = 'nimrod.tabs.v1:/project', scope = copilotSessionScope('acp-fixture');
+test('SDK sidebar identity, title, recency and draft survive reopening without automatic startup or prompt replay', async () => {
+  const key = 'nimrod.tabs.v1:/project', scope = copilotSdkScope('sdk-fixture');
   const first = await fixture(undefined, { windowWorkspace: '/project' });
   let appState: Record<string, unknown>, nativeDrafts: Record<string, unknown>;
   try {
     const enter = () => first.element('palette-input').dispatchEvent(new first.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     first.openPalette();
     const input = first.element<HTMLInputElement>('palette-input');
-    input.value = 'New ACP session'; input.dispatchEvent(new first.win.Event('input'));
-    enter(); await first.tick(); await first.tick(); enter(); await first.tick(); await first.tick();
+    input.value = 'New Copilot session'; input.dispatchEvent(new first.win.Event('input'));
+    enter(); await first.tick(); await first.tick();
     const prompt = first.element<HTMLTextAreaElement>('prompt');
     prompt.value = 'Copilot sidebar title'; prompt.dispatchEvent(new first.win.Event('input'));
     prompt.dispatchEvent(new first.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
@@ -419,9 +445,9 @@ test('Copilot sidebar identity, title, recency and draft survive reopening witho
     const layout = appState[key] as { tabs: JsonRecord[]; active: string };
     assert.equal(layout.active, scope);
     assert.equal(layout.tabs.length, 1);
-    assert.equal(layout.tabs[0].kind, 'acp');
-    assert.equal(layout.tabs[0].profile, 'copilot');
-    assert.equal(layout.tabs[0].sessionId, 'acp-fixture');
+    assert.equal(layout.tabs[0].kind, 'copilot-sdk');
+    assert.equal('profile' in layout.tabs[0], false);
+    assert.equal(layout.tabs[0].sessionId, 'sdk-fixture');
     assert.equal(layout.tabs[0].name, 'Copilot sidebar title');
     assert.equal('path' in layout.tabs[0], false, 'ACP identity is not a Pi path');
     assert.equal('env' in layout.tabs[0], false, 'launch environment is not persisted');
@@ -430,24 +456,24 @@ test('Copilot sidebar identity, title, recency and draft survive reopening witho
   const f = await fixture(undefined, { windowWorkspace: '/project', appState, nativeDrafts });
   try {
     assert.equal(f.rows().length, 1);
-    assert.match(f.rows()[0].textContent!, /Copilot sidebar title.*Copilot ACP/);
+    assert.match(f.rows()[0].textContent!, /Copilot sidebar title.*Copilot SDK/);
     assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Draft after restart');
-    assert.equal(f.calls.filter(call => call.command === 'start_acp').length, 1, 'project discovery initializes without loading a conversation');
-    assert.equal(f.calls.some(call => call.command === 'start_pi' || call.command === 'write_acp' && ['session/new', 'session/load', 'session/prompt'].includes(String((call.args.message as JsonRecord).method))), false);
+    assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, 1, 'project discovery initializes without loading a conversation');
+    assert.equal(f.calls.some(call => call.command === 'start_pi' || call.command === 'write_copilot' && ['connect', 'prompt'].includes(String((call.args.message as JsonRecord).method))), false);
     const used = (f.preferences.value.state[key] as { tabs: { lastUsed: number }[] }).tabs[0].lastUsed;
     f.rows()[0].click(); await f.tick(); await f.tick();
-    const messages = () => f.calls.filter(call => call.command === 'write_acp').map(call => call.args.message as JsonRecord);
-    assert.equal(f.calls.filter(call => call.command === 'start_acp').length, 2);
-    assert.deepEqual(structuredClone(messages().find(message => message.method === 'session/load')?.params), { cwd: '/project', sessionId: 'acp-fixture', mcpServers: [] });
-    assert.equal(messages().some(message => message.method === 'session/new' || message.method === 'session/prompt'), false);
+    const messages = () => f.calls.filter(call => call.command === 'write_copilot').map(call => call.args.message as JsonRecord);
+    assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, 2);
+    assert.equal(messages().find(message => message.method === 'connect')?.sessionId, 'sdk-fixture');
+    assert.equal(messages().some(message => message.method === 'prompt'), false);
     assert.match(f.element('messages').textContent!, /Saved Copilot question.*Saved Copilot answer/s);
     assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Draft after restart');
     assert.equal((f.preferences.value.state[key] as { tabs: { lastUsed: number }[] }).tabs[0].lastUsed, used, 'replay is not local use');
     assert.equal(f.calls.some(call => call.command === 'notify_session'), false);
     const writes = f.calls.filter(call => call.command === 'preferences_state').length;
-    const target = [...f.acpSessions.values()].find(session => session.sessionId === 'acp-fixture')!;
-    for (let i = 0; i < 50; i++) target.channel.onmessage({ kind: 'rpc', value: { jsonrpc: '2.0', method: 'session/update', params: {
-      sessionId: 'acp-fixture', update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: ' continued' } },
+    const target = [...f.sdkSessions.values()].find(session => session.sessionId === 'sdk-fixture')!;
+    for (let i = 0; i < 50; i++) target.channel.onmessage({ kind: 'rpc', value: { kind: 'event', event: {
+      id: `stream-${i}`, type: 'assistant.message_delta', data: { messageId: 'stream', deltaContent: ' continued' },
     } } });
     await f.tick();
     assert.equal(f.calls.filter(call => call.command === 'preferences_state').length, writes, 'content-only streaming adds no bookkeeping IPC');
@@ -722,7 +748,7 @@ test('Resume discovers closed Copilot history, restores its draft and reuses the
     assert.equal(f.calls.filter(call => call.command === 'start_acp').length, 1);
     await resume();
     assert.match(f.element('palette-list').textContent!, /Pi history/);
-    assert.match(f.element('palette-list').textContent!, /Closed Copilot.*Copilot ACP/);
+    assert.match(f.element('palette-list').textContent!, /Closed Copilot.*Copilot \(legacy ACP\)/);
     assert.doesNotMatch(f.element('palette-list').textContent!, /Wrong project/);
     const input = f.element<HTMLInputElement>('palette-input');
     input.value = 'Closed Copilot'; input.dispatchEvent(new f.win.Event('input')); enter(); await f.tick(); await f.tick();
@@ -787,7 +813,7 @@ test('Resume sorts incremental mixed-harness history by displayed recency after 
     const openTitles = [...f.element('palette-list').children].filter(row => row.getAttribute('aria-label')!.endsWith(' — Open'))
       .map(row => row.querySelector('.session-row-label')!.textContent);
     assert.deepEqual(openTitles, [...f.element('open-sessions').querySelectorAll('.session-row-label')].map(row => row.textContent));
-    assert.equal(f.element('palette-list').firstElementChild!.querySelector('small')!.lastElementChild!.textContent, 'Copilot ACP');
+    assert.equal(f.element('palette-list').firstElementChild!.querySelector('small')!.lastElementChild!.textContent, 'Copilot (legacy ACP)');
   } finally { release(); f.win.close(); }
 });
 
@@ -829,14 +855,15 @@ test('Pi history appears before slow Copilot discovery and cancelled results can
 });
 
 test('background ACP permissions stay in their conversation and cannot approve another session', async () => {
-  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  const f = await fixture(undefined, { windowWorkspace: '/project', appState: {
+    'nimrod.tabs.v1:/project': { tabs: [{ kind: 'acp', profile: 'copilot', sessionId: 'acp-fixture', name: 'Legacy ACP' }] },
+  } });
   const enter = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
   try {
-    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
-    f.openPalette(); const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New ACP session'; input.dispatchEvent(new f.win.Event('input')); enter(); await f.tick(); await f.tick(); enter(); await f.tick(); await f.tick();
+    f.rows()[0].click(); await f.tick(); await f.tick();
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'permission'; prompt.dispatchEvent(new f.win.Event('input')); prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
     const target = [...f.acpSessions.values()].find(session => session.sessionId === 'acp-fixture')!, acpRoot = f.win.document.querySelector<HTMLElement>('.session-view:not([hidden])')!;
-    f.rows()[0].click(); await f.tick(); const piPrompt = f.element<HTMLTextAreaElement>('prompt'); piPrompt.focus();
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick(); const piPrompt = f.element<HTMLTextAreaElement>('prompt'); piPrompt.focus();
     target.channel.onmessage({ kind: 'rpc', value: { jsonrpc: '2.0', id: 'permission', method: 'session/request_permission', params: { sessionId: 'acp-fixture', toolCall: { toolCallId: 'shell', kind: 'execute', title: 'Run fixture only', rawInput: { command: 'no execution', commands: ['no execution'] } }, options: [{ optionId: 'allow', name: 'Allow fixture', kind: 'allow_once' }] } } });
     await f.tick();
     assert.equal(acpRoot.hidden, true); assert.equal(f.win.document.activeElement, piPrompt);
@@ -846,7 +873,7 @@ test('background ACP permissions stay in their conversation and cannot approve a
     assert.equal(acpRoot.querySelectorAll('.acp-permission-command').length, 1);
     assert.equal(acpRoot.querySelector<HTMLDetailsElement>('.acp-permission-raw')?.open, false);
     assert.ok(acpRoot.querySelector('.acp-permission-actions + .acp-permission-raw'));
-    f.rows()[1].click(); await f.tick();
+    f.rows()[0].click(); await f.tick();
     const cancel = [...acpRoot.querySelectorAll<HTMLButtonElement>('.acp-permission button')].find(button => button.textContent === 'Cancel request')!;
     cancel.click(); await f.tick();
     const reply = f.calls.filter(call => call.command === 'write_acp').map(call => call.args.message as JsonRecord).find(message => message.id === 'permission');

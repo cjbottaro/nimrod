@@ -57,7 +57,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   let runtimeDefaults: { pi: string; node: string } | undefined;
   const runtime = installRuntimeSettings({
     form: required<HTMLFormElement>('runtime-settings'), fields: required<HTMLFieldSetElement>('runtime-fields'),
-    pi: required<HTMLInputElement>('pi-path'), node: required<HTMLInputElement>('node-path'), status: required('runtime-status'),
+    pi: required<HTMLInputElement>('pi-path'), node: required<HTMLInputElement>('node-path'), copilot: required<HTMLInputElement>('copilot-path'), status: required('runtime-status'),
   }, {
     read: () => runtimeDefaults ? preferences.runtime(runtimeDefaults) : null,
     save: async (paths, fields) => {
@@ -254,6 +254,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     const controls: [ProjectSettingKey, string][] = [
       ['appearance.theme', 'theme-picker'],
       ['runtime.piPath', 'pi-path'], ['runtime.nodePath', 'node-path'],
+      ['runtime.copilotPath', 'copilot-path'],
     ];
     const editVersions = new Map<string, number>();
     for (const [key, id] of controls) {
@@ -272,7 +273,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
           if (unloading) return;
           if (key.startsWith('runtime.')) {
             runtime.reload();
-            if (editVersions.get(id) === version) runtime.resetField(key === 'runtime.piPath' ? 'pi' : 'node');
+            if (editVersions.get(id) === version) runtime.resetField(key === 'runtime.piPath' ? 'pi' : key === 'runtime.nodePath' ? 'node' : 'copilot');
           }
           const nested = [...document.querySelectorAll('dialog[open], #dialog.open')].some(dialog => dialog !== required('settings-page'));
           if (restoreFocus && settings.isOpen && !nested && !required(id).closest<HTMLElement>('.settings-panel')?.hidden && (document.activeElement === reset || document.activeElement === document.body)) required(id).focus({ preventScroll: true });

@@ -1,6 +1,6 @@
 # Session deletion: implementation reference
 
-**Status: Pi tree deletion implemented; shared deletion coordinator and capability-gated Copilot deletion are source implemented with unrun fixtures. Installed Copilot 1.0.98 does not advertise deletion, so its controls remain unavailable.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#session-deletion) retain prior execution records.
+**Status: Pi tree deletion implemented; SDK and legacy capability-gated ACP Copilot deletion have authored unrun fixtures. CLI 1.0.98 lacks ACP deletion, not SDK deletion.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#session-deletion) retain prior execution records.
 
 Read the [user guide](../../../../docs/sessions.md#delete-session-tree),
 [shared vocabulary](../../nimrod-ui-vocabulary/SKILL.md) and
@@ -9,6 +9,14 @@ and conversation writes; Nimrod owns permanent file deletion. No Pi worker,
 installed extension, runtime executable or chat command participates in deletion.
 
 ## Consumer interface and Copilot deletion
+
+New built-in Copilot uses `src/copilot/session-deletion.ts`, the existing shared
+coordinator and supported SDK `client.deleteSession(id)`. It requires review,
+fresh exact project membership, owned-writer exit and authoritative success.
+Unknown results retain SDK identity/draft; no retries or private-directory
+removal. Open legacy representations block deletion; their distinct drafts are
+never purged by SDK cleanup. [SDK deletion](copilot-sdk.md#close-and-delete)
+owns concrete semantics. The ACP capability discussion below is legacy-only.
 
 `src/session-deletion-operation.ts` owns the consumer-oriented `SessionDeletionOperation`, `SessionDeletionSource` and source-scoped `SessionDeletionContext` interfaces. The named consumers are the Session sidebar trash buttons, Project bar trash control, selected-session palette/shortcut and repeated Delete sessions picker. A source binds a saved reference/title to an operation, returning `undefined` only for identities it does not own. Operations supply a cleanup target (`key`, `draftScope`), integration-specific `label`/`detail`, live `supported` and `available()` projections, an optional `unavailableReason`, and reviewed execution. An owned but unsupported identity can still explain its disabled controls; Delete discovery includes only supported operations. Completion also includes cancellation or a reported failure; only authoritative tombstones prove removal. This port is separate from `SessionLifecycle`: persistence, connectivity, discovery, Restart and deletion are independent capabilities.
 

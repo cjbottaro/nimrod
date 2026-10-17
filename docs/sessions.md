@@ -1,13 +1,14 @@
 # Sessions
 
-Each session has its own conversation, draft and agent process. Switching sessions leaves background work running and preserves reading position and expanded cards. The backend is fixed for that session. The saved/temporary lifecycle below describes Pi; [experimental Copilot sessions](acp.md#persistence-and-current-limits) also retain sidebar entries and drafts, while custom ACP sessions remain runtime-only.
+Each session has its own conversation, draft and agent process. Switching sessions leaves background work running and preserves reading position and expanded cards. The backend is fixed for that session. The saved/temporary lifecycle below describes Pi; [SDK Copilot sessions](copilot.md) also retain sidebar entries and drafts, while custom ACP sessions remain runtime-only. Older Copilot ACP identities remain explicitly legacy, not migrated.
 
 ## Create a session
 
 | Action | Use |
 | --- | --- |
 | **New session** / **⌘/Ctrl+N** | Start a normal persistent Pi conversation, regardless of the selected session's backend. |
-| **New ACP session…** | Select Copilot or a custom ACP launch profile (experimental; no default shortcut). |
+| **New Copilot session** | Start built-in official-SDK Copilot (no default shortcut). |
+| **New ACP session…** | Enter a custom ACP launch profile (experimental; no default shortcut). |
 | **New named session…** / **⌘+Option+N**, **Ctrl+Alt+N** | Enter a single-line name, then press Enter or Create. Escape cancels. Requires Pi's native `--name` support. |
 | **New temporary session** / **⌘/Ctrl+Shift+N** | Start without saved conversation history. Closing, quitting or reloading discards its drafts, recovery items and pop-outs. |
 
@@ -16,14 +17,14 @@ Pi writes persistent history. Until the first verified save, the Project bar sho
 ## Switch or resume
 
 - Click a Session sidebar row, or use **Switch session…** / **⌘/Ctrl+T** for every open session, including disconnected, temporary and filtered-out rows.
-- Use **Resume session…** / **⌘/Ctrl+K** to search saved history for this project by name, available preview/path or harness. Pi history is always included; projects that have used the built-in Copilot option also query [Copilot history](acp.md#resume-copilot-history). **—** marks closed history; already-open entries keep their sidebar title, time and activity indicator. Press Enter or click to select. Refresh retries discovery; one unavailable source does not hide another source's results.
+- Use **Resume session…** / **⌘/Ctrl+K** to search saved history for this project by name, available preview/path or harness. Pi history is always included; projects that have used the built-in Copilot option also query [Copilot SDK history](copilot.md#history-close-and-delete). **—** marks closed history; already-open entries keep their sidebar title, time and activity indicator. Press Enter or click to select. Refresh retries discovery; one unavailable source does not hide another source's results.
 - **Resume last session** explicitly opens the remembered file/project pair.
 
 Resume orders all harnesses together by the displayed time, newest first, using the sidebar's current time for already-open entries. Unknown times appear last. Each row shows its harness immediately after the date, below the title.
 
 Choosing an already-open entry reuses it. Selecting an inactive saved session loads its history and connects its owning agent without sending a prompt. Reopening a project restores its remembered sidebar entries; Copilot conversations stay disconnected until user selection/navigation, independently of the project's discovery process. Pi retains its existing selected-session connection behavior.
 
-Pi discovery lists the configured Pi session store. There is no arbitrary session-file chooser. Pi child sessions recorded as subagents or forks/branches are excluded from saved-history pickers; closed Pi children have no opening UI. Copilot supplies its own project-filtered catalog when the installed agent advertises listing and loading support; custom ACP history is not included.
+Pi discovery lists the configured Pi session store. There is no arbitrary session-file chooser. Pi child sessions recorded as subagents or forks/branches are excluded from saved-history pickers; closed Pi children have no opening UI. Copilot SDK supplies its own exact project-directory catalog; retained legacy ACP discovery still requires advertised list/load support. Custom ACP history is not included.
 
 Missing, malformed, replaced or wrong-project history shows an error without creating a replacement conversation. Resume restores Pi's active context, not an in-flight process, pending queues or every abandoned/pre-compaction branch. Stop other terminal/editor processes using that file first; Nimrod only coordinates its own writers.
 
@@ -52,9 +53,9 @@ Restart is unavailable for temporary sessions, before first save or during lifec
 
 The **trash icon left of Close** targets that row without switching to or resuming it. The Project bar trash icon and **Delete session tree…** / **⌘/Ctrl+Backspace** target the selected saved session.
 
-This section describes **Pi's tree deletion**. Built-in Copilot uses the same controls and shortcut as **Delete session…** when its agent advertises support, reviewing only one saved session; see [Delete Copilot history](acp.md#delete-copilot-history). Restart support is independent of deletion.
+This section describes **Pi's tree deletion**. Built-in SDK Copilot uses the same controls and shortcut as **Delete session…**, reviewing only one saved session through the SDK deletion API; see [Copilot deletion](copilot.md#history-close-and-delete). Restart remains Pi-only and is independent of deletion.
 
-The locally inspected Copilot 1.0.98 does not advertise deletion, so its controls remain disabled with an explanation. Closing a Copilot session is still available and does not delete its saved history or draft.
+CLI 1.0.98 lacks optional **ACP** deletion, so only legacy ACP entries retain that limitation; it does not disable SDK deletion. Closing either transport keeps its history and separate draft.
 
 1. Open deletion review.
 2. Inspect the selected session and its descendants, including any in other projects.
@@ -73,7 +74,7 @@ Deletion supports Pi's session-directory environment override, not arbitrary loc
 
 ## Delete several conversations
 
-Use **Delete sessions…** / **⌘/Ctrl+Shift+Backspace** to search supported saved project history, including open and closed sessions. Pi lists top-level trees; associated Copilot history is included when deletion is advertised.
+Use **Delete sessions…** / **⌘/Ctrl+Shift+Backspace** to search supported saved project history, including open and closed sessions. Pi lists top-level trees; associated SDK Copilot history uses supported SDK deletion, and legacy ACP history requires advertised deletion.
 
 Enter/click opens the integration's review above the still-visible picker without activating the session. Cancel leaves the filter, rows and reading position unchanged. Confirmed-deleted rows disappear in place; selection advances to the next match or previous row at the end. Failed/retained rows stay. The picker remains open, even when empty; Refresh explicitly reloads history. Accepting a deletion freezes any unfinished discovery to preserve the rows during execution; Refresh finishes loading remaining history. Escape from the picker closes it.
 

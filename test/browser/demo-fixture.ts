@@ -121,6 +121,26 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'notification_diagnostics') return 'macOS: authorized; desktop alerts: enabled; style: temporary; Notification Center: enabled; app active: yes; foreground handler calls: 1 (requests Banner + List).';
     if (command === 'notify_session' || command === 'test_notification') return 'submitted'; // Recorded only: never emit real OS notifications.
     if (command === 'list_workspace_sessions') return { sessions: catalog, warnings: [] };
+    if (command === 'start_copilot') {
+      const token = String(args.token);
+      if (children.has(token)) throw new Error('Duplicate offline SDK token');
+      const child = spawn(process.execPath, ['--import', './test/fixtures/copilot-sdk-register.mjs', 'copilot/bridge.mjs', '/fixture/copilot', process.cwd()], { cwd: process.cwd(), stdio: ['pipe', 'pipe', 'pipe'] });
+      children.set(token, child);
+      createInterface({ input: child.stdout }).on('line', line => {
+        const value = JSON.parse(line);
+        if (value.kind !== 'stopped') send(token, { kind: 'rpc', value });
+      });
+      child.stderr.on('data', chunk => errors.push(String(chunk)));
+      child.on('error', error => errors.push(String(error)));
+      child.on('exit', () => send(token, { kind: 'disconnected', message: 'Offline SDK fixture ended' }));
+      return process.cwd();
+    }
+    if (command === 'write_copilot') {
+      const child = children.get(String(args.token));
+      if (!child?.stdin.writable) throw new Error('No writable SDK fixture');
+      child.stdin.write(JSON.stringify(args.message) + '\n'); return;
+    }
+    if (command === 'stop_copilot') { await stopChildren(typeof args.token === 'string' ? args.token : undefined); return 'sdk-generation'; }
     if (command === 'start_acp') {
       const token = String(args.token);
       if (children.has(token)) throw new Error('Duplicate offline ACP token');
@@ -218,7 +238,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     });
     await target.exposeFunction('__fixtureHost', async (command: string, args: JsonRecord) => {
       if (command === 'plugin:window|close') { await target.close(); await page.bringToFront(); return; }
-      if (['start_pi', 'stop_pi', 'write_pi', 'start_acp', 'stop_acp', 'write_acp', 'drafts_load', 'sync_popout_sessions', 'load_personal_card_plugins'].includes(command)) throw new Error('Global Settings must not initialize project services');
+      if (['start_pi', 'stop_pi', 'write_pi', 'start_acp', 'stop_acp', 'write_acp', 'start_copilot', 'stop_copilot', 'write_copilot', 'drafts_load', 'sync_popout_sessions', 'load_personal_card_plugins'].includes(command)) throw new Error('Global Settings must not initialize project services');
       const result = await projectHost(command, args);
       return command === 'scoped_preferences_snapshot' ? globalSnapshot(result as PreferencesSnapshot) : result;
     });

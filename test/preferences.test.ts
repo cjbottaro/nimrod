@@ -327,7 +327,7 @@ test('project overrides merge over global defaults and reset removes keys rather
     f.host.external('// Global\n{"appearance.theme":"tokyo-night","appearance.zoom":175,"appearance.autoFollowAfterSending":"always","runtime.nodePath":"/new/node"}');
     assert.equal(p.theme().selected, 'dracula'); assert.equal(p.zoom(), 175); assert.equal(p.sendAutoFollow(), 'always');
     await p.saveRuntime({ pi: '/project/pi', node: '/new/node' }, ['pi']);
-    assert.deepEqual(p.runtime({ pi: 'pi', node: 'node' }), { version: 1, pi: '/project/pi', node: '/new/node' });
+    assert.deepEqual(p.runtime({ pi: 'pi', node: 'node' }), { version: 1, pi: '/project/pi', node: '/new/node', copilot: 'copilot' });
     assert.equal(p.isOverridden('runtime.nodePath'), false);
     await p.useGlobal('appearance.theme');
     assert.equal(p.theme().selected, 'tokyo-night'); assert.equal(p.isOverridden('appearance.theme'), false);

@@ -218,7 +218,12 @@ pub(crate) fn validate(text: &str) -> Result<(), String> {
             );
         }
     }
-    for key in ["runtime.piPath", "runtime.nodePath", "appearance.theme"] {
+    for key in [
+        "runtime.piPath",
+        "runtime.nodePath",
+        "runtime.copilotPath",
+        "appearance.theme",
+    ] {
         if let Some(value) = object.get(key) {
             let text = value
                 .as_str()

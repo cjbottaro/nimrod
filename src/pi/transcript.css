@@ -95,3 +95,8 @@ summary { cursor:pointer; color:var(--vscode-descriptionForeground); } :is(.tool
 @supports (field-sizing: content) {
   :is(#prompt, [data-pi-id="prompt"]) { field-sizing:content; height:auto; overflow-y:auto; }
 }
+.message-origin {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+  margin-bottom: 0.35em;
+}

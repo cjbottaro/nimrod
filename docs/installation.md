@@ -40,6 +40,11 @@ Install Node.js and Pi separately, configure Pi's provider authentication, and c
 
 Open a project in Nimrod, then choose **New session**. If discovery fails, select explicit Pi and Node executable paths in **Settings → Runtime**. You do not need Rust, mise, Xcode or the Nimrod source checkout to use a packaged release.
 
+For optional [Copilot sessions](copilot.md), install/authenticate Copilot CLI
+1.0.98 separately and use Node `^20.19.0 || >=22.12.0`. The app bundles SDK
+1.0.22 and required libraries, **not the CLI or Node**. Set the Copilot executable
+under Runtime when discovery fails. SDK native/package acceptance is pending.
+
 `nimrod .` opens or focuses a project without starting a session. See [Projects](projects.md#terminal-launches).
 
 ## Prereleases and uninstalling

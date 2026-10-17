@@ -87,13 +87,14 @@ The global `settings.json` accepts comments and trailing commas:
   "appearance.autoFollowAfterSending": "whenIdle",
   "notifications.enabled": true,
   "runtime.piPath": "/path/to/pi",
-  "runtime.nodePath": "/path/to/node"
+  "runtime.nodePath": "/path/to/node",
+  "runtime.copilotPath": "/path/to/copilot"
 }
 ```
 
 Personal [card plugins](card-plugins.md#personal-typescript-plugins) are discovered/compiled automatically from the dedicated user directory; `cards.autoLoad: false` disables this directory-trusted workflow. Existing manifests use `cards.plugins` / `cards.trustedPlugins`; `cards.renderers` overrides tool matching. Declarative manifests need no executable trust. They are configured in this file, not a dedicated Settings category. Package load errors use the shared notice strip, including while Settings is open; catalog changes affect newly mounted cards without restarting agents.
 
-The project file applies only `appearance.theme`, `runtime.piPath`, and `runtime.nodePath`. Earlier project entries for `appearance.zoom` and `appearance.autoFollowAfterSending` are ignored; their bytes/comments are preserved on unrelated saves, never copied into global preferences, and you can remove those obsolete entries manually. Other unsupported project keys still report a configuration error. Nimrod creates it only on an explicit override save, not when opening a project or Settings. There is no ancestor-directory discovery: the canonical project directory is the only project scope. You can choose whether to version-control `.nimrod/settings.json`; imported theme IDs refer to your global theme library.
+The project file applies only `appearance.theme`, `runtime.piPath`, `runtime.nodePath`, and `runtime.copilotPath`. Earlier project entries for `appearance.zoom` and `appearance.autoFollowAfterSending` are ignored; their bytes/comments are preserved on unrelated saves, never copied into global preferences, and you can remove those obsolete entries manually. Other unsupported project keys still report a configuration error. Nimrod creates it only on an explicit override save, not when opening a project or Settings. There is no ancestor-directory discovery: the canonical project directory is the only project scope. You can choose whether to version-control `.nimrod/settings.json`; imported theme IDs refer to your global theme library.
 
 Omitted project keys inherit global settings; omitted global keys use defaults or runtime discovery. Imported themes live in `appearance.importedThemes`; [keybinding overrides](keybindings.md#configuration-file) live in `keybindings`. Pi's settings remain Pi-owned. [Drafts](drafts.md) use separate Rust-managed per-session files with debounced asynchronous saves; legacy webview drafts are ignored without migration.
 

@@ -4,6 +4,13 @@
 
 ## Harness boundary
 
+`src/copilot/view-policy.ts` contributes SDK text-only intent validation and
+idle-only model/thinking controls. Busy Enter keeps the newer draft; Stop calls
+SDK abort, with no Pi queue/steer or CLI slash-command emulation. Shared local
+submission effects still clear/preview immediately; ambiguous results disconnect
+without replay/restoring sent text. [SDK events](copilot-sdk.md#send-events-controls-and-decisions)
+own echo reconciliation, cancellation and decisions. New fixtures are unrun.
+
 The detailed delivery/queue/compaction contract below is Pi-specific. The [shared view boundary](harness-presentation.md) requires an integration-owned interaction policy; there is no `ViewHost.acp` switch. `src/pi/view-policy.ts` owns Pi slash interception, busy steering/queue mapping, skill interpretation and compaction hints. `src/acp/view-policy.ts` owns advertised-only completion, text-only sending and agent-labeled Stop; busy Enter keeps the newer draft. ACP configuration/turn lifecycle stays in `src/acp/session.ts`, not Pi's controller. `mountPiView` remains a compatibility entry supplying Pi policy/projection. Mixed-shell/browser and new/updated extraction fixtures pass in the full offline gates; native acceptance remains separate.
 
 ## Specification and acceptance criteria

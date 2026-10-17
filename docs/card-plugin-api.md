@@ -74,6 +74,15 @@ Core always retains raw inputs. `renderPresentation` accepts optional `rawInputs
 
 ## Harness targets and shared runtime
 
+Official SDK Copilot has an explicit target
+`{ backend: 'copilot-sdk', agent: 'copilot' }`; `{ backend: 'copilot-sdk' }`
+matches any SDK source. It is not an ACP alias. Unspecified targets and Pi
+tool overrides remain Pi-only. SDK tool `native` metadata contains original SDK
+event payloads; shell/read/search components remain shared. Categories (`kinds`)
+may select SDK tools, but `defineKindPlugin` is still the ACP-specific helper;
+use explicit SDK targets with `definePresentationPlugin`/native name matching.
+New SDK fixtures and native packaging acceptance are pending.
+
 This surface is new in the experimental [ACP POC](acp.md). Public-helper/scoping and the latest matching/extraction fixtures pass offline; native app acceptance remains pending.
 
 Executable plugin exports may declare `targets`:
