@@ -56,4 +56,4 @@ Be explicit about not sent versus acceptance unknown. Send clears the composer i
 
 Remaining work: replace transitional projectErrors/generic Pi-operation producer metadata with more precise producer operation/cause metadata; strengthen matching resolution for palette/model requests and shared draft-store health. Never infer resolution from unrelated success. Native macOS visual/focus/accessibility/page-zoom acceptance and Linux/WebKitGTK remain unverified; fixtures do not establish native parity. See [verification](verification.md).
 
-When validation is explicitly requested, run `mise run check` and offline `npm run test:browser` for layout/scroll changes. Do not run tests/checks or builds automatically. [User guide](../../../../docs/error-messages.md). [Shared vocabulary](../../nimrod-ui-vocabulary/SKILL.md).
+When validation is explicitly requested, run `mise run test` and offline `npm run test:browser` for layout/scroll changes. Do not run tests/checks or builds automatically. [User guide](../../../../docs/error-messages.md). [Shared vocabulary](../../nimrod-ui-vocabulary/SKILL.md).

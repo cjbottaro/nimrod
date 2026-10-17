@@ -106,5 +106,5 @@ bundled dark snapshots, not Omarchy installation/desktop following.
 - `test/browser/themes.spec.ts`: real offline WebKit CSS title alignment, dot after
   title, keyboard/hover preview dark/light, Enter acceptance and Back/Escape rollback
   without conversation replacement/downloads. Native acceptance is distinct.
-- When validation is explicitly requested, use `mise run themes-check`, `mise run check` and the offline browser
+- When validation is explicitly requested, use `mise run themes-check`, `mise run test` and the offline browser
   suite; do not run tests/checks automatically. Explicit maintenance generation is separate from tests. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow).

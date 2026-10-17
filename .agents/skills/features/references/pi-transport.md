@@ -38,4 +38,4 @@ Ordinary RPC result timeout is 20 seconds. Explicit rejection, successful result
 
 Use `test/transport.test.ts`, `test/session.test.ts`, `test/native-view.test.ts`, native process/workspace/session fixtures and optional isolated installed-Pi metadata smokes. Validate ordering, late old callbacks, acknowledgement races, strict identity, malformed framing and shutdown-before-relaunch with fixtures.
 
-Run `mise run check`; no live models, compaction or user-session mutation. Native provider-generated first-save, queue consumption and platform process behavior remain distinct from fixture evidence. See [verification](verification.md).
+Run `mise run test`; no live models, compaction or user-session mutation. Native provider-generated first-save, queue consumption and platform process behavior remain distinct from fixture evidence. See [verification](verification.md).

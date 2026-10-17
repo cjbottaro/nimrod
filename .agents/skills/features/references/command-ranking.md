@@ -36,4 +36,4 @@ To add an algorithm, implement `CommandRankingStrategy` and inject it through `P
 - Rust `command_usage` tests: recency order, repeats, counts, bounds, invalid-entry recovery.
 - Rust Preferences test: concurrent writers retain all counts, atomic disk restore, malformed-file failure.
 
-Validate `mise run check`. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow). Offline DOM/unit evidence is not native Tauri visual acceptance or Linux/Windows parity. No app launch or live Pi calls are needed.
+Validate `mise run test`. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow). Offline DOM/unit evidence is not native Tauri visual acceptance or Linux/Windows parity. No app launch or live Pi calls are needed.

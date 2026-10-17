@@ -39,6 +39,6 @@ Rust fixtures: read/stage without disk writes, debounced vs forced flush, maximu
 
 `test/browser/native-drafts.spec.ts`: actual app bundle + offline child verifies immediate clearing and draft-only persistence without submission recovery. Shell fixtures cover dispatch despite failed/deferred storage flush, Stop without delayed replay, transport-derived lifecycle guards and restored-state sanitization. Typing fixtures cover empty/160-message transcript/200 retained drafts/combined/temporary with no localStorage writes, manual geometry reads or status mutations on supported WebKit; timings remain coarse handler diagnostics, not input-to-paint/native latency. Existing fractional-zoom, shrink/cap, reading/follow, image, sidebar and focus suites remain required.
 
-Run `mise run check` and the offline WebKit suite for composer/layout regressions. Fixture evidence does not establish native send/typing acceptance; no build/package or user-app launch is implied.
+Run `mise run test` and the offline WebKit suite for composer/layout regressions. Fixture evidence does not establish native send/typing acceptance; no build/package or user-app launch is implied.
 
 User guide: [Drafts](../../../../docs/drafts.md). Verification results: [verification](verification.md). No app build unless explicitly requested.

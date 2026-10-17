@@ -65,15 +65,15 @@ Resolve compilation errors through the worktree workflow above and rerun until p
 All other checks and tests run only when explicitly requested:
 
 ```sh
-mise run check
-npm run check:docs
+mise run check  # TypeScript and Rust compile checks
+mise run test   # Docs, TypeScript/UI tests, Rust formatting, Clippy and Rust tests
 
 # Include when validation of scrolling changes is requested; offline demo fixture only:
 npx playwright install webkit  # one-time setup
 npm run test:browser
 ```
 
-The standard check includes local Markdown links/anchors, TypeScript/UI tests, Rust formatting, Clippy and fixture tests. Tests must not call paid models, compact live conversations, delete user sessions or modify upstream Pi/the sibling pi-gui extension. Automated browser tests are allowed; interactive browser debugging and launching/interrupting the user's app require approval.
+The standard test includes local Markdown links/anchors, TypeScript/UI tests, Rust formatting, Clippy and fixture tests. `mise run check` runs `tsc --noEmit` and `cargo check` without the broader validation suite. Tests must not call paid models, compact live conversations, delete user sessions or modify upstream Pi/the sibling pi-gui extension. Automated browser tests are allowed; interactive browser debugging and launching/interrupting the user's app require approval.
 
 Optional installed-Pi metadata smoke tests use disposable config/session directories and hand-authored history, with user resources disabled. They send no prompts:
 
