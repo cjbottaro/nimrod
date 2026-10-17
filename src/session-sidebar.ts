@@ -1,4 +1,26 @@
 import { lastUsed } from './session-recency';
+import type { SessionListEntry, SessionStatus } from './session-list';
+
+const statusPresentation: Record<SessionStatus, { label: string; mark: string }> = {
+  closed: { label: 'Closed', mark: '—' },
+  inactive: { label: 'Inactive', mark: '○' },
+  starting: { label: 'Starting', mark: '' },
+  ready: { label: 'Ready', mark: '•' },
+  working: { label: 'Working', mark: '' },
+  input: { label: 'Input needed', mark: '?' },
+  failed: { label: 'Failed', mark: '!' },
+  unread: { label: 'Unread', mark: '◉' },
+  sending: { label: 'Sending', mark: '' },
+  compacting: { label: 'Compacting', mark: '' },
+  restarting: { label: 'Restarting', mark: '' },
+  closing: { label: 'Closing', mark: '' },
+  deleting: { label: 'Deleting', mark: '' },
+  recovery: { label: 'Recovery needed', mark: '↻' },
+};
+
+export function sessionStatusPresentation(state: SessionStatus): { state: SessionStatus; label: string; mark: string } {
+  return { state, ...statusPresentation[state] };
+}
 
 export function sessionTime(timestamp: unknown, now = Date.now(), locale?: string): string {
   const used = lastUsed(timestamp);
@@ -19,21 +41,23 @@ export interface SidebarState {
   inputCount?: number; failed?: boolean; inactive?: boolean; compacting?: boolean; busy?: boolean; pending?: boolean; unread?: boolean;
 }
 /** Keep lifecycle/error precedence separate from timestamp presentation. */
-export function sessionIndicator(state: SidebarState): { state: string; label: string; mark: string } {
-  if (state.deleting) return { state: 'deleting', label: 'Deleting', mark: '' };
-  if (state.blocked) return { state: 'recovery', label: 'Recovery needed', mark: '↻' };
-  if (state.restarting) return { state: 'restarting', label: 'Restarting', mark: '' };
-  if (state.closing) return { state: 'closing', label: 'Closing', mark: '' };
-  if (state.starting) return { state: 'starting', label: 'Starting', mark: '' };
-  if (state.inputCount) return { state: 'input', label: 'Input needed', mark: '?' };
-  if (state.failed) return { state: 'failed', label: 'Failed', mark: '!' };
-  if (state.inactive) return { state: 'inactive', label: 'Inactive', mark: '○' };
-  if (state.compacting) return { state: 'compacting', label: 'Compacting', mark: '' };
-  if (state.busy) return { state: 'working', label: 'Working', mark: '' };
-  if (state.unread) return { state: 'unread', label: 'Unread', mark: '◉' };
-  if (state.pending) return { state: 'sending', label: 'Sending', mark: '' };
-  return { state: 'ready', label: 'Ready', mark: '•' };
+export function sessionStatus(state: SidebarState): SessionStatus {
+  if (state.deleting) return 'deleting';
+  if (state.blocked) return 'recovery';
+  if (state.restarting) return 'restarting';
+  if (state.closing) return 'closing';
+  if (state.starting) return 'starting';
+  if (state.inputCount) return 'input';
+  if (state.failed) return 'failed';
+  if (state.inactive) return 'inactive';
+  if (state.compacting) return 'compacting';
+  if (state.busy) return 'working';
+  if (state.unread) return 'unread';
+  if (state.pending) return 'sending';
+  return 'ready';
 }
+
+export function sessionIndicator(state: SidebarState) { return sessionStatusPresentation(sessionStatus(state)); }
 
 export interface SessionRowContent {
   row: HTMLElement;
@@ -41,12 +65,6 @@ export interface SessionRowContent {
   rowIndicator: HTMLElement;
   rowTime: HTMLTimeElement;
 }
-export interface SessionRowPresentation {
-  timestamp: unknown;
-  indicator: ReturnType<typeof sessionIndicator>;
-  open?: boolean;
-}
-
 /** Shared content and styling for the sidebar and both session pickers. */
 export function createSessionRowContent(row: HTMLElement, timeId: string): SessionRowContent {
   const doc = row.ownerDocument;
@@ -71,16 +89,19 @@ export function updateSessionRowTime(time: HTMLTimeElement, timestamp: unknown, 
   else if (!datetime) time.removeAttribute('datetime');
 }
 
-export function updateSessionRowContent(content: SessionRowContent, name: string, presentation: SessionRowPresentation): void {
+export function updateSessionRowContent(content: SessionRowContent, entry: SessionListEntry, showMembership = true): void {
   const { row, rowLabel, rowIndicator, rowTime } = content;
-  const status = presentation.indicator;
+  const name = sessionListLabel(entry), status = sessionStatusPresentation(entry.status);
   if (rowLabel.textContent !== name) rowLabel.textContent = name;
-  updateSessionRowTime(rowTime, presentation.timestamp);
+  updateSessionRowTime(rowTime, entry.timestamp);
   if (rowIndicator.dataset.state !== status.state) rowIndicator.dataset.state = status.state;
   if (rowIndicator.textContent !== status.mark) rowIndicator.textContent = status.mark;
-  row.setAttribute('aria-label', `${name} — ${status.label}${presentation.open ? ' — Open' : ''}`);
+  row.setAttribute('aria-label', `${name} — ${status.label}${showMembership && entry.open ? ' — Open' : ''}`);
 }
 
+export function sessionListLabel(entry: SessionListEntry): string {
+  return entry.harnessLabel === 'Pi' ? entry.title : `${entry.title} · ${entry.harnessLabel}`;
+}
 /** Text refresh only: callers must not sort, persist, navigate or request history. */
 export function installSessionTimeRefresh(win: Window, refresh: () => void): () => void {
   const update = () => { if (win.document.visibilityState !== 'hidden') refresh(); };

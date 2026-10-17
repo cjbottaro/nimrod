@@ -92,6 +92,41 @@ test('ACP never loads without an advertised capability', async () => {
   }
 });
 
+test('ACP lists paginated project history without creating or loading a session', async () => {
+  const f = fixture();
+  await f.initialize({ loadSession: true, sessionCapabilities: { list: {} } });
+  const first = f.client.listSessions('/fixture/project');
+  assert.deepEqual(f.last('session/list').params, { cwd: '/fixture/project' });
+  f.respond('session/list', { sessions: [{ sessionId: 'saved', cwd: '/fixture/project', title: 'Saved title', updatedAt: '2026-10-16T12:00:00Z' }], nextCursor: 'next' });
+  assert.deepEqual(await first, { sessions: [{ sessionId: 'saved', cwd: '/fixture/project', title: 'Saved title', updatedAt: '2026-10-16T12:00:00Z' }], nextCursor: 'next' });
+  const second = f.client.listSessions('/fixture/project', 'next');
+  assert.deepEqual(f.last('session/list').params, { cwd: '/fixture/project', cursor: 'next' });
+  f.respond('session/list', { sessions: [], nextCursor: null });
+  assert.deepEqual(await second, { sessions: [], nextCursor: undefined });
+  assert.equal(f.client.phase, 'ready');
+  assert.equal(f.client.sessionId, undefined);
+  assert.equal(f.sent.some(packet => ['session/new', 'session/load', 'session/prompt'].includes(String(packet.method))), false);
+});
+
+test('ACP listing requires advertised list and load support and rejects invalid results', async () => {
+  for (const capabilities of [{}, { loadSession: true }, { sessionCapabilities: { list: {} } }, { loadSession: true, sessionCapabilities: { list: false } }]) {
+    const f = fixture();
+    await f.initialize(capabilities);
+    await assert.rejects(f.client.listSessions('/fixture/project'), /does not advertise/);
+    assert.equal(f.sent.length, 1);
+  }
+  for (const result of [{}, { sessions: [{}] }, { sessions: [], nextCursor: 5 },
+    { sessions: [{ sessionId: '', cwd: '/fixture/project' }] },
+    { sessions: [{ sessionId: 'a', cwd: '/fixture/project', updatedAt: 'bad date' }] }]) {
+    const f = fixture();
+    await f.initialize({ loadSession: true, sessionCapabilities: { list: {} } });
+    const pending = assert.rejects(f.client.listSessions('/fixture/project'), /Invalid ACP/);
+    f.respond('session/list', result);
+    await pending;
+    assert.equal(f.client.phase, 'disconnected');
+  }
+});
+
 test('ACP failed, mismatched or disconnected loading never creates a replacement or retries', async () => {
   for (const scenario of ['rejected', 'wrong-update', 'wrong-result', 'disconnected']) {
     const f = fixture();

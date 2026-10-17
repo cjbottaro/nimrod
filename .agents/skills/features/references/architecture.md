@@ -14,6 +14,7 @@ Pi is the primary integration; [ACP has an experimental source POC](acp-harnesse
 | --- | --- | --- |
 | Project shell (`src/main.ts`) | Mounted session views and effect coordination | [Projects/sessions](projects-and-sessions.md) |
 | Navigation/connection | Shared projections, activation and connection deferral | [Session navigation](session-navigation.md) |
+| Session lists/history | Shared semantic list/status projection and project-bound discovery, separate from connection owners | [Session history](session-history.md) |
 | Pi coordinator/transport | Ordered RPC, identity and result correlation | [Pi transport](pi-transport.md) |
 | Experimental ACP integration | Separate native ownership/JSON-RPC/session semantics; shared presentation, not Pi events | [ACP POC](acp-harnesses.md) |
 | Shared view / harness UI contributions | Presentation mechanics with integration-owned interaction policies, controls and actions | [Harness presentation and rationale](harness-presentation.md) |

@@ -215,6 +215,7 @@ fn validate_message(message: &Value, cwd: &Path) -> Result<(), String> {
             "initialize"
             | "session/new"
             | "session/load"
+            | "session/list"
             | "session/prompt"
             | "session/set_config_option"
             | "session/set_mode"
@@ -223,7 +224,7 @@ fn validate_message(message: &Value, cwd: &Path) -> Result<(), String> {
             "session/cancel" if message.get("id").is_none() => {}
             _ => return Err("Unsupported ACP operation".into()),
         }
-        if matches!(method, "session/new" | "session/load")
+        if matches!(method, "session/new" | "session/load" | "session/list")
             && message["params"]["cwd"].as_str() != cwd.to_str()
         {
             return Err("ACP session cwd must match its project".into());
@@ -234,6 +235,13 @@ fn validate_message(message: &Value, cwd: &Path) -> Result<(), String> {
                 .is_none_or(|id| id.trim().is_empty())
         {
             return Err("ACP loading requires a session ID".into());
+        }
+        if method == "session/list"
+            && message["params"]
+                .get("cursor")
+                .is_some_and(|cursor| cursor.as_str().is_none_or(|value| value.is_empty()))
+        {
+            return Err("ACP listing requires a nonempty string cursor".into());
         }
     } else if !valid_id(&message["id"])
         || (message.get("result").is_some() == message.get("error").is_some())
@@ -507,6 +515,30 @@ mod tests {
         assert!(validate_message(&load("/other", json!("saved-id")), cwd).is_err());
         for id in [Value::Null, json!(""), json!(" "), json!(42)] {
             assert!(validate_message(&load("/fixture/project", id), cwd).is_err());
+        }
+    }
+    #[test]
+    fn listing_requires_the_owned_project_and_a_valid_cursor() {
+        let cwd = Path::new("/fixture/project");
+        let list = |params: Value| {
+            json!({"jsonrpc":"2.0","id":1,"method":"session/list","params":params})
+        };
+        assert!(validate_message(&list(json!({"cwd":"/fixture/project"})), cwd).is_ok());
+        assert!(
+            validate_message(
+                &list(json!({"cwd":"/fixture/project","cursor":"next"})),
+                cwd
+            )
+            .is_ok()
+        );
+        assert!(validate_message(&list(json!({"cwd":"/other"})), cwd).is_err());
+        assert!(validate_message(&list(json!({})), cwd).is_err());
+        for cursor in [Value::Null, json!(""), json!(42)] {
+            assert!(validate_message(
+                &list(json!({"cwd":"/fixture/project","cursor":cursor})),
+                cwd
+            )
+            .is_err());
         }
     }
     #[cfg(unix)]

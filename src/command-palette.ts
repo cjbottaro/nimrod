@@ -1,6 +1,7 @@
 import { vscodeMruRanking, type CommandRanking } from './command-ranking';
 import { createPickerEnterHint } from './picker-hints';
-import { createSessionRowContent, updateSessionRowContent, type SessionRowPresentation } from './session-sidebar';
+import { createSessionRowContent, updateSessionRowContent, sessionStatusPresentation } from './session-sidebar';
+import type { SessionListEntry } from './session-list';
 
 export interface PaletteItem {
   id: string;
@@ -10,7 +11,7 @@ export interface PaletteItem {
   current?: boolean;
   projectOpen?: boolean;
   projectParent?: string;
-  sessionRow?: SessionRowPresentation;
+  sessionRow?: SessionListEntry;
   inspection?: { fields: [string, string][]; text?: string };
   shortcut?: string;
   keywords?: string;
@@ -20,7 +21,7 @@ export interface PaletteItem {
 export interface PalettePage { items: PaletteItem[]; notice?: string; }
 export interface PaletteOptions {
   commands(): (PaletteItem & { detail: string })[];
-  sessions(): Promise<PalettePage>;
+  sessions(signal: AbortSignal, publish: (page: PalettePage) => void): Promise<PalettePage>;
   openSessions(): PalettePage;
   deleteSessions?: () => Promise<PalettePage>;
   sessionDeleted?: (id: string) => boolean;
@@ -73,6 +74,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   let items: PaletteItem[] = [], matches: PaletteItem[] = [];
   let selected = 0;
   let generation = 0;
+  let historyRequest: AbortController | undefined;
   let commandQuery = '';
   let notice = '';
   let loading = false;
@@ -116,6 +118,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     afterClose = action;
     endPreview(!!action);
     cancelChoice(); createNamed = undefined; retryAction = undefined; generation++;
+    historyRequest?.abort(); historyRequest = undefined;
     closing = true;
     dialog.close();
   }
@@ -139,7 +142,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     input.setAttribute('aria-controls', 'palette-list'); input.setAttribute('aria-autocomplete', 'list');
     const previous = matches[selected]?.id;
     const words = input.value.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
-    matches = items.filter(item => words.every(word => `${item.label} ${item.badge || ''} ${item.detail || ''} ${item.sessionRow?.indicator.label || ''} ${item.sessionRow?.open ? 'Open' : ''} ${item.projectOpen ? 'Open' : ''} ${item.keywords || ''}`.toLocaleLowerCase().includes(word)));
+    matches = items.filter(item => words.every(word => `${item.label} ${item.badge || ''} ${item.detail || ''} ${item.sessionRow ? sessionStatusPresentation(item.sessionRow.status).label : ''} ${item.sessionRow?.harnessLabel || ''} ${item.sessionRow?.open ? 'Open' : ''} ${item.projectOpen ? 'Open' : ''} ${item.keywords || ''}`.toLocaleLowerCase().includes(word)));
     if (mode === 'commands') matches = (options.ranking?.strategy ?? vscodeMruRanking).rank(matches, { query: input.value, usage: options.ranking?.usage() ?? [] });
     selected = Math.max(0, matches.findIndex(item => item.id === previous));
     list.replaceChildren(...matches.map((item, index) => {
@@ -147,7 +150,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       if (item.sessionRow) {
         const content = createSessionRowContent(row, `${row.id}-time`);
         content.rowLabel.classList.add('palette-item-label');
-        updateSessionRowContent(content, item.label, item.sessionRow);
+        updateSessionRowContent(content, item.sessionRow);
         content.rowLabel.parentElement!.append(createPickerEnterHint(doc));
         return row;
       }
@@ -217,6 +220,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     if (preview && item?.id !== previewed) { previewed = item?.id; preview(item); }
   }
   function commands(): void {
+    historyRequest?.abort(); historyRequest = undefined;
     endPreview();
     deletionControls(false);
     cancelChoice(); createNamed = undefined; generation++; mode = 'commands'; loading = false; notice = ''; items = options.commands(); matches = []; selected = 0;
@@ -225,6 +229,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   }
   function beginPage(kind: 'sessions' | 'projects' | 'selection' | 'inspection', heading: string, placeholder: string, onRetry: () => void, keepQuery = false): number | undefined {
     if (!dialog.open && !open()) return;
+    historyRequest?.abort(); historyRequest = undefined;
     endPreview();
     deletionControls(false);
     if (mode === 'commands') commandQuery = input.value;
@@ -242,8 +247,13 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     sessionKind = kind;
     const request = beginPage('sessions', kind === 'delete' ? 'Delete sessions' : kind === 'resume' ? 'Resume session' : 'Switch session', kind === 'open' ? 'Type to filter open sessions…' : 'Type to filter project sessions…', () => { void sessions(kind, true); }, refresh);
     if (request === undefined) return;
+    const history = historyRequest = new realm.AbortController();
+    const publish = (page: PalettePage) => {
+      if (history.signal.aborted || !dialog.open || generation !== request) return;
+      items = page.items; notice = page.notice || ''; loading = false; draw();
+    };
     try {
-      const page = kind === 'delete' ? await options.deleteSessions!() : kind === 'resume' ? await options.sessions() : options.openSessions();
+      const page = kind === 'delete' ? await options.deleteSessions!() : kind === 'resume' ? await options.sessions(history.signal, publish) : options.openSessions();
       if (!dialog.open || generation !== request) return;
       items = page.items; notice = page.notice || '';
     } catch (error) {
@@ -330,6 +340,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   function namedSession(onCreate: (name: string) => void | Promise<void>): void {
     if (doc.querySelector('dialog[open]:not(#command-palette)')) return;
     if (!dialog.open && !open()) return;
+    historyRequest?.abort(); historyRequest = undefined;
     if (mode === 'commands') commandQuery = input.value;
     endPreview(); cancelChoice(); generation++; mode = 'name'; createNamed = onCreate; composing = false;
     title.textContent = 'New named session'; input.placeholder = 'Session name…'; input.setAttribute('aria-label', 'Session name');
@@ -403,6 +414,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   }, { signal });
   dialog.addEventListener('cancel', event => { event.preventDefault(); if (!doc.querySelector('dialog[open]:not(#command-palette)')) closeInteraction(); }, { signal });
   dialog.addEventListener('close', () => {
+    historyRequest?.abort(); historyRequest = undefined;
     closing = false;
     endPreview();
     cancelChoice(); createNamed = undefined; retryAction = undefined; generation++;
@@ -432,5 +444,5 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     if (dialog.open) { event.preventDefault(); return; }
     if (open()) event.preventDefault();
   }, { signal });
-  return { get isDeleting() { return dialog.open && mode === 'sessions' && sessionKind === 'delete' && deleting; }, open, projects, close: () => closeInteraction(), sessions: () => sessions('resume'), openSessions: () => sessions('open'), deleteSessions: () => sessions('delete'), namedSession, startSelection, startInspection, startPreviewSelection, dispose: () => { disposed = true; endPreview(); cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
+  return { get isDeleting() { return dialog.open && mode === 'sessions' && sessionKind === 'delete' && deleting; }, open, projects, close: () => closeInteraction(), sessions: () => sessions('resume'), openSessions: () => sessions('open'), deleteSessions: () => sessions('delete'), namedSession, startSelection, startInspection, startPreviewSelection, dispose: () => { disposed = true; historyRequest?.abort(); endPreview(); cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
 }

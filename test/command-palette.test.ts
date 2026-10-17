@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
-import { installCommandPalette, type PalettePage } from '../src/command-palette';
+import { installCommandPalette, type PalettePage, type PaletteOptions } from '../src/command-palette';
 import { vscodeMruRanking, type CommandRanking } from '../src/command-ranking';
 import { stubDialogs } from './dialog-fixture';
 import { sessionIndicator, sessionTime, type SidebarState } from '../src/session-sidebar';
 
-function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }), projects: (() => Promise<PalettePage>) | CommandRanking = load, ranking?: CommandRanking) {
+function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }), projects: (() => Promise<PalettePage>) | CommandRanking = load, ranking?: CommandRanking, history?: PaletteOptions['sessions']) {
   if (typeof projects !== 'function') { ranking = projects; projects = load; }
   const dom = new JSDOM(readFileSync('index.html', 'utf8'), { pretendToBeVisual: true });
   const win = dom.window; stubDialogs(win);
@@ -28,7 +28,7 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }),
         assert.equal(dialog.open, false); assert.equal(win.document.activeElement, opener);
         calls.push(`named:${name}`);
       }) },
-    ], sessions: load, deleteSessions: load, sessionDeleted: id => deleted.has(id), projects,
+    ], sessions: history ?? load, deleteSessions: load, sessionDeleted: id => deleted.has(id), projects,
     openSessions: () => ({ items: [{ id: 'open-demo', label: 'Offline demo', detail: 'Ready', run: () => { calls.push('open-demo'); } }] }),
   });
   const key = (key: string, init: KeyboardEventInit = {}) => input.dispatchEvent(new win.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
@@ -40,6 +40,31 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }),
   };
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+
+test('incremental history obeys query selection, refresh cancellation and stale-page guards', async () => {
+  const requests: { signal: AbortSignal; publish: (page: PalettePage) => void; resolve: (page: PalettePage) => void }[] = [];
+  const f = fixture(undefined, undefined, undefined, (signal, publish) => new Promise(resolve => { requests.push({ signal, publish, resolve }); }));
+  const page: PalettePage = { items: [{ id: 'pi', label: 'Pi history', run() {} }] };
+  try {
+    const first = f.palette.sessions();
+    requests[0].publish(page);
+    assert.equal(f.list().children.length, 1);
+    f.query('Pi');
+    f.win.document.querySelector<HTMLButtonElement>('#palette-refresh')!.click();
+    assert.equal(requests[0].signal.aborted, true);
+    requests[0].publish({ items: [{ id: 'stale', label: 'Stale history', run() {} }] });
+    requests[0].resolve(page);
+    await first;
+    assert.doesNotMatch(f.list().textContent!, /Stale history/);
+    requests[1].publish(page);
+    assert.equal(f.input.value, 'Pi');
+    f.key('Escape'); await tick();
+    assert.equal(requests[1].signal.aborted, true);
+    requests[1].publish(page); requests[1].resolve(page); await tick();
+    assert.equal(f.dialog.open, false);
+    assert.equal(f.win.document.activeElement, f.opener);
+  } finally { f.dispose(); }
+});
 
 test('inspection shares palette focus/cancellation, shows safe details and ignores stale reports', async () => {
   const f = fixture();
@@ -248,7 +273,7 @@ test('session row options share indicators and muted timestamps without visible 
     { closing: true }, { deleting: true }, { blocked: true }];
   const timestamp = Date.now() - 120_000;
   const f = fixture(async () => ({ items: states.map((state, index) => ({
-    id: `session-${index}`, label: `Conversation ${index}`, sessionRow: { timestamp, indicator: sessionIndicator(state) }, run() {},
+    id: `session-${index}`, label: `Conversation ${index}`, sessionRow: { key: `session-${index}`, title: `Conversation ${index}`, harnessLabel: 'Pi', timestamp, status: sessionIndicator(state).state, open: false }, run() {},
   })) }));
   try {
     await f.palette.sessions();
@@ -346,8 +371,8 @@ test('dismissal invalidates choices before the native close event is delivered',
 test('session membership is searchable without badges and rows share selected Enter hints', async () => {
   const chosen: string[] = [];
   const f = fixture(async () => ({ items: [
-    { id: 'a', label: 'A very long title', sessionRow: { timestamp: 100, indicator: sessionIndicator({ busy: true }), open: true }, keywords: 'A very long preview /sessions/a.jsonl', run: () => { chosen.push('a'); } },
-    { id: 'b', label: 'Historical session', sessionRow: { timestamp: undefined, indicator: { state: 'closed', label: 'Closed', mark: '—' } }, run: () => { chosen.push('b'); } },
+    { id: 'a', label: 'A very long title', sessionRow: { key: 'a', title: 'A very long title', harnessLabel: 'Pi', timestamp: 100, status: 'working', open: true }, keywords: 'A very long preview /sessions/a.jsonl', run: () => { chosen.push('a'); } },
+    { id: 'b', label: 'Historical session', sessionRow: { key: 'b', title: 'Historical session', harnessLabel: 'Pi', status: 'closed', open: false }, run: () => { chosen.push('b'); } },
   ] }));
   try {
     await f.palette.sessions();

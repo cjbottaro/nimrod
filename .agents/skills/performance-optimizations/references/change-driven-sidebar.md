@@ -37,6 +37,7 @@ The narrow content-only guard is implemented; broader row/list invalidation rema
 - **Reuse the boundary if implemented:** extend shared row presentation and navigation/attention projections, not a parallel sidebar state machine. A sidebar no-op must never short-circuit transcript/status updates, persistence or notifications elsewhere in `changed`.
 - **Correctness traps:** include membership, ordering, attention, selection and action eligibility—not just title/text—in invalidation. Preserve local Send effects, minute/foreground timestamp refresh, deletion locks and focused/filtered rows; do not hide missing invalidation behind a debounce.
 - **Extend fixtures when changing:** row fields, lifecycle controls, filters or recency/navigation. Add unchanged-token projection/geometry/mutation counters and explicit tests for each new dependency, using the shell and sidebar/navigation/attention/browser suites named below. Distinguish ordinary token no-ops from genuine immediate transitions.
+- Shared `SessionListEntry`/`SessionStatus` now projects the same inputs for sidebar and history consumers. Keep history/open-row reconciliation at discovery/selection boundaries, not content-stream publications; discovery pages and errors must not call `touchTab` or create per-token layout saves. Existing unchanged-streaming IPC fixtures remain the guard.
 
 ## Validation target
 

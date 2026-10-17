@@ -3,6 +3,7 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { sessionTime, sessionIndicator, installSessionTimeRefresh, createSessionRowContent, updateSessionRowContent } from '../src/session-sidebar';
 import { SessionRecency } from '../src/session-recency';
+import type { SessionListEntry } from '../src/session-list';
 
 test('recency retains closed identities, ignores malformed entries and never reuses a replaced file identity', () => {
   const identity = { path: '/sessions/a', sessionId: 'a' };
@@ -53,16 +54,16 @@ test('shared row updates preserve content nodes and expose open membership witho
   try {
     const row = dom.window.document.createElement('div');
     const content = createSessionRowContent(row, 'row-time');
-    const presentation = { timestamp: 100, indicator: sessionIndicator({ busy: true }), open: true };
-    updateSessionRowContent(content, 'Long title', presentation);
+    const presentation: SessionListEntry = { key: 'a', title: 'Long title', harnessLabel: 'Pi', timestamp: 100, status: 'working', open: true };
+    updateSessionRowContent(content, presentation);
     assert.equal(content.rowLabel.textContent, 'Long title');
     assert.equal(row.querySelector('.session-row-badge'), null);
     assert.equal(row.getAttribute('aria-label'), 'Long title — Working — Open');
     assert.equal(row.getAttribute('aria-describedby'), content.rowTime.id);
-    updateSessionRowContent(content, 'Renamed', presentation);
+    updateSessionRowContent(content, { ...presentation, title: 'Renamed' });
     assert.equal(row.querySelector('.session-indicator'), content.rowIndicator);
     assert.equal(row.querySelector('time'), content.rowTime);
-    updateSessionRowContent(content, 'Renamed', { ...presentation, open: undefined });
+    updateSessionRowContent(content, { ...presentation, title: 'Renamed', open: false });
     assert.equal(row.querySelector('.session-row-badge'), null);
     assert.equal(row.getAttribute('aria-label'), 'Renamed — Working');
   } finally { dom.window.close(); }

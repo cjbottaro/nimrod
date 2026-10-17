@@ -6,7 +6,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Added
 
-- Experimental ACP session POC alongside Pi: Copilot/custom-agent launch, shared transcript cards, session-local permissions with retained operation details, cancellation and advertised model/thinking/mode configuration and commands. Copilot sidebar entries and drafts survive reopening a project; selecting a restored entry loads its exact saved conversation without sending a prompt. Resume/Delete history pickers and Restart remain Pi-only; custom ACP sessions remain runtime-only. Real-agent/native acceptance remains pending.
+- Experimental ACP session POC alongside Pi: Copilot/custom-agent launch, shared transcript cards, session-local permissions with retained operation details, cancellation and advertised model/thinking/mode configuration and commands. Copilot sidebar entries and drafts survive reopening a project; selecting a restored entry loads its exact saved conversation without sending a prompt. Resume combines Pi with capability-gated Copilot history in associated projects, retaining usable results when another source is slow or unavailable and restoring closed conversations by exact ID. Delete history and Restart remain Pi-only; custom ACP sessions remain runtime-only. Real-agent/native acceptance remains pending.
 - Public card-plugin presentation/shell-output helpers, explicit harness/agent targeting and mount-time applicability, preserving legacy plugins as Pi-only by default.
 
 ### Changed

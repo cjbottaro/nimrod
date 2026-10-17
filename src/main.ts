@@ -1,4 +1,8 @@
 import { AcpSession } from './acp/session';
+import { CopilotSessionHistory, copilotHistoryKey } from './acp/session-history';
+import { PiSessionHistory, type PiSessionSummary as SessionSummary } from './pi/session-history';
+import { loadSessionHistory, type SessionHistory, type SessionHistorySnapshot } from './session-history';
+import { savedSessionKey, resolveSessionListEntry, type SessionListEntry } from './session-list';
 import { renderPermissionDetails } from './acp/tool-state';
 import { acpInteraction } from './acp/view-policy';
 import { createPiViewProjection, piInteraction } from './pi/view-policy';
@@ -19,7 +23,7 @@ import { SessionNavigation, SESSION_VIEWS, type SessionView, type SelectionInten
 import { SessionConnection } from './session-connection';
 import { installSidebarResize, sidebarWidthKey } from './sidebar-resize';
 import { lastUsed, captureSidebarScroll, revealSidebarRow, SessionRecency } from './session-recency';
-import { sessionIndicator, createSessionRowContent, updateSessionRowContent, updateSessionRowTime, installSessionTimeRefresh } from './session-sidebar';
+import { sessionStatus, sessionListLabel, createSessionRowContent, updateSessionRowContent, updateSessionRowTime, installSessionTimeRefresh } from './session-sidebar';
 import { installDeletionReview } from './deletion-review';
 import { SessionDeletion, type DeletionEvent, type DeletionSnapshot } from './session-deletion';
 import { presentActivity } from './pi/activity-state';
@@ -122,6 +126,7 @@ let ready = false;
 let acpReady = false;
 let unloading = false;
 let workspace: string | undefined;
+let copilotHistory: CopilotSessionHistory | undefined;
 let homeDirectory: string | undefined;
 let opening: Promise<boolean> | undefined;
 let sidebarVisible = stored('nimrod.sidebar.visible') !== false;
@@ -151,7 +156,6 @@ function syncPopouts(): void {
   popouts.sync(tabs.map(tab => ({ runtimeId: tab.id, pi: tab.file?.exists && tab.mode !== 'temporary'
     ? { path: tab.file.path, sessionId: tab.file.sessionId } : null })), presented?.id ?? null);
 }
-interface SessionSummary { path: string; sessionId: string; name?: string; preview: string; modified: number; parentSession?: string | null; lastUserMessageAt?: number; }
 interface Tab {
   readonly backend: SessionBackend;
   readonly lifecycle: SessionLifecycle;
@@ -277,6 +281,7 @@ window.addEventListener('pagehide', () => { void nativeDrafts?.flush().catch(dra
 const disposeTimeRefresh = installSessionTimeRefresh(window, () => { for (const tab of tabs) refreshTime(tab); });
 window.addEventListener('unload', () => {
   unloading = true;
+  void copilotHistory?.dispose().catch(error => console.error('Could not stop Copilot history discovery', error));
   notices.dispose();
   settingsSurface.dispose();
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
@@ -511,6 +516,8 @@ async function enterWorkspace(path: string): Promise<void> {
     tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
   }
   ready = true;
+  if (tabs.some(tab => { const identity = tab.lifecycle.identity; return identity && 'kind' in identity; })) rememberCopilot();
+  else startCopilotHistory();
   const selected = tabs.find(t => t.lifecycle.key === layout?.active) || navigation.all()[0];
   if (selected) activate(selected, 'startup');
   controls();
@@ -520,46 +527,93 @@ function openSessionPicker(): PalettePage {
   return {
     notice: tabs.length ? undefined : 'No open sessions.',
     items: navigation.all().map(tab => ({
+      ...sessionListItem(sessionRow(tab)),
       id: tab.id,
-      label: tab.title,
-      detail: profileFor(tab) ? `${profileFor(tab)!.name} · ACP POC` : 'Pi',
-      sessionRow: sessionRow(tab),
       keywords: tab === presented ? 'Current' : undefined,
       run: () => activate(tab),
     })),
   };
 }
-async function paletteSessions(kind: 'resume' | 'delete' = 'resume'): Promise<PalettePage> {
-  if (!workspace) return { items: [], notice: 'Open a project first.' };
-  const result = await invoke<{ sessions: SessionSummary[]; warnings: string[] }>('list_workspace_sessions');
-  const entries = new Map(result.sessions.filter(s => !deletion.removed(s.path)).map(s => [s.path, s]));
-  // Exact-file sessions can live outside discovery. Inspect missing entries so
-  // an open child is not accidentally reintroduced as a top-level session.
-  for (const tab of tabs) if (tab.file?.exists && !deletion.removed(tab.file.path)) {
-    let saved = entries.get(tab.file.path);
-    if (!saved) {
-      try {
-        const info = await invoke<SessionFile>('inspect_workspace_session', { path: tab.file.path });
-        if (info.sessionId !== tab.file.sessionId) throw new Error('The session file was replaced with a different session');
-        saved = { path: info.path, sessionId: info.sessionId, parentSession: info.parentSession, name: tab.title, preview: '', modified: 0, lastUserMessageAt: info.lastUserMessageAt };
-      } catch { result.warnings.push(tab.file.path); continue; }
-    }
-    entries.set(saved.path, { ...saved, name: tab.title });
+const piHistory = new PiSessionHistory({
+  catalog: () => invoke('list_workspace_sessions'),
+  inspect: path => invoke('inspect_workspace_session', { path }),
+  open: () => tabs.map(sessionRow),
+  removed: path => deletion.removed(path),
+  recency: reference => recency.get(reference),
+});
+function historyError(source: string, label: string, message: string): void {
+  if (!unloading) notices.report({ id: `history:${source}`, operation: `Read ${label} history`, message });
+}
+function startCopilotHistory(): CopilotSessionHistory | undefined {
+  if (!workspace || unloading || !acpReady || stored(copilotHistoryKey(workspace)) !== true) return;
+  if (!copilotHistory) {
+    const project = workspace;
+    copilotHistory = new CopilotSessionHistory(project, {
+      start: (token, receive, disconnected) => {
+        const onEvent = new Channel<Packet>();
+        onEvent.onmessage = packet => { if (packet.kind === 'rpc') receive(packet.value); else disconnected(packet.message); };
+        return invoke('start_acp', { token, config: { cwd: project, command: COPILOT_PROFILE.command, args: COPILOT_PROFILE.args, env: COPILOT_PROFILE.env, node: runtime.current().node }, onEvent });
+      },
+      send: (token, message) => invoke('write_acp', { token, message }),
+      stop: token => invoke('stop_acp', { token }),
+      error: error => historyError('copilot', 'Copilot', String(error)),
+    });
+    void copilotHistory.initialize().catch(error => historyError('copilot', 'Copilot', String(error)));
   }
+  return copilotHistory;
+}
+function rememberCopilot(): void {
+  if (!workspace) return;
+  save(copilotHistoryKey(workspace), true);
+  startCopilotHistory();
+}
+function sessionListItem(entry: SessionListEntry) {
   return {
-    notice: result.warnings.length ? `${result.warnings.length} session file(s) could not be read. Use Refresh to retry.` : undefined,
-    items: [...entries.values()].filter(s => !s.parentSession && !deletion.removed(s.path)).sort((a, b) => b.modified - a.modified).map(s => {
-      const open = tabs.find(t => t.file?.path === s.path);
-      return {
-        id: s.path, label: s.name || s.preview || 'Untitled session', keywords: `${s.path} ${s.preview}`,
-        sessionRow: {
-          ...(open ? sessionRow(open) : { timestamp: Math.max(recency.get(s), lastUsed(s.lastUserMessageAt)), indicator: { state: 'closed', label: 'Closed', mark: '—' } }),
-          open: !!open,
-        },
-        run: kind === 'delete' ? () => deleteSavedSession(s) : () => openSession(s),
-      };
-    }),
+    // Pi deletion reconciliation still consumes exact file paths, not display keys.
+    id: entry.reference && 'path' in entry.reference ? entry.reference.path : entry.key,
+    label: sessionListLabel(entry), detail: entry.harnessLabel, keywords: entry.keywords,
+    sessionRow: entry,
   };
+}
+async function paletteSessions(signal: AbortSignal, publish: (page: PalettePage) => void, kind: 'resume' | 'delete' = 'resume'): Promise<PalettePage> {
+  if (!workspace) return { items: [], notice: 'Open a project first.' };
+  const sources: SessionHistory[] = [piHistory];
+  if (kind === 'resume' && stored(copilotHistoryKey(workspace)) === true) {
+    const history = startCopilotHistory();
+    if (history) sources.push(history);
+    else historyError('copilot', 'Copilot', 'Copilot history is unavailable while the ACP host is unavailable or initializing. Use Refresh after resolving the problem. Pi history remains available.');
+  }
+  const project = workspace;
+  const page = (snapshot: SessionHistorySnapshot): PalettePage => {
+    const open = tabs.map(sessionRow);
+    return {
+      notice: snapshot.pending.length ? `Loading ${snapshot.pending.join(' and ')} history…` : undefined,
+      items: snapshot.entries.map(entry => resolveSessionListEntry(entry, open)).map(entry => ({
+        ...sessionListItem(entry),
+        run: () => {
+          if (workspace !== project || unloading) throw new Error('The history project is no longer open');
+          const reference = entry.reference;
+          if (!reference) throw new Error('This session has no saved identity');
+          if (kind === 'delete') {
+            if (!('path' in reference)) throw new Error('Deletion is unavailable for this history source');
+            return deleteSavedSession(reference);
+          }
+          return openSavedSession(entry);
+        },
+      })),
+    };
+  };
+  const update = (snapshot: SessionHistorySnapshot) => {
+    if (signal.aborted || unloading || workspace !== project) return;
+    for (const source of sources) {
+      const issue = snapshot.issues.find(issue => issue.source === source.id);
+      if (issue) historyError(source.id, source.label, `${issue.message}\nUse Refresh to retry. Other history sources remain available.`);
+      else if (!snapshot.pending.includes(source.label)) notices.resolve(`history:${source.id}`);
+    }
+    publish(page(snapshot));
+  };
+  const snapshot = await loadSessionHistory(sources, signal, update);
+  return page(snapshot);
 }
 async function openProjectDirectory(path: string): Promise<void> {
   const result = await invoke<{ cwd: string }>('open_project_directory', { cwd: path });
@@ -591,8 +645,8 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
       });
     },
   },
-  sessions: () => paletteSessions(),
-  deleteSessions: () => paletteSessions('delete'),
+  sessions: (signal, publish) => paletteSessions(signal, publish),
+  deleteSessions: () => paletteSessions(new AbortController().signal, () => {}, 'delete'),
   sessionDeleted: path => deletion.removed(path),
   openSessions: openSessionPicker,
   projects: paletteProjects,
@@ -818,14 +872,21 @@ function activate(tab: Tab, intent: SelectionIntent = 'explicit'): void {
 function refreshTime(tab: Tab): void {
   updateSessionRowTime(tab.rowTime, tab.lastUsed);
 }
-function indicator(tab: Tab) {
+function status(tab: Tab) {
   const state = tab.backend.session?.state;
   // A preview lock is not activity; show Deleting only after confirmation.
-  return sessionIndicator({ ...tab, deleting: tab.deletionExecuting, blocked: deletion.blocked(tab.file?.path),
+  return sessionStatus({ ...tab, deleting: tab.deletionExecuting, blocked: deletion.blocked(tab.file?.path),
     inactive: tab.ended || !state || state.sessionUnavailable, compacting: piSession(tab)?.state.compacting,
     busy: state?.busy || !!presentActivity(false, '', piSession(tab)?.state.extensionStatuses).subagents, pending: promptPending(tab) });
 }
-function sessionRow(tab: Tab) { return { timestamp: tab.lastUsed, indicator: indicator(tab) }; }
+function sessionRow(tab: Tab): SessionListEntry {
+  const reference = tab.lifecycle.identity;
+  return {
+    key: reference ? savedSessionKey(reference) : tab.id,
+    title: tab.title, harnessLabel: profileFor(tab) ? `${profileFor(tab)!.name} ACP` : 'Pi',
+    timestamp: tab.lastUsed || undefined, open: true, status: status(tab), reference,
+  };
+}
 function updateTab(tab: Tab): void {
   measureWork(settingsSurface.performanceProbe, 'sidebar-row-update', () => updateTabPresentation(tab), presented === tab);
 }
@@ -845,9 +906,9 @@ function shellPresentationChanged(before: ConversationState | undefined, after: 
 }
 function updateTabPresentation(tab: Tab): void {
   tab.root.inert = tab.closing || tab.restarting || tab.deleting || tab !== presented;
-  const name = profileFor(tab) ? `${tab.title} · ${profileFor(tab)!.name} ACP` : tab.title;
+  const entry = sessionRow(tab), name = sessionListLabel(entry);
   tab.root.setAttribute('aria-busy', String(tab.backend.session?.state.busy === true));
-  updateSessionRowContent(tab, name, sessionRow(tab));
+  updateSessionRowContent(tab, entry, false);
   tab.row.disabled = !ready;
   tab.row.setAttribute('aria-current', String(tab === presented)); tab.closeButton.setAttribute('aria-label', `Close ${name}`); tab.closeButton.disabled = !ready || tab.deleting || deletion.locked(tab.file?.path) || tab.closing || tab.starting || tab.restarting;
   tab.deleteButton.setAttribute('aria-label', `Delete session tree for ${name}`); tab.deleteButton.disabled = !deletable(tab);
@@ -1021,6 +1082,7 @@ async function newAcpSessionPicker(): Promise<void> {
 }
 async function newAcpSession(profile: AcpProfile): Promise<void> {
   if (!ready || !acpReady || unloading || settings.isOpen || !workspace) return;
+  if (profile === COPILOT_PROFILE) rememberCopilot();
   const tab = createTab(profile === COPILOT_PROFILE ? 'saved' : 'temporary', undefined, `${profile.name} session`, 0, profile);
   activate(tab); touchTab(tab);
   await tab.lifecycle.connect({ acceptedAction: true });
@@ -1218,6 +1280,18 @@ async function newSession(mode: LaunchMode = 'saved', copyDraft?: string, initia
   if (!ready || unloading || settings.isOpen) return;
   const tab = createTab(mode, undefined, undefined, navigation.nextRecency()); activate(tab); await launchPi(tab, copyDraft, true, initialName);
 }
+async function openSavedSession(entry: SessionListEntry): Promise<void> {
+  const reference = entry.reference;
+  if (!reference) throw new Error('This session has no saved identity');
+  if ('path' in reference) return openSession({ ...reference, name: entry.title, lastUserMessageAt: entry.timestamp });
+  if (!ready || unloading || settings.isOpen || !workspace) return;
+  rememberCopilot();
+  const existing = tabs.find(tab => tab.lifecycle.key === copilotSessionScope(reference.sessionId));
+  if (existing) { activate(existing); return; }
+  const tab = createTab('resume', undefined, entry.title, lastUsed(entry.timestamp), COPILOT_PROFILE, reference.sessionId);
+  tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
+  activate(tab);
+}
 async function openSession(info: Pick<SessionSummary, 'path' | 'sessionId' | 'name' | 'lastUserMessageAt'>): Promise<void> {
   if (!ready || settings.isOpen || !await ensureWorkspace()) return;
   if (deletion.locked(info.path)) { error.textContent = 'This session is locked for deletion. Finish or cancel its review before resuming it.'; return; }
@@ -1226,7 +1300,10 @@ async function openSession(info: Pick<SessionSummary, 'path' | 'sessionId' | 'na
     try { await deletion.recover(info.path, info.sessionId); } catch (e) { error.textContent = String(e); return; }
   }
   const existing = tabs.find(tab => tab.file?.path === info.path);
-  if (existing) { activate(existing); return; }
+  if (existing) {
+    if (existing.file?.sessionId !== info.sessionId) { error.textContent = 'This file is open with a different saved session identity. Close that session and refresh history before resuming it.'; return; }
+    activate(existing); return;
+  }
   let used = Math.max(recency.get(info), lastUsed(info.lastUserMessageAt));
   if (info.lastUserMessageAt === undefined) {
     try {
@@ -1241,7 +1318,10 @@ async function openSession(info: Pick<SessionSummary, 'path' | 'sessionId' | 'na
   if (deletion.removed(info.path)) { error.textContent = 'The selected session was deleted. Refresh Resume session and choose another session.'; return; }
   if (deletion.locked(info.path) || deletion.blocked(info.path)) { error.textContent = 'This session is unavailable because of deletion. Finish or cancel its review, or explicitly recover it through Resume session.'; return; }
   const concurrent = tabs.find(tab => tab.file?.path === info.path);
-  if (concurrent) { activate(concurrent); return; }
+  if (concurrent) {
+    if (concurrent.file?.sessionId !== info.sessionId) { error.textContent = 'This file is open with a different saved session identity. Close that session and refresh history before resuming it.'; return; }
+    activate(concurrent); return;
+  }
   const tab = createTab('resume', { path: info.path, sessionId: info.sessionId, exists: true }, info.name || 'Session', used);
   activate(tab); await tab.lifecycle.connect({ acceptedAction: true });
 }
@@ -1270,7 +1350,7 @@ async function restartSession(tab: Tab): Promise<void> {
     if (resumed && presented === tab && !tab.ended && !document.querySelector('dialog[open]')) tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true });
   }
 }
-async function deleteSavedSession(saved: SessionSummary): Promise<void> {
+async function deleteSavedSession(saved: Pick<SessionSummary, 'path' | 'sessionId'>): Promise<void> {
   if (unloading || settings.isOpen || !ready || deletion.pending) throw new Error('Session deletion is currently unavailable.');
   if (deletion.blocked(saved.path)) throw new Error('Recover this session through Resume session before deleting it.');
   const tab = tabs.find(tab => tab.file?.path === saved.path);
@@ -1340,7 +1420,7 @@ async function closeTab(tab: Tab): Promise<void> {
   const state = tab.backend.session?.state;
   const running = tab.backend.session && !tab.ended;
   if ((profileFor(tab) || tab.mode === 'temporary' || (running && (state?.busy || promptPending(tab) || tab.inputCount || piSession(tab)?.state.queue?.pendingCount))) && !await dialogs.confirm(`Close ${tab.title}?`, profileFor(tab) ? tab.lifecycle.identity
-    ? 'This stops this Copilot agent and removes the sidebar entry. Copilot’s saved history and your draft remain; in-flight work will not continue. Reopening closed Copilot sessions through Resume session is not implemented yet.'
+    ? 'This stops this Copilot agent and removes the sidebar entry. Copilot’s saved history and your draft remain; in-flight work will not continue. Use Resume session to reopen it when Copilot supports history discovery and loading.'
     : 'This stops this ACP agent and discards Nimrod’s in-memory transcript, draft and pop-outs. Nimrod cannot resume it in this POC. The agent may keep its own saved history; this does not delete it.' : tab.mode === 'temporary' ? 'This stops its agent and discards this temporary session, including its draft, queued messages and pop-outs.' : 'This stops only this session’s agent. Written history and your draft remain; queued and in-flight work will not continue.', undefined, profileFor(tab) ? 'Close ACP session' : tab.mode === 'temporary' ? 'Close temporary session' : 'Close session')) return;
   if (tab.closing || !tabs.includes(tab)) return;
   tab.closing = true; updateTab(tab);
@@ -1469,7 +1549,7 @@ async function boot(): Promise<void> {
     // ACP cleanup/availability is independent: an old/unavailable ACP host must
     // not prevent Pi from booting. New ACP sessions stay disabled until reaped.
     void invoke('stop_acp').then(() => {
-      if (!unloading) { acpReady = true; selectedConnection.barriersChanged(); }
+      if (!unloading) { acpReady = true; selectedConnection.barriersChanged(); startCopilotHistory(); }
     }).catch(error => {
       if (!unloading) notices.report({ id: 'acp-startup', operation: 'Initialize ACP', message: `ACP is unavailable; Pi remains available. ${String(error)}` });
     });

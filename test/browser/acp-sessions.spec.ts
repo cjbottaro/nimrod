@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { demoFixture, visible } from './demo-fixture';
 import { copilotSessionScope } from '../../src/acp/profiles';
+import { copilotHistoryKey } from '../../src/acp/session-history';
 
 async function newAcp(page: Page) {
   await page.keyboard.press('Meta+Shift+P');
@@ -73,7 +74,8 @@ test('remembered Copilot sidebar sessions load only on selection with draft and 
     },
   }, [], { persistent: false, drafts: { [scope]: { draft: 'Saved Copilot draft' } } });
   try {
-    expect(demo.calls.filter(call => call.command === 'start_acp')).toHaveLength(0);
+    expect(demo.calls.filter(call => call.command === 'start_acp')).toHaveLength(1);
+    expect(demo.calls.some(call => call.command === 'write_acp' && ['session/new', 'session/load', 'session/prompt'].includes(String((call.args.message as { method?: string }).method)))).toBe(false);
     await expect(page.locator('#open-sessions .session-row')).toHaveCount(2);
     await page.locator('#open-sessions .session-row').filter({ hasText: 'Remembered Copilot' }).click();
     await expect(page.locator(visible('send'))).toBeEnabled();
@@ -88,6 +90,35 @@ test('remembered Copilot sidebar sessions load only on selection with draft and 
     await page.locator(visible('prompt')).fill('/context');
     await page.locator(visible('prompt')).press('Enter');
     await expect(page.locator(visible('messages'))).toContainText('Offline context only; no provider request.');
+    expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
+test('Resume discovers paginated offline Copilot history and loads its exact ID with the saved draft', async ({ page }) => {
+  const scope = copilotSessionScope('fixture-acp');
+  const demo = await demoFixture(page, { [copilotHistoryKey(process.cwd())]: true }, [], {
+    persistent: false, drafts: { [scope]: { draft: 'Closed Copilot draft' } },
+  });
+  try {
+    await expect(page.locator('#open-sessions .session-row')).toHaveCount(1);
+    await page.keyboard.press('Meta+k');
+    await expect(page.locator('#palette-list')).toContainText('Saved offline conversation');
+    await expect(page.locator('#palette-list')).not.toContainText('Outside project fixture');
+    await page.locator('#palette-input').fill('Copilot');
+    const option = page.locator('#palette-list [role="option"]');
+    await expect(option).toHaveCount(1);
+    await expect(option.locator('.session-indicator')).toHaveAttribute('data-state', 'closed');
+    await page.locator('#palette-input').press('Enter');
+    await expect(page.locator(visible('send'))).toBeEnabled();
+    await expect(page.locator(visible('prompt'))).toHaveValue('Closed Copilot draft');
+    await expect(page.locator(visible('messages'))).toContainText('Saved offline answer');
+    await expect(page.locator('#open-sessions .session-row')).toHaveCount(2);
+    const requests = demo.calls.filter(call => call.command === 'write_acp').map(call => call.args.message as { method?: string; params?: unknown });
+    expect(requests.filter(request => request.method === 'session/list').map(request => request.params)).toEqual([
+      { cwd: process.cwd() }, { cwd: process.cwd(), cursor: 'fixture-page-2' },
+    ]);
+    expect(requests.find(request => request.method === 'session/load')?.params).toEqual({ cwd: process.cwd(), sessionId: 'fixture-acp', mcpServers: [] });
+    expect(requests.some(request => request.method === 'session/new' || request.method === 'session/prompt')).toBe(false);
     expect(demo.errors).toEqual([]);
   } finally { await demo.close(); }
 });

@@ -42,8 +42,17 @@ createInterface({ input: process.stdin }).on('line', line => {
     }
     return;
   }
-  if (message.method === 'initialize') response(message.id, { protocolVersion: 1, agentInfo: { name: 'fixture-agent', title: 'Offline fixture', version: '1' }, agentCapabilities: { loadSession: true } });
-  else if (message.method === 'session/new') {
+  if (message.method === 'initialize') response(message.id, { protocolVersion: 1, agentInfo: { name: 'fixture-agent', title: 'Offline fixture', version: '1' }, agentCapabilities: { loadSession: true, sessionCapabilities: { list: {} } } });
+  else if (message.method === 'session/list') {
+    if (message.params.cwd !== process.cwd()) { send({ id: message.id, error: { code: -32602, message: 'Wrong offline fixture project' } }); return; }
+    if (message.params.cursor === undefined) response(message.id, { sessions: [
+      { sessionId: 'outside-project', cwd: process.cwd() + '/another-project', title: 'Outside project fixture' },
+    ], nextCursor: 'fixture-page-2' });
+    else if (message.params.cursor === 'fixture-page-2') response(message.id, { sessions: [
+      { sessionId, cwd: process.cwd(), title: 'Saved offline conversation', updatedAt: '2026-10-16T12:00:00Z' },
+    ] });
+    else send({ id: message.id, error: { code: -32602, message: 'Unknown offline pagination cursor' } });
+  } else if (message.method === 'session/new') {
     response(message.id, { sessionId, configOptions: configOptions() });
     update({ sessionUpdate: 'available_commands_update', availableCommands: [{ name: 'context', description: 'Offline fixture context' }] });
   } else if (message.method === 'session/load') {

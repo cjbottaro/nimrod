@@ -3,6 +3,8 @@ import { AcpConnection, AcpResponseError, isRecord, type AcpPacket, type AcpReco
 
 export type AcpClientPhase = 'fresh' | 'initializing' | 'ready' | 'creating' | 'loading' | 'idle' | 'working' | 'disconnected';
 export interface AcpSessionUpdate { sessionId: string; update: AcpRecord & { sessionUpdate: string }; }
+export interface AcpSavedSession { sessionId: string; cwd: string; title?: string; updatedAt?: string; }
+export interface AcpSessionPage { sessions: AcpSavedSession[]; nextCursor?: string; }
 export interface AcpPermissionOption { optionId: string; name: string; kind: string; }
 export interface AcpPermissionRequest {
   sessionId: string;
@@ -132,6 +134,39 @@ export class AcpClient {
       this.disconnect(error);
       throw error;
     }
+  }
+
+  /** Discovery runs on an initialized connection without creating/loading a session. */
+  async listSessions(cwd: string, cursor?: string): Promise<AcpSessionPage> {
+    this.requirePhase('ready');
+    if (!cwd.trim()) throw new Error('ACP history requires a project directory');
+    if (cursor !== undefined && !cursor) throw new Error('ACP history requires a nonempty pagination cursor');
+    const capabilities = this.initialized?.agentCapabilities;
+    const sessionCapabilities = isRecord(capabilities) ? capabilities.sessionCapabilities : undefined;
+    if (!isRecord(capabilities) || capabilities.loadSession !== true
+      || !isRecord(sessionCapabilities) || !isRecord(sessionCapabilities.list))
+      throw new Error('This ACP agent does not advertise saved-session listing and loading. Use an agent version that supports both.');
+    let page: AcpSessionPage | undefined;
+    await this.connection.request('session/list', { cwd, ...(cursor === undefined ? {} : { cursor }) }, value => {
+      if (!isRecord(value) || !Array.isArray(value.sessions)
+        || (value.nextCursor !== undefined && value.nextCursor !== null && (typeof value.nextCursor !== 'string' || !value.nextCursor)))
+        throw new Error('Invalid ACP session list response');
+      const sessions = value.sessions.map(entry => {
+        if (!isRecord(entry) || typeof entry.sessionId !== 'string' || !entry.sessionId.trim()
+          || typeof entry.cwd !== 'string' || !entry.cwd.trim()
+          || (entry.title !== undefined && entry.title !== null && typeof entry.title !== 'string')
+          || (entry.updatedAt !== undefined && entry.updatedAt !== null && (typeof entry.updatedAt !== 'string' || !Number.isFinite(Date.parse(entry.updatedAt)))))
+          throw new Error('Invalid ACP saved session');
+        return {
+          sessionId: entry.sessionId, cwd: entry.cwd,
+          title: typeof entry.title === 'string' ? entry.title : undefined,
+          updatedAt: typeof entry.updatedAt === 'string' ? entry.updatedAt : undefined,
+        };
+      });
+      page = { sessions, nextCursor: typeof value.nextCursor === 'string' ? value.nextCursor : undefined };
+    });
+    if (!page) throw new Error('ACP session list response was not applied');
+    return page;
   }
 
   async prompt(text: string): Promise<string> {
