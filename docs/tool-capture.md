@@ -1,64 +1,68 @@
-# Tool activity logs
+# Transcript debug logs
 
-Built-in Copilot SDK uses source backend `copilot-sdk`, agent `copilot`, in the
-same opt-in local capture pipeline. It records native live `tool.*` events, streamed tool-input deltas, permission
-requests and SDK-reported permission completions, not conversation prose or saved-history replay.
-Custom ACP captures use `acp`; schemas are not translated into Pi.
+Enable **Transcript debug logs** in **Global Settings → Diagnostics** to record the native conversation traffic Nimrod receives and sends. This replaces tool-only activity capture: one switch and one local JSONL pipeline for debugging transcripts, cards, streaming, configuration and lifecycle behavior.
 
-Enable **Capture tool activity** in **Global Settings → Diagnostics** to automatically collect local JSON Lines logs for card/plugin development. It is off by default and covers **Pi, including extension tools**, and **Copilot**. ACP capture formats remain supported internally, but ACP sessions cannot be created from the current UI.
-
-No manual inspection/capture action is needed. Enable it, work normally, then give your coding assistant the relevant log paths and time window to inventory tool payloads and develop bespoke cards.
+It is off by default. The existing capture preference retains its value, so an already-enabled tool logger becomes the broader transcript logger. Pi (including extension tools) and built-in Copilot are supported; dormant ACP infrastructure uses the same pipeline but has no session-creation UI.
 
 ## What is collected
 
-- Tool starts, partial input/progress updates and results, with structured native payloads.
-- Copilot SDK streamed tool inputs, native permission requests/outcomes, and the exact permission callback payload. Native lifecycle events and callbacks are separate records, not duplicate approvals.
-- ACP tool-call patches and live permission-request tool details/options.
-- UTC receipt timestamps, sequence numbers, capture/session/connection identity, tool-call IDs when available, backend and agent identity, and reported agent versions when available.
+- User messages, assistant text and reasoning, including empty messages and streaming fragments.
+- Tool generation, execution, output, results and original native metadata.
+- Turn/activity boundaries, errors, usage and model/configuration events.
+- Requests and replies for prompts, Stop, commands, configuration, permissions, questions and other session operations.
+- History delivered during normal connection/Resume or existing history refreshes, distinguished from live events.
+- Session-controller UI actions, including rejected submissions and render-error reports, plus local configuration-progress transitions.
+- UTC receipt timestamps, sequence numbers, session/connection/capture identities, tool-call IDs when available and reported runtime versions when available.
 
-Pi, SDK and ACP retain their native event names and payload shapes; tools do not have to be known to Nimrod in advance. Pi generation events omit their full assistant-message `partial` snapshot, retaining only tool-event data. Normal prompts, assistant prose, reasoning streams and saved-history replay are not collected.
+**Logs contain full prompts, responses, reasoning, tool content, paths and possibly secrets.** They are not redacted or uploaded, and nothing is automatically deleted. Unsent draft edits, DOM snapshots, screenshots and OS-wide activity are not recorded. Performance diagnostics remain separate timing-only reports.
 
-**Tool payloads themselves can contain source code, commands, outputs, secrets, or embedded prompt/reasoning text.** Logs are not redacted or uploaded. Share them only deliberately.
+Enabling logging does not send prompts, load sessions, fetch history or restart agents. It records traffic from subsequent normal activity only; already-mounted transcript content is not retroactively copied. Logging a permission or a historical prompt never approves or executes it.
 
 ## Where logs go
 
-The exact resolved directory is shown beside the setting. Logs use Nimrod's existing state directory, like performance captures, honoring an absolute `XDG_STATE_HOME`. The default layout is:
+The exact resolved directory appears beside the setting. Nimrod honors an absolute `XDG_STATE_HOME`; the default layout is:
 
 ```text
-~/.local/state/nimrod/tool-captures/
-  pi/2026-10-16.jsonl
-  copilot-sdk/copilot/2026-10-16.jsonl
-  acp/copilot/2026-10-16.jsonl
-  acp/<other-agent>/2026-10-16.jsonl
+~/.local/state/nimrod/transcript-logs/
+  pi/YYYY-MM-DD.jsonl
+  copilot-sdk/copilot/YYYY-MM-DD.jsonl
+  acp/<agent>/YYYY-MM-DD.jsonl
 ```
 
-Agent directory names come from reported identity, not display titles. Unsafe/long names receive a hash-based directory name; their original names are retained inside records.
+Existing tool-only logs stay untouched under `~/.local/state/nimrod/tool-captures/`. They are not moved, rewritten or retroactively expanded. The setting's stored compatibility key remains `diagnostics.toolCapture`; it is still just one setting.
 
-Files roll over by **UTC day** and are **append-only**. Multiple sessions/windows can contribute to the same source/day file, with identity fields separating their events. Existing logs are never automatically deleted, truncated or rewritten. Unix files are created with private permissions.
+Files roll over by **UTC day** and are **append-only**. Multiple sessions/windows can share a source/day file; identity fields separate their records. Unix files are created privately. Unsafe/long agent directory names are encoded, with original identity retained in each record.
 
-## Inspecting a time window
+## Reading a trace
 
-Each line is an independent JSON object. For example:
+Give your coding assistant the source/day path, approximate UTC time and session ID if known. Native payloads retain their harness-specific shapes rather than becoming a universal conversation protocol.
+
+- **Pi:** native event names such as `message_start`, `message_update`, `message_end`, `tool_execution_end` and `agent_settled`. Streaming updates include the full native `assistantMessageEvent.partial` and enclosing message snapshot. Outgoing RPCs use `request.<type>`; replies use `response.<command>`, including `response.get_messages` with saved history. Extension answers, timeouts and process errors are included.
+- **Copilot:** native SDK event names such as `assistant.message`, `assistant.reasoning_delta`, `tool.execution_complete` and `session.idle`. Saved events use `history.<native-type>`. Empty content is retained. Duplicate native deliveries are logged before reducer deduplication. `request.<method>` records outgoing bridge requests; `bridge.result` contains correlated replies. `bridge.connected` records connection metadata without duplicating the history array. `permission.request` and `input.request` contain the complete callback packet, including its decision ID and original request. Decisions appear in `request.decision`.
+- **ACP:** native session-update names such as `agent_message_chunk` and `tool_call_update`; replayed updates use `history.<name>`. Requests use `request.<method>`, replies use `response`, and incoming permission requests retain their JSON-RPC envelope. Loading-time inbound records have a `history.` prefix.
+- **Nimrod:** `ui.action` is the session-controller action, not proof that it was sent or accepted. `ui.configuration` records changed local configuration operations, not authoritative harness settings.
+
+Each line has the existing schema-version-1 capture envelope and a native JSON payload. For example:
 
 ```json
-{"schemaVersion":1,"timestamp":"2026-10-16T19:42:31.482Z","captureId":"…","sequence":42,"source":{"backend":"acp","agent":"copilot"},"sessionId":"…","connectionId":"…","toolCallId":"…","event":"tool_call_update","payload":{"sessionUpdate":"tool_call_update","toolCallId":"…","status":"completed"}}
+{"schemaVersion":1,"timestamp":"2026-10-17T20:36:05.000Z","captureId":"…","sequence":42,"source":{"backend":"copilot-sdk","agent":"copilot"},"sessionId":"…","connectionId":"…","event":"assistant.message","payload":{"id":"…","type":"assistant.message","data":{"messageId":"…","content":"","toolRequests":[{"toolCallId":"…","name":"view"}]}}}
 ```
 
-With `jq`, select activity around a particular UTC time:
+Filter a time window with `jq`:
 
 ```sh
-jq -c 'select(.timestamp >= "2026-10-16T19:40:00.000Z" and .timestamp <= "2026-10-16T19:45:00.000Z")' \
-  ~/.local/state/nimrod/tool-captures/acp/copilot/2026-10-16.jsonl
+jq -c 'select(.timestamp >= "2026-10-17T20:35:00.000Z" and .timestamp <= "2026-10-17T20:38:00.000Z")' \
+  ~/.local/state/nimrod/transcript-logs/copilot-sdk/copilot/2026-10-17.jsonl
 ```
 
-For local times, convert to UTC first. Timestamps are when Nimrod receives events, not necessarily when a tool starts executing. Sequence numbers order records within one capture segment; wall clocks can move backwards, and multiple windows do not share a total sequence. Capture starting mid-tool may lack earlier inputs or a tool ID. Connection IDs and Pi's message sequence/content index help correlate partial events. SDK callbacks received before the saved session identity is known use a temporary `connecting:…` capture ID; later records use the actual session ID and retain the same connection ID. The existing SDK status response supplies the runtime version when available.
+Timestamps represent receipt/enqueue time, not original execution time. Sequence numbers order records within one capture segment; different windows do not share a total order, and wall clocks can move backwards. Before session identity is known, records use `connecting:…` or Pi's temporary identity; correlate through the stable connection ID. Runtime versions are present only after reported metadata becomes available. Enabling mid-turn can leave earlier events missing.
 
 ## Stopping, failures and limits
 
-Turning capture off stops collecting new events; logs remain on disk. Enabling it again starts a new capture segment without restarting agents. It does not retroactively log existing cards or saved history.
+Turning logging off stops collection and retains existing files. Re-enabling starts a new segment without restarting agents. Pending undispatched events can be lost on disable, disposal or crash; already accepted writes may finish. This is a diagnostic trace, not a durable audit journal or replay tool.
 
-Logging is buffered and does not wait for disk before processing agent events. Pending events may be lost on disable, close or crash; already accepted writes may finish after disable. Capture adds serialization/disk overhead, so leave it off outside discovery/debugging work.
+Writes are buffered and never gate ordered session processing. Full content and cumulative snapshots add serialization/disk overhead and can grow logs substantially; use logging during development/debugging rather than as an indefinite archive.
 
-A buffer overflow, oversized payload or write failure stops capture in the affected window and shows an application notice. Records are not silently truncated, and ambiguous writes are never retried automatically. Resolve the cause, then toggle capture off and on. If a file has an incomplete final record after a crash/write failure, preserve it and move it aside before retrying; Nimrod will not truncate it for you.
+Pending data is bounded to 8 Mi UTF-16 code units, with at most 2 Mi code units per record. Replay bursts are split into native batches of at most 512 records. An oversized event/history snapshot, buffer overflow, serialization error or write failure stops logging in that window and shows an application notice; records are not silently truncated and ambiguous writes are never retried. Resolve the cause, then toggle logging off/on. Preserve and move aside any file with an incomplete final line before retrying; Nimrod never truncates it for you.
 
-This is a diagnostic aid, not a durable audit log. SDK capture has passed focused offline controller/production-bridge/sink tests and native storage fixtures; the wider check remains blocked by unrelated migration assertions. Live SDK collection in the app and broader macOS/Linux/multi-process behavior remain to be verified; Windows parity is not established. [Performance reports](performance-diagnostics.md) remain separate, timing-only captures with their own retention policy.
+Expanded transcript logging has authored offline fixtures but has not yet been test-run or accepted in the native app. Earlier tool-only capture had focused offline/native-storage evidence; that does not establish acceptance of the broader logger. macOS/Linux runtime behavior and Windows parity remain unverified.

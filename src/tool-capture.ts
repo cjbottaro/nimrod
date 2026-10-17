@@ -1,4 +1,4 @@
-/** Consumer-oriented capture port: integrations retain their native event semantics. */
+/** Transcript debug capture; legacy ToolCapture identifiers retain one shared logging pipeline. */
 export interface ToolCaptureRecord {
   source: { backend: string; agent: string; version?: string };
   sessionId: string;
@@ -31,13 +31,16 @@ export function createToolCapture(host: ToolCaptureHost) {
   function fail(error: unknown): void {
     if (failed || disposed) return;
     failed = true; clear();
-    try { host.failure(`Tool capture stopped; some events may not have been saved. ${String(error)} Toggle capture off and on to start a new segment. Nothing was retried.`); }
-    catch (noticeError) { console.error('Could not report tool capture failure', noticeError); }
+    try { host.failure(`Transcript debug logging stopped; some events may not have been saved. ${String(error)} Toggle capture off and on to start a new segment. Nothing was retried.`); }
+    catch (noticeError) { console.error('Could not report transcript debug logging failure', noticeError); }
   }
   async function flush(): Promise<void> {
     clearTimeout(timer); timer = undefined;
     if (writing || !pending.length || !enabled || failed || disposed) return;
-    const lines = pending; pending = []; queuedChars = 0;
+    // History replay can synchronously deliver more than one native batch.
+    // Bound pending bytes, not event count; dispatch at most 512 records per write.
+    const lines = pending.splice(0, 512);
+    queuedChars -= lines.reduce((total, line) => total + line.length, 0);
     const current = generation;
     writing = true;
     try { await host.write(lines); }
@@ -59,7 +62,7 @@ export function createToolCapture(host: ToolCaptureHost) {
       try {
         // Snapshot now: native reducers may subsequently change retained objects.
         const line = JSON.stringify({ ...record, schemaVersion: 1, timestamp: new Date().toISOString(), captureId, sequence: ++sequence });
-        if (line.length > MAX_RECORD_CHARS || queuedChars + line.length > MAX_QUEUE_CHARS || pending.length >= 512) {
+        if (line.length > MAX_RECORD_CHARS || queuedChars + line.length > MAX_QUEUE_CHARS) {
           fail('Capture buffer or record size limit exceeded.'); return;
         }
         pending.push(line); queuedChars += line.length; schedule();

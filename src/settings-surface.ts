@@ -100,7 +100,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
       if (unloading) return;
       toolCaptureFailure = message;
       toolCaptureStatus.textContent = message;
-      notices.report({ id: 'tool-capture', operation: 'Capture tool activity', message });
+      notices.report({ id: 'tool-capture', operation: 'Record transcript debug logs', message });
     },
     recovered: () => { toolCaptureFailure = ''; notices.resolve('tool-capture'); },
   });
@@ -108,19 +108,19 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     const enabled = preferences.toolCaptureEnabled();
     toolCapture.setEnabled(enabled && !global);
     toolCapturePicker.value = enabled ? 'on' : 'off';
-    toolCaptureStatus.textContent = toolCaptureFailure || `${enabled ? 'Tool capture enabled for project windows.' : 'Tool capture is off; existing logs are retained.'}${toolCapturePath ? ` Logs: ${toolCapturePath}` : ''}`;
+    toolCaptureStatus.textContent = toolCaptureFailure || `${enabled ? 'Transcript debug logging enabled for project windows.' : 'Transcript debug logging is off; existing logs are retained.'}${toolCapturePath ? ` Logs: ${toolCapturePath}` : ''}`;
   }
   toolCapturePicker.addEventListener('change', () => {
     toolCapturePicker.disabled = true;
     void preferences.saveToolCapture(toolCapturePicker.value === 'on').then(() => notices.resolve('tool-capture-settings'))
-      .catch(error => notices.report({ id: 'tool-capture-settings', operation: 'Save tool capture setting', message: String(error) }))
+      .catch(error => notices.report({ id: 'tool-capture-settings', operation: 'Save transcript debug logging setting', message: String(error) }))
       .finally(() => { if (!unloading) { reloadToolCapture(); toolCapturePicker.disabled = false; } });
   });
   reloadToolCapture();
   void invoke<string>('tool_capture_directory').then(path => {
     if (!unloading) { toolCapturePath = path; reloadToolCapture(); }
   }).catch(error => {
-    if (!unloading) notices.report({ id: 'tool-capture-path', operation: 'Locate tool capture logs', message: String(error) });
+    if (!unloading) notices.report({ id: 'tool-capture-path', operation: 'Locate transcript debug logs', message: String(error) });
   });
   const performanceDiagnostics = installPerformanceDiagnostics(window, () => ({
     userAgent: navigator.userAgent.slice(0, 512), fieldSizing: window.CSS?.supports('field-sizing', 'content') ?? false,

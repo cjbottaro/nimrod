@@ -69,13 +69,15 @@ test('SDK native tool/input/permission lifecycle reaches the real JSONL sink wit
     f.session.receive({ kind: 'event', event: native[1] }); // Duplicate event ID, not another tool operation.
     await tick(); await f.capture.flush();
     const captured = f.lines.map(line => JSON.parse(line));
-    assert.deepEqual(captured.map(record => record.event), [...native.map(value => value.type), 'permission.request']);
-    assert.deepEqual(captured.slice(0, native.length).map(record => record.payload), native);
-    assert.deepEqual(captured.at(-1).payload, permission);
+    const events = captured.filter(record => native.some(value => value.type === record.event));
+    assert.deepEqual(events.map(record => record.payload), [...native, native[1]], 'trace duplicate delivery even though the reducer deduplicates it');
+    assert.deepEqual(captured.find(record => record.event === 'permission.request').payload, { kind: 'permission', id: 'callback', request: permission });
     assert.equal(captured.find(record => record.event === 'permission.requested').toolCallId, 'web');
     assert.deepEqual(captured.find(record => record.event === 'tool.execution_complete').payload.data.result, result);
     assert.equal(captured.find(record => record.event === 'tool.extension_specific').payload.agentId, 'child-agent');
-    assert.ok(captured.every(record => record.sessionId === 'sdk-fixture' && record.source.version === '1.0.98'));
+    assert.ok(events.every(record => record.sessionId === 'sdk-fixture' && record.source.version === '1.0.98'));
+    assert.ok(captured.some(record => record.event === 'request.decision'));
+    assert.ok(captured.some(record => record.event === 'bridge.result'));
     assert.equal(new Set(captured.map(record => record.connectionId)).size, 1);
     assert.deepEqual(captured.map(record => record.sequence), captured.map((_record, index) => index + 1));
     assert.ok(captured.every(record => record.schemaVersion === 1 && /Z$/.test(record.timestamp)));
@@ -84,10 +86,11 @@ test('SDK native tool/input/permission lifecycle reaches the real JSONL sink wit
   } finally { f.close(); }
 });
 
-test('SDK capture excludes replay, conversation text, reasoning and freeform input callbacks', async () => {
+test('SDK transcript logs include distinguished history, text, reasoning and freeform input callbacks', async () => {
   const f = fixture();
   try {
     const saved = [
+      event('saved-empty', 'assistant.message', { messageId: 'tool-only', content: '', toolRequests: [{ toolCallId: 'old', name: 'view' }] }),
       event('saved-start', 'tool.execution_start', { toolCallId: 'old', toolName: 'view', arguments: { path: '/fixture' } }),
       event('saved-permission', 'permission.requested', { requestId: 'old-request', permissionRequest: { kind: 'read', toolCallId: 'old', path: '/fixture' } }),
       event('saved-completed', 'permission.completed', { requestId: 'old-request', result: { kind: 'approved' } }),
@@ -102,7 +105,14 @@ test('SDK capture excludes replay, conversation text, reasoning and freeform inp
     ]) f.session.receive({ kind: 'event', event: value });
     f.session.receive({ kind: 'input', id: 'input', request: { question: 'private question', allowFreeform: true } });
     await tick(); await f.capture.flush();
-    assert.deepEqual(f.lines, []);
+    const captured = f.lines.map(line => JSON.parse(line));
+    assert.deepEqual(captured.filter(record => record.event.startsWith('history.')).map(record => record.payload), saved);
+    const empty = captured.find(record => record.event === 'history.assistant.message');
+    assert.equal(empty.payload.data.content, '');
+    assert.equal(empty.payload.data.toolRequests.length, 1);
+    for (const type of ['user.message', 'assistant.message', 'assistant.reasoning', 'input.request'])
+      assert.ok(captured.some(record => record.event === type), type);
+    assert.ok(captured.some(record => record.event === 'request.decision' && record.payload.value.answer === 'private input'));
     assert.deepEqual(f.errors, []);
   } finally { f.close(); }
 });
@@ -129,13 +139,13 @@ test('early SDK permission callbacks get valid capture identity until the author
   try {
     f.session.receive({ kind: 'permission', id: 'early', request: { kind: 'shell', toolCallId: 'early-call', data: { toolCallId: 'not-the-callback-id' }, fullCommandText: 'fixture only' } });
     await tick(); await f.capture.flush();
-    const early = JSON.parse(f.lines[0]);
+    const early = f.lines.map(line => JSON.parse(line)).find(record => record.event === 'permission.request');
     assert.match(early.sessionId, /^connecting:/); assert.equal(early.toolCallId, 'early-call');
     assert.equal(early.source.version, undefined);
     await f.connect();
     f.session.receive({ kind: 'event', event: event('live', 'tool.custom', { toolCallId: 'live' }) });
     await f.capture.flush();
-    const live = JSON.parse(f.lines[1]);
+    const live = f.lines.map(line => JSON.parse(line)).find(record => record.event === 'tool.custom');
     assert.equal(live.sessionId, 'sdk-fixture'); assert.equal(live.connectionId, early.connectionId);
     assert.equal(live.source.version, '1.0.98'); assert.deepEqual(f.errors, []);
   } finally { f.close(); }
