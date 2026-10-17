@@ -23,12 +23,12 @@ test('partial or unknown coverage is a lower bound, and absent accounting is not
   assert.match(partial.metricsTitle!, /12\.399999999 AIC reported subtotal/);
   assert.match(partial.metricsTitle!, /Partial accounting/);
   assert.equal(presentCopilotUsage({ credits: { nanoAiu: 12_300_000_000, status: 'unknown' } }).metrics, '≥$0.123 · — / —');
-  assert.equal(presentCopilotUsage({ credits: { nanoAiu: 0, status: 'unknown' } }).metrics, 'cost unavailable · — / —');
+  assert.equal(presentCopilotUsage({ credits: { nanoAiu: 0, status: 'unknown' } }).metrics, '— · — / —');
   for (const response of [null, {}, { totalNanoAiu: 0 }, { totalNanoAiu: 9, aiCreditsStatus: 'unavailable' },
     { aiCreditsStatus: 'complete' }, { totalNanoAiu: -1, aiCreditsStatus: 'complete' }, { totalNanoAiu: NaN }, { totalPremiumRequestCost: 999 }]) {
     const controller = new CopilotUsageController(async () => response, () => {});
     controller.refresh(); await flush();
-    assert.equal(presentCopilotUsage(controller.snapshot).metrics, 'cost unavailable · — / —');
+    assert.equal(presentCopilotUsage(controller.snapshot).metrics, '— · — / —');
     controller.dispose();
   }
 });
@@ -70,7 +70,7 @@ test('metadata failure and late completion do not erase context, poll, or revive
   }, () => {});
   controller.context({ currentTokens: 10, tokenLimit: 100 });
   controller.refresh(); await flush();
-  assert.equal(presentCopilotUsage(controller.snapshot).metrics, 'cost unavailable · 10% / 100');
+  assert.equal(presentCopilotUsage(controller.snapshot).metrics, '— · 10% / 100');
   assert.equal(reads, 1, 'failed optional reads do not start a retry timer');
   controller.refresh(); const before = controller.snapshot;
   controller.dispose(); resolve({ totalNanoAiu: 99_000_000_000, aiCreditsStatus: 'complete' }); await flush();

@@ -224,6 +224,22 @@ provides the narrow concrete `CopilotUsage` snapshot and session-bound metadata
 consumer, separate from model configuration. The shared Status area only consumes
 `StatusAreaSnapshot.metrics` / `metricsTitle`, not SDK billing fields.
 
+- Initial display is data, not a separate new/resume pipeline. `initialCopilotUsage`
+  in `src/copilot/usage-seed.ts` is the sole policy: fresh sessions seed provisional
+  zero cost/utilization (`~$0.000 · 0% / —`), Resume seeds unknowns (`— · — / —`).
+  Change the factory's `zero` mode to `unknown` to retire the experiment. New versus
+  saved identity comes from the existing initialize argument, never transcript
+  length or an assumed empty history. Both modes then use identical reads,
+  reconciliation, rendering, ownership and disposal.
+- Seeds live only in `CopilotUsage.provisional`, not `credits`/`context`, persisted
+  state or harness settings. Apply once after initial configuration/history binding;
+  never replace already reported values. Each successful/missing/error metadata
+  result settles only its own provisional field, with existing stale-result guards.
+  Live context replaces its seed immediately. Null/unavailable values use `—`;
+  model invalidation/disposal retires any provisional context/remaining seed.
+  Confirmed fields retain their existing error/lifetime semantics. Tooltip detail
+  explicitly identifies provisional values, not a measured empty context or zero
+  AI credits. No model-window capacity or Auto compact setting is seeded.
 - The private bridge `usage` read calls `session.rpc.usage.getMetrics()` and returns
   only `totalNanoAiu` and `aiCreditsStatus`. SDK totals include the main agent and
   subagents and restore accumulated usage on Resume; never sum ephemeral
@@ -246,7 +262,8 @@ consumer, separate from model configuration. The shared Status area only consume
   coverage with a positive subtotal displays a conservatively rounded-down lower
   bound such as `≥$0.123`. Explicit partial zero remains qualified by `≥`. Missing
   amounts, unavailable status, invalid numbers or zero without reported coverage
-  display `cost unavailable`, never a fabricated zero.
+  display `—`, never a fabricated reported zero. The explicit display-only fresh
+  seed above is separate from that authoritative accounting state.
 - Conversion is `AIC = totalNanoAiu / 1e9`, `USD equivalent = AIC * 0.01`, based on
   the published [SDK usage guide](https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/usage-and-billing)
   and [GitHub credit pricing](https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing).
@@ -284,9 +301,13 @@ consumer, separate from model configuration. The shared Status area only consume
   draft/focus/scroll owners and sidebar bookkeeping remain unchanged. Disposal
   suppresses late results; disconnected views keep only their last reported data.
 
-Code: `src/copilot/usage.ts`, `status-area.ts`, `session.ts`, the private bridge
+Code: `src/copilot/usage-seed.ts`, `usage.ts`, `status-area.ts`, `session.ts`, the private bridge
 read and native method allowlist, plus the generic `metricsTitle` field/render
-dependency. Fixtures: `test/copilot-usage.test.ts` covers formatting, partial/missing
+dependency. `test/copilot-usage-seed.test.ts` and the SDK controller fixture cover
+new/resume initialization with identical request sequences, independent seed
+retirement, no inferred window, known-data precedence, late results and disposal;
+these additions are unrun and visual flicker acceptance remains a user check.
+Fixtures: `test/copilot-usage.test.ts` covers formatting, partial/missing
 coverage, coalescing/stale responses, reconnect snapshot reads, null cold context,
 independent metadata errors/disposal and optional timeout isolation;
 SDK/production-bridge/native allowlist fixtures cover integration and aggregate

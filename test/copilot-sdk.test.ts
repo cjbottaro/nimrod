@@ -15,7 +15,7 @@ const models = [
   { id: 'small', name: 'Small', supportedReasoningEfforts: ['low', 'high'] },
   { id: 'large', name: 'Large' },
 ];
-async function fixture(events: unknown[] = [], decision: CopilotSessionUi['decision'] = async () => undefined, autoUsage = true) {
+async function fixture(events: unknown[] = [], decision: CopilotSessionUi['decision'] = async () => undefined, autoUsage = true, fresh = false) {
   const sent: BridgeRequest[] = [], published: ConversationViewMessage[] = [], completed: boolean[] = [], captured: ToolCaptureRecord[] = [];
   const session: CopilotSession = new CopilotSession(async request => {
     sent.push(request);
@@ -27,7 +27,7 @@ async function fixture(events: unknown[] = [], decision: CopilotSessionUi['decis
   });
   const last = (method: string) => { const request = [...sent].reverse().find(request => request.method === method); assert.ok(request); return request; };
   const reply = (method: string, result: unknown = null) => session.receive({ kind: 'result', id: last(method).id, result });
-  const initializing = session.initialize('saved-id');
+  const initializing = session.initialize(fresh ? undefined : 'saved-id');
   reply('initialize'); await flush();
   session.receive({ kind: 'connected', sessionId: 'saved-id', events, models, model: { modelId: 'small', reasoningEffort: 'low' } });
   reply('connect'); await initializing; await flush();
@@ -130,11 +130,11 @@ test('SDK status publishes root usage and reconciles selector capabilities witho
   const f = await fixture();
   const initial = f.session.state.statusArea!;
   assert.ok(initial.capabilities.metrics);
-  assert.equal(initial.metrics, 'cost unavailable · — / —');
+  assert.equal(initial.metrics, '— · — / —');
   assert.equal(initial.capabilities.queue, undefined);
   f.event('session.usage_info', { currentTokens: 31875, tokenLimit: 125000 });
   const reported = f.session.state.statusArea!;
-  assert.equal(reported.metrics, 'cost unavailable · 25.5% / 125k');
+  assert.equal(reported.metrics, '— · 25.5% / 125k');
   assert.equal(reported.controls, initial.controls, 'usage changes do not rebuild configuration controls');
   f.session.receive({ kind: 'event', event: { id: 'child-usage', agentId: 'child', type: 'session.usage_info', data: { currentTokens: 999, tokenLimit: 999 } } });
   assert.equal(f.session.state.statusArea, reported, 'child usage cannot overwrite root usage');
@@ -150,11 +150,29 @@ test('SDK status publishes root usage and reconciles selector capabilities witho
   assert.equal(f.session.state.statusArea!.controls[1].disabled, true);
   assert.equal(f.session.configuration.get('model'), undefined);
   assert.equal(f.session.configuration.get('effort'), undefined);
-  assert.equal(f.session.state.statusArea!.metrics, 'cost unavailable · — / —', 'model changes retire the old context denominator');
+  assert.equal(f.session.state.statusArea!.metrics, '— · — / —', 'model changes retire the old context denominator');
   f.event('session.usage_info', { currentTokens: 31875, tokenLimit: 125000 });
   f.session.disconnect('fixture complete');
   assert.equal(f.session.state.statusArea!.metrics, reported.metrics);
   assert.ok(f.session.state.statusArea!.controls.every(control => control.disabled));
+});
+
+test('new and resumed sessions use distinct display seeds but identical usage reads and reconciliation', async () => {
+  for (const fresh of [true, false]) {
+    const f = await fixture([], undefined, false, fresh);
+    try {
+      assert.equal(f.session.state.statusArea!.metrics, fresh ? '~$0.000 · 0% / —' : '— · — / —');
+      assert.equal(f.sent.filter(request => ['usage', 'context'].includes(request.method)).map(request => request.method).join(','), 'usage,context');
+      assert.match(f.session.state.statusArea!.metricsTitle!, fresh ? /Provisional new-session/ : /not been reported/);
+      f.reply('context', null); await flush();
+      assert.equal(f.session.state.statusArea!.metrics, fresh ? '~$0.000 · — / —' : '— · — / —', 'settle only the completed field');
+      f.reply('usage', {}); await flush();
+      assert.equal(f.session.state.statusArea!.metrics, '— · — / —');
+      f.event('session.usage_info', { currentTokens: 31875, tokenLimit: 125000 });
+      assert.equal(f.session.state.statusArea!.metrics, '— · 25.5% / 125k');
+      assert.equal(f.sent.some(request => ['prompt', 'command', 'configure'].includes(request.method)), false);
+    } finally { f.session.disconnect('fixture complete'); }
+  }
 });
 
 test('SDK reconnect seeds context and credit snapshots independently without sending a new turn', async () => {

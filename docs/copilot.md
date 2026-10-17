@@ -79,6 +79,13 @@ The Status area uses a compact layout similar to Pi:
 ~$0.123 · 25.5% / 125k
 ```
 
+A new session initially displays `~$0.000 · 0% / —` while usage reads are pending.
+Those zeros are provisional display values, not reported measurements. A reconnect
+starts with unknowns (`— · — / —`) rather than assuming no prior usage. Both then
+use the same update path: credit/context results replace their own field, and an
+unavailable result replaces that field's provisional value with `—`. A quick
+zero-to-dash change is possible. Window size and **Auto compact** are never guessed.
+
 - **Estimated USD** is the SDK's accumulated session AI-credit usage converted at
   GitHub's published **$0.01 per AIC**. Hover for the AIC amount, accounting coverage
   and exact reported context counters. This is usage value, not necessarily an
@@ -89,8 +96,8 @@ The Status area uses a compact layout similar to Pi:
   sending a message or waiting for a live usage event. Exact counters remain in
   the tooltip.
 - **`≥$…`** means partial/unknown coverage: the displayed amount is only a reported
-  subtotal and the full amount may be higher. **`cost unavailable`** means accounting
-  was not reported/read successfully, not that the session was free. A missing
+  subtotal and the full amount may be higher. **`—` in the cost position** means
+  accounting was not reported/read successfully, not that the session was free. A missing
   context count/window displays `— / —` next to known cost rather than disappearing
   or showing a guessed percentage. On a cold reconnect, Copilot may not report
   context until its system-prompt/tool metadata is initialized.

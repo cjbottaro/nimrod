@@ -6,6 +6,7 @@ import type { ToolCaptureSink } from '../tool-capture';
 import { copilotToolResult } from './tool-result';
 import { createCopilotStatusArea } from './status-area';
 import { CopilotUsageController } from './usage';
+import { initialCopilotUsage, type CopilotUsageSeed } from './usage-seed';
 import { createCopilotConfiguration } from './session-configuration';
 import { ConfigurationDeferred, ConfigurationSuperseded, type SessionConfigurationController } from '../session-configuration';
 import { pickConfiguration } from '../configuration-picker';
@@ -46,6 +47,7 @@ export class CopilotSession {
   private configurationVersion = 0;
   private projectStatus = createCopilotStatusArea();
   private usage: CopilotUsageController;
+  private initialUsage?: CopilotUsageSeed;
   private ended = false;
   private replaying = false;
   private failed = false;
@@ -90,6 +92,7 @@ export class CopilotSession {
   receive(packet: unknown): void { this.connection.receive(packet); }
   disconnect(reason: string): void { this.connection.disconnect(reason); }
   async initialize(sessionId?: string): Promise<void> {
+    this.initialUsage = initialCopilotUsage(sessionId === undefined);
     const status = await this.connection.request('initialize');
     if (record(status) && typeof status.version === 'string') this.runtimeVersion = status.version;
     await this.connection.request('connect', sessionId === undefined ? {} : { sessionId });
@@ -277,6 +280,7 @@ export class CopilotSession {
       try { for (const event of packet.events) this.event(event); this.finish(); }
       finally { this.replaying = false; }
       this.applyConfigurationSnapshot(packet.model);
+      this.usage.seed(this.initialUsage);
       this.state = { ...this.state, sessionUnavailable: false, busy: false, status: 'Idle' }; this.publish();
       this.usage.refresh(); this.usage.refreshContext();
     } else if (packet.kind === 'commands') {
