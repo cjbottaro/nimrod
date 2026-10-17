@@ -1,5 +1,5 @@
 /** Keep empty envelopes mounted for streaming identity, without a visible turn marker/gap. */
-export function isEmptyAssistantMessage(message: { role?: unknown; isError?: unknown; content?: unknown }): boolean {
+export function isEmptyAssistantMessage<T extends { role?: unknown; isError?: unknown; content?: unknown }>(message: T): boolean {
   if (message.role !== 'assistant' || message.isError) return false;
   if (!Array.isArray(message.content)) return typeof message.content !== 'string' || !message.content.trim();
   return message.content.every(value => {
