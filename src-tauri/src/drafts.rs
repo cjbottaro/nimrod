@@ -365,16 +365,18 @@ mod tests {
         assert_eq!(restored.load("/a").unwrap()[0].value["draft"], "first");
         assert_eq!(restored.load("/b").unwrap()[0].value["draft"], "second");
         assert_ne!(store.path("/a", scope), store.path("/a", "file:saved-id"));
-        assert!(store
-            .stage(
-                "/a",
-                Record {
-                    key: "acp:copilot:".into(),
-                    revision: 1,
-                    value: json!({"draft":"invalid"}),
-                },
-            )
-            .is_err());
+        assert!(
+            store
+                .stage(
+                    "/a",
+                    Record {
+                        key: "acp:copilot:".into(),
+                        revision: 1,
+                        value: json!({"draft":"invalid"}),
+                    },
+                )
+                .is_err()
+        );
     }
     #[test]
     fn debounced_scoped_atomic_records_restore_and_reject_stale_updates() {

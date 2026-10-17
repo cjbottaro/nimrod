@@ -502,9 +502,7 @@ mod tests {
     #[test]
     fn saved_loading_requires_the_owned_project_and_an_explicit_identity() {
         let cwd = Path::new("/fixture/project");
-        let load = |project: &str, id: Value| {
-            json!({"jsonrpc":"2.0","id":1,"method":"session/load","params":{"cwd":project,"sessionId":id,"mcpServers":[]}})
-        };
+        let load = |project: &str, id: Value| json!({"jsonrpc":"2.0","id":1,"method":"session/load","params":{"cwd":project,"sessionId":id,"mcpServers":[]}});
         assert!(validate_message(&load("/fixture/project", json!("saved-id")), cwd).is_ok());
         assert!(validate_message(&load("/other", json!("saved-id")), cwd).is_err());
         for id in [Value::Null, json!(""), json!(" "), json!(42)] {
