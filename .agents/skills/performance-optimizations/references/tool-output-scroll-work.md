@@ -27,4 +27,4 @@ Canonical contracts: [interaction](../../features/references/transcript-interact
 
 `test/native-view.test.ts` adds simultaneous/coalesced updates with zero unrelated geometry reads, retained plugins/focus and hidden catch-up/completion. `test/browser/incremental-streaming.spec.ts` checks plain text-node identity, independent inspected/following/untouched outputs, zero unrelated-card mutations and final terminal-style replacement. Existing console, hidden-session, tool-card/DOM-renderer and native-view scroll fixtures remain required.
 
-No tests/checks/builds or new native report were run for this implementation. Requested validation uses `mise run check` plus `npm run test:browser`; fixtures do not establish native trackpad, zoom, macOS/Linux/possible Windows acceptance.
+No tests/checks/builds or new native report were run for this implementation. Requested validation uses `mise run test` plus `npm run test:browser`; fixtures do not establish native trackpad, zoom, macOS/Linux/possible Windows acceptance.

@@ -94,7 +94,7 @@ lock-holder-without-listener timeout without unlinking; stale-socket recovery; k
 fixture-owner recovery; idempotent explicit Exit cleanup with retained ownership;
 connected write failure without retry/fallback; deadlines and malformed/oversized IO.
 
-Run `mise run check` in the task worktree. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow). Native Launch Services
+Run `mise run test` in the task worktree. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow). Native Launch Services
 forwarding, actual project-window focus/cycling, pop-out visibility and Linux/Windows
 acceptance are **not** established by these fixtures. No UI/scrolling code changed;
 offline browser tests are not the native startup oracle.

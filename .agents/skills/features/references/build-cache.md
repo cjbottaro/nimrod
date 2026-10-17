@@ -19,7 +19,7 @@ Explicitly requested builds use checkout-local targets and publish verified whol
 
 - `mise.toml`: pins `aqua:mozilla/sccache` at 0.18.0 alongside Rust/Node;
   project-scoped `RUSTC_WRAPPER=sccache`, `CARGO_INCREMENTAL=0` apply to dev,
-  check, build and `mise exec` Cargo commands.
+  check, test, build and `mise exec` Cargo commands.
 - No `CARGO_TARGET_DIR`, `SCCACHE_DIR`, remote backend, global Cargo config,
   global mise config or shell startup edits. Use sccache's normal machine-local
   disk cache and preserve personal overrides. Default size is 10 GiB.

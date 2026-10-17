@@ -12,6 +12,9 @@ CARGO_INCREMENTAL = "0"
 run = "npm run tauri dev"
 
 [tasks.check]
+run = "npm run typecheck && cargo check --manifest-path src-tauri/Cargo.toml"
+
+[tasks.test]
 run = "npm run check:docs && npm test && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml"
 
 [tasks.build]

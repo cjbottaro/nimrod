@@ -41,7 +41,7 @@ legacy source snapshots are retained rather than silently removed.
    ```
 
 3. Review `src/themes/catalog.json` and `THEME_CATALOG_NOTICES.md`, then run
-   `mise run themes-check` and `mise run check`. Build/package only when explicitly requested, following the [build workflow](build-cache.md#explicit-build-and-publication-workflow). Validate
+   `mise run themes-check` and `mise run test`. Build/package only when explicitly requested, following the [build workflow](build-cache.md#explicit-build-and-publication-workflow). Validate
    representative theme colors in the app before publishing a real release.
 4. Commit the manifest and generated files together when approved. Future normal
    builds use this snapshot without repeating collection.
@@ -159,5 +159,5 @@ font/layout import or Highlight.js replacement.
 
 `test/theme-catalog.test.ts` checks generated shapes, pinned provenance/licenses and no collection in normal tasks. `tools/theme-bundler/src/lib.rs`/`open_vsx.rs` and CLI integration tests use local fixtures for path/include/archive/checksum/license bounds, offline reproduction and failure preservation.
 
-Run `mise run themes-check` and `mise run check`; no registry access is authorized by routine validation. Historical explicit collection evidence is in [theme records](history/feature-records.md#themes). Native color/focus acceptance belongs to runtime theme work.
+Run `mise run themes-check` and `mise run test`; no registry access is authorized by routine validation. Historical explicit collection evidence is in [theme records](history/feature-records.md#themes). Native color/focus acceptance belongs to runtime theme work.
 
