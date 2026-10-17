@@ -21,7 +21,7 @@ The composition helper `sessionConfiguration` accesses the selected concrete own
 
 - Ready: accept the selection and apply after fresh validation.
 - Deferred: accept the selection immediately, show local progress, and apply when the concrete owner publishes a supported readiness transition. No polling timer, agent stop, reconnect, new prompt or request replay.
-- Unavailable/unsupported: reject before accepting intent. Startup/disconnection do not become a durable queue or trigger automatic Resume.
+- Unavailable/unsupported: reject before accepting intent and report the reason through the originating session notice at the top of its conversation area. Do not create a configuration change entry. Startup/disconnection do not become a durable queue or trigger automatic Resume.
 - A second selection replaces the still-pending value and updates the same operation key/article/title span. A dispatched mutation cannot be undone; newer choices wait behind it and apply serially after it reconciles. An error/uncertain result clears remaining intents, never automatically retries the mutation.
 - Model is a prerequisite of effort. Effort choices are bound to the effective or pending target model, and are rechecked after asynchronous metadata reads and immediately before dispatch. Replacing a model intent drops an effort queued for the previous target. A picker opened for another target is rejected. No effort clamping or guessing in shared code.
 - Disconnection, Close, Restart, deletion or owner replacement disposes this exact configuration object. Pending progress becomes cancelled; late completion cannot revive it or apply work to another connection. Switching the selected session alone does not cancel already accepted intent; it stays with its owning session.
@@ -33,6 +33,7 @@ These are Nimrod-owned **configuration changes**, not user/assistant messages, s
 
 - Waiting: shimmering `Model change queued` / setting-specific title and literal requested value text.
 - Applying: shimmering `Changing model` / setting-specific or combined configuration title.
+- Waiting/applying titles use the exact shared Queued/Steering delivery-status element and typography; configuration progress does not define a separate shimmer font treatment.
 - Completed, failed or cancelled: stop shimmering, retain a terminal marker locally for this connection. Operational error details still go through the originating session notice, not duplicate error turns.
 - Pending entries use the same bottom-sticky, bounded stack, user-like layout and CSS-only text-width shimmer as Queued/Steering. They preserve their keyed article/title span across replacement and application. Completed entries unpin in place and anchor after the then-current transcript tail, retaining position as later conversation arrives. If compaction removes the anchor, retain the local marker at the tail rather than injecting it into harness history.
 - No pending indicator, speculative value or pending tooltip is added to the Status area. It shows only confirmed selections and changes when the concrete integration reconciles authoritative state. Connected controls remain usable during deferred/in-flight changes so another choice can replace pending intent.

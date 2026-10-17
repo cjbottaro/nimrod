@@ -410,11 +410,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     const pending = message.steeringStatus === 'sending' || message.steeringStatus === 'pending';
     const showSteering = message.steering && pending;
     if (!message.steeringStatus || (pending && !message.queued && !showSteering)) { label?.remove(); return; }
-    if (!label) {
-      label = element("div", "steering-status");
-      label.append(element('span', 'delivery-status-text'));
-      node.prepend(label);
-    }
+    if (!label) label = ensureDeliveryStatus(node);
     const text = label.firstElementChild as HTMLElement;
     const status = pending ? message.queued ? 'Queued' : 'Steering' : steeringStatusLabel(message.steeringStatus);
     if (text.textContent !== status) text.textContent = status;
@@ -422,9 +418,16 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     node.setAttribute("aria-label", `User message: ${status}`);
   }
 
+  function ensureDeliveryStatus(node: HTMLElement): HTMLElement {
+    const label = element('div', 'steering-status');
+    label.append(element('span', 'delivery-status-text'));
+    node.prepend(label);
+    return label;
+  }
+
   function renderConfigurationOperation(node: HTMLElement, operation: import('./session-configuration').ConfigurationOperation): void {
     let label = node.querySelector<HTMLElement>('.steering-status');
-    if (!label) { label = element('div', 'steering-status'); label.append(element('span', 'delivery-status-text')); node.prepend(label); }
+    if (!label) label = ensureDeliveryStatus(node);
     const title = label.firstElementChild as HTMLElement;
     if (title.textContent !== operation.title) title.textContent = operation.title;
     title.classList.toggle('delivery-status-shimmer', operation.phase === 'queued' || operation.phase === 'applying');

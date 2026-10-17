@@ -23,7 +23,7 @@ export function createCopilotStatusArea(): (state: CopilotStatusAreaState) => St
       controls = [
         ...(state.supportsModel ? [{ id: 'model', label: state.model || 'default model', title: 'Select Copilot model', disabled }] : []),
         ...(state.supportsThinking || state.supportsModel && !state.model ? [{ id: 'thinking', label: state.effort || 'default effort',
-          title: state.supportsThinking ? 'Select Copilot reasoning effort' : 'Select a model to choose Copilot reasoning effort', disabled: disabled || !state.supportsThinking }] : []),
+          title: state.supportsThinking ? 'Select Copilot reasoning effort' : 'Select a model to choose Copilot reasoning effort', disabled }] : []),
       ];
     }
     const { metrics, metricsTitle } = previous && previous.usage === state.usage
