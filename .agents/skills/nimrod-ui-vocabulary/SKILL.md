@@ -85,7 +85,8 @@ A **card** needn't have a visible rectangle. A **disclosure** expands/collapses;
 
 ## Controls and feedback
 
-- **Command palette** — modal command selector; subordinate pickers are pages in that interaction.
+- **Action** — an operation that must be available in the command palette. A keybinding is optional; buttons and menus may provide additional entry points to the same action. “Command” is synonymous in command-palette discussions; not every button or UI interaction is an action.
+- **Command palette** — modal action selector; subordinate pickers are pages in that interaction.
 - **MCP inspector** — read-only session-server inspection page in the command palette, with selected-server details and Refresh. [MCP inspector](../features/references/mcp-inspector.md) owns its contract.
 - **Model picker / thinking-level picker** — session configuration selection pages; “effort” is a thinking-level search alias.
 - **Activity indicator** — spinner/dot with activity context; specify main agent/subagent/tool/reasoning when ambiguous.
