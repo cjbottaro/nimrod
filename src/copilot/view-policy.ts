@@ -7,6 +7,8 @@ export function copilotSessionActions(session?: CopilotSession): readonly Sessio
   return [
     ...(session?.configuration.capabilities.some(setting => setting.id === 'model') ? [{ id: 'model' as const, label: 'Select model…', detail: 'Choose the model for this session' }] : []),
     ...(session && (session.supports('thinking') || session.configuration.capabilities.some(setting => setting.id === 'effort')) ? [{ id: 'thinking' as const, label: 'Select thinking level…', detail: 'Choose the thinking level for this session', keywords: 'effort reasoning' }] : []),
+    ...(session?.configuration.capabilities.some(setting => setting.id === 'mode') ? [{ id: 'mode' as const, label: 'Select mode…', detail: 'Choose Interactive, Plan or Autopilot for this session', keywords: 'interactive plan autopilot' }] : []),
+    ...(session?.configuration.capabilities.some(setting => setting.id === 'context-tier') ? [{ id: 'context-window' as const, label: 'Select context window…', detail: 'Choose the context window tier for this session', keywords: 'limit tier long context' }] : []),
   ];
 }
 export function copilotInteraction(validate: (text: string) => string | undefined): ConversationInteraction {

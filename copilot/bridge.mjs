@@ -45,6 +45,8 @@ const config = () => ({
   onEvent: event,
   onPermissionRequest: request => decision('permission', request),
   onUserInputRequest: request => decision('input', request),
+  onExitPlanModeRequest: request => decision('plan', request),
+  onAutoModeSwitchRequest: () => 'no',
 });
 function event(value) {
   if (!value.agentId && ['session.idle', 'session.error'].includes(value.type)) cancelDecisions();
@@ -70,7 +72,11 @@ async function dispatch(message) {
         || value?.kind === 'reject' || value?.kind === 'user-not-available';
       if (!valid || Object.keys(value).some(key => !['kind', 'approvedInteractively'].includes(key))
         || value.kind !== 'approve-once' && value.approvedInteractively !== undefined) throw new Error('Invalid permission decision; expected explicit approve-once, reject or user-not-available');
-    } else if (typeof message.value?.answer !== 'string' || typeof message.value?.wasFreeform !== 'boolean') throw new Error('Invalid input answer');
+    } else if (pending.kind === 'input') {
+      if (typeof message.value?.answer !== 'string' || typeof message.value?.wasFreeform !== 'boolean') throw new Error('Invalid input answer');
+    } else if (typeof message.value?.approved !== 'boolean'
+      || message.value.selectedAction !== undefined && typeof message.value.selectedAction !== 'string'
+      || message.value.feedback !== undefined && typeof message.value.feedback !== 'string') throw new Error('Invalid plan-mode decision');
     decisions.delete(message.decisionId);
     pending.resolve(message.value);
     return;
@@ -105,7 +111,6 @@ async function dispatch(message) {
         if (message.sessionId !== undefined && session.sessionId !== message.sessionId) throw new Error('Copilot resumed a different session');
         send({ kind: 'identified', sessionId: session.sessionId });
         const mode = await session.rpc.mode.get();
-        if (mode !== 'interactive') throw new Error(`Copilot session mode "${mode}" is not supported by this integration. Change it to interactive in Copilot before reconnecting; no mode was changed or prompt sent.`);
         const events = await session.getEvents();
         // Use honored creation inputs only while the initial SDK snapshot omits
         // them. Later root events/configuration results remain authoritative.
@@ -113,7 +118,7 @@ async function dispatch(message) {
         const models = await client.listModels();
         // History and streamed events share IDs. Publish replay first, synchronously
         // in this channel, before any events received while getEvents was in flight.
-        send({ kind: 'connected', sessionId: session.sessionId, events, model, models });
+        send({ kind: 'connected', sessionId: session.sessionId, events, model, mode, models });
         const seen = new Set(events.map(item => item.id));
         for (const item of buffered) if (!seen.has(item.id)) eventAfterReplay(item);
         buffered = []; replaying = false;
@@ -159,11 +164,6 @@ async function dispatch(message) {
           ?? commands.find(item => item.aliases?.some(alias => alias.toLowerCase() === message.name.toLowerCase()));
         if (!command) throw new Error('This command is not advertised by Copilot. Nothing was invoked.');
         const result = await session.rpc.commands.invoke({ name: command.name, ...(message.input !== undefined ? { input: message.input } : {}) });
-        const mode = await session.rpc.mode.get();
-        if (mode !== 'interactive') {
-          send({ kind: 'fatal', error: `Copilot command changed to unsupported mode "${mode}". No follow-on prompt was sent.` });
-          throw new Error('Copilot is no longer in interactive mode');
-        }
         // Refresh metadata without re-invoking the command or changing its result.
         try { await refreshCommands(); }
         catch (error) { send({ kind: 'command-error', error: `Command discovery failed: ${failure(error)}` }); }
@@ -180,7 +180,9 @@ async function dispatch(message) {
       return await session.abort();
     case 'configure':
       if (!session) throw new Error('No connected Copilot session');
-      return await configuration.apply(session, message.model, message.effort);
+      if (!['model', 'effort', 'mode', 'context-tier'].includes(message.setting) || typeof message.value !== 'string')
+        throw new Error('Invalid Copilot configuration request');
+      return await configuration.apply(session, message.setting, message.value);
     default: throw new Error('Unsupported Copilot bridge operation');
   }
 }

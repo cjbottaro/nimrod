@@ -31,7 +31,7 @@ test('Pi status capabilities retain native configuration, extensions and unknown
 
 test('Copilot unknown model/effort values have independent lowercase placeholders without guessed capabilities', () => {
   const project = createCopilotStatusArea();
-  const unresolved = { supportsModel: true, supportsThinking: false, available: true };
+  const unresolved = { supportsModel: true, supportsThinking: false, supportsMode: false, supportsContext: false, available: true };
   const both = project(unresolved);
   assert.deepEqual(both.controls.map(control => control.label), ['default model', 'default effort']);
   assert.equal(both.controls[0].disabled, false);
@@ -48,7 +48,7 @@ test('Copilot unknown model/effort values have independent lowercase placeholder
 
 test('Copilot status separates advertised selectors, transient availability and reported usage', () => {
   const project = createCopilotStatusArea();
-  const state = { supportsModel: false, supportsThinking: false, available: false };
+  const state = { supportsModel: false, supportsThinking: false, supportsMode: false, supportsContext: false, available: false };
   const connecting = project(state);
   assert.deepEqual(connecting.controls, []);
   assert.ok(connecting.capabilities.metrics);
@@ -56,16 +56,18 @@ test('Copilot status separates advertised selectors, transient availability and 
   assert.equal(connecting.capabilities.queue, undefined);
   assert.equal(connecting.capabilities.information, undefined);
   assert.equal(connecting.capabilities.subagents, undefined);
-  const ready = { ...state, supportsModel: true, supportsThinking: true, available: true, model: 'small', effort: 'high' };
+  const ready = { ...state, supportsModel: true, supportsThinking: true, supportsMode: true, supportsContext: true,
+    available: true, model: 'small', effort: 'high', mode: 'plan' };
   const idle = project(ready);
   assert.equal(project({ ...ready }), idle, 'retain the full status snapshot on content-only publications');
-  assert.deepEqual(idle.controls.map(control => control.id), ['model', 'thinking']);
+  assert.deepEqual(idle.controls.map(control => control.id), ['model', 'thinking', 'mode']);
+  assert.equal(idle.controls[2].label, 'Plan');
   const busy = project({ ...ready, available: false });
-  assert.deepEqual(busy.controls.map(control => control.id), ['model', 'thinking']);
+  assert.deepEqual(busy.controls.map(control => control.id), ['model', 'thinking', 'mode']);
   assert.ok(busy.controls.every(control => control.disabled));
   assert.ok(project(ready).controls.every(control => !control.disabled));
   const noThinking = project({ ...ready, model: 'large', effort: undefined, supportsThinking: false });
-  assert.deepEqual(noThinking.controls.map(control => control.id), ['model']);
+  assert.deepEqual(noThinking.controls.map(control => control.id), ['model', 'mode']);
   const usage = { context: { currentTokens: 0, tokenLimit: 0 } };
   const reported = project({ ...ready, usage });
   assert.equal(reported.metrics, '— / —');
@@ -73,4 +75,7 @@ test('Copilot status separates advertised selectors, transient availability and 
   const disconnected = project({ ...ready, usage, available: false });
   assert.equal(disconnected.metrics, reported.metrics, 'keep the last reported usage on disconnect');
   assert.ok(disconnected.controls.every(control => control.disabled));
+  const withLimit = project({ ...ready, usage: { context: { currentTokens: 31_875, tokenLimit: 125_000 } } });
+  assert.equal(withLimit.metrics, '25.5% / 125k');
+  assert.equal(withLimit.metricParts?.find(part => part.actionId === 'context-window')?.text, '125k');
 });

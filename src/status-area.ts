@@ -5,6 +5,11 @@ export interface StatusAreaControl {
   readonly title: string;
   readonly disabled: boolean;
 }
+export interface StatusAreaMetricPart {
+  readonly text: string;
+  readonly title?: string;
+  readonly actionId?: string;
+}
 export interface StatusAreaInformation { readonly label: string; readonly text: string; }
 export interface StatusAreaCapabilities {
   /** Missing means unsupported; supported metrics may still have no reported value. */
@@ -26,6 +31,8 @@ export interface StatusAreaSnapshot {
   readonly subagents?: string;
   readonly information?: readonly StatusAreaInformation[];
   readonly metrics?: string;
+  /** Optional structured form used when one integration-owned segment is actionable. */
+  readonly metricParts?: readonly StatusAreaMetricPart[];
   /** Integration-owned metric detail/units; shared rendering never interprets billing. */
   readonly metricsTitle?: string;
 }

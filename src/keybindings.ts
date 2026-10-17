@@ -1,34 +1,42 @@
 export const KEYBINDINGS_SETTING = 'keybindings';
 export const ACTIONS = [
-  { id: 'open-recent-project', label: 'Open recent project…', scope: 'project', defaults: ['primary+shift+o'] },
-  { id: 'new', label: 'New session', scope: 'project', defaults: ['primary+n'] },
-  { id: 'new-copilot', label: 'New Copilot session', scope: 'project', defaults: [] },
-  { id: 'temporary', label: 'New temporary session', scope: 'project', defaults: ['primary+shift+n'] },
-  { id: 'delete', label: 'Delete session / Pi session tree…', scope: 'project', defaults: ['primary+backspace'] },
-  { id: 'delete-sessions', label: 'Delete sessions…', scope: 'project', defaults: ['primary+shift+backspace'] },
-  { id: 'capture-performance', label: 'Capture performance report', scope: 'project', defaults: [] },
-  { id: 'reload-card-plugins', label: 'Reload card plugins', scope: 'project', defaults: [] },
-  { id: 'select-theme', label: 'Select theme…', scope: 'project', defaults: [] },
-  { id: 'mcp', label: 'MCP servers…', scope: 'project', defaults: [] },
-  { id: 'model', label: 'Select model…', scope: 'project', defaults: ['primary+shift+m'] },
-  { id: 'thinking', label: 'Select thinking level…', keywords: 'effort reasoning', scope: 'project', defaults: ['primary+shift+e'] },
-  { id: 'palette', label: 'Command palette', scope: 'project', defaults: ['primary+shift+p'] },
-  { id: 'close', label: 'Close session', scope: 'project', defaults: ['primary+w'] },
-  { id: 'sidebar', label: 'Toggle session sidebar', scope: 'project', defaults: ['primary+b'] },
-  { id: 'previous', label: 'Previous open session', scope: 'project', defaults: ['primary+shift+['] },
-  { id: 'next', label: 'Next open session', scope: 'project', defaults: ['primary+shift+]'] },
-  { id: 'settings', label: 'Global Settings…', scope: 'app', defaults: ['primary+,'] },
-  { id: 'project-settings', label: 'Project settings…', scope: 'app', defaults: ['primary+shift+,'] },
-  { id: 'keybindings', label: 'Edit keybindings…', scope: 'app', defaults: [] },
-  { id: 'zoom-in', label: 'Zoom in', scope: 'app', defaults: ['primary+plus'] },
-  { id: 'zoom-out', label: 'Zoom out', scope: 'app', defaults: ['primary+-'] },
-  { id: 'zoom-reset', label: 'Reset zoom to 100%', scope: 'app', defaults: ['primary+0'] },
-  { id: 'resume', label: 'Resume session…', scope: 'project', defaults: ['primary+k'] },
-  { id: 'switch-session', label: 'Switch session…', scope: 'project', defaults: ['primary+t'] },
-  { id: 'new-named', label: 'New named session…', scope: 'project', defaults: ['primary+alt+n'] },
-  { id: 'restart', label: 'Restart session', scope: 'project', defaults: ['primary+r'] },
+  { id: 'open-recent-project', label: 'Open recent project…', scope: 'project', context: 'project', defaults: ['primary+shift+o'] },
+  { id: 'new', label: 'New session', scope: 'project', context: 'project', defaults: ['primary+n'] },
+  { id: 'new-copilot', label: 'New Copilot session', scope: 'project', context: 'project', defaults: [] },
+  { id: 'temporary', label: 'New temporary session', scope: 'project', context: 'project', defaults: ['primary+shift+n'] },
+  { id: 'delete', label: 'Delete session / Pi session tree…', scope: 'project', context: 'session', defaults: ['primary+backspace'] },
+  { id: 'delete-sessions', label: 'Delete sessions…', scope: 'project', context: 'project', defaults: ['primary+shift+backspace'] },
+  { id: 'capture-performance', label: 'Capture performance report', scope: 'project', context: 'project', defaults: [] },
+  { id: 'reload-card-plugins', label: 'Reload card plugins', scope: 'project', context: 'project', defaults: [] },
+  { id: 'select-theme', label: 'Select theme…', scope: 'project', context: 'project', defaults: [] },
+  { id: 'mcp', label: 'MCP servers…', scope: 'project', context: 'session', defaults: [] },
+  { id: 'model', label: 'Select model…', scope: 'project', context: 'session', defaults: ['primary+shift+m'] },
+  { id: 'thinking', label: 'Select thinking level…', keywords: 'effort reasoning', scope: 'project', context: 'session', defaults: ['primary+shift+e'] },
+  { id: 'mode', label: 'Select mode…', keywords: 'interactive plan autopilot', scope: 'project', context: 'session', defaults: [] },
+  { id: 'context-window', label: 'Select context window…', keywords: 'limit tier long context', scope: 'project', context: 'session', defaults: [] },
+  { id: 'palette', label: 'Command palette', scope: 'project', context: 'project', defaults: ['primary+shift+p'] },
+  { id: 'close', label: 'Close session', scope: 'project', context: 'session', defaults: ['primary+w'] },
+  { id: 'sidebar', label: 'Toggle session sidebar', scope: 'project', context: 'project', defaults: ['primary+b'] },
+  { id: 'previous', label: 'Previous open session', scope: 'project', context: 'project', defaults: ['primary+shift+['] },
+  { id: 'next', label: 'Next open session', scope: 'project', context: 'project', defaults: ['primary+shift+]'] },
+  { id: 'settings', label: 'Global Settings…', scope: 'app', context: 'application', defaults: ['primary+,'] },
+  { id: 'project-settings', label: 'Project settings…', scope: 'app', context: 'project', defaults: ['primary+shift+,'] },
+  { id: 'keybindings', label: 'Edit keybindings…', scope: 'app', context: 'application', defaults: [] },
+  { id: 'zoom-in', label: 'Zoom in', scope: 'app', context: 'application', defaults: ['primary+plus'] },
+  { id: 'zoom-out', label: 'Zoom out', scope: 'app', context: 'application', defaults: ['primary+-'] },
+  { id: 'zoom-reset', label: 'Reset zoom to 100%', scope: 'app', context: 'application', defaults: ['primary+0'] },
+  { id: 'resume', label: 'Resume session…', scope: 'project', context: 'project', defaults: ['primary+k'] },
+  { id: 'switch-session', label: 'Switch session…', scope: 'project', context: 'project', defaults: ['primary+t'] },
+  { id: 'new-named', label: 'New named session…', scope: 'project', context: 'project', defaults: ['primary+alt+n'] },
+  { id: 'restart', label: 'Restart session', scope: 'project', context: 'session', defaults: ['primary+r'] },
 ] as const;
 export type ActionId = typeof ACTIONS[number]['id'];
+export type ActionContext = typeof ACTIONS[number]['context'];
+export function actionDefinition(id: ActionId) { return ACTIONS.find(action => action.id === id)!; }
+export function actionContextAvailable(id: ActionId, context: { project: boolean; sessionActions?: ReadonlySet<string> }): boolean {
+  const required = actionDefinition(id).context;
+  return required === 'application' || required === 'project' && context.project || required === 'session' && !!context.sessionActions?.has(id);
+}
 export type KeyOverrides = Record<string, string[]>;
 export type KeyChanges = Record<string, string[] | undefined>;
 const modifiers = ['primary', 'cmd', 'ctrl', 'alt', 'shift'];
@@ -60,7 +68,7 @@ export function readKeyOverrides(value: unknown): KeyOverrides {
   return result;
 }
 export function bindingsFor(id: ActionId, overrides: KeyOverrides): readonly string[] {
-  return overrides[id] ?? ACTIONS.find(action => action.id === id)!.defaults;
+  return overrides[id] ?? actionDefinition(id).defaults;
 }
 export function isMac(window: Window): boolean { return /Mac|iPhone|iPad/i.test(window.navigator.platform); }
 export function shortcutLabel(binding: string, mac: boolean): string {

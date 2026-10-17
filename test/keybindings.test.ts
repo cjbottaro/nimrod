@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
-import { ACTIONS, bindingsFor, changeBinding, installKeybindingDispatch, matchesBinding, readKeyOverrides, recordBinding, shortcutLabel, validateBinding, type ActionId, type KeyOverrides } from '../src/keybindings';
+import { ACTIONS, actionContextAvailable, bindingsFor, changeBinding, installKeybindingDispatch, matchesBinding, readKeyOverrides, recordBinding, shortcutLabel, validateBinding, type ActionId, type KeyOverrides } from '../src/keybindings';
 import { installKeybindingEditor } from '../src/keybinding-editor';
 import { editSettings, installPreferences, parseSettings } from '../src/preferences';
 import { MemoryPreferences } from './preferences-fixture';
@@ -9,6 +9,14 @@ import { stubDialogs } from './dialog-fixture';
 import { INTENTIONALLY_UNBOUND_ACTIONS } from './keybindings-fixture';
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+test('action contexts retain project commands without a selected session and gate harness contributions', () => {
+  const emptyProject = { project: true, sessionActions: new Set<string>() };
+  assert.equal(actionContextAvailable('new', emptyProject), true);
+  assert.equal(actionContextAvailable('settings', { project: false }), true);
+  assert.equal(actionContextAvailable('model', emptyProject), false);
+  assert.equal(actionContextAvailable('mode', { project: true, sessionActions: new Set(['mode']) }), true);
+  assert.equal(actionContextAvailable('context-window', { project: true, sessionActions: new Set(['model']) }), false);
+});
 function fixture() {
   const dom = new JSDOM('<button id="origin">Settings</button><dialog id="settings-page"><div class="settings-content"></div></dialog><dialog id="pi-dialog"></dialog>', { pretendToBeVisual: true });
   Object.defineProperty(dom.window.navigator, 'platform', { value: 'MacIntel' });

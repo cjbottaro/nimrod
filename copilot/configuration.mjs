@@ -8,7 +8,7 @@ function optionalValue(value, label) {
 /**
  * Concrete SDK configuration adapter behind Nimrod's session configuration port.
  * Defaults are creation inputs, never guessed selections or resume overrides.
- * Only model/effort leave the settings response; no raw settings are published.
+ * Only supported session-setting values leave the settings response; no raw settings are published.
  */
 export function createCopilotConfiguration(client) {
   async function snapshot(session, createdDefaults = {}) {
@@ -16,11 +16,13 @@ export function createCopilotConfiguration(client) {
     if (!record(current)) throw new Error('Copilot returned an invalid configuration snapshot.');
     const model = optionalValue(current.modelId, 'model');
     const effort = optionalValue(current.reasoningEffort, 'reasoning effort');
+    const contextTier = optionalValue(current.contextTier, 'context tier');
     // Once the runtime reports a different model (e.g. policy), do not attach
     // effort configured for the requested model to that authoritative selection.
     const sameModel = !model || !createdDefaults.model || model === createdDefaults.model;
     return { ...current, modelId: model ?? createdDefaults.model,
-      reasoningEffort: effort ?? (sameModel ? createdDefaults.reasoningEffort : undefined) };
+      reasoningEffort: effort ?? (sameModel ? createdDefaults.reasoningEffort : undefined),
+      contextTier: contextTier ?? (sameModel ? createdDefaults.contextTier : undefined) };
   }
   return {
     async defaults() {
@@ -33,14 +35,33 @@ export function createCopilotConfiguration(client) {
         // `value` is the effective setting, not the registered `default` field.
         return optionalValue(setting.value, `${key} setting`);
       };
-      const model = read('model'), reasoningEffort = read('effortLevel');
-      return { ...(model === undefined ? {} : { model }), ...(reasoningEffort === undefined ? {} : { reasoningEffort }) };
+      const model = read('model'), reasoningEffort = read('effortLevel'), contextTier = read('contextTier');
+      return { ...(model === undefined ? {} : { model }), ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
+        ...(contextTier === undefined ? {} : { contextTier }) };
     },
     snapshot,
-    async apply(session, model, effort) {
-      await session.setModel(model, effort === undefined ? undefined : { reasoningEffort: effort });
+    async apply(session, setting, value) {
+      if (setting === 'mode') {
+        const expectedMode = await session.rpc.mode.get();
+        const result = await session.rpc.mode.set({ mode: value, expectedMode });
+        if (!record(result) || result.modeApplied === false) throw new Error('Copilot did not apply the requested mode.');
+        if (result.confirmation || result.deferImplementation || result.armInteractiveContinuation)
+          throw new Error('Copilot applied a mode transition that requires unsupported follow-up. Reconnect to read its authoritative state; nothing was replayed.');
+        const notice = [result.warning, result.message, ...(Array.isArray(result.deprecationWarnings) ? result.deprecationWarnings : [])]
+          .filter(value => typeof value === 'string' && value).join('\n');
+        return { model: await snapshot(session), mode: await session.rpc.mode.get(), ...(notice ? { notice } : {}) };
+      }
+      const current = await snapshot(session);
+      const model = setting === 'model' ? value : current.modelId;
+      if (!model) throw new Error('Select a model before changing this Copilot setting.');
+      const reasoningEffort = setting === 'model' ? undefined : setting === 'effort' ? value : current.reasoningEffort;
+      const contextTier = setting === 'model' ? undefined : setting === 'context-tier' ? value : current.contextTier;
+      await session.setModel(model, {
+        ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
+        ...(contextTier === undefined ? {} : { contextTier }),
+      });
       // Creation defaults must never revive a later unset/deselected value.
-      return snapshot(session);
+      return { model: await snapshot(session), mode: await session.rpc.mode.get() };
     },
   };
 }

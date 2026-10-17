@@ -610,13 +610,22 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       renderMainActivity(mainActivityDom, presentation);
       renderSubagentActivity(subagentActivityDom, presentation.subagents);
     }
-    if (!before || previousStatus?.metrics !== status?.metrics || previousStatus?.metricsTitle !== status?.metricsTitle || previousStatus?.capabilities !== capabilities) {
+    if (!before || previousStatus?.metrics !== status?.metrics || previousStatus?.metricParts !== status?.metricParts
+      || previousStatus?.metricsTitle !== status?.metricsTitle || previousStatus?.capabilities !== capabilities) {
       const metrics = capabilities?.metrics ? status?.metrics : undefined;
       const label = capabilities?.metrics?.label || '';
       const title = capabilities?.metrics ? status?.metricsTitle || label : label;
       sessionMetrics.title = title; sessionMetrics.setAttribute('aria-label', title);
       sessionMetrics.hidden = metrics === undefined;
-      if (sessionMetrics.textContent !== (metrics || '')) sessionMetrics.textContent = metrics || '';
+      if (status?.metricParts?.length) {
+        sessionMetrics.replaceChildren(...status.metricParts.map(part => {
+          if (!part.actionId) return document.createTextNode(part.text);
+          const button = element('button'); button.type = 'button'; button.textContent = part.text;
+          button.dataset.controlId = part.actionId; button.title = part.title || part.text;
+          button.setAttribute('aria-label', button.title);
+          return button;
+        }));
+      } else if (previousStatus?.metricParts?.length || sessionMetrics.textContent !== (metrics || '')) sessionMetrics.textContent = metrics || '';
     }
     if (!before || previousStatus?.information !== status?.information || previousStatus?.capabilities !== capabilities) {
       extensionActivity.replaceChildren();
@@ -836,6 +845,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     return before.busy !== after.busy || before.status !== after.status || before.queue !== after.queue
       || before.statusArea?.capabilities !== after.statusArea?.capabilities || before.statusArea?.subagents !== after.statusArea?.subagents
       || before.statusArea?.information !== after.statusArea?.information || before.statusArea?.metrics !== after.statusArea?.metrics
+      || before.statusArea?.metricParts !== after.statusArea?.metricParts
       || before.statusArea?.metricsTitle !== after.statusArea?.metricsTitle;
   }
 
@@ -902,6 +912,10 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   controlsNode.addEventListener('click', event => {
     const node = event.target instanceof Element ? event.target.closest<HTMLButtonElement>('button[data-control-id]') : undefined;
     if (node && !node.disabled && !node.hidden && active && !disposed) post('selectControl', { id: node.dataset.controlId });
+  }, { signal: listeners.signal });
+  sessionMetrics.addEventListener('click', event => {
+    const node = event.target instanceof Element ? event.target.closest<HTMLButtonElement>('button[data-control-id]') : undefined;
+    if (node && !node.disabled && active && !disposed) post('selectControl', { id: node.dataset.controlId });
   }, { signal: listeners.signal });
   prompt.addEventListener('paste', event => {
     if (!active || disposed || prompt.readOnly || document.querySelector('dialog[open]')) return;

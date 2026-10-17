@@ -1,6 +1,19 @@
-# Model and thinking preferences
+# Session configuration
 
 Click the model or thinking-level button in the **Status area**, or use **Select model…** / **Select thinking level…** in the command palette. Default shortcuts are **⌘/Ctrl Shift+M** for model and **⌘/Ctrl Shift+E** for thinking level (also searchable as “effort”). These choices never switch harnesses.
+
+Copilot also shows its confirmed mode after effort, producing
+`model · effort · mode`. Use that button or **Select mode…** to choose
+**Interactive**, **Plan** or **Autopilot**. Harnesses without a mode capability
+omit both the control and palette action.
+
+Copilot’s reported context line keeps its compact usage form, for example
+`25.5% / 125k`. When the selected session supports changing its context window,
+the reported limit is a button that opens **Select context window…**. Choices
+use the tier name as the primary label—such as **Default context** or
+**Long context**—and the reported token amount as secondary detail when
+available. Pi’s reported context limit remains non-interactive because Pi does
+not expose a corresponding setting.
 
 Model pickers show readable names without numbered prefixes. Copilot places the model ID beneath its friendly name. Pi places the provider beneath the reported friendly name, falling back to the model ID when no friendly name is available. Secondary details align with those names while the current-value marker occupies its own column. Filtering still matches the underlying model identity, and selection does not depend on displayed labels being unique.
 
@@ -28,6 +41,12 @@ until Copilot reports a concrete value. No default is guessed from the catalog.
 When the model is unknown, the effort value/placeholder stays visible; selecting
 it reports that a model is required in the session notice banner. Resuming saved sessions never
 applies current new-session defaults.
+
+Copilot restores the saved mode and context tier reported by the session.
+Changing mode or context follows the same confirmed-value and deferred-change
+rules as model/effort. Plan-mode completion choices remain in that session;
+background requests never navigate or take focus. Autopilot remains stoppable
+through the normal composer Stop action.
 
 ## Limits and lifecycle
 

@@ -295,7 +295,8 @@ test('SDK busy configuration replaces one transcript operation and applies only 
   assert.ok(f.session.state.statusArea!.controls.every(control => !control.disabled));
   f.event('session.idle', {}); await flush();
   assert.equal(f.sent.filter(request => request.method === 'configure').length, 1);
-  assert.equal(f.last('configure').model, 'large');
+  assert.equal(f.last('configure').setting, 'model');
+  assert.equal(f.last('configure').value, 'large');
   assert.equal(f.session.state.statusArea!.controls[0].label, 'small', 'do not show requested model before confirmation');
   f.reply('configure', { modelId: 'large' }); await flush();
   assert.equal(f.session.state.statusArea!.controls[0].label, 'large');
@@ -313,9 +314,11 @@ test('SDK dependent effort uses the pending target model and waits for its autho
   assert.equal(f.session.state.statusArea!.controls[0].label, 'large');
   assert.equal(f.session.state.statusArea!.controls.length, 1);
   f.event('session.idle', {}); await flush();
-  assert.equal(f.last('configure').model, 'small');
+  assert.equal(f.last('configure').setting, 'model');
+  assert.equal(f.last('configure').value, 'small');
   f.reply('configure', { modelId: 'small', reasoningEffort: 'low' }); await flush();
-  assert.equal(f.last('configure').effort, 'high');
+  assert.equal(f.last('configure').setting, 'effort');
+  assert.equal(f.last('configure').value, 'high');
   assert.equal(f.session.state.statusArea!.controls.find(control => control.id === 'thinking')!.label, 'low');
   f.reply('configure', { modelId: 'small', reasoningEffort: 'high' }); await flush();
   assert.equal(f.session.state.statusArea!.controls.find(control => control.id === 'thinking')!.label, 'high');

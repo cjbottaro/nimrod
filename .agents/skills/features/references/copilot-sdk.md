@@ -187,13 +187,23 @@ use the released SDK's public experimental command discovery/invocation APIs,
 argument metadata and typed results; authored fixtures are unrun. Returned choices
 reuse the shared modal lifecycle, not app-action dispatch. Model invocation-effect
 finalization and richer dialog/scoped-setting effects remain unsupported.
-The bridge checks pinned `session.rpc.mode.get()` and accepts **interactive**
-sessions only. Plan/autopilot selection fails explicitly without changing mode,
-creating a replacement or prompting; live mode changes outside that supported
-boundary disconnect. Root error/idle/configuration events cannot be inferred
+The bridge reads and changes the pinned SDK session mode through
+`session.rpc.mode.get/set`, supporting **Interactive**, **Plan** and
+**Autopilot** without replacing the session or sending a prompt. Plan exit
+requests use the owning conversation’s decision surface; background requests do
+not navigate or focus. Mode changes reconcile through native events and the
+configuration snapshot. A mode result requiring unsupported model confirmation,
+deferred implementation or automatic continuation disconnects explicitly after
+the mutation rather than guessing or replaying follow-on work. Root
+error/idle/configuration events cannot be inferred
 from a child-agent event. Child transcript rows carry an explicit origin label.
 [Usage metrics](#usage-metrics) expose reported context and SDK aggregate AI-credit
 accounting with an estimated USD equivalent; no invented costs/queue capabilities.
+
+The same configuration snapshot retains the SDK `contextTier`. Supported models
+offer Default/Long context through **Select context window…**; the reported
+context limit is the Status-area action target, while choice details use
+reported/catalog token amounts without inventing a limit.
 
 `onEvent` is registered before SDK create/resume so early events are buffered.
 Permission and user-input callbacks await explicit choices inside their owning

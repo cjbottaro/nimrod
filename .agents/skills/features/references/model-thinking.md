@@ -8,7 +8,7 @@ Human guide: [Model and thinking preferences](../../../../docs/model-thinking.md
 
 `src/session-configuration.ts::SessionConfiguration` is a small session-bound consumer port, not a universal session/controller or wire protocol. `main.ts` and `configuration-picker.ts` no longer dispatch model/effort selection by backend:
 
-- `capabilities`: supported setting descriptors with opaque IDs, labels, optional dependencies and live `ready` / `deferred` / `unavailable` availability/reasons. The common picker uses `model` and `effort`; concrete ACP options can contribute additional IDs. No common provider/model/effort enum.
+- `capabilities`: supported setting descriptors with opaque IDs, labels, optional dependencies and live `ready` / `deferred` / `unavailable` availability/reasons. The common picker uses `model` and `effort`; Copilot additionally contributes `mode` and `context-tier`, while concrete ACP options can contribute additional IDs. No common provider/model/effort/mode enum.
 - `get(id)`: current harness-confirmed value, including undefined when unknown. Successfully accepted Copilot creation inputs provide initial values until concrete SDK values arrive; they are not reused on Resume or later deselection. It never returns pending intent as effective state.
 - `choices(id)`: fresh advertised choices bound to this configuration object, setting and dependency values. Each choice has an opaque value, primary label and optional secondary detail/search terms for the shared picker; concrete integrations own that presentation metadata. The shared selection layout reserves the current-value marker column for every heading and aligns secondary detail with the primary label, not the marker. `set(id, choice)` accepts one of those choices synchronously; it is acceptance of local intent, not an RPC acknowledgement or a success promise.
 - `operations`: immutable-by-convention, reference-stable local progress publications. Owners publish them as `configurationOperations` on the existing synchronous conversation snapshot channel. No additional subscription/event bus, persistence or process ownership.
@@ -57,6 +57,15 @@ Pi exposes levels only for its currently selected model. If another model is pen
 ### Copilot SDK
 
 `src/copilot/session-configuration.ts` uses the filtered catalog/current root model and supported reasoning efforts. Pending target models can supply their own advertised effort choices. `CopilotSession` owns idle-only SDK configuration, including command/configuration-in-flight guards; the picker can accept intent while those guards defer mutation. Pending work begins after the actual root idle boundary, not a child event or an acceptance response.
+
+Copilot also projects the SDK’s authoritative `interactive` / `plan` /
+`autopilot` session mode and `default` / `long_context` context tier. Mode is the
+third confirmed Status-area control after model and effort. Context tier is
+selected through the reported context-limit button and **Select context
+window…** action rather than another control in that row. Context choices use
+the tier name as the primary label and a reported/catalog token amount as
+secondary detail when available. Model changes do not carry an effort or context
+tier that may be invalid for the target model.
 
 Copilot model choices use the catalog's friendly name as the picker label and model ID as secondary detail. Stable model IDs, not rendered labels or list positions, identify selections.
 

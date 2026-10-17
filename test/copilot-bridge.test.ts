@@ -59,7 +59,12 @@ test('production SDK bridge loads only exact project members and disconnects wit
     assert.equal(connected.model.reasoningEffort, undefined);
     assert.ok(f.packets.findIndex(packet => packet.kind === 'identified') < f.packets.indexOf(connected));
     assert.equal(f.packets.some(packet => packet.kind === 'permission' || packet.kind === 'input'), false);
-    assert.equal((await f.request('configure', { model: 'small', effort: 'high' })).reasoningEffort, 'high');
+    const configured = await f.request('configure', { setting: 'effort', value: 'high' });
+    assert.equal(configured.model.reasoningEffort, 'high');
+    const context = await f.request('configure', { setting: 'context-tier', value: 'long_context' });
+    assert.equal(context.model.contextTier, 'long_context');
+    const mode = await f.request('configure', { setting: 'mode', value: 'plan' });
+    assert.equal(mode.mode, 'plan');
     await assert.rejects(f.request('delete', { sessionId: 'fixture-sdk' }), /history-only/);
   } finally { await f.close(); }
 });
@@ -131,9 +136,9 @@ test('SDK creation defaults never revive an omitted value in a later configurati
   try {
     await f.request('initialize'); await f.request('connect');
     assert.equal(f.packets.find(packet => packet.kind === 'connected')!.model.reasoningEffort, 'high');
-    const changed = await f.request('configure', { model: 'large' });
-    assert.equal(changed.modelId, 'large');
-    assert.equal(changed.reasoningEffort, undefined);
+    const changed = await f.request('configure', { setting: 'model', value: 'large' });
+    assert.equal(changed.model.modelId, 'large');
+    assert.equal(changed.model.reasoningEffort, undefined);
   } finally { await f.close(); }
 });
 
@@ -262,13 +267,14 @@ for (const choice of [{ kind: 'approve-once', approvedInteractively: true }, { k
   });
 }
 
-test('unsupported SDK mode retains the exact identity without prompting or changing mode', { timeout: 5000 }, async () => {
+test('SDK reconnects the exact identity in its authoritative mode without prompting', { timeout: 5000 }, async () => {
   const f = bridge('plan');
   try {
     await f.request('initialize');
-    await assert.rejects(f.request('connect', { sessionId: 'fixture-sdk' }), /mode "plan" is not supported/);
+    await f.request('connect', { sessionId: 'fixture-sdk' });
     assert.equal(f.packets.find(packet => packet.kind === 'identified')?.sessionId, 'fixture-sdk');
-    assert.equal(f.packets.some(packet => packet.kind === 'connected' || packet.kind === 'event'), false);
+    assert.equal(f.packets.find(packet => packet.kind === 'connected')?.mode, 'plan');
+    assert.equal(f.packets.some(packet => packet.kind === 'event'), false);
   } finally { await f.close(); }
 });
 test('SDK commands use discovery/invocation, retain arguments and choices, and never fall through to prompts', { timeout: 5000 }, async () => {

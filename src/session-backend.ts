@@ -5,6 +5,7 @@ import type { CopilotSession } from './copilot/session';
 import { copilotSessionActions } from './copilot/view-policy';
 import { acpSessionActions } from './acp/view-policy';
 import { piSessionActions } from './pi/view-policy';
+import type { ActionId } from './keybindings';
 
 /** Concrete alternatives, not a universal controller. One backend owns a live session. */
 export type SessionBackend =
@@ -12,7 +13,7 @@ export type SessionBackend =
   | { readonly kind: 'copilot-sdk'; session?: CopilotSession; savedSessionId?: string }
   | { readonly kind: 'acp'; readonly profile: AcpProfile; session?: AcpSession };
 export interface SessionAction {
-  id: 'mcp' | 'model' | 'thinking' | 'acp-options';
+  id: Extract<ActionId, 'mcp' | 'model' | 'thinking' | 'mode' | 'context-window'> | 'acp-options';
   label: string;
   detail: string;
   keywords?: string;

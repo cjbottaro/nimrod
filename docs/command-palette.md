@@ -4,11 +4,15 @@
 
 **Reload card plugins** rescans personal TypeScript sources and refreshes the catalog for new cards, using cached bundles when unchanged. It does not restart Pi, send prompts or rebuild inspected cards. It has no default shortcut; assign one in [Keybindings](keybindings.md). See [Card plugins](card-plugins.md#startup-reload-and-caching).
 
-Open with **⌘/Ctrl+Shift+P**, type an action or description, then press Enter or click a result. Commands show a short description and their effective shortcut; unbound actions leave the shortcut space empty. Every palette command is bindable, but **Select theme…** has no default shortcut.
+Open with **⌘/Ctrl+Shift+P**, type an action or description, then press Enter or click a result. Commands show a short description and their effective shortcut; unbound actions leave the shortcut space empty. Every palette command is bindable; actions such as **Select theme…**, **Select mode…** and **Select context window…** have no default shortcut.
 
 ## Harness-aware commands
 
-**New session** stays Pi-default. **New Copilot session** creates [Copilot](copilot.md), with the hint **Start a Copilot session**. This action is unbound by default. ACP creation/options actions are not exposed. Switch includes open sessions; Resume combines independent Pi/Copilot history sources. Delete uses Pi tree review or Copilot permanent deletion; unsupported history is omitted. Model/thinking and Pi MCP commands reflect the selected backend's actual support. Commands remain Nimrod-owned, not agent slash commands.
+**New session** stays Pi-default. **New Copilot session** creates [Copilot](copilot.md), with the hint **Start a Copilot session**. This action is unbound by default. ACP creation/options actions are not exposed. Switch includes open sessions; Resume combines independent Pi/Copilot history sources. Delete uses Pi tree review or Copilot permanent deletion; unsupported history is omitted. Model/thinking/mode/context-window and Pi MCP commands reflect the selected
+session’s actual support. Unsupported session actions are absent. Application
+and project actions remain available without a selected session, so an empty
+project can still create or resume work. Commands remain Nimrod-owned, not agent
+slash commands.
 
 ## Pickers and cancellation
 
@@ -18,7 +22,7 @@ Some commands open a picker or name field:
 - [Switch/Resume session](sessions.md#switch-or-resume) searches open conversations or saved history.
 - [Delete sessions](sessions.md#delete-several-conversations) supports repeated cleanup.
 - [MCP servers](mcp.md) shows a read-only server snapshot with selected-server details and Refresh.
-- [Model/thinking](model-thinking.md) marks the acknowledged current value with a **•**.
+- [Session configuration](model-thinking.md) marks the acknowledged current value with a **•**.
 - [Select theme](themes.md#select-and-preview-themes) previews colors before saving.
 
 **Escape closes the entire command interaction in one press**, including from a picker opened by a direct shortcut or Status-area button. It restores prior focus without changing your draft or stopping agents. Explicit **Back** returns to commands and retains the command query. Naming has Enter/Create and Escape, not a Back step.

@@ -30,7 +30,7 @@ or freeform text when supported. **Cancel request** never approves. A background
 request does not switch sessions or steal focus; return to its conversation to
 act. Stop/Close/disconnect cancel pending choices.
 
-Model and thinking controls use Copilot’s reported catalog and current state,
+Model, thinking and mode controls use Copilot’s reported catalog and current state,
 and accept selections while connected, including during work. Changes apply
 when Copilot is idle; a shimmering [configuration change](model-thinking.md)
 entry in the transcript shows waiting/application and updates in place if you
@@ -46,6 +46,14 @@ reasoning support omit the effort control. Resume keeps its saved configuration
 rather than applying today’s new-session defaults. Tool/reasoning cards, disclosures, scroll behavior, draft storage and
 notification preferences reuse the existing shell. Unknown rich results remain
 literal data; no tool payload grants additional permission.
+
+The confirmed controls read `model · effort · mode`. **Select mode…** offers
+Interactive, Plan and Autopilot. When Plan finishes, its supported continuation
+choices stay inside the owning conversation. The context usage line keeps its
+reported percentage and limit; clicking the limit opens **Select context
+window…** with tier names as primary labels and reported token amounts as
+secondary details. Unsupported controls and palette actions are omitted rather
+than shown as Pi equivalents.
 Copilot inspection/web cards reuse shared components, including cited web answers
 and fetched-content previews when supported by native results. Tool cards appear
 while their inputs stream and transition in place when execution begins; late
@@ -66,10 +74,11 @@ acceptance after a requested build.
 Current limits: text-only input; no Restart, steering, queue, Pi MCP inspector
 or in-place harness switching. Slash commands use the SDK's supported interface,
 not full terminal-UI emulation; see below.
-Only interactive Copilot sessions are supported. Plan/autopilot histories remain
-listed, but connection reports their unsupported mode without changing it or
-sending a prompt; change the mode in Copilot before reconnecting. Generic agent
-protocol infrastructure is retained internally, without a separate creation action.
+Interactive, Plan and Autopilot sessions are supported through the SDK. Generic
+agent protocol infrastructure is retained internally, without a separate
+creation action. A mode transition that asks the host for an unsupported extra
+model confirmation or automatic continuation reports the limitation and
+disconnects rather than guessing or submitting follow-on work.
 
 ## Usage metrics
 

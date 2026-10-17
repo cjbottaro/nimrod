@@ -7,5 +7,7 @@ export const INTENTIONALLY_UNBOUND_ACTIONS = [
   'reload-card-plugins',
   'select-theme',
   'mcp',
+  'mode',
+  'context-window',
   'keybindings',
 ] as const satisfies readonly ActionId[];

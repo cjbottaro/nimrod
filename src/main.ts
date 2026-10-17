@@ -61,7 +61,7 @@ import { Dialogs } from './dialogs';
 import { COMMAND_USAGE_KEY, readCommandUsage } from './command-ranking';
 import { abbreviateHome, projectPathParts } from './project-path';
 import { installCommandPalette, type PalettePage } from './command-palette';
-import { ACTIONS, bindingsFor, installKeybindingDispatch, isMac, shortcutLabel, type ActionId } from './keybindings';
+import { ACTIONS, actionContextAvailable, actionDefinition, bindingsFor, installKeybindingDispatch, isMac, shortcutLabel, type ActionId } from './keybindings';
 import { installSessionPopouts } from './session-popouts';
 import transcript from './pi/transcript.html?raw';
 import './pi/transcript.css';
@@ -887,7 +887,8 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
       }
       if (tab.closing || tab.restarting) return;
       if (message.type === 'selectControl') {
-        if (message.id === 'model' || message.id === 'thinking') void runSessionAction(tab, message.id);
+        const action = sessionActions(tab).find(candidate => candidate.id === message.id);
+        if (action) void runSessionAction(tab, action.id);
         else {
           const option = typeof message.id === 'string' ? acpSession(tab)?.controlOption(message.id) : undefined;
           if (option) void pickAcpOption(tab, undefined, option);
@@ -998,7 +999,7 @@ async function runSessionAction(tab: Tab, id: SessionAction['id']): Promise<void
   if (!tabs.includes(tab) || tab.closing || tab.restarting || tab.deleting || !ACTIONS.some(action => action.id === id) || !sessionActions(tab).some(action => action.id === id)) return;
   if (id === 'mcp') return inspectMcp(tab);
   if (id === 'acp-options') return pickAcpOption(tab);
-  return pickPreference(tab, id);
+  return pickPreference(tab, id as 'model' | 'thinking' | 'mode' | 'context-window');
 }
 async function inspectMcp(tab: Tab): Promise<void> {
   if (profileFor(tab)) return;
@@ -1040,19 +1041,21 @@ async function inspectMcp(tab: Tab): Promise<void> {
     if (valid()) notices.report({ id: `${tab.id}:mcp-inspection`, owner: tab.id, operation: 'Inspect MCP servers', message: String(error) });
   }
 }
-async function pickPreference(tab: Tab, kind: 'model' | 'thinking'): Promise<void> {
-  const operation = kind === 'model' ? 'Select model' : 'Select thinking level';
+async function pickPreference(tab: Tab, kind: 'model' | 'thinking' | 'mode' | 'context-window'): Promise<void> {
+  const operation = kind === 'model' ? 'Select model' : kind === 'thinking' ? 'Select thinking level'
+    : kind === 'mode' ? 'Select mode' : 'Select context window';
   const request = palette.startSelection(operation, () => { void pickPreference(tab, kind); }, message => {
     if (tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:preference:${++noticeSequence}`, owner: tab.id, operation, message });
   });
   if (!request) return;
   const configuration = sessionConfiguration(tab);
-  if (!configuration || tab.ended || tab.closing || tab.restarting || tab.deleting || deletion.blocked(tab.file?.path)) { request.error('Resume this session before changing its model or thinking level.'); return; }
+  if (!configuration || tab.ended || tab.closing || tab.restarting || tab.deleting || deletion.blocked(tab.file?.path)) { request.error('Resume this session before changing its configuration.'); return; }
   tab.cancelPreference?.(); tab.cancelPreference = request.cancel;
   const valid = () => tabs.includes(tab) && sessionConfiguration(tab) === configuration && tab.cancelPreference === request.cancel
     && !tab.ended && !tab.closing && !tab.restarting && !tab.deleting;
   try {
-    await pickConfiguration(configuration, kind === 'model' ? 'model' : 'effort',
+    const setting = kind === 'model' ? 'model' : kind === 'thinking' ? 'effort' : kind === 'context-window' ? 'context-tier' : 'mode';
+    await pickConfiguration(configuration, setting,
       (options, current) => request.chooseItems(options.map(option => ({ id: option.value, label: option.label, detail: option.detail, keywords: option.keywords })), current), valid);
   } catch (error) { if (valid()) request.error(String(error)); }
   finally { request.finish(); if (tab.cancelPreference === request.cancel) tab.cancelPreference = undefined; }
@@ -1118,7 +1121,7 @@ function requestSessionChoice(tab: Tab, details: HTMLElement, options: { id: str
     });
   });
 }
-async function requestCopilotDecision(tab: Tab, kind: 'permission' | 'input', request: Record<string, unknown>, signal: AbortSignal): Promise<CopilotDecision | undefined> {
+async function requestCopilotDecision(tab: Tab, kind: 'permission' | 'input' | 'plan', request: Record<string, unknown>, signal: AbortSignal): Promise<CopilotDecision | undefined> {
   if (kind === 'permission') {
     const details = copilotPermissionPreview(document, request, workspace);
     const choice = await requestSessionChoice(tab, details, [{ id: 'allow', label: 'Allow once' }, { id: 'deny', label: 'Deny' }], signal);
@@ -1126,6 +1129,19 @@ async function requestCopilotDecision(tab: Tab, kind: 'permission' | 'input', re
       : { kind: choice === 'deny' ? 'reject' : 'user-not-available' };
   }
   const details = document.createElement('div');
+  if (kind === 'plan') {
+    const title = document.createElement('strong'); title.textContent = typeof request.summary === 'string' ? request.summary : 'Copilot finished planning';
+    details.append(title);
+    if (typeof request.planContent === 'string' && request.planContent) {
+      const plan = document.createElement('pre'); plan.textContent = request.planContent; details.append(plan);
+    }
+    const actions = Array.isArray(request.actions) ? request.actions.filter((value): value is string => typeof value === 'string' && !!value) : [];
+    const choice = await requestSessionChoice(tab, details, actions.map(action => ({
+      id: action, label: action === 'interactive' ? 'Continue interactively' : action === 'autopilot' ? 'Continue with Autopilot'
+        : action === 'exit_only' ? 'Finish planning' : action,
+    })), signal);
+    return choice === undefined ? { approved: false } : { approved: true, selectedAction: choice };
+  }
   const title = document.createElement('strong'); title.textContent = typeof request.question === 'string' ? request.question : 'Copilot requests input';
   details.append(title);
   const choices = Array.isArray(request.choices) ? request.choices.filter((value): value is string => typeof value === 'string') : [];
@@ -1631,13 +1647,19 @@ const keybindingDispatch = installKeybindingDispatch(window, {
   read: () => preferences.keybindings(),
   enabled: id => {
     if (unloading) return false;
-    if (['settings', 'keybindings', 'zoom-in', 'zoom-out', 'zoom-reset'].includes(id)) return true;
-    if (id === 'project-settings') return !!workspace;
+    const contributed = new Set<string>();
+    if (presented) {
+      for (const action of sessionActions(presented)) contributed.add(action.id);
+      contributed.add('close');
+      if (restartable(presented)) contributed.add('restart');
+      if (tabDeletion(presented)?.available()) contributed.add('delete');
+    }
+    if (!actionContextAvailable(id, { project: !!workspace, sessionActions: contributed })) return false;
+    if (actionDefinition(id).context === 'application') return true;
     if (!ready) return false;
     if (id === 'new-copilot') return copilotReady;
     if (id === 'capture-performance') return preferences.performanceEnabled() && !settingsSurface.capturingPerformance;
-    if (['mcp', 'model', 'thinking'].includes(id)) return !!presented && sessionActions(presented).some(action => action.id === id);
-    if (['close', 'restart', 'delete'].includes(id)) return !!presented;
+    if (['mcp', 'model', 'thinking', 'mode', 'context-window'].includes(id)) return !!presented && sessionActions(presented).some(action => action.id === id);
     return true;
   },
   run: (id: ActionId) => {
@@ -1651,7 +1673,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'capture-performance': return capturePerformance(true);
       case 'reload-card-plugins': return reloadCardPlugins(true);
       case 'select-theme': return pickTheme();
-      case 'mcp': case 'model': case 'thinking': return presented ? runSessionAction(presented, id) : undefined;
+      case 'mcp': case 'model': case 'thinking': case 'mode': case 'context-window': return presented ? runSessionAction(presented, id) : undefined;
       case 'palette': palette.open(); return;
       case 'close': return presented ? closeTab(presented) : undefined;
       case 'sidebar': required<HTMLButtonElement>('toggle-sidebar').click(); return;

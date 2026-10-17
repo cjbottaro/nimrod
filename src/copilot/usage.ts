@@ -1,5 +1,6 @@
 import { record } from './connection';
 import type { CopilotUsageSeed } from './usage-seed';
+import type { StatusAreaMetricPart } from '../status-area';
 
 export interface CopilotContextUsage { readonly currentTokens: number; readonly tokenLimit: number; }
 export interface CopilotCreditUsage {
@@ -163,10 +164,11 @@ export class CopilotUsageController {
 // multipliers: 1 AIC = 10^9 nano-AIU and $0.01 USD equivalent (not an invoice).
 const NANO_AIU_PER_CREDIT = 1_000_000_000;
 const USD_PER_CREDIT = 0.01;
-const compact = (tokens: number) => tokens >= 1_000_000 ? `${(tokens / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
+export const compactTokenCount = (tokens: number) => tokens >= 1_000_000 ? `${(tokens / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
   : tokens >= 1_000 ? `${(tokens / 1_000).toFixed(1).replace(/\.0$/, '')}k` : String(Math.round(tokens));
 
-export function presentCopilotUsage(usage?: CopilotUsage): { metrics?: string; metricsTitle?: string } {
+export function presentCopilotUsage(usage?: CopilotUsage, configurableContext = false):
+  { metrics?: string; metricParts?: readonly StatusAreaMetricPart[]; metricsTitle?: string } {
   if (!usage) return {};
   const parts: string[] = [], details: string[] = [];
   if (usage.credits) {
@@ -192,7 +194,7 @@ export function presentCopilotUsage(usage?: CopilotUsage): { metrics?: string; m
   if (usage.context && nonnegative(usage.context.currentTokens) && nonnegative(usage.context.tokenLimit)) {
     const { currentTokens, tokenLimit } = usage.context;
     const percent = tokenLimit > 0 ? currentTokens / tokenLimit * 100 : NaN;
-    parts.push(`${Number.isFinite(percent) ? `${percent.toFixed(1).replace(/\.0$/, '')}%` : '—'} / ${tokenLimit > 0 ? compact(tokenLimit) : '—'}`);
+    parts.push(`${Number.isFinite(percent) ? `${percent.toFixed(1).replace(/\.0$/, '')}%` : '—'} / ${tokenLimit > 0 ? compactTokenCount(tokenLimit) : '—'}`);
     details.push(`Context: ${currentTokens.toLocaleString('en-US', { maximumFractionDigits: 20 })} / ${tokenLimit > 0 ? tokenLimit.toLocaleString('en-US', { maximumFractionDigits: 20 }) : 'unknown limit'} tokens reported by Copilot.`);
   } else if (usage.provisional?.context) {
     parts.push(usage.provisional.context === 'zero' ? '0% / —' : '— / —');
@@ -203,5 +205,17 @@ export function presentCopilotUsage(usage?: CopilotUsage): { metrics?: string; m
     parts.push('— / —');
     details.push('Context usage/window is not reported yet; no percentage or window size is inferred.');
   }
-  return parts.length ? { metrics: parts.join(' · '), metricsTitle: details.join('\n') } : {};
+  if (!parts.length) return {};
+  const metrics = parts.join(' · '), metricsTitle = details.join('\n');
+  if (!configurableContext || !usage.context || usage.context.tokenLimit <= 0) return { metrics, metricsTitle };
+  const limit = compactTokenCount(usage.context.tokenLimit);
+  const at = metrics.lastIndexOf(limit);
+  return at < 0 ? { metrics, metricsTitle } : {
+    metrics, metricsTitle,
+    metricParts: [
+      { text: metrics.slice(0, at) },
+      { text: limit, actionId: 'context-window', title: `Select context window: ${limit}` },
+      { text: metrics.slice(at + limit.length) },
+    ],
+  };
 }

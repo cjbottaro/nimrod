@@ -27,6 +27,8 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 | MCP servers… | Unbound by default |
 | Select model… | Cmd/Ctrl+Shift+M |
 | Select thinking level… (“effort”) | Cmd/Ctrl+Shift+E |
+| Select mode… | Unbound by default |
+| Select context window… | Unbound by default |
 | Command palette | Cmd/Ctrl+Shift+P |
 | Switch session… | Cmd/Ctrl+T |
 | Resume session… | Cmd/Ctrl+K |
@@ -43,7 +45,17 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 
 **Open recent project…** searches recently opened directories and is configurable like other palette commands. **Open project…** / Cmd/Ctrl+O remains the native directory-only chooser, outside this editor.
 
-Every current command-palette command can be rebound or unbound. The removed ACP actions are absent from the editor; their old overrides remain stored but inert. **Select theme…** has no default shortcut. **Restart session** restarts the selected saved session's Pi process, not the window; its existing eligibility and interruption-confirmation rules still apply. Plus and Equals both invoke Zoom in. Existing user overrides remain unchanged when defaults change; Reset the affected action to adopt its new defaults.
+Every current command-palette command can be rebound or unbound. Application and
+project actions can execute without a selected session; session actions execute
+only when the selected harness contributes that capability. Unsupported
+session-action shortcuts are consumed without falling through to native editing.
+The removed ACP actions are absent from the editor; their old overrides remain
+stored but inert. **Select theme…**, **Select mode…** and **Select context
+window…** have no default shortcut. **Restart session** restarts the selected
+saved session's Pi process, not the window; its existing eligibility and
+interruption-confirmation rules still apply. Plus and Equals both invoke Zoom
+in. Existing user overrides remain unchanged when defaults change; Reset the
+affected action to adopt its new defaults.
 
 **Delete sessions…** opens a searchable saved-history picker for repeated deletion. Enter opens tree review above the retained picker; Cancel leaves it unchanged, and completed deletion removes only confirmed-deleted rows in place, selecting the next match without refreshing history. Escape from the picker closes it. See [Delete sessions picker](sessions.md#delete-several-conversations).
 

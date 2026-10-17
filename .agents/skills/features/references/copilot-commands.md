@@ -67,7 +67,7 @@ queueing, mode switching, new session ownership or permission policy is invented
 | `agent-prompt` | Only an interactive/unspecified-mode result may submit its actual returned prompt. Display its supplied display prompt and optional notice. Never treat command invocation failure as this result or send twice. |
 | `show-dialog` | Basic unscoped model-picker requests can present the reported model catalog and return the selection to the originating command. Model enabling, settings scopes and other dialog kinds are unsupported. |
 | `set-model`, `set-plan-model` | Explicit unsupported notice, no approximation or fallback setter. The pinned release's invocation-effect finalizer is internal, not a public SDK consumer API. Existing Nimrod model controls still work independently. |
-| Unknown/malformed result or unsupported mode | Session-owned error; no speculative prompt/action or automatic replay. A real mode change disconnects before follow-on work under the existing interactive-only contract. |
+| Unknown/malformed result or unknown mode | Session-owned error; no speculative prompt/action or automatic replay. Supported Interactive, Plan and Autopilot changes reconcile through the session mode configuration; unknown values disconnect before follow-on work. |
 
 Command-output rows are **connection-local presentation**, not invented persisted
 Copilot events. They survive switching within that connection, not Close/Resume.
