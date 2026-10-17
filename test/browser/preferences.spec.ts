@@ -7,9 +7,16 @@ test('fresh offline session model and effort controls share the searchable palet
     await page.locator(visible('prompt')).fill('Keep unsent');
     await page.locator(visible('model')).click();
     await expect(page.locator('#palette-title')).toHaveText('Select model');
-    await expect(page.locator('#palette-list')).toContainText('fixture/offline-demo');
+    const modelRow = page.locator('#palette-list [role=option]').first();
+    await expect(modelRow.locator('.palette-item-label')).toHaveText('Offline demo');
+    await expect(modelRow.locator('.palette-item-description')).toHaveText('fixture');
+    const modelGeometry = await modelRow.evaluate(option => ({
+      label: option.querySelector('.palette-item-label')!.getBoundingClientRect().left,
+      detail: option.querySelector('.palette-item-description')!.getBoundingClientRect().left,
+    }));
+    expect(modelGeometry.detail).toBe(modelGeometry.label);
     await expect(page.locator('#palette-list [aria-current=true] .palette-selection-marker')).toHaveText('•');
-    await expect(page.locator('#palette-list .session-indicator, #palette-list small')).toHaveCount(0);
+    await expect(page.locator('#palette-list .session-indicator')).toHaveCount(0);
     await expect(page.locator('#palette-list')).not.toContainText('Current');
     await expect(page.locator('#host-dialog')).not.toBeVisible();
     await page.locator('#palette-input').fill('offline');

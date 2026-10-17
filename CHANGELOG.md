@@ -26,6 +26,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Model-picker names and secondary details stay aligned when the current-value marker is present.
 - Empty assistant text/reasoning entries no longer leave orphaned accent lines and gaps between cards, including Copilot tool-only messages. Streaming text reveals the same retained entry without rebuilding tool cards.
 
 - Copilot model/thinking changes no longer lose an idle/readiness transition while another configuration update is settling, preventing a queued transcript card from remaining pinned indefinitely. Configuration titles use the same Queued/Steering shimmer treatment, and truly unavailable selections report through the session notice banner instead of creating pending progress.
