@@ -1,7 +1,13 @@
 import type { PiSession } from './session';
-import { ownedSessionStop, sessionConnectionState, type SessionLifecycle, type SessionLifecycleHost, type SessionLifecycleOwner } from '../session-lifecycle';
+import { ownedSessionStop, sessionConnectionState, type SessionLifecycle, type SessionLifecycleHost, type SessionLifecycleOwner, type LaunchMode } from '../session-lifecycle';
+import type { SessionFile } from './session-file';
 
-export function piSessionLifecycle(readOwner: () => SessionLifecycleOwner, backend: { session?: PiSession }, host: SessionLifecycleHost): SessionLifecycle {
+export interface PiSessionLifecycleOwner extends SessionLifecycleOwner {
+  mode: LaunchMode;
+  file?: SessionFile;
+}
+
+export function piSessionLifecycle(readOwner: () => PiSessionLifecycleOwner, backend: { session?: PiSession }, host: SessionLifecycleHost): SessionLifecycle {
   return {
     label: 'Pi',
     get identity() {
@@ -11,7 +17,7 @@ export function piSessionLifecycle(readOwner: () => SessionLifecycleOwner, backe
     },
     get key() { const owner = readOwner(); return owner.mode !== 'temporary' && owner.file?.exists ? owner.file.path : undefined; },
     get draftScope() { return this.key === undefined ? undefined : `file:${this.key}`; },
-    get connection() { return sessionConnectionState(readOwner(), backend.session); },
+    get connection() { return sessionConnectionState(readOwner(), !!backend.session && !backend.session.state.sessionUnavailable); },
     connectOnStartup: true,
     eligibility() {
       if (!this.identity) return 'unavailable';

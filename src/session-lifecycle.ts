@@ -1,37 +1,48 @@
 import type { ConnectionEligibility } from './session-connection';
 import { lastUsed } from './session-recency';
 
-export interface SessionFile {
-  path: string;
-  sessionId: string;
-  exists: boolean;
-  parentSession?: string | null;
-  lastUserMessageAt?: number;
-}
 export type LaunchMode = 'saved' | 'temporary' | 'resume';
 export type SavedSessionIdentity =
   | { path: string; sessionId: string }
   | { kind: 'acp'; profile: 'copilot'; sessionId: string };
 export type SavedSidebarSession = SavedSessionIdentity & { name: string; lastUsed: number };
-export interface ConnectSessionOptions { copyDraft?: string; acceptedAction?: boolean; initialName?: string; }
+/** A previously accepted user action may outlive the palette/settings surface that accepted it. */
+export interface ConnectSessionOptions { acceptedAction?: boolean; }
 export type SessionConnectionState = 'disconnected' | 'connecting' | 'connected';
 
-/** Nimrod lifecycle only. Conversation, configuration and tool semantics stay backend-owned. */
-export interface SessionLifecycle {
-  readonly label: string;
+/** Read-only bookkeeping for the project layout and draft store; never harness history. */
+export interface SessionPersistence {
   readonly identity: SavedSessionIdentity | undefined;
   readonly key: string | undefined;
   readonly draftScope: string | undefined;
+}
+
+/** Connection coordinator and shell teardown port, not prompt cancellation or history discovery. */
+export interface SessionConnectivity {
+  readonly label: string;
   readonly connection: SessionConnectionState;
   readonly connectOnStartup: boolean;
+  /** Selection eligibility, not permission to create a new session or a readiness acknowledgement. */
   eligibility(): ConnectionEligibility;
+  /** Settles when the guarded attempt finishes, including a skipped or locally reported failure.
+   * Read connection state for readiness. Never submits/replays a prompt or navigates on completion.
+   */
   connect(options?: ConnectSessionOptions): Promise<void>;
+  /** Observe owned child exit; concurrent calls for one token share work. Failure retains ownership
+   * and permits a later explicit retry. This is not the composer's Stop/cancel-turn action.
+   */
   stop(): Promise<void>;
+  /** Synchronously retire local transport/pending operations. Does not itself await native exit;
+   * concrete disconnect observers may request stop. Saved identity/drafts remain intact.
+   */
   disconnect(reason: string): void;
 }
+
+/** Composition convenience, not a growing universal harness controller. */
+export interface SessionLifecycle extends SessionPersistence, SessionConnectivity {}
+
+/** Only process/connection bookkeeping is shared; concrete integrations own their identity inputs. */
 export interface SessionLifecycleOwner {
-  mode: LaunchMode;
-  file?: SessionFile;
   token?: string;
   starting: boolean;
   ended: boolean;
@@ -42,12 +53,12 @@ export interface SessionLifecycleHost {
   gate(): 'ready' | 'blocked' | 'unavailable';
 }
 
-export function sessionConnectionState(owner: SessionLifecycleOwner, session: { state: { sessionUnavailable?: boolean } } | undefined): SessionConnectionState {
-  return owner.starting ? 'connecting' : !owner.ended && session && !session.state.sessionUnavailable ? 'connected' : 'disconnected';
+export function sessionConnectionState(owner: Pick<SessionLifecycleOwner, 'starting' | 'ended'>, available: boolean): SessionConnectionState {
+  return owner.starting ? 'connecting' : !owner.ended && available ? 'connected' : 'disconnected';
 }
 
 /** Keep the reservation after a failed stop; deduplicate repeated teardown for one owned token. */
-export function ownedSessionStop(owner: () => SessionLifecycleOwner, stop: SessionLifecycleHost['stop']): () => Promise<void> {
+export function ownedSessionStop(owner: () => Pick<SessionLifecycleOwner, 'token'>, stop: SessionLifecycleHost['stop']): () => Promise<void> {
   let pending: { token: string; task: Promise<void> } | undefined;
   return async () => {
     const token = owner().token;

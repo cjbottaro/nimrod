@@ -11,7 +11,7 @@ export function acpSessionLifecycle(readOwner: () => SessionLifecycleOwner, back
     },
     get key() { return backend.savedSessionId === undefined ? undefined : copilotSessionScope(backend.savedSessionId); },
     get draftScope() { return this.key; },
-    get connection() { return sessionConnectionState(readOwner(), backend.session); },
+    get connection() { return sessionConnectionState(readOwner(), !!backend.session && !backend.session.state.sessionUnavailable); },
     connectOnStartup: false,
     eligibility() {
       if (!this.identity) return 'unavailable';

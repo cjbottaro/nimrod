@@ -1,15 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { piSessionLifecycle } from '../src/pi/session-lifecycle';
+import { piSessionLifecycle, type PiSessionLifecycleOwner } from '../src/pi/session-lifecycle';
 import { acpSessionLifecycle } from '../src/acp/session-lifecycle';
 import { COPILOT_PROFILE, copilotSessionScope } from '../src/acp/profiles';
 import { AcpSession } from '../src/acp/session';
 import { PiSession } from '../src/pi/session';
 import { PiTransport } from '../src/pi/transport';
-import { readSavedSidebarSession, type ConnectSessionOptions, type SessionLifecycle, type SessionLifecycleHost, type SessionLifecycleOwner } from '../src/session-lifecycle';
+import { readSavedSidebarSession, type ConnectSessionOptions, type SessionLifecycle, type SessionLifecycleHost, type SessionLifecycleOwner, type SessionPersistence } from '../src/session-lifecycle';
 
 function fixture(kind: 'pi' | 'copilot') {
-  const owner: SessionLifecycleOwner = { mode: 'saved', starting: false, ended: false };
+  const owner: PiSessionLifecycleOwner = { mode: 'saved', starting: false, ended: false };
   let gate: ReturnType<SessionLifecycleHost['gate']> = 'ready';
   const connects: ConnectSessionOptions[] = [], stops: string[] = [], disconnected: string[] = [];
   let stop: (token: string) => Promise<void> = async () => {};
@@ -100,6 +100,22 @@ for (const kind of ['pi', 'copilot'] as const) {
     assert.deepEqual(f.stops, ['owned-a', 'owned-b', 'owned-b']);
   });
 }
+
+test('ACP lifecycle needs only connection ownership; persistence consumers need no controller operations', async () => {
+  const owner: SessionLifecycleOwner = { starting: false, ended: true };
+  const backend = { profile: COPILOT_PROFILE, savedSessionId: 'saved-id' };
+  let stops = 0;
+  const lifecycle = acpSessionLifecycle(() => owner, backend, {
+    connect: async () => {}, stop: async () => { stops++; }, gate: () => 'ready',
+  });
+  const persistence: SessionPersistence = lifecycle;
+  assert.deepEqual(persistence.identity, { kind: 'acp', profile: 'copilot', sessionId: 'saved-id' });
+  assert.equal(lifecycle.eligibility(), 'connectable');
+  await lifecycle.stop();
+  assert.equal(stops, 0, 'no token means no owned process to stop');
+  lifecycle.disconnect('Not connected');
+  assert.equal(persistence.key, copilotSessionScope('saved-id'));
+});
 
 test('saved reference decoding preserves legacy Pi entries and tagged Copilot entries without mixing identities', () => {
   const pi = { path: '/fixture/session.jsonl', sessionId: 'saved-id', name: 'Pi', lastUsed: 100 };

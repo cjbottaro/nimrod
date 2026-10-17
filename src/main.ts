@@ -4,8 +4,10 @@ import { acpInteraction } from './acp/view-policy';
 import { createPiViewProjection, piInteraction } from './pi/view-policy';
 import { piSession, acpSession, acpProfile as profileFor, sessionActions, type SessionAction, type SessionBackend } from './session-backend';
 import { piSessionLifecycle } from './pi/session-lifecycle';
+import type { SessionFile } from './pi/session-file';
+import { startPiSession, type PiLaunchInfo } from './pi/session-startup';
 import { acpSessionLifecycle } from './acp/session-lifecycle';
-import { readSavedSidebarSession, type SessionLifecycle, type SessionFile, type LaunchMode, type SavedSidebarSession } from './session-lifecycle';
+import { readSavedSidebarSession, type SessionLifecycle, type LaunchMode, type SavedSidebarSession } from './session-lifecycle';
 import type { ConversationViewMessage, ConversationView } from './conversation-view-host';
 import { COPILOT_PROFILE, copilotSessionScope, parseAcpProfile, type AcpProfile } from './acp/profiles';
 import { mountConversationView } from './conversation-view';
@@ -149,7 +151,6 @@ function syncPopouts(): void {
   popouts.sync(tabs.map(tab => ({ runtimeId: tab.id, pi: tab.file?.exists && tab.mode !== 'temporary'
     ? { path: tab.file.path, sessionId: tab.file.sessionId } : null })), presented?.id ?? null);
 }
-interface LaunchInfo { cwd: string; session?: SessionFile; }
 interface SessionSummary { path: string; sessionId: string; name?: string; preview: string; modified: number; parentSession?: string | null; lastUserMessageAt?: number; }
 interface Tab {
   readonly backend: SessionBackend;
@@ -686,7 +687,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
     stop: token => invoke<void>('stop_acp', { token }),
     gate: () => acpReady ? 'ready' : 'blocked',
   }) : piSessionLifecycle(() => tab, backend, {
-    connect: options => launchPi(tab, options.copyDraft, options.acceptedAction, options.initialName),
+    connect: options => launchPi(tab, undefined, options.acceptedAction),
     stop: token => invoke<void>('stop_pi', { token }),
     gate: () => deletion.blocked(tab.file?.path) ? 'unavailable' : tab.deleting || deletion.locked(tab.file?.path) ? 'blocked' : 'ready',
   });
@@ -1106,10 +1107,9 @@ async function launchPi(tab: Tab, copyDraft?: string, acceptedAction = false, in
   const rpc = new PiTransport(message => invoke('write_pi', { token, message }));
   const mode = tab.file?.exists ? 'resume' : tab.mode;
   const config = { cwd: workspace, ...runtime.current(), mode, sessionName: initialName, sessionFile: mode === 'resume' ? tab.file?.path : undefined, sessionId: mode === 'resume' ? tab.file?.sessionId || undefined : undefined };
-  let launchInfo: LaunchInfo;
+  let launchInfo: PiLaunchInfo;
   let identityGeneration = 0;
   let confirmedRaw: { path: string; sessionId: string } | undefined;
-  let startupPackets: Packet[] | undefined = [];
   let shellState: ConversationState | undefined;
   const current = new PiSession(rpc, {
     performance: settingsSurface.performanceProbe,
@@ -1180,22 +1180,26 @@ async function launchPi(tab: Tab, copyDraft?: string, acceptedAction = false, in
   try {
     if (copyDraft) tab.drafts.select(`unassigned:${tab.id}`, copyDraft);
     tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
-    const onEvent = new Channel<Packet>();
-    onEvent.onmessage = packet => { if (!currentToken()) return; if (startupPackets) startupPackets.push(packet); else rpc.receive(packet); };
-    launchInfo = await invoke<LaunchInfo>('start_pi', { config, token, onEvent });
-    if (!launchInfo?.cwd || launchInfo.cwd !== workspace) throw new Error('Native host did not confirm this project');
-    if (mode === 'resume' && !launchInfo.session) throw new Error('Native host did not validate the selected session');
-    if (launchInfo.session) {
-      if (config.sessionId && config.sessionId !== launchInfo.session.sessionId) throw new Error('The session file was replaced with a different session');
-      tab.file = launchInfo.session;
-      tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.select(`file:${launchInfo.session.path}`) });
-    }
-    const packets = startupPackets; startupPackets = undefined;
-    for (const packet of packets) rpc.receive(packet);
-    await current.initialize(initialName);
+    await startPiSession(config, {
+      start: receive => {
+        const onEvent = new Channel<Packet>(); onEvent.onmessage = receive;
+        return invoke<PiLaunchInfo>('start_pi', { config, token, onEvent });
+      },
+      currentProject: () => workspace,
+      current: currentToken,
+      receive: packet => rpc.receive(packet),
+      validated: info => {
+        launchInfo = info;
+        if (info.session) {
+          tab.file = info.session;
+          tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.select(`file:${info.session.path}`) });
+        }
+      },
+      initialize: () => current.initialize(initialName),
+    });
     if (presented === tab && !tab.restarting && !document.querySelector('dialog[open]')) tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true });
   } catch (e) {
-    startupPackets = undefined; rpc.disconnect(String(e));
+    rpc.disconnect(String(e));
     try { await tab.lifecycle.stop(); } catch (stopError) { notices.report({ id: `${tab.id}:stop:${++noticeSequence}`, owner: tab.id, operation: 'Stop Pi', message: String(stopError) }); }
     showNotice(tab, String(e), !!tab.file?.exists); tab.ended = true;
   } finally { tab.starting = false; updateTab(tab); controls(); }
@@ -1212,7 +1216,7 @@ function newNamedSession(): void {
 async function newSession(mode: LaunchMode = 'saved', copyDraft?: string, initialName?: string): Promise<void> {
   if (!ready || settings.isOpen || !await ensureWorkspace()) return;
   if (!ready || unloading || settings.isOpen) return;
-  const tab = createTab(mode, undefined, undefined, navigation.nextRecency()); activate(tab); await tab.lifecycle.connect({ copyDraft, acceptedAction: true, initialName });
+  const tab = createTab(mode, undefined, undefined, navigation.nextRecency()); activate(tab); await launchPi(tab, copyDraft, true, initialName);
 }
 async function openSession(info: Pick<SessionSummary, 'path' | 'sessionId' | 'name' | 'lastUserMessageAt'>): Promise<void> {
   if (!ready || settings.isOpen || !await ensureWorkspace()) return;
