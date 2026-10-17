@@ -42,11 +42,18 @@ export function createCopilotConfiguration(client) {
     snapshot,
     async apply(session, setting, value) {
       if (setting === 'mode') {
+        if (!['interactive', 'plan', 'autopilot'].includes(value)) throw new Error('Unknown Copilot session mode. Nothing was changed.');
         const expectedMode = await session.rpc.mode.get();
+        if (!['interactive', 'plan', 'autopilot'].includes(expectedMode)) throw new Error('Copilot returned an unknown current mode. Nothing was changed.');
         const result = await session.rpc.mode.set({ mode: value, expectedMode });
         if (!record(result) || result.modeApplied === false) throw new Error('Copilot did not apply the requested mode.');
-        if (result.confirmation || result.deferImplementation || result.armInteractiveContinuation)
-          throw new Error('Copilot applied a mode transition that requires unsupported follow-up. Reconnect to read its authoritative state; nothing was replayed.');
+        const unsupported = [
+          result.confirmation && 'model confirmation',
+          result.deferImplementation && 'deferred implementation',
+          result.armInteractiveContinuation && 'interactive continuation',
+        ].filter(Boolean);
+        if (unsupported.length)
+          throw new Error(`Copilot mode transition requires unsupported ${unsupported.join(', ')}. Reconnect to read its authoritative state; nothing was replayed.`);
         const notice = [result.warning, result.message, ...(Array.isArray(result.deprecationWarnings) ? result.deprecationWarnings : [])]
           .filter(value => typeof value === 'string' && value).join('\n');
         return { model: await snapshot(session), mode: await session.rpc.mode.get(), ...(notice ? { notice } : {}) };

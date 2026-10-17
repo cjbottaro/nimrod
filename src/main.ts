@@ -1145,16 +1145,20 @@ async function requestCopilotDecision(tab: Tab, kind: 'permission' | 'input' | '
   }
   const details = document.createElement('div');
   if (kind === 'plan') {
+    if (!Array.isArray(request.actions) || !request.actions.length
+      || !request.actions.every(action => typeof action === 'string' && action.length > 0))
+      throw new Error('Copilot did not supply valid plan continuation choices.');
     const title = document.createElement('strong'); title.textContent = typeof request.summary === 'string' ? request.summary : 'Copilot finished planning';
     details.append(title);
     if (typeof request.planContent === 'string' && request.planContent) {
       const plan = document.createElement('pre'); plan.textContent = request.planContent; details.append(plan);
     }
-    const actions = Array.isArray(request.actions) ? request.actions.filter((value): value is string => typeof value === 'string' && !!value) : [];
+    const actions = request.actions.filter((value): value is string => typeof value === 'string');
     const choice = await requestSessionChoice(tab, details, actions.map(action => ({
       id: action, label: action === 'interactive' ? 'Continue interactively' : action === 'autopilot' ? 'Continue with Autopilot'
         : action === 'exit_only' ? 'Finish planning' : action,
     })), signal);
+    if (choice !== undefined && !actions.includes(choice)) throw new Error('This Copilot plan action is no longer available.');
     return choice === undefined ? { approved: false } : { approved: true, selectedAction: choice };
   }
   const title = document.createElement('strong'); title.textContent = typeof request.question === 'string' ? request.question : 'Copilot requests input';

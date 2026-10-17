@@ -67,6 +67,12 @@ the tier name as the primary label and a reported/catalog token amount as
 secondary detail when available. Model changes do not carry an effort or context
 tier that may be invalid for the target model.
 
+Autopilot intermediate idle is not configuration readiness. Accepted changes
+remain queued until a terminal root idle/abort/error boundary; no host-generated
+continuation is sent. Mode choices are opaque shared configuration, while SDK
+continuation and exit-plan semantics stay in the concrete Copilot integration.
+See [mode lifecycle](copilot-sdk.md#plan-and-autopilot-lifecycle).
+
 Copilot model choices use the catalog's friendly name as the picker label and model ID as secondary detail. Stable model IDs, not rendered labels or list positions, identify selections.
 
 New sessions honor non-null Copilot model/effort preferences read through the SDK; each null value is omitted independently from creation options. Unknown display values are lowercase `default model` / `default effort`, and actual session values supersede creation inputs. Resume never inherits newly configured defaults. `copilot/configuration.mjs` owns that concrete bridge-side policy; live getters/pickers remain behind `SessionConfiguration`, and presentation remains behind `StatusAreaSnapshot`. Native `session.model_change`/deselection outrank older results. Mutation failure/uncertainty disconnects rather than continuing with unconfirmed configuration. Shared code checks the reconciled getter before declaring success and never replays a failed request. [Copilot SDK](copilot-sdk.md) owns native transport/API scope.

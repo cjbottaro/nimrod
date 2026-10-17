@@ -50,7 +50,8 @@ const config = () => ({
   onAutoModeSwitchRequest: () => 'no',
 });
 function event(value) {
-  if (!value.agentId && ['session.idle', 'session.error'].includes(value.type)) cancelDecisions();
+  if (!value.agentId && (value.type === 'session.error'
+    || value.type === 'session.idle' && (value.data?.mode !== 'autopilot' || value.data?.aborted === true))) cancelDecisions();
   if (replaying) buffered.push(value);
   else {
     send({ kind: 'event', event: value });
@@ -74,7 +75,11 @@ async function dispatch(message) {
       if (typeof message.value?.answer !== 'string' || typeof message.value?.wasFreeform !== 'boolean') throw new Error('Invalid input answer');
     } else if (typeof message.value?.approved !== 'boolean'
       || message.value.selectedAction !== undefined && typeof message.value.selectedAction !== 'string'
-      || message.value.feedback !== undefined && typeof message.value.feedback !== 'string') throw new Error('Invalid plan-mode decision');
+      || message.value.feedback !== undefined && typeof message.value.feedback !== 'string'
+      || message.value.approved && (!Array.isArray(pending.request.actions)
+        || !pending.request.actions.includes(message.value.selectedAction))
+      || !message.value.approved && message.value.selectedAction !== undefined)
+      throw new Error('Invalid plan-mode decision; choose an action advertised by this request.');
     decisions.delete(message.decisionId);
     pending.resolve(message.value);
     return;

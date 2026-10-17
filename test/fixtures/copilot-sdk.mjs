@@ -142,6 +142,16 @@ class Session {
   }
   async run(prompt, turn) {
     this.emit('user.message', { content: prompt }); this.emit('assistant.turn_start', {});
+    if (prompt === 'plan mode fixture') {
+      const result = this.config.onExitPlanModeRequest({
+        summary: 'Fixture plan', planContent: 'Read, change, review.',
+        actions: ['interactive', 'autopilot', 'exit_only'],
+      });
+      this.emit('session.idle', { mode: 'autopilot' });
+      const choice = await result;
+      this.emit('assistant.message', { messageId: `plan-${turn}`, content: JSON.stringify(choice) });
+      this.emit('session.idle', { mode: 'interactive' }); return;
+    }
     if (prompt.startsWith('scoped permission fixture:')) {
       const request = JSON.parse(prompt.slice('scoped permission fixture:'.length));
       const result = await this.permission(request);

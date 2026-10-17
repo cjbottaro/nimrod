@@ -68,6 +68,29 @@ test('production SDK bridge loads only exact project members and disconnects wit
     await assert.rejects(f.request('delete', { sessionId: 'fixture-sdk' }), /history-only/);
   } finally { await f.close(); }
 });
+
+for (const selectedAction of ['interactive', 'autopilot', 'exit_only', undefined]) {
+  test(`plan decisions remain scoped and survive intermediate idle (${selectedAction ?? 'cancel'})`, { timeout: 5000 }, async () => {
+    const f = bridge('plan');
+    try {
+      await f.request('initialize');
+      await f.request('connect', { sessionId: 'fixture-sdk' });
+      await f.request('prompt', { text: 'plan mode fixture' });
+      const plan = await f.waitFor(packet => packet.kind === 'plan');
+      await f.waitFor(packet => packet.kind === 'event' && packet.event.type === 'session.idle' && packet.event.data.mode === 'autopilot');
+      for (const value of [
+        { approved: true },
+        { approved: true, selectedAction: 'invented-action' },
+        { approved: false, selectedAction: 'autopilot' },
+      ]) await assert.rejects(f.request('decision', { decisionId: plan.id, value }), /Invalid plan-mode decision/);
+      const value = selectedAction === undefined ? { approved: false } : { approved: true, selectedAction };
+      await f.request('decision', { decisionId: plan.id, value });
+      const response = await f.waitFor(packet => packet.kind === 'event' && packet.event.type === 'assistant.message');
+      assert.deepEqual(JSON.parse(response.event.data.content), value);
+      await assert.rejects(f.request('decision', { decisionId: plan.id, value }), /no longer pending/);
+    } finally { await f.close(); }
+  });
+}
 for (const modelState of ['resolved', 'model-only', 'unresolved']) {
   test(`new SDK sessions honor configured creation defaults before any prompt (${modelState})`, { timeout: 5000 }, async () => {
     let session: CopilotSession | undefined;
