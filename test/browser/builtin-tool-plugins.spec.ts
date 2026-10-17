@@ -40,6 +40,9 @@ test('dedicated write plugin keeps requested content and streaming results indep
     await expect(requested).toHaveAttribute('data-fixture-identity', 'requested');
     await expect(output).toHaveAttribute('data-fixture-identity', 'output');
     await expect(requested).toBeFocused();
+    // Execution end still has a result-processing overlay until Pi settles.
+    await expect(output).toHaveClass(/tool-output-streaming/);
+    await emit([{ type: 'agent_settled' }]);
     await expect(output).toHaveClass(/tool-output-final/);
     expect(await requested.textContent()).toBe(content);
     expect(await requested.evaluate(node => node.scrollTop)).toBe(positions[0]);

@@ -8,7 +8,7 @@ Read the [human guide](../../../../docs/sessions.md),
 
 ## ACP POC boundary
 
-The saved-history/identity/temporary contracts below remain Pi's. [ACP POC sessions](acp-harnesses.md) carry an immutable frozen `acpProfile`, separate `AcpSession` and native `AcpHost`; they share project navigation but never enter the Pi session catalog or saved layout. Their runtime UUID and memory-only draft/pop-out scope reuse Nimrod's temporary-storage mechanism without promising that the agent disables its own history. New session remains Pi-default; New ACP session is explicit. Close confirms Nimrod state loss and routes to `stop_acp`; window/app teardown stops both hosts independently. No ACP resume/restart/deletion/migration is implemented or accepted. Mixed/native fixtures are authored, not run.
+The saved-history/identity/temporary contracts below remain Pi's. [ACP POC sessions](acp-harnesses.md) carry an immutable frozen `acpProfile`, separate `AcpSession` and native `AcpHost`; they share project navigation but never enter the Pi session catalog or saved layout. Their runtime UUID and memory-only draft/pop-out scope reuse Nimrod's temporary-storage mechanism without promising that the agent disables its own history. New session remains Pi-default; New ACP session is explicit. Close confirms Nimrod state loss and routes to `stop_acp`; window/app teardown stops both hosts independently. No ACP resume/restart/deletion/migration is implemented or accepted. Mixed shell/browser and native pipe/ownership fixtures pass; real-agent/native app acceptance remains pending.
 
 ## Specification and acceptance criteria
 

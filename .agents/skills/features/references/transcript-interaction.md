@@ -10,7 +10,7 @@ Preserve live follow versus older-history reading through incremental updates, c
 
 ## ACP POC reuse
 
-`src/conversation-view.ts` exposes the existing mounted runtime under a shared name; no second scroll/follow engine is introduced. ACP feeds display snapshots and optional continuous dirty-row revisions directly, not Pi events. Structural changes/gaps use the same full fallback, hidden catch-up and disposal boundaries. Inline ACP permission regions live in their owning interaction area, never a background global modal; their layout changes use the existing viewport resize owner. `test/browser/acp-sessions.spec.ts` adds mixed-backend disclosure/reader/draft coverage, authored but not run. See [ACP POC](acp-harnesses.md).
+`src/conversation-view.ts` exposes the existing mounted runtime under a shared name; no second scroll/follow engine is introduced. ACP feeds display snapshots and optional continuous dirty-row revisions directly, not Pi events. Structural changes/gaps use the same full fallback, hidden catch-up and disposal boundaries. Inline ACP permission regions live in their owning interaction area, never a background global modal; their layout changes use the existing viewport resize owner. `test/browser/acp-sessions.spec.ts` supplies passing offline mixed-backend disclosure/reader/draft coverage; this is not native app acceptance. See [ACP POC](acp-harnesses.md).
 
 ## Code map
 

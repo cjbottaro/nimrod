@@ -15,7 +15,7 @@ Apply the [optimistic interaction policy](references/architecture.md#optimistic-
 
 ## Harness integration direction
 
-**ACP has an experimental source POC; checks, real-agent compatibility and native acceptance are pending.** Follow [ACP harness support](references/acp-harnesses.md) for decisions, staged implementation, the single-worktree/checkpoint strategy and evidence boundaries. Copilot CLI is the first concrete target; a second ACP agent must establish interoperability. Pi remains the primary integration and retains its native transport/session semantics. ACP is a reusable integration alongside Pi, not a mandatory internal protocol for every harness.
+**ACP has an offline-validated experimental POC; real-agent compatibility and native app acceptance are pending.** Follow [ACP harness support](references/acp-harnesses.md) for decisions, staged implementation, the single-worktree/checkpoint strategy and evidence boundaries. Copilot CLI is the first concrete target; a second ACP agent must establish interoperability. Pi remains the primary integration and retains its native transport/session semantics. ACP is a reusable integration alongside Pi, not a mandatory internal protocol for every harness.
 
 Session backends are immutable; model/thinking changes never switch harnesses. Preserve bespoke harness functionality behind a shared transcript/plugin runtime and one Nimrod-owned command palette. Plugin sets may be harness/agent-specific, but shared UI components must be public and dogfooded equally by bundled and external plugins; see the [planned plugin boundary](references/card-plugins.md#multi-harness-plugin-boundary).
 

@@ -97,10 +97,14 @@ test('deletion review preserves the idle sidebar indicator; only confirmed shutd
       await expect(row.locator('.session-row')).toHaveAttribute('aria-label', 'Saved fixture — Inactive');
       await expect(page.locator('#sidebar-working-count')).toHaveText('0');
       await page.keyboard.press(id === 'cancel' ? 'Escape' : 'Enter');
-      await expect(page.locator('#deletion-review')).not.toBeVisible();
       if (id === 'cancel') {
+        await expect(page.locator('#deletion-review')).not.toBeVisible();
         await demo.deletionEvent(phase(id, 'release'));
         await expect(indicator).toHaveAttribute('data-state', 'inactive');
+      } else {
+        // Confirmation keeps review mounted through owned shutdown/removal.
+        await expect(page.locator('#deletion-review')).toBeVisible();
+        await expect.poll(() => demo.calls.filter(call => call.command === 'confirm_session_deletion' && call.args.confirmed === true).length).toBe(1);
       }
     }
     await demo.deletionEvent(phase('check', 'check'));
@@ -110,6 +114,7 @@ test('deletion review preserves the idle sidebar indicator; only confirmed shutd
     expect(await indicator.evaluate(node => getComputedStyle(node, '::before').animationName)).toBe('sidebar-indicator-spin');
     await expect(page.locator('#sidebar-working-count')).toHaveText('0');
     await demo.deletionEvent({ id: 'complete', phase: 'complete', files: [file], results: [{ file, deleted: true }], pending: false });
+    await expect(page.locator('#deletion-review')).not.toBeVisible();
     await expect(row).toHaveCount(0); await expect(prompt).toHaveValue('Keep the offline draft');
     expect(demo.children.size).toBe(1); expect(demo.calls.some(call => call.command === 'delete_session_tree')).toBe(false);
     expect(demo.errors).toEqual([]);

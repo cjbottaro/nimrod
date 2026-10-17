@@ -73,7 +73,7 @@ Core always retains raw inputs. `renderPresentation` accepts optional `rawInputs
 
 ## Harness targets and shared runtime
 
-This surface is new in the experimental [ACP POC](acp.md); new fixtures have not yet been run.
+This surface is new in the experimental [ACP POC](acp.md). Public-helper bundling, mounting, scoping and raw-recovery fixtures pass offline; native app acceptance remains pending.
 
 Executable plugin exports may declare `targets`:
 

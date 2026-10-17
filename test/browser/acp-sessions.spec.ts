@@ -37,7 +37,10 @@ test('offline ACP and Pi keep independent drafts, permissions, configuration and
     await page.locator('#palette-input').fill('Fixture large');
     await page.locator('#palette-input').press('Enter');
     await expect(page.locator(visible('model'))).toHaveText('Fixture large');
-    await page.locator(visible('prompt')).fill('/context'); await page.locator(visible('prompt')).press('Enter');
+    await page.locator(visible('prompt')).fill('/context');
+    await page.locator(visible('prompt')).press('Tab');
+    await expect(page.locator(visible('prompt'))).toHaveValue('/context ');
+    await page.locator(visible('prompt')).press('Enter');
     await expect(page.locator(visible('messages'))).toContainText('Offline context only; no provider request.');
     const piStops = demo.calls.filter(call => call.command === 'stop_pi').length;
     const acpStops = demo.calls.filter(call => call.command === 'stop_acp').length;

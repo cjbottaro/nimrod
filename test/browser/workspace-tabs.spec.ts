@@ -518,6 +518,7 @@ test('Close reuses the latest connected session across filters with its draft an
 test('older-history reading position survives hiding a session during background streaming', async ({ page }) => {
   const demo = await demoFixture(page);
   try {
+    await demo.editPreferences(JSON.stringify({ 'appearance.autoFollowAfterSending': 'never' }));
     await demo.turn(1); await demo.turn(2);
     const firstRow = page.locator(`#${await page.locator(sessions).getAttribute('id')}`);
     await page.locator(visible('transcript-viewport')).hover({ position: { x: 20, y: 30 } });

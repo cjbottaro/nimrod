@@ -75,6 +75,7 @@ test('sidebar separator supports keyboard/reset, remains on its edge in narrow o
 test('sidebar resize leaves older transcript reading paused during subsequent streaming', async ({ page }) => {
   const demo = await demoFixture(page);
   try {
+    await demo.editPreferences(JSON.stringify({ 'appearance.autoFollowAfterSending': 'never' }));
     await demo.turn(1); await demo.turn(2);
     const pane = page.locator(visible('transcript-viewport'));
     await pane.hover(); await page.mouse.wheel(0, -300);

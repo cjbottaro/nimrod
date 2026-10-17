@@ -53,7 +53,7 @@ createInterface({ input: process.stdin }).on('line', line => {
     turn = message;
     const prompt = message.params.prompt.map(content => content.text || '').join('');
     update({ sessionUpdate: 'user_message_chunk', content: { type: 'text', text: prompt } });
-    if (prompt === '/context') {
+    if (prompt.trim() === '/context') {
       update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Offline context only; no provider request.' } }); finish('end_turn'); return;
     }
     update({ sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'This is an offline fixture, not model reasoning.' } });

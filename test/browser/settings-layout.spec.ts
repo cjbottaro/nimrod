@@ -54,7 +54,12 @@ for (const width of [1440, 800, 480]) {
       await settingsPage.locator('#settings-category-keybindings').focus(); await settingsPage.keyboard.press('Home');
       await expect(settingsPage.locator('#settings-category-appearance')).toBeFocused();
       await settingsPage.keyboard.press('ArrowUp'); await expect(settingsPage.locator('#settings-panel-runtime')).toBeVisible();
-      await settingsPage.keyboard.press('Escape'); await expect.poll(() => settingsPage.isClosed()).toBe(true);
+      // The fixture closes this native-window substitute during keydown;
+      // WebKit may reject the remaining keyup after the page is already gone.
+      await settingsPage.keyboard.press('Escape').catch(error => {
+        if (!settingsPage.isClosed() || !/Page closed|Target .*closed/.test(String(error))) throw error;
+      });
+      await expect.poll(() => settingsPage.isClosed()).toBe(true);
       expect(fixture.errors).toEqual([]);
     } finally { await fixture.close(); }
   });

@@ -4,7 +4,7 @@
 
 ## Harness boundary
 
-The detailed delivery/queue/compaction contract below is Pi-specific. The [ACP POC](acp-harnesses.md#current-foundation) reuses the mounted presentation engine through explicit optional `ViewHost.acp` behavior: text-only local Send, no Pi slash interception, only advertised command completion, no busy steering/queue, and agent-labeled Stop. Busy Enter keeps the newer draft. ACP configuration/turn lifecycle stays in `src/acp/session.ts`, not Pi's controller. The default/omitted view behavior retains Pi's existing path. New mixed-shell/offline-browser fixtures are authored, not run.
+The detailed delivery/queue/compaction contract below is Pi-specific. The [ACP POC](acp-harnesses.md#current-foundation) reuses the mounted presentation engine through explicit optional `ViewHost.acp` behavior: text-only local Send, no Pi slash interception, only advertised command completion, no busy steering/queue, and agent-labeled Stop. Busy Enter keeps the newer draft. ACP configuration/turn lifecycle stays in `src/acp/session.ts`, not Pi's controller. The default/omitted view behavior retains Pi's existing path. Mixed-shell/offline-browser fixtures pass in the full gates; native app acceptance remains pending.
 
 ## Specification and acceptance criteria
 

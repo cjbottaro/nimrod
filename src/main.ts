@@ -587,7 +587,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     { id: 'resume', label: 'Resume session…', detail: 'Open a saved conversation in this project', next: true, run: () => palette.sessions() },
     { id: 'delete-sessions', label: 'Delete sessions…', detail: 'Repeatedly review and delete saved session trees in this project', next: true, run: () => palette.deleteSessions() },
     { id: 'new', label: 'New session', detail: 'Pi · persistent conversation (default harness)', run: () => newSession() },
-    ...(acpReady ? [{ id: 'new-acp', label: 'New ACP session…', detail: 'Experimental · Copilot or a custom ACP agent · text only, no Nimrod history resume', next: true, run: newAcpSessionPicker }] : []),
+    ...(acpReady ? [{ id: 'new-acp', label: 'New ACP session…', detail: 'Experimental · Copilot or a custom ACP agent · text only, in-memory Nimrod state', next: true, run: newAcpSessionPicker }] : []),
     { id: 'new-named', label: 'New named session…', detail: 'Choose a name before starting', next: true, run: newNamedSession },
     ...(tabs.length ? [{ id: 'switch-session', label: 'Switch session…', detail: 'All open sessions, regardless of sidebar view', next: true, run: () => palette.openSessions() }] : []),
     ...(active && !active.acpProfile ? [{ id: 'mcp', label: 'MCP servers…', detail: 'Inspect this Pi session’s MCP connections, exposure and reported errors', next: true, run: () => inspectMcp(active!) }] : []),

@@ -13,13 +13,13 @@ This is the current evidence/acceptance map, not a chronological test log. Featu
 
 ## Current automated validation
 
-[ACP POC](acp-harnesses.md#current-foundation): native launch/ownership, shared transcript/public plugin helpers and mixed-session UI are implemented in source, with protocol/session/card/native/shell/offline-browser fixtures authored but **not run or type-checked**. Rust source formatting only was applied. No app build/launch, offline-agent execution, Copilot/second-agent acceptance or new Pi regression evidence exists. Passing results below predate this work and do not validate it; both `mise run check` and `npm run test:browser` are required when validation is authorized.
+Full `mise run check` passes: **786 TS/Node tests**, **152 Rust tests** (2 installed-Pi smokes intentionally ignored), TypeScript compilation, **81-document** link/anchor validation, Rust formatting and Clippy. Full `npm run test:browser` passes **123 offline WebKit tests**.
+
+[ACP POC](acp-harnesses.md#current-foundation) coverage includes protocol/session ordering, cancellation/permissions, target-scoped plugins/public shell-helper bundling, independent native pipe ownership and mixed Pi/ACP shell/browser behavior. Browser ACP launches execute the real offline fixture subprocess through mocked Tauri IPC; this does not establish native Tauri window/IPC or installed-agent compatibility. The ACP command's description no longer shadows Pi Resume searches; ranking and Pi lifecycle semantics are unchanged. Five stale Pi browser expectations were independently reproduced on `a3e1919` and corrected to their current contracts (settled result-processing, retained deletion review and no-Send-jump reader intent). Settings-window closing also tolerates the expected WebKit post-close keyup error only after confirmed page closure. No app package/build/launch, real Copilot/second-agent startup, paid model work or native/platform acceptance occurred.
 
 Appearance-regression follow-up: TypeScript compilation and Rust formatting/Clippy pass; 71 targeted appearance/presentation/theme/preferences tests, 8 offline WebKit translucency/theme/Settings/pop-out tests and 144 Rust tests pass (2 installed-Pi smokes intentionally ignored). Browser evidence uses mock native material, title and Settings ownership—not a native app launch, macOS visual acceptance or Linux verification.
 
 90%-density follow-up: TypeScript compilation, 20 focused button/appearance tests and 8 offline WebKit modal-layout/translucency tests pass. Contrast is now a lower bound on the eased role curve, not the base of a second ramp; dark Nimrod's normal fill at 90% is ~65% rather than ~80%. Independent legacy-fill comparison covers dark/light system schemes, multiple palettes, both areas and normal/hover states. This covers all palette contrast bounds with known parent tint, composited density, all six shared shells and opaque/sidebar-only/simulated reduced-transparency fallbacks. No native app acceptance/build/launch is implied.
-
-Full `mise run check` passes: **750 TS/Node tests**, **150 Rust tests** (2 installed-Pi smokes intentionally ignored), TypeScript compilation, 78-document link/anchor validation, Rust formatting and Clippy. The seven stale fixture failures are corrected without application changes: shared explicit intentionally-unbound action expectations, selecting Copy rather than Wrap, comparing hidden content against its rendered baseline, preserving the selected settled Working session until leaving the view, accepting slash completion before submitting `/mcp`, and checking filename/directory presentation plus accessible/raw full-path recovery. No browser tests were run for these fixture-only corrections; no packaged app was built/published or user app launched, and no new native/platform acceptance is claimed.
 
 ## Native observations retained
 
@@ -61,6 +61,7 @@ Incremental streaming now adds indexed tool updates, dirty-row presentation, app
 
 | Area | User/platform checks still needed |
 | --- | --- |
+| ACP POC | Installed Copilot and second-agent interoperability, packaged Tauri IPC/window/permission/focus/shutdown behavior, platform-specific launch discovery; offline fixtures are not native app acceptance. ACP history/attachments/login/client services remain unimplemented. |
 | Projects/startup | Finder runtime discovery, rapid cold/warm CLI forwarding, minimized-window focus, native window cycling and pop-out ownership |
 | Drafts | Native typing feel, Close/Quit flush and crash/reload limits; [storage specification](native-drafts.md) |
 | Sessions | Real first-save/exact-file resume, Close/Restart cancellation and failure, independent multi-window shutdown, no replay |

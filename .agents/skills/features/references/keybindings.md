@@ -21,7 +21,7 @@ Every palette action is bindable through one shared dispatcher; empty default bi
 
 ## ACP POC actions
 
-`new-acp` and `acp-options` are project actions with empty default bindings, using the same dispatcher and configurable hints. Existing `new` remains Pi-default even from an ACP session. Model/thinking require the selected ACP session to expose their selectors; Pi MCP inspection is unavailable there. Unavailable matches are still consumed, not passed to text editing. `test/keybindings-fixture.ts` includes the two new intentionally unbound IDs; shell/browser fixtures cover mixed-session dispatch and existing Pi defaults but have not been run for this change. See [ACP POC](acp-harnesses.md).
+`new-acp` and `acp-options` are project actions with empty default bindings, using the same dispatcher and configurable hints. Existing `new` remains Pi-default even from an ACP session. Model/thinking require the selected ACP session to expose their selectors; Pi MCP inspection is unavailable there. Unavailable matches are still consumed, not passed to text editing. `test/keybindings-fixture.ts` includes the two new intentionally unbound IDs; shell/browser fixtures pass for mixed-session dispatch and existing Pi defaults; native shortcut acceptance remains separate. See [ACP POC](acp-harnesses.md).
 
 ## Data and reset semantics
 

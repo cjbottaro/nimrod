@@ -105,6 +105,8 @@ test('horizontal scrolling in assistant code does not unanchor the next single-l
 test('real upward scrolling pauses follow; returning to the bottom resumes it', async ({ page }) => {
   const demo = await demoFixture(page);
   try {
+    // Test reader intent independently of the default idle-Send jump policy.
+    await demo.editPreferences(JSON.stringify({ 'appearance.autoFollowAfterSending': 'never' }));
     await demo.turn(1); await demo.turn(2);
     await expect.poll(async () => (await demo.metrics()).gap).toBeLessThanOrEqual(2);
     await page.locator(visible('transcript-viewport')).hover({ position: { x: 20, y: 30 } });
