@@ -43,7 +43,7 @@ test('Pi view projection keeps lazy history and stable content-only UI dependenc
   assert.equal(first.controls, second.controls);
   assert.equal(first.information, second.information);
   assert.equal(first.queue, second.queue);
-  assert.equal(first.subagents, '2 running');
+  assert.equal(first.subagents, '2 running agents', 'preserve the Pi extension’s reported label');
   assert.equal(first.status, 'Idle — ready for your message');
   const duringWork = project({ ...state, busy: true, compacting: true });
   assert.equal(duringWork.controls?.find(control => control.id === 'model')?.disabled, false, 'Pi preferences remain available during work/compaction');

@@ -1,6 +1,6 @@
 # ACP sessions (experimental POC)
 
-Nimrod has an experimental Agent Client Protocol integration alongside its bespoke Pi integration. **The initial POC passed offline checks and browser tests; the latest shared-view and correctness changes have not yet been validated. It has not been accepted with Copilot or another real agent in the native app.** It is not a broad compatibility guarantee.
+Nimrod has an experimental Agent Client Protocol integration alongside its bespoke Pi integration. **The POC, shared-view extraction and correctness fixes pass offline checks and browser tests. It has not been accepted with Copilot or another real agent in the native app.** It is not a broad compatibility guarantee.
 
 ## Start an ACP session
 

@@ -553,9 +553,15 @@ mod tests {
         let (tx, mut rx) = mpsc::unbounded_channel();
         let output: Output =
             Arc::new(move |packet| tx.send(packet).map_err(|error| error.to_string()));
-        host.start("duplex", "large".into(), std::env::temp_dir(), command, output)
-            .await
-            .unwrap();
+        host.start(
+            "duplex",
+            "large".into(),
+            std::env::temp_dir(),
+            command,
+            output,
+        )
+        .await
+        .unwrap();
         let packet = json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"fixture":"x".repeat(1024 * 1024)}});
         let write = timeout(
             Duration::from_secs(10),
@@ -576,7 +582,10 @@ mod tests {
         host.shutdown().await.unwrap();
         write.unwrap().unwrap();
         let packets = observed.unwrap();
-        assert_eq!(packets[0]["params"]["text"].as_str().unwrap().len(), 8192 * 64);
+        assert_eq!(
+            packets[0]["params"]["text"].as_str().unwrap().len(),
+            8192 * 64
+        );
         assert_eq!(
             packets[1], packet,
             "partial writes must not restart when reads win"

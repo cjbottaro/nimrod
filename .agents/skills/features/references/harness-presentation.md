@@ -1,6 +1,29 @@
 # Harness presentation boundaries
 
-**Status: review changes implemented in source; new/updated fixtures have not been run.** This is the current internal boundary and its rationale, not a public harness SDK. [ACP](acp-harnesses.md) owns protocol/lifecycle scope; [card plugins](card-plugins.md#multi-harness-plugin-boundary) owns the public content API; [verification](verification.md) owns evidence.
+**Status: implemented and offline-validated; real-agent and native app acceptance pending.** This is the current internal boundary and its rationale, not a public harness SDK. [ACP](acp-harnesses.md) owns protocol/lifecycle scope; [card plugins](card-plugins.md#multi-harness-plugin-boundary) owns the public content API; [verification](verification.md) owns evidence.
+
+## Target portfolio and scope
+
+**This is intended product scope, not a claim of implemented support or agent/platform acceptance.** Nimrod remains one shared workspace with a small curated set of first-class integrations, not a separate app per harness or a universal compatibility commitment.
+
+| Integration | Target experience | Commitment |
+| --- | --- | --- |
+| Pi | Excellent | Flagship, bespoke integration that preserves Pi's distinctive supported capabilities and extension ecosystem. |
+| Copilot | Great | Deliberate workflows, controls and presentation through supported interfaces. |
+| Codex | Great | Deliberate workflows, controls and presentation through supported interfaces. |
+| Claude Code | Great | Deliberate workflows, controls and presentation through supported interfaces. |
+| Other ACP agents | Good | Reliable capability-driven baseline, useful generic cards and optional presentation enhancements, without agent-specific completeness promises. |
+
+These tiers distinguish richness and polish, **not correctness**. Every integration must preserve accurate sending/cancellation, permission handling, output, session isolation and process ownership. Generic ACP is not permission to weaken those guarantees.
+
+Scope rules:
+
+- Expose supported harness capabilities when they improve the Nimrod experience; preserve their actual semantics. Shared controls are appropriate where those semantics align, not as an obligation to maintain feature parity.
+- Use supported ACP, SDK or native interfaces where practical. If a capability cannot be accessed readily through a supported interface, omit it. Do not reverse-engineer private behavior, emulate inaccessible capabilities, or pursue completeness with every CLI feature and extension.
+- Harness identity and integration mechanism are distinct. A curated Copilot experience can use the shared ACP client plus specific UI contributions; it does not need a separate transport to be bespoke. SDK use does not require another workspace implementation or imply seamless switching of an existing session's backend.
+- Card plugins enhance content presentation. Nimrod's concrete integrations remain responsible for lifecycle, permissions, configuration and overall correctness; external plugins are not expected to assemble the core harness experience.
+- The named curated portfolio is bounded. Generic ACP compatibility does not make every agent a first-class maintenance commitment.
+- Implement sequentially. Pi remains the flagship and Copilot the immediate second-integration target. Establish value and actual interoperability before further abstraction; no implementation order or delivery promise is set for Codex versus Claude Code.
 
 ## Decision and rationale
 
@@ -49,4 +72,4 @@ See [ACP tool calls](https://agentclientprotocol.com/protocol/tool-calls) for op
 - Plugin selection and lifecycle are separate: mount-time applicability can try another candidate; compatibility/update failure after mounting retains existing raw-fallback behavior. The [plugin reference](card-plugins.md#multi-harness-plugin-boundary) owns precedence and the POC category-matching migration.
 - Added `test/conversation-view.test.ts`: policies, lazy/stable Pi projection, concrete action availability, keyed generic controls and literal rich output/hidden catch-up. Extended ACP session/card fixtures cover partial permissions/null patches, multiple rich blocks, busy configuration updates and scoped candidate selection.
 - Native fixtures cover simultaneous large input/output and Stop during blocked stdin. Offline browser fixtures now use ID-only permission requests, unsolicited configuration during work and an advertised mode selector. Existing Pi suites remain the regression base.
-- **None of this review change's tests/checks/builds have been run.** The prior full offline validation belongs to `35cbd6f`, not this extraction. Real Copilot and a second ACP agent, native Tauri focus/permissions/pipe behavior, macOS visuals and Linux acceptance remain outstanding. Only perform requested validation; scrolling validation includes offline WebKit.
+- Full `mise run check` and `npm run test:browser` now pass for the extraction: **798 TS/Node tests, 154 Rust tests (2 installed-Pi smokes ignored), TypeScript checking, 82-document links/anchors, formatting/Clippy and 123 offline WebKit tests**. The new projection fixture was corrected to preserve Pi's exact reported subagent label; production behavior was unchanged. The browser plugin disclosure/local-input scenario failed intermittently once, then passed three focused repetitions and the complete rerun without a test or production workaround; [verification](verification.md#current-automated-validation) retains that caveat. Real Copilot and a second ACP agent, native Tauri focus/permissions/pipe behavior, macOS visuals and Linux acceptance remain outstanding. Only perform requested validation; scrolling validation includes offline WebKit.
