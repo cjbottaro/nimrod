@@ -317,6 +317,72 @@ shell-signature guard prevent transcript scans/layout persistence per delta.
 
 ## Plan and Autopilot lifecycle
 
+### Verified mode API behavior and remaining handoff limits
+
+User-authorized no-prompt probes on 2026-10-17 used SDK 1.0.22, CLI 1.0.98,
+protocol 3 and custom in-memory `SessionFs` providers. Each session had separate
+memory storage; no user conversations were loaded/deleted, no prompts or
+compaction were sent, and no plan selection was persisted. All owned sessions
+were disconnected and clients stopped.
+
+Observed transitions: Interactive -> Plan -> Interactive -> Autopilot ->
+Interactive, both with ordinary parameters and explicit
+`planModelConfigured:false, restorePlanModel:true`. Every transition emitted
+`session.mode_changed` and returned
+`{status:"unchanged",modelChanged:false,modeApplied:true}`; `mode.get()` confirmed
+the target. The `status` string is not evidence that a mode was unchanged.
+No confirmation/defer/continuation flag was returned.
+
+An additional empty session created with catalog model `auto`, requesting a
+distinct advertised plan model with `planModelConfigured:true`,
+`restorePlanModel:true` and `persistPlanSelection:false`, likewise returned no
+follow-up flags and retained the base model. Entering Plan exposed
+`planBaseModelId:"auto"`; leaving removed it. This does NOT verify a distinct
+planning model actually running or being restored. Do not generalize these
+empty-session observations to conversations with context or active objectives.
+
+The public RPC schema exposes `compactionDecision`, `restorePlanModel` and
+`planExitAction` on `mode.set`; compaction confirmation reports target model,
+current tokens and target limit. An upstream serialization fixture uses
+`compactionDecision:"compact"` on `model.switchTo`, but does not establish
+runtime decision values, rejection semantics or ordering for `mode.set`.
+
+The low-level `ui.handlePendingExitPlanMode({requestId,response})` supports
+`response.deferImplementation`; the high-level `ExitPlanModeResult` does not
+declare that field. The low-level event includes a request ID and plan-authoring
+model omitted by the high-level callback. A future implementation must choose
+one response owner and verify event-interest registration versus callback
+dispatch; never answer both routes. The schema describes deferral as ending
+planning before restoring configuration and submitting a fresh implementation
+turn. No canonical continuation payload or proven sequencing was found for
+`armInteractiveContinuation`. Do not invent them or cast extra callback fields
+past the SDK type.
+
+Known limits: compaction confirmation, distinct-model execution handoff,
+deferred implementation and interactive continuation remain unsupported when
+their result flags are returned. Their existing explicit-error/disconnect
+fallback remains. Further acceptance needs isolated model-backed evidence or
+upstream clarification; no model-backed probe is authorized by the no-prompt
+probe. Native GUI, Linux, active-task Stop and sticky-mode completion are
+unverified. These probes establish only metadata/configuration behavior.
+
+Plan review now offers optional feedback and **Request changes** using the
+existing high-level callback's supported `{approved:false,feedback}` response.
+Approval may also carry feedback; Cancel discards it and returns only
+`{approved:false}`. UI-local choice IDs are separate from native action IDs, so
+future SDK action names cannot collide with Request changes. Feedback never
+uses Send, modifies the composer or creates synthetic transcript history.
+Authored, unrun shell/bridge fixtures cover these responses and draft/focus
+preservation; the configuration fixture records the observed `unchanged`
+model-status result.
+
+Upstream evidence:
+- [Plan callback support](https://github.com/github/copilot-sdk/issues/1053)
+- [Mode callback end-to-end example](https://github.com/github/copilot-sdk/blob/main/python/e2e/test_mode_handlers_e2e.py)
+- [Model RPC serialization fixture](https://github.com/github/copilot-sdk/blob/main/dotnet/test/Unit/RpcModelCompatibilityTests.cs)
+
+### Runtime and presentation ownership
+
 Mode selection reuses `SessionConfiguration` with opaque choices. Copilot owns
 planning and continuation; shared transcript, navigation and notification code
 consume semantic Working/completion state only. No universal Plan/Autopilot

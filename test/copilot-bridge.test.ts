@@ -69,7 +69,7 @@ test('production SDK bridge loads only exact project members and disconnects wit
   } finally { await f.close(); }
 });
 
-for (const selectedAction of ['interactive', 'autopilot', 'exit_only', undefined]) {
+for (const selectedAction of ['interactive', 'autopilot', 'exit_only', 'revise', undefined]) {
   test(`plan decisions remain scoped and survive intermediate idle (${selectedAction ?? 'cancel'})`, { timeout: 5000 }, async () => {
     const f = bridge('plan');
     try {
@@ -83,7 +83,8 @@ for (const selectedAction of ['interactive', 'autopilot', 'exit_only', undefined
         { approved: true, selectedAction: 'invented-action' },
         { approved: false, selectedAction: 'autopilot' },
       ]) await assert.rejects(f.request('decision', { decisionId: plan.id, value }), /Invalid plan-mode decision/);
-      const value = selectedAction === undefined ? { approved: false } : { approved: true, selectedAction };
+      const value = selectedAction === undefined ? { approved: false } : selectedAction === 'revise'
+        ? { approved: false, feedback: 'Preserve the existing API before implementing.' } : { approved: true, selectedAction };
       await f.request('decision', { decisionId: plan.id, value });
       const response = await f.waitFor(packet => packet.kind === 'event' && packet.event.type === 'assistant.message');
       assert.deepEqual(JSON.parse(response.event.data.content), value);

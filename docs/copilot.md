@@ -122,6 +122,11 @@ actions, such as **Continue interactively**, **Continue with Autopilot** or
 **Finish planning**. **Cancel request** declines the transition. A background
 plan request never switches sessions or steals focus.
 
+Use **Plan feedback** and **Request changes** to return revisions to Copilot
+without approving implementation. Feedback can also accompany an approval.
+**Cancel request** declines without submitting the feedback. None of these
+actions sends an extra chat prompt or replaces your composer draft.
+
 **Autopilot** lets Copilot continue through successive steps from one prompt.
 Nimrod keeps the session Working across intermediate pauses, retaining tool
 cards and pending questions rather than announcing completion at each step.
@@ -136,6 +141,13 @@ does not automatically continue pending work.
 The intermediate-idle handling follows the pinned SDK's completion waiter.
 Real CLI completion, sticky Autopilot mode, limits and Stop still need native
 acceptance; this is not a claim of full terminal-UI parity.
+
+Empty, isolated-session probes confirmed that ordinary mode changes work with
+CLI 1.0.98 without additional host steps. They did not verify model-switch
+compaction or a handoff from a distinct planning model to an execution model.
+If Copilot requests those unsupported follow-ups, Nimrod reports the specific
+limitation and disconnects; reconnect explicitly to read the actual mode/model.
+Automatic execution handoffs requiring those extra steps remain unavailable.
 
 ## Usage metrics
 

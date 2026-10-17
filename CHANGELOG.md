@@ -6,6 +6,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Added
 
+- Copilot plan review supports optional feedback and **Request changes**, returning revisions through the plan decision rather than sending another prompt or replacing the composer draft.
+
 - Copilot SDK cards for GitHub MCP code-search results and repository contents, skill-name previews, and compact command/file/URL/MCP permission details with raw recovery.
 - Choose model/thinking settings while connected even when the harness must wait to apply them. Deferred changes use one Queued/Steering-style shimmering transcript entry that updates in place when you choose again; the Status area shows only confirmed values, with no pending badge. Pi retains changes during work/compaction; Copilot applies at idle. Model/effort dependencies are revalidated and pending intent is cancelled on disconnect rather than replayed.
 - Copilot session configuration now includes **Interactive**, **Plan** and **Autopilot** modes plus default/long context-window tiers. The Status area extends `model · effort` with mode, and the reported context limit opens **Select context window…** when that session supports changing it. Plan completion choices stay in the owning conversation.

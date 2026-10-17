@@ -28,6 +28,19 @@ test('mode configuration uses a fresh precondition and reads the resulting model
     mode: 'plan',
     notice: 'Model changed\nPlan ready\nDeprecated model',
   });
+
+  test('CLI 1.0.98 unchanged model status still permits an applied mode transition', async () => {
+    let mode = 'interactive';
+    const session = { setModel, rpc: { model, mode: {
+      get: async () => mode,
+      set: async (params: { mode: string }) => {
+        mode = params.mode;
+        return { status: 'unchanged', modelChanged: false, modeApplied: true };
+      },
+    } } };
+    const result = await createCopilotConfiguration(client).apply(session, 'mode', 'plan');
+    assert.equal(result.mode, 'plan');
+  });
   assert.deepEqual(calls, ['get-mode', { mode: 'plan', expectedMode: 'interactive' }, 'get-mode']);
 });
 

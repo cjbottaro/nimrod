@@ -1153,13 +1153,20 @@ async function requestCopilotDecision(tab: Tab, kind: 'permission' | 'input' | '
     if (typeof request.planContent === 'string' && request.planContent) {
       const plan = document.createElement('pre'); plan.textContent = request.planContent; details.append(plan);
     }
+    const feedbackLabel = document.createElement('label'); feedbackLabel.textContent = 'Plan feedback (optional)';
+    const feedback = document.createElement('textarea'); feedback.setAttribute('aria-label', 'Plan feedback');
+    feedbackLabel.append(feedback); details.append(feedbackLabel);
     const actions = request.actions.filter((value): value is string => typeof value === 'string');
-    const choice = await requestSessionChoice(tab, details, actions.map(action => ({
-      id: action, label: action === 'interactive' ? 'Continue interactively' : action === 'autopilot' ? 'Continue with Autopilot'
+    const choice = await requestSessionChoice(tab, details, [...actions.map((action, index) => ({
+      id: String(index), label: action === 'interactive' ? 'Continue interactively' : action === 'autopilot' ? 'Continue with Autopilot'
         : action === 'exit_only' ? 'Finish planning' : action,
-    })), signal);
-    if (choice !== undefined && !actions.includes(choice)) throw new Error('This Copilot plan action is no longer available.');
-    return choice === undefined ? { approved: false } : { approved: true, selectedAction: choice };
+    })), { id: 'revise', label: 'Request changes' }], signal);
+    if (choice === undefined || signal.aborted) return { approved: false };
+    const responseFeedback = feedback.value.trim() ? { feedback: feedback.value.trim() } : {};
+    if (choice === 'revise') return { approved: false, ...responseFeedback };
+    const selectedAction = actions[Number(choice)];
+    if (selectedAction === undefined) throw new Error('This Copilot plan action is no longer available.');
+    return { approved: true, selectedAction, ...responseFeedback };
   }
   const title = document.createElement('strong'); title.textContent = typeof request.question === 'string' ? request.question : 'Copilot requests input';
   details.append(title);

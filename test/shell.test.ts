@@ -1123,6 +1123,39 @@ test('Copilot permissions use one session-owned panel, exact scoped decisions an
   } finally { f.win.close(); }
 });
 
+test('Copilot plan review returns feedback without sending a prompt or changing the draft', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    f.openPalette();
+    const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New Copilot session'; input.dispatchEvent(new f.win.Event('input'));
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    const target = [...f.sdkSessions.values()].find(session => session.sessionId === 'sdk-fixture')!;
+    const draft = f.element<HTMLTextAreaElement>('prompt'); draft.value = 'keep draft'; draft.focus();
+    const host = draft.closest('.session-view')!;
+    for (const [id, buttonText, expected] of [
+      ['revise', 'Request changes', { approved: false, feedback: 'Preserve the API.' }],
+      ['approve', 'Continue with Autopilot', { approved: true, selectedAction: 'autopilot', feedback: 'Preserve the API.' }],
+      ['cancel', 'Cancel request', { approved: false }],
+    ] as const) {
+      target.channel.onmessage({ kind: 'rpc', value: { kind: 'plan', id, request: {
+        summary: 'Review plan', planContent: 'Inspect and implement', actions: ['interactive', 'autopilot', 'exit_only'],
+      } } });
+      await f.tick();
+      assert.equal(f.win.document.activeElement, draft);
+      const feedback = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Plan feedback"]')!;
+      feedback.value = ' Preserve the API. ';
+      [...host.querySelectorAll<HTMLButtonElement>('.acp-permission button')].find(button => button.textContent === buttonText)!.click();
+      await f.tick();
+      const decision = f.calls.filter(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'decision').at(-1)!;
+      assert.deepEqual((decision.args.message as JsonRecord).value, expected);
+      assert.equal(draft.value, 'keep draft');
+      assert.equal(host.querySelector('.acp-permission'), null);
+    }
+    assert.equal(f.calls.some(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'prompt'), false);
+  } finally { f.win.close(); }
+});
+
 test('performance capture is opt-in, bindable, timing-only and preserves the mounted session', async () => {
   const control = { after: [] as (() => void)[], writeError: undefined as string | undefined, copyError: undefined as string | undefined };
   const f = await fixture(undefined, { windowWorkspace: '/project', performanceControl: control });
