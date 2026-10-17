@@ -15,6 +15,8 @@ A pending **configuration change** appears in the transcript like Queued/Steerin
 
 The **Status area shows confirmed values only**. There is no pending badge or speculative model/effort value there. When the harness confirms the change, the Status area updates and the transcript entry stops shimmering and unpins. Failed/cancelled changes also stop shimmering; error details belong to that session's notices. These entries are local to the connection, not messages sent to the agent or saved in harness history.
 
+If a setting is truly unavailable rather than temporarily deferred, Nimrod accepts no change and shows the reason in that session's notice banner at the top of the conversation area. It does not create a queued configuration card.
+
 Changing models can change thinking effort according to the harness's defaults and supported levels. Selecting another pending model drops effort queued for the previous target. Copilot can offer efforts advertised for a pending target model; for Pi, wait until the model changes before choosing its supported thinking levels. Nimrod revalidates choices before applying, rather than silently carrying an incompatible effort across models.
 
 ## Copilot new-session defaults
@@ -23,8 +25,8 @@ New Copilot sessions use Copilot’s configured model/effort preferences, read t
 the SDK. Each setting is independent: non-null values are supplied at creation;
 unset values are omitted and display lowercase **default model** / **default effort**
 until Copilot reports a concrete value. No default is guessed from the catalog.
-When the model is unknown, the effort value/placeholder stays visible but cannot
-be selected until its supported choices are known. Resuming saved sessions never
+When the model is unknown, the effort value/placeholder stays visible; selecting
+it reports that a model is required in the session notice banner. Resuming saved sessions never
 applies current new-session defaults.
 
 ## Limits and lifecycle

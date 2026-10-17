@@ -47,6 +47,7 @@ export class SessionConfigurationController implements SessionConfiguration {
   private active?: { setting: string; intent: Intent };
   private current?: ConfigurationOperation;
   private running = false;
+  private updateRequested = false;
   private disposed = false;
   private changedSettings = new Set<string>();
   private offered = new WeakMap<ConfigurationChoice, { setting: string; dependencies: Record<string, string | undefined> }>();
@@ -91,7 +92,11 @@ export class SessionConfigurationController implements SessionConfiguration {
     this.update();
   }
   /** Call synchronously on concrete readiness/catalog/value transitions, not a polling timer. */
-  update(): void { if (!this.running && !this.disposed && this.pending.size) void this.drain(); }
+  update(): void {
+    if (this.disposed || !this.pending.size) return;
+    if (this.running) { this.updateRequested = true; return; }
+    void this.drain();
+  }
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true; this.pending.clear();
@@ -123,6 +128,7 @@ export class SessionConfigurationController implements SessionConfiguration {
   }
   private async drain(): Promise<void> {
     this.running = true;
+    this.updateRequested = false;
     try {
       while (!this.disposed && this.pending.size) {
         const capabilities = this.capabilities;
@@ -165,6 +171,9 @@ export class SessionConfigurationController implements SessionConfiguration {
     } catch (error) {
       this.pending.clear(); this.active = undefined;
       if (!this.disposed) { this.finish('failed'); this.error(String(error)); }
-    } finally { this.running = false; }
+    } finally {
+      this.running = false;
+      if (this.updateRequested && !this.disposed && this.pending.size) queueMicrotask(() => this.update());
+    }
   }
 }
