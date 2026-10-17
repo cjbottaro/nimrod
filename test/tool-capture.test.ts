@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createToolCapture, type ToolCaptureRecord } from '../src/tool-capture';
 import { PiToolCapture } from '../src/pi/tool-capture';
+import { PiTransport } from '../src/pi/transport';
 
 const event = (payload: unknown = { args: { path: 'fixture' } }): ToolCaptureRecord => ({
   source: { backend: 'pi', agent: 'pi' }, sessionId: 'fixture-session', toolCallId: 'extension-call',
@@ -32,6 +33,19 @@ test('disabled capture never reads payloads; enabled capture snapshots native da
     assert.deepEqual(records[1].source, { backend: 'acp', agent: 'fixture-agent', version: 'fixture' });
   } finally { f.capture.dispose(); }
 });
+test('synchronous replay bursts span bounded native batches instead of stopping at 512 events', async () => {
+  const f = fixture();
+  try {
+    f.capture.setEnabled(true);
+    for (let index = 0; index < 600; index++) f.capture.append(event({ index }));
+    await f.capture.flush(); await f.capture.flush();
+    assert.equal(f.capture.enabled, true);
+    assert.deepEqual(f.batches.map(batch => batch.length), [512, 88]);
+    assert.deepEqual(f.errors, []);
+    assert.deepEqual(f.batches.flat().map(line => JSON.parse(line).payload.index), Array.from({ length: 600 }, (_, index) => index));
+  } finally { f.capture.dispose(); }
+});
+
 test('write failures stop capture without retry; re-enabling creates a new segment', async () => {
   let writes = 0;
   const f = fixture(async () => { writes++; throw new Error('fixture disk full'); });
@@ -62,7 +76,7 @@ test('oversized and unserializable records fail visibly rather than truncating t
   f.capture.append(event({ toJSON() { throw new Error('fixture serialization'); } }));
   assert.equal(f.errors.length, 2); f.capture.dispose();
 });
-test('Pi captures extension tools, partial input and authoritative results without assistant prose or reasoning', () => {
+test('Pi transcript logs preserve native prose, reasoning, partial inputs and authoritative results', () => {
   const records: ToolCaptureRecord[] = [];
   const capture = new PiToolCapture({ enabled: true, append: record => { records.push(record); } });
   const observe = (value: Record<string, unknown>) => capture.observe(value, 'pi-session');
@@ -74,8 +88,36 @@ test('Pi captures extension tools, partial input and authoritative results witho
   observe({ type: 'tool_execution_update', toolCallId: 'custom', partialResult: { data: [1] } });
   observe({ type: 'tool_execution_end', toolCallId: 'custom', result: { customMetadata: { arbitrary: true } } });
   observe({ type: 'message_end', message: { role: 'toolResult', toolCallId: 'custom', content: [{ type: 'text', text: 'result' }] } });
-  assert.equal(records.length, 6);
-  assert.ok(records.every(r => r.toolCallId === 'custom' && r.sessionId === 'pi-session'));
-  assert.equal(JSON.stringify(records).includes('private'), false);
-  assert.deepEqual((records[4].payload as Record<string, unknown>).result, { customMetadata: { arbitrary: true } });
+  assert.equal(records.length, 8);
+  assert.ok(records.every(r => r.sessionId === 'pi-session'));
+  assert.equal(records[2].toolCallId, 'custom');
+  assert.equal(records[3].toolCallId, 'custom');
+  assert.equal(JSON.stringify(records).includes('private reasoning'), true);
+  assert.equal(JSON.stringify(records).includes('private prose'), true);
+  assert.deepEqual((records[6].payload as Record<string, unknown>).result, { customMetadata: { arbitrary: true } });
+});
+
+test('Pi transport traces requests, history responses and extension choices without issuing work', async () => {
+  const f = fixture();
+  const sent: Record<string, unknown>[] = [];
+  const rpc = new PiTransport(async message => { sent.push(message); });
+  const capture = new PiToolCapture(f.capture);
+  rpc.onTrace = (event, payload) => capture.capture(event, payload, 'pi-session');
+  rpc.onEvent = event => capture.observe(event, 'pi-session');
+  try {
+    f.capture.setEnabled(true);
+    const history = rpc.request('get_messages');
+    const response = { type: 'response', id: sent[0].id, command: 'get_messages', success: true,
+      data: { messages: [{ role: 'assistant', content: [{ type: 'text', text: '' }] }] } };
+    rpc.receive({ kind: 'rpc', value: response });
+    await history;
+    await rpc.respond({ id: 'choice', value: 'typed answer' });
+    rpc.disconnect('fixture disconnect');
+    await f.capture.flush();
+    const records = f.batches.flat().map(line => JSON.parse(line));
+    assert.deepEqual(records.map(record => record.event), ['request.get_messages', 'response.get_messages', 'request.extension_ui_response', 'process_error']);
+    assert.deepEqual(records[1].payload, response);
+    assert.equal(records[2].payload.value, 'typed answer');
+    assert.equal(sent.length, 2, 'capture does not request snapshots or send prompts');
+  } finally { f.capture.dispose(); }
 });

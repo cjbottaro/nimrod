@@ -56,13 +56,15 @@ test('ACP history replay finalizes reasoning and tools without sends, permission
   assert.equal(thought[0].thinkingComplete, true);
   assert.equal(session.state.messages[2].uiPhase, 'stopped');
   assert.equal(permissions, 0);
-  assert.deepEqual(captured, [], 'saved-history replay is not captured as new activity');
+  assert.ok(captured.some(record => record.event === 'history.agent_thought_chunk'));
+  assert.ok(captured.some(record => record.event === 'history.tool_call'));
+  assert.ok(!captured.some(record => record.event === 'tool_call'), 'history is explicitly distinguished from live updates');
   assert.deepEqual(sent.find(packet => packet.id === 'old-permission')?.result, { outcome: { outcome: 'cancelled' } });
   assert.deepEqual(completed, []);
   assert.equal(sent.some(packet => packet.method === 'session/new' || packet.method === 'session/prompt'), false);
 });
 
-test('ACP capture preserves partial native patches and permission details without prose', async () => {
+test('ACP transcript logs preserve prose, partial native patches and permission exchanges', async () => {
   const f = await fixture(async () => 'allow');
   const turn = f.session.handle({ type: 'prompt', id: 'capture', text: 'fixture prompt' });
   f.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'not captured' } });
@@ -73,12 +75,14 @@ test('ACP capture preserves partial native patches and permission details withou
   const request = { sessionId: 'test-session', toolCall: { toolCallId: 'custom' }, options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }] };
   f.session.receive({ jsonrpc: '2.0', id: 'capture-permission', method: 'session/request_permission', params: request });
   await flush();
-  assert.deepEqual(f.captured.map(r => r.event), ['tool_call', 'tool_call_update', 'session/request_permission']);
-  assert.deepEqual(f.captured[0].payload, start);
-  assert.deepEqual(f.captured[1].payload, patch, 'record the received patch, not merged state');
-  assert.deepEqual(f.captured[2].payload, request, 'record permission details before retained-state merging');
-  assert.deepEqual(f.captured[0].source, { backend: 'acp', agent: 'fixture-agent', version: '1' });
-  assert.equal(JSON.stringify(f.captured).includes('not captured'), false);
+  const tools = f.captured.filter(record => record.event === 'tool_call' || record.event === 'tool_call_update');
+  assert.deepEqual(tools.map(record => record.payload), [start, patch], 'record patches before retained-state merging');
+  const permission = f.captured.find(record => record.event === 'session/request_permission')!;
+  assert.deepEqual((permission.payload as AcpRecord).params, request);
+  assert.deepEqual(tools[0].source, { backend: 'acp', agent: 'fixture-agent', version: '1' });
+  assert.equal(JSON.stringify(f.captured).includes('not captured'), true);
+  assert.ok(f.captured.some(record => record.event === 'request.session/prompt'));
+  assert.ok(f.captured.some(record => record.event === 'response' && (record.payload as AcpRecord).id === 'capture-permission'));
   f.reply('session/prompt', { stopReason: 'end_turn' }); await turn;
 });
 

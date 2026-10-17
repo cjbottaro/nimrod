@@ -46,7 +46,9 @@ test('SDK replay is read-only and final content wins over buffered deltas', asyn
   ]);
   assert.equal(f.session.state.messages.length, 4);
   assert.equal(f.session.state.messages[3].uiPhase, 'stopped');
-  assert.deepEqual(f.completed, []); assert.deepEqual(f.captured, []);
+  assert.deepEqual(f.completed, []);
+  assert.ok(f.captured.some(record => record.event === 'history.assistant.message'));
+  assert.ok(f.captured.some(record => record.event === 'history.assistant.reasoning'));
   f.event('assistant.message_delta', { messageId: 'answer', deltaContent: 'Saved answer' });
   const answer = f.session.state.messages[1].content;
   assert.ok(Array.isArray(answer)); assert.equal(answer[0].text, 'Saved answer');
@@ -86,7 +88,9 @@ test('SDK optimistic echo, native tools, content-only controls and one completio
   assert.equal(f.session.state.messages.find(message => message.role === 'assistant')!.key, key);
   f.event('session.idle', {}); f.event('session.idle', {});
   assert.deepEqual(f.completed, [false]);
-  assert.ok(f.captured.every(record => record.event.startsWith('tool.')));
+  assert.ok(f.captured.some(record => record.event === 'tool.execution_complete'));
+  assert.ok(f.captured.some(record => record.event === 'assistant.message'));
+  assert.ok(f.captured.some(record => record.event === 'request.prompt'));
   assert.ok(f.sent.every(request => !('jsonrpc' in request)));
   f.session.disconnect('fixture complete');
 });

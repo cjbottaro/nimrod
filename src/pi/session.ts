@@ -69,6 +69,7 @@ export class PiSession {
   constructor(readonly rpc: PiTransport, private ui: SessionUi, temporary = true) {
     this.state.temporary = temporary;
     this.toolCapture = new PiToolCapture(ui.toolCapture);
+    rpc.onTrace = (event, payload) => this.toolCapture.capture(event, payload, this.captureSessionId);
     rpc.onEvent = event => this.measure('pi-event', () => this.event(event));
     this.model = new ModelThinkingController(rpc, {
       isChangeBlocked: () => !!this.state.sessionUnavailable || this.rpc.hasPendingRequest('prompt', 'set_session_name'),
@@ -181,7 +182,10 @@ export class PiSession {
   }
 
   publish(): void {
-    if (this.configuration && this.state.configurationOperations !== this.configuration.operations) this.state = { ...this.state, configurationOperations: this.configuration.operations };
+    if (this.configuration && this.state.configurationOperations !== this.configuration.operations) {
+      this.toolCapture.capture('ui.configuration', { operations: this.configuration.operations }, this.captureSessionId);
+      this.state = { ...this.state, configurationOperations: this.configuration.operations };
+    }
     const snapshot = this.measure('timeline-projection', () => this.transcript.snapshot(this.state));
     this.measure('snapshot-delivery', () => this.ui.publish({ type: 'snapshot', build: 'Nimrod PoC', commands: this.commands,
       ...snapshot }));
@@ -275,6 +279,7 @@ export class PiSession {
   }
 
   async handle(message: JsonRecord): Promise<void> {
+    this.toolCapture.capture('ui.action', message, this.captureSessionId);
     try {
       switch (message.type) {
         case 'ready': this.publish(); break;

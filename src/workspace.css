@@ -91,6 +91,7 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor:col-resize !important; u
 #palette-list .palette-item-shortcut { flex:none; margin-left:auto; color:var(--vscode-descriptionForeground); font:11px var(--vscode-font-family); white-space:nowrap; }
 #command-palette[data-mode=commands] #palette-list [aria-selected=true] :is(.palette-item-description, .palette-item-shortcut) { color:color-mix(in srgb, var(--vscode-list-activeSelectionForeground) 75%, var(--vscode-list-activeSelectionBackground)); }
 #palette-list .palette-selection-marker { flex:0 0 14px; text-align:center; font-size:1.1em; line-height:1; color:var(--vscode-descriptionForeground); user-select:none; }
+#command-palette[data-mode=selection] #palette-list .palette-item-description { margin-left:22px; }
 /* Live theme preview keeps the conversation visible; native modality still owns focus. */
 #command-palette[data-preview=theme]::backdrop { background:transparent; }
 #command-palette[data-preview=theme] #palette-list { max-height:32vh; }

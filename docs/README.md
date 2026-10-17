@@ -24,7 +24,7 @@
 - [MCP inspector](mcp.md) — read-only session server status and reported diagnostics.
 - [Keybindings](keybindings.md) — shortcuts, reassignment and configuration syntax.
 - [Performance reports](performance-diagnostics.md) — opt-in timing diagnostics and local slowdown captures.
-- [Tool activity logs](tool-capture.md) — automatic, opt-in Pi/SDK/ACP tool payload logs for card development.
+- [Transcript debug logs](tool-capture.md) — opt-in native conversation, history, tool and request/result traces for debugging Nimrod.
 - [Settings](settings.md) — categories, zoom, runtime paths and local files.
 - [Themes](themes.md) — live previews, bundled themes and standalone imports.
 - [Translucency](translucency.md) — background opacity, surface selection and platform-specific blur.

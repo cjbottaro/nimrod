@@ -1,4 +1,4 @@
-//! Opt-in native tool payload capture; never touches harness-owned history.
+//! Opt-in transcript debug logs; never mutates harness-owned history.
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{
@@ -40,7 +40,7 @@ fn directory(snapshot: &crate::preferences::Snapshot) -> Result<PathBuf, String>
         .state_path
         .parent()
         .ok_or("Missing Nimrod state directory")?
-        .join("tool-captures"))
+        .join("transcript-logs"))
 }
 fn enabled(snapshot: &crate::preferences::Snapshot) -> bool {
     snapshot.error.is_none()
@@ -72,12 +72,12 @@ fn groups(lines: Vec<String>) -> Result<BTreeMap<PathBuf, Vec<u8>>, String> {
         || lines.len() > 512
         || lines.iter().map(String::len).sum::<usize>() > MAX_BATCH
     {
-        return Err("Invalid or oversized tool capture batch".into());
+        return Err("Invalid or oversized transcript debug batch".into());
     }
     let mut groups: BTreeMap<PathBuf, Vec<u8>> = BTreeMap::new();
     for line in lines {
         if line.len() > MAX_LINE || line.contains(['\r', '\n']) {
-            return Err("Invalid or oversized tool capture record".into());
+            return Err("Invalid or oversized transcript debug record".into());
         }
         let record: Record = serde_json::from_str(&line).map_err(|e| e.to_string())?;
         let time =
@@ -104,9 +104,9 @@ fn groups(lines: Vec<String>) -> Result<BTreeMap<PathBuf, Vec<u8>>, String> {
                 .is_some_and(|v| v.len() > 1024)
             || record.tool_call_id.as_ref().is_some_and(|v| v.len() > 4096)
         {
-            return Err("Invalid tool capture envelope".into());
+            return Err("Invalid transcript debug envelope".into());
         }
-        // Arbitrary JSON is intentional: tool schemas belong to integrations/extensions.
+        // Arbitrary native JSON is intentional: transcript semantics belong to integrations/extensions.
         let _ = &record.payload;
         let mut relative = PathBuf::from(segment(&record.source.backend));
         if record.source.backend != "pi" {
@@ -138,7 +138,7 @@ fn ensure_directory(path: &Path) -> Result<(), String> {
                 Ok(())
             } else {
                 Err(format!(
-                    "Not a regular tool capture directory: {}",
+                    "Not a regular transcript debug directory: {}",
                     path.display()
                 ))
             }
@@ -158,7 +158,7 @@ fn append_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
     }
     // Check existing symlinks on all platforms; Unix additionally uses O_NOFOLLOW at open.
     if fs::symlink_metadata(path).is_ok_and(|m| !m.is_file() || m.file_type().is_symlink()) {
-        return Err("Tool capture destination is not a regular file".into());
+        return Err("Transcript debug destination is not a regular file".into());
     }
     let file = options.open(path).map_err(|e| e.to_string())?;
     #[cfg(unix)]
@@ -168,13 +168,13 @@ fn append_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let mut file = file;
     let metadata = file.metadata().map_err(|e| e.to_string())?;
     if !metadata.is_file() {
-        return Err("Tool capture destination is not a regular file".into());
+        return Err("Transcript debug destination is not a regular file".into());
     }
     #[cfg(unix)]
     {
         use std::os::unix::fs::{MetadataExt, PermissionsExt};
         if metadata.permissions().mode() & 0o077 != 0 || metadata.nlink() != 1 {
-            return Err("Tool capture file must be private and have no hard links".into());
+            return Err("Transcript debug file must be private and have no hard links".into());
         }
     }
     // Never silently append behind a crash/partial-write fragment or truncate existing data.
@@ -183,7 +183,7 @@ fn append_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
         let mut tail = [0];
         file.read_exact(&mut tail).map_err(|e| e.to_string())?;
         if tail[0] != b'\n' {
-            return Err("Tool capture file has an incomplete final record; preserve it and move it aside before re-enabling capture".into());
+            return Err("Transcript debug file has an incomplete final record; preserve it and move it aside before re-enabling logging".into());
         }
     }
     file.write_all(bytes).map_err(|e| e.to_string())?;
@@ -192,7 +192,7 @@ fn append_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
 fn write_groups(root: &Path, groups: BTreeMap<PathBuf, Vec<u8>>) -> Result<(), String> {
     let _guard = WRITER
         .lock()
-        .map_err(|_| "Tool capture writer unavailable")?;
+        .map_err(|_| "Transcript debug writer unavailable")?;
     // State parent is resolved by Preferences, never supplied by the frontend.
     fs::create_dir_all(root.parent().ok_or("Missing state directory")?)
         .map_err(|e| e.to_string())?;
@@ -227,7 +227,7 @@ pub async fn append_tool_capture(
     let snapshot = preferences.snapshot();
     // A write already accepted may finish after disable; never retry ambiguous writes.
     if !enabled(&snapshot) {
-        return Err("Tool capture is disabled or global settings are invalid".into());
+        return Err("Transcript debug logging is disabled or global settings are invalid".into());
     }
     let root = directory(&snapshot)?;
     tauri::async_runtime::spawn_blocking(move || write_groups(&root, groups(lines)?))
@@ -295,6 +295,9 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let prefs = crate::preferences::Preferences::isolated(temp.path());
         assert!(!enabled(&prefs.snapshot()));
+        assert!(directory(&prefs.snapshot())
+            .unwrap()
+            .ends_with("transcript-logs"));
         let root = temp.path().join("tool-captures");
         write_groups(&root, groups(vec![line("pi", "pi", 1)]).unwrap()).unwrap();
         let path = root.join("pi/2026-10-16.jsonl");

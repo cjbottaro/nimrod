@@ -177,7 +177,7 @@ The user built/restarted the baseline and reported existing cards/edit previews 
 
 ## Tool payload discovery
 
-Opt-in [tool activity capture](tool-capture.md) records native Pi (including extension tools) and ACP tool events to separate append-only JSONL state logs for card inventory and offline fixture development. It does not alter plugin matching, card snapshots or execution permissions. Capture fixtures are authored but unvalidated.
+Opt-in [transcript debug logs](tool-capture.md) record full native Pi (including extension tools), Copilot SDK and dormant ACP conversation traffic, including tools, text/reasoning, history and requests/results, in append-only JSONL state files. Use them for card inventory, transcript debugging and offline fixture development. Logging does not alter plugin matching, card snapshots or execution permissions. Expanded transcript-logging fixtures are authored but unrun; the linked specification owns prior capture evidence and current verification gaps.
 
 ## Material constraints
 

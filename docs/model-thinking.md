@@ -2,7 +2,7 @@
 
 Click the model or thinking-level button in the **Status area**, or use **Select model…** / **Select thinking level…** in the command palette. Default shortcuts are **⌘/Ctrl Shift+M** for model and **⌘/Ctrl Shift+E** for thinking level (also searchable as “effort”). These choices never switch harnesses.
 
-Model pickers show readable names without numbered prefixes. Copilot places the model ID beneath its friendly name. Pi places the provider beneath the reported friendly name, falling back to the model ID when no friendly name is available. Filtering still matches the underlying model identity, and selection does not depend on displayed labels being unique.
+Model pickers show readable names without numbered prefixes. Copilot places the model ID beneath its friendly name. Pi places the provider beneath the reported friendly name, falling back to the model ID when no friendly name is available. Secondary details align with those names while the current-value marker occupies its own column. Filtering still matches the underlying model identity, and selection does not depend on displayed labels being unique.
 
 ## Immediate and deferred changes
 
