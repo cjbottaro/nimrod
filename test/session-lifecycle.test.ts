@@ -1,0 +1,119 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { piSessionLifecycle } from '../src/pi/session-lifecycle';
+import { acpSessionLifecycle } from '../src/acp/session-lifecycle';
+import { COPILOT_PROFILE, copilotSessionScope } from '../src/acp/profiles';
+import { AcpSession } from '../src/acp/session';
+import { PiSession } from '../src/pi/session';
+import { PiTransport } from '../src/pi/transport';
+import { readSavedSidebarSession, type ConnectSessionOptions, type SessionLifecycle, type SessionLifecycleHost, type SessionLifecycleOwner } from '../src/session-lifecycle';
+
+function fixture(kind: 'pi' | 'copilot') {
+  const owner: SessionLifecycleOwner = { mode: 'saved', starting: false, ended: false };
+  let gate: ReturnType<SessionLifecycleHost['gate']> = 'ready';
+  const connects: ConnectSessionOptions[] = [], stops: string[] = [], disconnected: string[] = [];
+  let stop: (token: string) => Promise<void> = async () => {};
+  const host: SessionLifecycleHost = {
+    connect: async options => { connects.push(options); },
+    stop: token => { stops.push(token); return stop(token); },
+    gate: () => gate,
+  };
+  const pi = new PiSession(new PiTransport(() => {}), {
+    publish() {}, changed() {}, choose: async () => undefined, input: async () => undefined,
+    confirm: async () => false, copy: async () => {}, openLink: async () => {},
+    disconnected: reason => disconnected.push(reason ?? ''),
+  }, false);
+  const acp = new AcpSession(() => {}, {
+    publish() {}, changed() {}, notice() {}, completed() {}, permission: async () => undefined,
+    disconnected: reason => disconnected.push(reason),
+  });
+  const piBackend = { session: pi };
+  const acpBackend: { profile: typeof COPILOT_PROFILE; session: AcpSession; savedSessionId?: string } = { profile: COPILOT_PROFILE, session: acp };
+  const lifecycle: SessionLifecycle = kind === 'pi'
+    ? piSessionLifecycle(() => owner, piBackend, host)
+    : acpSessionLifecycle(() => owner, acpBackend, host);
+  const save = () => {
+    if (kind === 'pi') owner.file = { path: '/fixture/session.jsonl', sessionId: 'saved-id', exists: true };
+    else acpBackend.savedSessionId = 'saved-id';
+  };
+  return { owner, lifecycle, connects, stops, disconnected, save,
+    gate: (value: typeof gate) => { gate = value; },
+    stop: (operation: typeof stop) => { stop = operation; },
+    available: (value: boolean) => {
+      pi.state = { ...pi.state, sessionUnavailable: !value };
+      acp.state = { ...acp.state, sessionUnavailable: !value };
+    },
+  };
+}
+
+for (const kind of ['pi', 'copilot'] as const) {
+  test(`${kind}: durable membership is independent of connectivity and survives disconnect`, () => {
+    const f = fixture(kind);
+    assert.equal(f.lifecycle.identity, undefined);
+    f.save();
+    const identity = f.lifecycle.identity, key = f.lifecycle.key, draft = f.lifecycle.draftScope;
+    assert.ok(identity); assert.ok(key); assert.ok(draft);
+    f.available(true);
+    assert.equal(f.lifecycle.connection, 'connected');
+    f.lifecycle.disconnect('Owned connection closed');
+    assert.equal(f.lifecycle.connection, 'disconnected');
+    assert.deepEqual(f.lifecycle.identity, identity);
+    assert.equal(f.lifecycle.key, key);
+    assert.equal(f.lifecycle.draftScope, draft);
+    assert.deepEqual(f.disconnected, ['Owned connection closed']);
+  });
+
+  test(`${kind}: connection operations target the integration without changing saved membership`, async () => {
+    const f = fixture(kind); f.save();
+    const identity = f.lifecycle.identity;
+    const options = { acceptedAction: true };
+    await f.lifecycle.connect(options);
+    assert.deepEqual(f.connects, [options]);
+    f.owner.ended = true;
+    assert.equal(f.lifecycle.eligibility(), 'connectable');
+    f.gate('blocked'); assert.equal(f.lifecycle.eligibility(), 'blocked');
+    f.gate('unavailable'); assert.equal(f.lifecycle.eligibility(), 'unavailable');
+    assert.deepEqual(f.lifecycle.identity, identity);
+    f.owner.starting = true;
+    assert.equal(f.lifecycle.connection, 'connecting');
+  });
+
+  test(`${kind}: stop is token-scoped, deduplicated, observes completion and retries only explicitly after failure`, async () => {
+    const f = fixture(kind);
+    f.owner.token = 'owned-a';
+    let release!: () => void;
+    f.stop(() => new Promise(resolve => { release = resolve; }));
+    let finished = false;
+    const first = f.lifecycle.stop().then(() => { finished = true; });
+    const second = f.lifecycle.stop();
+    await Promise.resolve();
+    assert.equal(finished, false);
+    assert.deepEqual(f.stops, ['owned-a']);
+    release(); await Promise.all([first, second]);
+    await f.lifecycle.stop(); assert.deepEqual(f.stops, ['owned-a']);
+    f.owner.token = 'owned-b';
+    f.stop(async () => { throw new Error('Could not observe exit'); });
+    await assert.rejects(f.lifecycle.stop(), /Could not observe exit/);
+    assert.equal(f.owner.token, 'owned-b', 'failed stop cannot clear the ownership reservation');
+    f.stop(async () => {});
+    await f.lifecycle.stop();
+    assert.deepEqual(f.stops, ['owned-a', 'owned-b', 'owned-b']);
+  });
+}
+
+test('saved reference decoding preserves legacy Pi entries and tagged Copilot entries without mixing identities', () => {
+  const pi = { path: '/fixture/session.jsonl', sessionId: 'saved-id', name: 'Pi', lastUsed: 100 };
+  const copilot = { kind: 'acp', profile: 'copilot', sessionId: 'saved-id', name: 'Copilot', lastUsed: 100 };
+  assert.deepEqual(readSavedSidebarSession(pi), pi);
+  assert.deepEqual(readSavedSidebarSession(copilot), copilot);
+  for (const invalid of [null, [], {}, { ...copilot, profile: 'unknown' }, { ...copilot, sessionId: ' ' }, { ...pi, kind: 'unknown' }])
+    assert.equal(readSavedSidebarSession(invalid), undefined);
+  const p = fixture('pi'), c = fixture('copilot'); p.save(); c.save();
+  assert.notEqual(p.lifecycle.key, c.lifecycle.key);
+  assert.equal(c.lifecycle.key, copilotSessionScope('saved-id'));
+  assert.equal(p.lifecycle.draftScope, 'file:/fixture/session.jsonl');
+  assert.equal(p.lifecycle.connectOnStartup, true);
+  assert.equal(c.lifecycle.connectOnStartup, false);
+  p.owner.mode = 'temporary';
+  assert.equal(p.lifecycle.identity, undefined, 'a temporary Pi session cannot become persistent because it reports a file');
+});

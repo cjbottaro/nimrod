@@ -21,7 +21,3 @@ export function acpProfile(owner: Owner): AcpProfile | undefined { return owner.
 export function sessionActions(owner: Owner): readonly SessionAction[] {
   return owner.backend.kind === 'pi' ? piSessionActions : acpSessionActions(owner.backend.session);
 }
-export function disconnectBackend(owner: Owner, reason: string): void {
-  if (owner.backend.kind === 'pi') owner.backend.session?.rpc.disconnect(reason);
-  else owner.backend.session?.disconnect(reason);
-}

@@ -491,6 +491,36 @@ test('unsupported or missing Copilot history never substitutes a new conversatio
   }
 });
 
+test('shared lifecycle preserves mixed sidebar membership independently of connection and Pi-only Restart', async () => {
+  const key = 'nimrod.tabs.v1:/project', path = '/sessions/pi.jsonl', scope = copilotSessionScope('fixture-id');
+  const f = await fixture(undefined, { windowWorkspace: '/project', appState: { [key]: {
+    tabs: [
+      { path, sessionId: 'fixture-id', name: 'Pi saved', lastUsed: 100 },
+      { kind: 'acp', profile: 'copilot', sessionId: 'fixture-id', name: 'Copilot saved', lastUsed: 200 },
+    ],
+    active: path,
+  } } });
+  try {
+    const layout = () => f.preferences.value.state[key] as { tabs: { path?: string; kind?: string; sessionId: string }[]; active: string };
+    assert.equal(f.calls.filter(call => call.command === 'start_pi').length, 1);
+    assert.equal(f.calls.filter(call => call.command === 'start_acp').length, 0);
+    assert.equal(layout().tabs.length, 2);
+    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, false);
+    f.rows()[1].click(); await f.tick(); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'start_acp').length, 1);
+    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, true);
+    assert.equal(layout().active, scope);
+    assert.equal(layout().tabs.length, 2, 'disabling Restart cannot remove Copilot persistence');
+    const target = [...f.acpSessions.values()][0];
+    target.channel.onmessage({ kind: 'disconnected', message: 'Offline agent exited' }); await f.tick();
+    assert.equal(f.rows().length, 2, 'disconnect cannot close the sidebar entry');
+    assert.equal(layout().tabs.length, 2);
+    assert.equal(layout().tabs.find(tab => tab.kind === 'acp')?.sessionId, 'fixture-id');
+    assert.equal(layout().tabs.find(tab => tab.path === path)?.sessionId, 'fixture-id', 'matching IDs across backends stay independent');
+    assert.equal(f.calls.filter(call => call.command === 'start_acp').length, 1, 'disconnect is not a reconnect request');
+  } finally { f.win.close(); }
+});
+
 test('late Copilot loading never steals Pi selection or focus and Close preserves the saved draft', async () => {
   let release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });

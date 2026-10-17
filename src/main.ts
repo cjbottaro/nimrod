@@ -2,7 +2,10 @@ import { AcpSession } from './acp/session';
 import { renderPermissionDetails } from './acp/tool-state';
 import { acpInteraction } from './acp/view-policy';
 import { createPiViewProjection, piInteraction } from './pi/view-policy';
-import { piSession, acpSession, acpProfile as profileFor, disconnectBackend, sessionActions, type SessionAction, type SessionBackend } from './session-backend';
+import { piSession, acpSession, acpProfile as profileFor, sessionActions, type SessionAction, type SessionBackend } from './session-backend';
+import { piSessionLifecycle } from './pi/session-lifecycle';
+import { acpSessionLifecycle } from './acp/session-lifecycle';
+import { readSavedSidebarSession, type SessionLifecycle, type SessionFile, type LaunchMode, type SavedSidebarSession } from './session-lifecycle';
 import type { ConversationViewMessage, ConversationView } from './conversation-view-host';
 import { COPILOT_PROFILE, copilotSessionScope, parseAcpProfile, type AcpProfile } from './acp/profiles';
 import { mountConversationView } from './conversation-view';
@@ -146,17 +149,14 @@ function syncPopouts(): void {
   popouts.sync(tabs.map(tab => ({ runtimeId: tab.id, pi: tab.file?.exists && tab.mode !== 'temporary'
     ? { path: tab.file.path, sessionId: tab.file.sessionId } : null })), presented?.id ?? null);
 }
-type LaunchMode = 'saved' | 'temporary' | 'resume';
-interface SessionFile { path: string; sessionId: string; exists: boolean; parentSession?: string | null; lastUserMessageAt?: number; }
 interface LaunchInfo { cwd: string; session?: SessionFile; }
 interface SessionSummary { path: string; sessionId: string; name?: string; preview: string; modified: number; parentSession?: string | null; lastUserMessageAt?: number; }
-type SavedSidebarSession = { path: string; sessionId: string; name: string; lastUsed: number }
-  | { kind: 'acp'; profile: 'copilot'; sessionId: string; name: string; lastUsed: number };
 interface Tab {
   readonly backend: SessionBackend;
+  readonly lifecycle: SessionLifecycle;
   id: string; token?: string; title: string; lastUsed: number; mode: LaunchMode; file?: SessionFile;
   root: HTMLElement; view: ConversationView; drafts: SessionDrafts; receive?: (message: HostMessage | ConversationViewMessage) => void;
-  starting: boolean; closing: boolean; restarting: boolean; deleting: boolean; deletionExecuting: boolean; ended: boolean; stopTask?: Promise<void>;
+  starting: boolean; closing: boolean; restarting: boolean; deleting: boolean; deletionExecuting: boolean; ended: boolean;
   awaitingSelection: boolean;
   inputCount: number; unread: boolean; failed: boolean; focus?: HTMLElement; notice: HTMLElement;
   notices: ReturnType<typeof installApplicationNotices>;
@@ -206,18 +206,10 @@ const selectedConnection = new SessionConnection<Tab>({
   selected: () => presented,
   eligibility: tab => {
     if (!ready || unloading || !workspace || !tabs.includes(tab) || tab.closing || tab.restarting || tab.awaitingSelection) return 'unavailable';
-    if (tab.backend.kind === 'acp') {
-      if (!savedAcpId(tab)) return 'unavailable';
-      if (!acpReady) return 'blocked';
-      return tab.starting || (tab.backend.session && !tab.ended) ? 'connected' : 'connectable';
-    }
-    if (!tab.file?.exists || deletion.blocked(tab.file.path)) return 'unavailable';
-    if (tab.starting || (tab.backend.session && !tab.ended)) return 'connected';
-    if (tab.deleting || deletion.locked(tab.file.path)) return 'blocked';
-    return 'connectable';
+    return tab.lifecycle.eligibility();
   },
-  connect: tab => launch(tab, undefined, true),
-  failed: (tab, error) => { if (tabs.includes(tab)) showNotice(tab, `Could not connect ${profileFor(tab)?.name || 'Pi'}: ${error}`, true); },
+  connect: tab => tab.lifecycle.connect({ acceptedAction: true }),
+  failed: (tab, error) => { if (tabs.includes(tab)) showNotice(tab, `Could not connect ${tab.lifecycle.label}: ${error}`, true); },
 });
 const deletion = new SessionDeletion({
   panels: () => tabs.filter(tab => tab.file?.exists && tab.mode !== 'temporary').map(tab => ({
@@ -289,7 +281,7 @@ window.addEventListener('unload', () => {
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
   pluginLoading.dispose();
   sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); unlistenLinkErrors(); deletion.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
-  for (const tab of tabs) { tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); disconnectBackend(tab, 'Window closed'); }
+  for (const tab of tabs) { tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.lifecycle.disconnect('Window closed'); }
   keybindingDispatch.dispose(); unlistenProjectSettings();
   unlistenProjectPicker(); palette.dispose();
 }, { once: true });
@@ -318,8 +310,8 @@ function isWorking(tab: Tab): boolean {
     !!state && !state.sessionUnavailable && (state.busy || !!presentActivity(false, '', piSession(tab)?.state.extensionStatuses).subagents);
 }
 function isConnected(tab: Tab): boolean {
-  return !!tab.backend.session && !tab.ended && !tab.backend.session.state.sessionUnavailable &&
-    !tab.starting && !tab.closing && !tab.restarting && !tab.deleting && !deletion.blocked(tab.file?.path);
+  return tab.lifecycle.connection === 'connected' &&
+    !tab.closing && !tab.restarting && !tab.deleting && !deletion.blocked(tab.file?.path);
 }
 function navigationSnapshot(): NavigationSnapshot<Tab> { return navigation.snapshot(sidebarView, presented, active); }
 function sidebarTabs(): readonly Tab[] { return navigationSnapshot().visible; }
@@ -421,11 +413,6 @@ function deletionBusy(tab: Tab): boolean {
   return tab.starting || tab.closing || tab.restarting || !!tab.inputCount || promptPending(tab) || !!(state && !tab.ended && (state.busy || state.compacting || state.modelControls.changing || state.sessionUnavailable || state.queue.pendingCount || state.queue.steering.length || state.queue.followUp.length || presentActivity(false, '', state.extensionStatuses).subagents));
 }
 function restartable(tab: Tab): boolean { return tab.backend.kind === 'pi' && !!tab.file?.exists && tab.mode !== 'temporary'; }
-function savedAcpId(tab: Tab): string | undefined { return tab.backend.kind === 'acp' ? tab.backend.savedSessionId : undefined; }
-function savedTabKey(tab: Tab): string | undefined {
-  const id = savedAcpId(tab);
-  return id ? copilotSessionScope(id) : restartable(tab) ? tab.file!.path : undefined;
-}
 function deletable(tab: Tab | undefined): boolean {
   return ready && !deletion.pending && !!tab && tabs.includes(tab) && restartable(tab) &&
     !tab.deleting && !deletion.blocked(tab.file?.path) && !tab.starting && !tab.closing && !tab.restarting;
@@ -449,13 +436,15 @@ function persistTabs(): void {
 function prepareTabBookkeeping(): void {
   if (!workspace) return;
   let changed = false;
-  for (const tab of tabs) if (restartable(tab) && recency.record(tab.file!, tab.lastUsed)) changed = true;
+  for (const tab of tabs) {
+    const identity = tab.lifecycle.identity;
+    if (identity && 'path' in identity && recency.record(identity, tab.lastUsed)) changed = true;
+  }
   if (changed) save(recencyKey(), recency.dump());
   save(layoutKey(), { tabs: tabs.flatMap<SavedSidebarSession>(tab => {
-    const id = savedAcpId(tab);
-    if (id) return [{ kind: 'acp', profile: 'copilot', sessionId: id, name: tab.title, lastUsed: tab.lastUsed }];
-    return restartable(tab) ? [{ path: tab.file!.path, sessionId: tab.file!.sessionId, name: tab.title, lastUsed: tab.lastUsed }] : [];
-  }), active: active ? savedTabKey(active) : undefined });
+    const identity = tab.lifecycle.identity;
+    return identity ? [{ ...identity, name: tab.title, lastUsed: tab.lastUsed }] : [];
+  }), active: active?.lifecycle.key });
 }
 function recentWorkspaces(): string[] { const raw = stored(recentKey); return Array.isArray(raw) ? raw.filter((s): s is string => typeof s === 'string') : []; }
 function renderRecents(): void {
@@ -499,15 +488,15 @@ async function enterWorkspace(path: string): Promise<void> {
   save(recentKey, [path, ...recentWorkspaces().filter(p => p !== path)].slice(0, 30)); renderRecents();
   const layout = stored(layoutKey()) as { tabs?: unknown[]; active?: string } | null;
   for (const value of Array.isArray(layout?.tabs) ? layout.tabs : []) {
-    const t = value as (Partial<SessionSummary> & { kind?: unknown; profile?: unknown; lastUsed?: unknown }) | null;
-    if (t?.kind === 'acp') {
-      if (t.profile !== 'copilot' || typeof t.sessionId !== 'string' || !t.sessionId.trim() || tabs.some(tab => savedAcpId(tab) === t.sessionId)) continue;
+    const t = readSavedSidebarSession(value);
+    if (!t) continue;
+    if ('kind' in t) {
+      if (tabs.some(tab => tab.lifecycle.key === copilotSessionScope(t.sessionId))) continue;
       const tab = createTab('resume', undefined, typeof t.name === 'string' ? t.name : 'Copilot session', lastUsed(t.lastUsed), COPILOT_PROFILE, t.sessionId);
-      tab.awaitingSelection = true;
       tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
       continue;
     }
-    if (!t || typeof t.path !== 'string' || typeof t.sessionId !== 'string' || deletion.removed(t.path) || tabs.some(tab => tab.file?.path === t.path)) continue;
+    if (deletion.removed(t.path) || tabs.some(tab => tab.lifecycle.key === t.path)) continue;
     let used = Math.max(lastUsed(t.lastUsed), recency.get({ path: t.path, sessionId: t.sessionId }));
     if (!used) {
       try {
@@ -518,11 +507,10 @@ async function enterWorkspace(path: string): Promise<void> {
     if (unloading) return;
     if (deletion.removed(t.path)) continue;
     const tab = createTab('resume', { path: t.path, sessionId: t.sessionId, exists: true }, typeof t.name === 'string' ? t.name : 'Session', used);
-    tab.drafts.select(`file:${t.path}`);
     tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
   }
   ready = true;
-  const selected = tabs.find(t => savedTabKey(t) === layout?.active) || navigation.all()[0];
+  const selected = tabs.find(t => t.lifecycle.key === layout?.active) || navigation.all()[0];
   if (selected) activate(selected, 'startup');
   controls();
 }
@@ -692,11 +680,21 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
   deleteButton.append(required('delete-session').querySelector('svg')!.cloneNode(true));
   const closeButton = button('×', () => { void closeTab(tab); }); closeButton.className = 'session-close';
   rowNode.append(row, deleteButton, closeButton); required('open-sessions').append(rowNode);
-  const tab: Tab = { id, mode, file, title, backend: acpProfile ? { kind: 'acp', profile: acpProfile, savedSessionId: acpSessionId } : { kind: 'pi' }, lastUsed: Math.max(lastUsed(used), file ? recency.get(file) : 0), root, notice, notices: sessionNotices, closeButton, deleteButton, row, rowLabel, rowIndicator, rowTime, rowNode,
-    drafts: drafts.fork(), starting: false, closing: false, restarting: false, deleting: false, deletionExecuting: false, ended: false, awaitingSelection: false, inputCount: 0, unread: false, failed: deletion.blocked(file?.path),
+  const backend: SessionBackend = acpProfile ? { kind: 'acp', profile: acpProfile, savedSessionId: acpSessionId } : { kind: 'pi' };
+  const lifecycle: SessionLifecycle = backend.kind === 'acp' ? acpSessionLifecycle(() => tab, backend, {
+    connect: options => launchAcp(tab, options.acceptedAction),
+    stop: token => invoke<void>('stop_acp', { token }),
+    gate: () => acpReady ? 'ready' : 'blocked',
+  }) : piSessionLifecycle(() => tab, backend, {
+    connect: options => launchPi(tab, options.copyDraft, options.acceptedAction, options.initialName),
+    stop: token => invoke<void>('stop_pi', { token }),
+    gate: () => deletion.blocked(tab.file?.path) ? 'unavailable' : tab.deleting || deletion.locked(tab.file?.path) ? 'blocked' : 'ready',
+  });
+  const tab: Tab = { id, mode, file, title, backend, lifecycle, lastUsed: Math.max(lastUsed(used), file ? recency.get(file) : 0), root, notice, notices: sessionNotices, closeButton, deleteButton, row, rowLabel, rowIndicator, rowTime, rowNode,
+    drafts: drafts.fork(), starting: false, closing: false, restarting: false, deleting: false, deletionExecuting: false, ended: false, awaitingSelection: mode === 'resume' && !lifecycle.connectOnStartup, inputCount: 0, unread: false, failed: deletion.blocked(file?.path),
     view: { setActive() {}, scrollToBottom() {}, dispose() {} } };
   root.addEventListener('focusin', event => { if (event.target instanceof HTMLElement) tab.focus = event.target; });
-  tab.drafts.select(acpSessionId ? copilotSessionScope(acpSessionId) : file ? `file:${file.path}` : mode === 'temporary' ? `temporary:${workspace}:${id}` : `unassigned:${id}`);
+  tab.drafts.select(lifecycle.draftScope ?? (file ? `file:${file.path}` : mode === 'temporary' ? `temporary:${workspace}:${id}` : `unassigned:${id}`));
   const ephemeralImages = new Set<string>();
   let imagesDisposed = false;
   function releaseTemporaryImages(): void {
@@ -858,7 +856,7 @@ function updateTabPresentation(tab: Tab): void {
 function showNotice(tab: Tab, text: string, retry = false): void {
   tab.notice.hidden = true; tab.notice.replaceChildren();
   notices.report({ id: `${tab.id}:connection`, owner: tab.id, cause: 'connection', priority: 10, operation: 'Session connection', message: text,
-    actions: retry && !deletion.blocked(tab.file?.path) ? [{ label: 'Retry connection', enabled: () => tabs.includes(tab) && !tab.closing && !tab.restarting && !tab.deleting && !deletion.locked(tab.file?.path), run: () => launch(tab) }] : undefined,
+    actions: retry && !deletion.blocked(tab.file?.path) ? [{ label: 'Retry connection', enabled: () => tabs.includes(tab) && !tab.closing && !tab.restarting && !tab.deleting && !deletion.locked(tab.file?.path), run: () => tab.lifecycle.connect() }] : undefined,
   });
   updateTab(tab);
 }
@@ -1024,7 +1022,7 @@ async function newAcpSession(profile: AcpProfile): Promise<void> {
   if (!ready || !acpReady || unloading || settings.isOpen || !workspace) return;
   const tab = createTab(profile === COPILOT_PROFILE ? 'saved' : 'temporary', undefined, `${profile.name} session`, 0, profile);
   activate(tab); touchTab(tab);
-  await launchAcp(tab, true);
+  await tab.lifecycle.connect({ acceptedAction: true });
 }
 async function launchAcp(tab: Tab, acceptedAction = false): Promise<void> {
   const profile = profileFor(tab);
@@ -1032,13 +1030,12 @@ async function launchAcp(tab: Tab, acceptedAction = false): Promise<void> {
   const project = workspace;
   tab.awaitingSelection = false;
   tab.starting = true; updateTab(tab);
-  try { await stopOwned(tab); }
-  catch (error) { tab.starting = false; showNotice(tab, `Could not stop the previous ACP process: ${error}`, !!savedAcpId(tab)); updateTab(tab); return; }
+  try { await tab.lifecycle.stop(); }
+  catch (error) { tab.starting = false; showNotice(tab, `Could not stop the previous ACP process: ${error}`, !!tab.lifecycle.identity); updateTab(tab); return; }
   if (unloading || !tabs.includes(tab) || tab.closing || workspace !== project) { tab.starting = false; return; }
-  const savedId = savedAcpId(tab);
+  const savedId = tab.lifecycle.identity?.sessionId;
   tab.cancelPreference?.();
-  disconnectBackend(tab, 'Reconnecting session');
-  tab.stopTask = undefined;
+  tab.lifecycle.disconnect('Reconnecting session');
   tab.starting = true; tab.token = crypto.randomUUID(); tab.ended = false; updateTab(tab);
   const token = tab.token;
   const valid = () => !unloading && tabs.includes(tab) && tab.token === token;
@@ -1047,7 +1044,7 @@ async function launchAcp(tab: Tab, acceptedAction = false): Promise<void> {
     publish: message => { if (valid()) tab.receive?.(message); },
     identified: id => {
       if (!valid() || tab.backend.kind !== 'acp' || profile !== COPILOT_PROFILE) return;
-      if (tabs.some(other => other !== tab && savedAcpId(other) === id)) throw new Error('Copilot returned an already-open session identity. No draft was replaced.');
+      if (tabs.some(other => other !== tab && other.lifecycle.key === copilotSessionScope(id))) throw new Error('Copilot returned an already-open session identity. No draft was replaced.');
       tab.drafts.bindScope(copilotSessionScope(id));
       tab.backend.savedSessionId = id;
       persistTabs();
@@ -1063,7 +1060,7 @@ async function launchAcp(tab: Tab, acceptedAction = false): Promise<void> {
       const signature = JSON.stringify([state.busy, state.sessionUnavailable, tab.title]);
       if (signature !== shellSignature) {
         shellSignature = signature; if (state.busy) tab.failed = false; updateTab(tab);
-        if (savedAcpId(tab)) persistTabs();
+        if (tab.lifecycle.identity) persistTabs();
       }
     },
     notice: message => { if (valid() && !tab.closing) notices.report({ id: `${tab.id}:acp:${++noticeSequence}`, owner: tab.id, operation: 'ACP session', message }); },
@@ -1071,10 +1068,10 @@ async function launchAcp(tab: Tab, acceptedAction = false): Promise<void> {
     disconnected: message => {
       if (!valid()) return;
       tab.ended = true; tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' });
-      if (!tab.closing) showNotice(tab, savedAcpId(tab)
+      if (!tab.closing) showNotice(tab, tab.lifecycle.identity
         ? `${message}. The saved session and draft were kept. Nothing was sent again. Retry the connection after resolving the problem.`
-        : `${message}. Nothing was retried. This ACP session has no saved Nimrod identity; create a new session explicitly.`, !!savedAcpId(tab));
-      void stopOwned(tab).catch(error => { if (valid()) showNotice(tab, `Could not stop ACP agent: ${error}`, !!savedAcpId(tab)); });
+        : `${message}. Nothing was retried. This ACP session has no saved Nimrod identity; create a new session explicitly.`, !!tab.lifecycle.identity);
+      void tab.lifecycle.stop().catch(error => { if (valid()) showNotice(tab, `Could not stop ACP agent: ${error}`, !!tab.lifecycle.identity); });
       updateTab(tab);
     },
     completed: (failed, response) => {
@@ -1097,22 +1094,14 @@ async function launchAcp(tab: Tab, acceptedAction = false): Promise<void> {
     if (!valid()) return;
     notices.resolve(`${tab.id}:connection`);
     if (presented === tab && !document.querySelector('dialog[open]')) tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true });
-  } catch (error) { session.disconnect(error); try { await stopOwned(tab); } catch (error) { if (valid()) showNotice(tab, String(error), !!savedAcpId(tab)); } }
+  } catch (error) { session.disconnect(error); try { await tab.lifecycle.stop(); } catch (error) { if (valid()) showNotice(tab, String(error), !!tab.lifecycle.identity); } }
   finally { tab.starting = false; if (valid()) { updateTab(tab); controls(); } }
 }
-async function stopOwned(tab: Tab): Promise<void> {
-  if (!tab.token) return;
-  if (!tab.stopTask) tab.stopTask = invoke<void>(tab.backend.kind === 'acp' ? 'stop_acp' : 'stop_pi', { token: tab.token });
-  const task = tab.stopTask;
-  try { await task; }
-  catch (error) { if (tab.stopTask === task) tab.stopTask = undefined; throw error; }
-}
-async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, initialName?: string): Promise<void> {
-  if (tab.backend.kind === 'acp') return launchAcp(tab, acceptedAction);
+async function launchPi(tab: Tab, copyDraft?: string, acceptedAction = false, initialName?: string): Promise<void> {
   if (!ready || deletion.blocked(tab.file?.path) || deletion.locked(tab.file?.path) || tab.deleting || tab.starting || tab.closing || (piSession(tab) && !tab.ended) || (!acceptedAction && settings.isOpen) || !workspace) return;
   tab.starting = true; tab.failed = false; updateTab(tab); error.textContent = ''; tab.notice.hidden = true;
-  try { await stopOwned(tab); } catch (e) { tab.starting = false; showNotice(tab, `Could not stop the previous process: ${e}`); updateTab(tab); return; }
-  const token = crypto.randomUUID(); tab.token = token; tab.stopTask = undefined; tab.ended = false;
+  try { await tab.lifecycle.stop(); } catch (e) { tab.starting = false; showNotice(tab, `Could not stop the previous process: ${e}`); updateTab(tab); return; }
+  const token = crypto.randomUUID(); tab.token = token; tab.ended = false;
   const currentToken = () => tabs.includes(tab) && tab.token === token;
   const rpc = new PiTransport(message => invoke('write_pi', { token, message }));
   const mode = tab.file?.exists ? 'resume' : tab.mode;
@@ -1150,7 +1139,7 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
     disconnected: reason => {
       if (!currentToken()) return;
       tab.ended = true; tab.cancelPreference?.(); tab.cancelInspector?.(); tab.receive?.({ type: 'sessionDisconnected' }); dialogs.cancel(token);
-      void stopOwned(tab).catch(e => { if (currentToken()) showNotice(tab, `Could not stop Pi: ${e}`); });
+      void tab.lifecycle.stop().catch(e => { if (currentToken()) showNotice(tab, `Could not stop Pi: ${e}`); });
       if (!tab.closing && !tab.restarting && !tab.deleting) showNotice(tab, `${reason || 'Session disconnected'}. Nothing will be sent automatically.`, !!tab.file?.exists);
       updateTab(tab); controls();
     },
@@ -1207,7 +1196,7 @@ async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, init
     if (presented === tab && !tab.restarting && !document.querySelector('dialog[open]')) tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true });
   } catch (e) {
     startupPackets = undefined; rpc.disconnect(String(e));
-    try { await stopOwned(tab); } catch (stopError) { notices.report({ id: `${tab.id}:stop:${++noticeSequence}`, owner: tab.id, operation: 'Stop Pi', message: String(stopError) }); }
+    try { await tab.lifecycle.stop(); } catch (stopError) { notices.report({ id: `${tab.id}:stop:${++noticeSequence}`, owner: tab.id, operation: 'Stop Pi', message: String(stopError) }); }
     showNotice(tab, String(e), !!tab.file?.exists); tab.ended = true;
   } finally { tab.starting = false; updateTab(tab); controls(); }
 }
@@ -1223,7 +1212,7 @@ function newNamedSession(): void {
 async function newSession(mode: LaunchMode = 'saved', copyDraft?: string, initialName?: string): Promise<void> {
   if (!ready || settings.isOpen || !await ensureWorkspace()) return;
   if (!ready || unloading || settings.isOpen) return;
-  const tab = createTab(mode, undefined, undefined, navigation.nextRecency()); activate(tab); await launch(tab, copyDraft, true, initialName);
+  const tab = createTab(mode, undefined, undefined, navigation.nextRecency()); activate(tab); await tab.lifecycle.connect({ copyDraft, acceptedAction: true, initialName });
 }
 async function openSession(info: Pick<SessionSummary, 'path' | 'sessionId' | 'name' | 'lastUserMessageAt'>): Promise<void> {
   if (!ready || settings.isOpen || !await ensureWorkspace()) return;
@@ -1250,7 +1239,7 @@ async function openSession(info: Pick<SessionSummary, 'path' | 'sessionId' | 'na
   const concurrent = tabs.find(tab => tab.file?.path === info.path);
   if (concurrent) { activate(concurrent); return; }
   const tab = createTab('resume', { path: info.path, sessionId: info.sessionId, exists: true }, info.name || 'Session', used);
-  activate(tab); await launch(tab, undefined, true);
+  activate(tab); await tab.lifecycle.connect({ acceptedAction: true });
 }
 async function restartSession(tab: Tab): Promise<void> {
   if (!ready || tab.deleting || deletion.locked(tab.file?.path) || deletion.blocked(tab.file?.path) || !tabs.includes(tab) || !restartable(tab) || tab.starting || tab.closing || tab.restarting || settings.isOpen) return;
@@ -1262,13 +1251,13 @@ async function restartSession(tab: Tab): Promise<void> {
     if (needsConfirmation && !await dialogs.confirm(`Restart ${tab.title}?`, 'This interrupts this session’s agent and resumes its saved history. Your draft stays; queued and in-flight work will not continue. Nothing is sent again automatically.', undefined, 'Restart session')) return;
     if (!tabs.includes(tab)) return;
     // Stop is a native lifecycle operation, not an RPC request to a stuck agent.
-    await stopOwned(tab);
+    await tab.lifecycle.stop();
     tab.cancelPreference?.(); tab.cancelInspector?.();
     if (tab.token) dialogs.cancel(tab.token);
     tab.receive?.({ type: 'sessionDisconnected' }); piSession(tab)?.rpc.disconnect('Session restarted');
     tab.ended = true;
     resumed = true;
-    await launch(tab, undefined, true);
+    await tab.lifecycle.connect({ acceptedAction: true });
   } catch (error) { showNotice(tab, `Could not restart Pi: ${error}`); }
   finally {
     tab.restarting = false; if (tabs.includes(tab)) updateTab(tab); controls();
@@ -1319,7 +1308,7 @@ function disposeTab(tab: Tab): void {
   if (active === tab) active = undefined;
   if (presented === tab) { tab.view.setActive(false); presented = undefined; conversation.hidden = true; }
   if (tab.token) dialogs.cancel(tab.token);
-  tab.cancelPreference?.(); tab.cancelInspector?.(); tab.receive?.({ type: 'sessionDisconnected' }); disconnectBackend(tab, 'Session closed');
+  tab.cancelPreference?.(); tab.cancelInspector?.(); tab.receive?.({ type: 'sessionDisconnected' }); tab.lifecycle.disconnect('Session closed');
   tab.view.dispose();
   try { tab.drafts.discardTemporary(); } catch (e) { persistenceError(e); }
   tab.root.remove(); tab.rowNode.remove();
@@ -1329,7 +1318,7 @@ function detachTab(tab: Tab): void {
   tab.closing = true;
   tab.notices.dispose(); notices.store.resolveOwner(tab.id);
   if (tab.token) dialogs.cancel(tab.token);
-  tab.cancelPreference?.(); tab.cancelInspector?.(); tab.receive?.({ type: 'sessionDisconnected' }); disconnectBackend(tab, 'Session closed');
+  tab.cancelPreference?.(); tab.cancelInspector?.(); tab.receive?.({ type: 'sessionDisconnected' }); tab.lifecycle.disconnect('Session closed');
   const before = navigationSnapshot();
   navigation.remove(tab); tab.view.dispose();
   try { tab.drafts.discardTemporary(); } catch (e) { persistenceError(e); }
@@ -1346,15 +1335,15 @@ async function closeTab(tab: Tab): Promise<void> {
   if (tab.deleting || deletion.locked(tab.file?.path) || tab.closing || tab.starting || tab.restarting || settings.isOpen) return;
   const state = tab.backend.session?.state;
   const running = tab.backend.session && !tab.ended;
-  if ((profileFor(tab) || tab.mode === 'temporary' || (running && (state?.busy || promptPending(tab) || tab.inputCount || piSession(tab)?.state.queue?.pendingCount))) && !await dialogs.confirm(`Close ${tab.title}?`, profileFor(tab) ? savedAcpId(tab)
+  if ((profileFor(tab) || tab.mode === 'temporary' || (running && (state?.busy || promptPending(tab) || tab.inputCount || piSession(tab)?.state.queue?.pendingCount))) && !await dialogs.confirm(`Close ${tab.title}?`, profileFor(tab) ? tab.lifecycle.identity
     ? 'This stops this Copilot agent and removes the sidebar entry. Copilot’s saved history and your draft remain; in-flight work will not continue. Reopening closed Copilot sessions through Resume session is not implemented yet.'
     : 'This stops this ACP agent and discards Nimrod’s in-memory transcript, draft and pop-outs. Nimrod cannot resume it in this POC. The agent may keep its own saved history; this does not delete it.' : tab.mode === 'temporary' ? 'This stops its agent and discards this temporary session, including its draft, queued messages and pop-outs.' : 'This stops only this session’s agent. Written history and your draft remain; queued and in-flight work will not continue.', undefined, profileFor(tab) ? 'Close ACP session' : tab.mode === 'temporary' ? 'Close temporary session' : 'Close session')) return;
   if (tab.closing || !tabs.includes(tab)) return;
   tab.closing = true; updateTab(tab);
   try {
     await nativeDrafts?.flush();
-    await stopOwned(tab);
-    tab.receive?.({ type: 'sessionDisconnected' }); disconnectBackend(tab, 'Disconnected');
+    await tab.lifecycle.stop();
+    tab.receive?.({ type: 'sessionDisconnected' }); tab.lifecycle.disconnect('Disconnected');
     await nativeDrafts?.flush();
     if (tab.token) dialogs.cancel(tab.token);
     detachTab(tab);
