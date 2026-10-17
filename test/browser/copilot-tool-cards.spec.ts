@@ -1,0 +1,53 @@
+import { expect, test } from '@playwright/test';
+import { demoFixture, visible } from './demo-fixture';
+
+test('offline Copilot read/search cards keep compact previews, exact raw recovery and inspected output', async ({ page }) => {
+  const demo = await demoFixture(page, {}, [], undefined, undefined, { acpAgentName: 'Copilot' });
+  try {
+    await page.keyboard.press('Meta+Shift+P');
+    await page.locator('#palette-input').fill('New ACP session');
+    await page.locator('#palette-input').press('Enter');
+    await expect(page.locator('#palette-title')).toHaveText('New ACP session (POC)');
+    await page.locator('#palette-input').press('Enter');
+    await expect(page.locator(visible('send'))).toBeEnabled();
+    const connection = demo.calls.find(call => call.command === 'write_acp' && (call.args.message as { method?: string }).method === 'session/new')!;
+    const token = connection.args.token as string;
+    const emit = (updates: object[]) => page.evaluate(({ token, updates }) => {
+      const channels = (window as unknown as { __fixtureChannels: Record<string, { onmessage(packet: unknown): void }> }).__fixtureChannels;
+      for (const update of updates) channels[token].onmessage({ kind: 'rpc', value: { jsonrpc: '2.0', method: 'session/update', params: { sessionId: 'fixture-acp', update } } });
+    }, { token, updates });
+    const content = Array.from({ length: 80 }, (_, index) => `line ${index}: <script>literal source</script>`).join('\n');
+    const rawOutput = { content, detailedContent: 'redundant diff representation' };
+    await emit([
+      { sessionUpdate: 'tool_call', toolCallId: 'read-fixture', kind: 'read', title: 'Viewing .../client.ts', status: 'in_progress', rawInput: { path: '/fixture/src/client.ts', view_range: [1, 80] } },
+      { sessionUpdate: 'tool_call_update', toolCallId: 'read-fixture', rawOutput },
+      { sessionUpdate: 'tool_call', toolCallId: 'search-fixture', kind: 'other', title: "Searching for 'deleteSession...'", rawInput: { pattern: 'deleteSession|session/delete', paths: '/fixture/src', glob: '*.ts', output_mode: 'content' } },
+      { sessionUpdate: 'tool_call_update', toolCallId: 'search-fixture', status: 'completed', rawOutput: { content: 'client.ts:20: deleteSession', detailedContent: 'same search in another format' } },
+    ]);
+    const read = page.locator('details[data-detail-key="tool:read-fixture"]');
+    const search = page.locator('details[data-detail-key="tool:search-fixture"]');
+    await expect(read.locator('.tool-card-title')).toHaveText('Read file');
+    await expect(read.locator('.tool-card-preview')).toHaveText('client.ts · lines 1–80 · /fixture/src/');
+    await expect(search.locator('.tool-card-title')).toHaveText('Search');
+    await expect(search.locator('.tool-card-preview')).toHaveText('deleteSession|session/delete · in /fixture/src · files *.ts');
+    await read.evaluate(node => { if (!(node as HTMLDetailsElement).open) node.querySelector('summary')!.click(); });
+    const output = read.locator('.card-plugin-body [data-output-kind="result"] .tool-output');
+    expect(await output.textContent()).toBe(content);
+    await expect(read.locator('script')).toHaveCount(0);
+    const position = await output.evaluate(node => { const output = node as HTMLElement; output.scrollTop = 35; output.focus(); output.dataset.fixtureIdentity = 'read-output'; return output.scrollTop; });
+    const final = { content: content + '\nfinal line', detailedContent: 'final redundant representation' };
+    await emit([{ sessionUpdate: 'tool_call_update', toolCallId: 'read-fixture', status: 'completed', rawOutput: final }]);
+    await expect(output).toHaveAttribute('data-fixture-identity', 'read-output');
+    await expect(output).toHaveClass(/tool-output-final/);
+    await expect(output).toBeFocused();
+    expect(await output.evaluate(node => node.scrollTop)).toBe(position);
+    expect(await output.textContent()).toBe(final.content);
+    const raw = read.locator(':scope > .tool-raw-output');
+    await raw.locator(':scope > summary').click();
+    expect(await raw.locator('[data-output-kind="result"] pre').textContent()).toBe(JSON.stringify(final, null, 2));
+    await search.evaluate(node => { if (!(node as HTMLDetailsElement).open) node.querySelector('summary')!.click(); });
+    await expect(search.locator('.card-plugin-body .tool-output')).toHaveText('client.ts:20: deleteSession');
+    expect(demo.errors).toEqual([]);
+    expect(demo.calls.some(call => call.command === 'write_acp' && (call.args.message as { method?: string }).method === 'session/prompt')).toBe(false);
+  } finally { await demo.close(); }
+});

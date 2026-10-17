@@ -23,7 +23,7 @@ type TestWindow = Window & {
 export const visible = (id: string) => `.session-view:not([hidden]) [data-pi-id="${id}"]`;
 
 /** Real app bundle and independent offline demo children. Never starts Pi. */
-export async function demoFixture(page: Page, appState: Record<string, unknown> = {}, catalog: { path: string; sessionId: string; name: string; preview: string; modified: number; lastUserMessageAt?: number }[] = [], typingOptions?: { drafts: Record<string, unknown>; persistent: boolean }, pluginOptions?: { settings: string; packages: Record<string, string>; personal?: () => Promise<import('../../src/pi/card-plugins/catalog').PersonalBundles> }, fixtureOptions?: { tool?: 'edit'; enforceCsp?: boolean }) {
+export async function demoFixture(page: Page, appState: Record<string, unknown> = {}, catalog: { path: string; sessionId: string; name: string; preview: string; modified: number; lastUserMessageAt?: number }[] = [], typingOptions?: { drafts: Record<string, unknown>; persistent: boolean }, pluginOptions?: { settings: string; packages: Record<string, string>; personal?: () => Promise<import('../../src/pi/card-plugins/catalog').PersonalBundles> }, fixtureOptions?: { tool?: 'edit'; enforceCsp?: boolean; acpAgentName?: 'Copilot' }) {
   const result = await build({ entryPoints: ['src/main.ts'], bundle: true, format: 'iife', platform: 'browser', write: false,
     loader: { '.css': 'empty' }, plugins: [{ name: 'raw', setup(builder) {
       builder.onResolve({ filter: /\.html\?raw$/ }, args => ({ path: path.resolve(args.resolveDir, args.path.replace('?raw', '')), namespace: 'raw' }));
@@ -124,7 +124,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'start_acp') {
       const token = String(args.token);
       if (children.has(token)) throw new Error('Duplicate offline ACP token');
-      const child = spawn(process.execPath, ['test/fixtures/acp-agent.mjs'], { cwd: process.cwd(), stdio: ['pipe', 'pipe', 'pipe'] });
+      const child = spawn(process.execPath, ['test/fixtures/acp-agent.mjs'], { cwd: process.cwd(), env: { ...process.env, NIMROD_ACP_FIXTURE_AGENT: fixtureOptions?.acpAgentName || 'fixture-agent' }, stdio: ['pipe', 'pipe', 'pipe'] });
       children.set(token, child);
       createInterface({ input: child.stdout }).on('line', line => send(token, { kind: 'rpc', value: JSON.parse(line) }));
       child.stderr.on('data', chunk => errors.push(String(chunk)));

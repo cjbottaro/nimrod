@@ -42,7 +42,7 @@ createInterface({ input: process.stdin }).on('line', line => {
     }
     return;
   }
-  if (message.method === 'initialize') response(message.id, { protocolVersion: 1, agentInfo: { name: 'fixture-agent', title: 'Offline fixture', version: '1' }, agentCapabilities: { loadSession: true, sessionCapabilities: { list: {} } } });
+  if (message.method === 'initialize') response(message.id, { protocolVersion: 1, agentInfo: { name: process.env.NIMROD_ACP_FIXTURE_AGENT || 'fixture-agent', title: 'Offline fixture', version: '1' }, agentCapabilities: { loadSession: true, sessionCapabilities: { list: {} } } });
   else if (message.method === 'session/list') {
     if (message.params.cwd !== process.cwd()) { send({ id: message.id, error: { code: -32602, message: 'Wrong offline fixture project' } }); return; }
     if (message.params.cursor === undefined) response(message.id, { sessions: [

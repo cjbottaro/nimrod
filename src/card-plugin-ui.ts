@@ -33,6 +33,18 @@ export function rawToolPresentation(block: Readonly<ToolCardData>): CardPresenta
   if (output) sections.push({ key: 'result', label: block.toolStatus === 'running' && !block.resultOutput ? 'Live output' : 'Result', text: output });
   return { title: block.title || (typeof block.name === 'string' && block.name) || 'tool', sections };
 }
+/** Compact filename-first read summary; ranges describe requested input, not returned line counts. */
+export function fileReadPresentation(value: { path: string; range?: string; sections: CardPresentation['sections'] }): CardPresentation {
+  const split = Math.max(value.path.lastIndexOf('/'), value.path.lastIndexOf('\\'));
+  const filename = value.path.slice(split + 1) || value.path;
+  const directory = split >= 0 ? value.path.slice(0, split + 1) : '';
+  return { title: 'Read file', preview: [filename, value.range, directory].filter(Boolean).join(' · '), rawInputsPlacement: 'after', sections: value.sections };
+}
+/** Query-first search summary, shared by content and filename searches without parsing results. */
+export function searchPresentation(value: { title?: string; query: string; scope?: string; glob?: string; sections: CardPresentation['sections'] }): CardPresentation {
+  return { title: value.title || 'Search', preview: [value.query || '""', value.scope ? `in ${value.scope}` : undefined, value.glob ? `files ${value.glob}` : undefined].filter(Boolean).join(' · '),
+    rawInputsPlacement: 'after', sections: value.sections };
+}
 /** Shared command/output component through the public keyed presentation runtime. */
 export function shellPresentation(value: { title: string; command?: string; sections: CardPresentation['sections'] }): CardPresentation {
   return { title: value.title, preview: value.command, sections: value.sections.map(section => ({ ...section, format: 'console' as const })) };

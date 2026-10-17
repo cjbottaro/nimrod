@@ -38,6 +38,14 @@ Nimrod uses the project's exact directory. Opening the session does not submit a
 
 Pi and ACP sessions share the transcript, reasoning/tool-card runtime, disclosure/scroll behavior and presentation actions. ACP tool cards default to generic protocol-level rendering, with optional agent-specific or [external plugins](card-plugin-api.md#harness-targets-and-shared-runtime). Unsupported rich content is shown as literal JSON/text rather than inferred into a different tool schema; consecutive content blocks are retained independently.
 
+Copilot has compact bundled cards for common inspection tools:
+
+- **Read file** puts the filename first, followed by a requested line range when supplied and its directory.
+- **Search** puts the complete text pattern first, followed by the supplied search scope and optional file filter.
+- **Find files** shows a filename pattern and supplied search scope.
+
+Recognized Copilot output wrappers show their plain content rather than duplicate JSON/diff representations. The complete original output remains in a collapsed **Raw output** disclosure; **Raw inputs** follows the result. Source and search results stay literal, not executable HTML. Unknown agents, unsupported payload shapes and other tools keep their generic presentation. New cards retain the existing disclosure, status and reading-position behavior; these presentation changes have not yet been validated in the native app.
+
 Supported agent-advertised selectors appear through **ACP session options…**. Model, thinking and mode controls appear in the Status area only when the agent advertises their corresponding categories. Mode names and meanings belong to the agent. Other selectors remain in ACP session options. Changes are available while idle; working-turn configuration updates do not leave controls disabled afterward. The POC also accepts legacy ACP model/mode selectors. Advertised slash commands appear in composer completion and are sent as ordinary ACP prompts. Unadvertised slash commands are blocked locally, not accidentally forwarded to a model.
 
 Session sidebar and Switch session include both backends. ACP rows and the Project bar identify the agent/ACP POC. Application commands such as Settings, themes and plugin reload remain Nimrod operations; Pi-only MCP inspection is not offered for ACP sessions.
