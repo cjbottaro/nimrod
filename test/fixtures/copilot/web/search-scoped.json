@@ -1,0 +1,104 @@
+{
+  "start": {
+    "type": "tool.execution_start",
+    "data": {
+      "arguments": {
+        "query": "site:docs.github.com/copilot \"autopilot\" \"plan mode\" Copilot CLI"
+      },
+      "mcpConfigServerName": "github-mcp-server",
+      "mcpConfigSource": "builtin",
+      "mcpServerName": "github-mcp-server",
+      "mcpToolName": "web_search",
+      "mcpTransport": "http",
+      "toolCallId": "search-scoped",
+      "toolName": "web_search",
+      "toolTitle": "Web Search"
+    }
+  },
+  "complete": {
+    "type": "tool.execution_complete",
+    "data": {
+      "result": {
+        "content": "{\"annotations\":null,\"bing_searches\":[{\"text\":\"site:docs.github.com/copilot \\\"autopilot\\\" \\\"plan mode\\\" Copilot CLI\",\"url\":\"https://www.bing.com/search?q=site%3Adocs.github.com%2Fcopilot+%22autopilot%22+%22plan+mode%22+Copilot+CLI\"}],\"text\":{\"annotations\":[{\"end_index\":965,\"start_index\":953,\"text\":\"\",\"url_citation\":{\"title\":\"Using Autopilot mode in GitHub Copilot CLI\",\"url\":\"https://docs.github.com/copilot/concepts/agents/copilot-cli/autopilot\"}},{\"end_index\":977,\"start_index\":965,\"text\":\"\",\"url_citation\":{\"title\":\"Delegating tasks to Copilot - GitHub Docs\",\"url\":\"https://docs.github.com/copilot/how-tos/copilot-cli/use-copilot-cli/delegate-tasks-to-cca\"}},{\"end_index\":1629,\"start_index\":1617,\"text\":\"\",\"url_citation\":{\"title\":\"Using Autopilot mode in GitHub Copilot CLI\",\"url\":\"https://docs.github.com/copilot/concepts/agents/copilot-cli/autopilot\"}},{\"end_index\":1641,\"start_index\":1629,\"text\":\"\",\"url_citation\":{\"title\":\"GitHub Copilot CLI\",\"url\":\"https://docs.github.com/copilot/concepts/agents/about-copilot-cli\"}},{\"end_index\":2117,\"start_index\":2105,\"text\":\"\",\"url_citation\":{\"title\":\"Using Autopilot mode in GitHub Copilot CLI\",\"url\":\"https://docs.github.com/copilot/concepts/agents/copilot-cli/autopilot\"}},{\"end_index\":2129,\"start_index\":2117,\"text\":\"\",\"url_citation\":{\"title\":\"GitHub Copilot CLI\",\"url\":\"https://docs.github.com/copilot/concepts/agents/about-copilot-cli\"}}],\"value\":\"Here’s a summary of how \\\"autopilot\\\" and \\\"plan mode\\\" work in GitHub Copilot CLI:\\n\\n### Autopilot Mode\\nAutopilot mode in Copilot CLI allows the AI to autonomously implement, test, and iterate on a well-defined task, without requiring user interaction at each step. You can enter autopilot mode during an interactive session by pressing `Shift + Tab` until the status line says “Autopilot mode.” You then provide a prompt outlining your expectations. For non-interactive use, you can directly use the CLI with:\\n```shell\\ncopilot --autopilot --yolo --max-autopilot-continues 10 -p \\\"YOUR PROMPT HERE\\\"\\n```\\nAutopilot works best if you enable all permissions, so Copilot doesn’t require manual approvals to execute actions on your machine. If you want more control, you can use manual approval or later grant full permissions using `/allow-all` (or `/yolo`). Consider running Copilot CLI in a local or cloud sandbox when using full permissions for sensitive tasks【3:0†source】【3:2†source】.\\n\\n### Plan Mode\\nPlan mode is an intermediate step for complex tasks where you want Copilot to first devise a step-by-step implementation plan before executing. In interactive mode, select Plan mode with `Shift + Tab`, provide your prompt and constraints, review the generated plan, revise as needed, and then accept the plan to move automatically to Autopilot execution.\\n\\nYou can combine plan and autopilot execution programmatically:\\n```shell\\ncopilot --plan --mode autopilot\\n```\\nThis starts with planning and, once the plan is ready, automatically moves to autopilot mode to complete the implementation, skipping interactive plan approval【3:0†source】【3:4†source】.\\n\\n### Key Points\\n- **Plan mode** = Copilot builds a structured implementation plan, you review/approve.\\n- **Autopilot mode** = Copilot executes the plan hands-free.\\n- You can switch between modes interactively or launch combined behavior from the command line.\\n- Permissions: You get optimal results if Copilot is allowed full permissions for the session.\\n\\nFor full details, see the [GitHub Copilot CLI official documentation](https://docs.github.com/copilot/cli)【3:0†source】【3:4†source】.\"},\"type\":\"output_text\"}",
+        "contents": [
+          {
+            "text": "{\"annotations\":null,\"bing_searches\":[{\"text\":\"site:docs.github.com/copilot \\\"autopilot\\\" \\\"plan mode\\\" Copilot CLI\",\"url\":\"https://www.bing.com/search?q=site%3Adocs.github.com%2Fcopilot+%22autopilot%22+%22plan+mode%22+Copilot+CLI\"}],\"text\":{\"annotations\":[{\"end_index\":965,\"start_index\":953,\"text\":\"\",\"url_citation\":{\"title\":\"Using Autopilot mode in GitHub Copilot CLI\",\"url\":\"https://docs.github.com/copilot/concepts/agents/copilot-cli/autopilot\"}},{\"end_index\":977,\"start_index\":965,\"text\":\"\",\"url_citation\":{\"title\":\"Delegating tasks to Copilot - GitHub Docs\",\"url\":\"https://docs.github.com/copilot/how-tos/copilot-cli/use-copilot-cli/delegate-tasks-to-cca\"}},{\"end_index\":1629,\"start_index\":1617,\"text\":\"\",\"url_citation\":{\"title\":\"Using Autopilot mode in GitHub Copilot CLI\",\"url\":\"https://docs.github.com/copilot/concepts/agents/copilot-cli/autopilot\"}},{\"end_index\":1641,\"start_index\":1629,\"text\":\"\",\"url_citation\":{\"title\":\"GitHub Copilot CLI\",\"url\":\"https://docs.github.com/copilot/concepts/agents/about-copilot-cli\"}},{\"end_index\":2117,\"start_index\":2105,\"text\":\"\",\"url_citation\":{\"title\":\"Using Autopilot mode in GitHub Copilot CLI\",\"url\":\"https://docs.github.com/copilot/concepts/agents/copilot-cli/autopilot\"}},{\"end_index\":2129,\"start_index\":2117,\"text\":\"\",\"url_citation\":{\"title\":\"GitHub Copilot CLI\",\"url\":\"https://docs.github.com/copilot/concepts/agents/about-copilot-cli\"}}],\"value\":\"Here’s a summary of how \\\"autopilot\\\" and \\\"plan mode\\\" work in GitHub Copilot CLI:\\n\\n### Autopilot Mode\\nAutopilot mode in Copilot CLI allows the AI to autonomously implement, test, and iterate on a well-defined task, without requiring user interaction at each step. You can enter autopilot mode during an interactive session by pressing `Shift + Tab` until the status line says “Autopilot mode.” You then provide a prompt outlining your expectations. For non-interactive use, you can directly use the CLI with:\\n```shell\\ncopilot --autopilot --yolo --max-autopilot-continues 10 -p \\\"YOUR PROMPT HERE\\\"\\n```\\nAutopilot works best if you enable all permissions, so Copilot doesn’t require manual approvals to execute actions on your machine. If you want more control, you can use manual approval or later grant full permissions using `/allow-all` (or `/yolo`). Consider running Copilot CLI in a local or cloud sandbox when using full permissions for sensitive tasks【3:0†source】【3:2†source】.\\n\\n### Plan Mode\\nPlan mode is an intermediate step for complex tasks where you want Copilot to first devise a step-by-step implementation plan before executing. In interactive mode, select Plan mode with `Shift + Tab`, provide your prompt and constraints, review the generated plan, revise as needed, and then accept the plan to move automatically to Autopilot execution.\\n\\nYou can combine plan and autopilot execution programmatically:\\n```shell\\ncopilot --plan --mode autopilot\\n```\\nThis starts with planning and, once the plan is ready, automatically moves to autopilot mode to complete the implementation, skipping interactive plan approval【3:0†source】【3:4†source】.\\n\\n### Key Points\\n- **Plan mode** = Copilot builds a structured implementation plan, you review/approve.\\n- **Autopilot mode** = Copilot executes the plan hands-free.\\n- You can switch between modes interactively or launch combined behavior from the command line.\\n- Permissions: You get optimal results if Copilot is allowed full permissions for the session.\\n\\nFor full details, see the [GitHub Copilot CLI official documentation](https://docs.github.com/copilot/cli)【3:0†source】【3:4†source】.\"},\"type\":\"output_text\"}",
+            "type": "text"
+          }
+        ],
+        "detailedContent": "{\"annotations\":null,\"bing_searches\":[{\"text\":\"site:docs.github.com/copilot \\\"autopilot\\\" \\\"plan mode\\\" Copilot CLI\",\"url\":\"https://www.bing.com/search?q=site%3Adocs.github.com%2Fcopilot+%22autopilot%22+%22plan+mode%22+Copilot+CLI\"}],\"text\":{\"annotations\":[{\"end_index\":965,\"start_index\":953,\"text\":\"\",\"url_citation\":{\"title\":\"Using Autopilot mode in GitHub Copilot CLI\",\"url\":\"https://docs.github.com/copilot/concepts/agents/copilot-cli/autopilot\"}},{\"end_index\":977,\"start_index\":965,\"text\":\"\",\"url_citation\":{\"title\":\"Delegating tasks to Copilot - GitHub Docs\",\"url\":\"https://docs.github.com/copilot/how-tos/copilot-cli/use-copilot-cli/delegate-tasks-to-cca\"}},{\"end_index\":1629,\"start_index\":1617,\"text\":\"\",\"url_citation\":{\"title\":\"Using Autopilot mode in GitHub Copilot CLI\",\"url\":\"https://docs.github.com/copilot/concepts/agents/copilot-cli/autopilot\"}},{\"end_index\":1641,\"start_index\":1629,\"text\":\"\",\"url_citation\":{\"title\":\"GitHub Copilot CLI\",\"url\":\"https://docs.github.com/copilot/concepts/agents/about-copilot-cli\"}},{\"end_index\":2117,\"start_index\":2105,\"text\":\"\",\"url_citation\":{\"title\":\"Using Autopilot mode in GitHub Copilot CLI\",\"url\":\"https://docs.github.com/copilot/concepts/agents/copilot-cli/autopilot\"}},{\"end_index\":2129,\"start_index\":2117,\"text\":\"\",\"url_citation\":{\"title\":\"GitHub Copilot CLI\",\"url\":\"https://docs.github.com/copilot/concepts/agents/about-copilot-cli\"}}],\"value\":\"Here’s a summary of how \\\"autopilot\\\" and \\\"plan mode\\\" work in GitHub Copilot CLI:\\n\\n### Autopilot Mode\\nAutopilot mode in Copilot CLI allows the AI to autonomously implement, test, and iterate on a well-defined task, without requiring user interaction at each step. You can enter autopilot mode during an interactive session by pressing `Shift + Tab` until the status line says “Autopilot mode.” You then provide a prompt outlining your expectations. For non-interactive use, you can directly use the CLI with:\\n```shell\\ncopilot --autopilot --yolo --max-autopilot-continues 10 -p \\\"YOUR PROMPT HERE\\\"\\n```\\nAutopilot works best if you enable all permissions, so Copilot doesn’t require manual approvals to execute actions on your machine. If you want more control, you can use manual approval or later grant full permissions using `/allow-all` (or `/yolo`). Consider running Copilot CLI in a local or cloud sandbox when using full permissions for sensitive tasks【3:0†source】【3:2†source】.\\n\\n### Plan Mode\\nPlan mode is an intermediate step for complex tasks where you want Copilot to first devise a step-by-step implementation plan before executing. In interactive mode, select Plan mode with `Shift + Tab`, provide your prompt and constraints, review the generated plan, revise as needed, and then accept the plan to move automatically to Autopilot execution.\\n\\nYou can combine plan and autopilot execution programmatically:\\n```shell\\ncopilot --plan --mode autopilot\\n```\\nThis starts with planning and, once the plan is ready, automatically moves to autopilot mode to complete the implementation, skipping interactive plan approval【3:0†source】【3:4†source】.\\n\\n### Key Points\\n- **Plan mode** = Copilot builds a structured implementation plan, you review/approve.\\n- **Autopilot mode** = Copilot executes the plan hands-free.\\n- You can switch between modes interactively or launch combined behavior from the command line.\\n- Permissions: You get optimal results if Copilot is allowed full permissions for the session.\\n\\nFor full details, see the [GitHub Copilot CLI official documentation](https://docs.github.com/copilot/cli)【3:0†source】【3:4†source】.\"},\"type\":\"output_text\"}",
+        "structuredContent": {
+          "annotations": null,
+          "bing_searches": [
+            {
+              "text": "site:docs.github.com/copilot \"autopilot\" \"plan mode\" Copilot CLI",
+              "url": "https://www.bing.com/search?q=site%3Adocs.github.com%2Fcopilot+%22autopilot%22+%22plan+mode%22+Copilot+CLI"
+            }
+          ],
+          "text": {
+            "annotations": [
+              {
+                "end_index": 965,
+                "start_index": 953,
+                "text": "",
+                "url_citation": {
+                  "title": "Using Autopilot mode in GitHub Copilot CLI",
+                  "url": "https://docs.github.com/copilot/concepts/agents/copilot-cli/autopilot"
+                }
+              },
+              {
+                "end_index": 977,
+                "start_index": 965,
+                "text": "",
+                "url_citation": {
+                  "title": "Delegating tasks to Copilot - GitHub Docs",
+                  "url": "https://docs.github.com/copilot/how-tos/copilot-cli/use-copilot-cli/delegate-tasks-to-cca"
+                }
+              },
+              {
+                "end_index": 1629,
+                "start_index": 1617,
+                "text": "",
+                "url_citation": {
+                  "title": "Using Autopilot mode in GitHub Copilot CLI",
+                  "url": "https://docs.github.com/copilot/concepts/agents/copilot-cli/autopilot"
+                }
+              },
+              {
+                "end_index": 1641,
+                "start_index": 1629,
+                "text": "",
+                "url_citation": {
+                  "title": "GitHub Copilot CLI",
+                  "url": "https://docs.github.com/copilot/concepts/agents/about-copilot-cli"
+                }
+              },
+              {
+                "end_index": 2117,
+                "start_index": 2105,
+                "text": "",
+                "url_citation": {
+                  "title": "Using Autopilot mode in GitHub Copilot CLI",
+                  "url": "https://docs.github.com/copilot/concepts/agents/copilot-cli/autopilot"
+                }
+              },
+              {
+                "end_index": 2129,
+                "start_index": 2117,
+                "text": "",
+                "url_citation": {
+                  "title": "GitHub Copilot CLI",
+                  "url": "https://docs.github.com/copilot/concepts/agents/about-copilot-cli"
+                }
+              }
+            ],
+            "value": "Here’s a summary of how \"autopilot\" and \"plan mode\" work in GitHub Copilot CLI:\n\n### Autopilot Mode\nAutopilot mode in Copilot CLI allows the AI to autonomously implement, test, and iterate on a well-defined task, without requiring user interaction at each step. You can enter autopilot mode during an interactive session by pressing `Shift + Tab` until the status line says “Autopilot mode.” You then provide a prompt outlining your expectations. For non-interactive use, you can directly use the CLI with:\n```shell\ncopilot --autopilot --yolo --max-autopilot-continues 10 -p \"YOUR PROMPT HERE\"\n```\nAutopilot works best if you enable all permissions, so Copilot doesn’t require manual approvals to execute actions on your machine. If you want more control, you can use manual approval or later grant full permissions using `/allow-all` (or `/yolo`). Consider running Copilot CLI in a local or cloud sandbox when using full permissions for sensitive tasks【3:0†source】【3:2†source】.\n\n### Plan Mode\nPlan mode is an intermediate step for complex tasks where you want Copilot to first devise a step-by-step implementation plan before executing. In interactive mode, select Plan mode with `Shift + Tab`, provide your prompt and constraints, review the generated plan, revise as needed, and then accept the plan to move automatically to Autopilot execution.\n\nYou can combine plan and autopilot execution programmatically:\n```shell\ncopilot --plan --mode autopilot\n```\nThis starts with planning and, once the plan is ready, automatically moves to autopilot mode to complete the implementation, skipping interactive plan approval【3:0†source】【3:4†source】.\n\n### Key Points\n- **Plan mode** = Copilot builds a structured implementation plan, you review/approve.\n- **Autopilot mode** = Copilot executes the plan hands-free.\n- You can switch between modes interactively or launch combined behavior from the command line.\n- Permissions: You get optimal results if Copilot is allowed full permissions for the session.\n\nFor full details, see the [GitHub Copilot CLI official documentation](https://docs.github.com/copilot/cli)【3:0†source】【3:4†source】."
+          },
+          "type": "output_text"
+        }
+      },
+      "success": true,
+      "toolCallId": "search-scoped"
+    }
+  }
+}

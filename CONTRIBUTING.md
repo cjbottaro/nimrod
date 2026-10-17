@@ -64,6 +64,8 @@ npx playwright install webkit  # one-time setup
 npm run test:browser
 ```
 
+The durable [Copilot web-card corpus](test/fixtures/copilot/web/README.md) contains scrubbed native SDK examples shared by card DOM tests and the offline browser demo. Use/extend these fixtures for presentation work rather than depending on user transcript logs or live SDK requests; retain citation strings/offsets together and document provenance/scrubbing.
+
 The standard test includes local Markdown links/anchors, TypeScript/UI tests, Rust formatting, Clippy and fixture tests. Tests must not call paid models, compact live conversations, delete user sessions or modify upstream Pi/the sibling pi-gui extension. Automated browser tests are allowed; interactive browser debugging and launching/interrupting the user's app require approval.
 
 Optional installed-Pi metadata smoke tests use disposable config/session directories and hand-authored history, with user resources disabled. They send no prompts:

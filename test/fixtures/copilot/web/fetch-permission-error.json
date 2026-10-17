@@ -1,0 +1,25 @@
+{
+  "start": {
+    "type": "tool.execution_start",
+    "data": {
+      "arguments": {
+        "max_length": 20000,
+        "url": "https://example.test/fixture.txt"
+      },
+      "toolCallId": "fetch-permission-error",
+      "toolName": "web_fetch",
+      "toolTitle": "Fetching web content"
+    }
+  },
+  "complete": {
+    "type": "tool.execution_complete",
+    "data": {
+      "error": {
+        "code": "failure",
+        "message": "native tool permission flow failed: GenericFailure, permission host returned malformed payload: unknown variant `approved`, expected one of `approve-once`, `approve-for-session`, `approve-permanently`, `reject`, `user-not-available`"
+      },
+      "success": false,
+      "toolCallId": "fetch-permission-error"
+    }
+  }
+}

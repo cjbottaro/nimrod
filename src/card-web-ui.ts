@@ -34,7 +34,10 @@ export interface WebSource { title: string; url: string; }
 export function webSearchPresentation(value: { query: string; sections: CardPresentation['sections']; sources?: readonly WebSource[] }): CardPresentation {
   const sections: CardSection[] = [...value.sections];
   if (value.sources?.length) sections.push({ key: 'web-sources', label: `Sources · ${value.sources.length}`,
-    text: value.sources.map((source, index) => `${index + 1}. ${markdownWebLink(source.title, source.url)}`).join('\n'), format: 'markdown', webLinks: true });
+    text: value.sources.map((source, index) => {
+      const url = webUrl(source.url), domain = url ? new URL(url).hostname : undefined;
+      return `${index + 1}. ${markdownWebLink(source.title, source.url)}${domain ? ` — ${domain}` : ''}`;
+    }).join('\n'), format: 'markdown', webLinks: true });
   return { title: 'Web search', preview: value.query, rawInputsPlacement: 'after', sections };
 }
 export function webFetchPresentation(value: { url: string; startIndex?: number; sections: CardPresentation['sections'] }): CardPresentation {

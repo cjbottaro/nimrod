@@ -9,6 +9,7 @@ import { definePresentationPlugin, webUrl, displayWebUrl } from '../src/card-plu
 import { validatePresentation } from '../src/pi/card-renderer';
 import type { ToolCardData, CardPlugin } from '../src/card-plugin-api';
 import { copilotToolResult } from '../src/copilot/tool-result';
+import { capturedWebExample, type WebExampleName } from './copilot-web-fixtures';
 
 const source = { backend: 'copilot-sdk' as const, agent: 'Copilot' };
 function fixture(data: ToolCardData, plugin?: CardPlugin) {
@@ -33,6 +34,92 @@ function searchData(value = `## Answer\n\nSee the documentation ${firstMarker} a
   ] }, bing_searches: [{ text: 'actual query', url: 'https://example.test/search?q=actual' }] };
   return nativeData('search', { query: 'A complete web query' }, { structuredContent, content: JSON.stringify(structuredContent), detailedContent: 'redundant representation' });
 }
+
+function capturedData(name: WebExampleName): ToolCardData {
+  const { start, complete } = capturedWebExample(name);
+  return { source, name: start.data.toolName, kind: start.data.toolName === 'web_search' ? 'search' : 'fetch', title: 'Native tool',
+    arguments: start.data.arguments, toolStatus: 'result', isError: !complete.data.success,
+    resultOutput: complete.data.result ? copilotToolResult(complete.data.result) : JSON.stringify(complete.data.error, null, 2),
+    native: { [start.type]: start.data, [complete.type]: complete.data } };
+}
+
+test('captured GitHub MCP web searches reach rich answers with numbered citations and source domains', () => {
+  for (const [name, count, citations] of [['search-answer', 6, 14], ['search-scoped', 3, 6]] as const) {
+    // Concrete MCP identity is sufficient even when category metadata is late.
+    const data = { ...capturedData(name), kind: 'other' }, f = fixture(data);
+    try {
+      assert.equal(f.card.querySelector('.tool-card-title')?.textContent, 'Web search');
+      assert.equal(f.card.querySelector('.tool-card-preview')?.textContent, (data.arguments as { query: string }).query);
+      const answer = f.card.querySelector('.card-plugin-body [data-output-kind="result"] .tool-output')!;
+      assert.ok(answer.classList.contains('tool-output-web-markdown'));
+      assert.equal(answer.textContent?.includes('†source'), false, 'all observed citation offsets are recognized');
+      assert.equal([...answer.querySelectorAll('a')].filter(a => /^\[\d+\]$/.test(a.textContent || '')).length, citations);
+      const sources = f.card.querySelector('[data-output-kind="web-sources"]')!;
+      assert.equal(sources.querySelector('.tool-label')?.textContent, `Sources · ${count}`);
+      assert.equal(sources.querySelectorAll('li').length, count);
+      for (const anchor of sources.querySelectorAll<HTMLAnchorElement>('a')) assert.ok(anchor.parentElement!.textContent!.includes(new URL(anchor.href).hostname));
+      assert.equal(f.card.querySelector('.tool-raw-output pre')?.textContent, data.resultOutput);
+      assert.equal(f.card.querySelector('img, script'), null);
+    } finally { f.close(); }
+  }
+});
+
+test('captured fetches show linked pages, redirects, partial content and native errors with exact raw recovery', () => {
+  for (const name of ['fetch-page', 'fetch-redirect', 'fetch-partial', 'fetch-permission-error'] as const) {
+    const data = capturedData(name), f = fixture(data);
+    try {
+      assert.equal(f.card.querySelector('.tool-card-title')?.textContent, 'Fetch');
+      assert.equal(f.card.querySelector('.tool-raw-output pre')?.textContent, data.resultOutput);
+      assert.equal(f.card.querySelector('img, script'), null);
+      if (name === 'fetch-permission-error') {
+        assert.equal(f.card.querySelector('.card-plugin-body .tool-output')?.textContent, capturedWebExample(name).complete.data.error!.message);
+        assert.ok(f.card.querySelector('.tool-card-failed'));
+      } else {
+        const redirected = name !== 'fetch-page';
+        const page = f.card.querySelector(`[data-output-kind="${redirected ? 'fetch-redirect' : 'fetch-source'}"]`)!;
+        assert.equal(page.querySelector('.tool-label')?.textContent, redirected ? 'Redirected to' : 'Page');
+        assert.ok(page.querySelector('a')?.getAttribute('href')?.startsWith('https://'));
+        assert.equal(page.querySelector('a')?.textContent?.startsWith('https://'), false);
+        assert.equal(Boolean(f.card.querySelector('[data-output-kind="fetch-partial"]')), name === 'fetch-partial');
+        for (const link of f.card.querySelectorAll('.card-plugin-body a[href]')) assert.match(link.getAttribute('href')!, /^https?:\/\//);
+        if (redirected) assert.ok(f.card.querySelector('.card-plugin-body [data-output-kind="result"] a[href^="https://docs.github.com/en/copilot/"]'));
+      }
+    } finally { f.close(); }
+  }
+});
+
+test('MCP metadata updates retain the mounted web card, Markdown, disclosure and focused viewport', () => {
+  const data = capturedData('search-answer'), f = fixture({ source, kind: 'other', toolStatus: 'running' });
+  try {
+    f.card.open = true;
+    const summary = f.card.querySelector('summary');
+    updateToolCard(f.doc, f.card, data);
+    const output = f.card.querySelector<HTMLElement>('.card-plugin-body [data-output-kind="result"] .tool-output')!;
+    output.focus();
+    const link = output.querySelector('a');
+    const raw = f.card.querySelector<HTMLDetailsElement>('.tool-raw-output')!; raw.open = true;
+    updateToolCard(f.doc, f.card, { ...data, title: 'Late title' });
+    assert.equal(f.card.querySelector('summary'), summary);
+    assert.equal(f.card.open, true);
+    assert.equal(f.card.querySelector('.card-plugin-body [data-output-kind="result"] .tool-output'), output);
+    assert.equal(output.querySelector('a'), link);
+    assert.equal(f.doc.activeElement, output);
+    assert.equal(f.card.querySelector('.tool-raw-output'), raw); assert.equal(raw.open, true);
+  } finally { f.close(); }
+});
+
+test('other MCP query tools do not acquire the web-search renderer', () => {
+  for (const [server, tool] of [['github-mcp-server', 'lookup'], ['another-server', 'web_search']]) {
+    const data = capturedData('search-answer');
+    data.native = { ...(data.native as Record<string, unknown>), 'tool.execution_start': { mcpServerName: server, mcpToolName: tool } };
+    const f = fixture(data);
+    try {
+      assert.notEqual(f.card.querySelector('.tool-card-title')?.textContent, 'Web search');
+      assert.equal(f.card.querySelector('[data-output-kind="web-sources"]'), null);
+      assert.equal(f.card.querySelector('.card-plugin-body .tool-output')?.textContent, data.resultOutput);
+    } finally { f.close(); }
+  }
+});
 
 test('Copilot web search renders an answer, linked numbered citations and deduplicated sources with exact raw recovery', () => {
   const data = searchData(), f = fixture(data);
@@ -95,9 +182,10 @@ test('raw fetched source stays literal, failures are readable, and unrecognized 
   const content = `Content type text/plain; charset=utf-8 cannot be simplified to markdown. Here is the raw content:\nContents of ${url}:\n${code}`;
   const plain = fixture(nativeData('fetch', { url }, { content, detailedContent: content }));
   try {
-    assert.equal(plain.card.querySelector('.card-plugin-body .tool-output')?.textContent, code);
-    assert.equal(plain.card.querySelector('.card-plugin-body script, .card-plugin-body a'), null);
-    assert.equal(plain.card.querySelector('.card-plugin-body .tool-label')?.textContent, 'Raw content');
+    const body = plain.card.querySelector('.card-plugin-body [data-output-kind="result"]')!;
+    assert.equal(body.querySelector('.tool-output')?.textContent, code);
+    assert.equal(body.querySelector('script, a'), null);
+    assert.equal(body.querySelector('.tool-label')?.textContent, 'Raw content');
   } finally { plain.close(); }
   const failed = fixture(nativeData('fetch', { url }, { code: 'failure', message: 'Failed to fetch — status code 404' }, true));
   try {

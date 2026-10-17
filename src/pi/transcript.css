@@ -66,7 +66,15 @@ details { margin:8px 0; border:0; border-radius:0; padding:0; }
 .tool-card .tool-raw-inputs > pre { margin-left:14px; }
 .card-plugin-summary { display:contents; }
 .tool-output-web-markdown { font-family:var(--vscode-font-family, sans-serif); white-space:normal; background:transparent; padding:0; }
-.tool-output-web-markdown > .markdown { white-space:normal; }
+.tool-output-web-markdown > .markdown { white-space:normal; overflow-wrap:anywhere; }
+.tool-output-web-markdown .markdown :is(h1, h2) { font-size:1.12em; line-height:1.4; }
+.tool-output-web-markdown .markdown :is(h3, h4, h5, h6) { font-size:1em; line-height:1.4; }
+.tool-output-web-markdown .markdown p { white-space:normal; }
+.tool-output-web-markdown .markdown pre { overflow-wrap:normal; }
+[data-output-kind="web-sources"] .tool-output-web-markdown { color:var(--vscode-descriptionForeground); font-size:.92em; }
+[data-output-kind="web-sources"] .markdown ol { margin:0; padding-left:1.8em; }
+[data-output-kind="web-sources"] .markdown li + li { margin-top:.35em; }
+:is([data-output-kind="fetch-source"], [data-output-kind="fetch-redirect"]) .tool-output-web-markdown { font-size:.92em; }
 .card-plugin-copy { margin:4px 0; padding:3px 7px; font-size:.8em; }
 .edit-card-preview { display:flex; flex:1; align-items:baseline; gap:12px; }
 .edit-card-filename { flex:none; max-width:70%; overflow:hidden; text-overflow:ellipsis; color:var(--vscode-foreground); }

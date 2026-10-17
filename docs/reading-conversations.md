@@ -21,6 +21,14 @@ A tool may keep its activity indicator after execution finishes while Pi process
 
 Each Pi built-in has a dedicated [card plugin](card-plugins.md#matching-and-overrides). Read summaries include the requested path and line range when supplied. Write cards show the destination and literal **Requested content**, separately scrollable from Pi's output; this previews the input, not a successful write. Grep/find show the pattern and path, and ls shows the directory. Edit cards retain requested diffs with Wrap/Copy. Unknown tools use a generic card, and personal plugins can override built-in presentation.
 
+### Copilot web cards
+
+Copilot web searches—including its built-in GitHub MCP web search—show the full query in the summary and a formatted **Answer** when expanded. Numbered citations link to source pages; a deduplicated **Sources** list shows their titles and domains. The answer is Copilot's generated summary, not independently verified by Nimrod.
+
+Fetch cards show the requested URL in the summary, a clickable **Page** URL (or **Redirected to** for an explicitly reported redirect), and readable page content. Relative links resolve against the returned page. A reported truncation appears as **Partial content**; Nimrod does not automatically fetch the rest. Raw-source responses remain literal, and failures retain the tool's error message.
+
+Web sections use compact headings and wrapping text/links; code retains its whitespace. Remote images are not loaded. Links use the normal external browser handler, and exact original results remain in **Raw output**. Unknown payloads fall back to literal output.
+
 ### Console-style command output
 
 Bash, shell and terminal tool cards render ANSI colors and text styles in both live output and results. Carriage returns, backspaces, tabs, line clearing and common relative cursor movements render progress updates instead of printing escape codes. Output remains selectable text in the existing scrollable viewport; colors follow the theme's terminal palette where available.

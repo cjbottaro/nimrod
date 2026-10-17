@@ -1,6 +1,6 @@
 import type { CardPlugin, CardPresentation, CardSection, CardPluginContext, ToolCardData } from '../card-plugin-api';
 import { copilotToolResult } from './tool-result';
-import { definePresentationPlugin, rawToolPresentation, shellPresentation, fileReadPresentation, searchPresentation, argumentRecord, firstString, webUrl, markdownWebLink, webSearchPresentation, webFetchPresentation, type WebSource, namedToolPresentation, codeSearchText, type CodeSearchFile } from '../card-plugin-ui';
+import { definePresentationPlugin, rawToolPresentation, shellPresentation, fileReadPresentation, searchPresentation, argumentRecord, firstString, webUrl, displayWebUrl, markdownWebLink, webSearchPresentation, webFetchPresentation, type WebSource, namedToolPresentation, codeSearchText, type CodeSearchFile } from '../card-plugin-ui';
 
 function isCopilot(data: Readonly<ToolCardData>): boolean {
   return data.source?.backend === 'copilot-sdk' && ['copilot', 'copilot-cli'].includes((data.source?.agent || '').toLowerCase());
@@ -120,7 +120,7 @@ function fetchSections(data: Readonly<ToolCardData>, requestedUrl: string): Card
   const partial = /\n*<note>(Content truncated\. Call the fetch tool with a start_index of \d+ to get more content\.)<\/note>\s*$/.exec(text);
   if (partial) text = text.slice(0, partial.index);
   const result: CardSection[] = [];
-  if (url !== requestedUrl) result.push({ key: 'fetch-redirect', label: 'Redirected to', text: markdownWebLink(url, url), format: 'markdown', webLinks: true });
+  result.push({ key: url !== requestedUrl ? 'fetch-redirect' : 'fetch-source', label: url !== requestedUrl ? 'Redirected to' : 'Page', text: markdownWebLink(displayWebUrl(url), url), format: 'markdown', webLinks: true });
   result.push({ key: 'result', label: rawPrefix ? 'Raw content' : 'Content', text, format: rawPrefix ? 'text' : 'markdown',
     ...(rawPrefix ? {} : { webLinks: true, baseUrl: url }) });
   if (partial) result.push({ key: 'fetch-partial', label: 'Partial content', text: partial[1] });
@@ -155,6 +155,9 @@ function copilotPresentation(data: Readonly<ToolCardData>, context: CardPluginCo
   const input = argumentRecord(data.arguments), start = object(object(data.native)?.['tool.execution_start']);
   const sections = data.isError ? copilotSections(data) : raw.sections;
   if (typeof start?.mcpServerName === 'string' && typeof start.mcpToolName === 'string') {
+    // The built-in web search is delivered through GitHub MCP, not only as a
+    // bare search-category tool. Match its concrete identity before MCP fallback.
+    if (start.mcpServerName === 'github-mcp-server' && start.mcpToolName === 'web_search' && typeof input?.query === 'string') return webSearch(data, input.query);
     if (start.mcpServerName === 'github-mcp-server' && start.mcpToolName === 'search_code' && typeof input?.query === 'string') {
       const native = !data.isError ? nativeResult(data) : undefined;
       const text = native ? repositoryResult(native.output) : undefined;
