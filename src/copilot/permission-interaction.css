@@ -8,3 +8,4 @@
 #palette-remaining { margin-left:auto; color:var(--vscode-descriptionForeground); font-size:11px; white-space:nowrap; }
 #command-palette[data-retained] #palette-hint { margin-left:0; }
 #command-palette[data-retained] #palette-list .palette-item-label { white-space:normal; overflow:visible; overflow-wrap:anywhere; }
+#command-palette[data-retained] #palette-list .palette-item-description { white-space:pre-wrap; overflow:visible; overflow-wrap:anywhere; }

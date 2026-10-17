@@ -33,6 +33,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 ### Fixed
 
 - Accepted configuration cards stay in normal transcript flow instead of following new output at the bottom. Changes confirmed before the first message remain at the start; coalesced updates and background sessions preserve the confirmation-time position.
+- Copilot no longer offers or accepts session-wide shell/file-write approval when the runtime disallows it or omits its capability flag. Shell session choices use a concise label with parsed command context and exact approval scope in searchable secondary details, without implying arbitrary-argument access or broadening the returned identifiers.
 - Copilot context-window changes refresh usage after configuration settles rather than caching an intermediate budget under the new tier. Long context keeps the model’s advertised maximum in the picker, and pending-model details no longer reuse another model’s limits.
 - Copilot Autopilot keeps Working state, pending questions, tool cards and queued configuration across intermediate idle events instead of prematurely announcing completion. Explicit aborts finish as Stopped, repeated terminal events do not repeat completion, and plan approvals are validated against the owning request's offered actions.
 

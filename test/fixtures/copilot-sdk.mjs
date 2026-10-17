@@ -138,6 +138,8 @@ class Session {
     const decision = await this.config.onPermissionRequest(request);
     assert.ok(['approve-once', 'approve-for-session', 'approve-permanently', 'reject', 'user-not-available'].includes(decision.kind), 'The live CLI accepts decisions, not legacy permission outcomes');
     if (decision.kind === 'approve-once') assert.equal(decision.approvedInteractively, true, 'Only an explicit UI choice may approve');
+    if (decision.kind === 'approve-for-session' && ['shell', 'write'].includes(request.kind))
+      assert.equal(request.canOfferSessionApproval, true, 'This request must explicitly allow session approval');
     return decision;
   }
   async run(prompt, turn) {

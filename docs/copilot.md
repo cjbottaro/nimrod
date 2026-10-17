@@ -43,13 +43,18 @@ The Status area says **Waiting for permission…** while choices are outstanding
 Alongside **Allow once** and **Deny**, applicable scope-labelled choices include:
 - File reads/writes can be allowed for this session. **All file reads/writes**
   means exactly that—not access restricted to the displayed file or directory.
-- Commands can be allowed for the runtime-reported command identifiers, with
-  **any arguments**, for this session.
+- **Allow for this session** appears for commands only when Copilot explicitly
+  permits it. The secondary details show parsed command context when available
+  and the exact **Approval scope** Copilot would remember. That scope can be a
+  full invocation rather than just an executable; Nimrod does not assume it
+  permits arbitrary arguments. Details wrap and are searchable.
 - MCP approval can remember the exact server/tool for this session.
 - URLs can allow the displayed domain for this session or **always**, explicitly
   labelled **saved across sessions**. This is a domain grant, not a URL-path grant.
 
-Only applicable choices appear. Managed-policy and sandbox-bypass requests offer
+Only applicable choices appear. Shell and file-write session approval require
+Copilot's explicit capability flag; false or missing flags hide that choice.
+Managed-policy and sandbox-bypass requests offer
 one-time approval or denial only. Directory-only and saved-project approval are
 not currently exposed because the installed CLI's compatibility with those newer
 SDK variants has not been verified. Copilot owns remembered rules; Nimrod does not
