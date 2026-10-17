@@ -42,10 +42,18 @@ createInterface({ input: process.stdin }).on('line', line => {
     }
     return;
   }
-  if (message.method === 'initialize') response(message.id, { protocolVersion: 1, agentInfo: { name: 'fixture-agent', title: 'Offline fixture', version: '1' }, agentCapabilities: {} });
+  if (message.method === 'initialize') response(message.id, { protocolVersion: 1, agentInfo: { name: 'fixture-agent', title: 'Offline fixture', version: '1' }, agentCapabilities: { loadSession: true } });
   else if (message.method === 'session/new') {
     response(message.id, { sessionId, configOptions: configOptions() });
     update({ sessionUpdate: 'available_commands_update', availableCommands: [{ name: 'context', description: 'Offline fixture context' }] });
+  } else if (message.method === 'session/load') {
+    if (message.params.sessionId !== sessionId) { send({ id: message.id, error: { code: -32602, message: 'Unknown offline fixture session' } }); return; }
+    // A fixed replay fixture, not a user-history store or provider invocation.
+    update({ sessionUpdate: 'user_message_chunk', messageId: 'saved-user', content: { type: 'text', text: 'Saved offline question' } });
+    update({ sessionUpdate: 'agent_thought_chunk', messageId: 'saved-thought', content: { type: 'text', text: 'Saved offline reasoning' } });
+    update({ sessionUpdate: 'agent_message_chunk', messageId: 'saved-answer', content: { type: 'text', text: 'Saved offline answer' } });
+    update({ sessionUpdate: 'available_commands_update', availableCommands: [{ name: 'context', description: 'Offline fixture context' }] });
+    response(message.id, { configOptions: configOptions() });
   } else if (message.method === 'session/set_config_option') {
     if (message.params.configId === 'model') model = message.params.value;
     if (message.params.configId === 'effort') effort = message.params.value;

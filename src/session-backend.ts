@@ -7,7 +7,7 @@ import { piSessionActions } from './pi/view-policy';
 /** Concrete alternatives, not a universal controller. One backend owns a live session. */
 export type SessionBackend =
   | { readonly kind: 'pi'; session?: PiSession }
-  | { readonly kind: 'acp'; readonly profile: AcpProfile; session?: AcpSession };
+  | { readonly kind: 'acp'; readonly profile: AcpProfile; session?: AcpSession; savedSessionId?: string };
 export interface SessionAction {
   id: 'mcp' | 'model' | 'thinking' | 'acp-options';
   label: string;

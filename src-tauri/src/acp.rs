@@ -214,6 +214,7 @@ fn validate_message(message: &Value, cwd: &Path) -> Result<(), String> {
         match method {
             "initialize"
             | "session/new"
+            | "session/load"
             | "session/prompt"
             | "session/set_config_option"
             | "session/set_mode"
@@ -222,8 +223,17 @@ fn validate_message(message: &Value, cwd: &Path) -> Result<(), String> {
             "session/cancel" if message.get("id").is_none() => {}
             _ => return Err("Unsupported ACP operation".into()),
         }
-        if method == "session/new" && message["params"]["cwd"].as_str() != cwd.to_str() {
+        if matches!(method, "session/new" | "session/load")
+            && message["params"]["cwd"].as_str() != cwd.to_str()
+        {
             return Err("ACP session cwd must match its project".into());
+        }
+        if method == "session/load"
+            && message["params"]["sessionId"]
+                .as_str()
+                .is_none_or(|id| id.trim().is_empty())
+        {
+            return Err("ACP loading requires a session ID".into());
         }
     } else if !valid_id(&message["id"])
         || (message.get("result").is_some() == message.get("error").is_some())
@@ -488,6 +498,18 @@ mod tests {
         );
         assert!(validate_message(&json!({"type":"prompt","id":"pi"}), cwd).is_err());
         assert!(validate_message(&json!({"jsonrpc":"2.0","id":"permission","result":{"outcome":{"outcome":"cancelled"}}}), cwd).is_ok());
+    }
+    #[test]
+    fn saved_loading_requires_the_owned_project_and_an_explicit_identity() {
+        let cwd = Path::new("/fixture/project");
+        let load = |project: &str, id: Value| {
+            json!({"jsonrpc":"2.0","id":1,"method":"session/load","params":{"cwd":project,"sessionId":id,"mcpServers":[]}})
+        };
+        assert!(validate_message(&load("/fixture/project", json!("saved-id")), cwd).is_ok());
+        assert!(validate_message(&load("/other", json!("saved-id")), cwd).is_err());
+        for id in [Value::Null, json!(""), json!(" "), json!(42)] {
+            assert!(validate_message(&load("/fixture/project", id), cwd).is_err());
+        }
     }
     #[cfg(unix)]
     #[tokio::test]

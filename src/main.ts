@@ -4,7 +4,7 @@ import { acpInteraction } from './acp/view-policy';
 import { createPiViewProjection, piInteraction } from './pi/view-policy';
 import { piSession, acpSession, acpProfile as profileFor, disconnectBackend, sessionActions, type SessionAction, type SessionBackend } from './session-backend';
 import type { ConversationViewMessage, ConversationView } from './conversation-view-host';
-import { COPILOT_PROFILE, parseAcpProfile, type AcpProfile } from './acp/profiles';
+import { COPILOT_PROFILE, copilotSessionScope, parseAcpProfile, type AcpProfile } from './acp/profiles';
 import { mountConversationView } from './conversation-view';
 import { installApplicationNotices } from './application-notices';
 import { Channel, invoke } from '@tauri-apps/api/core';
@@ -150,11 +150,14 @@ type LaunchMode = 'saved' | 'temporary' | 'resume';
 interface SessionFile { path: string; sessionId: string; exists: boolean; parentSession?: string | null; lastUserMessageAt?: number; }
 interface LaunchInfo { cwd: string; session?: SessionFile; }
 interface SessionSummary { path: string; sessionId: string; name?: string; preview: string; modified: number; parentSession?: string | null; lastUserMessageAt?: number; }
+type SavedSidebarSession = { path: string; sessionId: string; name: string; lastUsed: number }
+  | { kind: 'acp'; profile: 'copilot'; sessionId: string; name: string; lastUsed: number };
 interface Tab {
   readonly backend: SessionBackend;
   id: string; token?: string; title: string; lastUsed: number; mode: LaunchMode; file?: SessionFile;
   root: HTMLElement; view: ConversationView; drafts: SessionDrafts; receive?: (message: HostMessage | ConversationViewMessage) => void;
   starting: boolean; closing: boolean; restarting: boolean; deleting: boolean; deletionExecuting: boolean; ended: boolean; stopTask?: Promise<void>;
+  awaitingSelection: boolean;
   inputCount: number; unread: boolean; failed: boolean; focus?: HTMLElement; notice: HTMLElement;
   notices: ReturnType<typeof installApplicationNotices>;
   cancelPreference?: () => void;
@@ -202,13 +205,19 @@ const notifySession = sessionNotifications({
 const selectedConnection = new SessionConnection<Tab>({
   selected: () => presented,
   eligibility: tab => {
-    if (!ready || unloading || !workspace || !tabs.includes(tab) || !tab.file?.exists || deletion.blocked(tab.file.path) || tab.closing || tab.restarting) return 'unavailable';
+    if (!ready || unloading || !workspace || !tabs.includes(tab) || tab.closing || tab.restarting || tab.awaitingSelection) return 'unavailable';
+    if (tab.backend.kind === 'acp') {
+      if (!savedAcpId(tab)) return 'unavailable';
+      if (!acpReady) return 'blocked';
+      return tab.starting || (tab.backend.session && !tab.ended) ? 'connected' : 'connectable';
+    }
+    if (!tab.file?.exists || deletion.blocked(tab.file.path)) return 'unavailable';
     if (tab.starting || (tab.backend.session && !tab.ended)) return 'connected';
     if (tab.deleting || deletion.locked(tab.file.path)) return 'blocked';
     return 'connectable';
   },
   connect: tab => launch(tab, undefined, true),
-  failed: (tab, error) => { if (tabs.includes(tab)) showNotice(tab, `Could not connect Pi: ${error}`, true); },
+  failed: (tab, error) => { if (tabs.includes(tab)) showNotice(tab, `Could not connect ${profileFor(tab)?.name || 'Pi'}: ${error}`, true); },
 });
 const deletion = new SessionDeletion({
   panels: () => tabs.filter(tab => tab.file?.exists && tab.mode !== 'temporary').map(tab => ({
@@ -412,6 +421,11 @@ function deletionBusy(tab: Tab): boolean {
   return tab.starting || tab.closing || tab.restarting || !!tab.inputCount || promptPending(tab) || !!(state && !tab.ended && (state.busy || state.compacting || state.modelControls.changing || state.sessionUnavailable || state.queue.pendingCount || state.queue.steering.length || state.queue.followUp.length || presentActivity(false, '', state.extensionStatuses).subagents));
 }
 function restartable(tab: Tab): boolean { return tab.backend.kind === 'pi' && !!tab.file?.exists && tab.mode !== 'temporary'; }
+function savedAcpId(tab: Tab): string | undefined { return tab.backend.kind === 'acp' ? tab.backend.savedSessionId : undefined; }
+function savedTabKey(tab: Tab): string | undefined {
+  const id = savedAcpId(tab);
+  return id ? copilotSessionScope(id) : restartable(tab) ? tab.file!.path : undefined;
+}
 function deletable(tab: Tab | undefined): boolean {
   return ready && !deletion.pending && !!tab && tabs.includes(tab) && restartable(tab) &&
     !tab.deleting && !deletion.blocked(tab.file?.path) && !tab.starting && !tab.closing && !tab.restarting;
@@ -437,7 +451,11 @@ function prepareTabBookkeeping(): void {
   let changed = false;
   for (const tab of tabs) if (restartable(tab) && recency.record(tab.file!, tab.lastUsed)) changed = true;
   if (changed) save(recencyKey(), recency.dump());
-  save(layoutKey(), { tabs: tabs.filter(t => restartable(t)).map(t => ({ path: t.file!.path, sessionId: t.file!.sessionId, name: t.title, lastUsed: t.lastUsed })), active: active && restartable(active) ? active.file!.path : undefined });
+  save(layoutKey(), { tabs: tabs.flatMap<SavedSidebarSession>(tab => {
+    const id = savedAcpId(tab);
+    if (id) return [{ kind: 'acp', profile: 'copilot', sessionId: id, name: tab.title, lastUsed: tab.lastUsed }];
+    return restartable(tab) ? [{ path: tab.file!.path, sessionId: tab.file!.sessionId, name: tab.title, lastUsed: tab.lastUsed }] : [];
+  }), active: active ? savedTabKey(active) : undefined });
 }
 function recentWorkspaces(): string[] { const raw = stored(recentKey); return Array.isArray(raw) ? raw.filter((s): s is string => typeof s === 'string') : []; }
 function renderRecents(): void {
@@ -481,7 +499,14 @@ async function enterWorkspace(path: string): Promise<void> {
   save(recentKey, [path, ...recentWorkspaces().filter(p => p !== path)].slice(0, 30)); renderRecents();
   const layout = stored(layoutKey()) as { tabs?: unknown[]; active?: string } | null;
   for (const value of Array.isArray(layout?.tabs) ? layout.tabs : []) {
-    const t = value as (Partial<SessionSummary> & { lastUsed?: unknown }) | null;
+    const t = value as (Partial<SessionSummary> & { kind?: unknown; profile?: unknown; lastUsed?: unknown }) | null;
+    if (t?.kind === 'acp') {
+      if (t.profile !== 'copilot' || typeof t.sessionId !== 'string' || !t.sessionId.trim() || tabs.some(tab => savedAcpId(tab) === t.sessionId)) continue;
+      const tab = createTab('resume', undefined, typeof t.name === 'string' ? t.name : 'Copilot session', lastUsed(t.lastUsed), COPILOT_PROFILE, t.sessionId);
+      tab.awaitingSelection = true;
+      tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
+      continue;
+    }
     if (!t || typeof t.path !== 'string' || typeof t.sessionId !== 'string' || deletion.removed(t.path) || tabs.some(tab => tab.file?.path === t.path)) continue;
     let used = Math.max(lastUsed(t.lastUsed), recency.get({ path: t.path, sessionId: t.sessionId }));
     if (!used) {
@@ -497,7 +522,7 @@ async function enterWorkspace(path: string): Promise<void> {
     tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
   }
   ready = true;
-  const selected = tabs.find(t => t.file?.path === layout?.active) || navigation.all()[0];
+  const selected = tabs.find(t => savedTabKey(t) === layout?.active) || navigation.all()[0];
   if (selected) activate(selected, 'startup');
   controls();
 }
@@ -592,7 +617,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     { id: 'resume', label: 'Resume session…', detail: 'Open a saved conversation in this project', next: true, run: () => palette.sessions() },
     { id: 'delete-sessions', label: 'Delete sessions…', detail: 'Repeatedly review and delete saved session trees in this project', next: true, run: () => palette.deleteSessions() },
     { id: 'new', label: 'New session', detail: 'Pi · persistent conversation (default harness)', run: () => newSession() },
-    ...(acpReady ? [{ id: 'new-acp', label: 'New ACP session…', detail: 'Experimental · Copilot or a custom ACP agent · text only, in-memory Nimrod state', next: true, run: newAcpSessionPicker }] : []),
+    ...(acpReady ? [{ id: 'new-acp', label: 'New ACP session…', detail: 'Experimental · Copilot or a custom ACP agent · text only', next: true, run: newAcpSessionPicker }] : []),
     { id: 'new-named', label: 'New named session…', detail: 'Choose a name before starting', next: true, run: newNamedSession },
     ...(tabs.length ? [{ id: 'switch-session', label: 'Switch session…', detail: 'All open sessions, regardless of sidebar view', next: true, run: () => palette.openSessions() }] : []),
     ...(active ? sessionCommands(active) : []),
@@ -650,7 +675,7 @@ const unlistenProjectPicker = await listen('nimrod-open-project', () => { void t
 function button(text: string, click: () => void): HTMLButtonElement {
   const node = document.createElement('button'); node.type = 'button'; node.textContent = text; node.addEventListener('click', click); return node;
 }
-function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'temporary' ? 'Temporary session' : 'Session', used = 0, acpProfile?: AcpProfile): Tab {
+function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'temporary' ? 'Temporary session' : 'Session', used = 0, acpProfile?: AcpProfile, acpSessionId?: string): Tab {
   const id = crypto.randomUUID();
   const root = document.createElement('section'); root.className = 'session-view'; root.id = `panel-${id}`; root.setAttribute('role', 'region'); root.hidden = true;
   root.innerHTML = transcript;
@@ -667,11 +692,11 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
   deleteButton.append(required('delete-session').querySelector('svg')!.cloneNode(true));
   const closeButton = button('×', () => { void closeTab(tab); }); closeButton.className = 'session-close';
   rowNode.append(row, deleteButton, closeButton); required('open-sessions').append(rowNode);
-  const tab: Tab = { id, mode, file, title, backend: acpProfile ? { kind: 'acp', profile: acpProfile } : { kind: 'pi' }, lastUsed: Math.max(lastUsed(used), file ? recency.get(file) : 0), root, notice, notices: sessionNotices, closeButton, deleteButton, row, rowLabel, rowIndicator, rowTime, rowNode,
-    drafts: drafts.fork(), starting: false, closing: false, restarting: false, deleting: false, deletionExecuting: false, ended: false, inputCount: 0, unread: false, failed: deletion.blocked(file?.path),
+  const tab: Tab = { id, mode, file, title, backend: acpProfile ? { kind: 'acp', profile: acpProfile, savedSessionId: acpSessionId } : { kind: 'pi' }, lastUsed: Math.max(lastUsed(used), file ? recency.get(file) : 0), root, notice, notices: sessionNotices, closeButton, deleteButton, row, rowLabel, rowIndicator, rowTime, rowNode,
+    drafts: drafts.fork(), starting: false, closing: false, restarting: false, deleting: false, deletionExecuting: false, ended: false, awaitingSelection: false, inputCount: 0, unread: false, failed: deletion.blocked(file?.path),
     view: { setActive() {}, scrollToBottom() {}, dispose() {} } };
   root.addEventListener('focusin', event => { if (event.target instanceof HTMLElement) tab.focus = event.target; });
-  tab.drafts.select(file ? `file:${file.path}` : mode === 'temporary' ? `temporary:${workspace}:${id}` : `unassigned:${id}`);
+  tab.drafts.select(acpSessionId ? copilotSessionScope(acpSessionId) : file ? `file:${file.path}` : mode === 'temporary' ? `temporary:${workspace}:${id}` : `unassigned:${id}`);
   const ephemeralImages = new Set<string>();
   let imagesDisposed = false;
   function releaseTemporaryImages(): void {
@@ -775,6 +800,7 @@ function activate(tab: Tab, intent: SelectionIntent = 'explicit'): void {
   if (!ready) return;
   const plan = navigation.selection(tab, navigationSnapshot(), intent);
   if (!plan) return;
+  if (intent !== 'startup') tab.awaitingSelection = false;
   notificationNavigation++;
   if (plan.view !== sidebarView) {
     sidebarView = plan.view;
@@ -996,14 +1022,36 @@ async function newAcpSessionPicker(): Promise<void> {
 }
 async function newAcpSession(profile: AcpProfile): Promise<void> {
   if (!ready || !acpReady || unloading || settings.isOpen || !workspace) return;
-  const tab = createTab('temporary', undefined, `${profile.name} session`, 0, profile);
+  const tab = createTab(profile === COPILOT_PROFILE ? 'saved' : 'temporary', undefined, `${profile.name} session`, 0, profile);
   activate(tab); touchTab(tab);
+  await launchAcp(tab, true);
+}
+async function launchAcp(tab: Tab, acceptedAction = false): Promise<void> {
+  const profile = profileFor(tab);
+  if (!profile || !ready || !acpReady || unloading || !workspace || !tabs.includes(tab) || tab.starting || tab.closing || tab.restarting || (tab.backend.session && !tab.ended) || (!acceptedAction && settings.isOpen)) return;
+  const project = workspace;
+  tab.awaitingSelection = false;
+  tab.starting = true; updateTab(tab);
+  try { await stopOwned(tab); }
+  catch (error) { tab.starting = false; showNotice(tab, `Could not stop the previous ACP process: ${error}`, !!savedAcpId(tab)); updateTab(tab); return; }
+  if (unloading || !tabs.includes(tab) || tab.closing || workspace !== project) { tab.starting = false; return; }
+  const savedId = savedAcpId(tab);
+  tab.cancelPreference?.();
+  disconnectBackend(tab, 'Reconnecting session');
+  tab.stopTask = undefined;
   tab.starting = true; tab.token = crypto.randomUUID(); tab.ended = false; updateTab(tab);
-  const token = tab.token, project = workspace;
+  const token = tab.token;
   const valid = () => !unloading && tabs.includes(tab) && tab.token === token;
   let shellSignature = '';
   const session = new AcpSession(message => invoke('write_acp', { token, message }), {
     publish: message => { if (valid()) tab.receive?.(message); },
+    identified: id => {
+      if (!valid() || tab.backend.kind !== 'acp' || profile !== COPILOT_PROFILE) return;
+      if (tabs.some(other => other !== tab && savedAcpId(other) === id)) throw new Error('Copilot returned an already-open session identity. No draft was replaced.');
+      tab.drafts.bindScope(copilotSessionScope(id));
+      tab.backend.savedSessionId = id;
+      persistTabs();
+    },
     changed: () => {
       if (!valid()) return;
       const state = session.state;
@@ -1013,15 +1061,20 @@ async function newAcpSession(profile: AcpProfile): Promise<void> {
         if (typeof first?.content === 'string') tab.title = first.content.trim().replace(/\s+/g, ' ').slice(0, 70) || `${profile.name} session`;
       }
       const signature = JSON.stringify([state.busy, state.sessionUnavailable, tab.title]);
-      if (signature !== shellSignature) { shellSignature = signature; if (state.busy) tab.failed = false; updateTab(tab); }
+      if (signature !== shellSignature) {
+        shellSignature = signature; if (state.busy) tab.failed = false; updateTab(tab);
+        if (savedAcpId(tab)) persistTabs();
+      }
     },
     notice: message => { if (valid() && !tab.closing) notices.report({ id: `${tab.id}:acp:${++noticeSequence}`, owner: tab.id, operation: 'ACP session', message }); },
     permission: (request, signal) => requestAcpPermission(tab, request, signal),
     disconnected: message => {
       if (!valid()) return;
       tab.ended = true; tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' });
-      if (!tab.closing) showNotice(tab, `${message}. Nothing was retried. ACP POC sessions cannot reconnect; create a new session explicitly.`);
-      void stopOwned(tab).catch(error => { if (valid()) showNotice(tab, `Could not stop ACP agent: ${error}`); });
+      if (!tab.closing) showNotice(tab, savedAcpId(tab)
+        ? `${message}. The saved session and draft were kept. Nothing was sent again. Retry the connection after resolving the problem.`
+        : `${message}. Nothing was retried. This ACP session has no saved Nimrod identity; create a new session explicitly.`, !!savedAcpId(tab));
+      void stopOwned(tab).catch(error => { if (valid()) showNotice(tab, `Could not stop ACP agent: ${error}`, !!savedAcpId(tab)); });
       updateTab(tab);
     },
     completed: (failed, response) => {
@@ -1040,9 +1093,11 @@ async function newAcpSession(profile: AcpProfile): Promise<void> {
   try {
     const confirmed = await invoke<string>('start_acp', { token, config: { cwd: project, command: profile.command, args: profile.args, env: profile.env, node: runtime.current().node }, onEvent });
     if (!valid() || confirmed !== project) throw new Error('Native ACP host did not confirm this project');
-    await session.initialize(project);
+    await session.initialize(project, savedId);
+    if (!valid()) return;
+    notices.resolve(`${tab.id}:connection`);
     if (presented === tab && !document.querySelector('dialog[open]')) tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true });
-  } catch (error) { session.disconnect(error); try { await stopOwned(tab); } catch (error) { showNotice(tab, String(error)); } }
+  } catch (error) { session.disconnect(error); try { await stopOwned(tab); } catch (error) { if (valid()) showNotice(tab, String(error), !!savedAcpId(tab)); } }
   finally { tab.starting = false; if (valid()) { updateTab(tab); controls(); } }
 }
 async function stopOwned(tab: Tab): Promise<void> {
@@ -1053,7 +1108,7 @@ async function stopOwned(tab: Tab): Promise<void> {
   catch (error) { if (tab.stopTask === task) tab.stopTask = undefined; throw error; }
 }
 async function launch(tab: Tab, copyDraft?: string, acceptedAction = false, initialName?: string): Promise<void> {
-  if (tab.backend.kind !== 'pi') return; // ACP POC never silently reconnects/replaces a session.
+  if (tab.backend.kind === 'acp') return launchAcp(tab, acceptedAction);
   if (!ready || deletion.blocked(tab.file?.path) || deletion.locked(tab.file?.path) || tab.deleting || tab.starting || tab.closing || (piSession(tab) && !tab.ended) || (!acceptedAction && settings.isOpen) || !workspace) return;
   tab.starting = true; tab.failed = false; updateTab(tab); error.textContent = ''; tab.notice.hidden = true;
   try { await stopOwned(tab); } catch (e) { tab.starting = false; showNotice(tab, `Could not stop the previous process: ${e}`); updateTab(tab); return; }
@@ -1291,7 +1346,9 @@ async function closeTab(tab: Tab): Promise<void> {
   if (tab.deleting || deletion.locked(tab.file?.path) || tab.closing || tab.starting || tab.restarting || settings.isOpen) return;
   const state = tab.backend.session?.state;
   const running = tab.backend.session && !tab.ended;
-  if ((tab.mode === 'temporary' || (running && (state?.busy || promptPending(tab) || tab.inputCount || piSession(tab)?.state.queue?.pendingCount))) && !await dialogs.confirm(`Close ${tab.title}?`, profileFor(tab) ? 'This stops this ACP agent and discards Nimrod’s in-memory transcript, draft and pop-outs. Nimrod cannot resume it in this POC. The agent may keep its own saved history; this does not delete it.' : tab.mode === 'temporary' ? 'This stops its agent and discards this temporary session, including its draft, queued messages and pop-outs.' : 'This stops only this session’s agent. Written history and your draft remain; queued and in-flight work will not continue.', undefined, profileFor(tab) ? 'Close ACP session' : tab.mode === 'temporary' ? 'Close temporary session' : 'Close session')) return;
+  if ((profileFor(tab) || tab.mode === 'temporary' || (running && (state?.busy || promptPending(tab) || tab.inputCount || piSession(tab)?.state.queue?.pendingCount))) && !await dialogs.confirm(`Close ${tab.title}?`, profileFor(tab) ? savedAcpId(tab)
+    ? 'This stops this Copilot agent and removes the sidebar entry. Copilot’s saved history and your draft remain; in-flight work will not continue. Reopening closed Copilot sessions through Resume session is not implemented yet.'
+    : 'This stops this ACP agent and discards Nimrod’s in-memory transcript, draft and pop-outs. Nimrod cannot resume it in this POC. The agent may keep its own saved history; this does not delete it.' : tab.mode === 'temporary' ? 'This stops its agent and discards this temporary session, including its draft, queued messages and pop-outs.' : 'This stops only this session’s agent. Written history and your draft remain; queued and in-flight work will not continue.', undefined, profileFor(tab) ? 'Close ACP session' : tab.mode === 'temporary' ? 'Close temporary session' : 'Close session')) return;
   if (tab.closing || !tabs.includes(tab)) return;
   tab.closing = true; updateTab(tab);
   try {
@@ -1418,7 +1475,9 @@ async function boot(): Promise<void> {
     await invoke('stop_pi'); // Window-scoped reload cleanup; never stop another workspace.
     // ACP cleanup/availability is independent: an old/unavailable ACP host must
     // not prevent Pi from booting. New ACP sessions stay disabled until reaped.
-    void invoke('stop_acp').then(() => { if (!unloading) acpReady = true; }).catch(error => {
+    void invoke('stop_acp').then(() => {
+      if (!unloading) { acpReady = true; selectedConnection.barriersChanged(); }
+    }).catch(error => {
       if (!unloading) notices.report({ id: 'acp-startup', operation: 'Initialize ACP', message: `ACP is unavailable; Pi remains available. ${String(error)}` });
     });
     await zoom.ready;

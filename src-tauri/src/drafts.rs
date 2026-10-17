@@ -84,7 +84,12 @@ impl Drafts {
         Ok(records.into_values().collect())
     }
     pub fn stage(&self, project: &str, record: Record) -> Result<(), String> {
-        if !(record.key.starts_with("file:") || record.key.starts_with("unassigned:"))
+        if !(record.key.starts_with("file:")
+            || record.key.starts_with("unassigned:")
+            || record
+                .key
+                .strip_prefix("acp:copilot:")
+                .is_some_and(|id| !id.is_empty()))
             || record.key.len() > 32768
             || record.revision == 0
         {
@@ -338,6 +343,39 @@ pub fn watch(app: &tauri::AppHandle) {
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn copilot_drafts_restore_by_project_and_do_not_alias_pi_file_scopes() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Drafts::new(dir.path().join("drafts"));
+        let scope = "acp:copilot:\"saved-id\"";
+        for (project, draft) in [("/a", "first"), ("/b", "second")] {
+            store
+                .stage(
+                    project,
+                    Record {
+                        key: scope.into(),
+                        revision: 1,
+                        value: json!({"draft":draft}),
+                    },
+                )
+                .unwrap();
+        }
+        store.flush(None, false).unwrap();
+        let restored = Drafts::new(store.root.clone());
+        assert_eq!(restored.load("/a").unwrap()[0].value["draft"], "first");
+        assert_eq!(restored.load("/b").unwrap()[0].value["draft"], "second");
+        assert_ne!(store.path("/a", scope), store.path("/a", "file:saved-id"));
+        assert!(store
+            .stage(
+                "/a",
+                Record {
+                    key: "acp:copilot:".into(),
+                    revision: 1,
+                    value: json!({"draft":"invalid"}),
+                },
+            )
+            .is_err());
+    }
     #[test]
     fn debounced_scoped_atomic_records_restore_and_reject_stale_updates() {
         let dir = tempfile::tempdir().unwrap();

@@ -67,16 +67,20 @@ export class SessionDrafts {
     return this.read();
   }
   bind(path: string): void {
-    const key = `file:${path}`;
+    this.bindScope(`file:${path}`);
+  }
+  bindScope(key: string): void {
+    if (!key.startsWith('file:') && !key.startsWith('acp:copilot:')) throw new Error('Invalid saved draft scope');
     if (this.active === key) return;
     // Only promote a fresh session's provisional identity, never another session's draft.
     if (!this.active.startsWith('unassigned:')) throw new Error('Unexpected session file change');
     if (Object.hasOwn(this.drafts, key)) throw new Error('Session already has a local draft; resume it explicitly');
-    this.drafts[key] = this.read();
+    const value = this.read();
+    if (value !== undefined) this.drafts[key] = value;
     delete this.drafts[this.active];
     const previous = this.active;
     this.active = key;
-    this.changed?.(key, this.read());
+    if (value !== undefined) this.changed?.(key, value);
     this.changed?.(previous, null);
     if (!this.changed) this.flush();
   }

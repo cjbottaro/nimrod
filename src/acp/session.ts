@@ -12,6 +12,7 @@ export interface AcpSessionUi {
   permission(request: AcpPermissionRequest, signal: AbortSignal): Promise<string | undefined>;
   disconnected(message: string): void;
   completed(failed: boolean, response?: string): void;
+  identified?(sessionId: string): void;
 }
 export interface AcpOption { id: string; name: string; description?: string; category?: string; current: string; options: { value: string; name: string }[]; legacy?: 'model' | 'mode'; }
 export interface AcpSessionState extends ConversationViewState { messages: DisplayMessage[]; busy: boolean; status: string; sessionName?: string; }
@@ -43,7 +44,14 @@ export class AcpSession {
 
   constructor(send: (packet: AcpPacket) => void | Promise<void>, private ui: AcpSessionUi) {
     this.client = new AcpClient(send, {
-      created: configuration => { this.configure(configuration); this.state = { ...this.state, sessionUnavailable: false, status: 'Idle' }; this.publish(); },
+      created: configuration => {
+        ui.identified?.(text(configuration.sessionId));
+        this.configure(configuration); this.state = { ...this.state, sessionUnavailable: false, status: 'Idle' }; this.publish();
+      },
+      loaded: configuration => {
+        this.finishMessages(); this.group = undefined;
+        this.configure(configuration); this.state = { ...this.state, sessionUnavailable: false, status: 'Idle' }; this.publish();
+      },
       configured: configuration => { this.configure(configuration); this.publish([]); },
       selected: (kind, id) => { this.options = this.options.map(option => option.legacy === kind ? { ...option, current: id } : option); this.controls(); this.publish([]); },
       update: event => this.update(event),
@@ -72,11 +80,12 @@ export class AcpSession {
   }
   receive(packet: unknown): void { this.client.receive(packet); }
   disconnect(reason?: unknown): void { this.client.disconnect(reason); }
-  async initialize(cwd: string): Promise<void> {
+  async initialize(cwd: string, sessionId?: string): Promise<void> {
     await this.deadline(this.client.initialize());
     const info = this.client.initialization?.agentInfo;
     this.agent = isRecord(info) ? text(info.name) || undefined : undefined;
-    await this.deadline(this.client.newSession(cwd));
+    if (sessionId !== undefined) { this.state = { ...this.state, status: 'Loading saved ACP session…' }; this.publish([]); }
+    await this.deadline(sessionId === undefined ? this.client.newSession(cwd) : this.client.loadSession(cwd, sessionId));
   }
   private async deadline<T>(task: Promise<T>): Promise<T> {
     let timer: ReturnType<typeof setTimeout> | undefined;

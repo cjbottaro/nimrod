@@ -8,6 +8,8 @@ Nimrod keeps saved-session drafts in Rust-managed files beneath the app-state di
 
 An absolute `XDG_STATE_HOME` override changes the root, as with other app state. Drafts are separate from `state.json` and Pi's conversation files.
 
+Built-in [Copilot sidebar sessions](acp.md#persistence-and-current-limits) also use native draft storage, scoped by project, Copilot identity and session ID rather than a Pi file path. Their drafts survive quit/reopen and Close; custom ACP drafts remain runtime-only.
+
 Typing updates the draft immediately in memory and asynchronously stages the current session's record in Rust. Disk saves are debounced by 300 ms, with a 2-second maximum wait during continuous typing. Only the changed draft is written, using atomic replacement. Abrupt termination can lose recent unsaved typing or changes not yet delivered to Rust. Errors are shown without discarding the in-memory draft.
 
 Send clears the editable draft immediately. Pi responses are correlated by the transport, not composer state; submission text/images are not saved as recovery, restored after a failure or replayed after reload. Failed or uncertain sends show an error without changing the next draft or adding a recovery gate. Cleared drafts and queue-restoration/attachment changes request a storage flush, but sending does not wait for draft persistence. A storage error reports a storage problem, not that the message was unsent. Close, window shutdown and Quit flush staged records. Temporary drafts and images remain memory-only.

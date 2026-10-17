@@ -11,7 +11,7 @@ All, Switch and cycling share one canonical projection. Navigation effects retai
 ## Ownership and code map
 
 - `src/session-navigation.ts`: `SessionNavigation<T>` owns private open-session membership, canonical All order, view projections/retention, counts, adjacency, selected-row presentation, presentation intents and post-removal replacement policy.
-- `src/session-connection.ts`: `SessionConnection<T>` owns selected-session connection requests, in-flight deduplication, latest-selection deferral and gate-change reconciliation. It takes authoritative shell eligibility and a Pi launch callback, not navigation intents or feature-specific deletion events.
+- `src/session-connection.ts`: `SessionConnection<T>` owns selected-session connection requests, in-flight deduplication, latest-selection deferral and gate-change reconciliation. It takes authoritative shell eligibility and a concrete Pi/ACP launch dispatcher, not navigation intents or feature-specific deletion events.
 - `src/session-attention.ts`: arrival-order/selected-retention primitive, used only by the navigation model for shell views.
 - `src/session-recency.ts`: timestamp validation/stable recency sort/monotonic timestamp and identity-bound persisted cache; navigation owns how open-session consumers use these primitives. DOM viewport anchoring/reveal remain separate effects.
 - `src/main.ts`: adapts authoritative Pi/runtime state through `needsAttention`, `isWorking`, `isConnected`; applies navigation plans at `activate` and `presentConversation`. It owns DOM, focus, storage, the Pi eligibility adapter, pop-outs and native lifecycle, not ordering, replacement algorithms or deferred connection state.
@@ -36,12 +36,14 @@ Choose an existing projection and named presentation intent, then use the shell'
 
 Test relationships: every traversal edge equals the displayed canonical projection; Switch equals All even with hidden sessions; local Send recency updates all consumers before any RPC result; cleanup resolves one post-batch target; every visible saved-session selection requests connection, with immediate unrelated cleanup reconnection and deferral only for affected-file locks. Keep concrete shell/WebKit coverage to prove consumers use the model; pure policy tests alone cannot detect shell bypasses.
 
+Built-in [Copilot restoration](acp-harnesses.md#copilot-sidebar-restoration) adds one explicit startup eligibility gate: a restored Copilot row's `awaitingSelection` stays unavailable even when startup displays it. Any non-startup activation clears that gate and goes through the same coordinator; Pi startup is unchanged. Once activation is requested, pending ACP reload cleanup is a blocked gate reconciled on `acpReady`, not a reason to spawn another agent or replay navigation. Failed loading remains unavailable until explicit selection/retry, with no automatic retry on snapshots.
+
 ## Connection-coordinator tests
 
 `test/session-connection.test.ts` uses feature-independent eligibility states to cover ordinary connection, empty/unavailable/connected targets, gate deferral, latest-selection wins, hidden/removed targets, quarantine, independent connection, in-flight deduplication, sibling independence and failed-launch no-retry. Existing shell tests establish that navigation intents and Close/deletion/notification/view consumers actually use the common boundary. This is a project-shell connection effect owner, not a generic harness protocol or event bus.
 
 ## Storage and acceptance
 
-No schema/key migration: `nimrod.tabs.v1:<cwd>`, recency cache, sidebar view, drafts and Pi file ownership remain unchanged. Existing legacy `attention` migration stays in project restoration. No Rust/native integration changes.
+No schema/key migration for existing Pi entries: `nimrod.tabs.v1:<cwd>`, recency cache, sidebar view and Pi file ownership remain compatible. Built-in Copilot adds a tagged layout-entry variant and project/profile-qualified active/draft keys as specified in [ACP restoration](acp-harnesses.md#copilot-sidebar-restoration); these IDs never use the Pi recency/file cache. Existing legacy `attention` migration stays in project restoration. Native ACP message validation and draft-scope support are integration-owned.
 
 Run `mise run check` and `npm run test:browser`. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow). Unit/jsdom/offline WebKit tests do not establish native focus/shortcut or Linux acceptance. Never launch/interrupt the user's app, mutate user sessions or request live models for this refactor.

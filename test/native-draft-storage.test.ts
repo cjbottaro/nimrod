@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { SessionDrafts } from '../src/pi/session-drafts';
 import { restoreComposerState } from '../src/pi/webview-state';
+import { copilotSessionScope } from '../src/acp/profiles';
 
 test('native provisional promotion stages the saved draft and tombstones the old scope', () => {
   const changes: unknown[] = [];
@@ -15,4 +16,29 @@ test('native provisional promotion stages the saved draft and tombstones the old
   assert.equal(restoreComposerState(drafts.read()).draft, 'newer');
   drafts.deleteFile('/session');
   assert.deepEqual(changes.at(-1), ['file:/session', null]);
+});
+
+test('Copilot draft identity is project-library scoped, distinct from Pi and promoted without whole-library writes', () => {
+  const changes: unknown[] = [];
+  const store = new SessionDrafts(undefined, undefined, () => { throw new Error('whole-library persistence forbidden'); },
+    (key, value) => changes.push([key, value]));
+  const scope = copilotSessionScope('opaque:/id');
+  store.select('unassigned:new');
+  store.write({ draft: 'Keep this draft' });
+  store.bindScope(scope);
+  assert.deepEqual(changes.slice(-2), [[scope, { draft: 'Keep this draft' }], ['unassigned:new', null]]);
+  assert.equal(restoreComposerState(store.read()).draft, 'Keep this draft');
+  store.discardTemporary();
+  assert.equal(restoreComposerState(store.read()).draft, 'Keep this draft', 'Close does not discard saved Copilot drafts');
+  assert.throws(() => store.bindScope(copilotSessionScope('another-id')), /Unexpected session file change/);
+  assert.notEqual(scope, 'file:opaque:/id');
+  assert.notEqual(copilotSessionScope('a:b'), copilotSessionScope('a%3Ab'));
+});
+
+test('empty provisional Copilot promotion never stages an undefined draft', () => {
+  const changes: unknown[] = [];
+  const store = new SessionDrafts(undefined, undefined, () => {}, (key, value) => changes.push([key, value]));
+  store.select('unassigned:empty');
+  store.bindScope(copilotSessionScope('saved-id'));
+  assert.deepEqual(changes, [['unassigned:empty', null]]);
 });

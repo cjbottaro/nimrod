@@ -1,7 +1,7 @@
 import packageInfo from '../../package.json';
 import { AcpConnection, AcpResponseError, isRecord, type AcpPacket, type AcpRecord } from './connection';
 
-export type AcpClientPhase = 'fresh' | 'initializing' | 'ready' | 'creating' | 'idle' | 'working' | 'disconnected';
+export type AcpClientPhase = 'fresh' | 'initializing' | 'ready' | 'creating' | 'loading' | 'idle' | 'working' | 'disconnected';
 export interface AcpSessionUpdate { sessionId: string; update: AcpRecord & { sessionUpdate: string }; }
 export interface AcpPermissionOption { optionId: string; name: string; kind: string; }
 export interface AcpPermissionRequest {
@@ -11,6 +11,7 @@ export interface AcpPermissionRequest {
 }
 export interface AcpClientHooks {
   created?(configuration: AcpRecord): void;
+  loaded?(configuration: AcpRecord): void;
   configured?(configuration: AcpRecord): void;
   selected?(kind: 'model' | 'mode', id: string): void;
   /** Synchronous ordered delivery, not a coalesced paint callback. */
@@ -26,7 +27,7 @@ const permissionKinds = new Set(['allow_once', 'allow_always', 'reject_once', 'r
 const stopReasons = new Set(['end_turn', 'max_tokens', 'max_turn_requests', 'refusal', 'cancelled']);
 
 /**
- * Initial ACP v1 subset: one new session per connection, text prompts, updates,
+ * ACP v1 subset: one new or loaded session per connection, text prompts, updates,
  * cancellation and permission responses. No native launch or transcript adapter.
  * No generic Pi session interface, history emulation, implicit queue or retries.
  */
@@ -82,14 +83,14 @@ export class AcpClient {
     }
   }
 
-  /** The future native host must validate the canonical, absolute project cwd. */
+  /** The native host validates the canonical, absolute project cwd. */
   async newSession(cwd: string): Promise<string> {
     this.requirePhase('ready');
     if (!cwd.trim()) throw new Error('ACP session requires a project directory');
     this.currentPhase = 'creating';
     try {
       await this.connection.request('session/new', { cwd, mcpServers: [] }, value => {
-        if (!isRecord(value) || typeof value.sessionId !== 'string' || !value.sessionId)
+        if (!isRecord(value) || typeof value.sessionId !== 'string' || !value.sessionId.trim())
           throw new Error('Invalid ACP session identity');
         const id = value.sessionId;
         if (this.earlyUpdates.some(event => event.sessionId !== id)) throw new Error('ACP session identity mismatch');
@@ -104,6 +105,30 @@ export class AcpClient {
       return this.currentSession!;
     } catch (error) {
       // No implicit replacement session after failed/uncertain creation.
+      this.disconnect(error);
+      throw error;
+    }
+  }
+
+  async loadSession(cwd: string, sessionId: string): Promise<void> {
+    this.requirePhase('ready');
+    if (!cwd.trim() || !sessionId.trim()) throw new Error('ACP loading requires a project directory and session ID');
+    const capabilities = this.initialized?.agentCapabilities;
+    if (!isRecord(capabilities) || capabilities.loadSession !== true)
+      throw new Error('This ACP agent does not support loading saved sessions. Nothing was created or sent.');
+    // Identity is already known. Replay can exceed the small pre-new buffer and
+    // must be reduced synchronously as it arrives, before the load response.
+    this.currentSession = sessionId;
+    this.currentPhase = 'loading';
+    try {
+      await this.connection.request('session/load', { cwd, sessionId, mcpServers: [] }, value => {
+        if (!isRecord(value) || (value.sessionId !== undefined && value.sessionId !== sessionId))
+          throw new Error('Invalid ACP loaded session identity');
+        this.created = value;
+        this.currentPhase = 'idle';
+        this.hooks.loaded?.(value);
+      });
+    } catch (error) {
       this.disconnect(error);
       throw error;
     }

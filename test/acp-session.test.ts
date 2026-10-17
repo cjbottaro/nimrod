@@ -21,6 +21,43 @@ async function fixture(permission?: AcpSessionUi['permission']) {
   await flush(); reply('session/new', { sessionId: 'test-session', configOptions: options() }); await pending;
   return { session, sent, published, completed, permissions, last, reply, update };
 }
+test('ACP history replay finalizes reasoning and tools without sends, permission UI or completion alerts', async () => {
+  const sent: AcpPacket[] = [], completed: boolean[] = [];
+  let permissions = 0;
+  const session = new AcpSession(packet => { sent.push(packet); }, {
+    publish() {}, changed() {}, notice() {}, disconnected() {}, completed: failed => completed.push(failed),
+    permission: async () => { permissions++; return 'allow'; },
+  });
+  const reply = (method: string, result: unknown) => {
+    const packet = sent.find(packet => packet.method === method)!;
+    session.receive({ jsonrpc: '2.0', id: packet.id, result });
+  };
+  const loading = session.initialize('/fixture/project', 'saved-id');
+  reply('initialize', { protocolVersion: 1, agentCapabilities: { loadSession: true }, agentInfo: { name: 'copilot' } });
+  await flush();
+  const update = (update: AcpRecord) => session.receive({ jsonrpc: '2.0', method: 'session/update', params: { sessionId: 'saved-id', update } });
+  update({ sessionUpdate: 'user_message_chunk', content: { type: 'text', text: 'Original question' } });
+  update({ sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'Saved reasoning' } });
+  update({ sessionUpdate: 'tool_call', toolCallId: 'interrupted', kind: 'execute', status: 'in_progress', title: 'Old tool' });
+  update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Original answer' } });
+  session.receive({ jsonrpc: '2.0', id: 'old-permission', method: 'session/request_permission', params: {
+    sessionId: 'saved-id', toolCall: { toolCallId: 'interrupted' }, options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }],
+  } });
+  assert.equal(session.canSubmit, false);
+  reply('session/load', { configOptions: options() });
+  await loading; await flush();
+  assert.equal(session.canSubmit, true);
+  assert.equal(session.state.messages.length, 4);
+  const thought = session.state.messages[1].content;
+  assert.ok(Array.isArray(thought));
+  assert.equal(thought[0].thinkingComplete, true);
+  assert.equal(session.state.messages[2].uiPhase, 'stopped');
+  assert.equal(permissions, 0);
+  assert.deepEqual(sent.find(packet => packet.id === 'old-permission')?.result, { outcome: { outcome: 'cancelled' } });
+  assert.deepEqual(completed, []);
+  assert.equal(sent.some(packet => packet.method === 'session/new' || packet.method === 'session/prompt'), false);
+});
+
 test('ACP presentation correlates one local user turn and preserves native tool metadata without Pi events', async () => {
   const f = await fixture();
   const turn = f.session.handle({ type: 'prompt', id: 'local', text: 'hello' });

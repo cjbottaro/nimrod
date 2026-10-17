@@ -1,5 +1,6 @@
 export interface AcpProfile { readonly id: string; readonly name: string; readonly command: string; readonly args: readonly string[]; readonly env: Readonly<Record<string, string>>; }
 export const COPILOT_PROFILE: AcpProfile = Object.freeze({ id: 'copilot', name: 'Copilot', command: 'copilot', args: Object.freeze(['--acp', '--stdio']), env: Object.freeze({}) });
+export function copilotSessionScope(sessionId: string): string { return `acp:copilot:${JSON.stringify(sessionId)}`; }
 /** Explicit launch configuration, never a shell command string or cwd override. */
 export function parseAcpProfile(value: unknown): AcpProfile {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('ACP profile must be an object.');

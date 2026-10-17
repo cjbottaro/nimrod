@@ -8,7 +8,7 @@ interface Dependencies<T> {
 }
 
 /** Selected-session connection effects, independent of navigation intent and feature gates.
- * The shell supplies authoritative eligibility and the Pi launch operation. Barrier changes
+ * The shell supplies authoritative eligibility and the backend launch operation. Barrier changes
  * reconsider only a deferred selection, never retry a failed or disconnected process.
  */
 export class SessionConnection<T> {

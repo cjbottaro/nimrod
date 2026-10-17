@@ -23,9 +23,9 @@ function fixture(hooks: AcpClientHooks = {}) {
   ]) => client.receive({ jsonrpc: '2.0', id, method: 'session/request_permission', params: {
     sessionId, toolCall: { toolCallId: 'tool-1', title: 'Run command' }, options,
   } });
-  const initialize = async () => {
+  const initialize = async (agentCapabilities: Record<string, unknown> = { promptCapabilities: { image: true } }) => {
     const pending = client.initialize();
-    respond('initialize', { protocolVersion: 1, agentCapabilities: { promptCapabilities: { image: true } } });
+    respond('initialize', { protocolVersion: 1, agentCapabilities });
     await pending;
   };
   const ready = async () => {
@@ -62,6 +62,51 @@ test('ACP buffers pre-identity updates and releases them synchronously before la
   f.update();
   assert.deepEqual(events, ['available_commands_update', 'agent_message_chunk']);
   await creating;
+});
+
+test('ACP loads an exact saved identity and reduces unbounded-in-count replay in wire order', async () => {
+  const events: string[] = [];
+  const f = fixture({ update: event => events.push(event.update.sessionUpdate), loaded: () => events.push('loaded') });
+  await f.initialize({ loadSession: true });
+  const loading = f.client.loadSession('/fixture/project', 'saved-id');
+  assert.equal(f.client.phase, 'loading');
+  assert.deepEqual(f.last('session/load').params, { cwd: '/fixture/project', sessionId: 'saved-id', mcpServers: [] });
+  for (let i = 0; i < 200; i++) f.update('saved-id', 'user_message_chunk');
+  assert.equal(events.length, 200, 'known-identity replay does not use the 128-event creation buffer');
+  await assert.rejects(f.client.prompt('not yet'), /unavailable/);
+  f.respond('session/load', { configOptions: [] });
+  f.update('saved-id');
+  assert.deepEqual(events.slice(-2), ['loaded', 'agent_message_chunk'], 'load response applies before later wire events');
+  await loading;
+  assert.equal(f.client.sessionId, 'saved-id');
+  assert.equal(f.client.phase, 'idle');
+  assert.equal(f.sent.some(packet => packet.method === 'session/new' || packet.method === 'session/prompt'), false);
+});
+
+test('ACP never loads without an advertised capability', async () => {
+  for (const capabilities of [{}, { loadSession: false }]) {
+    const f = fixture();
+    await f.initialize(capabilities);
+    await assert.rejects(f.client.loadSession('/fixture/project', 'saved-id'), /does not support loading/);
+    assert.equal(f.sent.length, 1);
+  }
+});
+
+test('ACP failed, mismatched or disconnected loading never creates a replacement or retries', async () => {
+  for (const scenario of ['rejected', 'wrong-update', 'wrong-result', 'disconnected']) {
+    const f = fixture();
+    await f.initialize({ loadSession: true });
+    const loading = f.client.loadSession('/fixture/project', 'saved-id');
+    const checked = assert.rejects(loading);
+    if (scenario === 'rejected') f.client.receive({ jsonrpc: '2.0', id: f.last('session/load').id, error: { code: -32602, message: 'Missing history' } });
+    else if (scenario === 'wrong-update') f.update('another-id');
+    else if (scenario === 'wrong-result') f.respond('session/load', { sessionId: 'another-id' });
+    else f.client.disconnect('Process exited');
+    await checked;
+    assert.equal(f.client.phase, 'disconnected');
+    assert.equal(f.sent.filter(packet => packet.method === 'session/load').length, 1);
+    assert.equal(f.sent.some(packet => packet.method === 'session/new' || packet.method === 'session/prompt'), false);
+  }
 });
 
 test('ACP rejects unsupported protocol versions without creating a session', async () => {

@@ -1,6 +1,6 @@
 # ACP sessions (experimental POC)
 
-Nimrod has an experimental Agent Client Protocol integration alongside its bespoke Pi integration. **The POC, shared-view extraction and correctness fixes pass offline checks and browser tests. It has not been accepted with Copilot or another real agent in the native app.** It is not a broad compatibility guarantee.
+Nimrod has an experimental Agent Client Protocol integration alongside its bespoke Pi integration. **The earlier POC/shared-view baseline passed offline checks and browser tests; the latest correctness fixes and Copilot sidebar restoration have not been validated. It has not been accepted with Copilot or another real agent in the native app.** It is not a broad compatibility guarantee.
 
 ## Start an ACP session
 
@@ -32,7 +32,7 @@ Nimrod uses the project's exact directory. Opening the session does not submit a
 - While an ACP turn is running, the primary button is **Stop**. Enter does not steer or queue; the newer draft remains editable and is kept. Stop requests cancellation and waits for the agent's turn-completion response.
 - Permission requests appear **inside their own conversation area** with the exact offered choices and a Cancel request action. Tool details are resolved from earlier updates even when the request supplies only a tool-call ID; provided inputs, operation content (including diffs) and locations are shown literally. Permission patches are processed in arrival order with tool updates, so waiting for your choice cannot overwrite newer transcript details. The pending permission retains the details of the operation it asks you to approve. The call ID remains visible; missing details are explicitly identified. They do not open a global modal, select a background session or take focus. Return to that session to act. Existing notification preferences also apply to background input/completion.
 - Pending permission choices are canceled when the turn stops, the connection fails or the session closes. Nothing is silently approved.
-- If the agent stops responding, the POC cannot reconnect or restart that conversation. Close it and explicitly create another session; nothing is replayed.
+- A disconnected saved Copilot session can reconnect by selecting its row or choosing **Retry connection** in its session notice. Fix any executable/authentication problem first. Nothing is sent again automatically. Restart of a still-connected/stuck agent is not implemented; custom ACP sessions cannot reconnect in this POC.
 
 ## Reading and configuration
 
@@ -44,8 +44,14 @@ Session sidebar and Switch session include both backends. ACP rows and the Proje
 
 ## Persistence and current limits
 
-**ACP POC sessions are in-memory in Nimrod, not guaranteed temporary sessions in the agent.** Close, reload or quit discards Nimrod's transcript, draft and pop-outs. Close asks for confirmation. The agent may retain its own history; Nimrod neither deletes nor discovers it.
+**Copilot sessions created with the built-in Copilot option retain their sidebar entries and drafts across reload, quit and project reopening.** Nimrod remembers the Copilot session ID, title, message/creation recency and selected row, not a copy of the conversation or a history-list cache. Copilot owns the saved history.
 
-Resume session, saved-history deletion and Restart remain Pi-only. The POC does not implement ACP history loading/discovery, attachment sending, client-hosted filesystem/terminal services, login/elicitation flows or all protocol extensions. Agents must be able to execute their own tools without those client services. No Copilot SDK backend or in-place backend switching is implemented.
+Restored entries start disconnected, including the remembered selected row. Click a row or select it through Switch session to launch Copilot and load that exact conversation. History replay does not send a prompt, restore in-flight work, mark new message recency or generate completion alerts. Loading requires the agent's advertised saved-session capability. If Copilot is unavailable, loading is unsupported or history is missing, Nimrod keeps the row and draft and reports the error without creating a replacement. A missing executable can be a PATH/install problem; Nimrod does not assume uninstallation or erase anything.
+
+**Close removes the sidebar entry, not Copilot's saved history or your saved draft.** It asks for confirmation because reopening a closed Copilot session through **Resume session** is not implemented yet. Keep an entry open if you want it back after quitting. Copilot pop-outs remain runtime-only and are not restored after app restart.
+
+Custom ACP profiles/sessions retain the earlier runtime-only Nimrod lifecycle. Close, reload or quit discards their transcript, draft and pop-outs. The agent may retain its own history; Nimrod does not delete it. Sessions lost from the sidebar in earlier builds cannot be rediscovered by this change.
+
+Resume session, saved-history deletion and Restart remain Pi-only. ACP history discovery, including the proposed project-scoped Copilot discovery process, is deferred to the Resume stage; no extra discovery process starts for sidebar restoration. The POC also lacks attachment sending, client-hosted filesystem/terminal services, login/elicitation flows and some protocol extensions. Agents must be able to execute their own tools without those client services. No Copilot SDK backend or in-place backend switching is implemented.
 
 There is no real-agent or native platform acceptance yet. Intended platform direction remains macOS first, Linux next and possibly Windows later; this POC does not establish per-platform parity.

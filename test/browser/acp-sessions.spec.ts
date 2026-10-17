@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { demoFixture, visible } from './demo-fixture';
+import { copilotSessionScope } from '../../src/acp/profiles';
 
 async function newAcp(page: Page) {
   await page.keyboard.press('Meta+Shift+P');
@@ -53,12 +54,40 @@ test('offline ACP and Pi keep independent drafts, permissions, configuration and
     const piStops = demo.calls.filter(call => call.command === 'stop_pi').length;
     const acpStops = demo.calls.filter(call => call.command === 'stop_acp').length;
     await page.locator(`#open-sessions .session-row[aria-controls="${acpId}"]`).locator('..').locator('.session-close').click();
-    await expect(page.locator('#host-dialog-description')).toContainText('agent may keep its own saved history');
+    await expect(page.locator('#host-dialog-description')).toContainText('Copilot’s saved history and your draft remain');
     await page.locator('#host-dialog button[value="ok"]').click();
     await expect(page.locator(`#${acpId}`)).toHaveCount(0);
     await expect(page.locator(visible('prompt'))).toHaveValue('Pi draft must survive');
     expect(demo.calls.filter(call => call.command === 'stop_pi')).toHaveLength(piStops);
     expect(demo.calls.filter(call => call.command === 'stop_acp')).toHaveLength(acpStops + 1);
+    expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
+test('remembered Copilot sidebar sessions load only on selection with draft and replayed history intact', async ({ page }) => {
+  const scope = copilotSessionScope('fixture-acp');
+  const demo = await demoFixture(page, {
+    [`nimrod.tabs.v1:${process.cwd()}`]: {
+      tabs: [{ kind: 'acp', profile: 'copilot', sessionId: 'fixture-acp', name: 'Remembered Copilot', lastUsed: 100 }],
+      active: scope,
+    },
+  }, [], { persistent: false, drafts: { [scope]: { draft: 'Saved Copilot draft' } } });
+  try {
+    expect(demo.calls.filter(call => call.command === 'start_acp')).toHaveLength(0);
+    await expect(page.locator('#open-sessions .session-row')).toHaveCount(2);
+    await page.locator('#open-sessions .session-row').filter({ hasText: 'Remembered Copilot' }).click();
+    await expect(page.locator(visible('send'))).toBeEnabled();
+    await expect(page.locator(visible('prompt'))).toHaveValue('Saved Copilot draft');
+    await expect(page.locator(visible('messages'))).toContainText('Saved offline question');
+    await expect(page.locator(visible('messages'))).toContainText('Saved offline answer');
+    const requests = demo.calls.filter(call => call.command === 'write_acp').map(call => call.args.message as { method?: string; params?: unknown });
+    expect(requests.filter(request => request.method === 'session/load')).toHaveLength(1);
+    expect(requests.find(request => request.method === 'session/load')?.params).toEqual({ cwd: process.cwd(), sessionId: 'fixture-acp', mcpServers: [] });
+    expect(requests.some(request => request.method === 'session/new' || request.method === 'session/prompt')).toBe(false);
+    expect(demo.calls.filter(call => call.command === 'notify_session')).toHaveLength(0);
+    await page.locator(visible('prompt')).fill('/context');
+    await page.locator(visible('prompt')).press('Enter');
+    await expect(page.locator(visible('messages'))).toContainText('Offline context only; no provider request.');
     expect(demo.errors).toEqual([]);
   } finally { await demo.close(); }
 });

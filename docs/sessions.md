@@ -1,6 +1,6 @@
 # Sessions
 
-Each session has its own conversation, draft and agent process. Switching sessions leaves background work running and preserves reading position and expanded cards. The backend is fixed for that session. The saved/temporary lifecycle below describes Pi; [experimental ACP sessions](acp.md) have a separate in-memory POC lifecycle.
+Each session has its own conversation, draft and agent process. Switching sessions leaves background work running and preserves reading position and expanded cards. The backend is fixed for that session. The saved/temporary lifecycle below describes Pi; [experimental Copilot sessions](acp.md#persistence-and-current-limits) also retain sidebar entries and drafts, while custom ACP sessions remain runtime-only.
 
 ## Create a session
 
