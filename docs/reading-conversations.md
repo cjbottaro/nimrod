@@ -2,6 +2,8 @@
 
 The **transcript** contains user and assistant turns. An assistant turn can include reasoning, tool activity and response text—not just its final answer. The Status area below shows activity, model/thinking controls and Pi-reported usage metrics.
 
+Empty assistant text/reasoning entries do not display blank turn markers or gaps. This includes Copilot assistant messages with tool requests but no prose; their tool cards remain visible. If text arrives later, that assistant entry appears in its original position.
+
 ## Tool and reasoning cards
 
 Click a disclosure arrow or summary to expand a card.

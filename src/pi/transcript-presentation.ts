@@ -1,3 +1,13 @@
+import type { DisplayMessage } from '../conversation-model';
+
+/** Keep empty envelopes mounted for streaming identity, without a visible turn marker/gap. */
+export function isEmptyAssistantMessage(message: DisplayMessage): boolean {
+  if (message.role !== 'assistant' || message.isError) return false;
+  if (!Array.isArray(message.content)) return !message.content?.trim();
+  return message.content.every(block => block.type === 'text' ? !block.text?.trim()
+    : block.type === 'thinking' ? !block.thinking?.trim() : false);
+}
+
 export interface TranscriptRolePresentation {
   ariaLabel?: string;
   visibleLabel?: string;

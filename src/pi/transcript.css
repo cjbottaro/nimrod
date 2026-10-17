@@ -27,6 +27,7 @@ body.transcript-scrolled::before { opacity:1; }
 .tool-phase { margin:8px 0 4px 14px; color:var(--vscode-descriptionForeground); font-size:.85em; }
 .parallel-tool-list { max-height:12em; overflow:auto; padding-left:14px; list-style:none; } .parallel-tool-row { display:flex; align-items:center; gap:7px; min-width:0; padding:3px 0; } .parallel-tool-card { margin-top:6px; }
 button { color:var(--nimrod-button-foreground, var(--vscode-button-foreground)); background:var(--nimrod-button-background, var(--vscode-button-background)); border:1px solid transparent; border-radius:3px; padding:6px 10px; cursor:pointer; } button:hover { background:var(--nimrod-button-hover-background, var(--vscode-button-hoverBackground)); } button:disabled { opacity:.55; cursor:default; } button:focus-visible, textarea:focus-visible { outline:1px solid var(--vscode-focusBorder); outline-offset:1px; }
+.message[hidden] { display:none; }
 .message { margin:16px 0; border-left:3px solid var(--vscode-panel-border); padding:2px 12px; } .message:is(.user, .configuration) { border-left-color:var(--vscode-textLink-foreground); background:var(--vscode-textBlockQuote-background); padding-top:6px; padding-bottom:6px; }
 .composer-attachments { display:flex; gap:8px; padding:4px 10px 8px; overflow-x:auto; max-height:96px; align-items:center; }
 .composer-attachments[hidden] { display:none; }

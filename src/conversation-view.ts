@@ -15,7 +15,7 @@ import { toolMessageBlock } from "./pi/tool-call";
 import { DEFAULT_SEND_AUTO_FOLLOW, TranscriptScroll } from "./pi/transcript-scroll";
 import { disposeParallelCard } from './pi/parallel-card';
 import { renderReasoningCard, updateReasoningCard, disposeReasoningCard } from "./pi/reasoning-card";
-import { transcriptRolePresentation } from "./pi/transcript-presentation";
+import { isEmptyAssistantMessage, transcriptRolePresentation } from "./pi/transcript-presentation";
 import { SteeringTranscript, steeringStatusLabel } from "./pi/steering-transcript";
 import { clipboardImages, imageContent, validImageContent, validateAttachments } from './pi/image-attachments';
 import { renderParallelToolCard } from "./pi/tool-progress";
@@ -362,6 +362,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   function renderMessage(message: DisplayMessage): HTMLElement {
     const role = safeText(message.role);
     const article = element("article", `message ${role}`);
+    article.hidden = isEmptyAssistantMessage(message);
     renderMessageOrigin(article, message);
     article.dataset.key = safeText(message.key);
     const presentation = transcriptRolePresentation(role, safeText(message.toolName));
@@ -445,6 +446,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   /** Patches tool cards in their existing article so active spinner nodes never disconnect. */
   function patchMessage(node: HTMLElement, message: DisplayMessage): boolean {
     if (node.dataset.key !== safeText(message.key) || node.classList.contains(safeText(message.role)) === false) return false;
+    node.hidden = isEmptyAssistantMessage(message);
     renderMessageOrigin(node, message);
     node.classList.toggle("error", message.isError === true);
     if (message.role === "user") node.setAttribute("aria-label", message.originLabel ? `${message.originLabel} · User message` : "User message");

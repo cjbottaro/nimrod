@@ -26,6 +26,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Empty assistant text/reasoning entries no longer leave orphaned accent lines and gaps between cards, including Copilot tool-only messages. Streaming text reveals the same retained entry without rebuilding tool cards.
+
 - Copilot model/thinking changes no longer lose an idle/readiness transition while another configuration update is settling, preventing a queued transcript card from remaining pinned indefinitely. Configuration titles use the same Queued/Steering shimmer treatment, and truly unavailable selections report through the session notice banner instead of creating pending progress.
 - Copilot reconnects fetch context usage independently of restored credit totals, without sending another message. Unavailable cold-session context remains visible as `— / —` beside cost, and late snapshots cannot overwrite newer live context or model changes.
 - Copilot permission choices use the CLI’s decision variants (`approve-once`, `reject`, `user-not-available`) rather than legacy outcome values that caused real tool failures. Only explicit Allow once approves a request; persistent grants are not inferred.
