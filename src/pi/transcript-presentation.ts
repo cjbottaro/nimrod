@@ -1,11 +1,13 @@
-import type { DisplayMessage } from '../conversation-model';
-
 /** Keep empty envelopes mounted for streaming identity, without a visible turn marker/gap. */
-export function isEmptyAssistantMessage(message: DisplayMessage): boolean {
+export function isEmptyAssistantMessage(message: { role?: unknown; isError?: unknown; content?: unknown }): boolean {
   if (message.role !== 'assistant' || message.isError) return false;
-  if (!Array.isArray(message.content)) return !message.content?.trim();
-  return message.content.every(block => block.type === 'text' ? !block.text?.trim()
-    : block.type === 'thinking' ? !block.thinking?.trim() : false);
+  if (!Array.isArray(message.content)) return typeof message.content !== 'string' || !message.content.trim();
+  return message.content.every(value => {
+    if (!value || typeof value !== 'object') return false;
+    const block = value as { type?: unknown; text?: unknown; thinking?: unknown };
+    return block.type === 'text' ? typeof block.text !== 'string' || !block.text.trim()
+      : block.type === 'thinking' ? typeof block.thinking !== 'string' || !block.thinking.trim() : false;
+  });
 }
 
 export interface TranscriptRolePresentation {
