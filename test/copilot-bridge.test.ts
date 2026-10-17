@@ -5,8 +5,8 @@ import test from 'node:test';
 import { CopilotSession } from '../src/copilot/session';
 import { createToolCapture } from '../src/tool-capture';
 
-function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) => void) {
-  const child = spawn(process.execPath, ['--import', './test/fixtures/copilot-sdk-register.mjs', 'copilot/bridge.mjs', '/fixture/copilot', '/fixture/project'], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, NIMROD_FIXTURE_COPILOT_MODE: mode } });
+function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) => void, modelState = 'resolved') {
+  const child = spawn(process.execPath, ['--import', './test/fixtures/copilot-sdk-register.mjs', 'copilot/bridge.mjs', '/fixture/copilot', '/fixture/project'], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, NIMROD_FIXTURE_COPILOT_MODE: mode, NIMROD_FIXTURE_COPILOT_MODEL_STATE: modelState } });
   const packets: Record<string, any>[] = [], pending = new Map<string, { resolve(value: any): void; reject(error: Error): void }>();
   let stderr = '', sequence = 0;
   child.stderr.on('data', chunk => { stderr += chunk; });
@@ -47,12 +47,36 @@ test('production SDK bridge loads only exact project members and disconnects wit
     const connected = f.packets.find(packet => packet.kind === 'connected')!;
     assert.equal(connected.sessionId, 'fixture-sdk');
     assert.equal(connected.events[1].data.content, 'Saved SDK answer');
+    assert.equal(connected.model.modelId, 'large', 'catalog resolution must preserve an existing session selection');
+    assert.equal(connected.model.reasoningEffort, undefined);
     assert.ok(f.packets.findIndex(packet => packet.kind === 'identified') < f.packets.indexOf(connected));
     assert.equal(f.packets.some(packet => packet.kind === 'permission' || packet.kind === 'input'), false);
     assert.equal((await f.request('configure', { model: 'small', effort: 'high' })).reasoningEffort, 'high');
     await assert.rejects(f.request('delete', { sessionId: 'fixture-sdk' }), /history-only/);
   } finally { await f.close(); }
 });
+for (const modelState of ['resolved', 'model-only', 'unresolved']) {
+  test(`new SDK sessions read lazy configuration before any prompt (${modelState})`, { timeout: 5000 }, async () => {
+    let session: CopilotSession | undefined;
+    const f = bridge('interactive', packet => session?.receive(packet), modelState);
+    session = new CopilotSession(async message => f.send(message), {
+      publish() {}, changed() {}, identified() {}, disconnected() {},
+      notice(message) { assert.fail(message); }, completed() { assert.fail('Startup must not complete a turn'); },
+      decision: async () => { assert.fail('Startup must not request permission or input'); },
+    });
+    try {
+      await session.initialize();
+      const status = session.state.statusArea!;
+      assert.equal(status.controls.find(control => control.id === 'model')?.label, modelState === 'unresolved' ? 'Copilot default' : 'small');
+      const effort = status.controls.find(control => control.id === 'thinking');
+      assert.equal(effort?.label, modelState === 'resolved' ? 'low' : modelState === 'model-only' ? 'Model default' : undefined);
+      assert.ok(status.controls.every(control => !control.disabled));
+      assert.equal(session.state.messages.length, 0);
+      assert.deepEqual(f.packets.filter(packet => ['event', 'permission', 'input'].includes(packet.kind)), [], 'initialization must not send a prompt or explicitly switch models');
+    } finally { session.disconnect('offline startup fixture complete'); await f.close(); }
+  });
+}
+
 test('production SDK bridge tool and permission packets reach the JSONL capture sink unchanged', { timeout: 5000 }, async () => {
   const lines: string[] = [], errors: string[] = [];
   const capture = createToolCapture({ write: async batch => { lines.push(...batch); }, failure: message => errors.push(message), recovered() {} });

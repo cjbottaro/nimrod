@@ -18,7 +18,12 @@ export class CopilotClient {
       { sessionId: 'outside', summary: 'Outside project fixture', isRemote: false, context: { workingDirectory: '/elsewhere' }, startTime: new Date(1000), modifiedTime: new Date(2000) },
     ].filter(session => session.sessionId !== this.deleted);
   }
-  async createSession(config) { assert.equal(config.name, 'Copilot session'); return this.session = new Session(config, false); }
+  async createSession(config) {
+    assert.equal(config.name, 'Copilot session');
+    assert.equal(config.model, undefined, 'startup must not override the runtime default');
+    assert.equal(config.reasoningEffort, undefined);
+    return this.session = new Session(config, false);
+  }
   async resumeSession(id, config) {
     assert.equal(id, 'fixture-sdk'); assert.equal(config.allowTranscriptRecovery, false); assert.equal(config.continuePendingWork, false);
     return this.session = new Session(config, true);
@@ -30,15 +35,31 @@ class Session {
   listeners = [];
   sequence = 0;
   turns = 0;
-  model = 'small';
-  effort = 'low';
+  model;
+  effort;
+  catalogResolved = false;
   commandCatalog = [
     { name: 'permissions', aliases: ['perms'], description: 'Manage permissions', kind: 'builtin', allowDuringAgentExecution: true,
       input: { hint: 'Permission operation', choices: [{ name: 'show', description: 'Show permissions' }, { name: 'reset', description: 'Clear approvals' }] } },
     { name: 'discover-fixture', description: 'Add a new fixture command', kind: 'builtin', allowDuringAgentExecution: false },
   ];
   rpc = {
-    model: { getCurrent: async () => ({ modelId: this.model, reasoningEffort: this.effort }) },
+    model: {
+      list: async () => {
+        this.catalogResolved = true;
+        // Like the runtime, new sessions resolve defaults lazily from their own
+        // catalog, not the client-wide model listing or the display layer.
+        if (!this.saved && process.env.NIMROD_FIXTURE_COPILOT_MODEL_STATE !== 'unresolved') {
+          this.model = 'small';
+          this.effort = process.env.NIMROD_FIXTURE_COPILOT_MODEL_STATE === 'model-only' ? undefined : 'low';
+        }
+        return { list: [{ id: 'small', name: 'Fixture small' }, { id: 'large', name: 'Fixture large' }] };
+      },
+      getCurrent: async () => {
+        assert.equal(this.catalogResolved, true, 'resolve the session catalog before reading its configuration');
+        return { modelId: this.model, reasoningEffort: this.effort };
+      },
+    },
     mode: { get: async () => process.env.NIMROD_FIXTURE_COPILOT_MODE || 'interactive' },
     commands: {
       list: async () => ({ commands: this.commandCatalog }),
@@ -54,7 +75,10 @@ class Session {
       },
     },
   };
-  constructor(config, saved) { this.config = config; this.saved = saved; this.listeners = [config.onEvent]; }
+  constructor(config, saved) {
+    this.config = config; this.saved = saved; this.listeners = [config.onEvent];
+    if (saved) { this.model = 'large'; this.effort = undefined; }
+  }
   on(listener) { this.listeners.push(listener); return () => { this.listeners = this.listeners.filter(item => item !== listener); }; }
   emit(type, data) { const event = { id: `fixture-${this.sequence++}`, type, data }; this.listeners.forEach(listener => listener(event)); }
   async getEvents() { return this.saved ? [

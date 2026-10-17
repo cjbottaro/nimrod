@@ -32,8 +32,12 @@ request does not switch sessions or steal focus; return to its conversation to
 act. Stop/Close/disconnect cancel pending choices.
 
 Model and thinking controls use Copilot’s reported catalog and current state,
-and are available while idle. Thinking appears only for a model that advertises
-efforts. Tool/reasoning cards, disclosures, scroll behavior, draft storage and
+and are available while idle. Connecting resolves the session’s model catalog
+before reading its model/effort, so reported defaults can appear before your
+first message—without sending a prompt or explicitly selecting a model. If
+Copilot still reports no selection, the label remains **Copilot default**;
+missing effort stays **Model default**, not a guessed level. Thinking appears
+only for a model that advertises efforts. Tool/reasoning cards, disclosures, scroll behavior, draft storage and
 notification preferences reuse the existing shell. Unknown rich results remain
 literal data; no tool payload grants additional permission.
 Copilot inspection/web cards reuse shared components, including cited web answers

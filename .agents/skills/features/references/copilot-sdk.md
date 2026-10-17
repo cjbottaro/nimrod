@@ -132,7 +132,21 @@ with no invented steer/queue. Stop calls `abort`; it is not Close/Delete.
 Ambiguous writes/timeouts/results disconnect and retain identity/newer drafts;
 there is no automatic replay or restoring the submitted text.
 
-Models come from `listModels`; disabled-policy models are excluded. Thinking
+At connection, `session.rpc.model.list()` resolves the session-owned lazy
+catalog before history/current configuration are read. The pinned generated
+RPC documentation explicitly identifies this read as the prerequisite for
+model-policy readiness before a first turn; client-wide `listModels()` does
+not initialize that session. Then `session.rpc.model.getCurrent()` supplies
+model/effort for the first connected snapshot, without a prompt, model switch,
+explicit default override or persistent preference mutation. It applies equally
+to new/resumed sessions and never replaces an existing selection with the first
+catalog item. If the runtime still omits model/effort, the existing honest
+`Copilot default`/`Model default` presentation remains; no default is inferred.
+Buffered event/history ordering and newer model-event precedence are unchanged.
+This initialization fix has authored fixtures **unrun**; actual installed-CLI
+resolution before a first prompt remains pending native verification.
+
+Models come from client `listModels`; disabled-policy models are excluded. Thinking
 efforts come only from the selected model's catalog. Idle-only `setModel` and
 the pinned release's experimental `session.rpc.model.getCurrent()` read actual
 model/effort state; later native events outrank older results. Failed configuration
@@ -193,7 +207,11 @@ External applications remain uncoordinated.
 - `src/main.ts`, shared session/backend/draft/card interfaces: composition only.
 - `src-tauri/src/copilot.rs`, `copilot/bridge.mjs`: owned native/official SDK boundary.
 - `test/copilot-sdk.test.ts`, `test/copilot-bridge.test.ts`: authored **unrun**
-  semantic, uncertainty, draft-isolation and deletion fixtures; the production
+  semantic, uncertainty, draft-isolation, deletion and lazy startup-model fixtures.
+  The fake SDK leaves new-session defaults unresolved until `session.model.list`,
+  asserts list-before-getCurrent ordering, preserves a different resumed selection,
+  and exercises model-only/still-unresolved reads without prompts or model switches;
+  the production
   bridge imports an offline fake SDK through a test-only ESM loader.
 - `src-tauri/src/copilot_tests.rs`: authored **unrun** private-record validation,
   window-generation/token retirement and real-pipe/owned-group shutdown against

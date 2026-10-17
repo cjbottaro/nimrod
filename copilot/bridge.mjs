@@ -95,6 +95,10 @@ async function dispatch(message) {
       send({ kind: 'identified', sessionId: session.sessionId });
       const mode = await session.rpc.mode.get();
       if (mode !== 'interactive') throw new Error(`Copilot session mode "${mode}" is not supported by this integration. Change it to interactive in Copilot before reconnecting; no mode was changed or prompt sent.`);
+      // Resolve this session's lazy catalog/defaults before reading its current
+      // configuration. Client-wide listModels() does not initialize the session.
+      // This is a metadata read, not a prompt or an explicit model selection.
+      await session.rpc.model.list();
       const events = await session.getEvents();
       const model = await session.rpc.model.getCurrent();
       const models = await client.listModels();
