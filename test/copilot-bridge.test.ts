@@ -5,8 +5,8 @@ import test from 'node:test';
 import { CopilotSession } from '../src/copilot/session';
 import { createToolCapture } from '../src/tool-capture';
 
-function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) => void, modelState = 'resolved', defaults: Record<string, unknown> = { model: 'small', effortLevel: 'low' }, usageState = 'complete') {
-  const child = spawn(process.execPath, ['--import', './test/fixtures/copilot-sdk-register.mjs', 'copilot/bridge.mjs', '/fixture/copilot', '/fixture/project'], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, NIMROD_FIXTURE_COPILOT_MODE: mode, NIMROD_FIXTURE_COPILOT_MODEL_STATE: modelState, NIMROD_FIXTURE_COPILOT_DEFAULTS: JSON.stringify(defaults), NIMROD_FIXTURE_COPILOT_USAGE_STATE: usageState } });
+function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) => void, modelState = 'resolved', defaults: Record<string, unknown> = { model: 'small', effortLevel: 'low' }, usageState = 'complete', contextState = 'default') {
+  const child = spawn(process.execPath, ['--import', './test/fixtures/copilot-sdk-register.mjs', 'copilot/bridge.mjs', '/fixture/copilot', '/fixture/project'], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, NIMROD_FIXTURE_COPILOT_MODE: mode, NIMROD_FIXTURE_COPILOT_MODEL_STATE: modelState, NIMROD_FIXTURE_COPILOT_DEFAULTS: JSON.stringify(defaults), NIMROD_FIXTURE_COPILOT_USAGE_STATE: usageState, NIMROD_FIXTURE_COPILOT_CONTEXT_STATE: contextState } });
   const packets: Record<string, any>[] = [], pending = new Map<string, { resolve(value: any): void; reject(error: Error): void }>();
   const waiting = new Set<{ predicate(packet: Record<string, any>): boolean; resolve(packet: Record<string, any>): void; reject(error: Error): void }>();
   let stderr = '', sequence = 0;
@@ -182,6 +182,28 @@ test('production SDK bridge reads aggregate session accounting without leaking m
     assert.equal(f.packets.some(packet => packet.kind === 'event' && packet.event.type === 'user.message'), false);
   } finally { await f.close(); }
 });
+
+test('production SDK context read restores a resumed window without a prompt or a live usage event', { timeout: 5000 }, async () => {
+  const f = bridge();
+  try {
+    await f.request('initialize'); await f.request('connect', { sessionId: 'fixture-sdk' });
+    assert.deepEqual(await f.request('context'), { currentTokens: 31875, tokenLimit: 125000 }, 'use SDK limit, not the smaller effective prompt budget');
+    assert.equal(f.packets.some(packet => packet.kind === 'event' && ['user.message', 'session.usage_info'].includes(packet.event.type)), false);
+  } finally { await f.close(); }
+});
+
+for (const contextState of ['null', 'error']) {
+  test(`uninitialized/failed SDK context does not prevent restored credit accounting (${contextState})`, { timeout: 5000 }, async () => {
+    const f = bridge('interactive', undefined, 'resolved', { model: 'small', effortLevel: 'low' }, 'complete', contextState);
+    try {
+      await f.request('initialize'); await f.request('connect', { sessionId: 'fixture-sdk' });
+      if (contextState === 'null') assert.equal(await f.request('context'), null);
+      else await assert.rejects(f.request('context'), /context metadata unavailable/);
+      assert.deepEqual(await f.request('usage'), { totalNanoAiu: 12_300_000_000, aiCreditsStatus: 'complete' });
+      assert.equal(f.packets.some(packet => packet.kind === 'fatal'), false);
+    } finally { await f.close(); }
+  });
+}
 
 test('optional SDK accounting failures leave the connected conversation usable', { timeout: 5000 }, async () => {
   const f = bridge('interactive', undefined, 'resolved', { model: 'small', effortLevel: 'low' }, 'error');

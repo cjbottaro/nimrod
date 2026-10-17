@@ -235,9 +235,10 @@ consumer, separate from model configuration. The shared Status area only consume
   Frontend reads coalesce single-flight, discard results predating a newer usage
   trigger and make one owed follow-up read. The bridge also shares its SDK promise
   so an optional frontend timeout cannot pile up underlying metadata RPCs.
-- The usage request alone uses the connection's `reject` timeout policy: remove
-  its pending ID and mark credit accounting unavailable after 20 seconds, without
-  disconnecting chat. Late results are ignored. SDK method errors likewise affect
+- Usage and context metadata reads use the connection's `reject` timeout policy:
+  remove their pending ID after 20 seconds without disconnecting chat. A usage
+  failure marks credit accounting unavailable; a context failure cannot erase
+  credit totals or a newer live context observation. Late results are ignored. SDK method errors likewise affect
   only optional metrics; actual transport/write failures retain existing teardown.
   Every mutation retains the original uncertain-outcome disconnect/no-replay policy.
 - Normalize finite nonnegative amounts. `complete` plus an explicit numeric amount
@@ -253,13 +254,30 @@ consumer, separate from model configuration. The shared Status area only consume
   an included subscription allowance. No per-model token-rate reconstruction.
   Tooltip/accessibility detail retains AIC (up to nano-unit precision), coverage,
   conversion meaning and unrounded context counters; display rounding is separate.
-- Only root `session.usage_info` supplies context: percentage is
-  `currentTokens / tokenLimit * 100`, denominator uses decimal compact notation
-  (`125k`, `1.1M`). These are current context counters, never cumulative billed or
-  child-agent tokens. Zero/unknown limit displays `— / —`; ignore invalid/negative
-  updates and never clamp a legitimate reported percentage above 100. Model
-  change/deselection/context clear invalidates the old context without resetting
-  session-wide spending. Do not invent an Auto compact setting from events.
+- Root `session.usage_info` supplies live context. Reconnect does not necessarily
+  emit that event: a separate optional private `context` read calls
+  `session.rpc.metadata.contextInfo({promptTokenLimit:0,outputTokenLimit:0})` on
+  connection, idle/command settlement, model changes, context clear and compaction
+  completion. This asks the runtime to resolve the current model/tier; it does not
+  send a prompt, select a model, replay history or gate ordinary interaction.
+  The bridge returns only `{currentTokens:contextInfo.totalTokens, tokenLimit:contextInfo.limit}`.
+  Use **`limit`**, the advertised display window, not the distinct effective
+  `promptTokenLimit` input budget. No catalog capacity/last-call-token guesses.
+- Context and credit reads are independent and individually coalesced. Context
+  callbacks are fenced by model/invalidation revision, request revision, disposal
+  and every newer live observation (even one with unchanged values). A late read
+  cannot resurrect the previous model's window or overwrite live counts. Newer
+  context requests coalesce into one owed follow-up; no polling/retry timer.
+- `contextInfo` can be null on a cold reconnect before system-prompt/tool metadata
+  is cached. Keep unknown context visibly `— / —` next to known cost, not omitted
+  or fabricated as zero. Context null/error/timeout does not withhold a successful
+  credit read. Later live usage or supported metadata updates fill the slot.
+  Percentage is `currentTokens / tokenLimit * 100`, denominator uses decimal
+  compact notation (`125k`, `1.1M`). These are current root context counters,
+  never cumulative billed or child-agent tokens. Ignore invalid/negative updates
+  and never clamp reported percentages above 100. Model change/deselection/context
+  clear invalidates old context without resetting spending. No Auto compact state
+  is inferred from events.
 - Normalized snapshots and unchanged control arrays retain references. Tooltip-only
   changes invalidate the metrics section even when rounded text is unchanged,
   without replacing that text node. Existing paint suspension/hidden catch-up,
@@ -269,9 +287,12 @@ consumer, separate from model configuration. The shared Status area only consume
 Code: `src/copilot/usage.ts`, `status-area.ts`, `session.ts`, the private bridge
 read and native method allowlist, plus the generic `metricsTitle` field/render
 dependency. Fixtures: `test/copilot-usage.test.ts` covers formatting, partial/missing
-coverage, coalescing/stale responses, errors/disposal and optional timeout isolation;
+coverage, coalescing/stale responses, reconnect snapshot reads, null cold context,
+independent metadata errors/disposal and optional timeout isolation;
 SDK/production-bridge/native allowlist fixtures cover integration and aggregate
-filtering. Renderer/offline browser fixtures cover exact detail, hidden catch-up,
+filtering. The context fixture deliberately gives different `limit` and
+`promptTokenLimit` values, and covers Resume without a live usage event or prompt.
+Renderer/offline browser fixtures cover exact detail, hidden catch-up,
 retained nodes and the displayed `~$0.123 · 25.5% / 125k` example. **They have not
 been run**; real CLI accounting, resumed totals and macOS/Linux visuals remain
 unverified. Source documentation is API/rate evidence, not runtime acceptance.

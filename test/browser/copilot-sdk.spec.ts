@@ -16,6 +16,7 @@ test('offline SDK bridge uses the shared shell for optimistic send, permissions,
     const sdk = await page.locator('.session-view:not([hidden])').getAttribute('id');
     await expect(page.locator(visible('model'))).toHaveText('small');
     await expect(page.locator(visible('thinking'))).toHaveText('low');
+    await expect(page.locator(visible('session-metrics'))).toHaveText('~$0.000 · — / —');
     expect(demo.calls.some(call => call.command === 'write_copilot' && ['prompt', 'configure'].includes((call.args.message as { method?: string }).method || ''))).toBe(false);
     await page.locator(visible('prompt')).fill('Offline SDK request');
     await page.locator(visible('prompt')).press('Enter');
@@ -124,6 +125,8 @@ test('SDK discovery never resumes automatically; selection uses the exact ID and
     await expect(page.locator(visible('send'))).toBeEnabled();
     await expect(page.locator(visible('prompt'))).toHaveValue('SDK-only draft');
     await expect(page.locator(visible('messages'))).toContainText('Saved SDK answer');
+    await expect(page.locator(visible('session-metrics'))).toHaveText('~$0.123 · 25.5% / 125k');
+    await expect(page.locator(visible('session-metrics'))).toHaveAttribute('title', /31,875 \/ 125,000 tokens/);
     const requests = demo.calls.filter(call => call.command === 'write_copilot').map(call => call.args.message as { method?: string; sessionId?: string });
     expect(requests.filter(request => request.method === 'connect').map(request => request.sessionId)).toEqual(['fixture-sdk']);
     expect(requests.some(request => request.method === 'prompt')).toBe(false);

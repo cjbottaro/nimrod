@@ -19,7 +19,7 @@ async function fixture(events: unknown[] = [], decision: CopilotSessionUi['decis
   const sent: BridgeRequest[] = [], published: ConversationViewMessage[] = [], completed: boolean[] = [], captured: ToolCaptureRecord[] = [];
   const session: CopilotSession = new CopilotSession(async request => {
     sent.push(request);
-    if (autoUsage && request.method === 'usage') queueMicrotask(() => session.receive({ kind: 'result', id: request.id, result: {} }));
+    if (autoUsage && ['usage', 'context'].includes(request.method)) queueMicrotask(() => session.receive({ kind: 'result', id: request.id, result: request.method === 'usage' ? {} : null }));
   }, {
     publish: message => published.push(message), changed() {}, identified() {}, disconnected() {}, notice() {},
     completed: failed => completed.push(failed), decision,
@@ -50,7 +50,7 @@ test('SDK replay is read-only and final content wins over buffered deltas', asyn
   f.event('assistant.message_delta', { messageId: 'answer', deltaContent: 'Saved answer' });
   const answer = f.session.state.messages[1].content;
   assert.ok(Array.isArray(answer)); assert.equal(answer[0].text, 'Saved answer');
-  assert.deepEqual(f.sent.map(request => request.method), ['initialize', 'connect', 'usage']);
+  assert.deepEqual(f.sent.map(request => request.method), ['initialize', 'connect', 'usage', 'context']);
   f.session.disconnect('fixture complete');
 });
 
@@ -130,7 +130,7 @@ test('SDK status publishes root usage and reconciles selector capabilities witho
   const f = await fixture();
   const initial = f.session.state.statusArea!;
   assert.ok(initial.capabilities.metrics);
-  assert.equal(initial.metrics, 'cost unavailable');
+  assert.equal(initial.metrics, 'cost unavailable · — / —');
   assert.equal(initial.capabilities.queue, undefined);
   f.event('session.usage_info', { currentTokens: 31875, tokenLimit: 125000 });
   const reported = f.session.state.statusArea!;
@@ -150,11 +150,24 @@ test('SDK status publishes root usage and reconciles selector capabilities witho
   assert.equal(f.session.state.statusArea!.controls[1].disabled, true);
   assert.equal(f.session.configuration.get('model'), undefined);
   assert.equal(f.session.configuration.get('effort'), undefined);
-  assert.equal(f.session.state.statusArea!.metrics, 'cost unavailable', 'model changes retire the old context denominator');
+  assert.equal(f.session.state.statusArea!.metrics, 'cost unavailable · — / —', 'model changes retire the old context denominator');
   f.event('session.usage_info', { currentTokens: 31875, tokenLimit: 125000 });
   f.session.disconnect('fixture complete');
   assert.equal(f.session.state.statusArea!.metrics, reported.metrics);
   assert.ok(f.session.state.statusArea!.controls.every(control => control.disabled));
+});
+
+test('SDK reconnect seeds context and credit snapshots independently without sending a new turn', async () => {
+  const f = await fixture([], undefined, false);
+  try {
+    assert.equal(f.sent.some(request => request.method === 'context'), true);
+    f.reply('usage', { totalNanoAiu: 69_100_000_000, aiCreditsStatus: 'complete' }); await flush();
+    assert.equal(f.session.state.statusArea!.metrics, '~$0.691 · — / —');
+    f.reply('context', { currentTokens: 31875, tokenLimit: 125000 }); await flush();
+    assert.equal(f.session.state.statusArea!.metrics, '~$0.691 · 25.5% / 125k');
+    assert.equal(f.sent.some(request => ['prompt', 'command', 'configure'].includes(request.method)), false);
+    assert.deepEqual(f.completed, []);
+  } finally { f.session.disconnect('fixture complete'); }
 });
 
 test('SDK usage consumes aggregate totals including child activity and never treats a request multiplier as USD', async () => {

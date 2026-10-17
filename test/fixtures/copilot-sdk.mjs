@@ -58,6 +58,14 @@ class Session {
     { name: 'discover-fixture', description: 'Add a new fixture command', kind: 'builtin', allowDuringAgentExecution: false },
   ];
   rpc = {
+    metadata: { contextInfo: async parameters => {
+      assert.deepEqual(parameters, { promptTokenLimit: 0, outputTokenLimit: 0 }, 'the runtime resolves the current model/tier');
+      const state = process.env.NIMROD_FIXTURE_COPILOT_CONTEXT_STATE;
+      if (state === 'error') throw new Error('Fixture context metadata unavailable');
+      if (state === 'null' || !this.saved && !this.turns) return { contextInfo: null };
+      return { contextInfo: { totalTokens: 31875, limit: 125000, promptTokenLimit: 100000,
+        systemTokens: 1000, conversationTokens: 30000, toolDefinitionsTokens: 875 } };
+    } },
     usage: { getMetrics: async () => {
       if (process.env.NIMROD_FIXTURE_COPILOT_USAGE_STATE === 'error') throw new Error('Fixture usage metadata unavailable');
       return { totalNanoAiu: this.totalNanoAiu, aiCreditsStatus: 'complete', totalPremiumRequestCost: 999,

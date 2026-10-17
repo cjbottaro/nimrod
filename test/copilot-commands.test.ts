@@ -16,7 +16,7 @@ async function fixture(commandChoice?: CopilotSessionUi['commandChoice'], comman
   const sent: BridgeRequest[] = [], published: ConversationViewMessage[] = [], notices: string[] = [];
   const session: CopilotSession = new CopilotSession(async request => {
     sent.push(request);
-    if (request.method === 'usage') queueMicrotask(() => session.receive({ kind: 'result', id: request.id, result: {} }));
+    if (['usage', 'context'].includes(request.method)) queueMicrotask(() => session.receive({ kind: 'result', id: request.id, result: request.method === 'usage' ? {} : null }));
   }, {
     publish: message => published.push(message), changed() {}, identified() {}, disconnected() {}, completed() { throw new Error('Local command must not announce a completed agent turn'); },
     notice: message => notices.push(message), decision: async () => undefined, commandChoice,

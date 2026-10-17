@@ -68,7 +68,8 @@ export class CopilotSession {
       apply: (setting, value, current) => this.applyPreference(setting, value, current), changed: () => this.publish([]),
       error: message => this.ui.notice(`Configuration change failed: ${message}`),
     });
-    this.usage = new CopilotUsageController(() => this.connection.request('usage', {}, 'reject'), () => this.publish([]));
+    this.usage = new CopilotUsageController(() => this.connection.request('usage', {}, 'reject'), () => this.publish([]),
+      () => this.connection.request('context', {}, 'reject'));
     this.updateStatusArea();
   }
   get canSubmit(): boolean { return !this.ended && !this.state.sessionUnavailable && !this.state.busy && !this.configuring && !this.commandOperation; }
@@ -228,7 +229,7 @@ export class CopilotSession {
       if (this.commandOperation === operation) this.commandOperation = undefined;
       if (!this.ended && !this.state.busy) this.state = { ...this.state, status: 'Idle' };
       this.publish([]);
-      if (!this.ended && invoked) this.usage.refresh();
+      if (!this.ended && invoked) { this.usage.refresh(); this.usage.refreshContext(); }
     }
   }
   async selectPreference(kind: 'model' | 'thinking', choose: (values: string[], current?: string) => Promise<string | undefined>): Promise<void> {
@@ -256,7 +257,11 @@ export class CopilotSession {
     const changed = this.model !== model;
     this.model = model;
     this.effort = typeof value.reasoningEffort === 'string' ? value.reasoningEffort : undefined;
-    if (changed) this.usage.clearContext();
+    if (changed) this.invalidateContext();
+  }
+  private invalidateContext(): void {
+    this.usage.clearContext();
+    if (!this.ended && !this.replaying && !this.state.sessionUnavailable) this.usage.refreshContext();
   }
   private packet(packet: Record<string, unknown>): void {
     if (packet.kind === 'identified') {
@@ -273,7 +278,7 @@ export class CopilotSession {
       finally { this.replaying = false; }
       this.applyConfigurationSnapshot(packet.model);
       this.state = { ...this.state, sessionUnavailable: false, busy: false, status: 'Idle' }; this.publish();
-      this.usage.refresh();
+      this.usage.refresh(); this.usage.refreshContext();
     } else if (packet.kind === 'commands') {
       if (!Array.isArray(packet.commands)) throw new Error('Invalid Copilot command catalog');
       this.commands = copilotCommands(packet.commands); this.publish([]);
@@ -302,7 +307,8 @@ export class CopilotSession {
     this.events.add(raw.id);
     const data = raw.data, type = raw.type;
     if (type === 'assistant.usage' && !this.replaying && !this.state.sessionUnavailable) this.usage.refresh();
-    if (type === 'session.context_cleared' && !raw.agentId) { this.usage.clearContext(); if (!this.replaying && !this.state.sessionUnavailable) this.usage.refresh(); }
+    if (type === 'session.context_cleared' && !raw.agentId) { this.invalidateContext(); if (!this.replaying && !this.state.sessionUnavailable) this.usage.refresh(); }
+    if (type === 'session.compaction_complete' && !raw.agentId && !this.replaying && !this.state.sessionUnavailable) this.usage.refreshContext();
     const originLabel = typeof raw.agentId === 'string' && raw.agentId ? `Copilot agent ${raw.agentId}` : undefined;
     const string = (key: string) => typeof data[key] === 'string' ? data[key] as string : '';
     if (type.startsWith('tool.') || ['assistant.tool_call_delta', 'permission.requested', 'permission.completed'].includes(type)) this.capture(type, raw);
@@ -372,9 +378,9 @@ export class CopilotSession {
       const changed = this.model !== model;
       this.model = model;
       this.effort = typeof data.reasoningEffort === 'string' ? data.reasoningEffort : undefined;
-      if (changed) this.usage.clearContext();
+      if (changed) this.invalidateContext();
       this.publish([]);
-    } else if (type === 'session.model_deselected' && !raw.agentId) { this.configurationVersion++; this.model = undefined; this.effort = undefined; this.usage.clearContext(); this.publish([]); }
+    } else if (type === 'session.model_deselected' && !raw.agentId) { this.configurationVersion++; this.model = undefined; this.effort = undefined; this.invalidateContext(); this.publish([]); }
     else if (type === 'session.usage_info' && !raw.agentId && typeof data.currentTokens === 'number' && typeof data.tokenLimit === 'number') {
       this.usage.context({ currentTokens: data.currentTokens, tokenLimit: data.tokenLimit });
     }
@@ -398,7 +404,7 @@ export class CopilotSession {
     this.finish(); this.echo = undefined; this.cancelDecisions();
     this.state = { ...this.state, busy: false, status: this.stopped ? 'Stopped' : this.failed ? 'Failed' : 'Idle' };
     this.publish([]);
-    if (!this.ended && !this.state.sessionUnavailable) this.usage.refresh();
+    if (!this.ended && !this.state.sessionUnavailable) { this.usage.refresh(); this.usage.refreshContext(); }
     if (working && !this.stopped) this.ui.completed(this.failed, this.failed ? undefined : this.response());
   }
   private message(key: string): DisplayMessage | undefined { const index = this.indices.get(key); return index === undefined ? undefined : this.state.messages[index]; }

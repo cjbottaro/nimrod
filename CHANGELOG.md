@@ -25,6 +25,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Copilot reconnects fetch context usage independently of restored credit totals, without sending another message. Unavailable cold-session context remains visible as `— / —` beside cost, and late snapshots cannot overwrite newer live context or model changes.
 - Copilot permission choices use the CLI’s decision variants (`approve-once`, `reject`, `user-not-available`) rather than legacy outcome values that caused real tool failures. Only explicit Allow once approves a request; persistent grants are not inferred.
 - Copilot tool errors show their native message instead of JSON, streamed inputs update the eventual execution card, and late metadata no longer restarts or degrades completed cards.
 - Bare Copilot slash commands with advertised argument choices open a searchable picker before execution, rather than relying on the SDK's default command result to request one. Explicit arguments still run directly; Escape invokes nothing. This covers `/permissions` without hardcoding a permissions menu.

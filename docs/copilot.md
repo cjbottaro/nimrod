@@ -85,11 +85,15 @@ The Status area uses a compact layout similar to Pi:
   additional charge beyond your subscription allowance.
 - **`25.5% / 125k`** is current context utilization and the reported window limit,
   not the total tokens billed over the conversation. The window updates from
-  Copilot; it is not hard-coded to 125k. Exact counters remain in the tooltip.
+  Copilot; it is not hard-coded to 125k. Reconnect reads a context snapshot without
+  sending a message or waiting for a live usage event. Exact counters remain in
+  the tooltip.
 - **`≥$…`** means partial/unknown coverage: the displayed amount is only a reported
   subtotal and the full amount may be higher. **`cost unavailable`** means accounting
   was not reported/read successfully, not that the session was free. A missing
-  context limit displays `— / —` rather than a guessed percentage.
+  context count/window displays `— / —` next to known cost rather than disappearing
+  or showing a guessed percentage. On a cold reconnect, Copilot may not report
+  context until its system-prompt/tool metadata is initialized.
 
 Accounting includes the main agent and subagents and refreshes at usage/idle
 boundaries; it does not add event deltas together. Optional metadata failures do

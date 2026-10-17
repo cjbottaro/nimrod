@@ -135,6 +135,16 @@ async function dispatch(message) {
       })().finally(() => { usageRead = undefined; });
       return await usageRead;
     }
+    case 'context': {
+      if (!session) throw new Error('No connected Copilot session');
+      // Zero limits ask the runtime to resolve its selected model/context tier.
+      // `limit` is the display window; promptTokenLimit is a different effective
+      // input budget and must not silently become the denominator.
+      const { contextInfo } = await session.rpc.metadata.contextInfo({ promptTokenLimit: 0, outputTokenLimit: 0 });
+      if (contextInfo === null || contextInfo === undefined) return null;
+      if (typeof contextInfo !== 'object' || Array.isArray(contextInfo)) throw new Error('Invalid Copilot context snapshot');
+      return { currentTokens: contextInfo.totalTokens, tokenLimit: contextInfo.limit };
+    }
     case 'commands':
       if (!session) throw new Error('No connected Copilot session');
       return await refreshCommands();

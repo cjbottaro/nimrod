@@ -21,22 +21,30 @@ function creditUsage(value: unknown): CopilotCreditUsage {
   return { status, nanoAiu };
 }
 
-/** Session-bound metadata consumer. One aggregate read at a time; no delta summing or polling. */
+/** Session-bound metadata consumer. Independent single-flight credit/context reads; no polling. */
 export class CopilotUsageController {
   private state: CopilotUsage = {};
   private revision = 0;
   private inFlight = false;
   private disposed = false;
-  constructor(private read: () => Promise<unknown>, private changed: () => void) {}
+  private contextRevision = 0;
+  private contextRequestRevision = 0;
+  private contextInFlight = false;
+  constructor(private read: () => Promise<unknown>, private changed: () => void, private readContext?: () => Promise<unknown>) {}
   get snapshot(): CopilotUsage { return this.state; }
   context(value: CopilotContextUsage): void {
     if (this.disposed || !nonnegative(value.currentTokens) || !nonnegative(value.tokenLimit)) return;
+    // A live observation fences an older metadata result even when its values
+    // match the currently mounted snapshot.
+    this.contextRevision++;
     const previous = this.state.context;
     if (previous && previous.currentTokens === value.currentTokens && previous.tokenLimit === value.tokenLimit) return;
     this.state = { ...this.state, context: { ...value } }; this.changed();
   }
   clearContext(): void {
-    if (this.disposed || !this.state.context) return;
+    if (this.disposed) return;
+    this.contextRevision++;
+    if (!this.state.context) return;
     this.state = { ...this.state, context: undefined }; this.changed();
   }
   refresh(): void {
@@ -44,7 +52,28 @@ export class CopilotUsageController {
     this.revision++;
     if (!this.inFlight) void this.request();
   }
-  dispose(): void { this.disposed = true; this.revision++; }
+  refreshContext(): void {
+    if (this.disposed || !this.readContext) return;
+    this.contextRequestRevision++;
+    if (!this.contextInFlight) void this.requestContext();
+  }
+  dispose(): void { this.disposed = true; this.revision++; this.contextRevision++; }
+  private async requestContext(): Promise<void> {
+    this.contextInFlight = true;
+    const revision = this.contextRevision, requested = this.contextRequestRevision;
+    try {
+      const value = await this.readContext!();
+      if (!this.disposed && revision === this.contextRevision && requested === this.contextRequestRevision
+        && record(value) && nonnegative(value.currentTokens) && nonnegative(value.tokenLimit))
+        this.context({ currentTokens: value.currentTokens, tokenLimit: value.tokenLimit });
+    } catch {
+      // Optional context can be uninitialized/unavailable on cold resume. Never
+      // replace a newer live observation, discard credit totals or send a prompt.
+    } finally {
+      this.contextInFlight = false;
+      if (!this.disposed && requested !== this.contextRequestRevision) void this.requestContext();
+    }
+  }
   private async request(): Promise<void> {
     this.inFlight = true;
     const revision = this.revision;
@@ -91,6 +120,9 @@ export function presentCopilotUsage(usage?: CopilotUsage): { metrics?: string; m
     const percent = tokenLimit > 0 ? currentTokens / tokenLimit * 100 : NaN;
     parts.push(`${Number.isFinite(percent) ? `${percent.toFixed(1).replace(/\.0$/, '')}%` : '—'} / ${tokenLimit > 0 ? compact(tokenLimit) : '—'}`);
     details.push(`Context: ${currentTokens.toLocaleString('en-US', { maximumFractionDigits: 20 })} / ${tokenLimit > 0 ? tokenLimit.toLocaleString('en-US', { maximumFractionDigits: 20 }) : 'unknown limit'} tokens reported by Copilot.`);
+  } else if (usage.credits) {
+    parts.push('— / —');
+    details.push('Context usage/window is not reported yet; no percentage or window size is inferred.');
   }
   return parts.length ? { metrics: parts.join(' · '), metricsTitle: details.join('\n') } : {};
 }
