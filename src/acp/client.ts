@@ -61,6 +61,16 @@ export class AcpClient {
   /** Preserves agent-specific capabilities/configuration without claiming support. */
   get initialization(): AcpRecord | undefined { return this.initialized; }
   get sessionConfiguration(): AcpRecord | undefined { return this.created; }
+  get supportsSessionDeletion(): boolean {
+    const capabilities = this.initialized?.agentCapabilities;
+    const sessions = isRecord(capabilities) ? capabilities.sessionCapabilities : undefined;
+    return isRecord(sessions) && isRecord(sessions.delete);
+  }
+  get supportsSessionListing(): boolean {
+    const capabilities = this.initialized?.agentCapabilities;
+    const sessions = isRecord(capabilities) ? capabilities.sessionCapabilities : undefined;
+    return isRecord(capabilities) && capabilities.loadSession === true && isRecord(sessions) && isRecord(sessions.list);
+  }
 
   receive(packet: unknown): void { this.connection.receive(packet); }
   disconnect(reason?: unknown): void { this.connection.disconnect(reason); }
@@ -141,10 +151,7 @@ export class AcpClient {
     this.requirePhase('ready');
     if (!cwd.trim()) throw new Error('ACP history requires a project directory');
     if (cursor !== undefined && !cursor) throw new Error('ACP history requires a nonempty pagination cursor');
-    const capabilities = this.initialized?.agentCapabilities;
-    const sessionCapabilities = isRecord(capabilities) ? capabilities.sessionCapabilities : undefined;
-    if (!isRecord(capabilities) || capabilities.loadSession !== true
-      || !isRecord(sessionCapabilities) || !isRecord(sessionCapabilities.list))
+    if (!this.supportsSessionListing)
       throw new Error('This ACP agent does not advertise saved-session listing and loading. Use an agent version that supports both.');
     let page: AcpSessionPage | undefined;
     await this.connection.request('session/list', { cwd, ...(cursor === undefined ? {} : { cursor }) }, value => {
@@ -167,6 +174,16 @@ export class AcpClient {
     });
     if (!page) throw new Error('ACP session list response was not applied');
     return page;
+  }
+
+  /** Project history validates membership; this connection must not own a conversation. */
+  async deleteSession(sessionId: string): Promise<void> {
+    this.requirePhase('ready');
+    if (!sessionId.trim()) throw new Error('ACP deletion requires a session ID');
+    if (!this.supportsSessionDeletion) throw new Error('This ACP agent does not advertise session deletion.');
+    await this.connection.request('session/delete', { sessionId }, value => {
+      if (!isRecord(value)) throw new Error('Invalid ACP session deletion response');
+    });
   }
 
   async prompt(text: string): Promise<string> {

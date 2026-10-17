@@ -216,6 +216,7 @@ fn validate_message(message: &Value, cwd: &Path) -> Result<(), String> {
             | "session/new"
             | "session/load"
             | "session/list"
+            | "session/delete"
             | "session/prompt"
             | "session/set_config_option"
             | "session/set_mode"
@@ -229,12 +230,12 @@ fn validate_message(message: &Value, cwd: &Path) -> Result<(), String> {
         {
             return Err("ACP session cwd must match its project".into());
         }
-        if method == "session/load"
+        if matches!(method, "session/load" | "session/delete")
             && message["params"]["sessionId"]
                 .as_str()
                 .is_none_or(|id| id.trim().is_empty())
         {
-            return Err("ACP loading requires a session ID".into());
+            return Err("ACP loading/deletion requires a session ID".into());
         }
         if method == "session/list"
             && message["params"]
@@ -540,6 +541,24 @@ mod tests {
             )
             .is_err());
         }
+    }
+    #[test]
+    fn deletion_requires_an_explicit_saved_identity_and_request_id() {
+        let cwd = Path::new("/fixture/project");
+        let delete = |id: Value| {
+            json!({"jsonrpc":"2.0","id":1,"method":"session/delete","params":{"sessionId":id}})
+        };
+        assert!(validate_message(&delete(json!("saved-id")), cwd).is_ok());
+        for id in [Value::Null, json!(""), json!(" "), json!(42)] {
+            assert!(validate_message(&delete(id), cwd).is_err());
+        }
+        assert!(
+            validate_message(
+                &json!({"jsonrpc":"2.0","method":"session/delete","params":{"sessionId":"saved-id"}}),
+                cwd
+            )
+            .is_err()
+        );
     }
     #[cfg(unix)]
     #[tokio::test]

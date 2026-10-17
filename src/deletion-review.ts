@@ -1,7 +1,7 @@
 import { confirmationKey, labelDialogAction } from './dialog-actions';
 
 export interface DeletionTreeSession { file: string; title: string; parent?: string | null; cwd?: string; }
-export interface DeletionReviewData { id: string; sessions: DeletionTreeSession[]; }
+export interface DeletionReviewData { id: string; sessions: DeletionTreeSession[]; title?: string; description?: string; }
 
 function sessionIcon(doc: Document): SVGSVGElement {
   const icon = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -25,6 +25,8 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
   const form = confirm.form!;
   const description = dialog.querySelector<HTMLElement>('#deletion-description')!;
   const reviewDescription = description.textContent || '';
+  const title = dialog.querySelector<HTMLElement>('#deletion-title');
+  const reviewTitle = title?.textContent || 'Delete session tree';
   labelDialogAction(cancel, 'Cancel', 'Escape');
   labelDialogAction(confirm, 'Delete sessions', 'Enter');
   let pending: { resolve(answer: boolean): void } | undefined;
@@ -94,6 +96,7 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
     loading(): void {
       if (disposed || pending || executing || preview === 'loading') return;
       preview = 'loading';
+      if (title) title.textContent = reviewTitle;
       cancel.disabled = false; description.textContent = reviewDescription; description.removeAttribute('role');
       confirm.disabled = true; labelDialogAction(confirm, 'Delete sessions');
       tree.setAttribute('aria-busy', 'true');
@@ -145,7 +148,8 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
       }
       if (seen.size !== files.size) { close(); return Promise.resolve(false); }
       preview = 'idle'; cancel.disabled = false; confirm.disabled = false;
-      description.textContent = reviewDescription; description.removeAttribute('role');
+      if (title) title.textContent = data.title || reviewTitle;
+      description.textContent = data.description || reviewDescription; description.removeAttribute('role');
       tree.setAttribute('aria-busy', 'false');
       tree.replaceChildren(list); tree.scrollTop = 0;
       labelDialogAction(confirm, `Delete ${data.sessions.length} ${data.sessions.length === 1 ? 'session' : 'sessions'}`, 'Enter');

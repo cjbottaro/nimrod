@@ -23,7 +23,7 @@ export interface PaletteOptions {
   commands(): (PaletteItem & { detail: string })[];
   sessions(signal: AbortSignal, publish: (page: PalettePage) => void): Promise<PalettePage>;
   openSessions(): PalettePage;
-  deleteSessions?: () => Promise<PalettePage>;
+  deleteSessions?: (signal: AbortSignal, publish: (page: PalettePage) => void) => Promise<PalettePage>;
   sessionDeleted?: (id: string) => boolean;
   projects?: () => Promise<PalettePage>;
   canOpen(): boolean;
@@ -253,11 +253,11 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       items = page.items; notice = page.notice || ''; loading = false; draw();
     };
     try {
-      const page = kind === 'delete' ? await options.deleteSessions!() : kind === 'resume' ? await options.sessions(history.signal, publish) : options.openSessions();
-      if (!dialog.open || generation !== request) return;
+      const page = kind === 'delete' ? await options.deleteSessions!(history.signal, publish) : kind === 'resume' ? await options.sessions(history.signal, publish) : options.openSessions();
+      if (history.signal.aborted || !dialog.open || generation !== request) return;
       items = page.items; notice = page.notice || '';
     } catch (error) {
-      if (!dialog.open || generation !== request) return;
+      if (history.signal.aborted || !dialog.open || generation !== request) return;
       failure(`Could not load sessions: ${error}. Use Refresh to retry.`);
     }
     if (dialog.open && generation === request) { loading = false; draw(); }
@@ -369,6 +369,8 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     if (mode === 'sessions' && sessionKind === 'delete') {
       if (selected !== index) { selected = index; selection(); }
       const request = generation, selectedId = matches[selected]?.id, previousIndex = selected;
+      historyRequest?.abort();
+      if (notice.startsWith('Loading ')) notice = 'Refresh to finish loading history.';
       deletionControls(true);
       // Only deletion nests a review over this retained page. Never reload the
       // catalog or rebuild surviving rows after an accepted/cancelled transaction.

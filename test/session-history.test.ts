@@ -78,6 +78,7 @@ test('Pi history retains catalog ordering, exact-file inspection, child exclusio
 function copilotFixture(options: {
   startGate?: Promise<void>; startError?: string; stopError?: string; capabilities?: Record<string, unknown>;
   list?: (packet: AcpPacket, receive: (packet: unknown) => void) => void;
+  delete?: (packet: AcpPacket, receive: (packet: unknown) => void) => void;
 } = {}) {
   const sent: { token: string; packet: AcpPacket }[] = [], started: string[] = [], stopped: string[] = [], errors: unknown[] = [];
   const connections = new Map<string, (packet: unknown) => void>();
@@ -101,6 +102,10 @@ function copilotFixture(options: {
           { sessionId: 'saved', cwd: '/fixture/project', title: 'Saved Copilot', updatedAt: '2026-10-16T12:00:00Z' },
           { sessionId: 'other', cwd: '/other/project', title: 'Not this project' },
         ] } });
+      }
+      else if (packet.method === 'session/delete') {
+        if (options.delete) options.delete(packet, receive);
+        else receive({ jsonrpc: '2.0', id: packet.id, result: {} });
       }
     },
     stop: async token => {
@@ -192,4 +197,40 @@ test('failed discovery shutdown retains ownership and blocks replacement until e
   await f.source.dispose();
   assert.equal(f.connections.size, 0);
   assert.equal(f.started.length, 1);
+});
+
+test('Copilot deletion verifies fresh exact-project membership and uses only the advertised agent method', async () => {
+  const f = copilotFixture({ capabilities: { loadSession: true, sessionCapabilities: { list: {}, delete: {} } } });
+  try {
+    assert.equal(f.source.supportsDeletion, false);
+    await f.source.initialize();
+    assert.equal(f.source.supportsDeletion, true);
+    await f.source.deleteSession('saved');
+    assert.deepEqual(f.sent.map(({ packet }) => packet.method), ['initialize', 'session/list', 'session/delete']);
+    assert.deepEqual(f.sent.at(-1)!.packet.params, { sessionId: 'saved' });
+    await assert.rejects(f.source.deleteSession('other'), /no longer listed in this project/);
+    assert.equal(f.sent.filter(({ packet }) => packet.method === 'session/delete').length, 1);
+  } finally { await f.source.dispose(); }
+});
+
+test('Copilot deletion finds paged history but refuses missing, unsupported and uncertain outcomes without retry', async () => {
+  const f = copilotFixture({ capabilities: { loadSession: true, sessionCapabilities: { list: {}, delete: {} } },
+    list: (packet, receive) => {
+      const cursor = (packet.params as { cursor?: string }).cursor;
+      receive({ jsonrpc: '2.0', id: packet.id, result: cursor
+        ? { sessions: [{ sessionId: 'saved', cwd: '/fixture/project' }] }
+        : { sessions: [], nextCursor: 'next' } });
+    },
+    delete: (_packet, _receive) => { f.source.dispose().catch(error => f.errors.push(error)); },
+  });
+  try {
+    await assert.rejects(f.source.deleteSession('saved'), /not confirmed.*retained.*nothing is retried/s);
+    assert.equal(f.sent.filter(({ packet }) => packet.method === 'session/list').length, 2);
+    assert.equal(f.sent.filter(({ packet }) => packet.method === 'session/delete').length, 1);
+  } finally { await f.source.dispose(); }
+  const unsupported = copilotFixture();
+  try {
+    await assert.rejects(unsupported.source.deleteSession('saved'), /does not advertise/);
+    assert.equal(unsupported.sent.some(({ packet }) => packet.method === 'session/delete'), false);
+  } finally { await unsupported.source.dispose(); }
 });

@@ -1,6 +1,6 @@
-# Session tree deletion: implementation reference
+# Session deletion: implementation reference
 
-**Status: implemented.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#session-deletion) retain prior execution records.
+**Status: Pi tree deletion implemented; shared deletion operations and capability-gated Copilot deletion are source implemented with unrun fixtures.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#session-deletion) retain prior execution records.
 
 Read the [user guide](../../../../docs/sessions.md#delete-session-tree),
 [shared vocabulary](../../nimrod-ui-vocabulary/SKILL.md) and
@@ -8,7 +8,29 @@ Read the [user guide](../../../../docs/sessions.md#delete-session-tree),
 and conversation writes; Nimrod owns permanent file deletion. No Pi worker,
 installed extension, runtime executable or chat command participates in deletion.
 
-## Specification and acceptance criteria
+## Consumer interface and Copilot deletion
+
+`src/session-deletion-operation.ts` owns the consumer-oriented `SessionDeletionOperation` and `SessionDeletionSource` interfaces. The named consumers are the Session sidebar trash buttons, Project bar trash control, selected-session palette/shortcut and repeated Delete sessions picker. A source binds a saved reference/title to an operation or returns `undefined` for unsupported identities. Operations supply integration-specific `label`/`detail`, a live `available()` projection with optional `unavailableReason`, and `run()` encompassing review, authoritative execution and shell reconciliation. Completion also includes cancellation; only authoritative tombstones prove removal. This port is separate from `SessionLifecycle`: persistence, connectivity, discovery, Restart and deletion are independent capabilities.
+
+- `src/pi/session-deletion.ts` binds exact saved file/ID to the existing `SessionDeletion.run` transaction. Its native tree review, writer coordination, partial results, quarantine and recovery remain unchanged.
+- `src/acp/session-deletion.ts::CopilotSessionDeletion` owns single-session deletion sequencing, duplicate-execution guards/availability, target participants, project-lifetime disposal and success tombstones. It depends on a narrow `CopilotDeletionHistory` port, not a conversation controller. `CopilotSessionHistory` implements that port through the project-owned discovery connection; no conversation is created/loaded or prompted to delete closed history.
+- `main.ts` composes the sources and supplies mounted-session effects, notice routing, owned lifecycle stop, draft/bookkeeping cleanup and navigation. UI consumers use the operation instead of inferring deletion from Pi Restart support. Source-qualified Copilot tombstones and existing Pi file tombstones remove only confirmed successes from retained picker rows and reject stale Resume selections.
+
+Copilot Delete requires the built-in durable profile and advertised ACP list/load/delete capabilities. Omitted, null or malformed capabilities are unsupported. The [ACP schema](https://agentclientprotocol.com/protocol/v1/schema) defines `sessionCapabilities.delete: {}`, `session/delete` with `{sessionId}` and an object response. This is one agent-owned session, **not** a Pi-style descendants tree. Custom ACP profiles remain unsupported even when named `copilot`; Nimrod neither reads nor removes Copilot's private session directories. Installed-Copilot support remains unverified and may depend on its version.
+
+Review immediately locks the matching mounted session without activating it or stopping work; cancellation unlocks with no process, draft, recency or navigation effects. The same retained review dialog uses a Copilot-specific title/description and one listed identity. Confirmation disables its actions/Escape and retains it through validation, observed owned-child exit, removal and reconciliation. This destructive-operation result gate is intentional: success cannot be inferred from request delivery or history disappearance.
+
+After confirmation, discovery checks fresh paginated history for the exact ID and canonical project cwd before stopping anything. Only the matching conversation's owned child is stopped; unrelated conversations and the discovery process remain live. Membership is checked again after shutdown, immediately before `session/delete`. Missing/foreign history, unsupported capability, repeated cursors or failed shutdown prevent dispatch. Native ACP IPC allows only the named method with an explicit nonempty session ID and an owned window/token; project-history membership remains the concrete discovery owner's responsibility, not a filesystem deletion privilege.
+
+An object success response permits removal of the matching sidebar entry, project layout/draft scope and runtime references. Cleanup uses existing conditional bookkeeping, per-scope native draft tombstones and connected-first navigation once; background deletion leaves selection unchanged and removing the last row creates nothing. Working activity is shown only after confirmation, not during review. No Send recency, focus replay, prompts or notifications are manufactured.
+
+Errors use the application notice strip for the explicit deletion operation. Failure or response uncertainty retains the saved row/draft and removes no picker row; there is no retry or automatic reconnection. A stopped row awaits explicit selection before reconnecting by exact `session/load`. Refresh reads authoritative history before another user-requested attempt. Unlike Pi, ACP has no persisted file quarantine: if an unknown deletion actually succeeded, a retained remembered row can fail an explicit later load; Nimrod never substitutes `session/new`. External writers are not coordinated and cross-process deletion semantics belong to the agent. Project disposal cancels pending review and prevents later validation/shutdown continuations from dispatching removal; already-dispatched deletion is not replayed or rolled back.
+
+Delete sessions now aggregates supported sources with the same incremental isolation/cancellation as Resume. Pi retains catalog ordering; Copilot retains its source ordering. On accepting a deletion, the picker retires unfinished discovery so later pages cannot rebuild survivor DOM, restore removed rows or steal selection during execution. Existing rows/query/scroll remain; Refresh explicitly finishes discovery. Capability changes and explicit history publications refresh deletion controls, not content-stream events.
+
+Authored, **not run**: `test/session-deletion-operation.test.ts` (concrete mapping, ordering, cancel, failure, unsupported/disposal), ACP client/history fixtures (capability/schema, exact-project paginated membership, uncertainty/no retries), shell fixtures (closed/open cleanup, owned stop, retained modal/picker, mixed Pi/Copilot, failure and unsupported controls), review wording reset, per-scope draft cleanup and native method validation. No installed-agent deletion, user-session mutation, native macOS/Linux acceptance or cross-process compatibility is established.
+
+## Pi tree specification and acceptance criteria
 
 Review a live descendants tree without launching Pi or activating the target, including working sessions. One confirmation authorizes stopping affected Nimrod-owned writers and deleting the root's current descendants, including those created during review/shutdown, without re-review. The initiating modal remains open through shutdown, removal and frontend reconciliation. Only confirmed successes clean state; unknown/partial outcomes require explicit guarded recovery.
 
@@ -20,6 +42,7 @@ Review a live descendants tree without launching Pi or activating the target, in
 | `src/deletion-review.ts` | Safe iterative tree rendering, loading/cancellation, focus/IME guards, retained modal and disabled actions during execution, stopping/deleting progress |
 | `src/main.ts` | Saved-row eligibility, window-targeted event subscription, reports, renderer locks, reconciliation and recovery |
 | `src/session-deletion.ts` | Ordered frontend events, synchronous ownership acknowledgement without Pi RPC, progress, partial-result reconciliation and quarantine |
+| `src/session-deletion-operation.ts`, `src/pi/session-deletion.ts`, `src/acp/session-deletion.ts` | Shared consumer port and concrete Pi/Copilot operations |
 | `src/pi/webview-client.ts` | Composer persistence/deletionLock handshake |
 | `src/pi/session-drafts.ts` | Confirmed-success file draft cleanup and matching last-session pointer |
 | `src-tauri/src/session_files.rs` | Bounded store scan, header lineage, fingerprints, revalidation and children-first unlink |
