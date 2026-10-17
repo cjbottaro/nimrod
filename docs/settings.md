@@ -40,7 +40,7 @@ Escape during a drag cancels resizing; the next Escape closes Settings.
 
 ## Diagnostics
 
-**Transcript debug logs** is off by default and replaces tool-only capture using the same existing switch. It records full native Pi/Copilot conversation events, prompts, responses/reasoning, tools, delivered history, configuration and requests/results in daily JSONL files under Nimrod’s XDG state directory. Logs can contain secrets; nothing is uploaded or automatically deleted. Existing opt-in values are retained; old tool-only files stay untouched. See [Transcript debug logs](tool-capture.md).
+**Transcript debug logs** is off by default and replaces tool-only capture using the same existing switch. It records full native Pi/Copilot conversation events, prompts, responses/reasoning, tools, delivered history, configuration and requests/results in rotating JSONL files under Nimrod’s XDG state directory. Logs can contain secrets; nothing is uploaded. While logging, files rotate at 25 MiB and oldest logs are deleted to keep at most 250 MiB across sources and seven days since last modification. Existing opt-in values are retained; agent history and old tool-only files stay untouched. See [Transcript debug logs](tool-capture.md).
 
 **Performance diagnostics** are off by default. Enable timing-only in-memory history in global Settings, then choose **Capture performance report** in the affected project window’s command palette when typing or scrolling feels slow. Capture can also be bound to a shortcut. The project window’s notice strip shows capture progress and the saved path; the command’s detail also retains that path. See [Performance reports](performance-diagnostics.md) for privacy, local storage and limitations.
 
