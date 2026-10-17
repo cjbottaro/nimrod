@@ -51,7 +51,10 @@ export class AcpSession {
   private captureConnectionId = crypto.randomUUID();
 
   constructor(send: (packet: AcpPacket) => void | Promise<void>, private ui: AcpSessionUi) {
-    this.client = new AcpClient(send, {
+    this.client = new AcpClient(packet => {
+      this.capture(typeof packet.method === 'string' ? `request.${packet.method}` : 'response', packet, this.client?.sessionId || '', '');
+      return send(packet);
+    }, {
       created: configuration => {
         ui.identified?.(text(configuration.sessionId));
         this.configure(configuration); this.state = { ...this.state, sessionUnavailable: false, status: 'Idle' }; this.controls(); this.publish();
@@ -64,13 +67,13 @@ export class AcpSession {
       selected: (kind, id) => { this.options = this.options.map(option => option.legacy === kind ? { ...option, current: id } : option); this.controls(); this.publish([]); },
       update: event => this.update(event),
       permission: (request, signal) => {
-        this.capture('session/request_permission', request, request.sessionId, text(request.toolCall.toolCallId));
         // A request carries a ToolCallUpdate, often only an ID. Apply it through
         // the same retained-state owner as transcript updates before presenting.
         const toolCall = this.updateTool(request.toolCall);
         return ui.permission({ ...request, toolCall }, signal);
       },
       disconnected: error => {
+        this.capture('connection.disconnected', { error: error.message }, this.client.sessionId || '', '');
         this.ended = true;
         this.configuration?.dispose();
         this.finishMessages();
@@ -110,7 +113,15 @@ export class AcpSession {
       if (!this.commands.some(item => item.name === command)) return 'This command was not advertised by the ACP agent. Nothing was sent; your draft was kept.';
     }
   }
-  receive(packet: unknown): void { this.client.receive(packet); }
+  receive(packet: unknown): void {
+    if (isRecord(packet) && packet.method !== 'session/update') {
+      const params = isRecord(packet.params) ? packet.params : {};
+      const tool = isRecord(params.toolCall) ? params.toolCall : {};
+      this.capture(`${this.client.phase === 'loading' ? 'history.' : ''}${text(packet.method) || 'response'}`,
+        packet, text(params.sessionId) || this.client.sessionId || '', text(tool.toolCallId));
+    }
+    this.client.receive(packet);
+  }
   disconnect(reason?: unknown): void { this.client.disconnect(reason); }
   async initialize(cwd: string, sessionId?: string): Promise<void> {
     await this.deadline(this.client.initialize());
@@ -129,6 +140,7 @@ export class AcpSession {
     try { return await Promise.race([task, timeout]); } finally { clearTimeout(timer); }
   }
   async handle(message: AcpRecord): Promise<void> {
+    this.capture('ui.action', message, this.client.sessionId || '', '');
     if (message.type === 'stop') { this.client.cancel(); return; }
     if (message.type === 'renderError') { this.ui.notice(text(message.error)); return; }
     if (message.type !== 'prompt') return;
@@ -183,7 +195,10 @@ export class AcpSession {
   }
   private receipt(id: string, outcome: 'accepted' | 'rejected' | 'unknown', error?: string): void { this.ui.publish({ type: 'submissionReceipt', id, outcome, error }); }
   private publish(rows?: DisplayMessage[]): void {
-    if (this.configuration && this.state.configurationOperations !== this.configuration.operations) this.state = { ...this.state, configurationOperations: this.configuration.operations };
+    if (this.configuration && this.state.configurationOperations !== this.configuration.operations) {
+      this.capture('ui.configuration', { operations: this.configuration.operations }, this.client.sessionId || '', '');
+      this.state = { ...this.state, configurationOperations: this.configuration.operations };
+    }
     const base = this.revision++;
     this.ui.publish({ type: 'snapshot', state: this.state, commands: this.commands, transcript: { base, revision: this.revision, ...(rows ? { rows } : {}) } });
     this.ui.changed();
@@ -199,6 +214,7 @@ export class AcpSession {
   }
   private update({ update }: AcpSessionUpdate): void {
     const kind = update.sessionUpdate;
+    this.capture(`${this.client.phase === 'loading' ? 'history.' : ''}${kind}`, update, this.client.sessionId || '', text(update.toolCallId));
     if (['agent_message_chunk', 'agent_thought_chunk', 'user_message_chunk'].includes(kind)) {
       if (!isRecord(update.content)) throw new Error('Invalid ACP message content');
       const content = update.content;
@@ -224,7 +240,6 @@ export class AcpSession {
       return;
     }
     if (kind === 'tool_call' || kind === 'tool_call_update') {
-      this.capture(kind, update, this.client.sessionId || '', text(update.toolCallId));
       this.updateTool(update);
       return;
     }
@@ -239,10 +254,10 @@ export class AcpSession {
     this.publish([]);
   }
   private capture(event: string, payload: unknown, sessionId: string, toolCallId: string): void {
-    if (this.client.phase === 'loading' || !this.ui.toolCapture?.enabled) return;
+    if (!this.ui.toolCapture?.enabled) return;
     const info = this.client.initialization?.agentInfo;
     this.ui.toolCapture?.append({ source: { backend: 'acp', agent: this.agent || 'unknown',
-      ...(isRecord(info) && typeof info.version === 'string' ? { version: info.version } : {}) }, sessionId, connectionId: this.captureConnectionId, toolCallId, event, payload });
+      ...(isRecord(info) && typeof info.version === 'string' ? { version: info.version } : {}) }, sessionId: sessionId || `connecting:${this.captureConnectionId}`, connectionId: this.captureConnectionId, toolCallId: toolCallId || undefined, event, payload });
   }
   private updateTool(update: AcpRecord): AcpRecord {
     if (typeof update.toolCallId !== 'string' || !update.toolCallId) throw new Error('Invalid ACP tool identity');

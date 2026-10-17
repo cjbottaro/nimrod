@@ -206,7 +206,7 @@ Compact permission previews are SDK-owned parsing through `copilot/permission-pr
 Background requests do not navigate/focus or approve. Stop, disconnect and Close
 retire exact connection-bound AbortSignals and settle/reject callbacks safely.
 Notifications reuse shared preference/focus/token checks; replay never alerts.
-Capture logs native `tool.*`, streamed tool-input deltas and permission request/completion payloads without SDK-to-Pi conversion. [Tool capture](tool-capture.md#copilot-sdk) owns the concrete mapping, early-identity handling, version metadata, backend-specific paths and capture-specific offline evidence; this does not establish installed-CLI/native acceptance.
+[Transcript debug logs](tool-capture.md#copilot-sdk) now record all native SDK events, including empty assistant messages, prose/reasoning, tool/input/permission lifecycle, distinguished history, duplicate deliveries, bridge requests/results and local UI/configuration markers without SDK-to-Pi conversion. That reference owns concrete mapping, early identity/version, storage compatibility and verification boundaries; expanded fixtures are unrun and do not establish installed-CLI/native acceptance.
 
 Plugin source/target is **`copilot-sdk`**, distinct from ACP. Existing Pi-only
 defaults/overrides remain Pi-only; exact-agent plugins rank above generic SDK

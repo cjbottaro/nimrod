@@ -232,11 +232,14 @@ test('production SDK bridge tool and permission packets reach the JSONL capture 
     await session.handle({ type: 'prompt', id: 'offline-capture', text: 'Offline fake SDK only; no command is executed' });
     await finished; await capture.flush();
     const records = lines.map(line => JSON.parse(line));
-    assert.deepEqual(records.map(record => record.event), ['tool.execution_start', 'permission.request', 'tool.execution_partial_result', 'tool.execution_complete']);
+    const tools = records.filter(record => record.event.startsWith('tool.') || record.event === 'permission.request');
+    assert.deepEqual(tools.map(record => record.event), ['tool.execution_start', 'permission.request', 'tool.execution_partial_result', 'tool.execution_complete']);
     const native = f.packets.filter(packet => packet.kind === 'event' && packet.event.type.startsWith('tool.') || packet.kind === 'permission')
-      .map(packet => packet.kind === 'permission' ? packet.request : packet.event);
-    assert.deepEqual(records.map(record => record.payload), native);
-    assert.ok(records.every(record => record.sessionId === 'fixture-sdk' && record.source.backend === 'copilot-sdk' && record.source.version === '1.0.98'));
+      .map(packet => packet.kind === 'permission' ? packet : packet.event);
+    assert.deepEqual(tools.map(record => record.payload), native);
+    assert.ok(tools.every(record => record.sessionId === 'fixture-sdk' && record.source.backend === 'copilot-sdk' && record.source.version === '1.0.98'));
+    assert.ok(records.some(record => record.event === 'request.prompt' && record.payload.text.includes('Offline fake SDK')));
+    assert.ok(records.some(record => record.event === 'session.idle'));
     assert.deepEqual(errors, []);
   } finally { session.disconnect('offline capture fixture complete'); capture.dispose(); await f.close(); }
 });

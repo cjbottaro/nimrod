@@ -187,7 +187,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       if (command === 'list_project_overrides') return [];
       if (command === 'plugin:window|is_focused') return options.focused?.() ?? true;
       if (command === 'plugin:clipboard-manager|write_text' && options.performanceControl?.copyError) throw new Error(options.performanceControl.copyError);
-      if (command === 'tool_capture_directory') return '/fixture/.local/state/nimrod/tool-captures';
+      if (command === 'tool_capture_directory') return '/fixture/.local/state/nimrod/transcript-logs';
       if (command === 'append_tool_capture') return;
       if (command === 'write_performance_report') {
         if (options.performanceControl?.writeError) throw new Error(options.performanceControl.writeError);
@@ -1085,7 +1085,7 @@ test('SDK tool capture uses the global setting and native append bridge for tool
     const captured = f.calls.filter(call => call.command === 'append_tool_capture').flatMap(call => (call.args.lines as string[]).map(line => JSON.parse(line)));
     assert.deepEqual(captured.map(record => record.event), ['assistant.tool_call_delta', 'tool.execution_start', 'permission.requested', 'permission.request']);
     assert.ok(captured.every(record => record.source.backend === 'copilot-sdk' && record.sessionId === 'sdk-fixture' && record.toolCallId === 'captured'));
-    assert.deepEqual(captured.at(-1).payload, request);
+    assert.deepEqual(captured.at(-1).payload, { kind: 'permission', id: 'capture-permission', request });
     assert.equal(prompt.value, 'keep SDK draft'); assert.equal(f.win.document.activeElement, prompt);
     assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, starts);
     assert.equal(f.calls.some(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'prompt'), false);

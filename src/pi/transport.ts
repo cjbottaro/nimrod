@@ -17,6 +17,8 @@ export class PiTransport {
   private sequence = 0;
   private failure?: Error;
   onEvent: (event: JsonRecord) => void = () => {};
+  /** Optional local diagnostics; never changes request correlation or ordered application. */
+  onTrace: (event: string, payload: JsonRecord) => void = () => {};
   constructor(private readonly write: (message: JsonRecord) => Promise<void>) {}
 
   receive(packet: Packet): void {
@@ -24,6 +26,7 @@ export class PiTransport {
     if (packet.kind === 'disconnected') { this.disconnect(packet.message); return; }
     const event = packet.value;
     if (event.type !== 'response') { this.onEvent(event); return; }
+    this.onTrace(`response.${String(event.command || 'unknown')}`, event);
     const pending = typeof event.id === 'string' ? this.pending.get(event.id) : undefined;
     if (!pending) return;
     this.pending.delete(event.id as string);
@@ -49,16 +52,21 @@ export class PiTransport {
     return new Promise((resolve, reject) => {
       const timer = timeoutMs > 0 ? setTimeout(() => {
         this.pending.delete(id);
+        this.onTrace('request.timeout', { id, type });
         reject(new RpcTransportError(`Pi did not acknowledge ${type}; acceptance may be unknown. Nothing was retried.`));
       }, timeoutMs) : undefined;
       this.pending.set(id, { type, resolve, reject, timer, onResponse });
-      void this.write({ ...fields, id, type }).catch(error => this.disconnect(String(error)));
+      const message = { ...fields, id, type };
+      this.onTrace(`request.${type}`, message);
+      void this.write(message).catch(error => this.disconnect(String(error)));
     });
   }
 
   async respond(fields: JsonRecord): Promise<void> {
     if (this.failure) throw this.failure;
-    try { await this.write({ ...fields, type: 'extension_ui_response' }); }
+    const message = { ...fields, type: 'extension_ui_response' };
+    this.onTrace('request.extension_ui_response', message);
+    try { await this.write(message); }
     catch (error) { this.disconnect(String(error)); throw error; }
   }
 

@@ -58,7 +58,11 @@ export class CopilotSession {
   private captureConnectionId = crypto.randomUUID();
   private runtimeVersion?: string;
   constructor(send: (message: BridgeRequest) => Promise<void>, private ui: CopilotSessionUi) {
-    this.connection = new CopilotConnection(send, packet => this.packet(packet), reason => {
+    this.connection = new CopilotConnection(message => {
+      this.capture(`request.${message.method}`, message);
+      return send(message);
+    }, packet => this.packet(packet), reason => {
+      this.capture('bridge.disconnected', { reason });
       this.ended = true; this.decisions.abort(); this.commandOperation?.abort(); this.configuration?.dispose(); this.usage?.dispose(); this.finish();
       this.state = { ...this.state, sessionUnavailable: true, busy: false, status: 'Disconnected' };
       this.publish(); ui.disconnected(reason);
@@ -89,7 +93,11 @@ export class CopilotSession {
     }
   }
   cancelCommands(): void { this.commandOperation?.abort(); }
-  receive(packet: unknown): void { this.connection.receive(packet); }
+  receive(packet: unknown): void {
+    if (record(packet) && !['event', 'connected', 'permission', 'input'].includes(String(packet.kind)))
+      this.capture(`bridge.${String(packet.kind)}`, packet);
+    this.connection.receive(packet);
+  }
   disconnect(reason: string): void { this.connection.disconnect(reason); }
   async initialize(sessionId?: string): Promise<void> {
     this.initialUsage = initialCopilotUsage(sessionId === undefined);
@@ -99,6 +107,7 @@ export class CopilotSession {
     if (this.state.sessionUnavailable) throw new Error('Copilot did not publish a connected session');
   }
   async handle(message: Record<string, unknown>): Promise<void> {
+    this.capture('ui.action', message);
     if (message.type === 'renderError') { this.ui.notice(String(message.error)); return; }
     if (message.type === 'stop') {
       this.commandOperation?.abort();
@@ -280,6 +289,10 @@ export class CopilotSession {
       if (!this.sessionId) { this.ui.identified(packet.sessionId); this.sessionId = packet.sessionId; }
       this.models = packet.models.filter(record).filter(model => typeof model.id === 'string' && typeof model.name === 'string' && (!record(model.policy) || model.policy.state === 'enabled'))
         .map(model => ({ ...model, supportedReasoningEfforts: Array.isArray(model.supportedReasoningEfforts) ? model.supportedReasoningEfforts.filter((value): value is string => typeof value === 'string' && !!value) : undefined })) as unknown as Model[];
+      if (this.ui.toolCapture?.enabled) {
+        const { events: _events, ...connection } = packet;
+        this.capture('bridge.connected', connection);
+      }
       this.replaying = true;
       try { for (const event of packet.events) this.event(event); this.finish(); }
       finally { this.replaying = false; }
@@ -297,7 +310,7 @@ export class CopilotSession {
       if (typeof packet.id !== 'string' || !record(packet.request)) throw new Error('Invalid Copilot decision request');
       const id = packet.id;
       const signal = this.decisions.signal;
-      if (packet.kind === 'permission') this.capture('permission.request', packet.request);
+      this.capture(`${packet.kind}.request`, packet);
       void this.ui.decision(packet.kind, packet.request, signal).then(async choice => {
         if (signal.aborted) return;
         if (!choice && packet.kind === 'input') {
@@ -311,6 +324,7 @@ export class CopilotSession {
   }
   private event(raw: unknown): void {
     if (!record(raw) || typeof raw.type !== 'string' || typeof raw.id !== 'string' || !raw.id || !record(raw.data)) throw new Error('Invalid Copilot SDK event');
+    this.capture(`${this.replaying ? 'history.' : ''}${raw.type}`, raw);
     if (this.events.has(raw.id)) return;
     this.events.add(raw.id);
     const data = raw.data, type = raw.type;
@@ -319,7 +333,6 @@ export class CopilotSession {
     if (type === 'session.compaction_complete' && !raw.agentId && !this.replaying && !this.state.sessionUnavailable) this.usage.refreshContext();
     const originLabel = typeof raw.agentId === 'string' && raw.agentId ? `Copilot agent ${raw.agentId}` : undefined;
     const string = (key: string) => typeof data[key] === 'string' ? data[key] as string : '';
-    if (type.startsWith('tool.') || ['assistant.tool_call_delta', 'permission.requested', 'permission.completed'].includes(type)) this.capture(type, raw);
     if (type === 'assistant.tool_call_delta') {
       const id = string('toolCallId'); if (!id || typeof data.inputDelta !== 'string') throw new Error('Invalid Copilot tool input identity or fragment');
       const key = `copilot:tool:${raw.agentId || 'main'}:${id}`, previous = this.message(key);
@@ -436,8 +449,8 @@ export class CopilotSession {
   }
   private cancelDecisions(): void { this.decisions.abort(); this.decisions = new AbortController(); }
   private capture(event: string, payload: Record<string, unknown>): void {
-    if (this.replaying || !this.ui.toolCapture?.enabled) return;
-    const data = event !== 'permission.request' && record(payload.data) ? payload.data : payload;
+    if (!this.ui.toolCapture?.enabled) return;
+    const data = record(payload.data) ? payload.data : record(payload.request) ? payload.request : payload;
     const permission = record(data.permissionRequest) ? data.permissionRequest : undefined;
     const toolCallId = typeof data.toolCallId === 'string' ? data.toolCallId : typeof permission?.toolCallId === 'string' ? permission.toolCallId : undefined;
     this.ui.toolCapture.append({ source: { backend: 'copilot-sdk', agent: 'copilot', ...(this.runtimeVersion ? { version: this.runtimeVersion } : {}) },
@@ -452,7 +465,10 @@ export class CopilotSession {
   private publish(rows?: DisplayMessage[]): void {
     if (this.replaying) return;
     this.updateStatusArea();
-    if (this.configuration && this.state.configurationOperations !== this.configuration.operations) this.state = { ...this.state, configurationOperations: this.configuration.operations };
+    if (this.configuration && this.state.configurationOperations !== this.configuration.operations) {
+      this.capture('ui.configuration', { operations: this.configuration.operations });
+      this.state = { ...this.state, configurationOperations: this.configuration.operations };
+    }
     const base = this.revision++;
     this.ui.publish({ type: 'snapshot', state: this.state, commands: this.commands, transcript: { base, revision: this.revision, ...(rows ? { rows } : {}) } }); this.ui.changed();
     this.configuration?.update();
