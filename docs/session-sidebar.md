@@ -2,7 +2,7 @@
 
 The Session sidebar shows open conversations and their activity. **Open** means retained here; **connected** means a live agent connection; **working** means agent activity. These are independent—a disconnected session can still be open.
 
-Click a row to select it. **⌘/Ctrl+B** hides/shows the sidebar without closing sessions. Each row has [Delete session tree and Close](sessions.md#delete-session-tree) controls.
+Click a row to select it. **⌘/Ctrl+B** hides/shows the sidebar without closing sessions. Each row has [Delete and Close](sessions.md#delete-session-tree) controls. Delete reviews a Pi tree or one saved Copilot session when supported; unsupported deletion stays disabled.
 
 ## Views
 

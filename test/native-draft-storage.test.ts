@@ -42,3 +42,17 @@ test('empty provisional Copilot promotion never stages an undefined draft', () =
   store.bindScope(copilotSessionScope('saved-id'));
   assert.deepEqual(changes, [['unassigned:empty', null]]);
 });
+
+test('confirmed Copilot removal tombstones only its saved scope, including a closed draft', () => {
+  const scope = copilotSessionScope('deleted'), sibling = copilotSessionScope('retained');
+  const changes: unknown[] = [];
+  const store = new SessionDrafts({ drafts: { [scope]: { draft: 'Remove me' }, [sibling]: { draft: 'Keep me' },
+    'file:/pi': { draft: 'Pi draft' } } }, undefined,
+  () => { throw new Error('whole-library persistence forbidden'); }, (key, value) => changes.push([key, value]));
+  store.deleteScope(scope);
+  assert.deepEqual(changes, [[scope, null]]);
+  assert.equal(store.select(scope), undefined);
+  assert.deepEqual(store.select(sibling), { draft: 'Keep me' });
+  assert.deepEqual(store.select('file:/pi'), { draft: 'Pi draft' });
+  assert.throws(() => store.deleteScope('unassigned:wrong'), /Invalid saved draft scope/);
+});

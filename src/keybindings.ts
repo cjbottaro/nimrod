@@ -5,7 +5,7 @@ export const ACTIONS = [
   { id: 'new-acp', label: 'New ACP session…', scope: 'project', defaults: [] },
   { id: 'acp-options', label: 'ACP session options…', scope: 'project', defaults: [] },
   { id: 'temporary', label: 'New temporary session', scope: 'project', defaults: ['primary+shift+n'] },
-  { id: 'delete', label: 'Delete session tree…', scope: 'project', defaults: ['primary+backspace'] },
+  { id: 'delete', label: 'Delete session / Pi session tree…', scope: 'project', defaults: ['primary+backspace'] },
   { id: 'delete-sessions', label: 'Delete sessions…', scope: 'project', defaults: ['primary+shift+backspace'] },
   { id: 'capture-performance', label: 'Capture performance report', scope: 'project', defaults: [] },
   { id: 'reload-card-plugins', label: 'Reload card plugins', scope: 'project', defaults: [] },

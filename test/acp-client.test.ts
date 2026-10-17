@@ -144,6 +144,42 @@ test('ACP failed, mismatched or disconnected loading never creates a replacement
   }
 });
 
+test('ACP deletion requires advertised support, an ID and a discovery-only connection', async () => {
+  for (const capabilities of [{}, { sessionCapabilities: { delete: null } }, { sessionCapabilities: { delete: true } }]) {
+    const f = fixture();
+    await f.initialize(capabilities);
+    assert.equal(f.client.supportsSessionDeletion, false);
+    await assert.rejects(f.client.deleteSession('saved'), /does not advertise/);
+    assert.equal(f.sent.length, 1);
+  }
+  const f = fixture();
+  await f.initialize({ sessionCapabilities: { delete: {} } });
+  await assert.rejects(f.client.deleteSession(' '), /requires a session ID/);
+  const deleting = f.client.deleteSession('saved');
+  assert.deepEqual(f.last('session/delete').params, { sessionId: 'saved' });
+  f.respond('session/delete', {});
+  await deleting;
+  assert.equal(f.client.phase, 'ready');
+  assert.equal(f.client.sessionId, undefined);
+  assert.equal(f.sent.some(packet => ['session/new', 'session/load', 'session/prompt'].includes(String(packet.method))), false);
+  const conversation = fixture();
+  await conversation.ready();
+  await assert.rejects(conversation.client.deleteSession('session-a'), /unavailable/);
+});
+
+test('ACP deletion rejects malformed or uncertain replies and never retries', async () => {
+  for (const outcome of ['malformed', 'disconnected', 'rejected']) {
+    const f = fixture();
+    await f.initialize({ sessionCapabilities: { delete: {} } });
+    const deleting = assert.rejects(f.client.deleteSession('saved'));
+    if (outcome === 'malformed') f.respond('session/delete', null);
+    else if (outcome === 'disconnected') f.client.disconnect('Lost response');
+    else f.client.receive({ jsonrpc: '2.0', id: f.last('session/delete').id, error: { code: -32601, message: 'Unsupported' } });
+    await deleting;
+    assert.equal(f.sent.filter(packet => packet.method === 'session/delete').length, 1);
+  }
+});
+
 test('ACP rejects unsupported protocol versions without creating a session', async () => {
   const f = fixture();
   const pending = f.client.initialize();

@@ -20,7 +20,7 @@ export interface SessionHistorySnapshot {
   readonly issues: readonly { source: string; label: string; message: string }[];
 }
 
-/** Cancel a consumer's wait, not the shared read-only discovery connection. */
+/** Cancel a consumer's wait, not the shared project-history connection. */
 export function abortable<T>(task: Promise<T>, signal: AbortSignal): Promise<T> {
   return new Promise((resolve, reject) => {
     const abort = () => reject(signal.reason ?? new Error('History request cancelled'));

@@ -86,9 +86,13 @@ export class SessionDrafts {
   }
   remember(last: LastSession): void { this.last = last; this.flush(); }
   deleteFile(path: string): void {
-    delete this.drafts[`file:${path}`];
     if (this.last?.path === path) this.last = undefined;
-    this.changed?.(`file:${path}`, null);
+    this.deleteScope(`file:${path}`);
+  }
+  deleteScope(key: string): void {
+    if (!key.startsWith('file:') && !key.startsWith('acp:copilot:')) throw new Error('Invalid saved draft scope');
+    delete this.drafts[key];
+    this.changed?.(key, null);
     if (!this.changed) this.flush();
   }
   recoverable(): { key: string; label: string }[] {

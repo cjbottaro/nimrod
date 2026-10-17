@@ -60,7 +60,17 @@ Restored entries start disconnected, including the remembered selected row. Clic
 
 Custom ACP profiles/sessions retain the earlier runtime-only Nimrod lifecycle. Close, reload or quit discards their transcript, draft and pop-outs. The agent may retain its own history; Nimrod does not delete it.
 
-Saved-history deletion and Restart remain Pi-only; custom-agent history discovery remains unavailable. The POC also lacks attachment sending, client-hosted filesystem/terminal services, login/elicitation flows and some protocol extensions. Agents must be able to execute their own tools without those client services. No Copilot SDK backend or in-place backend switching is implemented.
+Saved Copilot deletion is available only when the agent advertises the required support; see [Delete Copilot history](#delete-copilot-history). Restart remains Pi-only; custom-agent history discovery/deletion remains unavailable. The POC also lacks attachment sending, client-hosted filesystem/terminal services, login/elicitation flows and some protocol extensions. Agents must be able to execute their own tools without those client services. No Copilot SDK backend or in-place backend switching is implemented.
+
+## Delete Copilot history
+
+For the built-in Copilot profile, the row/Project bar trash controls, **Delete session…** / **⌘/Ctrl+Backspace**, and **Delete sessions…** / **⌘/Ctrl+Shift+Backspace** use Copilot's advertised ACP deletion method. This requires session listing, loading and deletion support in your installed version. Unsupported controls remain unavailable, and the cleanup picker omits unsupported Copilot history. Custom profiles remain unsupported.
+
+The review names **one saved Copilot session**, not a descendants tree. Cancel/Escape keeps everything without stopping work. Confirming retains the dialog while Nimrod stops that conversation's owned agent, checks fresh project-history membership and requests permanent deletion. It neither creates/loads a conversation nor sends a prompt to delete closed history. Unrelated sessions and project discovery stay running. Nimrod does not inspect or remove Copilot's private files itself, and cannot coordinate external writers.
+
+Only a confirmed response removes the session's sidebar entry, saved draft and runtime references. Failed shutdown, missing history or an unconfirmed result retains the row/draft and reports an error. A stopped row stays disconnected until explicit selection; nothing retries or creates a replacement conversation. If a response is lost, deletion may have happened: use Refresh to verify history before another explicit attempt. A remembered row whose history was actually removed can fail a later explicit load without losing its draft.
+
+The cleanup picker remains open after each review, retaining its query and surviving rows. Accepting a deletion freezes unfinished discovery; use Refresh to finish loading other pages/sources. These deletion fixtures have not been run; installed-Copilot deletion and native platform acceptance remain pending.
 
 ## Resume Copilot history
 

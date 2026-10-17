@@ -38,6 +38,7 @@ The narrow content-only guard is implemented; broader row/list invalidation rema
 - **Correctness traps:** include membership, ordering, attention, selection and action eligibility—not just title/text—in invalidation. Preserve local Send effects, minute/foreground timestamp refresh, deletion locks and focused/filtered rows; do not hide missing invalidation behind a debounce.
 - **Extend fixtures when changing:** row fields, lifecycle controls, filters or recency/navigation. Add unchanged-token projection/geometry/mutation counters and explicit tests for each new dependency, using the shell and sidebar/navigation/attention/browser suites named below. Distinguish ordinary token no-ops from genuine immediate transitions.
 - Shared `SessionListEntry`/`SessionStatus` now projects the same inputs for sidebar and history consumers. Keep history/open-row reconciliation at discovery/selection boundaries, not content-stream publications; discovery pages and errors must not call `touchTab` or create per-token layout saves. Existing unchanged-streaming IPC fixtures remain the guard.
+- Deletion-operation availability also depends on project discovery capabilities and transaction state, independent of Restart. Refresh row/Project bar eligibility on discovery initialization/disconnection/publication and deletion lock/execution/settlement, not token content. Confirmed Copilot cleanup uses the existing per-scope draft writer and conditional layout save; retained picker survivors are not rebuilt by late discovery.
 
 ## Validation target
 

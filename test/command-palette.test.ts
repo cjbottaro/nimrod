@@ -7,7 +7,7 @@ import { vscodeMruRanking, type CommandRanking } from '../src/command-ranking';
 import { stubDialogs } from './dialog-fixture';
 import { sessionIndicator, sessionTime, type SidebarState } from '../src/session-sidebar';
 
-function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }), projects: (() => Promise<PalettePage>) | CommandRanking = load, ranking?: CommandRanking, history?: PaletteOptions['sessions']) {
+function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }), projects: (() => Promise<PalettePage>) | CommandRanking = load, ranking?: CommandRanking, history?: PaletteOptions['sessions'], deletion?: PaletteOptions['deleteSessions']) {
   if (typeof projects !== 'function') { ranking = projects; projects = load; }
   const dom = new JSDOM(readFileSync('index.html', 'utf8'), { pretendToBeVisual: true });
   const win = dom.window; stubDialogs(win);
@@ -28,7 +28,7 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }),
         assert.equal(dialog.open, false); assert.equal(win.document.activeElement, opener);
         calls.push(`named:${name}`);
       }) },
-    ], sessions: history ?? load, deleteSessions: load, sessionDeleted: id => deleted.has(id), projects,
+    ], sessions: history ?? load, deleteSessions: deletion ?? load, sessionDeleted: id => deleted.has(id), projects,
     openSessions: () => ({ items: [{ id: 'open-demo', label: 'Offline demo', detail: 'Ready', run: () => { calls.push('open-demo'); } }] }),
   });
   const key = (key: string, init: KeyboardEventInit = {}) => input.dispatchEvent(new win.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
@@ -40,6 +40,33 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }),
   };
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+
+test('accepting incremental deletion freezes discovery without rebuilding survivor rows on late pages', async () => {
+  let request!: { signal: AbortSignal; publish(page: PalettePage): void; resolve(page: PalettePage): void };
+  let finish!: () => void;
+  const removing = new Promise<void>(resolve => { finish = resolve; });
+  const page: PalettePage = { items: [
+    { id: 'copilot', label: 'Copilot saved', async run() { await removing; f.deleted.add('copilot'); } },
+    { id: 'pi', label: 'Pi survivor', run() {} },
+  ], notice: 'Loading Copilot history…' };
+  const f = fixture(undefined, undefined, undefined, undefined,
+    (signal, publish) => new Promise(resolve => { request = { signal, publish, resolve }; }));
+  try {
+    const listing = f.palette.deleteSessions();
+    request.publish(page);
+    const survivor = f.list().children[1];
+    f.key('Enter');
+    assert.equal(request.signal.aborted, true);
+    request.publish({ items: [] }); request.resolve(page);
+    await listing;
+    assert.equal(f.list().children[1], survivor);
+    finish(); await tick();
+    assert.equal(f.list().firstElementChild, survivor);
+    assert.equal(f.list().children.length, 1);
+    assert.equal(f.dialog.open, true);
+    assert.match(f.status()!, /Refresh to finish/);
+  } finally { finish(); f.dispose(); }
+});
 
 test('incremental history obeys query selection, refresh cancellation and stale-page guards', async () => {
   const requests: { signal: AbortSignal; publish: (page: PalettePage) => void; resolve: (page: PalettePage) => void }[] = [];

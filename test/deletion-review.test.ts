@@ -29,6 +29,23 @@ const sessions = [
   { file: '/store/grandchild', title: '<script>unsafe</script>', parent: '/store/child' },
 ];
 
+test('single-session review uses integration wording and restores Pi tree wording on the next review', async () => {
+  const f = fixture();
+  try {
+    const copilot = f.controller.review({ id: 'saved', sessions: [{ file: 'saved', title: 'Copilot title' }],
+      title: 'Delete Copilot session', description: 'Delete only this saved session.' });
+    assert.equal(f.doc.querySelector('#deletion-title')!.textContent, 'Delete Copilot session');
+    assert.equal(f.doc.querySelector('#deletion-description')!.textContent, 'Delete only this saved session.');
+    f.doc.querySelector<HTMLButtonElement>('#deletion-cancel')!.click();
+    assert.equal(await copilot, false);
+    const pi = f.controller.review({ id: 'pi', sessions });
+    assert.equal(f.doc.querySelector('#deletion-title')!.textContent, 'Delete session tree');
+    assert.match(f.doc.querySelector('#deletion-description')!.textContent!, /descendants/);
+    f.doc.querySelector<HTMLButtonElement>('#deletion-cancel')!.click();
+    assert.equal(await pi, false);
+  } finally { f.dispose(); }
+});
+
 test('review can cover only the authorized deletion picker, with loading and higher-dialog priority retained', async () => {
   const f = fixture(other => other.id === 'command-palette');
   try {

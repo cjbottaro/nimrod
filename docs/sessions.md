@@ -52,6 +52,8 @@ Restart is unavailable for temporary sessions, before first save or during lifec
 
 The **trash icon left of Close** targets that row without switching to or resuming it. The Project bar trash icon and **Delete session tree…** / **⌘/Ctrl+Backspace** target the selected saved session.
 
+This section describes **Pi's tree deletion**. Built-in Copilot uses the same controls and shortcut as **Delete session…** when its agent advertises support, reviewing only one saved session; see [Delete Copilot history](acp.md#delete-copilot-history). Restart support is independent of deletion.
+
 1. Open deletion review.
 2. Inspect the selected session and its descendants, including any in other projects.
 3. Choose **Delete N sessions** to stop affected agents and permanently remove the tree, or Cancel/Escape to retain everything without stopping work.
@@ -69,11 +71,11 @@ Deletion supports Pi's session-directory environment override, not arbitrary loc
 
 ## Delete several conversations
 
-Use **Delete sessions…** / **⌘/Ctrl+Shift+Backspace** to search saved top-level project history, including open and closed sessions.
+Use **Delete sessions…** / **⌘/Ctrl+Shift+Backspace** to search supported saved project history, including open and closed sessions. Pi lists top-level trees; associated Copilot history is included when deletion is advertised.
 
-Enter/click opens tree review above the still-visible picker without activating the session. Cancel leaves the filter, rows and reading position unchanged. Confirmed-deleted rows disappear in place; selection advances to the next match or previous row at the end. Failed/retained rows stay. The picker remains open, even when empty; Refresh explicitly reloads history. Escape from the picker closes it.
+Enter/click opens the integration's review above the still-visible picker without activating the session. Cancel leaves the filter, rows and reading position unchanged. Confirmed-deleted rows disappear in place; selection advances to the next match or previous row at the end. Failed/retained rows stay. The picker remains open, even when empty; Refresh explicitly reloads history. Accepting a deletion freezes any unfinished discovery to preserve the rows during execution; Refresh finishes loading remaining history. Escape from the picker closes it.
 
-Each deletion includes descendants, not just the listed row.
+Pi deletion includes descendants, not just the listed row. Copilot deletion includes only the named saved session.
 
 ## Drafts and recovery
 

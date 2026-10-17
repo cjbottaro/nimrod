@@ -22,7 +22,7 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 | ACP session options… | Unbound by default |
 | New named session… | Cmd+Option+N / Ctrl+Alt+N |
 | New temporary session | Cmd/Ctrl+Shift+N |
-| Delete session tree… | Cmd/Ctrl+Backspace |
+| Delete session / Pi session tree… | Cmd/Ctrl+Backspace |
 | Delete sessions… | Cmd/Ctrl+Shift+Backspace |
 | Select theme… | Unbound by default |
 | MCP servers… | Unbound by default |

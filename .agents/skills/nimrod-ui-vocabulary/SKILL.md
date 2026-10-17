@@ -43,6 +43,7 @@ Resume and other saved-history actions live in the command palette, not a sideba
 | **Temporary session** | Explicit runtime-only conversation. Close is not deletion for saved sessions. |
 | **Delete sessions picker** | Repeated saved-history cleanup action, distinct from selected-session deletion. |
 | **Delete session tree** | Selected/row-targeted deletion review for a session and descendants, distinct from Close. |
+| **Delete session** | Copilot's capability-gated review/removal of one saved session, using the shared deletion controls without Pi tree semantics. |
 | **Restart session** | Stop and resume the selected saved session's process; not Pi `/reload`, a webview reload or New session. |
 
 [Projects/sessions](../features/references/projects-and-sessions.md), [navigation](../features/references/session-navigation.md), [sidebar views](../features/references/sidebar-attention.md) and [deletion](../features/references/session-deletion.md) own behavioral contracts. Internal `Tab`/`tabs` names don't imply visible tabs.
