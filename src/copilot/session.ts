@@ -87,13 +87,13 @@ export class CopilotSession {
         maxContextTokens: model.capabilities?.limits?.max_context_window_tokens })),
       model: () => this.model, effort: () => this.effort,
       mode: () => this.mode, contextTier: () => this.contextTier,
-      contextLimit: tier => this.model ? this.contextLimits.get(`${this.model}:${tier}`) : undefined,
+      contextLimit: (model, tier) => this.contextLimits.get(`${model}:${tier}`),
       availability: () => this.ended || this.state.sessionUnavailable ? 'unavailable' : this.canSubmit ? 'ready' : 'deferred',
       apply: (setting, value, current) => this.applyPreference(setting, value, current), changed: () => this.publish([]),
       error: message => this.ui.notice(`Configuration change failed: ${message}`),
     });
     this.usage = new CopilotUsageController(() => this.connection.request('usage', {}, 'reject'), () => this.publish([]),
-      () => this.connection.request('context', {}, 'reject'));
+      () => this.configuring ? Promise.resolve(null) : this.connection.request('context', {}, 'reject'));
     this.updateStatusArea();
   }
   get canSubmit(): boolean { return !this.ended && !this.state.sessionUnavailable && !this.state.busy && !this.configuring && !this.commandOperation; }
@@ -280,7 +280,10 @@ export class CopilotSession {
     if (!this.canSubmit) throw new ConfigurationDeferred();
     if (!['model', 'effort', 'mode', 'context-tier'].includes(setting)) throw new Error('This Copilot setting is unsupported.');
     if (!current()) throw new ConfigurationSuperseded();
-    this.configuring = true; this.publish([]);
+    this.configuring = true;
+    // Fence reads started before this mutation. Native model events may precede
+    // the runtime's committed context budget; refresh only after settlement.
+    this.usage.clearContext(); this.publish([]);
     try {
       const version = this.configurationVersion;
       const result = await this.connection.request('configure', { setting, value });
@@ -288,7 +291,10 @@ export class CopilotSession {
     } catch (error) {
       this.disconnect(`Copilot configuration was not confirmed: ${String(error)}. Reconnect explicitly to read the authoritative configuration.`);
       throw error;
-    } finally { this.configuring = false; this.publish([]); }
+    } finally {
+      this.configuring = false;
+      this.invalidateContext(); this.publish([]);
+    }
   }
   private applyConfigurationSnapshot(value: unknown): void {
     if (!record(value)) throw new Error('Invalid Copilot configuration snapshot');
@@ -306,7 +312,7 @@ export class CopilotSession {
   }
   private invalidateContext(): void {
     this.usage.clearContext();
-    if (!this.ended && !this.replaying && !this.state.sessionUnavailable) this.usage.refreshContext();
+    if (!this.ended && !this.replaying && !this.configuring && !this.state.sessionUnavailable) this.usage.refreshContext();
   }
   private packet(packet: Record<string, unknown>): void {
     if (packet.kind === 'identified') {
@@ -440,7 +446,7 @@ export class CopilotSession {
     } else if (type === 'session.model_deselected' && !raw.agentId) {
       this.configurationVersion++; this.model = undefined; this.effort = undefined; this.contextTier = undefined; this.invalidateContext(); this.publish([]);
     }
-    else if (type === 'session.usage_info' && !raw.agentId && typeof data.currentTokens === 'number' && typeof data.tokenLimit === 'number') {
+    else if (type === 'session.usage_info' && !raw.agentId && !this.configuring && typeof data.currentTokens === 'number' && typeof data.tokenLimit === 'number') {
       this.usage.context({ currentTokens: data.currentTokens, tokenLimit: data.tokenLimit });
     }
     else if (type === 'session.error') {

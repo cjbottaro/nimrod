@@ -15,7 +15,7 @@ const models = [
   { id: 'small', name: 'Small', supportedReasoningEfforts: ['low', 'high'] },
   { id: 'large', name: 'Large' },
 ];
-async function fixture(events: unknown[] = [], decision: CopilotSessionUi['decision'] = async () => undefined, autoUsage = true, fresh = false) {
+async function fixture(events: unknown[] = [], decision: CopilotSessionUi['decision'] = async () => undefined, autoUsage = true, fresh = false, catalog: unknown[] = models) {
   const sent: BridgeRequest[] = [], published: ConversationViewMessage[] = [], completed: boolean[] = [], captured: ToolCaptureRecord[] = [];
   const session: CopilotSession = new CopilotSession(async request => {
     sent.push(request);
@@ -29,7 +29,7 @@ async function fixture(events: unknown[] = [], decision: CopilotSessionUi['decis
   const reply = (method: string, result: unknown = null) => session.receive({ kind: 'result', id: last(method).id, result });
   const initializing = session.initialize(fresh ? undefined : 'saved-id');
   reply('initialize'); await flush();
-  session.receive({ kind: 'connected', sessionId: 'saved-id', events, models, model: { modelId: 'small', reasoningEffort: 'low' } });
+  session.receive({ kind: 'connected', sessionId: 'saved-id', events, models: catalog, model: { modelId: 'small', reasoningEffort: 'low' } });
   reply('connect'); await initializing; await flush();
   let sequence = 0;
   const event = (type: string, data: Record<string, unknown>, id = `event-${sequence++}`) => session.receive({ kind: 'event', event: { id, type, data } });
@@ -334,6 +334,39 @@ test('SDK busy configuration replaces one transcript operation and applies only 
   assert.equal(f.session.state.configurationOperations, f.session.configuration.operations);
   assert.equal(f.sent.some(request => request.method === 'prompt'), false);
   f.session.disconnect('fixture complete');
+});
+
+test('SDK context changes fence old reads and refresh only after native configuration settles', async () => {
+  const catalog = [{ ...models[0], capabilities: { limits: { max_context_window_tokens: 1_000_000 } } }];
+  const f = await fixture([], undefined, false, false, catalog);
+  try {
+    f.reply('usage', {}); f.reply('context', { currentTokens: 100_000, tokenLimit: 128_000 }); await flush();
+    assert.match(f.session.state.statusArea!.metrics!, /128k/);
+    f.event('session.compaction_complete', {});
+    const oldRead = f.last('context');
+    await f.session.selectPreference('context-window', async values => values[1]); await flush();
+    assert.equal(f.last('configure').value, 'long_context');
+    f.event('session.model_change', { newModel: 'small', contextTier: 'long_context' });
+    f.event('session.usage_info', { currentTokens: 100_000, tokenLimit: 128_000 });
+    f.reply('context', { currentTokens: 100_000, tokenLimit: 128_000 }); await flush();
+    assert.equal(f.last('context'), oldRead, 'no context RPC inside the configuration mutation');
+    assert.doesNotMatch(f.session.state.statusArea!.metrics!, /128k/);
+    assert.equal((await f.session.configuration.choices('context-tier'))[1].detail, '1M');
+    f.reply('configure', { model: { modelId: 'small', contextTier: 'long_context' } }); await flush();
+    assert.notEqual(f.last('context'), oldRead, 'settlement must refresh even when a native event outranked the result');
+    f.reply('context', { currentTokens: 100_000, tokenLimit: 1_000_000 }); await flush();
+    assert.match(f.session.state.statusArea!.metrics!, /10% \/ 1M/);
+    assert.equal(f.session.configuration.operations[0].phase, 'completed');
+    assert.equal((await f.session.configuration.choices('context-tier'))[1].detail, '1M');
+
+    await f.session.selectPreference('context-window', async values => values[0]); await flush();
+    f.event('session.model_change', { newModel: 'small', contextTier: 'default' });
+    f.reply('configure', { model: { modelId: 'small', contextTier: 'default' } }); await flush();
+    f.reply('context', { currentTokens: 100_000, tokenLimit: 128_000 }); await flush();
+    assert.match(f.session.state.statusArea!.metrics!, /128k/);
+    assert.equal((await f.session.configuration.choices('context-tier'))[1].detail, '1M');
+    assert.equal(f.sent.some(request => request.method === 'prompt'), false);
+  } finally { f.session.disconnect('fixture complete'); }
 });
 
 test('SDK dependent effort uses the pending target model and waits for its authoritative selection', async () => {
