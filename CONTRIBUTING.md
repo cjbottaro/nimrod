@@ -36,13 +36,13 @@ See [SDK implementation](.agents/skills/features/references/copilot-sdk.md).
 
 ## Worktree workflow
 
-Work on a dedicated branch/worktree under `.worktrees/`, never directly on `main`. After completing significant work, commit it on the task branch and merge into `main` without a separate approval step. After every worktree merge, run `mise exec -- cargo check --manifest-path src-tauri/Cargo.toml` from the primary checkout on `main`. Fix any reported compilation errors in a dedicated task worktree, commit and merge the fixes, and rerun on `main` until it passes. Never fix directly on `main`; report blockers if a safe fix is unavailable. Other tests, checks and builds remain request-only. Preserve unrelated changes and report merge blockers rather than forcing or discarding work. Do not push without permission. Retain the task branch and worktree after merging; remove them only when explicitly requested. “Cleanup” after merging means removing the task's worktree with `git worktree remove` and deleting its local branch with `git branch -d`. First confirm the branch is merged into `main` and the worktree has no uncommitted changes; never force removal or branch deletion, or discard unmerged or uncommitted work.
+Work on a dedicated branch/worktree under `.worktrees/`, never directly on `main`. After completing significant work, commit it on the task branch and merge into `main` without a separate approval step. After every worktree merge, run `mise run check` from the primary checkout on `main`. Fix any reported TypeScript or Rust compilation errors in a dedicated task worktree, commit and merge the fixes, and rerun on `main` until it passes. Never fix directly on `main`; report blockers if a safe fix is unavailable. Other tests, checks and builds remain request-only. Preserve unrelated changes and report merge blockers rather than forcing or discarding work. Do not push without permission. Retain the task branch and worktree after merging; remove them only when explicitly requested. “Cleanup” after merging means removing the task's worktree with `git worktree remove` and deleting its local branch with `git branch -d`. First confirm the branch is merged into `main` and the worktree has no uncommitted changes; never force removal or branch deletion, or discard unmerged or uncommitted work.
 
 Keep compiler targets, `node_modules/` and frontend output checkout-local; do not redirect Cargo targets into another checkout. Mise's shared machine-local sccache reuses compatible Rust dependency compilations; final linking and all checks are not necessarily cacheable. Inspect it with `mise exec -- sccache --show-stats`.
 
 ## Changelog and local development
 
-Keep the rapid local loop unchanged: task worktree → commit → merge into main → cargo check on main (fix and repeat until passing) → build when explicitly requested. Local builds and frequent merges need **no version bump, tag or release**. They may include changes beyond the latest public version; Git revision/dirty-state build metadata distinguishes those builds. Normal pushes to main do not publish releases.
+Keep the rapid local loop unchanged: task worktree → commit → merge into main → `mise run check` on main (fix and repeat until passing) → build when explicitly requested. Local builds and frequent merges need **no version bump, tag or release**. They may include changes beyond the latest public version; Git revision/dirty-state build metadata distinguishes those builds. Normal pushes to main do not publish releases.
 
 Maintain the root [CHANGELOG.md](CHANGELOG.md) as changes merge. Add meaningful user-visible features, behavior changes, fixes, removals and compatibility/installation changes under **Unreleased**, in the same task commit as the implementation. Use nonempty **Added / Changed / Fixed / Removed** groups; mark breaking changes and include migration instructions. Skip internal refactors, test maintenance and routine documentation/policy edits unless they materially affect users; agents report when no entry is warranted.
 
@@ -54,18 +54,17 @@ Packaged macOS releases and the Homebrew cask are Apple Silicon only; no Intel a
 
 ## Checks
 
-After every worktree merge, the required fast Rust feedback loop runs from the primary checkout on `main`:
+After every worktree merge, the required TypeScript and Rust compile checks run from the primary checkout on `main`:
 
 ```sh
-mise exec -- cargo check --manifest-path src-tauri/Cargo.toml
+mise run check
 ```
 
-Resolve compilation errors through the worktree workflow above and rerun until passing. This checks Rust without producing the final app binary; it does not execute tests or establish packaging/native acceptance. Cargo build scripts may stage ignored checkout-local dependencies.
+Resolve compilation errors through the worktree workflow above and rerun until passing. This runs `tsc --noEmit` and `cargo check` without producing the final app binary, executing tests or establishing packaging/native acceptance. Cargo build scripts may stage ignored checkout-local dependencies.
 
 All other checks and tests run only when explicitly requested:
 
 ```sh
-mise run check  # TypeScript and Rust compile checks
 mise run test   # Docs, TypeScript/UI tests, Rust formatting, Clippy and Rust tests
 
 # Include when validation of scrolling changes is requested; offline demo fixture only:
@@ -73,7 +72,7 @@ npx playwright install webkit  # one-time setup
 npm run test:browser
 ```
 
-The standard test includes local Markdown links/anchors, TypeScript/UI tests, Rust formatting, Clippy and fixture tests. `mise run check` runs `tsc --noEmit` and `cargo check` without the broader validation suite. Tests must not call paid models, compact live conversations, delete user sessions or modify upstream Pi/the sibling pi-gui extension. Automated browser tests are allowed; interactive browser debugging and launching/interrupting the user's app require approval.
+The standard test includes local Markdown links/anchors, TypeScript/UI tests, Rust formatting, Clippy and fixture tests. Tests must not call paid models, compact live conversations, delete user sessions or modify upstream Pi/the sibling pi-gui extension. Automated browser tests are allowed; interactive browser debugging and launching/interrupting the user's app require approval.
 
 Optional installed-Pi metadata smoke tests use disposable config/session directories and hand-authored history, with user resources disabled. They send no prompts:
 
