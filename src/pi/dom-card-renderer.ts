@@ -1,4 +1,4 @@
-import { definePresentationPlugin, isPresentationPlugin } from '../card-plugin-ui';
+import { definePresentationPlugin, isPresentationPlugin, constrainWebLinks } from '../card-plugin-ui';
 import { isSafeLink } from './safe-markdown';
 import { renderConsoleOutput, clearConsoleOutput, consoleOutputIsLiteral } from './console-output';
 import { renderLiteralOutput, clearLiteralOutput } from './literal-output';
@@ -37,7 +37,7 @@ export class DomCardController<Data> {
   private disposed = false;
   private data?: Readonly<Data>;
   private state: CardUpdateState = { streaming: false };
-  private readonly content = new WeakMap<HTMLElement, { text: string; format: string; source?: OutputSource }>();
+  private readonly content = new WeakMap<HTMLElement, { text: string; format: string; source?: OutputSource; webLinks?: boolean; baseUrl?: string }>();
   private outputData?: { executionOutput?: string; resultOutput?: string };
 
   /** Only core-owned presentation output can skip inspection of actual DOM text. */
@@ -224,11 +224,12 @@ export class DomCardController<Data> {
       const output = section.querySelector<HTMLElement>('.tool-output')!;
       output.setAttribute('aria-label', part.label);
       const format = part.format || 'text';
+      output.classList.toggle('tool-output-web-markdown', format === 'markdown' && part.webLinks === true);
       const previous = this.content.get(output);
       const source = this.outputData && sectionOutputSource(this.outputData, part.key, part.text);
       const append = previous?.source && source ? sameOutputAppend(previous.source, source) : undefined;
-      if (previous?.text !== part.text || previous.format !== format) {
-        this.content.set(output, { text: part.text, format, source });
+      if (previous?.text !== part.text || previous.format !== format || previous.webLinks !== part.webLinks || previous.baseUrl !== part.baseUrl) {
+        this.content.set(output, { text: part.text, format, source, webLinks: part.webLinks, baseUrl: part.baseUrl });
         if (format !== 'console') clearConsoleOutput(output);
         if (format !== 'text' || previous?.format !== 'text') clearLiteralOutput(output);
         if (format === 'console') renderConsoleOutput(output, part.text, append);
@@ -238,8 +239,11 @@ export class DomCardController<Data> {
             const span = doc.createElement('span'); span.className = line.startsWith('+') ? 'hljs-addition' : line.startsWith('-') ? 'hljs-deletion' : '';
             span.textContent = line; output.append(span, doc.createTextNode('\n'));
           }
-        } else if (format === 'markdown') output.replaceChildren(this.context.markdown(part.text));
-        else renderLiteralOutput(output, part.text, source);
+        } else if (format === 'markdown') {
+          const rendered = this.context.markdown(part.text);
+          if (part.webLinks) constrainWebLinks(rendered, part.baseUrl);
+          output.replaceChildren(rendered);
+        } else renderLiteralOutput(output, part.text, source);
       }
       this.applyOutputPolicy(output); this.outputs.set(part.key, output);
       const at = sections()[index]; if (at !== section) this.body.insertBefore(section, at || null);

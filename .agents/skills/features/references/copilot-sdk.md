@@ -156,8 +156,10 @@ Capture logs native `tool.*`/permission payloads only, without SDK-to-Pi convers
 
 Plugin source/target is **`copilot-sdk`**, distinct from ACP. Existing Pi-only
 defaults/overrides remain Pi-only; exact-agent plugins rank above generic SDK
-targets. Bundled Copilot shell/read/search helpers accept both explicit sources;
+targets. Bundled Copilot shell/read/search/web helpers accept both explicit sources;
 raw results/inputs remain recoverable. Plugins never decide permissions.
+`tool-result.ts` retains distinct content/detailed content and rich metadata;
+shared web adapters read the original SDK result directly, with no ACP envelope.
 Indexed row lookup, dirty-row publications, stable unchanged controls and the
 shell-signature guard prevent transcript scans/layout persistence per delta.
 

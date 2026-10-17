@@ -34,6 +34,9 @@ and are available while idle. Thinking appears only for a model that advertises
 efforts. Tool/reasoning cards, disclosures, scroll behavior, draft storage and
 notification preferences reuse the existing shell. Unknown rich results remain
 literal data; no tool payload grants additional permission.
+Copilot inspection/web cards reuse shared components, including cited web answers
+and fetched-content previews when supported by native results. The raw output
+remains available; links open only through an explicit action.
 
 Current limits: text-only input; no CLI slash-command emulation, Restart,
 steering, queue, Pi MCP inspector or in-place harness switching.

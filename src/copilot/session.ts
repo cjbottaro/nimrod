@@ -2,6 +2,7 @@ import { CopilotConnection, record, type BridgeRequest } from './connection';
 import type { DisplayMessage } from '../conversation-model';
 import type { ConversationViewMessage, ConversationViewState } from '../conversation-view-host';
 import type { ToolCaptureSink } from '../tool-capture';
+import { copilotToolResult } from './tool-result';
 
 interface Model { id: string; name: string; supportedReasoningEfforts?: string[]; capabilities?: { supports?: { reasoningEffort?: boolean } }; policy?: { state: string }; }
 export interface CopilotSessionUi {
@@ -138,6 +139,7 @@ export class CopilotSession {
       void this.ui.decision(packet.kind, packet.request, signal).then(async choice => {
         if (signal.aborted) return;
         if (!choice && packet.kind === 'input') {
+          this.stopped = true;
           await this.connection.request('cancel');
           return;
         }
@@ -192,7 +194,7 @@ export class CopilotSession {
         toolNative: { ...native, ...(raw.agentId ? { agentId: raw.agentId } : {}), [type]: data }, streaming: !complete, toolStatus: complete ? 'result' : 'running',
         ...(type === 'tool.shell_output' ? { output: (previous?.output || '') + string('text'), hasStreamingOutput: true } : {}),
         ...(type === 'tool.execution_partial_result' ? { output: string('partialOutput'), hasStreamingOutput: true } : {}),
-        ...(complete ? { isError: data.success === false, resultOutput: result ? toolResult(result) : typeof error?.message === 'string' ? error.message : JSON.stringify(data, null, 2) } : {}),
+        ...(complete ? { isError: data.success === false, resultOutput: result ? copilotToolResult(result) : JSON.stringify(error ?? data, null, 2) } : {}),
       });
     } else if (type === 'session.model_change' && !raw.agentId) {
       this.configurationVersion++;
@@ -266,13 +268,9 @@ export class CopilotSession {
 }
 function toolKind(name?: string): string {
   if (['bash', 'powershell', 'shell'].includes(name || '')) return 'execute';
-  if (['view', 'read_file'].includes(name || '')) return 'read';
-  if (['grep', 'glob'].includes(name || '')) return 'search';
+  if (['view', 'read_file', 'glob'].includes(name || '')) return 'read';
+  if (['grep', 'web_search'].includes(name || '')) return 'search';
+  if (name === 'web_fetch') return 'fetch';
   if (['edit', 'create', 'apply_patch'].includes(name || '')) return 'edit';
   return 'other';
-}
-function toolResult(result: Record<string, unknown>): string {
-  const text = typeof result.detailedContent === 'string' ? result.detailedContent : typeof result.content === 'string' ? result.content : '';
-  const rich = Object.fromEntries(Object.entries(result).filter(([key, value]) => !['content', 'detailedContent'].includes(key) && value !== undefined));
-  return Object.keys(rich).length ? `${text}\n\nCopilot result metadata:\n${JSON.stringify(rich, null, 2)}` : text;
 }

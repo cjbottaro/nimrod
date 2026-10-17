@@ -27,6 +27,10 @@ One mounted card per invocation survives placement/lifecycle updates, preserving
 
 Each Pi built-in selects its own metadata-matched mounted plugin; [card plugins](card-plugins.md#built-in-tool-dogfooding) owns the IDs, matching and implementation map. Read summaries can show requested line ranges, and write bodies show literal input-backed **Requested content** alongside Pi output, not a claim of successful execution. File/search/list output remains literal. The shared generic fallback/override remains available for unknown/custom tools.
 
+## Web Markdown sections
+
+[Copilot web cards](card-plugins.md#copilot-web-cards) dogfood shared Markdown sections for search answers/sources and known fetched pages. Optional API-v2 `CardSection.webLinks`/`baseUrl` constrain links to HTTP(S) and resolve them against the page rather than project files, without changing default Pi/local Markdown. Opt-in web Markdown uses regular text typography and existing keyed viewports/caps; link policy joins text/format in update invalidation. Original flattened output remains in Raw output when transformed. Native schema/citation/redirect/partial/error parsing and compact fetch permissions are owned by the plugin reference. New unit/shell/offline-browser fixtures are unrun; native/platform acceptance remains pending.
+
 ## Console-style command output
 
 - The dedicated `nimrod.bash` plugin for Bash/shell/terminal cards (including normalized names such as `functions.bash`) opts into `CardSection.format: 'console'` for both execution and result sections. Other default tools, raw fallback and exact Raw output recovery remain literal. Plugins may explicitly request console sections through the shared presentation adapter; no private bundled renderer capability.

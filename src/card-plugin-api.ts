@@ -15,7 +15,12 @@ export interface ToolCardData {
   isError?: boolean;
   toolStatus?: 'running' | 'finished' | 'result';
 }
-export interface CardSection { key: string; label: string; text: string; format?: 'text' | 'markdown' | 'diff' | 'console'; }
+export interface CardSection {
+  key: string; label: string; text: string; format?: 'text' | 'markdown' | 'diff' | 'console';
+  /** Markdown-only: keep HTTP(S) links, resolving relative URLs only against a supplied web base. */
+  webLinks?: boolean;
+  baseUrl?: string;
+}
 export interface CardPresentation {
   title: string;
   preview?: string;

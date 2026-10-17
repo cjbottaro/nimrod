@@ -32,6 +32,7 @@ const config = () => ({
   onUserInputRequest: request => decision('input', request),
 });
 function event(value) {
+  if (!value.agentId && ['session.idle', 'session.error'].includes(value.type)) cancelDecisions();
   if (replaying) buffered.push(value);
   else send({ kind: 'event', event: value });
 }
