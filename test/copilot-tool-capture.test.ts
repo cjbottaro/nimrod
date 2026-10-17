@@ -21,6 +21,7 @@ function fixture(enabled = true) {
   capture.setEnabled(enabled);
   const session: CopilotSession = new CopilotSession(async request => {
     sent.push(request);
+    if (request.method === 'usage') queueMicrotask(() => session.receive({ kind: 'result', id: request.id, result: {} }));
     if (request.method === 'decision') queueMicrotask(() => session.receive({ kind: 'result', id: request.id, result: null }));
   }, {
     publish() {}, changed() {}, identified() {}, disconnected() {}, completed() {}, notice: message => errors.push(message),

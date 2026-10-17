@@ -15,9 +15,12 @@ const models = [
   { id: 'small', name: 'Small', supportedReasoningEfforts: ['low', 'high'] },
   { id: 'large', name: 'Large' },
 ];
-async function fixture(events: unknown[] = [], decision: CopilotSessionUi['decision'] = async () => undefined) {
+async function fixture(events: unknown[] = [], decision: CopilotSessionUi['decision'] = async () => undefined, autoUsage = true) {
   const sent: BridgeRequest[] = [], published: ConversationViewMessage[] = [], completed: boolean[] = [], captured: ToolCaptureRecord[] = [];
-  const session = new CopilotSession(async request => { sent.push(request); }, {
+  const session: CopilotSession = new CopilotSession(async request => {
+    sent.push(request);
+    if (autoUsage && request.method === 'usage') queueMicrotask(() => session.receive({ kind: 'result', id: request.id, result: {} }));
+  }, {
     publish: message => published.push(message), changed() {}, identified() {}, disconnected() {}, notice() {},
     completed: failed => completed.push(failed), decision,
     toolCapture: { enabled: true, append: record => captured.push(structuredClone(record)) },
@@ -27,7 +30,7 @@ async function fixture(events: unknown[] = [], decision: CopilotSessionUi['decis
   const initializing = session.initialize('saved-id');
   reply('initialize'); await flush();
   session.receive({ kind: 'connected', sessionId: 'saved-id', events, models, model: { modelId: 'small', reasoningEffort: 'low' } });
-  reply('connect'); await initializing;
+  reply('connect'); await initializing; await flush();
   let sequence = 0;
   const event = (type: string, data: Record<string, unknown>, id = `event-${sequence++}`) => session.receive({ kind: 'event', event: { id, type, data } });
   return { session, sent, published, completed, captured, last, reply, event };
@@ -47,7 +50,7 @@ test('SDK replay is read-only and final content wins over buffered deltas', asyn
   f.event('assistant.message_delta', { messageId: 'answer', deltaContent: 'Saved answer' });
   const answer = f.session.state.messages[1].content;
   assert.ok(Array.isArray(answer)); assert.equal(answer[0].text, 'Saved answer');
-  assert.deepEqual(f.sent.map(request => request.method), ['initialize', 'connect']);
+  assert.deepEqual(f.sent.map(request => request.method), ['initialize', 'connect', 'usage']);
   f.session.disconnect('fixture complete');
 });
 
@@ -127,11 +130,11 @@ test('SDK status publishes root usage and reconciles selector capabilities witho
   const f = await fixture();
   const initial = f.session.state.statusArea!;
   assert.ok(initial.capabilities.metrics);
-  assert.equal(initial.metrics, undefined);
+  assert.equal(initial.metrics, 'cost unavailable');
   assert.equal(initial.capabilities.queue, undefined);
-  f.event('session.usage_info', { currentTokens: 0, tokenLimit: 0 });
+  f.event('session.usage_info', { currentTokens: 31875, tokenLimit: 125000 });
   const reported = f.session.state.statusArea!;
-  assert.equal(reported.metrics, '0 / 0 context tokens');
+  assert.equal(reported.metrics, 'cost unavailable · 25.5% / 125k');
   assert.equal(reported.controls, initial.controls, 'usage changes do not rebuild configuration controls');
   f.session.receive({ kind: 'event', event: { id: 'child-usage', agentId: 'child', type: 'session.usage_info', data: { currentTokens: 999, tokenLimit: 999 } } });
   assert.equal(f.session.state.statusArea, reported, 'child usage cannot overwrite root usage');
@@ -147,9 +150,40 @@ test('SDK status publishes root usage and reconciles selector capabilities witho
   assert.equal(f.session.state.statusArea!.controls[1].disabled, true);
   assert.equal(f.session.configuration.get('model'), undefined);
   assert.equal(f.session.configuration.get('effort'), undefined);
+  assert.equal(f.session.state.statusArea!.metrics, 'cost unavailable', 'model changes retire the old context denominator');
+  f.event('session.usage_info', { currentTokens: 31875, tokenLimit: 125000 });
   f.session.disconnect('fixture complete');
   assert.equal(f.session.state.statusArea!.metrics, reported.metrics);
   assert.ok(f.session.state.statusArea!.controls.every(control => control.disabled));
+});
+
+test('SDK usage consumes aggregate totals including child activity and never treats a request multiplier as USD', async () => {
+  const f = await fixture([], undefined, false);
+  try {
+    assert.equal(f.last('usage').method, 'usage', 'connection reads totals for new/resumed sessions');
+    f.reply('usage', { totalNanoAiu: 12_300_000_000, aiCreditsStatus: 'complete' }); await flush();
+    f.event('session.usage_info', { currentTokens: 31875, tokenLimit: 125000 });
+    assert.equal(f.session.state.statusArea!.metrics, '~$0.123 · 25.5% / 125k');
+    assert.match(f.session.state.statusArea!.metricsTitle!, /12\.3 AIC/);
+    const status = f.session.state.statusArea!;
+    f.session.receive({ kind: 'event', event: { id: 'child-context', agentId: 'child', type: 'session.usage_info', data: { currentTokens: 999, tokenLimit: 999 } } });
+    assert.equal(f.session.state.statusArea, status);
+    const child = { id: 'child-accounting', agentId: 'child', type: 'assistant.usage', data: { model: 'child', cost: 999, inputTokens: 900000 } };
+    f.session.receive({ kind: 'event', event: child });
+    f.session.receive({ kind: 'event', event: child });
+    f.event('assistant.usage', { model: 'small', cost: 999, inputTokens: 800000 });
+    assert.equal(f.sent.filter(request => request.method === 'usage').length, 2, 'coalesce reads, including duplicate IDs');
+    f.reply('usage', { totalNanoAiu: 999_000_000_000, aiCreditsStatus: 'complete' }); await flush();
+    assert.equal(f.session.state.statusArea!.metrics, status.metrics, 'stale totals cannot flash while a newer read is owed');
+    f.reply('usage', { totalNanoAiu: 24_600_000_000, aiCreditsStatus: 'partial' }); await flush();
+    assert.equal(f.session.state.statusArea!.metrics, '≥$0.246 · 25.5% / 125k');
+    assert.equal(f.session.state.statusArea!.controls, status.controls);
+    assert.match(f.session.state.statusArea!.metricsTitle!, /24\.6 AIC reported subtotal/);
+    f.event('session.idle', {});
+    assert.equal(f.sent.filter(request => request.method === 'usage').length, 4, 'idle reconciles final accounting');
+    assert.equal(f.sent.some(request => ['prompt', 'configure'].includes(request.method)), false);
+    assert.deepEqual(f.completed, []);
+  } finally { f.session.disconnect('fixture complete'); }
 });
 
 test('SDK busy configuration replaces one transcript operation and applies only the latest model at idle', async () => {

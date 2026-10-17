@@ -605,12 +605,13 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       renderMainActivity(mainActivityDom, presentation);
       renderSubagentActivity(subagentActivityDom, presentation.subagents);
     }
-    if (!before || previousStatus?.metrics !== status?.metrics || previousStatus?.capabilities !== capabilities) {
+    if (!before || previousStatus?.metrics !== status?.metrics || previousStatus?.metricsTitle !== status?.metricsTitle || previousStatus?.capabilities !== capabilities) {
       const metrics = capabilities?.metrics ? status?.metrics : undefined;
       const label = capabilities?.metrics?.label || '';
-      sessionMetrics.title = label; sessionMetrics.setAttribute('aria-label', label);
+      const title = capabilities?.metrics ? status?.metricsTitle || label : label;
+      sessionMetrics.title = title; sessionMetrics.setAttribute('aria-label', title);
       sessionMetrics.hidden = metrics === undefined;
-      sessionMetrics.textContent = metrics || '';
+      if (sessionMetrics.textContent !== (metrics || '')) sessionMetrics.textContent = metrics || '';
     }
     if (!before || previousStatus?.information !== status?.information || previousStatus?.capabilities !== capabilities) {
       extensionActivity.replaceChildren();
@@ -829,7 +830,8 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   function activityChanged(before: State, after: State): boolean {
     return before.busy !== after.busy || before.status !== after.status || before.queue !== after.queue
       || before.statusArea?.capabilities !== after.statusArea?.capabilities || before.statusArea?.subagents !== after.statusArea?.subagents
-      || before.statusArea?.information !== after.statusArea?.information || before.statusArea?.metrics !== after.statusArea?.metrics;
+      || before.statusArea?.information !== after.statusArea?.information || before.statusArea?.metrics !== after.statusArea?.metrics
+      || before.statusArea?.metricsTitle !== after.statusArea?.metricsTitle;
   }
 
   function submit(mode: SubmissionMode = "normal"): void {

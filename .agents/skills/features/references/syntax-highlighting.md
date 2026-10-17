@@ -62,7 +62,7 @@ source preservation, HTML safety and actions. `test/native-view.test.ts` verifie
 user vs assistant/reasoning policy across strings and blocks, pending steering,
 incremental label changes and detected-language snapshot payloads.
 
-Run `mise run check` and offline `npm run test:browser`. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow).
+Run `mise run test` and offline `npm run test:browser`. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow).
 
 Shared portable frontend behavior, not a native integration: macOS visual
 acceptance and Linux/Windows webview verification remain user/platform checks;

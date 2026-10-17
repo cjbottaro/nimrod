@@ -42,4 +42,4 @@ No new native report, controlled before/after comparison or packaged reveal-late
 - `test/shell.test.ts`: foreground/background streaming retains zero unchanged-state IPC, background attention stays live, hidden DOM stays stale until synchronous reveal.
 - `test/browser/hidden-session-painting.spec.ts`: offline WebKit DOM-mutation counter, real-layout reader/follow and two inspected outputs, latest hidden content, retained drafts and repeated switching. Existing workspace/steering/queued/plugin suites remain required regressions.
 
-Tests/checks/builds were not run for this implementation. When requested, run `mise run check` and `npm run test:browser`; then compare packaged responsiveness and reveal latency under representative background-session load. No app/window interruption or live model requests are authorized by this catalogue.
+Tests/checks/builds were not run for this implementation. When requested, run `mise run test` and `npm run test:browser`; then compare packaged responsiveness and reveal latency under representative background-session load. No app/window interruption or live model requests are authorized by this catalogue.

@@ -190,8 +190,8 @@ sessions only. Plan/autopilot selection fails explicitly without changing mode,
 creating a replacement or prompting; live mode changes outside that supported
 boundary disconnect. Root error/idle/configuration events cannot be inferred
 from a child-agent event. Child transcript rows carry an explicit origin label.
-Reported context-token usage can be shown; no
-invented costs/queue capabilities.
+[Usage metrics](#usage-metrics) expose reported context and SDK aggregate AI-credit
+accounting with an estimated USD equivalent; no invented costs/queue capabilities.
 
 `onEvent` is registered before SDK create/resume so early events are buffered.
 Permission and user-input callbacks await explicit choices inside their owning
@@ -216,6 +216,65 @@ raw results/inputs remain recoverable. Actual native `completion.error.message` 
 shared web adapters read the original SDK result directly, with no ACP envelope.
 Indexed row lookup, dirty-row publications, stable unchanged controls and the
 shell-signature guard prevent transcript scans/layout persistence per delta.
+
+## Usage metrics
+
+**Status: source-implemented; new/updated fixtures unrun.** `src/copilot/usage.ts`
+provides the narrow concrete `CopilotUsage` snapshot and session-bound metadata
+consumer, separate from model configuration. The shared Status area only consumes
+`StatusAreaSnapshot.metrics` / `metricsTitle`, not SDK billing fields.
+
+- The private bridge `usage` read calls `session.rpc.usage.getMetrics()` and returns
+  only `totalNanoAiu` and `aiCreditsStatus`. SDK totals include the main agent and
+  subagents and restore accumulated usage on Resume; never sum ephemeral
+  `assistant.usage` events or add snapshot totals together. The premium-request
+  multiplier (`assistant.usage.cost` / `totalPremiumRequestCost`) is not currency.
+- Refresh after connection, any live root/child `assistant.usage` event, root idle/error
+  settlement and completed command invocation/context clear. Replay never issues
+  per-event reads. No token-chunk polling, quota queries or new provider/model work.
+  Frontend reads coalesce single-flight, discard results predating a newer usage
+  trigger and make one owed follow-up read. The bridge also shares its SDK promise
+  so an optional frontend timeout cannot pile up underlying metadata RPCs.
+- The usage request alone uses the connection's `reject` timeout policy: remove
+  its pending ID and mark credit accounting unavailable after 20 seconds, without
+  disconnecting chat. Late results are ignored. SDK method errors likewise affect
+  only optional metrics; actual transport/write failures retain existing teardown.
+  Every mutation retains the original uncertain-outcome disconnect/no-replay policy.
+- Normalize finite nonnegative amounts. `complete` plus an explicit numeric amount
+  displays `~$0.123`; an explicit complete zero is `~$0.000`. `partial` or unknown
+  coverage with a positive subtotal displays a conservatively rounded-down lower
+  bound such as `≥$0.123`. Explicit partial zero remains qualified by `≥`. Missing
+  amounts, unavailable status, invalid numbers or zero without reported coverage
+  display `cost unavailable`, never a fabricated zero.
+- Conversion is `AIC = totalNanoAiu / 1e9`, `USD equivalent = AIC * 0.01`, based on
+  the published [SDK usage guide](https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/usage-and-billing)
+  and [GitHub credit pricing](https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing).
+  This is usage value, not an invoice or necessarily additional charges against
+  an included subscription allowance. No per-model token-rate reconstruction.
+  Tooltip/accessibility detail retains AIC (up to nano-unit precision), coverage,
+  conversion meaning and unrounded context counters; display rounding is separate.
+- Only root `session.usage_info` supplies context: percentage is
+  `currentTokens / tokenLimit * 100`, denominator uses decimal compact notation
+  (`125k`, `1.1M`). These are current context counters, never cumulative billed or
+  child-agent tokens. Zero/unknown limit displays `— / —`; ignore invalid/negative
+  updates and never clamp a legitimate reported percentage above 100. Model
+  change/deselection/context clear invalidates the old context without resetting
+  session-wide spending. Do not invent an Auto compact setting from events.
+- Normalized snapshots and unchanged control arrays retain references. Tooltip-only
+  changes invalidate the metrics section even when rounded text is unchanged,
+  without replacing that text node. Existing paint suspension/hidden catch-up,
+  draft/focus/scroll owners and sidebar bookkeeping remain unchanged. Disposal
+  suppresses late results; disconnected views keep only their last reported data.
+
+Code: `src/copilot/usage.ts`, `status-area.ts`, `session.ts`, the private bridge
+read and native method allowlist, plus the generic `metricsTitle` field/render
+dependency. Fixtures: `test/copilot-usage.test.ts` covers formatting, partial/missing
+coverage, coalescing/stale responses, errors/disposal and optional timeout isolation;
+SDK/production-bridge/native allowlist fixtures cover integration and aggregate
+filtering. Renderer/offline browser fixtures cover exact detail, hidden catch-up,
+retained nodes and the displayed `~$0.123 · 25.5% / 125k` example. **They have not
+been run**; real CLI accounting, resumed totals and macOS/Linux visuals remain
+unverified. Source documentation is API/rate evidence, not runtime acceptance.
 
 ## Close and Delete
 

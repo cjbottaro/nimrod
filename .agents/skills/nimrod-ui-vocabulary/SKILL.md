@@ -91,7 +91,7 @@ A **card** needn't have a visible rectangle. A **disclosure** expands/collapses;
 - **MCP inspector** — read-only session-server inspection page in the command palette, with selected-server details and Refresh. [MCP inspector](../features/references/mcp-inspector.md) owns its contract.
 - **Model picker / thinking-level picker** — session configuration selection pages; “effort” is a thinking-level search alias.
 - **Activity indicator** — spinner/dot with activity context; specify main agent/subagent/tool/reasoning when ambiguous.
-- **Usage metrics** — Pi-reported cost/context estimates.
+- **Usage metrics** — harness-reported context and cost/credit usage, formatted by its integration.
 - **Prompt field / Send/Stop button / keyboard hints** — composer input, primary action and delivery hints.
 - **Session notices** — session-owned operational feedback at the top of its conversation area, above and outside the transcript pane, aligned with its gutters. Visible only in that session; not transcript entries or sidebar indicators.
 - **Application notice strip** (or **notice strip**) — shell-owned window/application feedback 48 CSS pixels below the viewport top, including Settings/dialogs. It reserves space and remains accessible through the active dialog's top layer. [Error presentation](../features/references/error-presentation.md) owns placement, routing and lifecycle for both notice surfaces.

@@ -5,8 +5,8 @@ import test from 'node:test';
 import { CopilotSession } from '../src/copilot/session';
 import { createToolCapture } from '../src/tool-capture';
 
-function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) => void, modelState = 'resolved', defaults: Record<string, unknown> = { model: 'small', effortLevel: 'low' }) {
-  const child = spawn(process.execPath, ['--import', './test/fixtures/copilot-sdk-register.mjs', 'copilot/bridge.mjs', '/fixture/copilot', '/fixture/project'], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, NIMROD_FIXTURE_COPILOT_MODE: mode, NIMROD_FIXTURE_COPILOT_MODEL_STATE: modelState, NIMROD_FIXTURE_COPILOT_DEFAULTS: JSON.stringify(defaults) } });
+function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) => void, modelState = 'resolved', defaults: Record<string, unknown> = { model: 'small', effortLevel: 'low' }, usageState = 'complete') {
+  const child = spawn(process.execPath, ['--import', './test/fixtures/copilot-sdk-register.mjs', 'copilot/bridge.mjs', '/fixture/copilot', '/fixture/project'], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, NIMROD_FIXTURE_COPILOT_MODE: mode, NIMROD_FIXTURE_COPILOT_MODEL_STATE: modelState, NIMROD_FIXTURE_COPILOT_DEFAULTS: JSON.stringify(defaults), NIMROD_FIXTURE_COPILOT_USAGE_STATE: usageState } });
   const packets: Record<string, any>[] = [], pending = new Map<string, { resolve(value: any): void; reject(error: Error): void }>();
   const waiting = new Set<{ predicate(packet: Record<string, any>): boolean; resolve(packet: Record<string, any>): void; reject(error: Error): void }>();
   let stderr = '', sequence = 0;
@@ -170,6 +170,27 @@ test('SDK settings failure prevents creation, but never affects exact-ID Resume'
     await resumed.request('initialize'); await resumed.request('connect', { sessionId: 'fixture-sdk' });
     assert.equal(resumed.packets.find(packet => packet.kind === 'connected')!.model.modelId, 'large');
   } finally { await resumed.close(); }
+});
+
+test('production SDK bridge reads aggregate session accounting without leaking model maps or request multipliers', { timeout: 5000 }, async () => {
+  const f = bridge();
+  try {
+    await f.request('initialize'); await f.request('connect', { sessionId: 'fixture-sdk' });
+    const metrics = await f.request('usage');
+    assert.deepEqual(metrics, { totalNanoAiu: 12_300_000_000, aiCreditsStatus: 'complete' });
+    assert.equal(JSON.stringify(metrics).includes('must-not-leave-metadata-boundary'), false);
+    assert.equal(f.packets.some(packet => packet.kind === 'event' && packet.event.type === 'user.message'), false);
+  } finally { await f.close(); }
+});
+
+test('optional SDK accounting failures leave the connected conversation usable', { timeout: 5000 }, async () => {
+  const f = bridge('interactive', undefined, 'resolved', { model: 'small', effortLevel: 'low' }, 'error');
+  try {
+    await f.request('initialize'); await f.request('connect');
+    await assert.rejects(f.request('usage'), /usage metadata unavailable/);
+    await f.request('commands');
+    assert.equal(f.packets.some(packet => packet.kind === 'fatal'), false);
+  } finally { await f.close(); }
 });
 
 test('production SDK bridge tool and permission packets reach the JSONL capture sink unchanged', { timeout: 5000 }, async () => {

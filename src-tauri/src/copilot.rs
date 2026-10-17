@@ -171,7 +171,7 @@ fn validate_message(value: &Value) -> Result<(), String> {
         return Err("Invalid Copilot SDK bridge record".into());
     }
     match value["method"].as_str() {
-        Some("initialize" | "list" | "connect" | "cancel" | "commands") => {}
+        Some("initialize" | "list" | "connect" | "cancel" | "commands" | "usage") => {}
         Some("command")
             if value["name"].as_str().is_some_and(|name| {
                 !name.is_empty()

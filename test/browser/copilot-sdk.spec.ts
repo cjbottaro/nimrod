@@ -34,6 +34,8 @@ test('offline SDK bridge uses the shared shell for optimistic send, permissions,
     await permission.getByRole('button', { name: 'Allow once', exact: true }).click();
     await expect(page.locator(visible('messages'))).toContainText('Offline SDK response.');
     await expect(page.locator(visible('send'))).toHaveAttribute('aria-label', 'Send message');
+    await expect(page.locator(visible('session-metrics'))).toHaveText('~$0.123 · 25.5% / 125k');
+    await expect(page.locator(visible('session-metrics'))).toHaveAttribute('title', /12\.3 AIC/);
     const card = page.locator(`#${sdk} .tool-card`).first();
     await card.locator('summary').first().click();
     const disclosed = await card.evaluate(card => (card as HTMLDetailsElement).open);

@@ -39,7 +39,7 @@ Unit fixtures cover all four arrow directions/wrapping, reversed DOM order, disa
 - `test/command-palette.test.ts`: two-line command structure, heading shortcuts, unbound absence and description search.
 - `test/browser/modal-layout.spec.ts`: actual WebKit right alignment/secondary descriptions; all six ordinary shells share computed geometry/surfaces at desktop and narrow sizes; whole-window glass and field/inset alpha, opaque/sidebar-only and simulated Reduce Transparency fallbacks across dark/light palettes; changing shared width/padding tokens updates all consumers.
 - Existing browser deletion/keybinding/ranking tests cover footer reachability, tree scrolling, focus, cancellation and retained drafts.
-- Run `mise run check` and `npm run test:browser` locally with offline fixtures only. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow).
+- Run `mise run test` and `npm run test:browser` locally with offline fixtures only. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow).
 - Glass follow-up: 8 offline WebKit modal-layout/translucency/theme tests pass. The geometry fixture now explicitly mounts the actual keybinding recorder with no-op fixture storage; project boot intentionally does not install that global-only UI. Native visual acceptance and Linux/Windows verification remain pending; fixture success is not platform acceptance.
 
 User guide: [Modal layout](../../../../docs/command-palette.md#confirmation-dialogs), [Command palette](../../../../docs/command-palette.md).

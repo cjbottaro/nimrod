@@ -7,11 +7,16 @@ export class CopilotConnection {
   private pending = new Map<string, { resolve(value: unknown): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }>();
   private closed = false;
   constructor(private send: (message: BridgeRequest) => Promise<void>, private event: (message: Record<string, unknown>) => void, private ended: (reason: string) => void) {}
-  request(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
+  request(method: string, params: Record<string, unknown> = {}, timeoutPolicy: 'disconnect' | 'reject' = 'disconnect'): Promise<unknown> {
     if (this.closed) return Promise.reject(new CopilotConnectionError('Copilot SDK bridge is disconnected'));
     const id = crypto.randomUUID();
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => this.disconnect('Copilot request timed out; its outcome is unknown. Nothing was retried.'), 20_000);
+      const timer = setTimeout(() => {
+        // Optional read-only metadata may fail independently of a healthy chat.
+        // Mutations retain their existing uncertain-delivery disconnect policy.
+        if (timeoutPolicy === 'reject') { this.pending.delete(id); reject(new Error('Optional Copilot metadata request timed out.')); }
+        else this.disconnect('Copilot request timed out; its outcome is unknown. Nothing was retried.');
+      }, 20_000);
       this.pending.set(id, { resolve, reject, timer });
       void this.send({ ...params, id, method }).catch(error => this.disconnect(`Copilot write failed; delivery is unknown: ${String(error)}`));
     });
