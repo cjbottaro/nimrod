@@ -29,6 +29,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Copilot context-window changes refresh usage after configuration settles rather than caching an intermediate budget under the new tier. Long context keeps the model’s advertised maximum in the picker, and pending-model details no longer reuse another model’s limits.
 - Copilot model, thinking-level, mode and context-window changes no longer fail with “Unsupported Copilot SDK bridge operation” and disconnect the session before reaching Copilot.
 
 - Copilot's built-in GitHub MCP web searches now reach the rich answer/citation cards instead of the generic MCP fallback; unrelated MCP query tools retain their own presentation.

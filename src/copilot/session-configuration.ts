@@ -7,7 +7,7 @@ export function createCopilotConfiguration(host: {
   effort(): string | undefined;
   mode(): string | undefined;
   contextTier(): string | undefined;
-  contextLimit(tier: string): number | undefined;
+  contextLimit(model: string, tier: string): number | undefined;
   availability(): ConfigurationAvailability;
   apply(setting: string, value: string, current: () => boolean): Promise<void>;
   changed(): void;
@@ -38,10 +38,13 @@ export function createCopilotConfiguration(host: {
       ];
       if (setting === 'context-tier') {
         const model = models.find(item => item.id === (desired.model ?? host.model()));
+        const defaultLimit = model && host.contextLimit(model.id, 'default');
+        // The catalog advertises the maximum, not an intermediate usage budget
+        // observed while the runtime is switching tiers.
+        const longLimit = model?.maxContextTokens;
         return [
-          { value: 'default', label: 'Default context', ...(host.contextLimit('default') ? { detail: compactTokenCount(host.contextLimit('default')!) } : {}) },
-          { value: 'long_context', label: 'Long context', ...(host.contextLimit('long_context') || model?.maxContextTokens
-            ? { detail: compactTokenCount(host.contextLimit('long_context') || model!.maxContextTokens!) } : {}) },
+          { value: 'default', label: 'Default context', ...(defaultLimit ? { detail: compactTokenCount(defaultLimit) } : {}) },
+          { value: 'long_context', label: 'Long context', ...(longLimit ? { detail: compactTokenCount(longLimit) } : {}) },
         ];
       }
       throw new Error('This Copilot setting is unsupported.');

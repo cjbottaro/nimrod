@@ -12,7 +12,11 @@ Copilot’s reported context line keeps its compact usage form, for example
 the reported limit is a button that opens **Select context window…**. Choices
 use the tier name as the primary label—such as **Default context** or
 **Long context**—and the reported token amount as secondary detail when
-available. Pi’s reported context limit remains non-interactive because Pi does
+available. **Long context** shows the selected model’s advertised maximum; an
+intermediate usage report cannot relabel that choice with the default window.
+After a context change, usage can briefly show an unknown window while Nimrod
+fetches the confirmed budget; no additional message is needed. Pi’s reported
+context limit remains non-interactive because Pi does
 not expose a corresponding setting.
 
 Model pickers show readable names without numbered prefixes. Copilot places the model ID beneath its friendly name. Pi places the provider beneath the reported friendly name, falling back to the model ID when no friendly name is available. Secondary details align with those names while the current-value marker occupies its own column. Filtering still matches the underlying model identity, and selection does not depend on displayed labels being unique.
