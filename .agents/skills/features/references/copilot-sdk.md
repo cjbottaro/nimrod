@@ -158,7 +158,7 @@ once/Deny/Cancel; input presents native choices and optional freeform text.
 Background requests do not navigate/focus or approve. Stop, disconnect and Close
 retire exact connection-bound AbortSignals and settle/reject callbacks safely.
 Notifications reuse shared preference/focus/token checks; replay never alerts.
-Capture logs native `tool.*`/permission payloads only, without SDK-to-Pi conversion.
+Capture logs native `tool.*`, streamed tool-input deltas and permission request/completion payloads without SDK-to-Pi conversion. [Tool capture](tool-capture.md#copilot-sdk) owns the concrete mapping, early-identity handling, version metadata, backend-specific paths and capture-specific offline evidence; this does not establish installed-CLI/native acceptance.
 
 Plugin source/target is **`copilot-sdk`**, distinct from ACP. Existing Pi-only
 defaults/overrides remain Pi-only; exact-agent plugins rank above generic SDK

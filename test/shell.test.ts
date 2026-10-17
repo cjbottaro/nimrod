@@ -1164,6 +1164,35 @@ test('tool capture setting enables native Pi logging without changing the mounte
   } finally { f.win.close(); }
 });
 
+test('SDK tool capture uses the global setting and native append bridge for tools and permissions', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    const enter = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    f.openPalette(); const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New Copilot session'; input.dispatchEvent(new f.win.Event('input')); enter(); await f.tick(); await f.tick();
+    const target = [...f.sdkSessions.values()].find(session => session.sessionId === 'sdk-fixture')!;
+    const event = (id: string, type: string, data: JsonRecord) => target.channel.onmessage({ kind: 'rpc', value: { kind: 'event', event: { id, type, data } } });
+    event('disabled-capture', 'tool.extension_specific', { toolCallId: 'disabled' });
+    assert.equal(f.calls.some(call => call.command === 'append_tool_capture'), false);
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'keep SDK draft'; prompt.dispatchEvent(new f.win.Event('input')); prompt.focus();
+    const starts = f.calls.filter(call => call.command === 'start_copilot').length;
+    f.preferences.external('{"diagnostics.toolCapture":true}'); await f.tick();
+    event('sdk-delta', 'assistant.tool_call_delta', { toolCallId: 'captured', inputDelta: '{"url":' });
+    event('sdk-start', 'tool.execution_start', { toolCallId: 'captured', toolName: 'web_fetch', arguments: { url: 'https://example.test/fixture' } });
+    const request = { kind: 'url', toolCallId: 'captured', url: 'https://example.test/fixture' };
+    event('sdk-permission-event', 'permission.requested', { requestId: 'native-request', permissionRequest: request });
+    target.channel.onmessage({ kind: 'rpc', value: { kind: 'permission', id: 'capture-permission', request } });
+    await new Promise(resolve => setTimeout(resolve, 150)); await f.tick();
+    const captured = f.calls.filter(call => call.command === 'append_tool_capture').flatMap(call => (call.args.lines as string[]).map(line => JSON.parse(line)));
+    assert.deepEqual(captured.map(record => record.event), ['assistant.tool_call_delta', 'tool.execution_start', 'permission.requested', 'permission.request']);
+    assert.ok(captured.every(record => record.source.backend === 'copilot-sdk' && record.sessionId === 'sdk-fixture' && record.toolCallId === 'captured'));
+    assert.deepEqual(captured.at(-1).payload, request);
+    assert.equal(prompt.value, 'keep SDK draft'); assert.equal(f.win.document.activeElement, prompt);
+    assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, starts);
+    assert.equal(f.calls.some(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'prompt'), false);
+    f.preferences.external('{}'); await f.tick();
+  } finally { f.win.close(); }
+});
+
 test('performance capture is opt-in, bindable, timing-only and preserves the mounted session', async () => {
   const control = { after: [] as (() => void)[], writeError: undefined as string | undefined, copyError: undefined as string | undefined };
   const f = await fixture(undefined, { windowWorkspace: '/project', performanceControl: control });

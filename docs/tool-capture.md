@@ -1,8 +1,8 @@
 # Tool activity logs
 
 Built-in Copilot SDK uses source backend `copilot-sdk`, agent `copilot`, in the
-same opt-in local capture pipeline. It records native live `tool.*` and
-permission-request data, not conversation prose or saved-history replay. Legacy
+same opt-in local capture pipeline. It records native live `tool.*` events, streamed tool-input deltas, permission
+requests and SDK-reported permission completions, not conversation prose or saved-history replay. Legacy
 Copilot/custom ACP captures remain `acp`; schemas are not translated into Pi.
 
 Enable **Capture tool activity** in **Global Settings → Diagnostics** to automatically collect local JSON Lines logs for card/plugin development. It is off by default and covers **Pi, including extension tools**, **official SDK Copilot**, and **custom/legacy ACP agents**.
@@ -12,6 +12,7 @@ No manual inspection/capture action is needed. Enable it, work normally, then gi
 ## What is collected
 
 - Tool starts, partial input/progress updates and results, with structured native payloads.
+- Copilot SDK streamed tool inputs, native permission requests/outcomes, and the exact permission callback payload. Native lifecycle events and callbacks are separate records, not duplicate approvals.
 - ACP tool-call patches and live permission-request tool details/options.
 - UTC receipt timestamps, sequence numbers, capture/session/connection identity, tool-call IDs when available, backend and agent identity, and reported agent versions when available.
 
@@ -26,6 +27,7 @@ The exact resolved directory is shown beside the setting. Logs use Nimrod's exis
 ```text
 ~/.local/state/nimrod/tool-captures/
   pi/2026-10-16.jsonl
+  copilot-sdk/copilot/2026-10-16.jsonl
   acp/copilot/2026-10-16.jsonl
   acp/<other-agent>/2026-10-16.jsonl
 ```
@@ -49,7 +51,7 @@ jq -c 'select(.timestamp >= "2026-10-16T19:40:00.000Z" and .timestamp <= "2026-1
   ~/.local/state/nimrod/tool-captures/acp/copilot/2026-10-16.jsonl
 ```
 
-For local times, convert to UTC first. Timestamps are when Nimrod receives events, not necessarily when a tool starts executing. Sequence numbers order records within one capture segment; wall clocks can move backwards, and multiple windows do not share a total sequence. Capture starting mid-tool may lack earlier inputs or a tool ID. Connection IDs and Pi's message sequence/content index help correlate partial events.
+For local times, convert to UTC first. Timestamps are when Nimrod receives events, not necessarily when a tool starts executing. Sequence numbers order records within one capture segment; wall clocks can move backwards, and multiple windows do not share a total sequence. Capture starting mid-tool may lack earlier inputs or a tool ID. Connection IDs and Pi's message sequence/content index help correlate partial events. SDK callbacks received before the saved session identity is known use a temporary `connecting:…` capture ID; later records use the actual session ID and retain the same connection ID. The existing SDK status response supplies the runtime version when available.
 
 ## Stopping, failures and limits
 
@@ -59,4 +61,4 @@ Logging is buffered and does not wait for disk before processing agent events. P
 
 A buffer overflow, oversized payload or write failure stops capture in the affected window and shows an application notice. Records are not silently truncated, and ambiguous writes are never retried automatically. Resolve the cause, then toggle capture off and on. If a file has an incomplete final record after a crash/write failure, preserve it and move it aside before retrying; Nimrod will not truncate it for you.
 
-This is a diagnostic aid, not a durable audit log. The implementation and offline fixtures have not yet been validated for this feature. Actual macOS/Linux collection and multi-process behavior remain to be verified; Windows parity is not established. [Performance reports](performance-diagnostics.md) remain separate, timing-only captures with their own retention policy.
+This is a diagnostic aid, not a durable audit log. SDK capture has passed focused offline controller/production-bridge/sink tests and native storage fixtures; the wider check remains blocked by unrelated migration assertions. Live SDK collection in the app and broader macOS/Linux/multi-process behavior remain to be verified; Windows parity is not established. [Performance reports](performance-diagnostics.md) remain separate, timing-only captures with their own retention policy.
