@@ -65,7 +65,7 @@ Incremental streaming now adds indexed tool updates, dirty-row presentation, app
 
 | Area | User/platform checks still needed |
 | --- | --- |
-| ACP POC | Installed Copilot and second-agent interoperability, list/load capability/schema and cross-process history discovery/pagination, exact saved-sidebar loading/replay/draft recovery across process restarts, packaged Tauri IPC/window/permission/focus/shutdown behavior, platform-specific launch discovery; offline fixtures are not native app acceptance. Copilot Resume discovery is source-implemented but unvalidated; custom history/attachments/login/client services remain unimplemented. |
+| ACP POC | Compact command-permission previews and their new unit/shell/browser fixtures are source-implemented but unvalidated; native wrapping, code viewport, raw disclosure, button/focus and cancellation acceptance remain pending. Installed Copilot and second-agent interoperability, list/load capability/schema and cross-process history discovery/pagination, exact saved-sidebar loading/replay/draft recovery across process restarts, packaged Tauri IPC/window/permission/focus/shutdown behavior, platform-specific launch discovery; offline fixtures are not native app acceptance. Copilot Resume discovery is source-implemented but unvalidated; custom history/attachments/login/client services remain unimplemented. |
 | Projects/startup | Finder runtime discovery, rapid cold/warm CLI forwarding, minimized-window focus, native window cycling and pop-out ownership |
 | Drafts | Native typing feel, Close/Quit flush and crash/reload limits; [storage specification](native-drafts.md) |
 | Sessions | Real first-save/exact-file resume, Close/Restart cancellation and failure, independent multi-window shutdown, no replay |

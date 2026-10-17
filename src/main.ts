@@ -1038,8 +1038,9 @@ function requestAcpPermission(tab: Tab, request: import('./acp/client').AcpPermi
   if (signal.aborted || !tabs.includes(tab) || tab.closing) return Promise.resolve(undefined);
   return new Promise(resolve => {
     const region = document.createElement('section'); region.className = 'acp-permission'; region.setAttribute('role', 'group'); region.setAttribute('aria-label', 'Agent permission request');
-    region.append(renderPermissionDetails(document, request.toolCall));
+    const details = renderPermissionDetails(document, request.toolCall); region.append(details);
     const actions = document.createElement('div'); actions.className = 'acp-permission-actions'; region.append(actions);
+    const raw = details.querySelector('.acp-permission-raw'); if (raw) region.append(raw);
     let settled = false;
     const finish = (choice?: string) => {
       if (settled) return; settled = true;

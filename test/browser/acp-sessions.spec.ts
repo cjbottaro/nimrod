@@ -26,7 +26,15 @@ test('offline ACP and Pi keep independent drafts, permissions, configuration and
     const permission = page.locator(`#${acpId} .acp-permission`);
     await expect(permission).toBeVisible();
     await expect(permission).toContainText('Fixture shell output');
-    await expect(permission).toContainText('printf fixture-only');
+    await expect(permission.locator('.acp-permission-summary')).toHaveText('Run command · Fixture shell output');
+    await expect(permission.locator('.acp-permission-command code')).toHaveText('printf fixture-only');
+    const raw = permission.locator('.acp-permission-raw');
+    await expect(raw).not.toHaveAttribute('open', '');
+    await expect(permission.locator(':scope > .acp-permission-actions + .acp-permission-raw')).toHaveCount(1);
+    await raw.locator('summary').click();
+    await expect(raw.locator('pre')).toBeVisible();
+    await expect(raw.locator('pre')).toContainText('fixture_shell');
+    await raw.locator('summary').click();
     await expect(page.locator(`#${acpId} .message.user`)).toHaveCount(1);
     await page.locator(`#open-sessions .session-row[aria-controls="${piId}"]`).click();
     await expect(page.locator(visible('prompt'))).toHaveValue('Pi draft must survive');

@@ -15,5 +15,21 @@
   max-height: 100px;
   overflow: auto;
 }
+.acp-permission-summary { font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; white-space: normal; }
+.acp-permission-summary strong { white-space: nowrap; }
+.acp-permission-description { color: var(--vscode-descriptionForeground); }
+.acp-permission pre.acp-permission-command {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: var(--vscode-textCodeBlock-background, var(--vscode-editor-background));
+  font-family: var(--vscode-editor-font-family, monospace);
+  line-height: 1.45;
+}
+.acp-permission-command code { font: inherit; }
+.acp-permission-raw { margin-top: 6px; font-size: 12px; }
+.acp-permission-raw > summary { color: var(--vscode-descriptionForeground); cursor: pointer; }
+.acp-permission-raw > small { margin-top: 6px; }
+.acp-permission-raw > pre { margin: 6px 0 0; font-family: var(--vscode-editor-font-family, monospace); }
 .acp-permission-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .acp-permission-actions button { padding: 4px 8px; }

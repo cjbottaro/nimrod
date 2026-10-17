@@ -12,6 +12,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- ACP command permissions use a compact **Run command · description** summary, exact command previews without duplicate metadata, and collapsed raw details below the existing permission buttons. Long descriptions wrap without truncation; unsupported operations retain the literal fallback.
 - Experimental ACP plugins distinguish tool names (`tools`) from protocol categories (`kinds`); early POC category-based plugins must move their matching to `kinds`. Agent-specific matches take precedence over generic ACP matches.
 
 - macOS release downloads and Homebrew installation target Apple Silicon only; Intel downloads are not provided.
