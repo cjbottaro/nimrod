@@ -40,7 +40,7 @@ The initial POC aliased `mountPiView` and introduced `ViewHost.acp` branches. It
 | Shared view | Mounted identity, incremental reconciliation, local Send feedback, disclosure, reading/focus intent, control DOM and cleanup. It does not decide what an ACP mode means or translate Pi steering into ACP operations. |
 | Project shell | Windows, navigation, notices, palette/shortcut dispatch and native effects. It assembles concrete integrations; it does not expose those effects to card plugins. |
 
-ACP is a broad fallback, not a ceiling or universal harness protocol. Copilot uses its own SDK backend. History, decisions and lifecycle project directly to existing consumer ports; the former Copilot ACP integration is removed and custom ACP remains runtime-only. SDK fixtures/native acceptance remain pending; older extraction pass results do not cover the migration.
+ACP is a broad fallback, not a ceiling or universal harness protocol. Copilot uses its own SDK backend. History, decisions and lifecycle project directly to existing consumer ports; the former Copilot ACP integration is removed and generic ACP adapters remain dormant, with no current product entry points. SDK fixtures/native acceptance remain pending; older extraction pass results do not cover the migration.
 
 ## Code map and contracts
 

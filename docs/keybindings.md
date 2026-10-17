@@ -18,9 +18,7 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 | --- | --- |
 | Open recent project… | Cmd/Ctrl+Shift+O |
 | New session (Pi default) | Cmd/Ctrl+N |
-| New ACP session… (experimental) | Unbound by default |
-| New Copilot session (SDK) | Unbound by default |
-| ACP session options… | Unbound by default |
+| New Copilot session | Unbound by default |
 | New named session… | Cmd+Option+N / Ctrl+Alt+N |
 | New temporary session | Cmd/Ctrl+Shift+N |
 | Delete session / Pi session tree… | Cmd/Ctrl+Backspace |
@@ -45,7 +43,7 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 
 **Open recent project…** searches recently opened directories and is configurable like other palette commands. **Open project…** / Cmd/Ctrl+O remains the native directory-only chooser, outside this editor.
 
-Every current command-palette command can be rebound or unbound. **Select theme…** has no default shortcut. **Restart session** restarts the selected saved session's Pi process, not the window; its existing eligibility and interruption-confirmation rules still apply. Plus and Equals both invoke Zoom in. Existing user overrides remain unchanged when defaults change; Reset the affected action to adopt its new defaults.
+Every current command-palette command can be rebound or unbound. The removed ACP actions are absent from the editor; their old overrides remain stored but inert. **Select theme…** has no default shortcut. **Restart session** restarts the selected saved session's Pi process, not the window; its existing eligibility and interruption-confirmation rules still apply. Plus and Equals both invoke Zoom in. Existing user overrides remain unchanged when defaults change; Reset the affected action to adopt its new defaults.
 
 **Delete sessions…** opens a searchable saved-history picker for repeated deletion. Enter opens tree review above the retained picker; Cancel leaves it unchanged, and completed deletion removes only confirmed-deleted rows in place, selecting the next match without refreshing history. Escape from the picker closes it. See [Delete sessions picker](sessions.md#delete-several-conversations).
 

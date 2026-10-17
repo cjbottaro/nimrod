@@ -552,36 +552,6 @@ test('missing Copilot executable retains the sidebar identity and draft and supp
   } finally { f.win.close(); }
 });
 
-test('a custom ACP profile named copilot remains runtime-only and never persists its environment or draft', async () => {
-  const f = await fixture(undefined, { windowWorkspace: '/project' });
-  const enter = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-  try {
-    f.openPalette();
-    const input = f.element<HTMLInputElement>('palette-input');
-    input.value = 'New ACP session'; input.dispatchEvent(new f.win.Event('input'));
-    enter(); await f.tick(); await f.tick();
-    input.value = 'Custom ACP agent'; input.dispatchEvent(new f.win.Event('input'));
-    enter(); await f.tick(); await f.tick();
-    f.element<HTMLTextAreaElement>('host-dialog-input').value = JSON.stringify({
-      id: 'copilot', name: 'Custom fixture', command: '/fixture/agent', args: ['--acp'], env: { FIXTURE_SETTING: 'fixture-env-value' },
-    });
-    await f.confirm(); await f.tick();
-    assert.equal(f.calls.filter(call => call.command === 'start_acp').length, 1);
-    const prompt = f.element<HTMLTextAreaElement>('prompt');
-    prompt.value = 'Runtime-only custom draft'; prompt.dispatchEvent(new f.win.Event('input'));
-    await f.tick();
-    const layout = f.preferences.value.state['nimrod.tabs.v1:/project'] as { tabs: unknown[] };
-    assert.deepEqual(layout.tabs, []);
-    assert.equal(JSON.stringify(f.preferences.value.state).includes('fixture-env-value'), false);
-    assert.equal(JSON.stringify(f.saved().drafts).includes('Runtime-only custom draft'), false);
-    assert.equal(f.calls.some(call => call.command === 'drafts_stage'), false);
-    f.rows()[0].parentElement!.querySelector<HTMLButtonElement>('.session-close')!.click(); await f.tick();
-    assert.match(f.element('host-dialog-description').textContent!, /discards Nimrod’s in-memory transcript, draft and pop-outs/);
-    await f.confirm();
-    assert.equal(f.rows().length, 0);
-  } finally { f.win.close(); }
-});
-
 test('shared lifecycle preserves mixed sidebar membership independently of connection and Pi-only Restart', async () => {
   const key = 'nimrod.tabs.v1:/project', path = '/sessions/pi.jsonl', scope = copilotSdkScope('fixture-id');
   const f = await fixture(undefined, { windowWorkspace: '/project', appState: { [key]: {
@@ -865,46 +835,6 @@ test('Pi history appears before slow Copilot discovery and cancelled results can
   } finally { release(); f.win.close(); }
 });
 
-test('background ACP permissions stay in their conversation and cannot approve another session', async () => {
-  const f = await fixture(undefined, { windowWorkspace: '/project' });
-  const enter = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-  try {
-    f.openPalette();
-    const input = f.element<HTMLInputElement>('palette-input');
-    input.value = 'New ACP session'; input.dispatchEvent(new f.win.Event('input')); enter(); await f.tick(); await f.tick();
-    input.value = 'Custom ACP agent'; input.dispatchEvent(new f.win.Event('input')); enter(); await f.tick(); await f.tick();
-    f.element<HTMLTextAreaElement>('host-dialog-input').value = JSON.stringify({ name: 'Fixture', command: '/fixture/agent', args: [] });
-    await f.confirm(); await f.tick();
-    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'permission'; prompt.dispatchEvent(new f.win.Event('input')); prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
-    const target = [...f.acpSessions.values()].find(session => session.sessionId === 'acp-fixture')!, acpRoot = f.win.document.querySelector<HTMLElement>('.session-view:not([hidden])')!;
-    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick(); const piPrompt = f.element<HTMLTextAreaElement>('prompt'); piPrompt.focus();
-    target.channel.onmessage({ kind: 'rpc', value: { jsonrpc: '2.0', id: 'permission', method: 'session/request_permission', params: { sessionId: 'acp-fixture', toolCall: { toolCallId: 'shell', kind: 'execute', title: 'Run fixture only', rawInput: { command: 'no execution', commands: ['no execution'] } }, options: [{ optionId: 'allow', name: 'Allow fixture', kind: 'allow_once' }] } } });
-    await f.tick();
-    assert.equal(acpRoot.hidden, true); assert.equal(f.win.document.activeElement, piPrompt);
-    assert.equal(f.element<HTMLDialogElement>('host-dialog').open, false);
-    assert.ok(acpRoot.querySelector('.acp-permission'));
-    assert.equal(acpRoot.querySelector('.acp-permission-summary')?.textContent, 'Run command · Run fixture only');
-    assert.equal(acpRoot.querySelectorAll('.acp-permission-command').length, 1);
-    assert.equal(acpRoot.querySelector<HTMLDetailsElement>('.acp-permission-raw')?.open, false);
-    assert.ok(acpRoot.querySelector('.acp-permission-actions + .acp-permission-raw'));
-    f.rows()[0].click(); await f.tick();
-    const cancel = [...acpRoot.querySelectorAll<HTMLButtonElement>('.acp-permission button')].find(button => button.textContent === 'Cancel request')!;
-    cancel.click(); await f.tick();
-    const reply = f.calls.filter(call => call.command === 'write_acp').map(call => call.args.message as JsonRecord).find(message => message.id === 'permission');
-    assert.deepEqual(JSON.parse(JSON.stringify(reply?.result)), { outcome: { outcome: 'cancelled' } });
-    assert.equal(acpRoot.querySelector('.acp-permission'), null);
-    target.channel.onmessage({ kind: 'rpc', value: { jsonrpc: '2.0', id: 'fetch-permission', method: 'session/request_permission', params: { sessionId: 'acp-fixture', toolCall: { toolCallId: 'fetch', kind: 'fetch', title: 'Fetch content from this URL.', rawInput: { url: 'https://example.test/docs' } }, options: [{ optionId: 'deny-fetch', name: 'Deny', kind: 'reject_once' }] } } });
-    await f.tick();
-    assert.equal(acpRoot.querySelector('.acp-permission-summary')?.textContent, 'Fetch · example.test/docs');
-    assert.equal(acpRoot.querySelector<HTMLDetailsElement>('.acp-permission-raw')?.open, false);
-    assert.ok(acpRoot.querySelector('.acp-permission-actions + .acp-permission-raw'));
-    assert.equal(f.calls.some(call => call.command === 'write_acp' && (call.args.message as JsonRecord).id === 'fetch-permission'), false);
-    [...acpRoot.querySelectorAll<HTMLButtonElement>('.acp-permission button')].find(button => button.textContent === 'Deny')!.click(); await f.tick();
-    const fetchReply = f.calls.filter(call => call.command === 'write_acp').map(call => call.args.message as JsonRecord).find(message => message.id === 'fetch-permission');
-    assert.deepEqual(JSON.parse(JSON.stringify(fetchReply?.result)), { outcome: { outcome: 'selected', optionId: 'deny-fetch' } });
-  } finally { f.win.close(); }
-});
-
 test('foreground/background streaming does not persist unchanged session layout; selection and rename still save', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   try {
@@ -1080,11 +1010,11 @@ test('palette commands show shortcuts except intentionally unbound actions and r
       if (unboundLabels.has(label)) assert.equal(row.querySelector('kbd'), null, label);
       else assert.ok(row.querySelector('kbd')?.textContent, label);
     }
-    assert.doesNotMatch(f.element('palette-list').textContent!, /offline demo|session file/i);
+    assert.doesNotMatch(f.element('palette-list').textContent!, /offline demo|session file|ACP/i);
     f.element<HTMLDialogElement>('command-palette').close(); await f.tick();
-    f.preferences.external('{"keybindings":{"demo":["primary+d"],"file":["primary+f"]}}'); await f.tick();
+    f.preferences.external('{"keybindings":{"demo":["primary+d"],"file":["primary+f"],"new-acp":["primary+u"],"acp-options":["primary+i"]}}'); await f.tick();
     const calls = f.calls.length;
-    for (const key of ['d', 'f']) {
+    for (const key of ['d', 'f', 'u', 'i']) {
       const event = new f.win.KeyboardEvent('keydown', { key, metaKey: true, bubbles: true, cancelable: true });
       f.win.dispatchEvent(event); assert.equal(event.defaultPrevented, false);
     }

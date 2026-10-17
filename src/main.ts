@@ -20,7 +20,7 @@ import { startPiSession, type PiLaunchInfo } from './pi/session-startup';
 import { acpSessionLifecycle } from './acp/session-lifecycle';
 import { readSavedSidebarSession, type SessionLifecycle, type LaunchMode, type SavedSidebarSession, type SavedSessionIdentity } from './session-lifecycle';
 import type { ConversationViewMessage, ConversationView } from './conversation-view-host';
-import { parseAcpProfile, type AcpProfile } from './acp/profiles';
+import type { AcpProfile } from './acp/profiles';
 import { mountConversationView } from './conversation-view';
 import { installApplicationNotices } from './application-notices';
 import { Channel, invoke } from '@tauri-apps/api/core';
@@ -711,7 +711,6 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     { id: 'delete-sessions', label: 'Delete sessions…', detail: 'Repeatedly review and delete supported saved sessions in this project', next: true, run: () => palette.deleteSessions() },
     { id: 'new', label: 'New session', detail: 'Pi · persistent conversation (default harness)', run: () => newSession() },
     ...(copilotReady ? [{ id: 'new-copilot', label: 'New Copilot session', detail: 'Start a Copilot session', run: newCopilotSession }] : []),
-    ...(acpReady ? [{ id: 'new-acp', label: 'New ACP session…', detail: 'Experimental · custom ACP agent · text only', next: true, run: newAcpSessionPicker }] : []),
     { id: 'new-named', label: 'New named session…', detail: 'Choose a name before starting', next: true, run: newNamedSession },
     ...(tabs.length ? [{ id: 'switch-session', label: 'Switch session…', detail: 'All open sessions, regardless of sidebar view', next: true, run: () => palette.openSessions() }] : []),
     ...(active ? sessionCommands(active) : []),
@@ -991,10 +990,11 @@ async function withTabDialog<T>(tab: Tab, action: (title: string) => Promise<T>,
   finally { tab.inputCount--; if (tabs.includes(tab)) updateTab(tab); }
 }
 function sessionCommands(tab: Tab) {
-  return sessionActions(tab).map(action => ({ ...action, next: true, run: () => runSessionAction(tab, action.id) }));
+  return sessionActions(tab).filter(action => ACTIONS.some(registered => registered.id === action.id))
+    .map(action => ({ ...action, next: true, run: () => runSessionAction(tab, action.id) }));
 }
 async function runSessionAction(tab: Tab, id: SessionAction['id']): Promise<void> {
-  if (!tabs.includes(tab) || tab.closing || tab.restarting || tab.deleting || !sessionActions(tab).some(action => action.id === id)) return;
+  if (!tabs.includes(tab) || tab.closing || tab.restarting || tab.deleting || !ACTIONS.some(action => action.id === id) || !sessionActions(tab).some(action => action.id === id)) return;
   if (id === 'mcp') return inspectMcp(tab);
   if (id === 'acp-options') return pickAcpOption(tab);
   return pickPreference(tab, id);
@@ -1260,25 +1260,6 @@ async function launchCopilot(tab: Tab, acceptedAction = false): Promise<void> {
     session.disconnect(String(error));
     try { await tab.lifecycle.stop(); } catch (error) { if (valid()) showNotice(tab, String(error), !!savedId); }
   } finally { tab.starting = false; if (valid()) { updateTab(tab); controls(); } }
-}
-async function newAcpSessionPicker(): Promise<void> {
-  if (!acpReady) return;
-  if (!ready || settings.isOpen || !await ensureWorkspace() || unloading) return;
-  const request = palette.startSelection('New ACP session (POC)', () => { void newAcpSessionPicker(); });
-  if (!request) return;
-  const choice = await request.choose(['Custom ACP agent…']);
-  request.finish();
-  if (choice === 'Custom ACP agent…') {
-    const value = await dialogs.input('ACP launch profile (JSON; not a shell command)', JSON.stringify({ name: 'ACP agent', command: '/absolute/path/to/agent', args: ['--acp'], env: {} }, null, 2));
-    if (!value) return;
-    try { await newAcpSession(parseAcpProfile(JSON.parse(value))); } catch (error) { notices.report({ id: `acp-profile:${++noticeSequence}`, operation: 'Create ACP session', message: String(error) }); }
-  }
-}
-async function newAcpSession(profile: AcpProfile): Promise<void> {
-  if (!ready || !acpReady || unloading || settings.isOpen || !workspace) return;
-  const tab = createTab('temporary', undefined, `${profile.name} session`, 0, profile);
-  activate(tab); touchTab(tab);
-  await tab.lifecycle.connect({ acceptedAction: true });
 }
 async function launchAcp(tab: Tab, acceptedAction = false): Promise<void> {
   const profile = profileFor(tab);
@@ -1686,10 +1667,9 @@ const keybindingDispatch = installKeybindingDispatch(window, {
     if (['settings', 'keybindings', 'zoom-in', 'zoom-out', 'zoom-reset'].includes(id)) return true;
     if (id === 'project-settings') return !!workspace;
     if (!ready) return false;
-    if (id === 'new-acp') return acpReady;
     if (id === 'new-copilot') return copilotReady;
     if (id === 'capture-performance') return preferences.performanceEnabled() && !settingsSurface.capturingPerformance;
-    if (['mcp', 'model', 'thinking', 'acp-options'].includes(id)) return !!presented && sessionActions(presented).some(action => action.id === id);
+    if (['mcp', 'model', 'thinking'].includes(id)) return !!presented && sessionActions(presented).some(action => action.id === id);
     if (['close', 'restart', 'delete'].includes(id)) return !!presented;
     return true;
   },
@@ -1697,9 +1677,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
     switch (id) {
       case 'open-recent-project': return palette.projects();
       case 'new': return newSession();
-      case 'new-acp': return newAcpSessionPicker();
       case 'new-copilot': return newCopilotSession();
-      case 'acp-options': return presented ? runSessionAction(presented, id) : undefined;
       case 'temporary': return newSession('temporary');
       case 'delete': return presented ? deleteSession(presented) : undefined;
       case 'delete-sessions': return palette.deleteSessions();
@@ -1731,18 +1709,18 @@ async function boot(): Promise<void> {
   controls(); renderRecents();
   try {
     await invoke('stop_pi'); // Window-scoped reload cleanup; never stop another workspace.
-    // ACP cleanup/availability is independent: an old/unavailable ACP host must
-    // not prevent Pi from booting. New ACP sessions stay disabled until reaped.
+    // Reap any owned legacy child left by a webview reload. This does not
+    // enable ACP creation or register product actions.
     void invoke('stop_acp').then(() => {
       if (!unloading) { acpReady = true; selectedConnection.barriersChanged(); }
     }).catch(error => {
-      if (!unloading) notices.report({ id: 'acp-startup', operation: 'Initialize ACP', message: `ACP is unavailable; Pi remains available. ${String(error)}` });
+      if (!unloading) notices.report({ id: 'acp-startup', operation: 'Clean up agents', message: `Could not finish legacy agent cleanup; Pi remains available. ${String(error)}` });
     });
     void invoke<string>('stop_copilot').then(generation => {
       if (typeof generation !== 'string' || !generation) throw new Error('Native Copilot host did not confirm a new window generation');
       if (!unloading) { copilotGeneration = generation; copilotReady = true; selectedConnection.barriersChanged(); startCopilotHistory(); }
     }).catch(error => {
-      if (!unloading) notices.report({ id: 'copilot-startup', operation: 'Initialize Copilot', message: `Copilot is unavailable; Pi and custom ACP remain independent. ${String(error)}` });
+      if (!unloading) notices.report({ id: 'copilot-startup', operation: 'Initialize Copilot', message: `Copilot is unavailable; Pi remains available. ${String(error)}` });
     });
     await zoom.ready;
     const defaults = await invoke<{ pi: string; node: string; cwd: string; home?: string }>('runtime_defaults');

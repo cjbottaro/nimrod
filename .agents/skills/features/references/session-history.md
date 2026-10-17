@@ -86,6 +86,6 @@ child tests. `test/shell.test.ts` ports mixed-source ordering, slow/error discov
 exact-ID Resume, drafts, open-row reuse, Close and supported deletion to SDK fixtures.
 `test/copilot-sdk.test.ts`, bridge fixtures and
 `test/browser/copilot-sdk.spec.ts` cover SDK behavior; generic ACP low-level
-list/load tests remain separate. Copilot ACP-specific discovery fixtures are removed.
+list/load tests remain separate; ACP creation/options are not exposed in the UI. Copilot ACP-specific discovery fixtures are removed.
 Updated fixtures have not been run. No checks/builds/app launch, live providers or
 user-session mutations were performed; native macOS/Linux acceptance remains pending.

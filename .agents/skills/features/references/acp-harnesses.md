@@ -1,6 +1,6 @@
 # Supporting ACP harnesses
 
-**Status: generic ACP foundation retained; Copilot-specific ACP integration removed.**
+**Status: generic ACP foundation retained internally; no current ACP product UI.**
 Earlier ACP baseline validation does not cover this cleanup. Updated fixtures
 are unrun; installed-agent/native acceptance remains pending.
 User guide: [ACP sessions](../../../../docs/acp.md).
@@ -17,13 +17,13 @@ explicitly revert selected merged commits. Cleanup requires separate authorizati
 ## Scope and integration boundary
 
 - Pi and [Copilot](copilot-sdk.md) remain bespoke integrations. Generic ACP is a
-  capability-driven fallback for custom agents, not a universal internal protocol.
+  capability-driven infrastructure for future agents, not a current UI option or universal internal protocol.
 - ACP profiles are immutable literal executable/args/env configurations. No built-in
   Copilot preset, durable ACP identity, project-history association, history source,
   deletion source or Copilot-specific card adapter remains.
-- Custom sessions are runtime-only, including profiles named `copilot`. Their
-  reported session IDs do not become saved Nimrod identities or draft scopes.
-  The shell creates through `session/new`; no saved ACP row is restored.
+- Retained custom-session adapters are runtime-only. Their reported IDs do not
+  become saved Nimrod identities or draft scopes. The shell has no ACP creation
+  factory or restored ACP rows; protocol `session/new` remains internal only.
 - Existing old layout records are ignored, not converted into SDK sessions.
   Old draft files and agent-owned history are not deleted or migrated.
 - Shared mounted views, optimistic Send, focus, scroll, disclosures, notices and
@@ -36,12 +36,11 @@ explicitly revert selected merged commits. Cleanup requires separate authorizati
 
 One Nimrod-owned palette and dispatcher owns project/session actions.
 **New session** stays Pi-default; **New Copilot session** uses the SDK;
-**New ACP session…** offers a custom JSON profile only. `new-acp` and
-`acp-options` are bindable actions with empty defaults. Supported selectors are
-session-bound; stale/canceled choices never act on another session.
-Agent-advertised slash commands stay in composer completion, not Nimrod actions.
-Switch includes custom sessions; Resume/Delete aggregate Pi and Copilot only.
-MCP inspection and Restart remain Pi-specific.
+ACP creation/options are absent from the palette, dispatcher and keybinding
+editor. Old `new-acp`/`acp-options` overrides remain stored but inert unknown
+IDs. Shell action contributions are filtered through the registered product
+actions. No active or restored ACP sessions enter the sidebar through product
+navigation. Pi and Copilot remain the exposed harnesses. MCP/Restart stay Pi-only.
 
 ## Current foundation
 
@@ -61,15 +60,16 @@ MCP inspection and Restart remain Pi-specific.
   Busy sends are not synthetic queues or steering.
 - `src/acp/profiles.ts`, `session-lifecycle.ts`, `src/main.ts`: frozen custom
   profiles and runtime-only lifecycle, independent owned start/stop/disconnect,
-  no durable reference/key/draft scope. Environment/credentials are never persisted.
-  Close confirms state loss and stops only the owning process.
+  no durable reference/key/draft scope. Dormant shell adapters are retained, but
+  the user-facing creation factory/actions are removed. Environment/credentials
+  are never persisted.
 - `src-tauri/src/acp.rs`: separate window/token-scoped owned stdio host.
   Canonical project cwd; literal args/env; optional Runtime Node PATH enrichment.
   Named-operation validation retains exact load IDs, project-filtered list/cursors
   and explicit delete IDs. Stdout is bounded at 16 MiB/record; stderr at 64 KiB/line
   with a bounded diagnostic tail. Ordered stdin has a 5s deadline without blocking
   output or Stop. SIGTERM/kill escalation observes exit; failed stop retains
-  reservations. Reload cleanup gates ACP creation, never Pi/Copilot startup.
+  reservations. Reload may reap owned legacy children, but never enables a product ACP action or gates Pi/Copilot startup.
 - `src/acp/card-plugins.ts`: generic protocol fallback only; Copilot adapters live
   in `src/copilot/card-plugins.ts` and accept SDK sources only. External plugins
   retain explicit ACP targets and the same public visual components.
@@ -89,10 +89,11 @@ Background requests never steal focus or navigate.
 ## Fixtures and remaining acceptance
 
 Generic protocol/client/session/card/native fixtures remain, including offline
-`test/fixtures/acp-agent.mjs`, custom-profile shell isolation and
-`test/browser/acp-sessions.spec.ts`. Browser sessions now launch custom profiles,
-not saved Copilot records. Copilot inspection/web fixtures exercise SDK data.
-Old Copilot ACP discovery/deletion fixtures were removed or ported to SDK.
+`test/fixtures/acp-agent.mjs`. Product custom-ACP shell/browser scenarios are
+removed because their entry points are no longer exposed.
+`test/browser/harness-availability.spec.ts` covers absent ACP actions/sidebar
+records and concise Copilot labels; shell/registry fixtures cover inert legacy
+shortcuts. Copilot inspection/web fixtures exercise SDK data.
 These changes have not been tested, checked, built or launched.
 
 Follow [Pi regression protection](harness-presentation.md#regression-guardrails-and-evidence),

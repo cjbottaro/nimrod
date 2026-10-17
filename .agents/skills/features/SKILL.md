@@ -15,7 +15,7 @@ Apply the [optimistic interaction policy](references/architecture.md#optimistic-
 
 ## Harness integration direction
 
-**Curated harnesses are bespoke-first: Pi native RPC and built-in [Copilot SDK](references/copilot-sdk.md).** The SDK migration is source-implemented with authored fixtures **unrun**; installed-CLI, packaging and native acceptance remain pending. [Generic ACP](references/acp-harnesses.md) stays an experimental fallback for runtime-only custom agents. The Copilot-specific ACP integration is removed; old draft files are retained without migration. Its historical POC worktree/abandonment strategy does not govern this separate SDK task.
+**Curated harnesses are bespoke-first: Pi native RPC and built-in [Copilot SDK](references/copilot-sdk.md).** The SDK migration is source-implemented with authored fixtures **unrun**; installed-CLI, packaging and native acceptance remain pending. [Generic ACP](references/acp-harnesses.md) is retained as dormant protocol/adapter infrastructure for future harnesses, without current creation/options UI. The Copilot-specific ACP integration is removed; old draft files are retained without migration. Its historical POC worktree/abandonment strategy does not govern this separate SDK task.
 
 **Product scope is Pi-first, not universal harness parity.** Build a small curated set of bespoke integrations plus a capability-driven generic ACP baseline; the [target portfolio and scope rules](references/harness-presentation.md#target-portfolio-and-scope) distinguish intended experience from implemented support. Use supported ACP/SDK/native interfaces where practical. Omit inaccessible capabilities rather than reverse-engineering or emulating them; expose cross-harness equivalents only where their actual semantics make sense. Experience tiers describe richness and polish, never weaker correctness or ownership guarantees. Harness identity is separate from its integration mechanism; Nimrod owns integration correctness, while card plugins enhance presentation.
 
@@ -56,7 +56,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Pi framing, response order and result correlation | [Pi transport](references/pi-transport.md) | [Writing messages](../../../docs/writing-messages.md) |
 | Consumer-oriented interface direction, lifecycle contracts and candidate inventory | [Consumer interfaces](references/consumer-interfaces.md) | Internal architecture only |
 | Shared presentation contracts, harness UI contributions and extraction rationale | [Harness presentation](references/harness-presentation.md) | [ACP sessions](../../../docs/acp.md), [Plugin authoring](../../../docs/card-plugin-api.md) |
-| Experimental ACP POC, immutable backend identity, command ownership and staged compatibility work | [ACP harnesses](references/acp-harnesses.md) | [ACP sessions (POC)](../../../docs/acp.md) |
+| Retained internal ACP protocol/adapters and historical POC boundaries | [ACP harnesses](references/acp-harnesses.md) | [ACP sessions (POC)](../../../docs/acp.md) |
 | Native per-session drafts, debounced saves and submission durability | [Native drafts](references/native-drafts.md) | [Drafts](../../../docs/drafts.md) |
 | Send/steer/queue, pending turns and recovery | [Composer](references/composer.md) | [Writing messages](../../../docs/writing-messages.md) |
 | Image paste, draft bytes and send outcomes | [Image paste](references/image-paste.md) | [Paste images](../../../docs/image-paste.md) |

@@ -19,9 +19,13 @@ Every palette action is bindable through one shared dispatcher; empty default bi
 - `src-tauri/src/preferences.rs`: delegates keybindings validation, preserving the existing native last-valid/atomic/CAS path.
 - `src-tauri/src/native_menu.rs` / `main.rs`: custom Minimize/Close Window items; Minimize restores the native macOS `Cmd+M` accelerator (menu-only on other platforms), while Close Window remains accelerator-free. Focused-window events use Tauri minimize/close, with normal window shutdown lifecycle. Quit/Open project stay native and reserved. Open recent project has an accelerator-free native menu entry and frontend-owned configurable `primary+shift+o` default; a native accelerator would intercept the old default after rebinding.
 
-## ACP POC actions
+## Removed ACP actions
 
-`new-acp` and `acp-options` are project actions with empty default bindings, using the same dispatcher and configurable hints. Existing `new` remains Pi-default even from an ACP session. Model/thinking require the selected ACP session to expose their selectors; Pi MCP inspection is unavailable there. Unavailable matches are still consumed, not passed to text editing. `test/keybindings-fixture.ts` includes the two new intentionally unbound IDs; shell/browser fixtures pass for mixed-session dispatch and existing Pi defaults; native shortcut acceptance remains separate. See [ACP POC](acp-harnesses.md).
+`new-acp` and `acp-options` are absent from the product action registry, palette,
+shared dispatcher and keybinding editor. Existing settings overrides remain inert
+unknown IDs, without migration or deletion. Generic ACP code remains internal;
+retaining an adapter is not permission to expose its actions. `new-copilot` remains
+registered, unbound by default, and labeled **New Copilot session**.
 
 ## Data and reset semantics
 

@@ -22,6 +22,12 @@ finalization is explicitly unsupported, not inferred from SDK type presence.
 
 ## Current automated validation
 
+ACP product-entry-point removal: generic transport/native/session/card adapters
+remain internal; creation/options actions, keybinding entries and shell factories
+are removed. Regression fixtures assert absent ACP palette/sidebar entries,
+concise Copilot labels and inert retired shortcuts. These follow-up changes are
+**unrun**: no checks, tests, builds, app launch or user-session mutation.
+
 Copilot shell compilation follow-up: reproduced `npm run build` failing with
 TS7022/TS7023 and a downstream TS7006 from the self-referential command-choice
 initializer. Explicitly typing the local `CopilotSession` breaks the inference

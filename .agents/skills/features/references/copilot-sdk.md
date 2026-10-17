@@ -109,7 +109,8 @@ contain only current supported identities. Agent-owned history is untouched.
 Visible harness labels are **Copilot** in the Project bar, sidebar and history;
 transport tags remain `copilot-sdk` for storage/API compatibility.
 **New Copilot session** has the concise hint **Start a Copilot session**.
-Generic ACP is retained for runtime-only custom profiles, without a Copilot preset.
+Generic ACP protocol/adapters are retained internally without a Copilot preset,
+creation/options actions or keybinding entries.
 
 ## Send, events, controls and decisions
 
@@ -199,8 +200,8 @@ External applications remain uncoordinated.
   the offline SDK fixture. It never starts an installed CLI.
 - `test/shell.test.ts`, `test/browser/copilot-sdk.spec.ts`: authored/updated
   **unrun** shell and isolated-browser fixtures for creation, exact resume,
-  decision ownership, newer drafts, tools and model controls. Generic ACP
-  browser scenarios launch runtime-only custom profiles.
+  decision ownership, newer drafts, tools and model controls. The harness-availability
+  browser fixture asserts that ACP actions/restored rows remain absent.
 
 Next authorized verification must run the normal offline checks/browser fixtures
 before any native acceptance request. Installed version metadata and released

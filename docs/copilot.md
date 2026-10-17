@@ -45,8 +45,8 @@ or in-place harness switching. Slash commands use the SDK's supported interface,
 not full terminal-UI emulation; see below.
 Only interactive Copilot sessions are supported. Plan/autopilot histories remain
 listed, but connection reports their unsupported mode without changing it or
-sending a prompt; change the mode in Copilot before reconnecting. Custom ACP
-agents remain a [separate experimental option](acp.md).
+sending a prompt; change the mode in Copilot before reconnecting. Generic agent
+protocol infrastructure is retained internally, without a separate creation action.
 
 ## Slash commands
 

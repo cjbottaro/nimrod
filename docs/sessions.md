@@ -1,6 +1,6 @@
 # Sessions
 
-Each session has its own conversation, draft and agent process. Switching sessions leaves background work running and preserves reading position and expanded cards. The backend is fixed for that session. The saved/temporary lifecycle below describes Pi; [SDK Copilot sessions](copilot.md) also retain sidebar entries and drafts, while custom ACP sessions remain runtime-only. Earlier Copilot integration entries are no longer restored; old stored drafts and agent history are left untouched.
+Each session has its own conversation, draft and agent process. Switching sessions leaves background work running and preserves reading position and expanded cards. The backend is fixed for that session. The saved/temporary lifecycle below describes Pi; [SDK Copilot sessions](copilot.md) also retain sidebar entries and drafts. Generic ACP is retained internally but has no session-creation UI. Earlier Copilot integration entries are no longer restored; old stored drafts and agent history are left untouched.
 
 ## Create a session
 
@@ -8,7 +8,6 @@ Each session has its own conversation, draft and agent process. Switching sessio
 | --- | --- |
 | **New session** / **⌘/Ctrl+N** | Start a normal persistent Pi conversation, regardless of the selected session's backend. |
 | **New Copilot session** | Start built-in official-SDK Copilot (no default shortcut). |
-| **New ACP session…** | Enter a custom ACP launch profile (experimental; no default shortcut). |
 | **New named session…** / **⌘+Option+N**, **Ctrl+Alt+N** | Enter a single-line name, then press Enter or Create. Escape cancels. Requires Pi's native `--name` support. |
 | **New temporary session** / **⌘/Ctrl+Shift+N** | Start without saved conversation history. Closing, quitting or reloading discards its drafts, recovery items and pop-outs. |
 

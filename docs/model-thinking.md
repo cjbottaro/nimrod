@@ -7,7 +7,7 @@ This does not switch harnesses or inherit Pi queue/thinking semantics.
 
 Click the model or thinking-level button in the **Status area**, or use **Select model…** / **Select thinking level…** in the command palette. Default shortcuts are **⌘/Ctrl Shift+M** for model and **⌘/Ctrl Shift+E** for thinking level (also searchable as “effort”).
 
-For [ACP POC sessions](acp.md), only agent-advertised selectors appear and configuration changes require idle. The behavior below describes the bespoke Pi integration.
+ACP adapters are retained internally, not exposed as session actions. The behavior below describes the bespoke Pi integration.
 
 Both pickers work while Pi is working, including during compaction. Changing a selection does not stop or restart the agent:
 

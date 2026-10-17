@@ -5,7 +5,7 @@ same opt-in local capture pipeline. It records native live `tool.*` events, stre
 requests and SDK-reported permission completions, not conversation prose or saved-history replay.
 Custom ACP captures use `acp`; schemas are not translated into Pi.
 
-Enable **Capture tool activity** in **Global Settings → Diagnostics** to automatically collect local JSON Lines logs for card/plugin development. It is off by default and covers **Pi, including extension tools**, **official SDK Copilot**, and **custom ACP agents**.
+Enable **Capture tool activity** in **Global Settings → Diagnostics** to automatically collect local JSON Lines logs for card/plugin development. It is off by default and covers **Pi, including extension tools**, and **Copilot**. ACP capture formats remain supported internally, but ACP sessions cannot be created from the current UI.
 
 No manual inspection/capture action is needed. Enable it, work normally, then give your coding assistant the relevant log paths and time window to inventory tool payloads and develop bespoke cards.
 

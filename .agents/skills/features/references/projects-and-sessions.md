@@ -16,11 +16,10 @@ Discovery never loads conversations. Close retains history/drafts; deletion uses
 the supported SDK API, independently of Pi-only Restart.
 
 [Generic ACP](acp-harnesses.md) retains frozen custom launch profiles,
-`AcpSession`/`AcpHost`, generic cards and runtime-only sessions. The former
+`AcpSession`/`AcpHost`, generic cards and runtime-only adapter code, with no creation/options actions or restored sidebar sessions. The former
 Copilot ACP preset, saved identities, discovery and deletion routes are removed.
 Old layout entries are ignored without reinterpreting IDs or migrating/deleting
-stored drafts or agent history. Custom ACP has no persistence, Resume, deletion
-or Restart UI. New session stays Pi-default; harness identity is immutable.
+stored drafts or agent history. Generic ACP has no current product UI, including creation/options, persistence, Resume, deletion or Restart. New session stays Pi-default; harness identity is immutable.
 Shared shell, mounted views and optimistic Send are unchanged. Updated fixtures
 are unrun; native acceptance remains pending. [Harness presentation](harness-presentation.md)
 owns the integration boundary.
