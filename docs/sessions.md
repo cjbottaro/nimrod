@@ -21,7 +21,7 @@ Pi writes persistent history. Until the first verified save, the Project bar sho
 
 Resume orders all harnesses together by the displayed time, newest first, using the sidebar's current time for already-open entries. Unknown times appear last. Each row shows its harness immediately after the date, below the title.
 
-Choosing an already-open entry reuses it. Selecting an inactive saved session loads its history and connects its owning agent without sending a prompt. Reopening a project restores its remembered sidebar entries; Copilot conversations stay disconnected until user selection/navigation, independently of the project's discovery process. Pi retains its existing selected-session connection behavior.
+Choosing an already-open entry reuses it. Selecting an inactive saved session loads its history and connects its owning agent without sending a prompt. Reopening a project restores its remembered sidebar entries and reconnects the last selected session, including Copilot; other restored Copilot rows stay disconnected until selected. Discovery remains independent and never loads a conversation.
 
 Pi discovery lists the configured Pi session store. There is no arbitrary session-file chooser. Pi child sessions recorded as subagents or forks/branches are excluded from saved-history pickers; closed Pi children have no opening UI. Copilot supplies its own exact project-directory catalog. Custom ACP history is not included.
 

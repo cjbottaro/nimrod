@@ -21,7 +21,6 @@ export interface SessionPersistence {
 export interface SessionConnectivity {
   readonly label: string;
   readonly connection: SessionConnectionState;
-  readonly connectOnStartup: boolean;
   /** Selection eligibility, not permission to create a new session or a readiness acknowledgement. */
   eligibility(): ConnectionEligibility;
   /** Settles when the guarded attempt finishes, including a skipped or locally reported failure.

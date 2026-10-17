@@ -8,7 +8,6 @@ export function copilotSessionLifecycle(owner: () => SessionLifecycleOwner, back
     get key() { return backend.savedSessionId === undefined ? undefined : copilotSdkScope(backend.savedSessionId); },
     get draftScope() { return this.key; },
     get connection() { return sessionConnectionState(owner(), !!backend.session && !backend.session.state.sessionUnavailable); },
-    connectOnStartup: false,
     eligibility() {
       if (!this.identity) return 'unavailable';
       const gate = host.gate(); if (gate !== 'ready') return gate;

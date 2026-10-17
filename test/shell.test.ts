@@ -451,7 +451,7 @@ test('Copilot slash commands discover arguments, open harness choice modals and 
   } finally { f.win.close(); }
 });
 
-test('SDK sidebar identity, title, recency and draft survive reopening without automatic startup or prompt replay', async () => {
+test('SDK sidebar identity, title, recency and draft survive reopening with selected-session connection and no prompt replay', async () => {
   const key = 'nimrod.tabs.v1:/project', scope = copilotSdkScope('sdk-fixture');
   const first = await fixture(undefined, { windowWorkspace: '/project' });
   let appState: Record<string, unknown>, nativeDrafts: Record<string, unknown>;
@@ -486,13 +486,11 @@ test('SDK sidebar identity, title, recency and draft survive reopening without a
     assert.equal(f.rows().length, 1);
     assert.match(f.rows()[0].textContent!, /Copilot sidebar title.*Copilot/);
     assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Draft after restart');
-    assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, 1, 'project discovery initializes without loading a conversation');
-    assert.equal(f.calls.some(call => call.command === 'start_pi' || call.command === 'write_copilot' && ['connect', 'prompt'].includes(String((call.args.message as JsonRecord).method))), false);
-    const used = (f.preferences.value.state[key] as { tabs: { lastUsed: number }[] }).tabs[0].lastUsed;
-    f.rows()[0].click(); await f.tick(); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, 2, 'project discovery and the selected conversation start independently');
     const messages = () => f.calls.filter(call => call.command === 'write_copilot').map(call => call.args.message as JsonRecord);
-    assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, 2);
     assert.equal(messages().find(message => message.method === 'connect')?.sessionId, 'sdk-fixture');
+    assert.equal(f.calls.some(call => call.command === 'start_pi' || call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'prompt'), false);
+    const used = (f.preferences.value.state[key] as { tabs: { lastUsed: number }[] }).tabs[0].lastUsed;
     assert.equal(messages().some(message => message.method === 'prompt'), false);
     assert.match(f.element('messages').textContent!, /Saved Copilot question.*Saved Copilot answer/s);
     assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Draft after restart');
@@ -521,8 +519,8 @@ test('retired Copilot ACP records never launch, restore rows or alias SDK drafts
     assert.doesNotMatch(f.rows()[0].textContent!, /ACP|SDK/);
     assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Current draft');
     assert.equal(f.calls.some(call => call.command === 'start_acp'), false);
-    assert.equal(f.calls.some(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'connect'), false);
-    f.rows()[0].click(); await f.tick(); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, 2, 'the valid fallback selection reconnects when the persisted target is retired');
+    assert.equal(f.calls.some(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'connect'), true);
     assert.equal(f.calls.some(call => call.command === 'start_acp'), false);
     assert.equal(f.saved().drafts[legacyScope].draft, 'Retired draft');
     assert.equal(f.saved().drafts[sdkScope].draft, 'Current draft');
@@ -536,13 +534,12 @@ test('missing Copilot executable retains the sidebar identity and draft and supp
     nativeDrafts: { [scope]: { draft: 'Keep my draft' } } };
   const f = await fixture(undefined, options);
   try {
-    f.rows()[0].click(); await f.tick(); await f.tick();
     assert.equal(f.rows().length, 1);
     assert.match(f.win.document.querySelector('.session-view:not([hidden])')!.textContent!, /not found on PATH/);
     assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Keep my draft');
     assert.equal((f.preferences.value.state[key] as { tabs: { sessionId: string }[] }).tabs[0].sessionId, 'saved-id');
     await f.tick(); await f.tick();
-    assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, 2, 'discovery and conversation failures never retry automatically');
+    assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, 2, 'startup selection connects once and does not retry its failure automatically');
     options.copilotStartError = undefined;
     const retry = [...f.win.document.querySelectorAll<HTMLButtonElement>('.session-view:not([hidden]) button')].find(button => button.textContent === 'Retry connection')!;
     assert.ok(retry); retry.click(); await f.tick(); await f.tick();

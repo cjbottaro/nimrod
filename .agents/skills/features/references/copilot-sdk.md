@@ -80,14 +80,16 @@ The SDK owns conversation files. Nimrod stores only sidebar membership, title,
 recency/selection and its separate draft. Discovery association is
 `nimrod.history.copilot-sdk.v1:<canonical cwd>`; it survives closing all rows.
 
-Opening/restoring a project never creates, resumes or prompts a conversation.
-Associated projects can start one **discovery-only** SDK client. `listSessions`
+Opening/restoring a project never prompts a conversation. Its restored selected
+Copilot row reconnects automatically; restored background rows remain disconnected.
+Associated projects can also start one **discovery-only** SDK client. `listSessions`
 does not load history; exact `context.workingDirectory` and nonremote membership
 are checked independently of the server filter. Dates are serialized SDK Dates,
 not invented user-message timestamps. Pi/Copilot sources publish independently
 through the existing shared history picker; Refresh is explicit.
 
-Selecting a saved ID mounts/activates its existing shell and draft immediately,
+Selecting a saved ID, including startup restoration of the last selection,
+mounts/activates its existing shell and draft immediately,
 then verifies fresh project membership and calls `resumeSession` on that **exact
 ID**, with `allowTranscriptRecovery:false` and `continuePendingWork:false`.
 There is no automatic repair, pending-work continuation, new-session fallback,

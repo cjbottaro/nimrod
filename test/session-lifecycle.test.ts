@@ -130,8 +130,6 @@ test('saved reference decoding preserves legacy Pi entries and tagged Copilot en
   assert.notEqual(p.lifecycle.key, c.lifecycle.key);
   assert.equal(c.lifecycle.key, copilotSdkScope('saved-id'));
   assert.equal(p.lifecycle.draftScope, 'file:/fixture/session.jsonl');
-  assert.equal(p.lifecycle.connectOnStartup, true);
-  assert.equal(c.lifecycle.connectOnStartup, false);
   p.owner.mode = 'temporary';
   assert.equal(p.lifecycle.identity, undefined, 'a temporary Pi session cannot become persistent because it reports a file');
 });
