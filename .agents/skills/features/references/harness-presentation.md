@@ -45,9 +45,9 @@ ACP is a broad fallback, not a ceiling or universal harness protocol. Copilot us
 ## Code map and contracts
 
 - `src/conversation-model.ts`: shared canonical transcript records. Native tool identity, category, title and immutable metadata are distinct; unavailable fields remain unavailable.
-- `src/conversation-view-host.ts`: internal presentation snapshots, interaction policy, keyed controls and view messages. These are in-process presentation inputs, not a new harness wire protocol. Queue presentation is optional and supplied only by an integration with real queue semantics.
+- `src/conversation-view-host.ts`: internal presentation snapshots, interaction policy and view messages. `ConversationViewState.statusArea` consumes the narrow `StatusAreaSnapshot` interface in `src/status-area.ts`; see [Status-area interface](#status-area-interface). These are in-process presentation inputs, not a new harness wire protocol. Queue presentation is optional and supplied only by an integration with real queue semantics.
 - `src/conversation-view.ts`: the actual shared mounted engine, moved from the Pi entry without changing its scroll/disclosure/hidden-catch-up owners. Legacy pure rendering helpers still live under `src/pi/`; relocating all helpers is not a prerequisite or a semantic abstraction.
-- `src/pi/view-policy.ts`: Pi-only slash interception, steering/follow-up keyboard mapping, compaction hints, skill disclosures, palette actions and projection of Pi configuration/extensions/usage. `createPiViewProjection` preserves lazy transcript access and reference-stable controls/information/queue projections on content-only updates. Never spread/materialize `TranscriptUpdates`' lazy messages when projecting UI.
+- `src/pi/view-policy.ts`: Pi-only slash interception, steering/follow-up keyboard mapping, compaction hints, skill disclosures, palette actions and conversation projection. `src/pi/status-area.ts` separately owns Pi configuration/extensions/usage presentation. `createPiViewProjection` preserves lazy transcript access and reference-stable Status-area/queue projections on content-only updates. Never spread/materialize `TranscriptUpdates`' lazy messages when projecting UI.
 - `src/pi/webview-client.ts` / `view-host.ts` / `view-state.ts`: compatibility entry for Pi callers and existing fixtures. Pi controller/reducer state and RPC behavior remain unchanged. Control IDs translate to existing Pi operations at the adapter boundary.
 - `src/acp/view-policy.ts`: advertised-only slash completion, busy-send rejection through the owning session, no steering/queues, text-only attachment guidance and agent-specific Stop label. ACP does not interpret Pi skill markup.
 - `src/acp/session.ts`: produces display state directly, without fabricated Pi queue, extension or model-control records. Agent-advertised model/thinking/**mode** categories contribute keyed Status-area controls; remaining or uncategorized options remain in the palette. Values/descriptions come from the agent; a mode label does not imply a client-invented permission policy.
@@ -56,6 +56,34 @@ ACP is a broad fallback, not a ceiling or universal harness protocol. Copilot us
 Control updates preserve existing button nodes by ID, hide unavailable controls/separators, and do not navigate or focus. New controls use the same Status-area layout. Pi controls remain available during work/compaction under Pi's existing policy; ACP controls are disabled while a turn or configuration request is active. These are separate state reasons, recomputed at turn/configuration transitions.
 
 Local draft clearing, previews, Send recency/follow effects, uncertain-delivery handling and no replay remain governed by [composer](composer.md) and [architecture](architecture.md#optimistic-interaction-policy). Policies classify intent before draft clearing; the shared view performs local effects, and later results never repeat them.
+
+## Status-area interface
+
+**Status: source-implemented; new/updated fixtures unrun.** This extraction preserves current visible behavior and layout; it does not establish SDK/native acceptance or add harness parity.
+
+The Status area consumes `StatusAreaSnapshot` (`src/status-area.ts`) through `ConversationViewState.statusArea`, not concrete harness state. It contains:
+
+- `capabilities`: optional metrics support with the integration's accessible label, and optional information/subagent/queue surfaces. Omitted/false means unsupported. Supported metrics with no reported value stay hidden; zero remains a real value. The renderer gates surfaces on capabilities even if a producer retains older data.
+- `controlsLabel` and keyed `controls`: control descriptors are themselves the support inventory, avoiding parallel model/thinking flags. Absent controls are unsupported; `disabled` controls are supported but temporarily unavailable. Values/titles remain integration-owned, without a universal model/effort enum.
+- Optional reported `metrics`, `information` and `subagents`: presentation values, never inferred costs, token estimates, queues or child activity.
+
+Concrete mappings:
+
+| Producer | Controls / availability | Optional surfaces |
+| --- | --- | --- |
+| `src/pi/status-area.ts::createPiStatusArea` | Model/thinking; existing readiness, changing and session-unavailable gates. Main work/compaction do not disable them. | Pi-formatted cost/context/auto-compaction estimates, extension information/widgets, recognized subagent counts and real Pi queue. |
+| `src/copilot/status-area.ts::createCopilotStatusArea` | Catalog-supported model and selected-model-supported effort; the SDK session supplies idle/configuration/command/readiness availability. | Root SDK-reported context-token usage only; no invented costs, queues, extension or subagent rows. |
+| Dormant `src/acp/session.ts` | Existing advertised configuration descriptors and concrete gates, mechanically migrated to the same snapshot. | Existing context/plan information; no new product entry points. |
+
+Each projection is constructed per owning session/view. Publications remain synchronous and ordered on the existing conversation channel; no second event bus, subscription lifetime, controller or persistence is introduced. Producers retain the entire snapshot and child arrays on content-only updates, and rebuild only changed contributions. Pi's projector accepts only Status-area inputs and never reads transcript history. Capability changes must invalidate their affected surfaces, including hidden-session catch-up.
+
+Main activity (`busy`/`status`), connection availability and the composer-owned queue/recovery remain on their existing conversation state. The Status area reads real queue presentation only when supported; local recovered messages remain available independently of harness queue support. No queue semantics move into the generic interface.
+
+Actions still dispatch opaque control IDs through the originating mounted view's session-bound `selectControl` path. Concrete session pickers retain their existing validation, authoritative configuration reconciliation and error handling. Snapshot publication/receipt is not an async operation acknowledgement and authorizes no prompt, navigation, focus, draft mutation or replay. Control nodes remain keyed and retained across disabling/removal/reappearance; layout and scroll owners are unchanged.
+
+Authored fixtures: `test/status-area.test.ts` covers both concrete mappings, reference stability, capability/availability distinctions and unknown versus zero metrics. `test/conversation-view.test.ts` covers lazy history, keyed controls, surface gating and capability revocation during hidden catch-up. `test/copilot-sdk.test.ts` covers real controller publications, root/child usage, model-specific effort removal, idle/busy and disconnect. Dormant ACP fixtures use the new snapshot location. **None of these changes have been tested, checked, built or accepted natively.**
+
+This is internal responsibility extraction only: no storage/wire change, user-guide/changelog behavior change or new public plugin API. The shell remains responsible for composition and session-bound action routing; concrete integrations retain configuration operations and lifecycle.
 
 ## Fidelity and transport fixes accompanying the boundary
 

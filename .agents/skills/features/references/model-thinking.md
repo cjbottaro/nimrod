@@ -18,7 +18,8 @@ Changing Pi-scoped model/thinking preferences stays available during work/compac
 
 - `src/pi/model-thinking-controller.ts`: readiness, single-change lock, fresh Pi state/capabilities, mutation and acknowledged refresh.
 - `src/pi/session.ts`: session-bound pickers, Pi-reported scoped models, configuration blocking only for session unavailability or pending prompt acceptance.
-- `src/pi/webview-client.ts`: status-area entry points; disabled only before controls are ready, during a preference change, or when the session is unavailable.
+- `src/status-area.ts`, `src/pi/status-area.ts`, `src/copilot/status-area.ts`: shared capability-driven Status-area snapshot and concrete configuration presentation. [Harness presentation](harness-presentation.md#status-area-interface) owns publication/availability semantics.
+- `src/pi/webview-client.ts`: compatibility entry points; Pi Status-area controls are disabled only before controls are ready, during a preference change, or when the session is unavailable.
 - `src/main.ts`: originating-session binding, serialized picker tasks and lifecycle guards.
 - [Command interactions](command-interactions.md): cancellation, stale metadata, focus and current-value markers.
 - [Keybindings](keybindings.md): model `primary+shift+m` and thinking/effort `primary+shift+e` defaults, effective hints and overrides; native macOS Cmd-M remains Minimize.

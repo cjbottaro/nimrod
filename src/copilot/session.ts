@@ -3,6 +3,7 @@ import type { DisplayMessage } from '../conversation-model';
 import type { ConversationViewMessage, ConversationViewState } from '../conversation-view-host';
 import type { ToolCaptureSink } from '../tool-capture';
 import { copilotToolResult } from './tool-result';
+import { createCopilotStatusArea } from './status-area';
 import { commandChoices, copilotCommands, findCopilotCommand, parseCopilotCommand, type CommandChoice, type CopilotCommand } from './commands';
 
 interface Model { id: string; name: string; supportedReasoningEfforts?: string[]; capabilities?: { supports?: { reasoningEffort?: boolean } }; policy?: { state: string }; }
@@ -21,7 +22,7 @@ export interface CopilotSessionUi {
 export class CopilotSession {
   readonly connection: CopilotConnection;
   state: Omit<ConversationViewState, 'messages'> & { messages: DisplayMessage[]; sessionName?: string } = {
-    messages: [], sessionUnavailable: true, busy: false, status: 'Connecting Copilot…', controls: [],
+    messages: [], sessionUnavailable: true, busy: false, status: 'Connecting Copilot…',
   };
   commands: CopilotCommand[] = [];
   private commandOperation?: AbortController;
@@ -34,7 +35,8 @@ export class CopilotSession {
   private effort?: string;
   private configuring = false;
   private configurationVersion = 0;
-  private controlsSignature = '';
+  private projectStatus = createCopilotStatusArea();
+  private usage?: { currentTokens: number; tokenLimit: number };
   private ended = false;
   private replaying = false;
   private failed = false;
@@ -45,6 +47,7 @@ export class CopilotSession {
   private captureConnectionId = crypto.randomUUID();
   private runtimeVersion?: string;
   constructor(send: (message: BridgeRequest) => Promise<void>, private ui: CopilotSessionUi) {
+    this.updateStatusArea();
     this.connection = new CopilotConnection(send, packet => this.packet(packet), reason => {
       this.ended = true; this.decisions.abort(); this.commandOperation?.abort(); this.finish();
       this.state = { ...this.state, sessionUnavailable: true, busy: false, status: 'Disconnected' };
@@ -309,7 +312,7 @@ export class CopilotSession {
       this.publish([]);
     } else if (type === 'session.model_deselected' && !raw.agentId) { this.configurationVersion++; this.model = undefined; this.effort = undefined; this.publish([]); }
     else if (type === 'session.usage_info' && !raw.agentId && typeof data.currentTokens === 'number' && typeof data.tokenLimit === 'number') {
-      this.state = { ...this.state, metrics: `${data.currentTokens.toLocaleString()} / ${data.tokenLimit.toLocaleString()} context tokens` }; this.publish([]);
+      this.usage = { currentTokens: data.currentTokens, tokenLimit: data.tokenLimit }; this.publish([]);
     }
     else if (type === 'session.error') {
       if (!raw.agentId) this.failed = true;
@@ -362,17 +365,14 @@ export class CopilotSession {
       // SDK callbacks can arrive before create/resume publishes its authoritative identity.
       sessionId: this.sessionId || `connecting:${this.captureConnectionId}`, connectionId: this.captureConnectionId, toolCallId, event, payload });
   }
+  private updateStatusArea(): void {
+    const statusArea = this.projectStatus({ model: this.model, effort: this.effort, supportsModel: this.supports('model'),
+      supportsThinking: this.supports('thinking'), available: this.canSubmit, usage: this.usage });
+    if (this.state.statusArea !== statusArea) this.state = { ...this.state, statusArea };
+  }
   private publish(rows?: DisplayMessage[]): void {
     if (this.replaying) return;
-    const disabled = !this.canSubmit;
-    const signature = JSON.stringify([disabled, this.model, this.effort, this.supports('model'), this.supports('thinking')]);
-    if (signature !== this.controlsSignature) {
-      this.controlsSignature = signature;
-      this.state = { ...this.state, controls: [
-        ...(this.supports('model') ? [{ id: 'model', label: this.model || 'Copilot default', title: 'Select Copilot model', disabled }] : []),
-        ...(this.supports('thinking') ? [{ id: 'thinking', label: this.effort || 'Model default', title: 'Select Copilot reasoning effort', disabled }] : []),
-      ] };
-    }
+    this.updateStatusArea();
     const base = this.revision++;
     this.ui.publish({ type: 'snapshot', state: this.state, commands: this.commands, transcript: { base, revision: this.revision, ...(rows ? { rows } : {}) } }); this.ui.changed();
   }

@@ -116,8 +116,8 @@ test('ACP applies configuration results in wire order, never over a later update
   f.update({ sessionUpdate: 'config_option_update', configOptions: options('small') });
   await selected;
   assert.equal(f.session.options[0].current, 'small');
-  assert.equal(f.session.state.controls?.find(control => control.id === 'model')?.label, 'Small');
-  assert.equal(f.session.state.controls?.find(control => control.id === 'model')?.disabled, false);
+  assert.equal(f.session.state.statusArea?.controls?.find(control => control.id === 'model')?.label, 'Small');
+  assert.equal(f.session.state.statusArea?.controls?.find(control => control.id === 'model')?.disabled, false);
 });
 
 test('ACP completion never injects Pi-only GUI commands', () => {
@@ -240,13 +240,13 @@ test('configuration updates while working do not latch controls disabled after c
   const turn = f.session.handle({ type: 'prompt', id: 'working', text: 'work' });
   const mode = { id: 'approval', name: 'Approval mode', description: 'Agent-owned permission policy', type: 'select', category: 'mode', currentValue: 'ask', options: [{ value: 'ask', name: 'Ask first' }] };
   f.update({ sessionUpdate: 'config_option_update', configOptions: [...options('large'), mode] });
-  assert.ok(f.session.state.controls?.every(control => control.disabled));
+  assert.ok(f.session.state.statusArea?.controls?.every(control => control.disabled));
   assert.equal(f.session.controlOption('mode')?.id, 'approval');
-  assert.match(f.session.state.controls?.find(control => control.id === 'mode')?.title || '', /Agent-owned permission policy/);
+  assert.match(f.session.state.statusArea?.controls?.find(control => control.id === 'mode')?.title || '', /Agent-owned permission policy/);
   assert.equal('modelControls' in f.session.state, false);
   assert.equal('queue' in f.session.state, false);
   assert.equal('extensionWidgets' in f.session.state, false);
   f.reply('session/prompt', { stopReason: 'end_turn' }); await turn;
-  assert.ok(f.session.state.controls?.every(control => !control.disabled));
-  assert.equal(f.session.state.controls?.find(control => control.id === 'model')?.label, 'Large');
+  assert.ok(f.session.state.statusArea?.controls?.every(control => !control.disabled));
+  assert.equal(f.session.state.statusArea?.controls?.find(control => control.id === 'model')?.label, 'Large');
 });

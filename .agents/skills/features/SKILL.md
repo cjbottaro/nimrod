@@ -65,6 +65,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Explicit labels and user-code inference | [Syntax highlighting](references/syntax-highlighting.md) | [Syntax highlighting](../../../docs/syntax-highlighting.md) |
 | Snapshot storage, visibility and native reference focus | [Pop-outs](references/pop-outs.md) | [Pop-outs](../../../docs/pop-outs.md) |
 | Background alerts, previews and native click routing | [Notifications](references/notifications.md) | [Notifications](../../../docs/notifications.md) |
+| Capability-driven Status-area interface, Pi/SDK projections and keyed controls | [Status-area contract](references/harness-presentation.md#status-area-interface) | Existing behavior; internal extraction only |
 | Live model/thinking configuration | [Model/thinking](references/model-thinking.md) | [Model/thinking](../../../docs/model-thinking.md) |
 | Global defaults, project JSONC overrides, migration and window state | [Preferences](references/preferences.md) | [Settings](../../../docs/settings.md) |
 | Global Settings window, Project settings page, categories and independent width | [Settings layout](references/settings-layout.md) | [Settings](../../../docs/settings.md) |

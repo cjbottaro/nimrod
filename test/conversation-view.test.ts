@@ -40,18 +40,19 @@ test('Pi view projection keeps lazy history and stable content-only UI dependenc
   const first = project({ ...state, get messages() { reads++; return []; } });
   const second = project({ ...state, get messages() { reads++; return []; } });
   assert.equal(reads, 0, 'projection must not materialize TranscriptUpdates history');
-  assert.equal(first.controls, second.controls);
-  assert.equal(first.information, second.information);
+  assert.equal(first.statusArea, second.statusArea);
+  assert.equal(first.statusArea?.controls, second.statusArea?.controls);
+  assert.equal(first.statusArea?.information, second.statusArea?.information);
   assert.equal(first.queue, second.queue);
-  assert.equal(first.subagents, '2 running agents', 'preserve the Pi extension’s reported label');
+  assert.equal(first.statusArea?.subagents, '2 running agents', 'preserve the Pi extension’s reported label');
   assert.equal(first.status, 'Idle — ready for your message');
   const duringWork = project({ ...state, busy: true, compacting: true });
-  assert.equal(duringWork.controls?.find(control => control.id === 'model')?.disabled, false, 'Pi preferences remain available during work/compaction');
+  assert.equal(duringWork.statusArea?.controls.find(control => control.id === 'model')?.disabled, false, 'Pi preferences remain available during work/compaction');
   assert.equal(duringWork.inputLocked, true);
   assert.equal(piInteraction.composer(duringWork).stopLabel, 'Cancel compaction');
   void first.messages; assert.equal(reads, 1);
   const disconnected = project({ ...state, sessionUnavailable: true });
-  assert.ok(disconnected.controls?.every(control => control.disabled));
+  assert.ok(disconnected.statusArea?.controls.every(control => control.disabled));
 });
 
 test('session action contributions expose only the owning integration operations', () => {
@@ -87,20 +88,57 @@ test('shared controls retain mounted identity, hide unsupported controls and dis
   const f = fixture();
   try {
     const mode = { id: 'mode', label: 'Ask', title: 'Select approval mode', disabled: false };
-    f.snapshot({ controls: [mode], messages: [], sessionUnavailable: false });
+    const statusArea = { capabilities: {}, controlsLabel: 'Fixture settings', controls: [mode] };
+    f.snapshot({ statusArea, messages: [], sessionUnavailable: false });
     const button = f.win.document.querySelector<HTMLButtonElement>('[data-control-id="mode"]')!;
     assert.equal(f.win.document.querySelector<HTMLButtonElement>('#model')!.hidden, true);
     assert.equal(f.win.document.querySelector<HTMLButtonElement>('#thinking')!.hidden, true);
     assert.equal(f.win.document.querySelector<HTMLElement>('.status-separator')!.hidden, true);
     button.focus(); button.click();
     assert.deepEqual(JSON.parse(JSON.stringify(f.sent.at(-1))), { type: 'selectControl', id: 'mode' });
-    f.snapshot({ controls: [{ ...mode, label: 'Review', disabled: true }], messages: [], busy: true });
+    f.snapshot({ statusArea: { ...statusArea, controls: [{ ...mode, label: 'Review', disabled: true }] }, messages: [], busy: true });
     assert.equal(f.win.document.querySelector('[data-control-id="mode"]'), button);
     assert.equal(button.disabled, true);
     assert.equal(f.win.document.querySelector('#send')!.getAttribute('aria-label'), 'Stop Fixture');
-    f.snapshot({ controls: [{ ...mode, label: 'Review' }], messages: [], busy: false });
+    f.snapshot({ statusArea: { ...statusArea, controls: [{ ...mode, label: 'Review' }] }, messages: [], busy: false });
     assert.equal(button.disabled, false);
     assert.equal(f.win.document.querySelector('#send')!.getAttribute('aria-label'), 'Send message');
+    f.snapshot({ messages: [], statusArea: { ...statusArea, controls: [] } });
+    assert.equal(button.hidden, true, 'removed contribution is unsupported, not merely disabled');
+    assert.equal(f.win.document.querySelector<HTMLElement>('#status-controls')!.hidden, true);
+    f.snapshot({ messages: [], statusArea });
+    assert.equal(f.win.document.querySelector('[data-control-id="mode"]'), button);
+    assert.equal(button.hidden, false);
+  } finally { f.dom.window.close(); }
+});
+
+test('status capabilities gate optional surfaces and reconcile revocation during hidden catch-up', () => {
+  const f = fixture();
+  try {
+    const document = f.win.document;
+    const statusArea = {
+      capabilities: { metrics: { label: 'Fixture usage' }, information: true, subagents: true, queue: true },
+      controlsLabel: 'Fixture configuration', controls: [], metrics: '0 context tokens',
+      information: [{ label: 'note', text: 'Reported information' }], subagents: '2 running agents',
+    };
+    const queue = { steering: [], followUp: ['Follow up'], authoritative: true };
+    f.snapshot({ messages: [], statusArea, queue });
+    assert.equal(document.querySelector('#session-metrics')!.textContent, '0 context tokens');
+    assert.equal(document.querySelector('#session-metrics')!.getAttribute('aria-label'), 'Fixture usage');
+    assert.equal(document.querySelector<HTMLElement>('#session-metrics')!.hidden, false);
+    assert.match(document.querySelector('#extension-activity')!.textContent!, /Reported information/);
+    assert.equal(document.querySelector<HTMLElement>('#subagent-activity')!.hidden, false);
+    assert.match(document.querySelector('#queue-activity')!.textContent!, /1 pending/);
+    f.view.setActive(false);
+    f.snapshot({ messages: [], statusArea: { ...statusArea, capabilities: {} }, queue });
+    assert.equal(document.querySelector<HTMLElement>('#session-metrics')!.hidden, false, 'hidden sessions defer painting');
+    f.view.setActive(true); f.flush();
+    for (const id of ['session-metrics', 'extension-activity', 'subagent-activity', 'queue-activity'])
+      assert.equal(document.querySelector<HTMLElement>(`#${id}`)!.hidden, true, `${id} must obey capability revocation despite retained data`);
+    f.snapshot({ messages: [], statusArea: { ...statusArea, metrics: undefined }, queue });
+    assert.equal(document.querySelector<HTMLElement>('#session-metrics')!.hidden, true, 'supported but not reported stays hidden');
+    assert.equal(document.querySelector('#session-metrics')!.getAttribute('aria-label'), 'Fixture usage');
+    assert.equal(document.querySelector<HTMLElement>('#queue-activity')!.hidden, false);
   } finally { f.dom.window.close(); }
 });
 

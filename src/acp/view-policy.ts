@@ -26,7 +26,7 @@ export function agentSlashCommands(raw: unknown): SlashCommand[] {
 /** ACP owns busy rejection and advertised commands. No synthetic steering or queues. */
 export function acpInteraction(label: string, validate: (text: string) => string | undefined): ConversationInteraction {
   return {
-    label, controlsLabel: 'ACP session configuration', metricsLabel: 'ACP-reported context usage',
+    label,
     unsupportedImages: 'This ACP proof of concept accepts text only. No image was attached.',
     commands: agentSlashCommands,
     keyboardMode: event => keyboardSubmissionMode(event, false),

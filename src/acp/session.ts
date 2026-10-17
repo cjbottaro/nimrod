@@ -5,6 +5,7 @@ import type { DisplayMessage, ContentBlock } from '../conversation-model';
 import type { ConversationViewState, ConversationViewMessage } from '../conversation-view-host';
 import { formatNativeSessionStats } from '../pi/session-stats';
 import { patchTool } from './tool-state';
+import type { StatusAreaSnapshot } from '../status-area';
 
 export interface AcpSessionUi {
   toolCapture?: ToolCaptureSink;
@@ -17,7 +18,7 @@ export interface AcpSessionUi {
   identified?(sessionId: string): void;
 }
 export interface AcpOption { id: string; name: string; description?: string; category?: string; current: string; options: { value: string; name: string }[]; legacy?: 'model' | 'mode'; }
-export interface AcpSessionState extends ConversationViewState { messages: DisplayMessage[]; busy: boolean; status: string; sessionName?: string; }
+export interface AcpSessionState extends ConversationViewState { messages: DisplayMessage[]; busy: boolean; status: string; sessionName?: string; statusArea: StatusAreaSnapshot; }
 const text = (value: unknown) => typeof value === 'string' ? value : '';
 function stringify(value: unknown): string { return typeof value === 'string' ? value : JSON.stringify(value, null, 2) ?? ''; }
 function contentText(value: unknown): string {
@@ -32,7 +33,8 @@ function contentText(value: unknown): string {
 /** ACP semantics -> shared presentation records, never synthetic Pi RPC events. */
 export class AcpSession {
   readonly client: AcpClient;
-  state: AcpSessionState = { messages: [], busy: false, status: 'Connecting ACP…', sessionUnavailable: true, controls: [] };
+  state: AcpSessionState = { messages: [], busy: false, status: 'Connecting ACP…', sessionUnavailable: true,
+    statusArea: { capabilities: { metrics: { label: 'ACP-reported context usage' }, information: true }, controlsLabel: 'ACP session configuration', controls: [] } };
   commands: { name: string; description: string }[] = [];
   options: AcpOption[] = [];
   agent?: string;
@@ -202,8 +204,8 @@ export class AcpSession {
     } else if (kind === 'config_option_update') this.configure({ configOptions: update.configOptions });
     else if (kind === 'current_mode_update') { this.options = this.options.map(option => option.legacy === 'mode' || option.category === 'mode' ? { ...option, current: text(update.currentModeId) } : option); this.controls(); }
     else if (kind === 'session_info_update' && typeof update.title === 'string') this.state = { ...this.state, sessionName: update.title };
-    else if (kind === 'plan') this.state = { ...this.state, information: Array.isArray(update.entries) ? update.entries.filter(isRecord).map(entry => ({ label: 'plan', text: `${text(entry.status)} · ${text(entry.content)}` })) : [] };
-    else if (kind === 'usage_update' && typeof update.used === 'number' && typeof update.size === 'number') this.state = { ...this.state, metrics: formatNativeSessionStats({ context: { tokens: update.used, contextWindow: update.size, percent: update.size > 0 ? update.used / update.size * 100 : undefined } }) };
+    else if (kind === 'plan') this.state = { ...this.state, statusArea: { ...this.state.statusArea, information: Array.isArray(update.entries) ? update.entries.filter(isRecord).map(entry => ({ label: 'plan', text: `${text(entry.status)} · ${text(entry.content)}` })) : [] } };
+    else if (kind === 'usage_update' && typeof update.used === 'number' && typeof update.size === 'number') this.state = { ...this.state, statusArea: { ...this.state.statusArea, metrics: formatNativeSessionStats({ context: { tokens: update.used, contextWindow: update.size, percent: update.size > 0 ? update.used / update.size * 100 : undefined } }) } };
     this.publish([]);
   }
   private capture(event: string, payload: unknown, sessionId: string, toolCallId: string): void {
@@ -248,12 +250,12 @@ export class AcpSession {
   private controls(): void {
     // Configuration-in-flight and agent-working are independent states. A
     // configuration update during a turn must not latch controls disabled.
-    this.state = { ...this.state, controls: ['model', 'thinking', 'mode'].flatMap(id => {
+    this.state = { ...this.state, statusArea: { ...this.state.statusArea, controls: ['model', 'thinking', 'mode'].flatMap(id => {
       const option = this.controlOption(id);
       if (!option) return [];
       const label = option.options.find(value => value.value === option.current)?.name || option.current;
       return [{ id, label, title: `Select ${option.name}: ${label}${option.description ? ` — ${option.description}` : ''}`, disabled: this.configuring || this.state.busy || this.ended }];
-    }) };
+    }) } };
   }
   private finishMessages(): void {
     this.state = { ...this.state, messages: this.state.messages.map(message => {

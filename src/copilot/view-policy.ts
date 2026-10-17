@@ -11,7 +11,7 @@ export function copilotSessionActions(session?: CopilotSession): readonly Sessio
 }
 export function copilotInteraction(validate: (text: string) => string | undefined): ConversationInteraction {
   return {
-    label: 'Copilot', controlsLabel: 'Copilot configuration', metricsLabel: 'Copilot-reported usage',
+    label: 'Copilot',
     unsupportedImages: 'Copilot sessions currently accept text only. No image was attached.',
     commands: copilotSlashCommands,
     keyboardMode: event => keyboardSubmissionMode(event, false),

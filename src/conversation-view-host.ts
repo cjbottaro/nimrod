@@ -3,10 +3,8 @@ import type { ComposerKeyboardEvent, KeyboardSubmissionMode } from './pi/compose
 import type { SlashCommand } from './pi/slash-completion';
 import type { SteeringStatus } from './pi/steering-transcript';
 import type { ParallelToolCluster } from './pi/tool-progress';
+import type { StatusAreaSnapshot } from './status-area';
 
-/** Internal presentation contributions; neither public plugins nor a harness RPC. */
-export interface ConversationControl { id: string; label: string; title: string; disabled: boolean; }
-export interface InformationRow { label: string; text: string; }
 export interface ConversationViewState {
   deletionLocked?: boolean;
   messages?: RenderMessage[];
@@ -15,10 +13,7 @@ export interface ConversationViewState {
   sessionUnavailable?: boolean;
   recoveryNotice?: string;
   inputLocked?: boolean;
-  controls?: readonly ConversationControl[];
-  subagents?: string;
-  information?: readonly InformationRow[];
-  metrics?: string;
+  statusArea?: StatusAreaSnapshot;
   /** Optional queue presentation supplied only by integrations with real queue semantics. */
   queue?: { steering?: string[]; followUp?: string[]; authoritative?: boolean; pendingCount?: number; unavailableLabel?: string };
 }
@@ -28,8 +23,6 @@ export type PreparedSubmission =
   | { kind: 'request'; message: Record<string, unknown>; preview: boolean; navigate: boolean };
 export interface ConversationInteraction {
   readonly label: string;
-  readonly controlsLabel: string;
-  readonly metricsLabel: string;
   readonly unsupportedImages?: string;
   commands(raw: unknown): SlashCommand[];
   keyboardMode(event: ComposerKeyboardEvent, busy: boolean): KeyboardSubmissionMode | undefined;

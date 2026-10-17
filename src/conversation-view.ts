@@ -49,7 +49,6 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   let composerNoticeOperation: string | undefined;
   const keyboardHintNode = required("keyboard-hint");
   const controlsNode = required('status-controls');
-  controlsNode.setAttribute('aria-label', host.interaction.controlsLabel);
   const controlNodes = new Map<string, HTMLButtonElement>(['model', 'thinking'].map(id => [id, required<HTMLButtonElement>(id)]));
   for (const [id, node] of controlNodes) node.dataset.controlId = id;
   const controlSeparators = new Map<string, HTMLElement>();
@@ -59,7 +58,6 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   const mainActivity = required("main-activity");
   const subagentActivity = required("subagent-activity");
   const sessionMetrics = required("session-metrics");
-  sessionMetrics.title = host.interaction.metricsLabel; sessionMetrics.setAttribute('aria-label', host.interaction.metricsLabel);
   const extensionActivity = required("extension-activity");
   const queueActivity = required("queue-activity");
   const submissionNotice = required("submission-notice");
@@ -549,7 +547,8 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   }
 
   function renderControls(state: State): void {
-    const controls = state.controls || [];
+    const controls = state.statusArea?.controls || [];
+    controlsNode.setAttribute('aria-label', state.statusArea?.controlsLabel || 'Session configuration');
     const ids = new Set(controls.map(control => control.id));
     for (const [id, node] of controlNodes) if (!ids.has(id)) node.hidden = true;
     for (const separator of controlSeparators.values()) separator.hidden = true;
@@ -579,24 +578,31 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   let activityRecovered: ComposerState['recovered'] | undefined;
   function renderActivity(state: State): { busy: boolean; text: string } {
     const before = activityState;
-    const presentation = { busy: !!state.busy, text: state.status || (state.busy ? 'Working…' : 'Idle'), subagents: state.subagents };
+    const status = state.statusArea, previousStatus = before?.statusArea;
+    const capabilities = status?.capabilities;
+    const subagents = capabilities?.subagents ? status?.subagents : undefined;
+    const presentation = { busy: !!state.busy, text: state.status || (state.busy ? 'Working…' : 'Idle'), subagents };
     mainActivity.hidden = false;
-    if (!before || before.busy !== state.busy || before.status !== state.status || before.subagents !== state.subagents) {
+    if (!before || before.busy !== state.busy || before.status !== state.status || previousStatus?.subagents !== status?.subagents
+      || previousStatus?.capabilities.subagents !== capabilities?.subagents) {
       renderMainActivity(mainActivityDom, presentation);
       renderSubagentActivity(subagentActivityDom, presentation.subagents);
     }
-    if (!before || before.metrics !== state.metrics) {
-      sessionMetrics.hidden = state.metrics === undefined;
-      sessionMetrics.textContent = state.metrics || '';
+    if (!before || previousStatus?.metrics !== status?.metrics || previousStatus?.capabilities !== capabilities) {
+      const metrics = capabilities?.metrics ? status?.metrics : undefined;
+      const label = capabilities?.metrics?.label || '';
+      sessionMetrics.title = label; sessionMetrics.setAttribute('aria-label', label);
+      sessionMetrics.hidden = metrics === undefined;
+      sessionMetrics.textContent = metrics || '';
     }
-    if (!before || before.information !== state.information) {
+    if (!before || previousStatus?.information !== status?.information || previousStatus?.capabilities !== capabilities) {
       extensionActivity.replaceChildren();
-      for (const row of state.information || []) extensionActivity.append(activityRow(row.label, row.text));
+      for (const row of capabilities?.information ? status?.information || [] : []) extensionActivity.append(activityRow(row.label, row.text));
       extensionActivity.hidden = extensionActivity.childElementCount === 0;
     }
-    if (!before || before.queue !== state.queue || activityRecovered !== composer.recovered) {
+    if (!before || before.queue !== state.queue || previousStatus?.capabilities !== capabilities || activityRecovered !== composer.recovered) {
       queueActivity.replaceChildren();
-      const queue = state.queue;
+      const queue = capabilities?.queue ? state.queue : undefined;
       if (queue?.authoritative) {
         const count = queue.steering?.length || 0;
         if (count) queueActivity.append(activityRow('steering', `${count} pending`));
@@ -791,7 +797,8 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
 
   // Snapshot dependencies only; local draft/recovery/lock actions render directly.
   function controlsChanged(before: State, after: State): boolean {
-    return before.controls !== after.controls || before.sessionUnavailable !== after.sessionUnavailable;
+    return before.statusArea?.controls !== after.statusArea?.controls || before.statusArea?.controlsLabel !== after.statusArea?.controlsLabel
+      || before.sessionUnavailable !== after.sessionUnavailable;
   }
 
   function composerPresentationChanged(before: State, after: State): boolean {
@@ -800,8 +807,9 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   }
 
   function activityChanged(before: State, after: State): boolean {
-    return before.busy !== after.busy || before.status !== after.status || before.subagents !== after.subagents
-      || before.information !== after.information || before.metrics !== after.metrics || before.queue !== after.queue;
+    return before.busy !== after.busy || before.status !== after.status || before.queue !== after.queue
+      || before.statusArea?.capabilities !== after.statusArea?.capabilities || before.statusArea?.subagents !== after.statusArea?.subagents
+      || before.statusArea?.information !== after.statusArea?.information || before.statusArea?.metrics !== after.statusArea?.metrics;
   }
 
   function submit(mode: SubmissionMode = "normal"): void {

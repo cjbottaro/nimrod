@@ -58,10 +58,10 @@ test('SDK optimistic echo, native tools, content-only controls and one completio
   assert.equal(f.session.state.messages.filter(message => message.role === 'user').length, 1);
   assert.equal(f.session.state.messages[0].content, 'Hello (native hook)');
   f.reply('prompt', { messageId: 'accepted' }); await sending;
-  const controls = f.session.state.controls;
+  const controls = f.session.state.statusArea?.controls;
   f.event('assistant.message_delta', { messageId: 'answer', deltaContent: 'First ' });
   f.event('assistant.message_delta', { messageId: 'answer', deltaContent: 'second' });
-  assert.equal(f.session.state.controls, controls);
+  assert.equal(f.session.state.statusArea?.controls, controls);
   const key = f.session.state.messages.find(message => message.role === 'assistant')!.key;
   f.event('tool.execution_start', { toolCallId: 'one', toolName: 'bash', arguments: { command: 'printf fixture' } });
   const tool = f.session.state.messages.find(message => message.role === 'tool')!, argumentsIdentity = tool.toolArguments;
@@ -115,12 +115,37 @@ test('SDK model events outrank older configuration responses and thinking remain
   await flush();
   f.event('session.model_change', { newModel: 'small', reasoningEffort: 'high' });
   f.reply('configure', { modelId: 'large' }); await selecting;
-  assert.equal(f.session.state.controls?.find(control => control.id === 'model')?.label, 'small');
-  assert.equal(f.session.state.controls?.find(control => control.id === 'thinking')?.label, 'high');
+  assert.equal(f.session.state.statusArea?.controls.find(control => control.id === 'model')?.label, 'small');
+  assert.equal(f.session.state.statusArea?.controls.find(control => control.id === 'thinking')?.label, 'high');
   f.event('session.model_change', { newModel: 'large' });
   assert.equal(f.session.supports('thinking'), false);
   assert.match(f.session.validatePrompt('/context')!, /not advertised/);
   f.session.disconnect('fixture complete');
+});
+
+test('SDK status publishes root usage and reconciles selector capabilities without inventing Pi surfaces', async () => {
+  const f = await fixture();
+  const initial = f.session.state.statusArea!;
+  assert.ok(initial.capabilities.metrics);
+  assert.equal(initial.metrics, undefined);
+  assert.equal(initial.capabilities.queue, undefined);
+  f.event('session.usage_info', { currentTokens: 0, tokenLimit: 0 });
+  const reported = f.session.state.statusArea!;
+  assert.equal(reported.metrics, '0 / 0 context tokens');
+  assert.equal(reported.controls, initial.controls, 'usage changes do not rebuild configuration controls');
+  f.session.receive({ kind: 'event', event: { id: 'child-usage', agentId: 'child', type: 'session.usage_info', data: { currentTokens: 999, tokenLimit: 999 } } });
+  assert.equal(f.session.state.statusArea, reported, 'child usage cannot overwrite root usage');
+  f.event('assistant.turn_start', {});
+  assert.ok(f.session.state.statusArea!.controls.every(control => control.disabled));
+  f.event('session.idle', {});
+  assert.ok(f.session.state.statusArea!.controls.every(control => !control.disabled));
+  f.event('session.model_change', { newModel: 'large' });
+  assert.deepEqual(f.session.state.statusArea!.controls.map(control => control.id), ['model']);
+  f.event('session.model_deselected', {});
+  assert.equal(f.session.state.statusArea!.controls[0].label, 'Copilot default');
+  f.session.disconnect('fixture complete');
+  assert.equal(f.session.state.statusArea!.metrics, reported.metrics);
+  assert.ok(f.session.state.statusArea!.controls.every(control => control.disabled));
 });
 
 test('SDK transport write uncertainty fails pending requests once and never replays them', async () => {
@@ -142,7 +167,7 @@ test('SDK child activity never changes root configuration or completes the root 
   child('session.idle', {});
   assert.equal(f.session.state.busy, true);
   assert.equal(f.session.state.messages.find(message => message.key.includes('child-message'))?.originLabel, 'Copilot agent child-id');
-  assert.equal(f.session.state.controls?.find(control => control.id === 'model')?.label, 'small');
+  assert.equal(f.session.state.statusArea?.controls.find(control => control.id === 'model')?.label, 'small');
   assert.deepEqual(f.completed, []);
   f.event('session.error', { message: 'Root failure' }); f.event('session.idle', {});
   assert.equal(f.session.state.busy, false); assert.deepEqual(f.completed, [true]);
