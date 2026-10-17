@@ -103,7 +103,7 @@
         <h2>Diagnostics</h2>
         <label for="tool-capture-mode">Transcript debug logs</label>
         <select id="tool-capture-mode"><option value="off">Off (default)</option><option value="on">On</option></select>
-        <p class="settings-hint">Log native conversation events, prompts, assistant text/reasoning, tools, history, configuration and requests/results locally. Logs include full content and may contain secrets. Nothing is uploaded; files are not automatically deleted.</p>
+        <p class="settings-hint">Log native conversation events, prompts, assistant text/reasoning, tools, history, configuration and requests/results locally. Logs include full content and may contain secrets. Nothing is uploaded. While logging, files rotate at 25 MiB; oldest logs are deleted to keep at most 250 MiB and seven days. Agent history and old tool-only captures are untouched.</p>
         <p id="tool-capture-status" role="status">Transcript debug logging is off.</p>
         <label for="performance-mode">Performance diagnostics</label>
         <select id="performance-mode"><option value="off">Off (default)</option><option value="on">On</option></select>

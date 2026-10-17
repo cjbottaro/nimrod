@@ -45,6 +45,46 @@ test('synchronous replay bursts span bounded native batches instead of stopping 
     assert.deepEqual(f.batches.flat().map(line => JSON.parse(line).payload.index), Array.from({ length: 600 }, (_, index) => index));
   } finally { f.capture.dispose(); }
 });
+test('large bursts dispatch early and drain subsequent batches without another debounce', async () => {
+  const batches: string[][] = [];
+  let finish!: () => void;
+  const f = fixture(lines => {
+    batches.push(lines);
+    return new Promise<void>(resolve => { finish = resolve; });
+  });
+  try {
+    f.capture.setEnabled(true);
+    for (let index = 0; index < 1100; index++) f.capture.append(event({ index }));
+    assert.deepEqual(batches.map(batch => batch.length), [512], 'first batch dispatches during synchronous replay');
+    finish(); await Promise.resolve(); await Promise.resolve();
+    assert.deepEqual(batches.map(batch => batch.length), [512, 512]);
+    finish(); await Promise.resolve(); await Promise.resolve();
+    assert.deepEqual(batches.map(batch => batch.length), [512, 512, 76]);
+    finish(); await Promise.resolve(); await Promise.resolve();
+    assert.deepEqual(batches.flat().map(line => JSON.parse(line).payload.index), Array.from({ length: 1100 }, (_, index) => index));
+    assert.deepEqual(f.errors, []);
+  } finally { f.capture.dispose(); }
+});
+test('byte pressure starts a write before the pending buffer fills and real overflow stays explicit', async () => {
+  let finish!: () => void;
+  const batches: string[][] = [];
+  const f = fixture(lines => {
+    batches.push(lines);
+    return new Promise<void>(resolve => { finish = resolve; });
+  });
+  try {
+    f.capture.setEnabled(true);
+    f.capture.append(event('x'.repeat(1024 * 1024)));
+    assert.equal(batches.length, 1);
+    assert.equal(f.capture.enabled, true);
+    for (let index = 0; index < 9; index++) f.capture.append(event('x'.repeat(1024 * 1024)));
+    assert.equal(f.capture.enabled, false);
+    assert.equal(f.errors.length, 1);
+    assert.match(f.errors[0], /Conversation unaffected.*pending buffer/);
+    finish(); await Promise.resolve(); await Promise.resolve();
+    assert.equal(batches.length, 1, 'overflow never retries the ambiguous in-flight batch');
+  } finally { f.capture.dispose(); }
+});
 
 test('write failures stop capture without retry; re-enabling creates a new segment', async () => {
   let writes = 0;
@@ -67,14 +107,37 @@ test('disable drops undispatched buffers; a previous generation cannot fail a ne
   f.capture.append(event()); f.capture.setEnabled(false); await f.capture.flush();
   f.capture.dispose();
 });
-test('oversized and unserializable records fail visibly rather than truncating tool payloads', async () => {
+test('oversized records are losslessly chunked; unserializable records still fail visibly', async () => {
   const f = fixture();
-  f.capture.setEnabled(true); f.capture.append(event('x'.repeat(2 * 1024 * 1024)));
-  assert.equal(f.errors.length, 1); assert.equal(f.capture.enabled, false);
-  await f.capture.flush(); assert.equal(f.batches.length, 0);
-  f.capture.setEnabled(false); f.capture.setEnabled(true);
+  const payload = { text: 'x"\\\n\u{1f600}'.repeat(350_000) };
+  f.capture.setEnabled(true); f.capture.append(event(payload));
+  await f.capture.flush();
+  const chunks = f.batches.flat().map(line => JSON.parse(line));
+  assert.ok(chunks.length > 1);
+  assert.ok(chunks.every(chunk => chunk.event === 'capture.record_chunk'));
+  assert.deepEqual(chunks.map(chunk => chunk.payload.index), Array.from({ length: chunks.length }, (_, index) => index));
+  assert.ok(chunks.every(chunk => chunk.payload.count === chunks.length && chunk.payload.recordId === chunks[0].payload.recordId));
+  assert.deepEqual(chunks.map(chunk => chunk.sequence), Array.from({ length: chunks.length }, (_, index) => index + 1));
+  const restored = JSON.parse(chunks.map(chunk => chunk.payload.data).join(''));
+  assert.deepEqual(restored.payload, payload);
+  assert.equal(restored.event, event().event);
+  assert.equal(f.errors.length, 0); assert.equal(f.capture.enabled, true);
+  f.capture.append(event({ afterChunks: true })); await f.capture.flush();
+  assert.equal(JSON.parse(f.batches.flat().at(-1)!).sequence, chunks.length + 1);
   f.capture.append(event({ toJSON() { throw new Error('fixture serialization'); } }));
-  assert.equal(f.errors.length, 2); f.capture.dispose();
+  assert.equal(f.errors.length, 1); assert.equal(f.capture.enabled, false); f.capture.dispose();
+});
+test('a synchronous storage failure stops oversized-event chunking immediately', async () => {
+  let writes = 0;
+  const f = fixture(() => { writes++; throw new Error('fixture synchronous failure'); });
+  try {
+    f.capture.setEnabled(true);
+    f.capture.append(event('x'.repeat(3 * 1024 * 1024)));
+    await f.capture.flush();
+    assert.equal(f.capture.enabled, false);
+    assert.equal(writes, 1);
+    assert.equal(f.errors.length, 1);
+  } finally { f.capture.dispose(); }
 });
 test('Pi transcript logs preserve native prose, reasoning, partial inputs and authoritative results', () => {
   const records: ToolCaptureRecord[] = [];
