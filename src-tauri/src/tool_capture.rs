@@ -252,7 +252,7 @@ mod tests {
         let root = temp.path().join("tool-captures");
         write_groups(
             &root,
-            groups(vec![line("pi", "pi", 1), line("acp", "copilot", 2)]).unwrap(),
+            groups(vec![line("pi", "pi", 1), line("acp", "fixture-agent", 2)]).unwrap(),
         )
         .unwrap();
         write_groups(&root, groups(vec![line("pi", "pi", 3)]).unwrap()).unwrap();
@@ -262,7 +262,13 @@ mod tests {
             pi,
             format!("{}\n{}\n", line("pi", "pi", 1), line("pi", "pi", 3))
         );
-        assert!(root.join("acp/copilot/2026-10-16.jsonl").is_file());
+        assert!(root.join("acp/fixture-agent/2026-10-16.jsonl").is_file());
+        let sdk = line("copilot-sdk", "copilot", 4);
+        write_groups(&root, groups(vec![sdk.clone()]).unwrap()).unwrap();
+        assert_eq!(
+            fs::read_to_string(root.join("copilot-sdk/copilot/2026-10-16.jsonl")).unwrap(),
+            format!("{sdk}\n")
+        );
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

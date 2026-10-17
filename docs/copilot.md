@@ -15,8 +15,9 @@ and native lifecycle still need verification. Windows SDK launch is unavailable.
 
 Open a project, then **⌘/Ctrl+Shift+P → New Copilot session**. This command is
 unbound by default and its hint is **Start a Copilot session**. Harness labels
-in the Project bar, Session sidebar and history pickers are simply **Copilot**. Ordinary **New session** and **⌘/Ctrl+N** still create Pi
-sessions, regardless of the selected harness.
+in the Project bar, Session sidebar and history pickers are simply **Copilot**.
+Ordinary **New session** and **⌘/Ctrl+N** still create Pi sessions, regardless of
+the selected harness.
 
 Text Send clears the composer and previews your turn immediately. It never
 replays uncertain delivery or restores sent text over a newer draft. While
@@ -39,12 +40,52 @@ Copilot inspection/web cards reuse shared components, including cited web answer
 and fetched-content previews when supported by native results. The raw output
 remains available; links open only through an explicit action.
 
-Current limits: text-only input; no CLI slash-command emulation, Restart,
-steering, queue, Pi MCP inspector or in-place harness switching.
+Current limits: text-only input; no Restart, steering, queue, Pi MCP inspector
+or in-place harness switching. Slash commands use the SDK's supported interface,
+not full terminal-UI emulation; see below.
 Only interactive Copilot sessions are supported. Plan/autopilot histories remain
 listed, but connection reports their unsupported mode without changing it or
 sending a prompt; change the mode in Copilot before reconnecting. Custom ACP
 agents remain a [separate experimental option](acp.md).
+
+## Slash commands
+
+Type `/` for commands discovered from your connected Copilot runtime, including
+aliases. Where Copilot supplies argument hints or literal choices, suggestions
+continue after the command name. Tab/click or Enter on a typed argument inserts
+text only; it does not run the command. With an empty argument, Enter submits the
+parent command unless you explicitly select an argument with the arrow keys.
+Hints alone never prevent submission. Free-text arguments remain available;
+dynamic argument and directory completion are not currently supported.
+
+Slash commands belong to **Copilot**, not Nimrod's command palette. For example,
+`/permissions` invokes Copilot's command API. If Copilot returns choices, Nimrod
+opens a modal containing its title, choices and descriptions. Use arrows and
+Enter to choose, or Escape to cancel. `/permissions show` can display the returned
+permission report as labelled **Copilot command** output in the transcript,
+without an assistant/model request. The installed CLI's exact behavior still
+needs native verification.
+
+Commands run while idle and consume the submitted draft immediately, without a
+literal user-turn preview or forced transcript navigation. You can edit a newer
+draft while waiting, but another submission waits until the command interaction
+settles. Switching sessions, Stop or disconnect cancels pending choices; late
+results never open a picker in another conversation or overwrite your draft.
+Already executed effects are not rolled back. Command-output rows stay within
+the current connection and are not restored on Close/Resume.
+
+New commands work automatically when they use the supported SDK metadata and
+result types: text/timeline output, completion, subcommand choices or an explicit
+interactive agent-prompt result. Unknown commands are rejected with the draft
+kept. Unsupported results report an error—never an ordinary prompt fallback or
+automatic retry. Some model commands return host-side model/settings effects
+that this SDK release does not publicly expose how to finalize; these remain
+unsupported. Use **Select model…** in the command palette or the Status-area
+model control for Nimrod's independent model picker. Scoped/model-enabling
+requests, arbitrary new dialog kinds and autonomous modes are not supported.
+
+Command discovery, argument suggestions and modal/output fixtures are authored
+but unrun. This is not a claim of complete Copilot TUI command parity.
 
 ## History, Close and Delete
 
@@ -64,7 +105,8 @@ that exact ID. Missing/failed loads never create a replacement.
 Copilot history and the SDK draft.
 
 **Delete session…**, row/Project bar trash controls and **Delete sessions…** use
-the SDK’s supported permanent deletion API. Review identifies one session and its artifacts, not a Pi tree.
+the SDK’s supported permanent deletion API. Review identifies one session and its
+artifacts, not a Pi tree.
 After confirmation Nimrod verifies fresh project membership, stops its owned
 writer, and requests deletion. Only confirmed success removes local SDK
 references/draft. Failed or uncertain results retain them and are never

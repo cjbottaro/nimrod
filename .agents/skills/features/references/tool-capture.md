@@ -1,6 +1,6 @@
 # Tool activity capture
 
-**Status: implemented; fixtures authored but not run. No native/platform acceptance.** User guide: [Tool activity logs](../../../../docs/tool-capture.md). Related: [preferences](preferences.md), [consumer interfaces](consumer-interfaces.md), [performance diagnostics](performance-diagnostics.md), [card plugins](card-plugins.md).
+**Status: SDK capture verified offline (13 focused Node tests and 6 native storage fixtures pass); native SDK/app acceptance remains pending.** User guide: [Tool activity logs](../../../../docs/tool-capture.md). Related: [preferences](preferences.md), [consumer interfaces](consumer-interfaces.md), [performance diagnostics](performance-diagnostics.md), [card plugins](card-plugins.md).
 
 ## Consumer and minimum contract
 
@@ -8,7 +8,7 @@
 request payloads from `src/copilot/session.ts`, under source backend
 `copilot-sdk`, agent `copilot`, with stable connection/session IDs. Replay is
 excluded. The same sink/storage/queue is reused, without translating to Pi/ACP.
-SDK capture fixtures are authored/unrun; enabling capture never starts work.
+Enabling capture never starts work. The capture-specific SDK follow-up adds real-sink, production-bridge/fake-SDK, shell and native partition fixtures; verification is recorded below.
 
 The consumer is a local card-design/debugging workflow: inspect observed tool names, native payload shapes and lifecycle changes, then derive bespoke card plugins and offline fixtures. This is not a universal harness protocol, conversation recorder or execution API.
 
@@ -27,6 +27,12 @@ The implementation adds `schemaVersion: 1`, receipt-time UTC RFC3339 `timestamp`
 - Pending memory is bounded to 512 records/8 Mi UTF-16 code units; individual records to 2 Mi code units. Native validation permits at most 512 records, 32 MiB per batch, 8 MiB per line. No payload is silently truncated. Serialization/overflow/write failures stop that window's sink and report one shared application notice; toggle off/on to start another segment. Already accepted records may have been written. Never automatically retry ambiguous appends. Late failures from retired segments cannot stop a newly enabled segment.
 
 ## Concrete integration mapping
+
+### Copilot SDK
+
+`src/copilot/session.ts` forwards every live `tool.*` event, `assistant.tool_call_delta` (tool-input fragments only), native `permission.requested` and `permission.completed` events, and the permission callback's original request as `permission.request`. The callback and native lifecycle event are deliberately distinct records: the latter retains request IDs, risk/owner metadata and reported outcomes; the callback records exactly what the decision UI receives. Nested `permissionRequest.toolCallId` is promoted only to the common correlation envelope; payloads remain unchanged. Native event IDs deduplicate replay/live overlap; replay and ordinary assistant prose/reasoning/freeform input are excluded. Child-agent origin remains in the native payload. Unknown future `tool.*` events are captured without a tool-name/schema allowlist.
+
+Source is `copilot-sdk`/`copilot`, with `source.version` from the existing SDK `getStatus().version` response when reported (not an invented package/runtime version). Before the bridge publishes an authoritative session ID, callbacks use `connecting:<connection UUID>` in the capture envelope so a valid early permission cannot fail the native writer's nonempty identity requirement. Later records use the real session ID and keep the same connection UUID. This fallback is capture-only: it never becomes saved identity, draft scope or an SDK request target. Disabled capture/replay returns before payload inspection/serialization; the shared sink snapshots data synchronously and handles buffering/errors.
 
 ### Pi
 
@@ -47,6 +53,7 @@ Resolved native state directory, honoring absolute `XDG_STATE_HOME` and existing
 ```text
 ~/.local/state/nimrod/tool-captures/
   pi/YYYY-MM-DD.jsonl
+  copilot-sdk/copilot/YYYY-MM-DD.jsonl
   acp/copilot/YYYY-MM-DD.jsonl
   acp/<agent>/YYYY-MM-DD.jsonl
 ```
@@ -62,9 +69,11 @@ Logs can contain source code, commands, outputs, credentials and tool-embedded p
 ## Code map and evidence
 
 - `src/tool-capture.ts`: shared port, snapshot/envelope, buffer, generation/failure/disposal lifetime.
-- `src/pi/tool-capture.ts`, `src/pi/session.ts`: Pi-native selection/identity; `src/acp/session.ts`: ACP-native selection.
+- `src/pi/tool-capture.ts`, `src/pi/session.ts`: Pi-native selection/identity; `src/copilot/session.ts`: SDK-native tool/permission selection; `src/acp/session.ts`: ACP-native selection.
 - `src/settings-surface.ts`, `src/main.ts`, `index.html`, `src/preferences.ts`: window-owned sink, global control/path/status, integration injection and synchronization.
 - `src-tauri/src/tool_capture.rs`, `preferences.rs`, `main.rs`: typed envelope validation, source/day partitioning, private append-only native writes and IPC.
 - `test/tool-capture.test.ts`, `test/acp-session.test.ts`, `test/preferences.test.ts`, `test/shell.test.ts` and Rust module fixtures: snapshot/disabled behavior, native tool selection/privacy, replay exclusion, partial patch/permission preservation, failure/no-retry, settings and source/file separation. Browser demo mocks remain offline and never write capture files.
 
-Tests/checks/builds have **not been run** for this feature. No app launch, personal settings/log mutation, live tool/provider request or native acceptance was performed. Actual macOS collection, disk-failure behavior, multi-process advisory locking and Linux behavior remain unverified; fixture source is not platform acceptance.
+The SDK follow-up adds `test/copilot-tool-capture.test.ts` using the actual JSONL sink; `test/copilot-bridge.test.ts` connects the production bridge/fake SDK through the real controller and sink; `test/shell.test.ts` proves preference-to-IPC injection without prompts/restarts/draft/focus changes; the Rust fixture verifies `copilot-sdk/copilot/` partitioning independently of Pi/legacy ACP. The 13 focused capture/production-bridge tests pass, the SDK settings-to-IPC shell fixture passes in the full Node run, and all 6 native capture-storage tests pass. `mise run check` passes TypeScript and 88-document validation, then stops at 918/922 Node tests because four non-capture migration assertions are stale (registry imports, updated target-error text, legacy ACP history label, and Resume Open ARIA label). Rust formatting/Clippy/full Rust tests are not reached by that command; native capture tests were run separately. No app build/launch or live Copilot request occurred.
+
+Earlier capture tests/checks/builds have **not been run** as recorded at implementation time. No app launch, personal settings/log mutation, live tool/provider request or native acceptance was performed. Actual macOS collection, disk-failure behavior, multi-process advisory locking and Linux behavior remain unverified; fixture source is not platform acceptance.

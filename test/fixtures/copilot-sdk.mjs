@@ -32,7 +32,28 @@ class Session {
   turns = 0;
   model = 'small';
   effort = 'low';
-  rpc = { model: { getCurrent: async () => ({ modelId: this.model, reasoningEffort: this.effort }) }, mode: { get: async () => process.env.NIMROD_FIXTURE_COPILOT_MODE || 'interactive' } };
+  commandCatalog = [
+    { name: 'permissions', aliases: ['perms'], description: 'Manage permissions', kind: 'builtin', allowDuringAgentExecution: true,
+      input: { hint: 'Permission operation', choices: [{ name: 'show', description: 'Show permissions' }, { name: 'reset', description: 'Clear approvals' }] } },
+    { name: 'discover-fixture', description: 'Add a new fixture command', kind: 'builtin', allowDuringAgentExecution: false },
+  ];
+  rpc = {
+    model: { getCurrent: async () => ({ modelId: this.model, reasoningEffort: this.effort }) },
+    mode: { get: async () => process.env.NIMROD_FIXTURE_COPILOT_MODE || 'interactive' },
+    commands: {
+      list: async () => ({ commands: this.commandCatalog }),
+      invoke: async ({ name, input }) => {
+        if (name === 'permissions') return input === undefined
+          ? { kind: 'select-subcommand', command: name, title: 'Permissions', options: this.commandCatalog[0].input.choices }
+          : { kind: 'text', text: `Fixture permission report: ${input}`, markdown: false };
+        if (name === 'discover-fixture') {
+          this.commandCatalog.push({ name: 'new-fixture', kind: 'builtin', description: 'Newly advertised command', allowDuringAgentExecution: false });
+          this.emit('commands.changed', { commands: [] }); return { kind: 'completed' };
+        }
+        assert.equal(name, 'new-fixture'); return { kind: 'completed', message: 'New command works' };
+      },
+    },
+  };
   constructor(config, saved) { this.config = config; this.saved = saved; this.listeners = [config.onEvent]; }
   on(listener) { this.listeners.push(listener); return () => { this.listeners = this.listeners.filter(item => item !== listener); }; }
   emit(type, data) { const event = { id: `fixture-${this.sequence++}`, type, data }; this.listeners.forEach(listener => listener(event)); }

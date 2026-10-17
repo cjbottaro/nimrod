@@ -3,6 +3,7 @@ import type { DisplayMessage } from '../conversation-model';
 import type { ConversationViewMessage, ConversationViewState } from '../conversation-view-host';
 import type { ToolCaptureSink } from '../tool-capture';
 import { copilotToolResult } from './tool-result';
+import { commandChoices, copilotCommands, findCopilotCommand, parseCopilotCommand, type CommandChoice, type CopilotCommand } from './commands';
 
 interface Model { id: string; name: string; supportedReasoningEfforts?: string[]; capabilities?: { supports?: { reasoningEffort?: boolean } }; policy?: { state: string }; }
 export interface CopilotSessionUi {
@@ -13,6 +14,7 @@ export interface CopilotSessionUi {
   completed(failed: boolean, response?: string): void;
   notice(message: string): void;
   decision(kind: 'permission' | 'input', request: Record<string, unknown>, signal: AbortSignal): Promise<Record<string, unknown> | undefined>;
+  commandChoice?(title: string, choices: readonly CommandChoice[], signal: AbortSignal): Promise<string | undefined>;
   toolCapture?: ToolCaptureSink;
 }
 /** SDK semantic events project directly to shared presentation, never Pi/ACP events. */
@@ -21,6 +23,8 @@ export class CopilotSession {
   state: Omit<ConversationViewState, 'messages'> & { messages: DisplayMessage[]; sessionName?: string } = {
     messages: [], sessionUnavailable: true, busy: false, status: 'Connecting Copilot…', controls: [],
   };
+  commands: CopilotCommand[] = [];
+  private commandOperation?: AbortController;
   private revision = 0;
   private indices = new Map<string, number>();
   private events = new Set<string>();
@@ -39,47 +43,63 @@ export class CopilotSession {
   private echo?: { key: string };
   private decisions = new AbortController();
   private captureConnectionId = crypto.randomUUID();
+  private runtimeVersion?: string;
   constructor(send: (message: BridgeRequest) => Promise<void>, private ui: CopilotSessionUi) {
     this.connection = new CopilotConnection(send, packet => this.packet(packet), reason => {
-      this.ended = true; this.decisions.abort(); this.finish();
+      this.ended = true; this.decisions.abort(); this.commandOperation?.abort(); this.finish();
       this.state = { ...this.state, sessionUnavailable: true, busy: false, status: 'Disconnected' };
       this.publish(); ui.disconnected(reason);
     });
   }
-  get canSubmit(): boolean { return !this.ended && !this.state.sessionUnavailable && !this.state.busy && !this.configuring; }
+  get canSubmit(): boolean { return !this.ended && !this.state.sessionUnavailable && !this.state.busy && !this.configuring && !this.commandOperation; }
   supports(kind: 'model' | 'thinking'): boolean {
     const model = this.models.find(model => model.id === this.model);
     return kind === 'model' ? this.models.length > 0 : model?.capabilities?.supports?.reasoningEffort !== false && !!model?.supportedReasoningEfforts?.length;
   }
   validatePrompt(text: string): string | undefined {
     if (!this.canSubmit) return 'Copilot is not idle or is still connecting. Your draft was kept.';
-    if (text.trimStart().startsWith('/')) return 'Copilot CLI slash commands are not exposed by this SDK integration. Nothing was sent; your draft was kept.';
+    if (text.trimStart().startsWith('/')) {
+      const invocation = parseCopilotCommand(text);
+      const command = invocation && findCopilotCommand(this.commands, invocation.name);
+      if (!command) return 'This command is not advertised by Copilot. Nothing was invoked; your draft was kept.';
+      if (command.input?.required && !invocation?.input?.trim()) return `/${command.name} requires input: ${command.input.hint}. Your draft was kept.`;
+    }
   }
+  cancelCommands(): void { this.commandOperation?.abort(); }
   receive(packet: unknown): void { this.connection.receive(packet); }
   disconnect(reason: string): void { this.connection.disconnect(reason); }
   async initialize(sessionId?: string): Promise<void> {
-    await this.connection.request('initialize');
+    const status = await this.connection.request('initialize');
+    if (record(status) && typeof status.version === 'string') this.runtimeVersion = status.version;
     await this.connection.request('connect', sessionId === undefined ? {} : { sessionId });
     if (this.state.sessionUnavailable) throw new Error('Copilot did not publish a connected session');
   }
   async handle(message: Record<string, unknown>): Promise<void> {
     if (message.type === 'renderError') { this.ui.notice(String(message.error)); return; }
     if (message.type === 'stop') {
+      this.commandOperation?.abort();
       if (this.state.busy) { this.stopped = true; this.cancelDecisions(); await this.connection.request('cancel'); }
       return;
     }
-    if (message.type !== 'prompt') return;
+    if (message.type !== 'prompt' && message.type !== 'command') return;
     const id = String(message.id ?? ''), text = typeof message.text === 'string' ? message.text : '';
     const invalid = this.validatePrompt(text);
     if (invalid || !text.trim() || message.images !== undefined) {
       this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', error: invalid || 'Copilot sessions currently accept non-empty text only.' }); return;
     }
+    if (text.trimStart().startsWith('/')) { await this.runCommand(id, text); return; }
+    if (message.type === 'command') {
+      this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', error: 'Invalid Copilot slash command. Nothing was invoked.' }); return;
+    }
+    await this.sendPrompt(id, text);
+  }
+  private async sendPrompt(id: string, text: string, display = text): Promise<void> {
     const key = `copilot:user:pending:${id}`;
     this.echo = { key };
     this.ui.publish({ type: 'submissionMessage', id, key });
     this.failed = false; this.stopped = false;
     this.state = { ...this.state, busy: true, status: 'Working…' };
-    this.replace(key, { key, role: 'user', content: text });
+    this.replace(key, { key, role: 'user', content: display });
     try {
       await this.connection.request('prompt', { text });
       this.ui.publish({ type: 'submissionReceipt', id, outcome: 'accepted' });
@@ -87,6 +107,87 @@ export class CopilotSession {
       // An SDK error after dispatch is not proof the runtime rejected delivery.
       this.ui.publish({ type: 'submissionReceipt', id, outcome: 'unknown', error: `Copilot delivery was not confirmed: ${String(error)}. Nothing was replayed.` });
       this.disconnect(`Copilot delivery was not confirmed: ${String(error)}`);
+    }
+  }
+  private commandOutput(text: string, command: string, markdown = false, error = false): void {
+    const key = `copilot:command:${crypto.randomUUID()}`;
+    this.replace(key, { key, role: 'command', originLabel: `Copilot command · /${command}`, isError: error,
+      content: [{ type: markdown ? 'text' : 'raw', text }] });
+  }
+  private async runCommand(id: string, text: string): Promise<void> {
+    const invocation = parseCopilotCommand(text)!;
+    const operation = new AbortController();
+    this.commandOperation = operation;
+    this.state = { ...this.state, status: `Running /${invocation.name}…` };
+    this.publish([]);
+    try {
+      let name = invocation.name, input = invocation.input;
+      // Each iteration requires a fresh user choice; never retry an invocation.
+      while (!operation.signal.aborted && !this.ended) {
+        const result = await this.connection.request('command', { name, ...(input !== undefined ? { input } : {}) });
+        if (operation.signal.aborted || this.ended) return;
+        if (!record(result) || typeof result.kind !== 'string') throw new Error('Copilot returned an invalid command result.');
+        if (result.mode !== undefined && result.mode !== 'interactive') throw new Error(`Copilot requested unsupported mode "${String(result.mode)}". No follow-on prompt was sent.`);
+        if (result.kind === 'select-subcommand') {
+          if (typeof result.command !== 'string' || !result.command || typeof result.title !== 'string') throw new Error('Copilot returned an invalid command selection.');
+          const choices = commandChoices(result.options);
+          if (!choices.length || !this.ui.commandChoice) throw new Error('This Copilot command requires a selection that is unavailable.');
+          const selected = await this.ui.commandChoice(result.title, choices, operation.signal);
+          if (operation.signal.aborted || this.ended || selected === undefined) {
+            if (!this.ended) this.ui.publish({ type: 'submissionReceipt', id, outcome: 'cancelled' });
+            return;
+          }
+          if (!choices.some(choice => choice.id === selected)) throw new Error('The Copilot command choice is no longer valid.');
+          name = result.command; input = selected;
+          continue;
+        }
+        if (result.kind === 'show-dialog') {
+          if (!record(result.dialog) || result.dialog.kind !== 'model-picker' || result.dialog.scope !== undefined || result.dialog.target !== undefined || result.dialog.modelToEnable !== undefined || !this.ui.commandChoice)
+            throw new Error('This Copilot command requires a dialog or settings scope not supported by Nimrod.');
+          const choices = this.models.map(model => ({ id: model.id, label: model.name, detail: model.id }));
+          if (!choices.length) throw new Error('Copilot did not advertise models for this command dialog.');
+          const selected = await this.ui.commandChoice('Copilot model', choices, operation.signal);
+          if (operation.signal.aborted || this.ended || selected === undefined) {
+            if (!this.ended) this.ui.publish({ type: 'submissionReceipt', id, outcome: 'cancelled' });
+            return;
+          }
+          if (!choices.some(choice => choice.id === selected)) throw new Error('The Copilot model choice is no longer valid.');
+          // Ask the command to interpret the selected argument; this is not the
+          // Nimrod Select model action or a speculative prompt fallback.
+          input = selected;
+          continue;
+        }
+        if (result.kind === 'text') {
+          if (typeof result.text !== 'string') throw new Error('Copilot returned invalid command text.');
+          this.commandOutput(result.text, name, result.markdown === true);
+        } else if (result.kind === 'add-timeline-entry') {
+          if (!record(result.entry) || typeof result.entry.text !== 'string') throw new Error('Copilot returned an invalid timeline entry.');
+          this.commandOutput(result.entry.text + (typeof result.entry.url === 'string' ? `\n${result.entry.url}` : ''), name);
+          if (result.prefillInput !== undefined) this.ui.notice('Copilot supplied a suggested draft. Nimrod did not replace your newer draft.');
+        } else if (result.kind === 'completed') {
+          if (typeof result.message === 'string' && result.message) this.commandOutput(result.message, name);
+        } else if (result.kind === 'agent-prompt') {
+          if (typeof result.prompt !== 'string' || !result.prompt.trim() || typeof result.displayPrompt !== 'string') throw new Error('Copilot returned an invalid agent prompt.');
+          if (typeof result.notice === 'string' && result.notice) this.commandOutput(result.notice, name);
+          if (this.state.busy) throw new Error('Copilot started working before the command prompt could be submitted. Nothing was replayed.');
+          await this.sendPrompt(id, result.prompt, result.displayPrompt);
+          return;
+        } else if (result.kind === 'set-model' || result.kind === 'set-plan-model') {
+          // The pinned release exposes these effects, but their finalization is
+          // internal SDK API. Do not approximate rollback/settings semantics.
+          throw new Error(`Copilot returned a ${result.kind} effect that this SDK integration cannot safely finalize. Use Nimrod’s model action for session model changes.`);
+        } else throw new Error(`Unsupported Copilot command result "${result.kind}". No fallback prompt was sent.`);
+        this.ui.publish({ type: 'submissionReceipt', id, outcome: 'accepted' });
+        return;
+      }
+    } catch (error) {
+      if (!this.ended && !operation.signal.aborted) {
+        this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', operation: 'Run Copilot command', error: `Copilot command did not finish: ${String(error)} Nothing was retried or sent as a fallback prompt.` });
+      }
+    } finally {
+      if (this.commandOperation === operation) this.commandOperation = undefined;
+      if (!this.ended && !this.state.busy) this.state = { ...this.state, status: 'Idle' };
+      this.publish([]);
     }
   }
   async selectPreference(kind: 'model' | 'thinking', choose: (values: string[], current?: string) => Promise<string | undefined>): Promise<void> {
@@ -130,6 +231,11 @@ export class CopilotSession {
       finally { this.replaying = false; }
       this.configuration(packet.model);
       this.state = { ...this.state, sessionUnavailable: false, busy: false, status: 'Idle' }; this.publish();
+    } else if (packet.kind === 'commands') {
+      if (!Array.isArray(packet.commands)) throw new Error('Invalid Copilot command catalog');
+      this.commands = copilotCommands(packet.commands); this.publish([]);
+    } else if (packet.kind === 'command-error') {
+      this.commands = []; this.publish([]); this.ui.notice(String(packet.error));
     } else if (packet.kind === 'event') this.event(packet.event);
     else if (packet.kind === 'permission' || packet.kind === 'input') {
       if (typeof packet.id !== 'string' || !record(packet.request)) throw new Error('Invalid Copilot decision request');
@@ -154,7 +260,7 @@ export class CopilotSession {
     const data = raw.data, type = raw.type;
     const originLabel = typeof raw.agentId === 'string' && raw.agentId ? `Copilot agent ${raw.agentId}` : undefined;
     const string = (key: string) => typeof data[key] === 'string' ? data[key] as string : '';
-    if (type.startsWith('tool.')) this.capture(type, raw);
+    if (type.startsWith('tool.') || ['assistant.tool_call_delta', 'permission.requested', 'permission.completed'].includes(type)) this.capture(type, raw);
     if (type === 'user.message') {
       const content = string('content'), echo = this.echo;
       const key = echo && !raw.agentId ? echo.key : `copilot:user:${raw.id}`;
@@ -248,8 +354,13 @@ export class CopilotSession {
   }
   private cancelDecisions(): void { this.decisions.abort(); this.decisions = new AbortController(); }
   private capture(event: string, payload: Record<string, unknown>): void {
-    const data = record(payload.data) ? payload.data : payload;
-    if (!this.replaying && this.ui.toolCapture?.enabled) this.ui.toolCapture.append({ source: { backend: 'copilot-sdk', agent: 'copilot' }, sessionId: this.sessionId, connectionId: this.captureConnectionId, toolCallId: typeof data.toolCallId === 'string' ? data.toolCallId : undefined, event, payload });
+    if (this.replaying || !this.ui.toolCapture?.enabled) return;
+    const data = event !== 'permission.request' && record(payload.data) ? payload.data : payload;
+    const permission = record(data.permissionRequest) ? data.permissionRequest : undefined;
+    const toolCallId = typeof data.toolCallId === 'string' ? data.toolCallId : typeof permission?.toolCallId === 'string' ? permission.toolCallId : undefined;
+    this.ui.toolCapture.append({ source: { backend: 'copilot-sdk', agent: 'copilot', ...(this.runtimeVersion ? { version: this.runtimeVersion } : {}) },
+      // SDK callbacks can arrive before create/resume publishes its authoritative identity.
+      sessionId: this.sessionId || `connecting:${this.captureConnectionId}`, connectionId: this.captureConnectionId, toolCallId, event, payload });
   }
   private publish(rows?: DisplayMessage[]): void {
     if (this.replaying) return;
@@ -263,7 +374,7 @@ export class CopilotSession {
       ] };
     }
     const base = this.revision++;
-    this.ui.publish({ type: 'snapshot', state: this.state, transcript: { base, revision: this.revision, ...(rows ? { rows } : {}) } }); this.ui.changed();
+    this.ui.publish({ type: 'snapshot', state: this.state, commands: this.commands, transcript: { base, revision: this.revision, ...(rows ? { rows } : {}) } }); this.ui.changed();
   }
 }
 function toolKind(name?: string): string {

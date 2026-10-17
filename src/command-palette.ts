@@ -44,6 +44,7 @@ export interface InspectionRequest {
 }
 export interface SelectionRequest {
   choose(options: string[], current?: string): Promise<string | undefined>;
+  chooseItems(options: readonly { id: string; label: string; detail?: string }[], current?: string): Promise<string | undefined>;
   error(message: string): void;
   finish(): void;
   cancel(): void;
@@ -288,33 +289,37 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       cancel() { if (current()) closeInteraction(); },
     };
   }
-  function startSelection(heading: string, onRetry: () => void, onError?: (message: string) => void): SelectionRequest | undefined {
+  function startSelection(heading: string, onRetry: () => void, onError?: (message: string) => void, standalone = false): SelectionRequest | undefined {
     const request = beginPage('selection', heading, 'Type to filter…', onRetry);
     if (request === undefined) return;
-    const current = () => dialog.open && generation === request && mode === 'selection';
+    if (standalone) { back.hidden = true; retry.hidden = true; }
+    const current = () => !disposed && dialog.open && generation === request && mode === 'selection';
     let accepted = false;
     const selectionFailure = (message: string) => {
       loading = false;
       if (onError) { closeInteraction(); onError(message); }
       else { failure(message); draw(); }
     };
+    const chooseItems: SelectionRequest['chooseItems'] = (values, selectedValue) => {
+      if (!current()) return Promise.resolve(undefined);
+      return new Promise(resolve => {
+        cancelChoice(); resolveChoice = resolve;
+        items = values.map(value => ({ ...value, current: value.id === selectedValue, keywords: value.id === selectedValue ? 'Current' : undefined,
+          run: () => { accepted = true; resolve(value.id); } }));
+        matches = items; selected = Math.max(0, items.findIndex(item => item.id === selectedValue));
+        loading = false; notice = ''; draw();
+      });
+    };
     return {
-      choose(values, selectedValue) {
-        if (!current()) return Promise.resolve(undefined);
-        return new Promise(resolve => {
-          cancelChoice(); resolveChoice = resolve;
-          items = values.map(value => ({ id: value, label: value, current: value === selectedValue, keywords: value === selectedValue ? 'Current' : undefined, run: () => { accepted = true; resolve(value); } }));
-          matches = items; selected = Math.max(0, items.findIndex(item => item.id === selectedValue));
-          loading = false; notice = ''; draw();
-        });
-      },
+      choose: (values, selectedValue) => chooseItems(values.map(value => ({ id: value, label: value })), selectedValue),
+      chooseItems,
       error(message) {
         if (current()) selectionFailure(message);
         // Applying an explicitly chosen value happens after the picker closes.
         // Report to its owner, without closing any newer interaction.
         else if (accepted) onError?.(message);
       },
-      finish() { if (current() && loading) selectionFailure('Pi did not provide choices. Retry when the session is ready.'); },
+      finish() { if (current() && loading) selectionFailure('No choices were provided. Retry when the session is ready.'); },
       cancel() { if (current()) closeInteraction(); },
     };
   }

@@ -44,6 +44,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Work area | Canonical reference | User guide |
 | --- | --- | --- |
 | Built-in Copilot SDK, runtime/process ownership, identity/legacy policy and SDK semantics | [Copilot SDK](references/copilot-sdk.md) | [Copilot](../../../docs/copilot.md) |
+| Copilot command discovery, argument suggestions, harness-owned modal choices and command output | [Copilot slash commands](references/copilot-commands.md) | [Copilot commands](../../../docs/copilot.md#slash-commands) |
 | Project identity, recent projects, session lifecycle and draft storage | [Projects/sessions](references/projects-and-sessions.md) | [Projects](../../../docs/projects.md), [Sessions](../../../docs/sessions.md) |
 | Ordering, activation, connection and cleanup selection | [Session navigation](references/session-navigation.md) | [Sidebar navigation](../../../docs/session-sidebar.md#ordering-and-navigation) |
 | Shared session-list/status contract and Pi/Copilot saved-history discovery | [Session history](references/session-history.md) | [Sessions](../../../docs/sessions.md#switch-or-resume), [Copilot history](../../../docs/copilot.md#history-close-and-delete) |
@@ -72,7 +73,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Palette page lifecycle and cancellation | [Command interactions](references/command-interactions.md) | [Command palette](../../../docs/command-palette.md) |
 | Palette command ranking and usage storage | [Command ranking](references/command-ranking.md) | [Ordering](../../../docs/command-palette.md#ordering) |
 | Shared modal shell and action focus | [Modal layout](references/modal-layout.md) | [Confirmations](../../../docs/command-palette.md#confirmation-dialogs) |
-| Opt-in automatic Pi/ACP tool payload capture, shared sink and append-only JSONL state logs | [Tool activity capture](references/tool-capture.md) | [Tool activity logs](../../../docs/tool-capture.md) |
+| Opt-in automatic Pi/Copilot SDK/ACP tool payload capture, shared sink and append-only JSONL state logs | [Tool activity capture](references/tool-capture.md) | [Tool activity logs](../../../docs/tool-capture.md) |
 | Opt-in timing history, explicit local capture and bounded report storage | [Performance diagnostics](references/performance-diagnostics.md) | [Performance reports](../../../docs/performance-diagnostics.md) |
 | Completed performance work, rationale/results and potential future optimizations (catalogue, not replacement feature contracts) | [Performance optimizations skill](../performance-optimizations/SKILL.md) | Agent-facing only |
 | Shared window creation/focus, presentation readiness/lifetime and explicit theme propagation | [Window presentation](references/window-presentation.md) | [Settings](../../../docs/settings.md), [Translucency](../../../docs/translucency.md) |

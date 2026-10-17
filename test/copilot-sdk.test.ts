@@ -119,7 +119,7 @@ test('SDK model events outrank older configuration responses and thinking remain
   assert.equal(f.session.state.controls?.find(control => control.id === 'thinking')?.label, 'high');
   f.event('session.model_change', { newModel: 'large' });
   assert.equal(f.session.supports('thinking'), false);
-  assert.match(f.session.validatePrompt('/context')!, /not exposed/);
+  assert.match(f.session.validatePrompt('/context')!, /not advertised/);
   f.session.disconnect('fixture complete');
 });
 

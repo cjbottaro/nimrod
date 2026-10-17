@@ -14,6 +14,18 @@ const client = new CopilotClient({
 let session, closing = false, initialized = false;
 let checkingHealth = false;
 let replaying = false, buffered = [];
+let commandRefresh;
+let commandExecuting = false;
+async function refreshCommands() {
+  if (!session || closing) return;
+  if (commandRefresh) return commandRefresh;
+  commandRefresh = (async () => {
+    const { commands } = await session.rpc.commands.list();
+    if (!Array.isArray(commands)) throw new Error('Copilot returned an invalid command catalog');
+    send({ kind: 'commands', commands });
+  })().finally(() => { commandRefresh = undefined; });
+  return commandRefresh;
+}
 const decisions = new Map();
 const send = value => process.stdout.write(`${JSON.stringify(value)}\n`);
 const failure = error => error instanceof Error ? error.message : String(error);
@@ -34,7 +46,10 @@ const config = () => ({
 function event(value) {
   if (!value.agentId && ['session.idle', 'session.error'].includes(value.type)) cancelDecisions();
   if (replaying) buffered.push(value);
-  else send({ kind: 'event', event: value });
+  else {
+    send({ kind: 'event', event: value });
+    if (!value.agentId && value.type === 'commands.changed') void refreshCommands().catch(error => send({ kind: 'command-error', error: `Command discovery failed: ${failure(error)}` }));
+  }
 }
 async function membership(id) {
   const sessions = await client.listSessions({ workingDirectory: cwd });
@@ -89,10 +104,39 @@ async function dispatch(message) {
       const seen = new Set(events.map(item => item.id));
       for (const item of buffered) if (!seen.has(item.id)) eventAfterReplay(item);
       buffered = []; replaying = false;
+      // Command discovery is optional: failure must not disable ordinary chat.
+      try { await refreshCommands(); }
+      catch (error) { send({ kind: 'command-error', error: `Command discovery failed: ${failure(error)}` }); }
       return;
+    }
+    case 'commands':
+      if (!session) throw new Error('No connected Copilot session');
+      return await refreshCommands();
+    case 'command': {
+      if (!session) throw new Error('No connected Copilot session');
+      if (commandExecuting) throw new Error('A Copilot command is already executing');
+      if (typeof message.name !== 'string' || !message.name || /[\s/\u0000-\u001f]/.test(message.name) || message.input !== undefined && typeof message.input !== 'string') throw new Error('Invalid Copilot command');
+      commandExecuting = true;
+      try {
+        const { commands } = await session.rpc.commands.list();
+        const command = commands.find(item => item.name.toLowerCase() === message.name.toLowerCase())
+          ?? commands.find(item => item.aliases?.some(alias => alias.toLowerCase() === message.name.toLowerCase()));
+        if (!command) throw new Error('This command is not advertised by Copilot. Nothing was invoked.');
+        const result = await session.rpc.commands.invoke({ name: command.name, ...(message.input !== undefined ? { input: message.input } : {}) });
+        const mode = await session.rpc.mode.get();
+        if (mode !== 'interactive') {
+          send({ kind: 'fatal', error: `Copilot command changed to unsupported mode "${mode}". No follow-on prompt was sent.` });
+          throw new Error('Copilot is no longer in interactive mode');
+        }
+        // Refresh metadata without re-invoking the command or changing its result.
+        try { await refreshCommands(); }
+        catch (error) { send({ kind: 'command-error', error: `Command discovery failed: ${failure(error)}` }); }
+        return result;
+      } finally { commandExecuting = false; }
     }
     case 'prompt':
       if (!session) throw new Error('No connected Copilot session');
+      if (typeof message.text !== 'string' || message.text.trimStart().startsWith('/')) throw new Error('Slash commands must use the command invocation API');
       return await session.send({ prompt: message.text, mode: 'immediate' });
     case 'cancel':
       if (!session) throw new Error('No connected Copilot session');

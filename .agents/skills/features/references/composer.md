@@ -6,8 +6,11 @@
 
 `src/copilot/view-policy.ts` contributes SDK text-only intent validation and
 idle-only model/thinking controls. Busy Enter keeps the newer draft; Stop calls
-SDK abort, with no Pi queue/steer or CLI slash-command emulation. Shared local
-submission effects still clear/preview immediately; ambiguous results disconnect
+SDK abort, with no Pi queue/steer. [Copilot commands](copilot-commands.md) use SDK
+command invocation rather than ordinary prompts or Nimrod action aliases;
+metadata drives argument suggestions and returned choices use a session-bound
+modal. Commands clear immediately without literal previews, recency or forced
+navigation. Ordinary local submission effects still clear/preview immediately; ambiguous results disconnect
 without replay/restoring sent text. [SDK events](copilot-sdk.md#send-events-controls-and-decisions)
 own echo reconciliation, cancellation and decisions. New fixtures are unrun.
 

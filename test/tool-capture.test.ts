@@ -20,7 +20,7 @@ test('disabled capture never reads payloads; enabled capture snapshots native da
     f.capture.setEnabled(true);
     const payload = { args: { path: 'original' } };
     f.capture.append(event(payload)); payload.args.path = 'later mutation';
-    f.capture.append({ ...event(), source: { backend: 'acp', agent: 'copilot', version: 'fixture' } });
+    f.capture.append({ ...event(), source: { backend: 'acp', agent: 'fixture-agent', version: 'fixture' } });
     await f.capture.flush();
     const records = f.batches.flat().map(line => JSON.parse(line));
     assert.equal(records.length, 2);
@@ -29,7 +29,7 @@ test('disabled capture never reads payloads; enabled capture snapshots native da
     assert.match(records[0].timestamp, /^\d{4}-\d{2}-\d{2}T.*Z$/);
     assert.deepEqual(records.map(r => r.sequence), [1, 2]);
     assert.equal(records[0].captureId, records[1].captureId);
-    assert.deepEqual(records[1].source, { backend: 'acp', agent: 'copilot', version: 'fixture' });
+    assert.deepEqual(records[1].source, { backend: 'acp', agent: 'fixture-agent', version: 'fixture' });
   } finally { f.capture.dispose(); }
 });
 test('write failures stop capture without retry; re-enabling creates a new segment', async () => {

@@ -2,7 +2,7 @@
 
 Focus the **prompt field** in the composer, write a message and press Enter. Pi determines the available models, tools and extensions. [Paste images](image-paste.md) to attach screenshots or send an image-only message.
 
-The send/steer/queue and slash-control behavior below describes **Pi sessions**. [ACP POC sessions](acp.md) accept text while idle, expose their own advertised commands and use Stop rather than Pi steering/queues.
+The send/steer/queue and slash-control behavior below describes **Pi sessions**. [Copilot SDK slash commands](copilot.md#slash-commands) use Copilot's command API, discovered argument suggestions, harness-requested modal choices and labelled command output—not Nimrod action aliases. [ACP POC sessions](acp.md) accept text while idle, expose their own advertised commands and use Stop rather than Pi steering/queues.
 
 ## Send, steer or queue
 

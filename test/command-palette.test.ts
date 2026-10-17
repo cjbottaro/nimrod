@@ -41,6 +41,24 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }),
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
+test('harness choice pages share selection mechanics without application Back/Retry or command ranking', async () => {
+  const f = fixture();
+  try {
+    const request = f.palette.startSelection('Copilot permissions', () => { throw new Error('A command choice must not retry an invocation'); }, undefined, true)!;
+    const choosing = request.chooseItems([{ id: 'show', label: 'show', detail: 'Show current permissions' }, { id: 'reset', label: 'reset', detail: 'Clear approvals' }]);
+    assert.equal(f.win.document.querySelector<HTMLButtonElement>('#palette-back')!.hidden, true);
+    assert.equal(f.win.document.querySelector<HTMLButtonElement>('#palette-refresh')!.hidden, true);
+    assert.match(f.list().textContent!, /Show current permissions/);
+    f.key('ArrowDown'); f.key('Enter'); await tick();
+    assert.equal(await choosing, 'reset'); assert.deepEqual(f.calls, []);
+    assert.equal(f.dialog.open, false);
+    const cancelled = f.palette.startSelection('Another choice', () => {}, undefined, true)!;
+    const choice = cancelled.chooseItems([{ id: 'show', label: 'show' }]); f.key('Escape');
+    assert.equal(await choice, undefined); cancelled.cancel();
+    assert.equal(await cancelled.chooseItems([{ id: 'late', label: 'Late' }]), undefined);
+  } finally { f.dispose(); }
+});
+
 test('accepting incremental deletion freezes discovery without rebuilding survivor rows on late pages', async () => {
   let request!: { signal: AbortSignal; publish(page: PalettePage): void; resolve(page: PalettePage): void };
   let finish!: () => void;

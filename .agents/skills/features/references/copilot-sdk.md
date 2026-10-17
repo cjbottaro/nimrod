@@ -136,8 +136,12 @@ efforts come only from the selected model's catalog. Idle-only `setModel` and
 the pinned release's experimental `session.rpc.model.getCurrent()` read actual
 model/effort state; later native events outrank older results. Failed configuration
 disconnects instead of continuing with unconfirmed settings. No synthetic Pi
-slash commands, ACP mode selectors, image sending, Restart, MCP inspector or
-other unsupported controls.
+slash aliases to Nimrod actions, ACP mode selectors, image sending, Restart,
+MCP inspector or other unsupported controls. [Copilot slash commands](copilot-commands.md)
+use the released SDK's public experimental command discovery/invocation APIs,
+argument metadata and typed results; authored fixtures are unrun. Returned choices
+reuse the shared modal lifecycle, not app-action dispatch. Model invocation-effect
+finalization and richer dialog/scoped-setting effects remain unsupported.
 The bridge checks pinned `session.rpc.mode.get()` and accepts **interactive**
 sessions only. Plan/autopilot selection fails explicitly without changing mode,
 creating a replacement or prompting; live mode changes outside that supported
@@ -153,7 +157,7 @@ once/Deny/Cancel; input presents native choices and optional freeform text.
 Background requests do not navigate/focus or approve. Stop, disconnect and Close
 retire exact connection-bound AbortSignals and settle/reject callbacks safely.
 Notifications reuse shared preference/focus/token checks; replay never alerts.
-Capture logs native `tool.*`/permission payloads only, without SDK-to-Pi conversion.
+Capture logs native `tool.*`, streamed tool-input deltas and permission request/completion payloads without SDK-to-Pi conversion. [Tool capture](tool-capture.md#copilot-sdk) owns the concrete mapping, early-identity handling, version metadata, backend-specific paths and capture-specific offline evidence; this does not establish installed-CLI/native acceptance.
 
 Plugin source/target is **`copilot-sdk`**, distinct from ACP. Existing Pi-only
 defaults/overrides remain Pi-only; exact-agent plugins rank above generic SDK

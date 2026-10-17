@@ -2,14 +2,16 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import test from 'node:test';
+import { CopilotSession } from '../src/copilot/session';
+import { createToolCapture } from '../src/tool-capture';
 
-function bridge(mode = 'interactive') {
+function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) => void) {
   const child = spawn(process.execPath, ['--import', './test/fixtures/copilot-sdk-register.mjs', 'copilot/bridge.mjs', '/fixture/copilot', '/fixture/project'], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, NIMROD_FIXTURE_COPILOT_MODE: mode } });
   const packets: Record<string, any>[] = [], pending = new Map<string, { resolve(value: any): void; reject(error: Error): void }>();
   let stderr = '', sequence = 0;
   child.stderr.on('data', chunk => { stderr += chunk; });
   createInterface({ input: child.stdout }).on('line', line => {
-    const packet = JSON.parse(line); packets.push(packet);
+    const packet = JSON.parse(line); packets.push(packet); receive?.(packet);
     if (packet.kind !== 'result') return;
     const request = pending.get(packet.id); pending.delete(packet.id);
     if (packet.error) request?.reject(new Error(packet.error)); else request?.resolve(packet.result);
@@ -21,6 +23,7 @@ function bridge(mode = 'interactive') {
   }));
   return {
     packets,
+    send(message: object) { child.stdin.write(`${JSON.stringify(message)}\n`); },
     request(method: string, parameters: Record<string, unknown> = {}): Promise<any> {
       const id = String(++sequence);
       return new Promise((resolve, reject) => {
@@ -50,6 +53,32 @@ test('production SDK bridge loads only exact project members and disconnects wit
     await assert.rejects(f.request('delete', { sessionId: 'fixture-sdk' }), /history-only/);
   } finally { await f.close(); }
 });
+test('production SDK bridge tool and permission packets reach the JSONL capture sink unchanged', { timeout: 5000 }, async () => {
+  const lines: string[] = [], errors: string[] = [];
+  const capture = createToolCapture({ write: async batch => { lines.push(...batch); }, failure: message => errors.push(message), recovered() {} });
+  capture.setEnabled(true);
+  let completed!: () => void;
+  const finished = new Promise<void>(resolve => { completed = resolve; });
+  let session: CopilotSession | undefined;
+  const f = bridge('interactive', packet => session?.receive(packet));
+  session = new CopilotSession(async message => f.send(message), {
+    publish() {}, changed() {}, identified() {}, disconnected() {}, notice: message => errors.push(message),
+    completed: () => completed(), decision: async () => ({ kind: 'approved' }), toolCapture: capture,
+  });
+  try {
+    await session.initialize();
+    await session.handle({ type: 'prompt', id: 'offline-capture', text: 'Offline fake SDK only; no command is executed' });
+    await finished; await capture.flush();
+    const records = lines.map(line => JSON.parse(line));
+    assert.deepEqual(records.map(record => record.event), ['tool.execution_start', 'permission.request', 'tool.execution_partial_result', 'tool.execution_complete']);
+    const native = f.packets.filter(packet => packet.kind === 'event' && packet.event.type.startsWith('tool.') || packet.kind === 'permission')
+      .map(packet => packet.kind === 'permission' ? packet.request : packet.event);
+    assert.deepEqual(records.map(record => record.payload), native);
+    assert.ok(records.every(record => record.sessionId === 'fixture-sdk' && record.source.backend === 'copilot-sdk' && record.source.version === '1.0.98'));
+    assert.deepEqual(errors, []);
+  } finally { session.disconnect('offline capture fixture complete'); capture.dispose(); await f.close(); }
+});
+
 test('unsupported SDK mode retains the exact identity without prompting or changing mode', { timeout: 5000 }, async () => {
   const f = bridge('plan');
   try {
@@ -59,6 +88,24 @@ test('unsupported SDK mode retains the exact identity without prompting or chang
     assert.equal(f.packets.some(packet => packet.kind === 'connected' || packet.kind === 'event'), false);
   } finally { await f.close(); }
 });
+test('SDK commands use discovery/invocation, retain arguments and choices, and never fall through to prompts', { timeout: 5000 }, async () => {
+  const f = bridge();
+  try {
+    await f.request('initialize'); await f.request('connect', { sessionId: 'fixture-sdk' });
+    assert.equal(f.packets.find(packet => packet.kind === 'commands')?.commands[0].input.choices[0].name, 'show');
+    const menu = await f.request('command', { name: 'permissions' });
+    assert.equal(menu.kind, 'select-subcommand'); assert.equal(menu.options[0].name, 'show');
+    const report = await f.request('command', { name: 'perms', input: 'show  literal\nrest' });
+    assert.equal(report.kind, 'text'); assert.equal(report.text, 'Fixture permission report: show  literal\nrest');
+    await assert.rejects(f.request('command', { name: 'missing' }), /not advertised/);
+    await assert.rejects(f.request('prompt', { text: '/permissions show' }), /invocation API/);
+    await f.request('command', { name: 'discover-fixture' });
+    assert.ok(f.packets.filter(packet => packet.kind === 'commands').at(-1)?.commands.some((command: { name: string }) => command.name === 'new-fixture'));
+    assert.equal((await f.request('command', { name: 'new-fixture' })).message, 'New command works');
+    assert.equal(f.packets.some(packet => packet.kind === 'event' && packet.event.type === 'user.message'), false);
+  } finally { await f.close(); }
+});
+
 test('production SDK discovery deletes only through the supported API and never recreates a missing ID', { timeout: 5000 }, async () => {
   const f = bridge();
   try {
