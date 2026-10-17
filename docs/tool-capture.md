@@ -2,10 +2,10 @@
 
 Built-in Copilot SDK uses source backend `copilot-sdk`, agent `copilot`, in the
 same opt-in local capture pipeline. It records native live `tool.*` and
-permission-request data, not conversation prose or saved-history replay. Legacy
-Copilot/custom ACP captures remain `acp`; schemas are not translated into Pi.
+permission-request data, not conversation prose or saved-history replay.
+Custom ACP captures use `acp`; schemas are not translated into Pi.
 
-Enable **Capture tool activity** in **Global Settings → Diagnostics** to automatically collect local JSON Lines logs for card/plugin development. It is off by default and covers **Pi, including extension tools**, **official SDK Copilot**, and **custom/legacy ACP agents**.
+Enable **Capture tool activity** in **Global Settings → Diagnostics** to automatically collect local JSON Lines logs for card/plugin development. It is off by default and covers **Pi, including extension tools**, **official SDK Copilot**, and **custom ACP agents**.
 
 No manual inspection/capture action is needed. Enable it, work normally, then give your coding assistant the relevant log paths and time window to inventory tool payloads and develop bespoke cards.
 

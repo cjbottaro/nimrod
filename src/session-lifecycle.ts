@@ -4,8 +4,7 @@ import { lastUsed } from './session-recency';
 export type LaunchMode = 'saved' | 'temporary' | 'resume';
 export type SavedSessionIdentity =
   | { path: string; sessionId: string }
-  | { kind: 'copilot-sdk'; sessionId: string }
-  | { kind: 'acp'; profile: 'copilot'; sessionId: string };
+  | { kind: 'copilot-sdk'; sessionId: string };
 export type SavedSidebarSession = SavedSessionIdentity & { name: string; lastUsed: number };
 /** A previously accepted user action may outlive the palette/settings surface that accepted it. */
 export interface ConnectSessionOptions { acceptedAction?: boolean; }
@@ -75,12 +74,10 @@ export function readSavedSidebarSession(value: unknown): SavedSidebarSession | u
   if (!value || typeof value !== 'object' || Array.isArray(value)) return;
   const entry = value as Record<string, unknown>;
   if (typeof entry.sessionId !== 'string' || !entry.sessionId.trim()) return;
-  const metadata = { name: typeof entry.name === 'string' ? entry.name : entry.kind === 'acp' || entry.kind === 'copilot-sdk' ? 'Copilot session' : 'Session',
+  const metadata = { name: typeof entry.name === 'string' ? entry.name : entry.kind === 'copilot-sdk' ? 'Copilot session' : 'Session',
     lastUsed: lastUsed(entry.lastUsed) };
   if (entry.kind === 'copilot-sdk') return { kind: 'copilot-sdk', sessionId: entry.sessionId, ...metadata };
-  if (entry.kind === 'acp') {
-    if (entry.profile === 'copilot') return { kind: 'acp', profile: 'copilot', sessionId: entry.sessionId, ...metadata };
-  } else if (entry.kind === undefined && typeof entry.path === 'string') {
+  if (entry.kind === undefined && typeof entry.path === 'string') {
     return { path: entry.path, sessionId: entry.sessionId, ...metadata };
   }
 }

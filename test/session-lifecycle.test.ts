@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { piSessionLifecycle, type PiSessionLifecycleOwner } from '../src/pi/session-lifecycle';
 import { acpSessionLifecycle } from '../src/acp/session-lifecycle';
-import { COPILOT_PROFILE, copilotSessionScope } from '../src/acp/profiles';
-import { AcpSession } from '../src/acp/session';
+import { copilotSessionLifecycle, copilotSdkScope } from '../src/copilot/session-lifecycle';
+import { CopilotSession } from '../src/copilot/session';
+import { parseAcpProfile } from '../src/acp/profiles';
 import { PiSession } from '../src/pi/session';
 import { PiTransport } from '../src/pi/transport';
 import { readSavedSidebarSession, type ConnectSessionOptions, type SessionLifecycle, type SessionLifecycleHost, type SessionLifecycleOwner, type SessionPersistence } from '../src/session-lifecycle';
@@ -23,25 +24,25 @@ function fixture(kind: 'pi' | 'copilot') {
     confirm: async () => false, copy: async () => {}, openLink: async () => {},
     disconnected: reason => disconnected.push(reason ?? ''),
   }, false);
-  const acp = new AcpSession(() => {}, {
-    publish() {}, changed() {}, notice() {}, completed() {}, permission: async () => undefined,
+  const copilot = new CopilotSession(async () => {}, {
+    publish() {}, changed() {}, notice() {}, completed() {}, identified() {}, decision: async () => undefined,
     disconnected: reason => disconnected.push(reason),
   });
   const piBackend = { session: pi };
-  const acpBackend: { profile: typeof COPILOT_PROFILE; session: AcpSession; savedSessionId?: string } = { profile: COPILOT_PROFILE, session: acp };
+  const copilotBackend: { session: CopilotSession; savedSessionId?: string } = { session: copilot };
   const lifecycle: SessionLifecycle = kind === 'pi'
     ? piSessionLifecycle(() => owner, piBackend, host)
-    : acpSessionLifecycle(() => owner, acpBackend, host);
+    : copilotSessionLifecycle(() => owner, copilotBackend, host);
   const save = () => {
     if (kind === 'pi') owner.file = { path: '/fixture/session.jsonl', sessionId: 'saved-id', exists: true };
-    else acpBackend.savedSessionId = 'saved-id';
+    else copilotBackend.savedSessionId = 'saved-id';
   };
   return { owner, lifecycle, connects, stops, disconnected, save,
     gate: (value: typeof gate) => { gate = value; },
     stop: (operation: typeof stop) => { stop = operation; },
     available: (value: boolean) => {
       pi.state = { ...pi.state, sessionUnavailable: !value };
-      acp.state = { ...acp.state, sessionUnavailable: !value };
+      copilot.state = { ...copilot.state, sessionUnavailable: !value };
     },
   };
 }
@@ -103,30 +104,31 @@ for (const kind of ['pi', 'copilot'] as const) {
 
 test('ACP lifecycle needs only connection ownership; persistence consumers need no controller operations', async () => {
   const owner: SessionLifecycleOwner = { starting: false, ended: true };
-  const backend = { profile: COPILOT_PROFILE, savedSessionId: 'saved-id' };
+  const backend = { profile: parseAcpProfile({ name: 'Fixture', command: '/fixture/agent', args: [] }) };
   let stops = 0;
   const lifecycle = acpSessionLifecycle(() => owner, backend, {
     connect: async () => {}, stop: async () => { stops++; }, gate: () => 'ready',
   });
   const persistence: SessionPersistence = lifecycle;
-  assert.deepEqual(persistence.identity, { kind: 'acp', profile: 'copilot', sessionId: 'saved-id' });
-  assert.equal(lifecycle.eligibility(), 'connectable');
+  assert.equal(persistence.identity, undefined);
+  assert.equal(persistence.draftScope, undefined);
+  assert.equal(lifecycle.eligibility(), 'unavailable');
   await lifecycle.stop();
   assert.equal(stops, 0, 'no token means no owned process to stop');
   lifecycle.disconnect('Not connected');
-  assert.equal(persistence.key, copilotSessionScope('saved-id'));
+  assert.equal(persistence.key, undefined);
 });
 
 test('saved reference decoding preserves legacy Pi entries and tagged Copilot entries without mixing identities', () => {
   const pi = { path: '/fixture/session.jsonl', sessionId: 'saved-id', name: 'Pi', lastUsed: 100 };
-  const copilot = { kind: 'acp', profile: 'copilot', sessionId: 'saved-id', name: 'Copilot', lastUsed: 100 };
+  const copilot = { kind: 'copilot-sdk', sessionId: 'saved-id', name: 'Copilot', lastUsed: 100 };
   assert.deepEqual(readSavedSidebarSession(pi), pi);
   assert.deepEqual(readSavedSidebarSession(copilot), copilot);
-  for (const invalid of [null, [], {}, { ...copilot, profile: 'unknown' }, { ...copilot, sessionId: ' ' }, { ...pi, kind: 'unknown' }])
+  for (const invalid of [null, [], {}, { ...copilot, kind: 'acp', profile: 'copilot' }, { ...copilot, sessionId: ' ' }, { ...pi, kind: 'unknown' }])
     assert.equal(readSavedSidebarSession(invalid), undefined);
   const p = fixture('pi'), c = fixture('copilot'); p.save(); c.save();
   assert.notEqual(p.lifecycle.key, c.lifecycle.key);
-  assert.equal(c.lifecycle.key, copilotSessionScope('saved-id'));
+  assert.equal(c.lifecycle.key, copilotSdkScope('saved-id'));
   assert.equal(p.lifecycle.draftScope, 'file:/fixture/session.jsonl');
   assert.equal(p.lifecycle.connectOnStartup, true);
   assert.equal(c.lifecycle.connectOnStartup, false);

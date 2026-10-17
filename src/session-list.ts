@@ -19,7 +19,7 @@ export interface SessionListEntry {
 
 export function savedSessionKey(reference: SavedSessionIdentity): string {
   return 'path' in reference ? `pi:${JSON.stringify([reference.path, reference.sessionId])}`
-    : reference.kind === 'copilot-sdk' ? `copilot-sdk:${JSON.stringify(reference.sessionId)}` : `acp:${reference.profile}:${JSON.stringify(reference.sessionId)}`;
+    : `copilot-sdk:${JSON.stringify(reference.sessionId)}`;
 }
 
 /** Open-session presentation is authoritative; history retains its search metadata. */

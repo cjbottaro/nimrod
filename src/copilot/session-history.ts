@@ -61,7 +61,7 @@ export class CopilotSessionHistory implements SessionHistory {
       const reference = { kind: 'copilot-sdk' as const, sessionId: value.sessionId };
       const timestamp = typeof value.modifiedTime === 'string' ? Date.parse(value.modifiedTime) : NaN;
       return { key: savedSessionKey(reference), reference, title: typeof value.summary === 'string' && value.summary.trim() ? value.summary : 'Untitled Copilot session',
-        harnessLabel: 'Copilot SDK', timestamp: Number.isFinite(timestamp) && timestamp > 0 ? timestamp : undefined, open: false, status: 'closed' as const, keywords: value.sessionId };
+        harnessLabel: 'Copilot', timestamp: Number.isFinite(timestamp) && timestamp > 0 ? timestamp : undefined, open: false, status: 'closed' as const, keywords: value.sessionId };
     }) };
   }
   async validateDeletion(sessionId: string): Promise<void> {

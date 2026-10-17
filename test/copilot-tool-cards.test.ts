@@ -4,10 +4,11 @@ import { JSDOM } from 'jsdom';
 import { build } from 'esbuild';
 import { CardPluginCatalog } from '../src/pi/card-plugins/catalog';
 import { renderToolCard, updateToolCard, disposeToolCard } from '../src/pi/tool-card';
-import { bundledAcpPlugin } from '../src/acp/card-plugins';
+import { bundledCopilotPlugin } from '../src/copilot/card-plugins';
 import type { ToolCardData } from '../src/card-plugin-api';
+import { copilotToolResult } from '../src/copilot/tool-result';
 
-const source = { backend: 'acp' as const, agent: 'Copilot' };
+const source = { backend: 'copilot-sdk' as const, agent: 'Copilot' };
 function fixture(data: ToolCardData, projectDirectory = '/fixture') {
   const dom = new JSDOM('<body></body>');
   const doc = dom.window.document;
@@ -16,14 +17,14 @@ function fixture(data: ToolCardData, projectDirectory = '/fixture') {
 }
 function readData(arguments_: unknown = { path: '/fixture/src/client.ts', view_range: [20, 40] }): ToolCardData {
   const rawOutput = { content: 'const example = "<script>literal</script>";\n', detailedContent: 'redundant diff representation' };
-  return { source, kind: 'read', title: 'Viewing .../client.ts', arguments: arguments_, native: { rawOutput },
-    toolStatus: 'result', resultOutput: JSON.stringify(rawOutput, null, 2) };
+  return { source, kind: 'read', title: 'Viewing .../client.ts', arguments: arguments_, native: { 'tool.execution_complete': { result: rawOutput } },
+    toolStatus: 'result', resultOutput: copilotToolResult(rawOutput) };
 }
 
 test('captured Copilot reads show project-relative paths then requested ranges and content without JSON/diff duplication', () => {
   const data = readData(), f = fixture(data);
   try {
-    assert.equal(bundledAcpPlugin(data).id, 'nimrod.acp.copilot-read');
+    assert.equal(bundledCopilotPlugin(data).id, 'nimrod.copilot.read');
     assert.equal(f.card.querySelector('.tool-card-title')?.textContent, 'Read file');
     assert.equal(f.card.querySelector('.tool-card-preview')?.textContent, 'src/client.ts · lines 20–40');
     assert.equal(f.card.querySelector('.card-plugin-body .tool-output')?.textContent, 'const example = "<script>literal</script>";\n');
@@ -73,7 +74,7 @@ test('Copilot grep uses the complete pattern, scope and file filter despite bein
     resultOutput: '<img src=x>\nclient.ts:10: deleteSession\n' };
   const f = fixture(data);
   try {
-    assert.equal(bundledAcpPlugin(data).id, 'nimrod.acp.copilot-search');
+    assert.equal(bundledCopilotPlugin(data).id, 'nimrod.copilot.search');
     assert.equal(f.card.querySelector('.tool-card-title')?.textContent, 'Search');
     assert.equal(f.card.querySelector('.tool-card-preview')?.textContent, 'deleteSession|session/delete · in src · files *.ts');
     assert.equal(f.card.querySelector('.card-plugin-body .tool-output')?.textContent, data.resultOutput);
@@ -99,7 +100,7 @@ test('file-pattern searches are not confused with reads, and unknown Copilot ope
   const catalog = new CardPluginCatalog();
   assert.equal(catalog.select({ ...readData(), source: { backend: 'acp', agent: 'unknown-agent' } }).id, 'nimrod.acp.tool');
   assert.equal(catalog.select({ name: 'read' }).id, 'nimrod.read');
-  assert.equal(catalog.select({ source, kind: 'execute', arguments: { command: 'fixture' } }).id, 'nimrod.acp.copilot-shell', 'captured capitalized identity also selects the existing shell adapter');
+  assert.equal(catalog.select({ source, kind: 'execute', arguments: { command: 'fixture' } }).id, 'nimrod.copilot.shell', 'captured capitalized identity also selects the existing shell adapter');
 });
 
 test('partial inputs enhance the same mounted card; output patches retain nodes, raw disclosure and reader focus', () => {
@@ -114,7 +115,7 @@ test('partial inputs enhance the same mounted card; output patches retain nodes,
     const raw = f.card.querySelector<HTMLDetailsElement>('.tool-raw-output')!;
     f.card.open = true; raw.open = true; output.focus();
     const rawOutput = { content: 'const example = "<script>literal</script>";\nmore\n', detailedContent: 'different redundant diff' };
-    updateToolCard(f.dom.window.document, f.card, { ...data, toolStatus: 'result', native: { rawOutput }, resultOutput: JSON.stringify(rawOutput, null, 2) });
+    updateToolCard(f.dom.window.document, f.card, { ...data, toolStatus: 'result', native: { 'tool.execution_complete': { result: rawOutput } }, resultOutput: copilotToolResult(rawOutput) });
     assert.equal(f.card.querySelector('.card-plugin-body .tool-output'), output);
     assert.equal(f.card.querySelector('.tool-raw-output'), raw); assert.equal(raw.open, true);
     assert.equal(f.dom.window.document.activeElement, output); assert.equal(f.card.open, true);
@@ -122,13 +123,13 @@ test('partial inputs enhance the same mounted card; output patches retain nodes,
   } finally { f.close(); }
 });
 
-test('standard ACP content and structured errors are not replaced by a rawOutput content shortcut', () => {
+test('unrelated output and structured errors are not replaced by a Copilot content shortcut', () => {
   const original = readData();
   const rawError = { code: 'failure', content: 'fixture error details', detailedContent: 'additional error metadata' };
   for (const data of [
     { ...original, native: { ...(original.native as object), content: [{ type: 'content', content: { type: 'text', text: 'standard content' } }] }, resultOutput: 'standard content' },
-    { ...original, native: { rawOutput: { code: 'failure', message: 'fixture file missing' } }, isError: true, resultOutput: '{"code":"failure","message":"fixture file missing"}' },
-    { ...original, native: { rawOutput: rawError }, isError: true, resultOutput: JSON.stringify(rawError, null, 2) },
+    { ...original, native: { 'tool.execution_complete': { result: { code: 'failure', message: 'fixture file missing' } } }, isError: true, resultOutput: '{"code":"failure","message":"fixture file missing"}' },
+    { ...original, native: { 'tool.execution_complete': { result: rawError } }, isError: true, resultOutput: copilotToolResult(rawError) },
   ]) {
     const f = fixture(data);
     try { assert.equal(f.card.querySelector('.card-plugin-body .tool-output')?.textContent, data.resultOutput); }

@@ -15,7 +15,7 @@ test('ACP tool selection cannot accidentally select a Pi Bash or legacy external
   const catalog = new CardPluginCatalog();
   assert.equal(catalog.select({ name: 'bash' }).id, 'nimrod.bash');
   assert.equal(catalog.select({ ...data, name: 'bash' }).id, 'nimrod.acp.tool');
-  assert.equal(catalog.select({ ...data, source: { backend: 'acp', agent: 'copilot' } }).id, 'nimrod.acp.copilot-shell');
+  assert.equal(catalog.select({ ...data, source: { backend: 'acp', agent: 'copilot' } }).id, 'nimrod.acp.tool', 'an agent name cannot enable removed Copilot ACP adapters');
   await catalog.reload({ files: [], trusted: [], overrides: { execute: 'nimrod.bash' } }, async () => '', () => {}, {
     readModule: async () => '', loadPersonal: async () => ({ entries: ['legacy.ts'], plugins: [{ entry: 'legacy.ts', source: 'legacy', cacheHit: false }], warnings: [] }),
     importModule: async () => ({ default: { apiVersion: 2, id: 'external.legacy', tools: ['execute'], supports: () => true, mount() { return { update() {}, dispose() {} }; } } }),

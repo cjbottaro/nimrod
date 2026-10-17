@@ -68,12 +68,12 @@ test('shared row updates preserve content nodes and expose open membership witho
     updateSessionRowContent(content, { ...presentation, title: 'Renamed', open: false });
     assert.equal(row.querySelector('.session-row-badge'), null);
     assert.equal(row.getAttribute('aria-label'), 'Renamed — Working');
-    updateSessionRowContent(content, { ...presentation, title: 'Copilot conversation', harnessLabel: 'Copilot ACP' });
+    updateSessionRowContent(content, { ...presentation, title: 'Copilot conversation', harnessLabel: 'Copilot' });
     assert.equal(content.rowLabel.textContent, 'Copilot conversation');
-    assert.equal(content.rowTime.parentElement!.textContent, `${sessionTime(100)} · Copilot ACP`);
+    assert.equal(content.rowTime.parentElement!.textContent, `${sessionTime(100)} · Copilot`);
     assert.equal(row.querySelector('.session-row-harness'), content.rowHarness);
     updateSessionRowTime(content.rowTime, 100, 120_100);
-    assert.equal(content.rowTime.parentElement!.textContent, `${sessionTime(100, 120_100)} · Copilot ACP`);
+    assert.equal(content.rowTime.parentElement!.textContent, `${sessionTime(100, 120_100)} · Copilot`);
   } finally { dom.window.close(); }
 });
 

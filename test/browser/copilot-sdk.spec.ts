@@ -11,7 +11,7 @@ test('offline SDK bridge uses the shared shell for optimistic send, permissions,
     await page.keyboard.press('Meta+Shift+P');
     await page.locator('#palette-input').fill('New Copilot session');
     await page.locator('#palette-input').press('Enter');
-    await expect(page.locator('#mode-badge')).toHaveText(/Copilot.*SDK/);
+    await expect(page.locator('#mode-badge')).toHaveText('Copilot');
     await expect(page.locator(visible('send'))).toBeEnabled();
     const sdk = await page.locator('.session-view:not([hidden])').getAttribute('id');
     await page.locator(visible('prompt')).fill('Offline SDK request');

@@ -1,4 +1,5 @@
-import { bundledAcpPlugin } from '../../acp/card-plugins';
+import { acpToolPlugin } from '../../acp/card-plugins';
+import { bundledCopilotPlugin } from '../../copilot/card-plugins';
 import { pluginTargets, matchesTarget, pluginKinds, targetSpecificity } from '../../card-plugin-targets';
 import { immutableSnapshot } from '../immutable-snapshot';
 import type { CardPluginTarget } from '../../card-plugin-api';
@@ -116,7 +117,7 @@ export class CardPluginCatalog {
     // Existing tool-only overrides belong to Pi. ACP never inherits a Pi match.
     const override = data.source && data.source.backend !== 'pi' ? undefined : Object.hasOwn(this.config.overrides, name) ? this.config.overrides[name] : undefined;
     if (override === 'nimrod.raw') return presentationPlugin({ id: 'nimrod.raw', supports: () => true, mount: () => ({ update: rawToolPresentation, dispose() {} }) });
-    const bundled = data.source && data.source.backend !== 'pi' ? bundledAcpPlugin(data) : bundledToolRenderer(data);
+    const bundled = data.source?.backend === 'copilot-sdk' ? bundledCopilotPlugin(data) : data.source?.backend === 'acp' ? acpToolPlugin : bundledToolRenderer(data);
     if (override === bundled.id || override === 'nimrod.tool') return override === 'nimrod.tool' ? presentationPlugin(defaultToolRenderer) : bundled;
     // ACP categories are intentionally broad. Select applicable candidates in a
     // deterministic order, then latch the chosen instance for its whole lifetime.

@@ -48,6 +48,10 @@ class Session {
   }
   async run(prompt, turn) {
     this.emit('user.message', { content: prompt }); this.emit('assistant.turn_start', {});
+    if (prompt === 'url permission fixture') {
+      await this.config.onPermissionRequest({ kind: 'url', url: 'https://example.test/permission' });
+      this.emit('session.idle', {}); return;
+    }
     if (prompt === 'input fixture') {
       const answer = await this.config.onUserInputRequest({ question: 'Fixture question', choices: ['First', 'Second'], allowFreeform: true });
       this.emit('assistant.message', { messageId: `answer-${turn}`, content: answer.answer });

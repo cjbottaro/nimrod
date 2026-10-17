@@ -14,7 +14,8 @@ and native lifecycle still need verification. Windows SDK launch is unavailable.
 ## Start and send
 
 Open a project, then **⌘/Ctrl+Shift+P → New Copilot session**. This command is
-unbound by default. Ordinary **New session** and **⌘/Ctrl+N** still create Pi
+unbound by default and its hint is **Start a Copilot session**. Harness labels
+in the Project bar, Session sidebar and history pickers are simply **Copilot**. Ordinary **New session** and **⌘/Ctrl+N** still create Pi
 sessions, regardless of the selected harness.
 
 Text Send clears the composer and previews your turn immediately. It never
@@ -63,24 +64,18 @@ that exact ID. Missing/failed loads never create a replacement.
 Copilot history and the SDK draft.
 
 **Delete session…**, row/Project bar trash controls and **Delete sessions…** use
-the SDK’s supported permanent deletion API, **not ACP’s optional deletion
-capability**. Review identifies one session and its artifacts, not a Pi tree.
+the SDK’s supported permanent deletion API. Review identifies one session and its artifacts, not a Pi tree.
 After confirmation Nimrod verifies fresh project membership, stops its owned
 writer, and requests deletion. Only confirmed success removes local SDK
 references/draft. Failed or uncertain results retain them and are never
 automatically retried; use Refresh before a later explicit attempt. Nimrod does
 not remove private Copilot directories or coordinate external applications.
 
-## Older Copilot ACP entries
+## Earlier integration
 
-Previously saved **Copilot (legacy ACP)** entries keep their exact ACP identity
-and separate draft; they are not automatically migrated to the SDK. Selecting
-one still uses the legacy ACP load path and advertised capabilities. CLI
-1.0.98 does not advertise ACP deletion, so that legacy entry’s Delete remains
-unavailable even though SDK-native entries have supported SDK deletion.
-
-The same ID may be discovered by both transports. Nimrod will not reinterpret
-drafts or control it concurrently: close the conflicting entry before connecting
-the other representation. Closing keeps its separate draft. Deleting an SDK
-session does not erase its legacy ACP draft or establish interchangeability.
-No seamless ACP/SDK switching is promised.
+The previous Copilot integration has been removed. Its saved sidebar entries are
+no longer restored, and its project association no longer starts history discovery.
+There is no automatic conversion or draft migration. Old stored drafts and
+Copilot-owned history are not deleted. Start **New Copilot session** or use
+Copilot's current project history through **Resume session**; older drafts are not
+attached to newly opened sessions.

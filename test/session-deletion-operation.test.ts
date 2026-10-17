@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { copilotSessionDeletion, type CopilotDeletionHistory } from '../src/acp/session-deletion';
+import { copilotSessionDeletion, type CopilotDeletionHistory } from '../src/copilot/session-deletion';
 import { piSessionDeletion } from '../src/pi/session-deletion';
 import { SessionDeletionCoordinator } from '../src/session-deletion-coordinator';
 import type { SessionDeletionContext, SessionDeletionSource } from '../src/session-deletion-operation';
 import { savedSessionKey } from '../src/session-list';
 
-const reference = { kind: 'acp' as const, profile: 'copilot' as const, sessionId: 'saved' };
+const reference = { kind: 'copilot-sdk' as const, sessionId: 'saved' };
 function fixture(extraStop?: () => Promise<void>) {
   const events: string[] = [], errors: string[] = [];
   let confirm = true, failStop = false, failDelete = false, ready = true;
@@ -105,7 +105,7 @@ test('unsupported operations explain missing capability, revalidate live support
   const operation = f.coordinator.operation(reference, 'Saved')!;
   Object.assign(f.history, { supportsDeletion: false });
   assert.equal(operation.supported, false);
-  assert.match(operation.unavailableReason!, /has not advertised/);
+  assert.match(operation.unavailableReason!, /Connect Copilot history/);
   assert.equal(operation.available(), false);
   await operation.run();
   assert.equal(f.events.includes('stop'), false);

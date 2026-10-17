@@ -1,4 +1,5 @@
-import { bundledAcpPlugin } from '../acp/card-plugins';
+import { acpToolPlugin } from '../acp/card-plugins';
+import { bundledCopilotPlugin } from '../copilot/card-plugins';
 import { type CardRenderer } from './card-renderer';
 import { DomCardController, presentationPlugin, type DomCardRenderer, type CardDomHost } from './dom-card-renderer';
 import { associateOutputViewport } from './card-shell';
@@ -24,7 +25,7 @@ export function toolCardIsBusy(block: ToolCardBlock): boolean {
   const status = toolStatus(block); return status === 'running' || status === 'thinking';
 }
 export function renderToolCard(document: Document, block: ToolCardBlock, details: HTMLDetailsElement,
-  renderer: ToolCardRenderer = block.source && block.source.backend !== 'pi' ? bundledAcpPlugin(block) : bundledToolRenderer(block), report?: (error: unknown) => void, host: CardDomHost = {}): HTMLDetailsElement {
+  renderer: ToolCardRenderer = block.source?.backend === 'copilot-sdk' ? bundledCopilotPlugin(block) : block.source?.backend === 'acp' ? acpToolPlugin : bundledToolRenderer(block), report?: (error: unknown) => void, host: CardDomHost = {}): HTMLDetailsElement {
   disposeToolCard(details); details.classList.add('tool-card');
   const summary = document.createElement('summary');
   const row = document.createElement('span'); row.className = 'tool-card-summary';

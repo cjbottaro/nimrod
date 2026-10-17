@@ -1,61 +1,91 @@
 # Session lists and saved-history discovery
 
-**Status: source implemented; new fixtures have not been run. Installed-Copilot and native/platform acceptance pending.** User guides: [Sessions](../../../../docs/sessions.md#switch-or-resume), [ACP](../../../../docs/acp.md#resume-copilot-history).
+**Status: Pi and Copilot SDK sources implemented; latest fixtures unrun.
+Installed-agent/native acceptance pending.**
+User guides: [Sessions](../../../../docs/sessions.md#switch-or-resume),
+[Copilot](../../../../docs/copilot.md#history-close-and-delete).
 
 ## Consumer contracts
 
-Built-in [Copilot SDK history](copilot-sdk.md#identity-history-and-drafts) is
-`src/copilot/session-history.ts`: project-owned SDK `listSessions`, independently
-checked `context.workingDirectory`, nonremote filtering, separate
-`nimrod.history.copilot-sdk.v1:<cwd>` association and `copilot-sdk:` keys.
-It never creates/resumes during discovery; selection resumes the exact ID.
-The ACP source/association detailed below is **legacy only** and remains
-explicitly labeled. SDK/legacy open conflicts block connection, never alias
-drafts. All new SDK history/bridge/shell fixtures are authored **unrun**.
+`src/session-list.ts::SessionListEntry` is shared by the Session sidebar, Switch
+and history pickers: source-qualified `key`, `title`, `harnessLabel`, optional
+numeric `timestamp`, `open`, semantic `SessionStatus`, optional saved `reference`
+and search `keywords`. Pi references retain exact file path/ID; Copilot references
+retain `kind:'copilot-sdk'` and saved ID. No durable ACP reference remains.
 
-`src/session-list.ts::SessionListEntry` is the shared input for the Session sidebar, Switch and Resume pickers: project-local source-qualified `key`, `title`, `harnessLabel`, optional numeric `timestamp`, `open`, typed `SessionStatus`, optional saved `reference` and search `keywords`. Absent reference means no durable identity yet, not necessarily an explicitly temporary session. Pi references retain their exact path and ID; Copilot references retain the immutable built-in profile and saved ID. Keys include the saved ID so a replaced Pi file cannot inherit another session's open presentation.
+The shell's `sessionRow` projects authoritative connection/activity/attention/
+deletion state with existing precedence. `session-sidebar.ts` owns accessible
+wording/glyphs. `resolveSessionListEntry` overlays matching open title/time/status
+while retaining history search metadata. Membership is independent of connectivity;
+history does not own another lifecycle state machine.
 
-Status describes the primary displayed condition, not all simultaneous state. The shell's `sessionRow` projects existing authoritative connection/activity/attention/deletion inputs through `sessionStatus` with unchanged precedence. `src/session-sidebar.ts` alone maps status to accessible wording and glyphs. History entries are closed; `resolveSessionListEntry` overlays the matching open session's current title/time/status while retaining history search metadata. Open membership remains independent of connection. The sidebar does not repeat its implicit Open membership in its accessible name; pickers do. Neither list discovery nor rendering owns a second lifecycle state machine.
+`src/session-history.ts::SessionHistory` is a project-bound consumer port:
+source `id`/`label`, `list({signal,cursor?})` returning immutable entries,
+optional next cursor and warnings, plus owned `dispose()`. Every history entry
+has a saved reference. Failures reject, not empty-success fallback.
+Opaque cursors remain source-owned; the collector deduplicates identities/repeated
+cursors and retains completed pages after later failure. No persistent catalog,
+polling or transcript copy.
 
-`src/session-history.ts::SessionHistory` is a project-bound discovery port consumed by Resume, not a public plugin API:
+`loadSessionHistory` queries sources concurrently and publishes incrementally.
+Pi remains usable while Copilot is slow/failed and vice versa. Resume overlays open
+rows before stable `sortByRecency`, newest displayed timestamp first; unknown times
+last, ties in collector order. Pi uses message/local-use recency; Copilot uses
+SDK-reported modification time, not invented user-message time. Delete retains
+source ordering. No rendering/discovery stamps recency or changes query/highlight.
 
-- `id` and `label` identify the source for error isolation and progress.
-- `list({ signal, cursor? })` returns an immutable page snapshot with `entries`, optional `nextCursor` and `warnings`. Every history entry must have a saved reference. Source-wide failure rejects; partial results retain explicit warnings. No empty-success fallback for unsupported discovery.
-- Cursors are opaque and source-owned, forwarded only within a listing traversal. Refresh begins a new traversal. The collector deduplicates repeated identities, rejects repeated cursors and retains pages obtained before a later failure. No persistent catalog, transcript copy, polling or background indexing.
-- Cancellation retires the consumer wait and blocks stale publication, not the shared project-history connection. Escape, Back, Refresh, another page, external dialog close and disposal invalidate the request. Accepted selections still execute only after normal palette focus restoration.
-- `dispose()` releases source resources and observes owned shutdown; failure propagates. Project teardown, not picker dismissal, owns source lifetime.
+Rows show title above muted time/date/harness. Harness is a retained span after
+`<time>`; minute/foreground refresh only updates time. The Copilot harness label is
+**Copilot**, with no transport suffix. Source errors use source-owned application
+notices; load failures use the selected session's notices.
 
-`loadSessionHistory` queries sources concurrently and publishes each completed page/source, so Pi rows remain actionable during slow/failed Copilot listing and vice versa. The collector retains source order (Pi then Copilot) and each source's native ordering. At every publication, the shell overlays matching open rows before sorting Resume by displayed timestamp, newest first across harnesses, through the same `sortByRecency` primitive as the sidebar. Unknown/invalid times sort last; equal times retain collector order. Pi row time uses message/local-use recency, and closed Copilot row time uses agent-reported `updatedAt` when available, not an invented user-message time. Delete retains Pi catalog order. Sorting never stamps recency or changes the current query/highlighted identity.
-
-Shared rows display the title above muted `relative time · local date · harness`, including Pi; an unknown time shows `No message time · harness`. The harness is a separate mounted span after the `<time>`, included in the row's accessible description. Minute/foreground refresh updates only the time, preserving the harness and mounted nodes. ACP harness identity is no longer appended to the visible title; existing accessible action names and search aliases retain harness context.
-
-Source errors/warnings use the existing application notice strip, with one issue identity per history source and explicit Refresh guidance. Successful completion of that source resolves its matching issue; another source's success does not. Session load errors belong to the selected session's notice. Discovery cannot set session failure/unread/input state, navigate, mutate drafts or generate completion notifications.
+Cancellation retires consumer waits and blocks stale publication, not the shared
+project-history connection. Escape/Back/Refresh/page change/external close/disposal
+invalidate selection. Accepted selections execute after palette focus restoration.
+Project teardown owns source disposal; stop failure propagates and retains ownership.
 
 ## Concrete implementations and ownership
 
-- `src/pi/session-history.ts::PiSessionHistory` owns Pi catalog/exact-file composition. It calls the existing native read-only catalog, inspects otherwise-unlisted open exact files, excludes Pi child/deleted histories, preserves catalog ordering/search and derives identity-bound row recency. No Pi process starts to list history. Pi Delete retains this source and exact-file/tree review; the cleanup picker also includes supported Copilot history through separate [deletion operations](session-deletion.md#consumer-interface-and-copilot-deletion).
-- `src/acp/session-history.ts::CopilotSessionHistory` owns one discovery-only `AcpClient` and native token per associated open project. The shell supplies literal built-in launch configuration, runtime Node PATH enrichment and native channel wiring; the source owns initialization/coalescing, request deadlines, packet routing and observed stop. It never calls `session/new`, `session/load` or `session/prompt`. Conversation sessions keep their own separate controllers/tokens.
-- `nimrod.history.copilot.v1:<canonical cwd>` stores only `true`, independently of sidebar membership. Explicit built-in Copilot creation and restored saved Copilot entries establish the association; custom profiles, including custom ID `copilot`, do not. Restored layouts seed the association without migrating histories. Associated project boot starts one initialized discovery process after ACP reload cleanup, but does not load conversations. Closing the last Copilot row retains the association/process; project/window shutdown stops it. No discovery starts in a Pi-only project.
-- `src/acp/client.ts::listSessions` requires advertised `loadSession: true` and `agentCapabilities.sessionCapabilities.list`. It validates pages/identities/metadata and forwards the exact project cwd and opaque cursor. The source independently excludes entries whose reported cwd differs from the canonical project. ACP owns which histories it exposes; Nimrod does not infer Pi parent/tree semantics or read Copilot's private storage. Cross-process completeness depends on the agent/version.
-- Native `src-tauri/src/acp.rs` permits `session/list` only with the owning project's exact cwd and an optional nonempty string cursor. Existing record bounds and window/token ownership remain unchanged. No filesystem or terminal client capabilities are advertised.
-
-Initialization and each list request have a 20-second deadline; native launch uses the existing native IPC lifetime. Disconnect stops only the discovery token. There is no automatic retry loop. Explicit Refresh can reconnect after a failed connection; failed shutdown retains ownership and prevents replacement. Stop waits for any in-flight native launch before observing its exit, so late launch completion cannot leak a process after disposal.
+- `src/pi/session-history.ts`: existing read-only catalog plus exact-file inspection
+  of otherwise unlisted open files; child/deleted filtering, identity-bound recency,
+  native ordering. No Pi process starts for listing.
+- `src/copilot/session-history.ts`: one discovery-only SDK connection/token per
+  associated project, `listSessions` with independently validated exact
+  `context.workingDirectory` and nonremote filtering. `nimrod.history.copilot-sdk.v1:<cwd>`
+  stores the association independently of membership. New Copilot creation or restored
+  SDK rows establish it; closing all rows retains it. Pi-only projects launch no
+  discovery process. Discovery never calls connect/create/resume/prompt.
+- Shell wiring owns literal runtime/native launch parameters. Source initialization
+  is coalesced; explicit Refresh can reconnect after failure, never an automatic loop.
+  Dispose waits for in-flight launch and observed owned stop. Conversations have
+  independent controllers/tokens.
+- The former ACP Copilot history source and association routing are removed.
+  Old layout entries are ignored; no automatic conversion or draft migration.
+  Generic ACP protocol list/load primitives remain, but custom history has no product UI.
 
 ## Resume execution
 
-The source has no `resume` method. The shell accepts the entry's saved reference, revalidates its project and either activates an existing identity or immediately creates/selects one saved sidebar representation. It restores the normal draft scope and asks the existing connection coordinator to connect. Pi retains its native file/cwd/identity/deletion validation; built-in Copilot reuses exact-ID `session/load` and its existing ordered replay/finalization. Unsupported listing does not prevent selecting a remembered Copilot sidebar entry through its existing load path.
+Sources expose no `resume` method. The shell accepts a saved reference and activates
+its matching open row or immediately creates/selects a saved representation, restores
+the normal draft scope and requests connection through the existing coordinator.
+Pi keeps native file/cwd/identity/deletion validation. Copilot reconnects its exact
+SDK ID, never a replacement. Missing history/binary or failed loading retains the
+row/identity/draft for explicit retry. Startup does not resume Copilot conversations.
 
-No listing, selection or replay stamps local Send recency, submits a prompt, replays uncertain work, falls back to a new session or changes another session's selection/draft. Loading readiness remains authoritative, so the composer is unavailable until load completes. Missing history/binary, unsupported loading and protocol failures keep the saved row/reference/draft for explicit retry. Close removes membership only; Restart remains Pi-only. Copilot deletion is a separate capability-gated operation implemented using the discovery connection, never inferred from saved identity or list/load alone. Custom ACP history remains unsupported.
+Listing, selection and replay never send prompts, restore in-flight work, stamp
+Send recency, emit completion alerts or change another session's draft/focus.
+Loading readiness controls composer availability. Close removes membership only;
+Restart stays Pi-only. Copilot deletion uses the separate SDK
+[deletion operation](session-deletion.md#consumer-interface-and-copilot-deletion).
 
 ## Fixtures and remaining evidence
 
-New fixtures are authored, **not run**:
-
-- `test/session-history.test.ts`: qualified identities/open overlay, Pi catalog/exact-file/child behavior, incremental isolated source failures, page deduplication/repeated cursor, exact-cwd Copilot discovery, one connection/no conversation calls, cancellation/late results, explicit retry, late-launch teardown and failed-stop ownership.
-- `test/acp-client.test.ts`: capability-gated listing, paging/null terminal cursor, validation and no new/load/prompt calls.
-- `test/command-palette.test.ts`, `test/session-sidebar.test.ts`, `test/session-recency.test.ts`: shared semantic row rendering with harness after date, mounted-node preservation, stable timestamp sorting/unknown times, incremental publication, refresh/cancel/stale-result and existing focus/search behavior.
-- `test/shell.test.ts`: project association independent of membership, no automatic conversation startup, mixed-source errors/slow discovery, incremental cross-harness Resume ordering after open-row overlay with highlighted identity preserved, exact-ID Resume/draft/recency/no alerts, open-row reuse and existing Pi/ACP coexistence.
-- Rust ACP fixtures: project/cursor validation. Existing owned-pipe/window/token fixtures remain the native-host regression base.
-- `test/browser/acp-sessions.spec.ts` and `test/fixtures/acp-agent.mjs`: offline subprocess pagination, exact-project filtering and exact-ID Resume with saved draft; no user history or providers.
-
-Installed-Copilot capability/schema, cross-process history completeness/pagination and replay compatibility have not been exercised. Native macOS process/focus/permission behavior and Linux acceptance remain pending. Fixture conformance is not real-agent/platform acceptance. Validation/builds/live requests remain explicitly user-authorized under repository policy.
+`test/session-history.test.ts` retains shared qualified identity/open overlay,
+incremental isolated failures, paging/dedup/repeated cursors and Pi catalog/exact-file/
+child tests. `test/shell.test.ts` ports mixed-source ordering, slow/error discovery,
+exact-ID Resume, drafts, open-row reuse, Close and supported deletion to SDK fixtures.
+`test/copilot-sdk.test.ts`, bridge fixtures and
+`test/browser/copilot-sdk.spec.ts` cover SDK behavior; generic ACP low-level
+list/load tests remain separate. Copilot ACP-specific discovery fixtures are removed.
+Updated fixtures have not been run. No checks/builds/app launch, live providers or
+user-session mutations were performed; native macOS/Linux acceptance remains pending.

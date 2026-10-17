@@ -2,7 +2,7 @@
 
 A dedicated cross-platform app for directory-backed coding projects and agent sessions. Conversations belong here; files, searches and diffs stay in your editor.
 
-**One project directory per window, with bespoke harness integrations.** Pi is primary, using your installed Pi and its configuration, extensions, models and authentication. Built-in [Copilot](docs/copilot.md) uses the bundled official SDK with your installed/authenticated CLI. [Generic ACP](docs/acp.md) remains an experimental fallback with explicit legacy Copilot identities. SDK fixtures, packaging and real-agent/native acceptance are pending.
+**One project directory per window, with bespoke harness integrations.** Pi is primary, using your installed Pi and its configuration, extensions, models and authentication. Built-in [Copilot](docs/copilot.md) uses the bundled official SDK with your installed/authenticated CLI. [Generic ACP](docs/acp.md) remains an experimental fallback for custom agents. SDK fixtures, packaging and real-agent/native acceptance are pending.
 
 ## Get started
 
@@ -44,7 +44,7 @@ Without installation, use `./bin/nimrod .`. The launcher opens or focuses a proj
 - [Projects](docs/projects.md) — directory-backed windows and recent-project navigation.
 - [Sessions](docs/sessions.md) — persistent and temporary conversations, resume, restart, close and deletion.
 - [Copilot sessions](docs/copilot.md) — official SDK, separate saved identity/drafts, history/Resume, permissions, model/thinking and supported permanent deletion.
-- [ACP sessions (POC)](docs/acp.md) — experimental custom-agent stdio integration and retained legacy Copilot entries.
+- [ACP sessions (POC)](docs/acp.md) — experimental custom-agent stdio integration.
 - [Session sidebar](docs/session-sidebar.md) — All, Unread and Working views, activity indicators and resizing.
 - [Drafts](docs/drafts.md) — native per-session storage, debounced saves and recovery.
 - [Writing messages](docs/writing-messages.md) — send, steer, queue, Stop, slash commands and recovery. [Error messages](docs/error-messages.md) describes session-local notices and the application notice strip.
@@ -67,6 +67,6 @@ See the [user-guide index](docs/README.md). [Card plugins](docs/card-plugins.md)
 
 macOS is the current development platform; Linux is next, and Windows is a possible future target, not a parity commitment. Linux native delivery/focus and Windows behavior remain unverified. The Bash launcher has no Windows wrapper; Windows Pi npm `.cmd` wrappers are not supported (select Pi's JS entry point and `node.exe` explicitly).
 
-There is no background process continuity, integrated diff editor, fork/tree-navigation UI, Pi `/reload` or in-app update system. [Built-in Copilot](docs/copilot.md) uses SDK 1.0.22 (declared CLI 1.0.98 compatibility), a supported installed Node and an explicitly resolved user-installed CLI—not a bundled CLI. SDK identities/drafts persist; exact-ID Resume and permanent SDK deletion remain separate from preserved legacy ACP entries. No automatic transport/draft migration or concurrent ACP/SDK ownership is supported. SDK checks, packaging and native macOS/Linux acceptance remain pending; Windows SDK launch is unavailable. SDK/ACP Restart and attachment sending remain unavailable; custom ACP sessions remain runtime-only. macOS local bundles use ad-hoc signing; the separate [release workflow](CONTRIBUTING.md#release-setup) uses Developer ID signing/notarization and DMG packaging. Opening a project never loads Copilot automatically; explicit selection reconnects without sending a prompt. Closing a project stops its owned agents.
+There is no background process continuity, integrated diff editor, fork/tree-navigation UI, Pi `/reload` or in-app update system. [Built-in Copilot](docs/copilot.md) uses SDK 1.0.22 (declared CLI 1.0.98 compatibility), a supported installed Node and an explicitly resolved user-installed CLI—not a bundled CLI. Copilot identities/drafts persist with exact-ID Resume and permanent deletion. The earlier Copilot integration is removed; old stored drafts are not migrated or deleted. SDK checks, packaging and native macOS/Linux acceptance remain pending; Windows SDK launch is unavailable. SDK/ACP Restart and attachment sending remain unavailable; custom ACP sessions remain runtime-only. macOS local bundles use ad-hoc signing; the separate [release workflow](CONTRIBUTING.md#release-setup) uses Developer ID signing/notarization and DMG packaging. Opening a project never loads Copilot automatically; explicit selection reconnects without sending a prompt. Closing a project stops its owned agents.
 
 Send clears the composer and previews ordinary messages in the transcript immediately (images after local preparation), then reconciles Pi’s user turn in place. Failed or uncertain sends show an error without restoring the message or blocking a new draft; nothing is automatically replayed. Pi owns conversation history; Nimrod cannot coordinate external applications writing the same session file.

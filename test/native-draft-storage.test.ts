@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { SessionDrafts } from '../src/pi/session-drafts';
 import { restoreComposerState } from '../src/pi/webview-state';
-import { copilotSessionScope } from '../src/acp/profiles';
+import { copilotSdkScope } from '../src/copilot/session-lifecycle';
 
 test('native provisional promotion stages the saved draft and tombstones the old scope', () => {
   const changes: unknown[] = [];
@@ -22,7 +22,7 @@ test('Copilot draft identity is project-library scoped, distinct from Pi and pro
   const changes: unknown[] = [];
   const store = new SessionDrafts(undefined, undefined, () => { throw new Error('whole-library persistence forbidden'); },
     (key, value) => changes.push([key, value]));
-  const scope = copilotSessionScope('opaque:/id');
+  const scope = copilotSdkScope('opaque:/id');
   store.select('unassigned:new');
   store.write({ draft: 'Keep this draft' });
   store.bindScope(scope);
@@ -30,21 +30,21 @@ test('Copilot draft identity is project-library scoped, distinct from Pi and pro
   assert.equal(restoreComposerState(store.read()).draft, 'Keep this draft');
   store.discardTemporary();
   assert.equal(restoreComposerState(store.read()).draft, 'Keep this draft', 'Close does not discard saved Copilot drafts');
-  assert.throws(() => store.bindScope(copilotSessionScope('another-id')), /Unexpected session file change/);
+  assert.throws(() => store.bindScope(copilotSdkScope('another-id')), /Unexpected session file change/);
   assert.notEqual(scope, 'file:opaque:/id');
-  assert.notEqual(copilotSessionScope('a:b'), copilotSessionScope('a%3Ab'));
+  assert.notEqual(copilotSdkScope('a:b'), copilotSdkScope('a%3Ab'));
 });
 
 test('empty provisional Copilot promotion never stages an undefined draft', () => {
   const changes: unknown[] = [];
   const store = new SessionDrafts(undefined, undefined, () => {}, (key, value) => changes.push([key, value]));
   store.select('unassigned:empty');
-  store.bindScope(copilotSessionScope('saved-id'));
+  store.bindScope(copilotSdkScope('saved-id'));
   assert.deepEqual(changes, [['unassigned:empty', null]]);
 });
 
 test('confirmed Copilot removal tombstones only its saved scope, including a closed draft', () => {
-  const scope = copilotSessionScope('deleted'), sibling = copilotSessionScope('retained');
+  const scope = copilotSdkScope('deleted'), sibling = copilotSdkScope('retained');
   const changes: unknown[] = [];
   const store = new SessionDrafts({ drafts: { [scope]: { draft: 'Remove me' }, [sibling]: { draft: 'Keep me' },
     'file:/pi': { draft: 'Pi draft' } } }, undefined,

@@ -84,7 +84,7 @@ Opening/restoring a project never creates, resumes or prompts a conversation.
 Associated projects can start one **discovery-only** SDK client. `listSessions`
 does not load history; exact `context.workingDirectory` and nonremote membership
 are checked independently of the server filter. Dates are serialized SDK Dates,
-not invented user-message timestamps. Pi/SDK/legacy sources publish independently
+not invented user-message timestamps. Pi/Copilot sources publish independently
 through the existing shared history picker; Refresh is explicit.
 
 Selecting a saved ID mounts/activates its existing shell and draft immediately,
@@ -97,20 +97,19 @@ durable without sending a paid prompt.
 The bridge publishes the authoritative identity before reading mode, transcript
 or model metadata, so later setup failure cannot lose an already-created ID.
 
-### Legacy ACP policy
+### Removed earlier integration
 
-The shared backing CLI alone does **not prove ACP/SDK identity, transcript or
-draft interoperability**. Old `{kind:'acp',profile:'copilot',sessionId}` records,
-`acp:copilot:<JSON ID>` scopes and `nimrod.history.copilot.v1:<cwd>` associations
-stay explicitly **legacy ACP**. They retain the historical capability-gated
-ACP list/load/delete path on explicit selection; no automated load or migration.
-New custom ACP profiles never implicitly become SDK sessions.
+Copilot's ACP preset, saved identity variant, history/deletion sources and shell
+routing are removed. Old `{kind:'acp',profile:'copilot',sessionId}` records and
+history associations are ignored, never reinterpreted as SDK identities.
+Old native draft files remain readable by the storage layer but are not bound,
+staged, migrated or deleted by current Copilot sessions. Normal layout saves
+contain only current supported identities. Agent-owned history is untouched.
 
-The same raw ID can appear in native CLI discovery and legacy records, but it
-does not acquire the other draft. Conflicting open SDK/legacy representations
-block connection/deletion until the other entry closes, even when inactive.
-SDK success cleans **only its own namespace**; a legacy draft is retained.
-No seamless transport switch or concurrent control of one ID is promised.
+Visible harness labels are **Copilot** in the Project bar, sidebar and history;
+transport tags remain `copilot-sdk` for storage/API compatibility.
+**New Copilot session** has the concise hint **Start a Copilot session**.
+Generic ACP is retained for runtime-only custom profiles, without a Copilot preset.
 
 ## Send, events, controls and decisions
 
@@ -175,7 +174,7 @@ and artifacts. The shared target-bound operation requires review, fresh exact
 project membership, locks, observed owned writer shutdown and another fresh
 membership check in the discovery-only bridge. It never resumes, creates,
 prompts, deletes a private directory or replaces Pi's native tree transaction.
-Aborted/failed stop, stale membership, legacy conflicts or an unknown deletion
+Aborted/failed stop, stale membership or an unknown deletion
 outcome retain identity/draft/references; confirmed success alone cleans the
 SDK scope. No automatic retry; Refresh may inform a later explicit attempt.
 External applications remain uncoordinated.
@@ -196,8 +195,8 @@ External applications remain uncoordinated.
   the offline SDK fixture. It never starts an installed CLI.
 - `test/shell.test.ts`, `test/browser/copilot-sdk.spec.ts`: authored/updated
   **unrun** shell and isolated-browser fixtures for creation, exact resume,
-  decision ownership, newer drafts, tools and model controls. Historical ACP
-  browser scenarios now seed explicit legacy identities.
+  decision ownership, newer drafts, tools and model controls. Generic ACP
+  browser scenarios launch runtime-only custom profiles.
 
 Next authorized verification must run the normal offline checks/browser fixtures
 before any native acceptance request. Installed version metadata and released

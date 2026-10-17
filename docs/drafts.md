@@ -1,10 +1,9 @@
 # Drafts and composer responsiveness
 
-SDK Copilot drafts use a separate `copilot-sdk:` identity scope. Older
-`acp:copilot:` drafts remain tied to explicit legacy ACP entries; there is no
-automatic copying, transport migration or deletion of the other draft.
-Close keeps each saved draft; confirmed deletion cleans only the target scope.
-See [Copilot history and legacy policy](copilot.md#older-copilot-acp-entries).
+Copilot drafts use a separate `copilot-sdk:` identity scope. Close keeps saved
+drafts; confirmed deletion cleans only the target scope. Drafts from the removed
+earlier integration are left on disk, but are not restored or copied into current
+sessions. See [Copilot history](copilot.md#history-close-and-delete).
 
 Nimrod keeps saved-session drafts in Rust-managed files beneath the app-state directory:
 

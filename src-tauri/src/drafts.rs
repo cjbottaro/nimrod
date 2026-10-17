@@ -89,10 +89,6 @@ impl Drafts {
             || record
                 .key
                 .strip_prefix("copilot-sdk:")
-                .is_some_and(|id| !id.is_empty())
-            || record
-                .key
-                .strip_prefix("acp:copilot:")
                 .is_some_and(|id| !id.is_empty()))
             || record.key.len() > 32768
             || record.revision == 0
@@ -351,7 +347,7 @@ mod tests {
     fn copilot_drafts_restore_by_project_and_do_not_alias_pi_file_scopes() {
         let dir = tempfile::tempdir().unwrap();
         let store = Drafts::new(dir.path().join("drafts"));
-        let scope = "acp:copilot:\"saved-id\"";
+        let scope = "copilot-sdk:\"saved-id\"";
         for (project, draft) in [("/a", "first"), ("/b", "second")] {
             store
                 .stage(
@@ -374,7 +370,7 @@ mod tests {
                 .stage(
                     "/a",
                     Record {
-                        key: "acp:copilot:".into(),
+                        key: "copilot-sdk:".into(),
                         revision: 1,
                         value: json!({"draft":"invalid"}),
                     },

@@ -828,16 +828,16 @@ mod tests {
         let mut state = state;
         state.insert("nimrod.recency.v1:/closed-project".into(), json!({"/store/a":{"sessionId":"a", "lastUsed":100}, "/store/b":{"sessionId":"b", "lastUsed":200}}));
         state.insert("nimrod.recency.v1:/malformed".into(), json!(42));
-        let copilot = json!({"kind":"acp","profile":"copilot","sessionId":"saved-id","name":"Retain Copilot","lastUsed":100});
+        let copilot = json!({"kind":"copilot-sdk","sessionId":"saved-id","name":"Retain Copilot","lastUsed":100});
         state.insert(
             "nimrod.tabs.v1:/mixed".into(),
-            json!({"tabs":[{"path":"/store/a"},copilot.clone()],"active":"acp:copilot:\"saved-id\""}),
+            json!({"tabs":[{"path":"/store/a"},copilot.clone()],"active":"copilot-sdk:\"saved-id\""}),
         );
         let updated = deleted_state_updates(&state, &results);
         assert_eq!(updated["nimrod.tabs.v1:/mixed"]["tabs"], json!([copilot]));
         assert_eq!(
             updated["nimrod.tabs.v1:/mixed"]["active"],
-            "acp:copilot:\"saved-id\""
+            "copilot-sdk:\"saved-id\""
         );
         assert_eq!(
             updated["nimrod.tabs.v1:/one"]["tabs"],

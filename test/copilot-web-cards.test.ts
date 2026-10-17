@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { build } from 'esbuild';
-import { bundledAcpPlugin } from '../src/acp/card-plugins';
+import { bundledCopilotPlugin } from '../src/copilot/card-plugins';
 import { renderToolCard, updateToolCard, disposeToolCard } from '../src/pi/tool-card';
 import { createSafeMarkdownRenderer } from '../src/pi/safe-markdown';
 import { definePresentationPlugin, webUrl, displayWebUrl } from '../src/card-plugin-ui';
@@ -10,7 +10,7 @@ import { validatePresentation } from '../src/pi/card-renderer';
 import type { ToolCardData, CardPlugin } from '../src/card-plugin-api';
 import { copilotToolResult } from '../src/copilot/tool-result';
 
-const source = { backend: 'acp' as const, agent: 'Copilot' };
+const source = { backend: 'copilot-sdk' as const, agent: 'Copilot' };
 function fixture(data: ToolCardData, plugin?: CardPlugin) {
   const dom = new JSDOM('<body></body>', { url: 'https://nimrod.test/' });
   const doc = dom.window.document, markdown = createSafeMarkdownRenderer(dom.window as unknown as Window);
@@ -21,9 +21,8 @@ function fixture(data: ToolCardData, plugin?: CardPlugin) {
   return { dom, doc, card, close() { disposeToolCard(card); dom.window.close(); } };
 }
 function nativeData(kind: string, args: unknown, output: Record<string, unknown>, isError = false): ToolCardData {
-  const text = typeof output.content === 'string' ? output.content : JSON.stringify(output, null, 2);
-  return { source, kind, title: 'Agent-supplied title', arguments: args, toolStatus: 'result', resultOutput: text, isError,
-    native: { rawOutput: output, ...(typeof output.content === 'string' ? { content: [{ type: 'content', content: { type: 'text', text } }] } : {}) } };
+  return { source, kind, title: 'Agent-supplied title', arguments: args, toolStatus: 'result', resultOutput: copilotToolResult(output), isError,
+    native: { 'tool.execution_complete': { result: output, success: !isError } } };
 }
 const firstMarker = '\u30101:1\u2020source\u3011', secondMarker = '\u30101:2\u2020source\u3011';
 function searchData(value = `## Answer\n\nSee the documentation ${firstMarker} and another reference ${secondMarker}.`) {
@@ -50,26 +49,13 @@ test('Copilot web search renders an answer, linked numbered citations and dedupl
   } finally { f.close(); }
 });
 
-test('SDK web cards consume original SDK results with citations and exact literal recovery', () => {
-  const acp = searchData();
-  const output = (acp.native as { rawOutput: Record<string, unknown> }).rawOutput;
-  const data: ToolCardData = { ...acp, source: { backend: 'copilot-sdk', agent: 'copilot' }, native: { 'tool.execution_complete': { result: output, success: true } }, resultOutput: copilotToolResult(output) };
-  const f = fixture(data);
-  try {
-    assert.equal(f.card.querySelector('.tool-card-title')?.textContent, 'Web search');
-    assert.equal(f.card.querySelector('[data-output-kind="result"] h2')?.textContent, 'Answer');
-    assert.equal(f.card.querySelector('[data-output-kind="web-sources"] a')?.textContent, 'Documentation');
-    assert.equal(f.card.querySelector('.tool-raw-output [data-output-kind="result"] pre')?.textContent, data.resultOutput);
-  } finally { f.close(); }
-});
-
 test('invalid citations stay literal, unsafe links remain inert, and Unicode offsets do not corrupt the answer', () => {
   const value = `😀 See the documentation ${firstMarker} and another reference ${secondMarker}.`;
   const data = searchData(value);
-  const raw = (data.native as { rawOutput: { structuredContent: { text: { annotations: { start_index: number; end_index: number; url_citation: { title: string; url: string } }[] } }; content: string } }).rawOutput;
+  const raw = (data.native as { 'tool.execution_complete': { result: { structuredContent: { text: { annotations: { start_index: number; end_index: number; url_citation: { title: string; url: string } }[] } }; content: string } } })['tool.execution_complete'].result;
   for (const annotation of raw.structuredContent.text.annotations) { annotation.start_index--; annotation.end_index--; }
   raw.structuredContent.text.annotations.push({ start_index: 99999, end_index: 100000, url_citation: { title: 'Unsafe', url: 'javascript:alert(1)' } });
-  raw.content = JSON.stringify(raw.structuredContent); data.resultOutput = raw.content;
+  raw.content = JSON.stringify(raw.structuredContent); data.resultOutput = copilotToolResult(raw);
   const f = fixture(data);
   try {
     const answer = f.card.querySelector('.card-plugin-body [data-output-kind="result"]')!;
@@ -78,9 +64,9 @@ test('invalid citations stay literal, unsafe links remain inert, and Unicode off
     assert.equal(f.card.querySelector('a[href^="javascript:"]'), null);
   } finally { f.close(); }
   const broken = searchData();
-  const output = (broken.native as { rawOutput: { structuredContent: { text: { annotations: unknown[] } }; content: string } }).rawOutput;
+  const output = (broken.native as { 'tool.execution_complete': { result: { structuredContent: { text: { annotations: unknown[] } }; content: string } } })['tool.execution_complete'].result;
   output.structuredContent.text.annotations = [{ start_index: 0, end_index: 5, url_citation: { title: 'Known source', url: 'https://example.test/source' } }];
-  output.content = JSON.stringify(output.structuredContent); broken.resultOutput = output.content;
+  output.content = JSON.stringify(output.structuredContent); broken.resultOutput = copilotToolResult(output);
   const literal = fixture(broken);
   try { assert.ok(literal.card.querySelector('.card-plugin-body [data-output-kind="result"]')!.textContent!.includes(firstMarker)); }
   finally { literal.close(); }
@@ -92,7 +78,7 @@ test('fetch renders Markdown with web-relative links, reported redirects and vis
   const data = nativeData('fetch', { url: requested, start_index: 2000 }, { content, detailedContent: content });
   const f = fixture(data);
   try {
-    assert.equal(bundledAcpPlugin(data).id, 'nimrod.acp.copilot-fetch');
+    assert.equal(bundledCopilotPlugin(data).id, 'nimrod.copilot.fetch');
     assert.equal(f.card.querySelector('.tool-card-title')?.textContent, 'Fetch');
     assert.equal(f.card.querySelector('.tool-card-preview')?.textContent, 'example.test/old · from character 2000');
     const body = f.card.querySelector('.card-plugin-body [data-output-kind="result"]')!;
@@ -100,7 +86,7 @@ test('fetch renders Markdown with web-relative links, reported redirects and vis
     assert.deepEqual([...body.querySelectorAll('a')].map(a => a.getAttribute('href')), ['https://example.test/docs/next', 'https://example.test/reference', null]);
     assert.equal(f.card.querySelector('[data-output-kind="fetch-redirect"] a')?.getAttribute('href'), final);
     assert.match(f.card.querySelector('[data-output-kind="fetch-partial"]')!.textContent!, /Partial content.*start_index of 4000/);
-    assert.equal(f.card.querySelector('.tool-raw-output [data-output-kind="result"] pre')?.textContent, content);
+    assert.equal(f.card.querySelector('.tool-raw-output [data-output-kind="result"] pre')?.textContent, data.resultOutput);
   } finally { f.close(); }
 });
 
@@ -120,8 +106,9 @@ test('raw fetched source stays literal, failures are readable, and unrecognized 
     assert.ok(failed.card.querySelector('.tool-card-failed'));
     assert.match(failed.card.querySelector('.tool-raw-output pre')!.textContent!, /"code": "failure"/);
   } finally { failed.close(); }
-  const unknown = fixture(nativeData('fetch', { url }, { content: '<script>unknown shape</script>', detailedContent: 'keep all metadata' }));
-  try { assert.equal(unknown.card.querySelector('.card-plugin-body .tool-output')?.textContent, '<script>unknown shape</script>'); }
+  const unknownData = nativeData('fetch', { url }, { content: '<script>unknown shape</script>', detailedContent: 'keep all metadata' });
+  const unknown = fixture(unknownData);
+  try { assert.equal(unknown.card.querySelector('.card-plugin-body .tool-output')?.textContent, unknownData.resultOutput); }
   finally { unknown.close(); }
 });
 
@@ -132,10 +119,10 @@ test('malformed/foreign searches and fetches retain generic output instead of gu
   const invalid = fixture({ source, kind: 'fetch', title: 'Unknown fetch', arguments: { url: 'javascript:alert(1)' } });
   try { assert.equal(invalid.card.querySelector('.tool-card-title')?.textContent, 'Unknown fetch'); }
   finally { invalid.close(); }
-  assert.equal(bundledAcpPlugin({ source: { backend: 'acp', agent: 'another-agent' }, kind: 'fetch' }).id, 'nimrod.acp.tool');
+  assert.equal(bundledCopilotPlugin({ source: { backend: 'copilot-sdk', agent: 'another-agent' }, kind: 'fetch' }).id, 'nimrod.copilot.tool');
   const data = nativeData('search', { query: 'query' }, { structuredContent: { unexpected: true }, content: 'unknown response' });
   const malformed = fixture(data);
-  try { assert.equal(malformed.card.querySelector('.card-plugin-body .tool-output')?.textContent, 'unknown response'); }
+  try { assert.equal(malformed.card.querySelector('.card-plugin-body .tool-output')?.textContent, data.resultOutput); }
   finally { malformed.close(); }
 });
 

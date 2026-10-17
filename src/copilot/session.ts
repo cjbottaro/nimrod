@@ -72,7 +72,7 @@ export class CopilotSession {
     const id = String(message.id ?? ''), text = typeof message.text === 'string' ? message.text : '';
     const invalid = this.validatePrompt(text);
     if (invalid || !text.trim() || message.images !== undefined) {
-      this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', error: invalid || 'Copilot SDK sessions currently accept non-empty text only.' }); return;
+      this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', error: invalid || 'Copilot sessions currently accept non-empty text only.' }); return;
     }
     const key = `copilot:user:pending:${id}`;
     this.echo = { key };

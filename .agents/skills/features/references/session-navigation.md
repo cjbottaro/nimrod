@@ -7,7 +7,7 @@ Human guide: [Projects and sessions](../../../../docs/session-sidebar.md#orderin
 [Copilot SDK](copilot-sdk.md) uses the same coordinator and canonical open-session
 projection. Saved SDK rows restore inactive and connect only on explicit exact-ID
 selection; discovery never loads them. SDK callbacks do not repeat navigation
-after acceptance. SDK and legacy ACP references use different keys/draft scopes;
+after acceptance. Copilot SDK references use their own keys/draft scopes;
 conflicting raw IDs block connection rather than switching the selected backend.
 
 ## Specification and acceptance criteria
@@ -42,7 +42,7 @@ Choose an existing projection and named presentation intent, then use the shell'
 
 Test relationships: every traversal edge equals the displayed canonical projection; Switch equals All even with hidden sessions; local Send recency updates all consumers before any RPC result; cleanup resolves one post-batch target; every visible saved-session selection requests connection, with immediate unrelated cleanup reconnection and deferral only for affected-file locks. Keep concrete shell/WebKit coverage to prove consumers use the model; pure policy tests alone cannot detect shell bypasses.
 
-Built-in [Copilot restoration](acp-harnesses.md#copilot-sidebar-restoration) adds one explicit startup eligibility gate: `SessionLifecycle.connectOnStartup` initializes a restored row's `awaitingSelection`, which stays unavailable even when startup displays it. Any non-startup activation clears that gate and goes through the same coordinator; Pi startup is unchanged. Once activation is requested, the ACP implementation reports pending reload cleanup as a blocked gate reconciled on `acpReady`, not a reason to spawn another agent or replay navigation. Failed loading waits for explicit selection/retry, with no automatic retry on snapshots. Shared `SessionLifecycle.connection` supplies live connectivity independently of persisted membership; `eligibility()` is a coordinator decision that may treat in-flight startup as already satisfied, not a user-facing Connected claim.
+Built-in [Copilot restoration](copilot-sdk.md#identity-history-and-drafts) adds one explicit startup eligibility gate: `SessionLifecycle.connectOnStartup` initializes a restored row's `awaitingSelection`, which stays unavailable even when startup displays it. Any non-startup activation clears that gate and goes through the same coordinator; Pi startup is unchanged. Once activation is requested, the Copilot implementation reports pending reload cleanup as a blocked gate reconciled on `copilotReady`, not a reason to spawn another agent or replay navigation. Failed loading waits for explicit selection/retry, with no automatic retry on snapshots. Shared `SessionLifecycle.connection` supplies live connectivity independently of persisted membership; `eligibility()` is a coordinator decision that may treat in-flight startup as already satisfied, not a user-facing Connected claim.
 
 ## Connection-coordinator tests
 
@@ -50,6 +50,6 @@ Built-in [Copilot restoration](acp-harnesses.md#copilot-sidebar-restoration) add
 
 ## Storage and acceptance
 
-No schema/key migration for existing Pi entries: `nimrod.tabs.v1:<cwd>`, recency cache, sidebar view and Pi file ownership remain compatible. Built-in Copilot adds a tagged layout-entry variant and project/profile-qualified active/draft keys as specified in [ACP restoration](acp-harnesses.md#copilot-sidebar-restoration); these IDs never use the Pi recency/file cache. Existing legacy `attention` migration stays in project restoration. Native ACP message validation and draft-scope support are integration-owned.
+No schema/key migration for existing Pi entries: `nimrod.tabs.v1:<cwd>`, recency cache, sidebar view and Pi file ownership remain compatible. Built-in Copilot adds a tagged layout-entry variant and project/profile-qualified active/draft keys as specified in [Copilot restoration](copilot-sdk.md#identity-history-and-drafts); these IDs never use the Pi recency/file cache. Existing legacy `attention` migration stays in project restoration. Native Copilot message validation and draft-scope support are integration-owned.
 
 Run `mise run check` and `npm run test:browser`. Build/package the app only on explicit user request, then publish to main's CLI-visible app location per [build workflow](build-cache.md#explicit-build-and-publication-workflow). Unit/jsdom/offline WebKit tests do not establish native focus/shortcut or Linux acceptance. Never launch/interrupt the user's app, mutate user sessions or request live models for this refactor.

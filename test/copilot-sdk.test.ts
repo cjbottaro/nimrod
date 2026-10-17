@@ -3,7 +3,6 @@ import test from 'node:test';
 import { CopilotSession, type CopilotSessionUi } from '../src/copilot/session';
 import { CopilotConnection, type BridgeRequest } from '../src/copilot/connection';
 import { copilotSdkScope } from '../src/copilot/session-lifecycle';
-import { copilotSessionScope } from '../src/acp/profiles';
 import { SessionDrafts } from '../src/pi/session-drafts';
 import { copilotSessionDeletion } from '../src/copilot/session-deletion';
 import type { SessionDeletionContext } from '../src/session-deletion-operation';
@@ -151,7 +150,7 @@ test('SDK child activity never changes root configuration or completes the root 
 });
 
 test('SDK and legacy identity scopes never copy or delete one another’s draft', () => {
-  const id = 'same/raw:id', sdk = copilotSdkScope(id), legacy = copilotSessionScope(id);
+  const id = 'same/raw:id', sdk = copilotSdkScope(id), legacy = `acp:copilot:${JSON.stringify(id)}`;
   let saved: { drafts: Record<string, unknown> } | undefined;
   const drafts = new SessionDrafts({ drafts: { [legacy]: { draft: 'Legacy draft' }, [sdk]: { draft: 'SDK draft' } } }, null, value => { saved = value as typeof saved; });
   assert.notEqual(sdk, legacy);
@@ -163,7 +162,7 @@ test('SDK and legacy identity scopes never copy or delete one another’s draft'
 
 test('SDK deletion requires review, fresh membership and owned stop; unknown deletion retains local state', async () => {
   const order: string[] = [], abort = new AbortController();
-  let unknown = false, legacyOpen = false;
+  let unknown = false;
   const history = {
     supportsDeletion: true,
     async validateDeletion() { order.push('membership'); },
@@ -174,13 +173,13 @@ test('SDK deletion requires review, fresh membership and owned stop; unknown del
     async review() { order.push('review'); return true; }, lock(_targets, executing) { if (executing) order.push('lock'); },
     async stop() { order.push('stop'); }, progress() {}, removed() { order.push('removed'); },
   };
-  const source = copilotSessionDeletion(() => history, context, () => legacyOpen);
+  const source = copilotSessionDeletion(() => history, context);
   const operation = source.operation({ kind: 'copilot-sdk', sessionId: 'saved-id' }, 'Saved')!;
   await operation.run();
   assert.deepEqual(order, ['review', 'membership', 'lock', 'stop', 'delete', 'removed']);
   order.length = 0; unknown = true;
   await assert.rejects(operation.run(), /outcome unknown/);
   assert.equal(order.includes('removed'), false);
-  legacyOpen = true;
+  Object.assign(history, { supportsDeletion: false });
   assert.equal(operation.available(), false);
 });

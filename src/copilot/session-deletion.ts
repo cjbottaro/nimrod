@@ -1,7 +1,8 @@
 import type { SessionDeletionContext, SessionDeletionSource } from '../session-deletion-operation';
 import type { CopilotSessionHistory } from './session-history';
 import { copilotSdkScope } from './session-lifecycle';
-export function copilotSessionDeletion(history: () => CopilotSessionHistory | undefined, context: SessionDeletionContext, legacyOpen: (id: string) => boolean = () => false): SessionDeletionSource {
+export type CopilotDeletionHistory = Pick<CopilotSessionHistory, 'supportsDeletion' | 'validateDeletion' | 'deleteSession'>;
+export function copilotSessionDeletion(history: () => CopilotDeletionHistory | undefined, context: SessionDeletionContext): SessionDeletionSource {
   return {
     pending: false,
     operation(reference, title) {
@@ -11,12 +12,12 @@ export function copilotSessionDeletion(history: () => CopilotSessionHistory | un
       return {
         target, label: 'Delete session…', detail: 'Review permanent removal of this Copilot session and artifacts',
         get supported() { return !!history()?.supportsDeletion; },
-        get unavailableReason() { return legacyOpen(sessionId) ? 'Close the legacy ACP representation of this ID before SDK deletion. Its separate draft is not migrated or removed.' : history()?.supportsDeletion ? undefined : 'Connect Copilot history before deletion. Close keeps history and drafts.'; },
-        available: () => !!history()?.supportsDeletion && !legacyOpen(sessionId),
+        get unavailableReason() { return history()?.supportsDeletion ? undefined : 'Connect Copilot history before deletion. Close keeps history and drafts.'; },
+        available: () => !!history()?.supportsDeletion,
         async run() {
           context.signal.throwIfAborted();
           const source = history();
-          if (!source?.supportsDeletion || legacyOpen(sessionId)) throw new Error('Copilot history is unavailable or this ID has an open legacy ACP representation. Nothing was deleted.');
+          if (!source?.supportsDeletion) throw new Error('Copilot history is unavailable. Nothing was deleted.');
           context.lock([target], false);
           if (!await context.review({ id: sessionId, title: 'Delete Copilot session',
             description: 'Stops this session’s Nimrod-owned agent and permanently removes its Copilot history and artifacts, Nimrod draft and references. Other sessions are not included. This cannot be undone. External applications are not coordinated.',
@@ -27,7 +28,6 @@ export function copilotSessionDeletion(history: () => CopilotSessionHistory | un
           context.lock([target], true);
           await context.stop([target]);
           context.signal.throwIfAborted();
-          if (legacyOpen(sessionId)) throw new Error('A legacy ACP representation opened during deletion review. Nothing was deleted.');
           context.progress('deleting');
           await source.deleteSession(sessionId);
           context.removed([target]);

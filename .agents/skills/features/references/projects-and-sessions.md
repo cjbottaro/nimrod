@@ -6,17 +6,24 @@ Read the [human guide](../../../../docs/sessions.md),
 [architecture](architecture.md), and
 [UI vocabulary](../../nimrod-ui-vocabulary/SKILL.md). Paths below are repository-root relative.
 
-## ACP POC boundary
+## Harness boundaries
 
-New built-in Copilot now follows the [SDK specification](copilot-sdk.md).
-`kind:'copilot-sdk'` has its own lifecycle, `copilot-sdk:` draft scope,
-discovery association, supported deletion API and native process-group owner.
-The ACP contract below is retained **only for legacy Copilot identities** and
-custom profiles; New ACP session no longer creates the built-in profile.
-Both transports restore inactive and never migrate/alias draft scopes. Shared
-shell navigation, mounted views and optimistic Send remain unchanged.
+Built-in [Copilot](copilot-sdk.md) uses its bespoke SDK controller/host,
+`kind:'copilot-sdk'` saved identity, project history association and
+`copilot-sdk:` native draft scope. Restored rows stay disconnected, including
+startup selection; explicit activation reconnects the exact ID without prompting.
+Discovery never loads conversations. Close retains history/drafts; deletion uses
+the supported SDK API, independently of Pi-only Restart.
 
-The Pi-specific saved-history/identity/temporary contracts below do not become generic ACP semantics. [Legacy Copilot sidebar restoration](acp-harnesses.md#copilot-sidebar-restoration) retains durable ACP references and native drafts; custom ACP sessions remain runtime-only. The ACP backend keeps its frozen launch profile, concrete `AcpSession` and native `AcpHost`; SDK Copilot has its own controller/host. Neither ID enters the Pi file catalog. Restored rows stay disconnected, including the startup selection; explicit activation loads their exact saved ID through the shared connection coordinator without prompting. Close removes sidebar membership only after its owned host stops. New session stays Pi-default; New Copilot session selects SDK, and New ACP session selects custom profiles. Discovery never loads conversations. Legacy ACP deletion is capability-gated; ACP Restart and custom-history migration remain unsupported. SDK and revised restoration fixtures are authored/unrun, with native acceptance pending. [Harness presentation](harness-presentation.md) owns the integration boundary.
+[Generic ACP](acp-harnesses.md) retains frozen custom launch profiles,
+`AcpSession`/`AcpHost`, generic cards and runtime-only sessions. The former
+Copilot ACP preset, saved identities, discovery and deletion routes are removed.
+Old layout entries are ignored without reinterpreting IDs or migrating/deleting
+stored drafts or agent history. Custom ACP has no persistence, Resume, deletion
+or Restart UI. New session stays Pi-default; harness identity is immutable.
+Shared shell, mounted views and optimistic Send are unchanged. Updated fixtures
+are unrun; native acceptance remains pending. [Harness presentation](harness-presentation.md)
+owns the integration boundary.
 
 ## Specification and acceptance criteria
 
@@ -158,7 +165,7 @@ History `get_messages` response applies synchronously before later channel event
 - Catalog listing is metadata extraction, not full JSONL validation: malformed skipped middle records need not generate warnings. Bad headers, parsed metadata and encountered oversize records still do. Exact-file `sessions::inspect` and deletion fingerprint/validation continue fully validating the affected history before launch/removal; no acknowledgement is inferred from metadata. `sessions::inspect` retains its existing maximum-user-timestamp behavior for exact-file recency rather than becoming a second catalog reader.
 - Fixture coverage in `session_catalog.rs` asserts early tail termination with counted I/O, forward preview, unnamed/cleared names, invalid times, backwards clocks, escaped enums, fake payload markers, UTF-8/CRLF/blank lines/chunk-spanning records, record bounds and malformed middle history still rejected by exact-file inspection. Shell tests assert both views use identical native catalog/presentation without starting Pi.
 - Custom unrelated paths and differently encoded symlink aliases are not recursively searched; there is no product arbitrary-file opening path. Existing remembered entries still validate their exact identity. Names come from `session_info`, previews from first user message; unreadable files are reported, not repaired.
-- Project draft state is an in-memory shared library backed by per-scope Rust files; see [Native drafts](native-drafts.md). Pi persistent scopes use `file:<canonical path>`; SDK Copilot uses `copilot-sdk:<JSON-encoded session ID>` and legacy ACP retains `acp:copilot:<JSON-encoded session ID>`. Provisional scopes use `unassigned:<mounted UUID>`. Temporary/demo/custom-ACP scopes never stage. Legacy localStorage libraries are ignored without migration or deletion.
+- Project draft state is an in-memory shared library backed by per-scope Rust files; see [Native drafts](native-drafts.md). Pi persistent scopes use `file:<canonical path>`; Copilot uses `copilot-sdk:<JSON-encoded session ID>`. Old draft files from the removed integration remain on disk without active bindings. Provisional scopes use `unassigned:<mounted UUID>`. Temporary/demo/custom-ACP scopes never stage. Legacy localStorage libraries are ignored without migration or deletion.
 - App-managed `state.json` retains `nimrod.tabs.v1:<cwd>` for open order/selection and per-entry `lastUsed` timestamps (All displays recency order; ties retain open order), `nimrod.recency.v1:<cwd>` for canonical-path/session-ID-bound recency across Close (creation/local Send time, historical user-message seed for unknown sessions), `nimrod.workspaces.v1` for recent paths, `nimrod.sidebar.visible`, `nimrod.sidebar.width:<cwd>` for independently saved sidebar size, `nimrod.last-session.v1` and legacy launch state. Naming cleanup needs no schema migration. Already-mounted layouts are not rebuilt from external state changes. Runtime/theme/zoom synchronize separately through Preferences.
 - Closing a saved session is not deletion. Unwritten persistent-session drafts remain explicitly recoverable; recovery copies rather than consuming them. Temporary sessions are disposable: confirmation states that drafts, queued messages and pop-outs are discarded. `Dialogs.confirm` focuses its action and uses plain labels with non-visual shortcut metadata; Close/Restart supply action-specific labels while Pi keeps Confirm. Enter honors Cancel focus, otherwise confirms; Esc cancels. Shared `dialog-actions.ts` suppresses composing/keyCode-229/repeated Enter. Its per-request keyboard listener is removed on close; input/select dialogs keep their existing behavior. Wait for owned shutdown before detaching; Cancel or failed stop retains the live session/draft. `detachTab` disposes the view and calls `discardTemporary`, which deletes runtime memory and blocks late writes from resurrecting it. No temporary state survives window close, quit or reload. Existing native pop-out synchronization releases temporary runtime windows without writing saved references. `persistTabs` explicitly excludes temporary owners. Native draft failures are visible; abrupt termination can lose recent unstaged/unsaved changes.
 

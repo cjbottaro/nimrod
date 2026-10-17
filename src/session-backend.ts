@@ -10,7 +10,7 @@ import { piSessionActions } from './pi/view-policy';
 export type SessionBackend =
   | { readonly kind: 'pi'; session?: PiSession }
   | { readonly kind: 'copilot-sdk'; session?: CopilotSession; savedSessionId?: string }
-  | { readonly kind: 'acp'; readonly profile: AcpProfile; session?: AcpSession; savedSessionId?: string };
+  | { readonly kind: 'acp'; readonly profile: AcpProfile; session?: AcpSession };
 export interface SessionAction {
   id: 'mcp' | 'model' | 'thinking' | 'acp-options';
   label: string;

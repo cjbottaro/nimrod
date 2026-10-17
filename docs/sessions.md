@@ -1,6 +1,6 @@
 # Sessions
 
-Each session has its own conversation, draft and agent process. Switching sessions leaves background work running and preserves reading position and expanded cards. The backend is fixed for that session. The saved/temporary lifecycle below describes Pi; [SDK Copilot sessions](copilot.md) also retain sidebar entries and drafts, while custom ACP sessions remain runtime-only. Older Copilot ACP identities remain explicitly legacy, not migrated.
+Each session has its own conversation, draft and agent process. Switching sessions leaves background work running and preserves reading position and expanded cards. The backend is fixed for that session. The saved/temporary lifecycle below describes Pi; [SDK Copilot sessions](copilot.md) also retain sidebar entries and drafts, while custom ACP sessions remain runtime-only. Earlier Copilot integration entries are no longer restored; old stored drafts and agent history are left untouched.
 
 ## Create a session
 
@@ -24,7 +24,7 @@ Resume orders all harnesses together by the displayed time, newest first, using 
 
 Choosing an already-open entry reuses it. Selecting an inactive saved session loads its history and connects its owning agent without sending a prompt. Reopening a project restores its remembered sidebar entries; Copilot conversations stay disconnected until user selection/navigation, independently of the project's discovery process. Pi retains its existing selected-session connection behavior.
 
-Pi discovery lists the configured Pi session store. There is no arbitrary session-file chooser. Pi child sessions recorded as subagents or forks/branches are excluded from saved-history pickers; closed Pi children have no opening UI. Copilot SDK supplies its own exact project-directory catalog; retained legacy ACP discovery still requires advertised list/load support. Custom ACP history is not included.
+Pi discovery lists the configured Pi session store. There is no arbitrary session-file chooser. Pi child sessions recorded as subagents or forks/branches are excluded from saved-history pickers; closed Pi children have no opening UI. Copilot supplies its own exact project-directory catalog. Custom ACP history is not included.
 
 Missing, malformed, replaced or wrong-project history shows an error without creating a replacement conversation. Resume restores Pi's active context, not an in-flight process, pending queues or every abandoned/pre-compaction branch. Stop other terminal/editor processes using that file first; Nimrod only coordinates its own writers.
 
@@ -55,8 +55,6 @@ The **trash icon left of Close** targets that row without switching to or resumi
 
 This section describes **Pi's tree deletion**. Built-in SDK Copilot uses the same controls and shortcut as **Delete session…**, reviewing only one saved session through the SDK deletion API; see [Copilot deletion](copilot.md#history-close-and-delete). Restart remains Pi-only and is independent of deletion.
 
-CLI 1.0.98 lacks optional **ACP** deletion, so only legacy ACP entries retain that limitation; it does not disable SDK deletion. Closing either transport keeps its history and separate draft.
-
 1. Open deletion review.
 2. Inspect the selected session and its descendants, including any in other projects.
 3. Choose **Delete N sessions** to stop affected agents and permanently remove the tree, or Cancel/Escape to retain everything without stopping work.
@@ -74,7 +72,7 @@ Deletion supports Pi's session-directory environment override, not arbitrary loc
 
 ## Delete several conversations
 
-Use **Delete sessions…** / **⌘/Ctrl+Shift+Backspace** to search supported saved project history, including open and closed sessions. Pi lists top-level trees; associated SDK Copilot history uses supported SDK deletion, and legacy ACP history requires advertised deletion.
+Use **Delete sessions…** / **⌘/Ctrl+Shift+Backspace** to search supported saved project history, including open and closed sessions. Pi lists top-level trees; associated Copilot history uses supported SDK deletion.
 
 Enter/click opens the integration's review above the still-visible picker without activating the session. Cancel leaves the filter, rows and reading position unchanged. Confirmed-deleted rows disappear in place; selection advances to the next match or previous row at the end. Failed/retained rows stay. The picker remains open, even when empty; Refresh explicitly reloads history. Accepting a deletion freezes any unfinished discovery to preserve the rows during execution; Refresh finishes loading remaining history. Escape from the picker closes it.
 

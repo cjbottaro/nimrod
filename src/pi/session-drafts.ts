@@ -70,7 +70,7 @@ export class SessionDrafts {
     this.bindScope(`file:${path}`);
   }
   bindScope(key: string): void {
-    if (!key.startsWith('file:') && !key.startsWith('acp:copilot:') && !key.startsWith('copilot-sdk:')) throw new Error('Invalid saved draft scope');
+    if (!key.startsWith('file:') && !key.startsWith('copilot-sdk:')) throw new Error('Invalid saved draft scope');
     if (this.active === key) return;
     // Only promote a fresh session's provisional identity, never another session's draft.
     if (!this.active.startsWith('unassigned:')) throw new Error('Unexpected session file change');
@@ -89,7 +89,7 @@ export class SessionDrafts {
     this.deleteScope(`file:${path}`);
   }
   deleteScope(key: string): void {
-    if (!key.startsWith('file:') && !key.startsWith('acp:copilot:') && !key.startsWith('copilot-sdk:')) throw new Error('Invalid saved draft scope');
+    if (!key.startsWith('file:') && !key.startsWith('copilot-sdk:')) throw new Error('Invalid saved draft scope');
     if (this.last && key === `file:${this.last.path}`) this.last = undefined;
     delete this.drafts[key];
     this.changed?.(key, null);

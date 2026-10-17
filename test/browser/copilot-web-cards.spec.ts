@@ -1,19 +1,20 @@
 import { expect, test } from '@playwright/test';
 import { demoFixture, visible } from './demo-fixture';
+import { copilotToolResult } from '../../src/copilot/tool-result';
 
-test('offline legacy Copilot web cards render cited answers, partial fetches and URL permissions without navigation', async ({ page }) => {
-  const state = { [`nimrod.tabs.v1:${process.cwd()}`]: { tabs: [{ kind: 'acp', profile: 'copilot', sessionId: 'fixture-acp', name: 'Legacy Copilot web' }] } };
-  const demo = await demoFixture(page, state, [], undefined, undefined, { acpAgentName: 'Copilot' });
+test('offline Copilot web cards render cited answers, partial fetches and URL permissions without navigation', async ({ page }) => {
+  const state = { [`nimrod.tabs.v1:${process.cwd()}`]: { tabs: [{ kind: 'copilot-sdk', sessionId: 'fixture-sdk', name: 'Copilot web' }] } };
+  const demo = await demoFixture(page, state);
   try {
-    await page.locator('#open-sessions .session-row').filter({ hasText: 'Legacy Copilot web' }).click();
+    await page.locator('#open-sessions .session-row').filter({ hasText: 'Copilot web' }).click();
     await expect(page.locator(visible('send'))).toBeEnabled();
-    const connection = demo.calls.find(call => call.command === 'write_acp' && (call.args.message as { method?: string }).method === 'session/load')!;
+    const connection = demo.calls.find(call => call.command === 'write_copilot' && (call.args.message as { method?: string }).method === 'connect')!;
     const token = connection.args.token as string;
     const packets = (values: object[]) => page.evaluate(({ token, values }) => {
       const channels = (window as unknown as { __fixtureChannels: Record<string, { onmessage(packet: unknown): void }> }).__fixtureChannels;
-      for (const value of values) channels[token].onmessage({ kind: 'rpc', value: { jsonrpc: '2.0', ...value } });
+      for (const value of values) channels[token].onmessage({ kind: 'rpc', value });
     }, { token, values });
-    const update = (updates: object[]) => packets(updates.map(update => ({ method: 'session/update', params: { sessionId: 'fixture-acp', update } })));
+    const update = (updates: { type: string; data: object }[]) => packets(updates.map(event => ({ kind: 'event', event: { id: crypto.randomUUID(), ...event } })));
     const marker = '\u30101:1\u2020source\u3011';
     const answer = `## Answer\n\n**Useful information** ${marker}`;
     const structuredContent = { type: 'output_text', text: { value: answer, annotations: [{ start_index: answer.indexOf(marker), end_index: answer.indexOf(marker) + marker.length, url_citation: { title: 'Fixture source', url: 'https://example.test/docs' } }] } };
@@ -21,12 +22,12 @@ test('offline legacy Copilot web cards render cited answers, partial fetches and
     const fetchUrl = 'https://example.test/docs/page';
     const fetchText = `Contents of ${fetchUrl}:\n# Page\n\n[Next page](next)\n\n<script>not executable</script>\n\n<note>Content truncated. Call the fetch tool with a start_index of 4000 to get more content.</note>`;
     await update([
-      { sessionUpdate: 'tool_call', toolCallId: 'web-search', kind: 'search', title: 'Searching...', rawInput: { query: 'A full fixture query' } },
-      { sessionUpdate: 'tool_call_update', toolCallId: 'web-search', status: 'completed', rawOutput: searchOutput, content: [{ type: 'content', content: { type: 'text', text: searchOutput.content } }] },
-      { sessionUpdate: 'tool_call', toolCallId: 'web-fetch', kind: 'fetch', title: 'Fetch content from this URL.', rawInput: { url: fetchUrl } },
-      { sessionUpdate: 'tool_call_update', toolCallId: 'web-fetch', status: 'completed', rawOutput: { content: fetchText, detailedContent: fetchText }, content: [{ type: 'content', content: { type: 'text', text: fetchText } }] },
-      { sessionUpdate: 'tool_call', toolCallId: 'web-failure', kind: 'fetch', title: 'Fetching...', rawInput: { url: 'https://example.test/missing' } },
-      { sessionUpdate: 'tool_call_update', toolCallId: 'web-failure', status: 'failed', rawOutput: { code: 'failure', message: 'Failed to fetch — status code 404' } },
+      { type: 'tool.execution_start', data: { toolCallId: 'web-search', toolName: 'web_search', arguments: { query: 'A full fixture query' } } },
+      { type: 'tool.execution_complete', data: { toolCallId: 'web-search', success: true, result: searchOutput } },
+      { type: 'tool.execution_start', data: { toolCallId: 'web-fetch', toolName: 'web_fetch', arguments: { url: fetchUrl } } },
+      { type: 'tool.execution_complete', data: { toolCallId: 'web-fetch', success: true, result: { content: fetchText, detailedContent: fetchText } } },
+      { type: 'tool.execution_start', data: { toolCallId: 'web-failure', toolName: 'web_fetch', arguments: { url: 'https://example.test/missing' } } },
+      { type: 'tool.execution_complete', data: { toolCallId: 'web-failure', success: false, result: { code: 'failure', message: 'Failed to fetch — status code 404' } } },
     ]);
     const search = page.locator('details[data-detail-key="tool:web-search"]');
     const fetch = page.locator('details[data-detail-key="tool:web-fetch"]');
@@ -47,21 +48,17 @@ test('offline legacy Copilot web cards render cited answers, partial fetches and
     expect(demo.calls.filter(call => call.command === 'open_card_link')[1].args.href).toBe('https://example.test/docs/next');
     expect(page.url()).toBe(location);
     await search.locator(':scope > .tool-raw-output > summary').click();
-    expect(await search.locator(':scope > .tool-raw-output pre').textContent()).toBe(searchOutput.content);
+    expect(await search.locator(':scope > .tool-raw-output pre').textContent()).toBe(copilotToolResult(searchOutput));
     await expect(page.locator('details[data-detail-key="tool:web-failure"] .tool-card-failed')).toHaveCount(1);
-    await page.locator(visible('prompt')).fill('Offline permission fixture only');
+    await page.locator(visible('prompt')).fill('url permission fixture');
     await page.locator(visible('prompt')).press('Enter');
-    await expect(page.locator('.acp-permission')).toBeVisible();
-    await packets([{ id: 'fetch-permission', method: 'session/request_permission', params: { sessionId: 'fixture-acp', toolCall: { toolCallId: 'fetch-approval', kind: 'fetch', title: 'Fetch content from this URL.', rawInput: { url: 'https://example.test/permission' } }, options: [{ optionId: 'deny-url', name: 'Deny', kind: 'reject_once' }] } }]);
-    const permission = page.locator('.acp-permission').filter({ hasText: 'example.test/permission' });
-    await expect(permission.locator('.acp-permission-summary')).toHaveText('Fetch · example.test/permission');
-    await expect(permission.locator('.acp-permission-actions + .acp-permission-raw')).toHaveCount(1);
-    await expect(permission.locator('.acp-permission-raw')).not.toHaveAttribute('open', '');
-    expect(demo.calls.some(call => call.command === 'write_acp' && (call.args.message as { id?: string }).id === 'fetch-permission')).toBe(false);
+    const permission = page.locator('.acp-permission').filter({ hasText: 'https://example.test/permission' });
+    await expect(permission).toBeVisible();
+    expect(demo.calls.some(call => call.command === 'write_copilot' && (call.args.message as { method?: string }).method === 'decision')).toBe(false);
     await permission.getByRole('button', { name: 'Deny', exact: true }).click();
-    await expect.poll(() => demo.calls.some(call => call.command === 'write_acp' && (call.args.message as { id?: string }).id === 'fetch-permission')).toBe(true);
-    const reply = demo.calls.find(call => call.command === 'write_acp' && (call.args.message as { id?: string }).id === 'fetch-permission')!.args.message as { result: unknown };
-    expect(reply.result).toEqual({ outcome: { outcome: 'selected', optionId: 'deny-url' } });
+    await expect.poll(() => demo.calls.some(call => call.command === 'write_copilot' && (call.args.message as { method?: string }).method === 'decision')).toBe(true);
+    const reply = demo.calls.find(call => call.command === 'write_copilot' && (call.args.message as { method?: string }).method === 'decision')!.args.message as { value: unknown };
+    expect(reply.value).toEqual({ kind: 'denied-interactively-by-user' });
     expect(demo.errors).toEqual([]);
   } finally { await demo.close(); }
 });
