@@ -19,7 +19,9 @@ export interface ToolCaptureHost {
   recovered(): void;
 }
 const MAX_QUEUE_CHARS = 8 * 1024 * 1024;
-const MAX_RECORD_CHARS = 2 * 1024 * 1024;
+const CHUNK_RECORD_CHARS = 2 * 1024 * 1024;
+const FLUSH_CHARS = 1024 * 1024;
+const CHUNK_CHARS = 128 * 1024;
 
 /** One writer per project window. A failed/overflowed capture stays stopped until toggled. */
 export function createToolCapture(host: ToolCaptureHost) {
@@ -31,7 +33,7 @@ export function createToolCapture(host: ToolCaptureHost) {
   function fail(error: unknown): void {
     if (failed || disposed) return;
     failed = true; clear();
-    try { host.failure(`Transcript debug logging stopped; some events may not have been saved. ${String(error)} Toggle capture off and on to start a new segment. Nothing was retried.`); }
+    try { host.failure(`Conversation unaffected; diagnostic logging stopped. Some events may not have been saved. ${String(error)} Toggle transcript debug logs off and on to start a new segment. Nothing was retried.`); }
     catch (noticeError) { console.error('Could not report transcript debug logging failure', noticeError); }
   }
   async function flush(): Promise<void> {
@@ -45,10 +47,23 @@ export function createToolCapture(host: ToolCaptureHost) {
     writing = true;
     try { await host.write(lines); }
     catch (error) { if (!disposed && current === generation) fail(error); }
-    finally { writing = false; schedule(); }
+    finally {
+      writing = false;
+      if (pending.length && enabled && !failed && !disposed) void flush();
+    }
   }
   function schedule(): void {
     if (!timer && !writing && pending.length && enabled && !failed && !disposed) timer = setTimeout(() => { void flush(); }, 100);
+  }
+  function enqueue(line: string): boolean {
+    if (!enabled || failed || disposed) return false;
+    if (queuedChars + line.length > MAX_QUEUE_CHARS) {
+      fail('Transcript events exceeded the 8 Mi-character pending buffer while storage was busy.'); return false;
+    }
+    pending.push(line); queuedChars += line.length;
+    if (pending.length >= 512 || queuedChars >= FLUSH_CHARS) void flush();
+    else schedule();
+    return enabled && !failed && !disposed;
   }
   return {
     get enabled() { return enabled && !failed && !disposed; },
@@ -62,10 +77,16 @@ export function createToolCapture(host: ToolCaptureHost) {
       try {
         // Snapshot now: native reducers may subsequently change retained objects.
         const line = JSON.stringify({ ...record, schemaVersion: 1, timestamp: new Date().toISOString(), captureId, sequence: ++sequence });
-        if (line.length > MAX_RECORD_CHARS || queuedChars + line.length > MAX_QUEUE_CHARS) {
-          fail('Capture buffer or record size limit exceeded.'); return;
+        if (line.length <= CHUNK_RECORD_CHARS) { enqueue(line); return; }
+        // Split the serialized snapshot, not the native payload; joining all parts restores it exactly.
+        const snapshot: Record<string, unknown> = JSON.parse(line);
+        delete snapshot.payload;
+        const recordId = `${captureId}:${sequence}`, count = Math.ceil(line.length / CHUNK_CHARS);
+        for (let index = 0; index < count; index++) {
+          const chunk = JSON.stringify({ ...snapshot, sequence: index === 0 ? sequence : ++sequence,
+            event: 'capture.record_chunk', payload: { recordId, index, count, data: line.slice(index * CHUNK_CHARS, (index + 1) * CHUNK_CHARS) } });
+          if (!enqueue(chunk)) return;
         }
-        pending.push(line); queuedChars += line.length; schedule();
       } catch (error) { fail(error); }
     },
     flush,
