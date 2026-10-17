@@ -15,6 +15,8 @@ export interface ApplicationNotice {
   priority?: number;
   severity?: 'error' | 'warning' | 'info';
   dismissible?: boolean;
+  /** Unresolved interaction state, not an error or a severity classification. */
+  presentation?: 'pending-action';
   actions?: NoticeAction[];
 }
 
@@ -35,7 +37,7 @@ export class NoticeStore {
   }
   subscribe(callback: () => void): () => void { this.subscribers.add(callback); return () => { this.subscribers.delete(callback); }; }
   report(notice: ApplicationNotice): void {
-    const signature = JSON.stringify([notice.operation, notice.message, notice.details, notice.owner, notice.cause, notice.priority, notice.severity, notice.dismissible, notice.actions?.map(action => [action.label, action.enabled?.() !== false])]);
+    const signature = JSON.stringify([notice.operation, notice.message, notice.details, notice.owner, notice.cause, notice.priority, notice.severity, notice.dismissible, notice.presentation, notice.actions?.map(action => [action.label, action.enabled?.() !== false])]);
     if (this.dismissed.get(notice.id)?.signature === signature) return;
     this.dismissed.delete(notice.id);
     this.entries.set(notice.id, notice); // Always refresh guarded action closures.
@@ -97,11 +99,9 @@ export function installApplicationNotices(win: Window, store = new NoticeStore()
   strip.setAttribute('role', 'region'); strip.setAttribute('aria-label', session ? 'Session notices' : 'Application notices'); strip.hidden = true;
   const announcement = document.createElement('span'); announcement.className = 'notice-announcement';
   announcement.setAttribute('role', 'status'); announcement.setAttribute('aria-live', 'polite'); announcement.setAttribute('aria-atomic', 'true');
-  const group = document.createElement('details'); group.className = 'notice-group';
-  const summary = document.createElement('summary'); summary.className = 'notice-group-summary';
+  const pending = document.createElement('div'); pending.className = 'notice-pending';
   const list = document.createElement('div'); list.className = 'notice-list';
-  group.append(summary, list);
-  strip.append(announcement, group);
+  strip.append(announcement, pending, list);
   let active = !session;
   const slot = document.createElement('div'); slot.id = 'application-notice-slot'; slot.setAttribute('aria-hidden', 'true');
   const bar = document.getElementById('workspace-bar');
@@ -112,7 +112,7 @@ export function installApplicationNotices(win: Window, store = new NoticeStore()
   }
   // Pi's fallback producer label adds no context; retain actual operation names.
   const hasOperationContext = (notice: ApplicationNotice) => !session || notice.operation !== 'Pi operation';
-  const rows = new Map<string, { node: HTMLElement; signature: string }>();
+  const rows = new Map<string, { node: HTMLElement; signature: string; structure: string }>();
   const dialogs: HTMLDialogElement[] = [];
   const focus = new Map<Element, HTMLElement>();
   let disposed = false;
@@ -177,21 +177,38 @@ export function installApplicationNotices(win: Window, store = new NoticeStore()
     for (const notice of notices) {
       let row = rows.get(notice.id);
       const enabled = notice.actions?.map(action => action.enabled?.() !== false) ?? [];
-      const signature = JSON.stringify([notice.operation, notice.message, notice.details, notice.severity, notice.dismissible, notice.actions?.map(action => action.label), enabled]);
+      const signature = JSON.stringify([notice.operation, notice.message, notice.details, notice.severity, notice.dismissible, notice.presentation, notice.actions?.map(action => action.label), enabled]);
       if (!row) {
         const node = document.createElement('div'); node.className = 'application-notice'; node.dataset.noticeId = notice.id;
-        row = { node, signature: '' }; rows.set(notice.id, row); list.append(node);
+        row = { node, signature: '', structure: '' }; rows.set(notice.id, row);
       }
+      const parent = notice.presentation === 'pending-action' ? pending : list;
+      if (row.node.parentElement !== parent) parent.append(row.node);
       if (signature === row.signature) continue;
       changed = true;
       row.signature = signature; row.node.dataset.severity = notice.severity ?? 'error';
+      row.node.dataset.presentation = notice.presentation || 'notice';
+      const firstLine = notice.message.split('\n')[0];
+      const compact = firstLine.length > 160 ? `${firstLine.slice(0, 157)}…` : firstLine;
+      const diagnostics = [compact !== notice.message ? notice.message : undefined, notice.details].filter(Boolean).join('\n\n');
+      const structure = JSON.stringify([hasOperationContext(notice), !!diagnostics, notice.severity, notice.dismissible, notice.presentation, notice.actions?.map(action => action.label)]);
+      if (row.structure === structure) {
+        const title = row.node.querySelector('strong')!;
+        if (title.textContent !== (session ? compact : notice.operation)) title.textContent = session ? compact : notice.operation;
+        const body = row.node.querySelector('.notice-message');
+        if (body && body.textContent !== (session ? notice.operation : compact)) body.textContent = session ? notice.operation : compact;
+        const detail = row.node.querySelector('.notice-details > div');
+        if (detail && detail.textContent !== diagnostics) detail.textContent = diagnostics;
+        for (const button of row.node.querySelectorAll<HTMLButtonElement>('[data-action-index]'))
+          button.disabled = !enabled[Number(button.dataset.actionIndex)];
+        continue;
+      }
+      row.structure = structure;
       const text = document.createElement('div'); text.className = 'application-notice-text';
       const title = document.createElement('strong');
       const body = document.createElement('span'); body.className = 'notice-message';
       // Long/raw producer messages remain available verbatim, without dominating
       // the conversation. Explicit diagnostics do not require text classification.
-      const firstLine = notice.message.split('\n')[0];
-      const compact = firstLine.length > 160 ? `${firstLine.slice(0, 157)}…` : firstLine;
       title.textContent = session ? compact : notice.operation;
       text.append(title);
       if (hasOperationContext(notice)) {
@@ -199,7 +216,6 @@ export function installApplicationNotices(win: Window, store = new NoticeStore()
         text.append(body);
       }
       // Keep the complete message when shortened, even with explicit diagnostics.
-      const diagnostics = [compact !== notice.message ? notice.message : undefined, notice.details].filter(Boolean).join('\n\n');
       if (diagnostics) {
         const detail = document.createElement('details'); detail.className = 'notice-details';
         const label = document.createElement('summary'); label.textContent = 'Details';
@@ -223,12 +239,6 @@ export function installApplicationNotices(win: Window, store = new NoticeStore()
     }
     if (strip.hidden !== !notices.length) changed = true;
     strip.hidden = !notices.length;
-    const multiple = notices.length > 1;
-    if (group.classList.contains('notice-group-multiple') !== multiple) { changed = true; group.open = !multiple || wasInStrip; }
-    if (!multiple) group.open = true;
-    group.classList.toggle('notice-group-multiple', multiple);
-    const heading = `${notices.length} ${session ? 'session' : 'application'} issues`;
-    if (summary.textContent !== heading) summary.textContent = heading;
     const signature = active ? JSON.stringify(notices.map(notice => [notice.id, notice.operation, notice.message])) : '';
     if (signature !== announced) { announced = signature; announcement.textContent = active ? notices.map(notice => hasOperationContext(notice) ? `${notice.operation}. ${notice.message}` : notice.message).join(' ') : ''; }
     position(); if (changed) scheduleMeasure(); restoreFocus(wasInStrip);

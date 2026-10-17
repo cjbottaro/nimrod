@@ -18,10 +18,30 @@ Read-only MCP inspection uses `startInspection()` in the same lifecycle: details
 
 Add a picker through `startSelection()` or the existing page lifecycle, not a feature-specific dialog key handler. `beginPage()` owns query reset, Back/Retry controls and request generation. Page content may differ; dismissal must not branch on page mode or entry point. There is no new generic harness or global modal framework.
 
-Repeated deletion is the deliberate nested-dialog exception: the shared deletion session page stays mounted and visible while its tree review owns focus and Escape. Only that executing page authorizes review coverage; all other dialogs retain priority. Cancel leaves the picker unchanged; successful tombstones prune cached rows in place after settlement without rediscovery or rebuilding survivors. Escape from the picker dismisses the interaction. Generation/disposal guards reject stale completions after API closure or newer pages; no automatic reopening. See [deletion picker](session-deletion.md#repeated-deletion-picker).
+Repeated deletion is one deliberate nested-dialog interaction: the shared deletion session page stays mounted and visible while its tree review owns focus and Escape. Only that executing page authorizes review coverage; all other dialogs retain priority. Cancel leaves the picker unchanged; successful tombstones prune cached rows in place after settlement without rediscovery or rebuilding survivors. Escape from the picker dismisses the interaction. Generation/disposal guards reject stale completions after API closure or newer pages; no automatic reopening. See [deletion picker](session-deletion.md#repeated-deletion-picker).
 
 Project navigation is another shared page, not a separate modal controller; see [recent-project picker](projects-and-sessions.md#recent-project-picker). Its recent-directory page uses inline project rows and has no OS folder-chooser action; native File Open / Cmd/Ctrl+O is separate.
 Command-list sorting and accepted-command history are independent of page lifecycle; see [Command ranking](command-ranking.md). Subordinate picker order is unchanged.
+
+## Retained permission interaction
+
+`startRetainedSelection` is the shared presentation lifecycle used by
+[Copilot permissions](copilot-sdk.md#permission-choices-and-interaction).
+It refuses to replace an already-open dialog; its standalone page hides
+application Back/Retry and does not enter command rankings. `show` supplies
+operation context and choices, `remaining` patches only header text, and `focus`
+restores the filter only when no child/higher-priority dialog is open. Choosing
+runs the guarded page action without closing the shell; the concrete owner
+advances it or explicitly cancels it when empty.
+
+Escape/native close still dismisses the whole palette interaction and invalidates
+callbacks synchronously. Unlike `chooseItems`, this API does not own a harness
+decision promise: dismissal notifies the concrete owner, which leaves its queue
+pending behind a Review requests banner. It never translates Escape into denial.
+A nested host input dialog is a deliberate exception for denial feedback: only
+the top modal handles Escape; cancellation returns to the mounted picker, submit
+advances it. Owner-generation/AbortSignal guards retire both on cancellation.
+Existing one-shot selections and post-close application actions are unchanged.
 
 ## Copilot harness choices
 

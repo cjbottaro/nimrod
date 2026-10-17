@@ -51,6 +51,6 @@ export class Dialogs {
     return result;
   }
   choose(title: string, options: string[], owner?: string): Promise<string | undefined> { return this.show(title, options, undefined, undefined, owner); }
-  input(title: string, prefill?: string, owner?: string): Promise<string | undefined> { return this.show(title, undefined, prefill, undefined, owner); }
+  input(title: string, prefill?: string, owner?: string, action = 'Confirm'): Promise<string | undefined> { return this.show(title, undefined, prefill, undefined, owner, action); }
   async confirm(title: string, message: string, owner?: string, action = 'Confirm'): Promise<boolean> { return (await this.show(title, undefined, undefined, message, owner, action)) !== undefined; }
 }

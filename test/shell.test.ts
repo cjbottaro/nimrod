@@ -1083,14 +1083,14 @@ test('SDK tool capture uses the global setting and native append bridge for tool
     assert.deepEqual(captured.map(record => record.event), ['assistant.tool_call_delta', 'tool.execution_start', 'permission.requested', 'permission.request']);
     assert.ok(captured.every(record => record.source.backend === 'copilot-sdk' && record.sessionId === 'sdk-fixture' && record.toolCallId === 'captured'));
     assert.deepEqual(captured.at(-1).payload, { kind: 'permission', id: 'capture-permission', request });
-    assert.equal(prompt.value, 'keep SDK draft'); assert.equal(f.win.document.activeElement, prompt);
+    assert.equal(prompt.value, 'keep SDK draft'); assert.equal(f.win.document.activeElement, f.element('palette-input'));
     assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, starts);
     assert.equal(f.calls.some(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'prompt'), false);
     f.preferences.external('{}'); await f.tick();
   } finally { f.win.close(); }
 });
 
-test('Copilot permissions use one session-owned panel, exact scoped decisions and waiting status without changing the draft', async () => {
+test('Copilot permissions retain one modal, escape without answering, reopen through a banner and route exact scoped decisions', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   try {
     f.openPalette();
@@ -1104,20 +1104,30 @@ test('Copilot permissions use one session-owned panel, exact scoped decisions an
     request('first', '/project/test'); request('second', '/project/src');
     await f.tick();
     const host = draft.closest('.session-view')!;
-    assert.equal(host.querySelectorAll('.copilot-permission-panel').length, 1);
-    assert.equal(host.querySelectorAll('.copilot-permission-body:not([hidden])').length, 1);
-    assert.match(host.querySelector('.copilot-permission-header')!.textContent!, /2 pending/);
+    const picker = f.element<HTMLDialogElement>('command-palette');
+    assert.equal(picker.open, true);
+    assert.equal(f.element('palette-remaining').textContent, '1 more');
+    assert.match(host.querySelector('.notice-pending')!.textContent!, /2 requests/);
+    assert.equal(host.querySelector('.notice-pending [data-dismiss]'), null);
     assert.match(f.element('activity').textContent!, /Waiting for permission/);
     assert.doesNotMatch(f.element('keyboard-hint').textContent!, /working/i);
-    assert.equal(f.win.document.activeElement, draft); assert.equal(draft.value, 'keep draft');
-    const allow = [...host.querySelectorAll<HTMLButtonElement>('.copilot-permission-body:not([hidden]) button')].find(button => button.textContent === 'Allow all file reads this session')!;
+    assert.equal(f.win.document.activeElement, f.element('palette-input')); assert.equal(draft.value, 'keep draft');
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await f.tick();
+    assert.equal(picker.open, false); assert.equal(f.win.document.activeElement, draft);
+    assert.equal(f.calls.some(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'decision'), false);
+    host.querySelector<HTMLButtonElement>('.notice-pending button')!.click(); await f.tick();
+    assert.equal(picker.open, true);
+    const allow = [...f.element('palette-list').querySelectorAll<HTMLElement>('[role=option]')].find(row => row.textContent?.includes('Allow all file reads this session'))!;
     allow.click(); await f.tick();
     const decisions = f.calls.filter(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'decision');
     assert.deepEqual((decisions.at(-1)!.args.message as JsonRecord).value, { kind: 'approve-for-session', approval: { kind: 'read' } });
-    assert.match(host.querySelector('.copilot-permission-header')!.textContent!, /1 pending/);
+    assert.equal(picker.open, true);
+    assert.equal(f.element('palette-remaining').textContent, 'Last request');
     target.channel.onmessage({ kind: 'rpc', value: { kind: 'event', event: { id: 'idle-permissions', type: 'session.idle', data: {} } } });
     await f.tick();
-    assert.equal(host.querySelector('.copilot-permission-panel'), null);
+    assert.equal(picker.open, false);
+    assert.equal(host.querySelector('.notice-pending > .application-notice'), null);
     assert.equal(draft.value, 'keep draft'); assert.equal(f.win.document.activeElement, draft);
     assert.equal(f.calls.filter(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'decision').length, 1);
   } finally { f.win.close(); }

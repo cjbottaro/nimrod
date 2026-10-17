@@ -1,17 +1,20 @@
 :root { --application-notice-height:0px; }
 body.application-notice-shell { grid-template-rows:48px var(--application-notice-height) minmax(0,1fr); }
 #application-notice-slot { height:var(--application-notice-height); min-height:0; }
-#application-notices, .session-notices { box-sizing:border-box; max-height:min(25dvh,180px); overflow:auto; color:var(--vscode-foreground); font:12px var(--vscode-font-family, sans-serif); }
+#application-notices, .session-notices { box-sizing:border-box; max-height:min(25dvh,180px); display:flex; flex-direction:column; gap:8px; overflow:hidden; color:var(--vscode-foreground); font:12px var(--vscode-font-family, sans-serif); }
 #application-notices { position:fixed; inset:48px 0 auto; z-index:100; width:100%; padding:6px 20px; background:var(--vscode-editorWidget-background); border-bottom:1px solid color-mix(in srgb, var(--vscode-descriptionForeground) 20%, transparent); }
 .session-view:has(> .session-notices:not([hidden])) { grid-template-rows:auto minmax(0,1fr) auto; }
-.session-notices { --notice-line-height:24px; margin:12px 20px; padding:8px 12px; border:1px solid color-mix(in srgb, var(--vscode-errorForeground) 60%, transparent); border-radius:5px; background:color-mix(in srgb, var(--vscode-descriptionForeground) 6%, var(--vscode-editor-background)); }
+.session-notices { --notice-line-height:24px; margin:12px 20px; }
+.session-notices:has(.notice-pending:not(:empty)) { max-height:min(35dvh,260px); }
+.notice-pending { flex:none; }
+.notice-pending:empty, .notice-list:empty { display:none; }
+.notice-list { min-height:0; overflow:auto; display:flex; flex-direction:column; gap:8px; }
 #application-notices[hidden], .session-notices[hidden] { display:none; }
-.notice-group-summary { padding:7px 0; cursor:pointer; color:var(--vscode-descriptionForeground); }
-.notice-group:not(.notice-group-multiple) > .notice-group-summary { display:none; }
-.application-notice { display:flex; align-items:flex-start; gap:10px; padding:7px 0; }
-.application-notice + .application-notice { border-top:1px solid color-mix(in srgb, var(--vscode-descriptionForeground) 15%, transparent); }
-.session-notices .application-notice { gap:8px; padding:0; }
-.session-notices .application-notice + .application-notice { margin-top:8px; padding-top:8px; }
+.application-notice { flex:none; display:flex; align-items:flex-start; gap:10px; padding:8px 12px; border:1px solid color-mix(in srgb, var(--vscode-descriptionForeground) 25%, transparent); border-radius:5px; background:var(--vscode-editorWidget-background); }
+#application-notices .application-notice { background:transparent; }
+.session-notices .application-notice { gap:8px; border-color:color-mix(in srgb, var(--vscode-errorForeground) 60%, transparent); background:color-mix(in srgb, var(--vscode-descriptionForeground) 6%, var(--vscode-editor-background)); }
+.session-notices .application-notice[data-presentation=pending-action] { border-color:var(--vscode-panel-border); }
+.session-notices .application-notice[data-presentation=pending-action] .notice-icon { color:var(--vscode-descriptionForeground); }
 .application-notice-text { display:grid; gap:3px; flex:1; min-width:0; overflow-wrap:anywhere; }
 .application-notice-text strong { font-weight:600; }
 .session-notices .application-notice-text strong { font-weight:500; line-height:var(--notice-line-height); }

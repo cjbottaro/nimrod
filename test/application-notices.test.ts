@@ -121,7 +121,7 @@ test('session Details retain complete unstructured messages and explicit diagnos
   } finally { ui.dispose(); dom.window.close(); }
 });
 
-test('multiple notices collapse to a bounded list; diagnostics and rows survive unchanged reports', () => {
+test('multiple notices remain separate without a disclosure; diagnostics and rows survive unchanged reports', () => {
   const dom = new JSDOM('<body><header id="workspace-bar"></header></body>', { pretendToBeVisual: true });
   const ui = installApplicationNotices(dom.window as unknown as Window);
   try {
@@ -134,10 +134,11 @@ test('multiple notices collapse to a bounded list; diagnostics and rows survive 
     assert.equal(ui.strip.querySelector('.application-notice'), row);
     assert.equal(detail.open, true);
     ui.report({ id: 'two', operation: 'Save', message: 'Another failure' });
-    const group = ui.strip.querySelector<HTMLDetailsElement>('.notice-group')!;
-    assert.equal(group.open, false); assert.match(group.querySelector('summary')!.textContent!, /2 application issues/);
-    group.open = true; ui.report(notice); assert.equal(group.open, true);
-    ui.resolve('two'); assert.equal(group.open, true);
+    assert.equal(ui.strip.querySelector('.notice-group'), null);
+    assert.equal(ui.strip.querySelectorAll('.notice-list > .application-notice').length, 2);
+    assert.match(ui.strip.textContent!, /Another failure/);
+    ui.report(notice); assert.equal(ui.strip.querySelectorAll('.application-notice').length, 2);
+    ui.resolve('two'); assert.equal(ui.strip.querySelectorAll('.application-notice').length, 1);
     assert.equal(detail.open, true); assert.equal(row, ui.strip.querySelector('.application-notice'));
   } finally { ui.dispose(); dom.window.close(); }
 });
@@ -168,7 +169,7 @@ test('action failures from separate session renderers keep independent IDs and d
   } finally { one.dispose(); two.dispose(); win.close(); }
 });
 
-test('new issues do not collapse a focused notice control; multiline details retain the original message', () => {
+test('new issues retain existing focus and multiline details without collapsing banners', () => {
   const dom = new JSDOM('<body><header id="workspace-bar"></header></body>', { pretendToBeVisual: true });
   const ui = installApplicationNotices(dom.window as unknown as Window);
   try {
@@ -177,8 +178,41 @@ test('new issues do not collapse a focused notice control; multiline details ret
     assert.equal(ui.strip.querySelector('.notice-details > div')!.textContent, 'Could not start Pi\nspawn /fixture/pi ENOENT');
     const dismiss = ui.strip.querySelector<HTMLButtonElement>('[data-dismiss]')!; dismiss.focus();
     ui.report({ id: 'two', operation: 'Save', message: 'Another failure' });
-    assert.equal(ui.strip.querySelector<HTMLDetailsElement>('.notice-group')!.open, true);
+    assert.equal(ui.strip.querySelector('.notice-group'), null);
+    assert.equal(ui.strip.querySelectorAll('.application-notice').length, 2);
     assert.equal(dom.window.document.activeElement, dismiss);
+  } finally { ui.dispose(); dom.window.close(); }
+});
+
+test('pending interaction banner stays first, neutral and non-dismissable while independent errors remain separate', () => {
+  const dom = new JSDOM('<body><section id="session"></section></body>', { pretendToBeVisual: true });
+  const store = new NoticeStore(), ui = installApplicationNotices(dom.window as unknown as Window, store,
+    { owner: 'one', container: dom.window.document.querySelector('section')! });
+  try {
+    ui.setActive(true);
+    const error = { id: 'error', owner: 'one', operation: 'Connect', message: 'Could not connect' };
+    store.report(error);
+    const errorNode = ui.strip.querySelector('[data-notice-id="error"]');
+    let reviews = 0;
+    const report = (count: number) => store.report({ id: 'permission', owner: 'one', operation: 'Permissions',
+      message: `Waiting for permission · ${count} requests`, dismissible: false, presentation: 'pending-action', severity: 'info',
+      actions: [{ label: 'Review requests', run: () => { reviews++; } }] });
+    report(2);
+    const banner = ui.strip.querySelector<HTMLElement>('.notice-pending > .application-notice')!;
+    const review = banner.querySelector<HTMLButtonElement>('button')!; review.focus();
+    assert.equal(banner.dataset.presentation, 'pending-action');
+    assert.equal(banner.querySelector('[data-dismiss]'), null);
+    assert.equal(ui.strip.querySelector('.notice-group'), null);
+    assert.equal(ui.strip.querySelector('[data-notice-id="error"]'), errorNode);
+    report(3);
+    assert.equal(banner.querySelector('button'), review); assert.equal(dom.window.document.activeElement, review);
+    assert.match(banner.textContent!, /3 requests/);
+    store.dismiss('permission'); assert.equal(store.notices.length, 2);
+    store.report(error); assert.equal(ui.strip.querySelectorAll('.application-notice').length, 2);
+    store.resolve('permission');
+    assert.equal(ui.strip.querySelectorAll('.application-notice').length, 1);
+    assert.equal(ui.strip.querySelector('[data-notice-id="error"]'), errorNode);
+    assert.equal(reviews, 0);
   } finally { ui.dispose(); dom.window.close(); }
 });
 

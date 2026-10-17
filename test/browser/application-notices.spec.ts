@@ -39,15 +39,14 @@ test('session notices stay inside their conversation, preserving reader intent, 
     await expect(page.locator(visible('session-notices'))).toBeHidden();
     await expect(page.locator('#application-notices')).toBeHidden(); await expect(secondPrompt).toBeFocused();
     await page.locator(`.session-row[aria-controls="${await firstRoot.getAttribute('id')}"]`).click();
-    await expect(notice.locator('.notice-group-summary')).toHaveText('2 session issues');
-    await expect(notice.locator('.notice-group')).not.toHaveAttribute('open', '');
-    await notice.locator('.notice-group-summary').click();
+    await expect(notice.locator('.application-notice')).toHaveCount(2);
+    await expect(notice.locator('.notice-group')).toHaveCount(0);
     await expect(notice).toContainText('Another first-session issue');
     await page.locator('#open-settings').click();
     await expect(page.locator('#settings-page .session-notices')).toHaveCount(0);
     await expect(page.locator('#application-notices')).toBeHidden();
     await page.locator('#settings-back').click();
-    await expect(notice.locator('.notice-group')).toHaveAttribute('open', '');
+    await expect(notice.locator('.application-notice')).toHaveCount(2);
     expect(fixture.errors).toEqual([]);
   } finally { await fixture.close(); }
 });
@@ -64,7 +63,7 @@ test('session notices use the theme error outline, message-first text and preser
     }, { token, message });
     const notices = page.locator(visible('session-notices'));
     await expect(notices).toBeVisible(); await expect(prompt).toBeFocused();
-    await notices.locator('.notice-group-summary').click();
+    await expect(notices.locator('.application-notice')).toHaveCount(3);
     const row = notices.locator('.application-notice').first();
     await expect(row.locator('strong')).toHaveText(message.slice(0, 157) + '…');
     await expect(row.locator('.notice-message')).toHaveCount(0);
@@ -82,7 +81,7 @@ test('session notices use the theme error outline, message-first text and preser
         const error = color('var(--vscode-errorForeground)');
         const border = color('color-mix(in srgb, var(--vscode-errorForeground) 60%, transparent)');
         const foreground = color('var(--vscode-foreground)'); probe.remove();
-        const style = getComputedStyle(node);
+        const style = getComputedStyle(node.querySelector('.application-notice')!);
         return { border: style.borderTopColor, expectedBorder: border, width: style.borderTopWidth, type: style.borderTopStyle,
           icons: [...node.querySelectorAll('.notice-icon')].map(icon => getComputedStyle(icon).color), error,
           headline: getComputedStyle(node.querySelector('strong')!).color, foreground };
@@ -118,7 +117,7 @@ for (const wrapped of [false, true]) test(`session notice first-line alignment a
       const icon = slot.querySelector('svg')!.getBoundingClientRect();
       const close = node.querySelector('[data-dismiss] svg')!.getBoundingClientRect();
       const titleBounds = title.getBoundingClientRect(), bounds = node.getBoundingClientRect();
-      const style = getComputedStyle(node), line = Number.parseFloat(getComputedStyle(title).lineHeight);
+      const style = getComputedStyle(node.querySelector('.application-notice')!), line = Number.parseFloat(getComputedStyle(title).lineHeight);
       const scale = slot.getBoundingClientRect().height / Number.parseFloat(getComputedStyle(slot).height);
       const firstLineCenter = titleBounds.y + line * scale / 2;
       const viewport = node.closest('.session-view')!.querySelector('[data-pi-id="transcript-viewport"]')!.getBoundingClientRect();

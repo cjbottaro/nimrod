@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { permissionOptions, validPermissionDecision } from '../copilot/permissions.mjs';
-import { CopilotPermissionPanel } from '../src/copilot/permission-panel';
+import { CopilotPermissionInteraction } from '../src/copilot/permission-interaction';
+import { readFileSync } from 'node:fs';
+import { installCommandPalette } from '../src/command-palette';
+import { installApplicationNotices, NoticeStore } from '../src/application-notices';
+import { stubDialogs } from './dialog-fixture';
 
 test('Copilot offers exact, labelled session rules and explicitly saved URL domains', () => {
   for (const [request, expected] of [
@@ -51,66 +55,139 @@ test('managed, elevated, unknown and malformed scopes retain only explicit one-t
   }
 });
 
+const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 function fixture() {
-  const dom = new JSDOM('<body><main></main><textarea id="draft">keep me</textarea></body>');
-  const document = dom.window.document, host = document.querySelector('main')!, draft = document.querySelector<HTMLTextAreaElement>('#draft')!;
-  let selected = true, pending = 0, releases = 0;
-  const panel = new CopilotPermissionPanel(document, host, '/project', () => selected,
-    delta => { pending += delta; }, () => { releases++; draft.focus(); });
-  const controls = () => [...host.querySelectorAll<HTMLButtonElement>('.copilot-permission-body:not([hidden]) button')];
-  const click = (label: string) => { const button = controls().find(control => control.textContent === label); assert.ok(button, label); button.click(); };
+  const dom = new JSDOM(readFileSync('index.html', 'utf8'), { pretendToBeVisual: true });
+  const win = dom.window, document = win.document; stubDialogs(win);
+  const host = document.createElement('section'); document.body.append(host);
+  const draft = document.createElement('textarea'); draft.value = 'keep me'; host.append(draft);
+  const dialog = document.querySelector<HTMLDialogElement>('#command-palette')!;
+  const child = document.querySelector<HTMLDialogElement>('#host-dialog')!;
+  const input = document.querySelector<HTMLInputElement>('#palette-input')!;
+  const feedback = document.querySelector<HTMLTextAreaElement>('#host-dialog-input')!;
+  let selected = true, pending = 0, opens = 0, closes = 0;
+  const show = dialog.showModal.bind(dialog), close = dialog.close.bind(dialog);
+  dialog.showModal = () => { opens++; show(); }; dialog.close = value => { closes++; close(value); };
+  const palette = installCommandPalette(win as unknown as Window, dialog, {
+    canOpen: () => true, commands: () => [], sessions: async () => ({ items: [] }), openSessions: () => ({ items: [] }),
+  });
+  const store = new NoticeStore(), notices = installApplicationNotices(win as unknown as Window, store, { owner: 'fixture', container: host });
+  notices.setActive(true);
+  const interaction = new CopilotPermissionInteraction({
+    document, project: '/project',
+    canPresent: () => selected && !document.querySelector('dialog[open]:not(#command-palette)'),
+    start: dismiss => palette.startRetainedSelection('Copilot permission', dismiss),
+    feedback: () => new Promise(resolve => {
+      child.returnValue = ''; feedback.value = '';
+      child.addEventListener('close', () => resolve(child.returnValue === 'ok' ? feedback.value : undefined), { once: true });
+      child.showModal(); feedback.focus();
+    }),
+    cancelFeedback: () => { if (child.open) child.close('cancel'); },
+    changed: delta => { pending += delta; },
+    banner: (count, review) => {
+      if (!count) store.resolve('permission');
+      else store.report({ id: 'permission', owner: 'fixture', operation: 'Permissions', message: `Waiting for permission · ${count} requests`,
+        presentation: 'pending-action', severity: 'info', dismissible: false, actions: [{ label: 'Review requests', run: review }] });
+    },
+    error: message => { throw new Error(message); },
+  });
+  const click = (label: string) => {
+    const row = [...document.querySelectorAll<HTMLElement>('#palette-list > [role=option]')]
+      .find(row => row.querySelector('.palette-item-label')?.textContent === label);
+    assert.ok(row, label); row.click();
+  };
+  const key = (key: string, extra: KeyboardEventInit = {}) => input.dispatchEvent(new win.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extra }));
   draft.focus();
-  return { dom, document, host, draft, panel, controls, click, setSelected(value: boolean) { selected = value; }, pending: () => pending, releases: () => releases };
+  return { dom, win, document, host, draft, dialog, child, input, feedback, interaction, palette, notices, store, click, key,
+    counts: () => ({ pending, opens, closes }),
+    query(value: string) { input.value = value; input.dispatchEvent(new win.Event('input')); },
+    setSelected(value: boolean) { selected = value; notices.setActive(value); interaction.setActive(value); },
+    dispose() { interaction.dispose(); palette.dispose(); notices.dispose(); win.close(); },
+  };
 }
 
-test('one FIFO panel bounds simultaneous requests, preserves mounted details/draft/focus and settles exact choices', async () => {
-  const f = fixture(), first = new AbortController(), second = new AbortController();
-  try {
-    const one = f.panel.request({ kind: 'read', path: '/project/test', intention: 'Search in directory: /project/test' }, first.signal);
-    const body = f.host.querySelector('.copilot-permission-body')!, raw = body.querySelector<HTMLDetailsElement>('.acp-permission-raw')!;
-    raw.open = true;
-    const two = f.panel.request({ kind: 'read', path: '/project/src/file' }, second.signal);
-    assert.equal(f.host.querySelectorAll('.copilot-permission-panel').length, 1);
-    assert.equal(f.host.querySelectorAll('.copilot-permission-body:not([hidden])').length, 1);
-    assert.equal(f.host.querySelector('.copilot-permission-body'), body); assert.equal(raw.open, true);
-    assert.match(f.host.querySelector('.copilot-permission-header')!.textContent!, /2 pending/);
-    assert.match(f.host.querySelector('.copilot-permission-queue')!.textContent!, /src\/file/);
-    assert.equal(f.document.activeElement, f.draft); assert.equal(f.draft.value, 'keep me');
-    assert.equal(f.host.textContent!.includes('Cancel request'), false);
-    assert.equal(f.pending(), 2);
-    f.controls()[0].focus(); f.click('Allow all file reads this session');
-    assert.deepEqual(await one, { kind: 'approve-for-session', approval: { kind: 'read' } });
-    assert.equal(f.pending(), 1); assert.equal(f.document.activeElement, f.controls()[0]);
-    const feedback = f.host.querySelector<HTMLTextAreaElement>('.copilot-permission-body:not([hidden]) textarea')!;
-    feedback.value = 'Use a different file'; feedback.focus(); f.click('Send denial');
-    assert.deepEqual(await two, { kind: 'reject', feedback: 'Use a different file' });
-    assert.equal(f.pending(), 0); assert.equal(f.host.childElementCount, 0);
-    assert.equal(f.document.activeElement, f.draft); assert.equal(f.releases(), 1);
-  } finally { first.abort(); second.abort(); f.dom.window.close(); }
-});
-
-test('background/obscured requests cannot decide; cancellation removes all entries without approving or stealing focus', async () => {
+test('sequential permissions retain one modal, details/query on arrivals and exact decisions; dismissing only presentation retains the queue', async () => {
   const f = fixture(), owner = new AbortController();
   try {
-    const choices = [f.panel.request({ kind: 'read', path: '/project/one' }, owner.signal),
-      f.panel.request({ kind: 'read', path: '/project/two' }, owner.signal)];
-    f.setSelected(false); f.click('Allow once'); f.click('Deny');
-    assert.equal(f.pending(), 2); assert.equal(f.document.activeElement, f.draft);
-    owner.abort();
-    assert.deepEqual(await Promise.all(choices), [undefined, undefined]);
-    assert.equal(f.pending(), 0); assert.equal(f.host.childElementCount, 0); assert.equal(f.releases(), 0);
-    assert.equal(f.document.activeElement, f.draft);
-    assert.equal(await f.panel.request({ kind: 'read' }, owner.signal), undefined);
-  } finally { owner.abort(); f.dom.window.close(); }
+    const one = f.interaction.request({ kind: 'read', path: '/project/test', intention: 'Search in directory: /project/test' }, owner.signal);
+    const raw = f.document.querySelector<HTMLDetailsElement>('#palette-context .acp-permission-raw')!; raw.open = true;
+    f.query('Allow');
+    const selected = f.document.querySelector('#palette-list > [aria-selected=true]');
+    const two = f.interaction.request({ kind: 'read', path: '/project/src/file' }, owner.signal);
+    assert.deepEqual(f.counts(), { pending: 2, opens: 1, closes: 0 });
+    assert.equal(f.input.value, 'Allow'); assert.equal(raw.open, true);
+    assert.equal(f.document.querySelector('#palette-list > [aria-selected=true]'), selected);
+    assert.equal(f.document.querySelector('#palette-remaining')!.textContent, '1 more');
+    f.click('Allow all file reads this session');
+    assert.deepEqual(await one, { kind: 'approve-for-session', approval: { kind: 'read' } });
+    assert.deepEqual(f.counts(), { pending: 1, opens: 1, closes: 0 });
+    assert.match(f.document.querySelector('#palette-context')!.textContent!, /src\/file/);
+    assert.equal(f.input.value, '');
+    f.key('Escape');
+    assert.deepEqual(f.counts(), { pending: 1, opens: 1, closes: 1 });
+    assert.equal(f.document.activeElement, f.draft); assert.equal(f.draft.value, 'keep me');
+    assert.equal(f.notices.strip.querySelector('[data-dismiss]'), null);
+    const three = f.interaction.request({ kind: 'url', url: 'https://example.test/' }, owner.signal);
+    assert.equal(f.dialog.open, false, 'new arrivals never reopen an explicitly dismissed picker');
+    f.notices.strip.querySelector<HTMLButtonElement>('button')!.click(); await tick();
+    assert.equal(f.dialog.open, true);
+    f.click('Deny'); assert.deepEqual(await two, { kind: 'reject' });
+    f.click('Always allow domain: example.test (saved across sessions)');
+    assert.deepEqual(await three, { kind: 'approve-permanently', domain: 'example.test' });
+    assert.deepEqual(f.counts(), { pending: 0, opens: 2, closes: 2 });
+    assert.equal(f.notices.strip.hidden, true); assert.equal(f.document.activeElement, f.draft);
+  } finally { owner.abort(); f.dispose(); }
 });
 
-test('separate conversations never share permission queues', async () => {
-  const a = fixture(), b = fixture(), owner = new AbortController();
+test('feedback nests over the retained picker; cancel returns without answering, submit advances without closing the parent', async () => {
+  const f = fixture(), owner = new AbortController();
   try {
-    const one = a.panel.request({ kind: 'read', path: '/a' }, owner.signal);
-    const two = b.panel.request({ kind: 'url', url: 'https://example.test/' }, owner.signal);
-    a.click('Deny'); assert.deepEqual(await one, { kind: 'reject' }); assert.equal(b.pending(), 1);
-    b.click('Always allow domain: example.test (saved across sessions)');
-    assert.deepEqual(await two, { kind: 'approve-permanently', domain: 'example.test' });
-  } finally { owner.abort(); a.dom.window.close(); b.dom.window.close(); }
+    const one = f.interaction.request({ kind: 'read', path: '/project/one' }, owner.signal);
+    const two = f.interaction.request({ kind: 'read', path: '/project/two' }, owner.signal);
+    f.click('Deny with feedback…');
+    assert.equal(f.child.open, true); assert.equal(f.dialog.open, true); assert.equal(f.document.activeElement, f.feedback);
+    const context = f.document.querySelector('#palette-context')!.firstElementChild;
+    const three = f.interaction.request({ kind: 'read', path: '/project/three' }, owner.signal);
+    assert.equal(f.document.activeElement, f.feedback); assert.equal(f.document.querySelector('#palette-context')!.firstElementChild, context);
+    f.child.close('cancel'); await tick();
+    assert.equal(f.dialog.open, true); assert.equal(f.document.activeElement, f.input); assert.equal(f.interaction.pendingCount, 3);
+    assert.match(f.document.querySelector('#palette-list > [aria-selected=true]')!.textContent!, /Deny with feedback/);
+    f.click('Deny with feedback…'); f.feedback.value = 'Use another file'; f.child.close('ok'); await tick();
+    assert.deepEqual(await one, { kind: 'reject', feedback: 'Use another file' });
+    assert.equal(f.dialog.open, true); assert.equal(f.child.open, false); assert.equal(f.counts().closes, 0);
+    owner.abort(); assert.deepEqual(await Promise.all([two, three]), [undefined, undefined]);
+    assert.equal(f.dialog.open, false); assert.equal(f.notices.strip.hidden, true);
+  } finally { owner.abort(); f.dispose(); }
+});
+
+test('background/obscured sessions never replace dialogs and inactive or late choices cannot approve', async () => {
+  const f = fixture(), owner = new AbortController();
+  try {
+    f.setSelected(false);
+    const one = f.interaction.request({ kind: 'read', path: '/project/one' }, owner.signal);
+    assert.equal(f.dialog.open, false); assert.equal(f.document.activeElement, f.draft);
+    f.child.showModal();
+    f.setSelected(true); assert.equal(f.dialog.open, false, 'existing modal keeps priority');
+    f.child.close('cancel'); assert.equal(f.dialog.open, false, 'closing another dialog does not summon the picker');
+    f.interaction.review(); assert.equal(f.dialog.open, true);
+    const stale = f.document.querySelector<HTMLElement>('#palette-list > [role=option]')!;
+    f.setSelected(false); assert.equal(f.dialog.open, false);
+    stale.click(); assert.equal(f.interaction.pendingCount, 1);
+    owner.abort(); assert.equal(await one, undefined);
+    assert.equal(f.notices.strip.hidden, true); assert.equal(f.counts().pending, 0);
+  } finally { owner.abort(); f.dispose(); }
+});
+
+test('aborting while feedback is open closes both layers and late feedback cannot answer a later request', async () => {
+  const f = fixture(), owner = new AbortController(), newer = new AbortController();
+  try {
+    const one = f.interaction.request({ kind: 'read', path: '/project/old' }, owner.signal);
+    f.click('Deny with feedback…'); owner.abort();
+    assert.equal(await one, undefined); assert.equal(f.dialog.open, false); assert.equal(f.child.open, false);
+    const two = f.interaction.request({ kind: 'read', path: '/project/new' }, newer.signal);
+    await tick();
+    assert.equal(f.interaction.pendingCount, 1); assert.equal(f.child.open, false);
+    f.click('Allow once'); assert.deepEqual(await two, { kind: 'approve-once', approvedInteractively: true });
+    assert.equal(f.counts().pending, 0);
+  } finally { owner.abort(); newer.abort(); f.dispose(); }
 });

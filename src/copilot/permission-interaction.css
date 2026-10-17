@@ -1,0 +1,10 @@
+/* Permission content uses the shared palette and modal shells without geometry overrides. */
+#palette-context { min-height:0; max-height:22dvh; overflow:auto; font-size:12px; }
+#palette-context[hidden], #palette-remaining[hidden] { display:none; }
+#palette-context .acp-permission-summary { display:flex; flex-wrap:wrap; gap:4px; }
+#palette-context .acp-permission-description { font-family:var(--vscode-editor-font-family, monospace); }
+#palette-context pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
+#palette-context .acp-permission-command { padding:6px 8px; background:var(--modal-inset-surface); border-radius:4px; margin:6px 0 0; }
+#palette-remaining { margin-left:auto; color:var(--vscode-descriptionForeground); font-size:11px; white-space:nowrap; }
+#command-palette[data-retained] #palette-hint { margin-left:0; }
+#command-palette[data-retained] #palette-list .palette-item-label { white-space:normal; overflow:visible; overflow-wrap:anywhere; }

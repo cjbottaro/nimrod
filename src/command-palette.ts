@@ -42,6 +42,14 @@ export interface InspectionRequest {
   isCurrent(): boolean;
   cancel(): void;
 }
+/** Explicitly retained interaction: selection updates its page instead of closing the shell. */
+export interface RetainedSelectionRequest {
+  show(page: PalettePage, context: HTMLElement): void;
+  remaining(text: string): void;
+  focus(): void;
+  isCurrent(): boolean;
+  cancel(): void;
+}
 export interface SelectionRequest {
   choose(options: string[], current?: string): Promise<string | undefined>;
   chooseItems(options: readonly { id: string; label: string; detail?: string; keywords?: string }[], current?: string): Promise<string | undefined>;
@@ -69,6 +77,11 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   inspection.id = 'palette-inspection'; inspection.hidden = true;
   inspection.setAttribute('aria-label', 'Selected item details');
   list.after(inspection);
+  const context = doc.createElement('section'); context.id = 'palette-context'; context.hidden = true;
+  context.setAttribute('role', 'region'); context.setAttribute('aria-label', 'Choice context');
+  input.parentElement!.before(context);
+  const remaining = doc.createElement('span'); remaining.id = 'palette-remaining'; remaining.hidden = true;
+  hint.before(remaining);
   const controller = new realm.AbortController();
   const signal = controller.signal;
   let mode: 'commands' | 'sessions' | 'projects' | 'selection' | 'inspection' | 'name' = 'commands';
@@ -91,6 +104,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   let deleting = false;
   let preview: ((item?: PaletteItem) => void) | undefined;
   let cancelPreview: (() => void) | undefined;
+  let dismissRetained: (() => void) | undefined;
   let previewed: string | undefined;
   function failure(message: string): void {
     if (options.error) { options.error(message, title.textContent || 'Command palette'); notice = ''; }
@@ -102,6 +116,13 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     delete dialog.dataset.preview;
     hint.textContent = 'Esc to close';
     if (!accepted) cancel?.();
+  }
+
+  function endRetained(): void {
+    const dismiss = dismissRetained; dismissRetained = undefined;
+    context.hidden = true; context.replaceChildren(); remaining.hidden = true; remaining.textContent = '';
+    delete dialog.dataset.retained;
+    dismiss?.();
   }
 
   function deletionControls(pending: boolean): void {
@@ -117,6 +138,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   function closeInteraction(action?: () => void | Promise<void>): void {
     if (!dialog.open) return;
     afterClose = action;
+    endRetained();
     endPreview(!!action);
     cancelChoice(); createNamed = undefined; retryAction = undefined; generation++;
     historyRequest?.abort(); historyRequest = undefined;
@@ -222,7 +244,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   }
   function commands(): void {
     historyRequest?.abort(); historyRequest = undefined;
-    endPreview();
+    endRetained(); endPreview();
     deletionControls(false);
     cancelChoice(); createNamed = undefined; generation++; mode = 'commands'; loading = false; notice = ''; items = options.commands(); matches = []; selected = 0;
     title.textContent = 'Commands'; input.placeholder = 'Type a command…'; input.setAttribute('aria-label', 'Search commands');
@@ -231,7 +253,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   function beginPage(kind: 'sessions' | 'projects' | 'selection' | 'inspection', heading: string, placeholder: string, onRetry: () => void, keepQuery = false): number | undefined {
     if (!dialog.open && !open()) return;
     historyRequest?.abort(); historyRequest = undefined;
-    endPreview();
+    endRetained(); endPreview();
     deletionControls(false);
     if (mode === 'commands') commandQuery = input.value;
     cancelChoice(); createNamed = undefined; mode = kind; title.textContent = heading; input.placeholder = placeholder;
@@ -324,6 +346,29 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       cancel() { if (current()) closeInteraction(); },
     };
   }
+  function startRetainedSelection(heading: string, onDismiss: () => void): RetainedSelectionRequest | undefined {
+    // A request must not replace an unrelated interaction already using the palette.
+    if (doc.querySelector('dialog[open]')) return;
+    const request = beginPage('selection', heading, 'Type to filter choices…', () => {});
+    if (request === undefined) return;
+    back.hidden = true; retry.hidden = true;
+    dismissRetained = onDismiss; dialog.dataset.retained = 'true';
+    const current = () => !disposed && !closing && dialog.open && generation === request && mode === 'selection';
+    return {
+      isCurrent: current,
+      show(page, details) {
+        if (!current()) return;
+        items = page.items.map(item => ({ ...item, next: true, run: () => { if (current()) return item.run(); } }));
+        matches = []; selected = 0; input.value = ''; notice = page.notice || ''; loading = false;
+        context.replaceChildren(details); context.hidden = false;
+        draw();
+        if (!doc.querySelector('dialog[open]:not(#command-palette)')) input.focus({ preventScroll: true });
+      },
+      remaining(text) { if (current()) { remaining.textContent = text; remaining.hidden = !text; } },
+      focus() { if (current() && !doc.querySelector('dialog[open]:not(#command-palette)')) input.focus({ preventScroll: true }); },
+      cancel() { if (current()) closeInteraction(); },
+    };
+  }
   function startPreviewSelection(heading: string, onRetry: (() => void) | undefined, onPreview: (item?: PaletteItem) => void, onCancel: () => void): PreviewSelectionRequest | undefined {
     const request = beginPage('selection', heading, 'Type to filter themes…', onRetry || (() => {}));
     if (request === undefined) return;
@@ -348,7 +393,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     if (!dialog.open && !open()) return;
     historyRequest?.abort(); historyRequest = undefined;
     if (mode === 'commands') commandQuery = input.value;
-    endPreview(); cancelChoice(); generation++; mode = 'name'; createNamed = onCreate; composing = false;
+    endRetained(); endPreview(); cancelChoice(); generation++; mode = 'name'; createNamed = onCreate; composing = false;
     title.textContent = 'New named session'; input.placeholder = 'Session name…'; input.setAttribute('aria-label', 'Session name');
     input.value = ''; back.hidden = true; retry.hidden = true; retryAction = undefined;
     loading = false; notice = ''; items = []; matches = []; selected = 0;
@@ -371,7 +416,10 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     if (!dialog.open || !item || loading || deleting || doc.querySelector('dialog[open]:not(#command-palette)')) return;
     if (mode === 'inspection') { selected = index; selection(); return; }
     if (mode === 'commands') options.ranking?.record(item.id);
-    if (item.next) { void item.run(); return; }
+    if (item.next) {
+      if (dismissRetained) { selected = index; selection(); }
+      void item.run(); return;
+    }
     if (mode === 'sessions' && sessionKind === 'delete') {
       if (selected !== index) { selected = index; selection(); }
       const request = generation, selectedId = matches[selected]?.id, previousIndex = selected;
@@ -424,7 +472,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   dialog.addEventListener('close', () => {
     historyRequest?.abort(); historyRequest = undefined;
     closing = false;
-    endPreview();
+    endRetained(); endPreview();
     cancelChoice(); createNamed = undefined; retryAction = undefined; generation++;
     const action = afterClose; afterClose = undefined;
     if (!doc.querySelector('dialog[open]') && opener?.isConnected && !opener.closest('[hidden], [inert]')) opener.focus({ preventScroll: true });
@@ -452,5 +500,5 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     if (dialog.open) { event.preventDefault(); return; }
     if (open()) event.preventDefault();
   }, { signal });
-  return { get isDeleting() { return dialog.open && mode === 'sessions' && sessionKind === 'delete' && deleting; }, open, projects, close: () => closeInteraction(), sessions: () => sessions('resume'), openSessions: () => sessions('open'), deleteSessions: () => sessions('delete'), namedSession, startSelection, startInspection, startPreviewSelection, dispose: () => { disposed = true; historyRequest?.abort(); endPreview(); cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
+  return { get isDeleting() { return dialog.open && mode === 'sessions' && sessionKind === 'delete' && deleting; }, open, projects, close: () => closeInteraction(), sessions: () => sessions('resume'), openSessions: () => sessions('open'), deleteSessions: () => sessions('delete'), namedSession, startSelection, startRetainedSelection, startInspection, startPreviewSelection, dispose: () => { disposed = true; historyRequest?.abort(); endRetained(); endPreview(); cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
 }

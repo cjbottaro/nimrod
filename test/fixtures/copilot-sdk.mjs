@@ -152,6 +152,12 @@ class Session {
       this.emit('assistant.message', { messageId: `plan-${turn}`, content: JSON.stringify(choice) });
       this.emit('session.idle', { mode: 'interactive' }); return;
     }
+    if (prompt === 'parallel permission fixture') {
+      const results = await Promise.all(['one', 'two', 'three'].map(name =>
+        this.permission({ kind: 'read', path: `/fixture/project/${name}`, intention: `Search in directory: /fixture/project/${name}` })));
+      this.emit('assistant.message', { messageId: `permissions-${turn}`, content: JSON.stringify(results) });
+      this.emit('session.idle', {}); return;
+    }
     if (prompt.startsWith('scoped permission fixture:')) {
       const request = JSON.parse(prompt.slice('scoped permission fixture:'.length));
       const result = await this.permission(request);

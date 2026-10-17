@@ -11,7 +11,7 @@ import { PiSessionHistory, type PiSessionSummary as SessionSummary } from './pi/
 import { loadSessionHistory, type SessionHistory, type SessionHistorySnapshot } from './session-history';
 import { savedSessionKey, resolveSessionListEntry, type SessionListEntry } from './session-list';
 import { renderPermissionDetails } from './acp/tool-state';
-import { CopilotPermissionPanel } from './copilot/permission-panel';
+import { CopilotPermissionInteraction } from './copilot/permission-interaction';
 import { acpInteraction } from './acp/view-policy';
 import { createPiViewProjection, piInteraction } from './pi/view-policy';
 import { piSession, acpSession, copilotSession, acpProfile as profileFor, sessionActions, sessionConfiguration, type SessionAction, type SessionBackend } from './session-backend';
@@ -66,7 +66,7 @@ import { installSessionPopouts } from './session-popouts';
 import transcript from './pi/transcript.html?raw';
 import './pi/transcript.css';
 import './acp/session.css';
-import './copilot/permission-panel.css';
+import './copilot/permission-interaction.css';
 import './theme.css';
 import './workspace.css';
 import './keybindings.css';
@@ -325,7 +325,7 @@ window.addEventListener('unload', () => {
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
   pluginLoading.dispose();
   sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); unlistenLinkErrors(); deletions.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
-  for (const tab of tabs) { tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.lifecycle.disconnect('Window closed'); }
+  for (const tab of tabs) { copilotPermissions.get(tab)?.dispose(); tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.lifecycle.disconnect('Window closed'); }
   keybindingDispatch.dispose(); unlistenProjectSettings();
   unlistenProjectPicker(); palette.dispose();
 }, { once: true });
@@ -423,6 +423,7 @@ function presentConversation(tab: Tab | undefined): void {
   if (presented !== tab) {
     if (presented) {
       copilotSession(presented)?.cancelCommands();
+      copilotPermissions.get(presented)?.setActive(false);
       const focused = document.activeElement;
       if (focused instanceof HTMLElement && presented.root.contains(focused)) {
         presented.focus = focused;
@@ -432,7 +433,7 @@ function presentConversation(tab: Tab | undefined): void {
     }
     presented = tab;
     conversation.hidden = !tab;
-    if (tab) { tab.root.hidden = false; tab.view.setActive(true); tab.notices.setActive(true); }
+    if (tab) { tab.root.hidden = false; tab.view.setActive(true); tab.notices.setActive(true); copilotPermissions.get(tab)?.setActive(true); }
     syncPopouts();
   }
   for (const item of tabs) {
@@ -1122,19 +1123,34 @@ function requestSessionChoice(tab: Tab, details: HTMLElement, options: { id: str
     });
   });
 }
-const copilotPermissionPanels = new WeakMap<Tab, CopilotPermissionPanel>();
+const copilotPermissions = new WeakMap<Tab, CopilotPermissionInteraction>();
 async function requestCopilotDecision(tab: Tab, kind: 'permission' | 'input' | 'plan', request: Record<string, unknown>, signal: AbortSignal): Promise<CopilotDecision | undefined> {
   if (kind === 'permission') {
     if (signal.aborted || !tabs.includes(tab) || tab.closing) return { kind: 'user-not-available' };
-    let panel = copilotPermissionPanels.get(tab);
-    if (!panel) {
-      panel = new CopilotPermissionPanel(document, tab.root.querySelector('[data-pi-id="composer-area"]')!, workspace,
-        () => presented === tab && tabs.includes(tab) && !tab.closing && !document.querySelector('dialog[open]'),
-        delta => { tab.inputCount += delta; if (tabs.includes(tab)) updateTab(tab); },
-        () => tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true }));
-      copilotPermissionPanels.set(tab, panel);
+    let interaction = copilotPermissions.get(tab);
+    if (!interaction) {
+      const feedbackOwner = `${tab.id}:permission-feedback`;
+      const canPresent = () => !unloading && presented === tab && tabs.includes(tab) && !tab.closing && !tab.restarting && !tab.deleting && !tab.ended
+        && !settings.isOpen && !document.querySelector('dialog[open]:not(#command-palette)');
+      interaction = new CopilotPermissionInteraction({
+        document, project: workspace, canPresent,
+        start: dismiss => canPresent() ? palette.startRetainedSelection('Copilot permission', dismiss) : undefined,
+        feedback: () => dialogs.input('Reason or suggested alternative', undefined, feedbackOwner, 'Send denial'),
+        cancelFeedback: () => dialogs.cancel(feedbackOwner),
+        changed: delta => { tab.inputCount += delta; if (tabs.includes(tab)) updateTab(tab); },
+        banner: (count, review) => {
+          const id = `${tab.id}:permission-required`;
+          if (!count) { notices.resolve(id); return; }
+          notices.report({ id, owner: tab.id, operation: 'Copilot permissions',
+            message: `Waiting for permission · ${count} ${count === 1 ? 'request' : 'requests'}`,
+            presentation: 'pending-action', severity: 'info', dismissible: false,
+            actions: [{ label: 'Review requests', enabled: () => !unloading && tabs.includes(tab) && presented === tab && !tab.closing, run: review }] });
+        },
+        error: message => { if (tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:permission-error:${++noticeSequence}`, owner: tab.id, operation: 'Permission feedback', message }); },
+      });
+      copilotPermissions.set(tab, interaction);
     }
-    const choice = panel.request(request, signal);
+    const choice = interaction.request(request, signal);
     const token = tab.token;
     if (token) void notifySession('input', {
       valid: () => !signal.aborted && !unloading && tabs.includes(tab) && tab.token === token && !tab.closing && !tab.ended,
@@ -1562,6 +1578,7 @@ function disposeTab(tab: Tab): void {
   if (!tabs.includes(tab)) return;
   tab.closing = true;
   tab.root.dispatchEvent(new Event('nimrod-dispose-images'));
+  copilotPermissions.get(tab)?.dispose();
   tab.notices.dispose(); notices.store.resolveOwner(tab.id);
   navigation.remove(tab);
   if (active === tab) active = undefined;
@@ -1575,6 +1592,7 @@ function disposeTab(tab: Tab): void {
 function detachTab(tab: Tab): void {
   if (!tabs.includes(tab)) return;
   tab.closing = true;
+  copilotPermissions.get(tab)?.dispose();
   tab.notices.dispose(); notices.store.resolveOwner(tab.id);
   if (tab.token) dialogs.cancel(tab.token);
   tab.cancelPreference?.(); tab.cancelInspector?.(); tab.receive?.({ type: 'sessionDisconnected' }); tab.lifecycle.disconnect('Session closed');

@@ -56,5 +56,18 @@ test('confirmation focus, labels and Enter agree; Cancel focus and Escape cancel
     cancel.focus(); assert.equal(key('ArrowRight').defaultPrevented, true);
     assert.equal(document.activeElement, confirm);
     dialog.close('ok'); assert.equal(await input, 'Keep multiline behavior');
+    const parent = document.querySelector<HTMLDialogElement>('#command-palette')!;
+    const parentInput = document.querySelector<HTMLInputElement>('#palette-input')!;
+    parent.showModal(); parentInput.focus();
+    const feedback = dialogs.input('Reason or suggested alternative', undefined, 'permission-owner', 'Send denial');
+    await Promise.resolve();
+    assert.equal(parent.open, true); assert.equal(dialog.open, true);
+    assert.equal(confirm.textContent, 'Send denial'); assert.equal(document.activeElement, field);
+    dialogs.cancel('permission-owner'); assert.equal(await feedback, undefined);
+    assert.equal(parent.open, true); assert.equal(document.activeElement, parentInput);
+    const ordinary = dialogs.input('Ordinary input', 'No stale label');
+    await Promise.resolve(); assert.equal(confirm.textContent, 'Confirm');
+    dialog.close('ok'); assert.equal(await ordinary, 'No stale label');
+    parent.close();
   } finally { globalThis.document = previous; dom.window.close(); }
 });

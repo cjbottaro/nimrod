@@ -27,12 +27,20 @@ fix the executable/authentication issue, then reconnect explicitly.
 
 ## Permissions and questions
 
-Permission requests stay in one compact panel above the Status area. The oldest
-request is shown with a pending count; expand **Other pending requests** to inspect
-the rest. Requests never open a blocking window modal or switch sessions. The
-Status area says **Waiting for permission…** while choices are outstanding.
+Permission requests use a command-palette-style modal, one request at a time.
+Use arrows, typing to filter and Enter, or click a choice. The header shows how
+many **more** requests follow this one. Answering advances the same open modal;
+it closes only when no requests remain, or when you dismiss it.
 
-Choose **Allow once** or **Deny**, or expand **More approval options…**:
+**Escape dismisses without answering or denying.** A non-dismissable
+**Waiting for permission · N requests** banner stays at the top of this
+conversation, above any error banners. Choose **Review requests** to reopen the
+queue after inspecting the transcript. Additional requests update the count
+without reopening a dismissed modal. Other dialogs keep priority; background
+sessions never summon a modal or switch you away from your conversation.
+
+The Status area says **Waiting for permission…** while choices are outstanding.
+Alongside **Allow once** and **Deny**, applicable scope-labelled choices include:
 - File reads/writes can be allowed for this session. **All file reads/writes**
   means exactly that—not access restricted to the displayed file or directory.
 - Commands can be allowed for the runtime-reported command identifiers, with
@@ -48,18 +56,23 @@ SDK variants has not been verified. Copilot owns remembered rules; Nimrod does n
 keep its own approval policy. A session choice does not batch-answer other
 already-pending requests.
 
-**Deny with feedback…** optionally tells the agent why. Use **Stop** to cancel the
-turn; there is no ambiguous Cancel request permission button. Questions and plan
-continuations retain their separate answers and cancellation controls.
+**Deny with feedback…** opens a separate input modal layered over the unchanged
+permission picker. Enter a reason or suggest what to do instead, then choose
+**Send denial**. Escape/Cancel closes only that input modal and returns to the
+picker without answering. Submitting advances the picker to the next request.
+
+Use **Stop** to cancel the turn (dismiss the picker first if necessary); there is
+no ambiguous Cancel request permission button. Questions and plan continuations
+retain their separate answers and cancellation controls.
 
 Shell requests show their intention and exact command. File requests show
 project-relative paths (absolute outside the project), with **Search directory**
 or **Search file** titles when reported; URL requests show **Fetch · URL**.
 Supplied changes/arguments and sandbox-bypass requirements remain visible.
-**Raw details** stays collapsed beneath the controls; unknown scopes retain
+**Raw details** stays initially collapsed in the operation context; unknown scopes retain
 literal details. Background requests do not steal focus or alter your draft;
 return to their conversation to act. Stop/Close/disconnect cancel pending choices
-without approving. The expanded choices and panel still need installed-CLI/native
+without approving and remove the pending banner. The modal interaction still needs installed-CLI/native
 acceptance after a requested build.
 
 ## Session configuration

@@ -61,6 +61,33 @@ test('harness choice pages share selection mechanics without application Back/Re
   } finally { f.dispose(); }
 });
 
+test('retained selections update one open shell, retain context on count changes, and Escape invalidates every old callback', () => {
+  const f = fixture();
+  try {
+    let dismissed = 0, opens = 0, closes = 0;
+    const show = f.dialog.showModal.bind(f.dialog), close = f.dialog.close.bind(f.dialog);
+    f.dialog.showModal = () => { opens++; show(); };
+    f.dialog.close = value => { closes++; close(value); };
+    const page = f.palette.startRetainedSelection('Permissions', () => { dismissed++; })!;
+    const context = f.win.document.createElement('details'); context.textContent = 'Literal operation'; context.open = true;
+    let selections = 0;
+    page.show({ items: [{ id: 'once', label: 'Allow once', run: () => {
+      selections++;
+      page.show({ items: [{ id: 'deny', label: 'Deny', run: () => { selections++; page.cancel(); } }] }, context);
+    } }] }, context);
+    page.remaining('2 more');
+    f.query('Allow'); const row = f.list().firstElementChild;
+    page.remaining('3 more');
+    assert.equal(f.input.value, 'Allow'); assert.equal(f.list().firstElementChild, row); assert.equal(context.open, true);
+    f.key('Enter'); assert.equal(f.dialog.open, true); assert.equal(opens, 1); assert.equal(closes, 0); assert.equal(selections, 1);
+    f.key('Enter', { repeat: true }); assert.equal(selections, 1);
+    const stale = f.list().firstElementChild as HTMLElement;
+    f.key('Escape'); assert.equal(dismissed, 1); assert.equal(closes, 1); assert.equal(page.isCurrent(), false);
+    stale.click(); page.show({ items: [] }, context); assert.equal(selections, 1); assert.equal(f.dialog.open, false);
+    assert.equal(f.win.document.querySelector('#palette-context')!.hasAttribute('hidden'), true);
+  } finally { f.dispose(); }
+});
+
 test('accepting incremental deletion freezes discovery without rebuilding survivor rows on late pages', async () => {
   let request!: { signal: AbortSignal; publish(page: PalettePage): void; resolve(page: PalettePage): void };
   let finish!: () => void;

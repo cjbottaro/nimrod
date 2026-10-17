@@ -21,18 +21,21 @@ test('offline SDK bridge uses the shared shell for optimistic send, permissions,
     await page.locator(visible('prompt')).fill('Offline SDK request');
     await page.locator(visible('prompt')).press('Enter');
     await expect(page.locator(visible('prompt'))).toHaveValue('');
-    const permission = page.locator(`#${sdk} .acp-permission`);
+    const permission = page.locator('#command-palette');
     await expect(permission.locator('.acp-permission-summary')).toHaveText('Run command');
     await expect(permission.locator('.acp-permission-command')).toHaveText('printf fixture-only');
-    await expect(permission.locator('.acp-permission-actions + .acp-permission-raw')).toHaveCount(1);
+    await expect(permission.locator('#palette-context .acp-permission-raw')).toHaveCount(1);
     await expect(permission.locator('.acp-permission-raw')).not.toHaveAttribute('open', '');
     await expect(page.locator(`#${sdk} .message.user`)).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await expect(page.locator(`#${sdk} .notice-pending`)).toContainText('Review requests');
     await page.locator(`#open-sessions .session-row[aria-controls="${pi}"]`).click();
     await expect(permission).toBeHidden();
     await expect(page.locator(visible('prompt'))).toHaveValue('Keep Pi draft');
     expect(demo.calls.some(call => call.command === 'write_copilot' && (call.args.message as { method?: string }).method === 'decision')).toBe(false);
     await page.locator(`#open-sessions .session-row[aria-controls="${sdk}"]`).click();
-    await permission.getByRole('button', { name: 'Allow once', exact: true }).click();
+    await page.locator(`#${sdk} .notice-pending`).getByRole('button', { name: 'Review requests' }).click();
+    await permission.getByRole('option', { name: 'Allow once', exact: true }).click();
     await expect(page.locator(visible('messages'))).toContainText('Offline SDK response.');
     await expect(page.locator(visible('send'))).toHaveAttribute('aria-label', 'Send message');
     await expect(page.locator(visible('session-metrics'))).toHaveText('~$0.123 · 25.5% / 125k');
@@ -46,7 +49,7 @@ test('offline SDK bridge uses the shared shell for optimistic send, permissions,
     await expect(page.locator(visible('model'))).toHaveText('large');
     await page.locator(visible('prompt')).fill('Second request');
     await page.locator(visible('prompt')).press('Enter');
-    await permission.getByRole('button', { name: 'Allow once', exact: true }).click();
+    await permission.getByRole('option', { name: 'Allow once', exact: true }).click();
     await expect(page.locator(`#${sdk} .tool-card`).last()).toContainText('fixture output');
     expect(await card.evaluate(card => (card as HTMLDetailsElement).open)).toBe(disclosed);
     await page.locator(visible('prompt')).fill('Keep newer draft');
@@ -58,6 +61,68 @@ test('offline SDK bridge uses the shared shell for optimistic send, permissions,
   } finally { await demo.close(); }
 });
 
+test('permission picker retains one shell, nests feedback and resumes through a pinned banner above independent errors', async ({ page }) => {
+  const demo = await demoFixture(page);
+  try {
+    await page.keyboard.press('Meta+Shift+P');
+    await page.locator('#palette-input').fill('New Copilot session'); await page.locator('#palette-input').press('Enter');
+    await expect(page.locator(visible('send'))).toBeEnabled();
+    await page.evaluate(() => {
+      const dialog = document.querySelector<HTMLDialogElement>('#command-palette')!;
+      const show = dialog.showModal.bind(dialog), close = dialog.close.bind(dialog);
+      dialog.dataset.opens = '0'; dialog.dataset.closes = '0';
+      dialog.showModal = () => { dialog.dataset.opens = String(Number(dialog.dataset.opens) + 1); show(); };
+      dialog.close = value => { dialog.dataset.closes = String(Number(dialog.dataset.closes) + 1); close(value); };
+    });
+    await page.locator(visible('prompt')).fill('parallel permission fixture'); await page.locator(visible('prompt')).press('Enter');
+    const picker = page.locator('#command-palette'), remaining = picker.locator('#palette-remaining');
+    await expect(remaining).toHaveText('2 more'); await expect(picker).toHaveAttribute('data-opens', '1');
+    await picker.getByRole('option', { name: 'Allow once', exact: true }).click();
+    await expect(remaining).toHaveText('1 more'); await expect(picker).toHaveAttribute('data-closes', '0');
+    await picker.getByRole('option', { name: /Deny with feedback/ }).click();
+    const child = page.locator('#host-dialog');
+    await expect(child).toBeVisible(); await expect(picker).toBeVisible();
+    await expect(child.locator('textarea')).toBeFocused();
+    const before = await picker.boundingBox();
+    await page.keyboard.press('Escape');
+    await expect(child).toBeHidden(); await expect(picker.locator('#palette-input')).toBeFocused();
+    expect(await picker.boundingBox()).toEqual(before);
+    const decisions = () => demo.calls.filter(call => call.command === 'write_copilot' && (call.args.message as { method?: string }).method === 'decision');
+    expect(decisions()).toHaveLength(1);
+    await picker.getByRole('option', { name: /Deny with feedback/ }).click();
+    await child.locator('textarea').fill('Use another approach');
+    await child.getByRole('button', { name: 'Send denial', exact: true }).click();
+    await expect(child).toBeHidden(); await expect(remaining).toHaveText('Last request');
+    await expect(picker).toHaveAttribute('data-closes', '0');
+    await page.keyboard.press('Escape'); await expect(picker).toBeHidden();
+    const banner = page.locator('.session-view:not([hidden]) .notice-pending');
+    await expect(banner).toContainText('1 request'); await expect(banner.locator('[data-dismiss]')).toHaveCount(0);
+    const token = String(demo.calls.find(call => call.command === 'write_copilot' && (call.args.message as { method?: string }).method === 'prompt')!.args.token);
+    await page.evaluate(token => {
+      const host = window as unknown as { __fixtureChannels: Record<string, { onmessage(packet: unknown): void }> };
+      for (let i = 0; i < 12; i++) host.__fixtureChannels[token].onmessage({ kind: 'rpc', value: { kind: 'command-error', error: `Independent fixture error ${i}` } });
+    }, token);
+    const notices = page.locator(visible('session-notices')), errors = notices.locator('.notice-list');
+    await expect(errors.locator('.application-notice')).toHaveCount(12);
+    await expect(notices.locator('.notice-group')).toHaveCount(0);
+    const bannerTop = (await banner.boundingBox())!.y;
+    await errors.evaluate(node => { node.scrollTop = node.scrollHeight; });
+    expect((await banner.boundingBox())!.y).toBe(bannerTop);
+    await expect(banner.getByRole('button', { name: 'Review requests' })).toBeInViewport();
+    await page.locator(visible('prompt')).fill('Keep newer draft');
+    await banner.getByRole('button', { name: 'Review requests' }).click();
+    await expect(picker).toBeVisible();
+    await picker.getByRole('option', { name: 'Deny', exact: true }).click();
+    await expect(picker).toBeHidden(); await expect(banner).toBeHidden();
+    await expect(page.locator(visible('prompt'))).toHaveValue('Keep newer draft');
+    await expect(picker).toHaveAttribute('data-opens', '2'); await expect(picker).toHaveAttribute('data-closes', '2');
+    expect(decisions().map(call => (call.args.message as { value: unknown }).value)).toEqual([
+      { kind: 'approve-once', approvedInteractively: true }, { kind: 'reject', feedback: 'Use another approach' }, { kind: 'reject' },
+    ]);
+    expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
 test('busy SDK configuration updates one queued transcript row and applies at idle without pending status or reader navigation', async ({ page }) => {
   const demo = await demoFixture(page);
   try {
@@ -65,13 +130,13 @@ test('busy SDK configuration updates one queued transcript row and applies at id
     await page.locator('#palette-input').fill('New Copilot session'); await page.locator('#palette-input').press('Enter');
     await expect(page.locator(visible('model'))).toHaveText('small');
     const prompt = page.locator(visible('prompt'));
-    const permission = page.locator('.session-view:not([hidden]) .acp-permission');
+    const permission = page.locator('#command-palette');
     await prompt.fill('First fixture turn'); await prompt.press('Enter');
-    await permission.getByRole('button', { name: 'Allow once', exact: true }).click();
+    await permission.getByRole('option', { name: 'Allow once', exact: true }).click();
     await expect(page.locator(visible('messages'))).toContainText('Offline SDK response.');
     await expect(page.locator(visible('send'))).toHaveAttribute('aria-label', 'Send message');
     await prompt.fill('Second fixture turn'); await prompt.press('Enter');
-    await permission.getByRole('button', { name: 'Allow once', exact: true }).click();
+    await permission.getByRole('option', { name: 'Allow once', exact: true }).click();
     await expect(page.locator(visible('send'))).toHaveAttribute('aria-label', 'Stop Copilot');
     await page.locator(visible('transcript-viewport')).hover({ position: { x: 20, y: 30 } });
     await page.mouse.wheel(0, -200);

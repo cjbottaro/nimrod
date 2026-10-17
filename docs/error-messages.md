@@ -23,6 +23,15 @@ agent/provider/tool failures supplied as conversation output remain in the
 transcript or their tool card. The **Status area** continues to show activity,
 model/thinking, usage and queues—not arbitrary error messages.
 
+## Pending permissions
+
+Copilot's **Waiting for permission · N requests** banner appears first in the
+session's banner stack, above errors. It represents a pending decision, not an
+error, so its styling is neutral. It has **Review requests** instead of Dismiss
+and remains accessible while the error list scrolls. Dismissing the permission
+modal does not answer the request; the banner disappears when the pending requests
+are answered or cancelled. See [Copilot permissions](copilot.md#permissions-and-questions).
+
 ## Application notice strip
 
 Window/application problems—such as reading or saving preferences, loading card
@@ -44,9 +53,12 @@ border. The gap before the transcript stays visible while you scroll. The icon
 and Dismiss control align with the first message line, including when the message
 wraps or Details is expanded.
 
-Multiple issues collapse into an expandable count/list, with a bounded scrollable
-area so they do not keep shrinking the transcript. Long messages have a shortened
-preview with the complete original text under **Details**. Separately supplied
+Every independent issue has its own banner, actions and dismiss control. There
+is no multi-error count/disclosure hiding other issues. Repeated reports of the
+same occurrence are deduplicated; unrelated failures with identical wording
+remain separate. Banners keep their arrival order, with a bounded, independently
+scrolling list so they do not keep shrinking the transcript. Long messages have
+a shortened preview with the complete original text under **Details**. Separately supplied
 diagnostics also appear there. Unstructured Pi messages are not guessed at or
 rewritten to separate a problem from its technical details.
 

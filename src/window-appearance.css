@@ -45,7 +45,7 @@
 :root:is([data-translucency=chrome], [data-translucency=window]) body.code-popout-window { background:var(--nimrod-surface-content); }
 :root[data-translucency=window] :is(#composer-area, [data-pi-id="composer-area"]) { background:var(--nimrod-surface-controls); }
 :root[data-translucency=window] :is(#activity, [data-pi-id="activity"]) { background:var(--nimrod-surface-status); }
-:root[data-translucency=window] .session-notices { background:var(--nimrod-surface-notice); }
+:root[data-translucency=window] .session-notices .application-notice { background:var(--nimrod-surface-notice); }
 :root[data-translucency=window] #application-notices { background:color-mix(in srgb, var(--vscode-editorWidget-background) var(--nimrod-notice-opacity), transparent); }
 /* Shared controls use these semantic fills rather than per-button overrides.
    Chrome-only inherits them just inside the chrome; the conversation is unchanged.

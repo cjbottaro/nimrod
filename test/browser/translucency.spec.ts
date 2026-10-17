@@ -17,13 +17,13 @@ test('buttons, Status area and notices use translucent overlays rather than stac
       const host = window as unknown as { __fixtureChannels: Record<string, { onmessage(packet: unknown): void }> };
       host.__fixtureChannels[token].onmessage({ kind: 'rpc', value: { type: 'extension_ui_request', method: 'notify', notifyType: 'error', id: 'translucent-notice', message: 'Fixture session notice' } });
     }, token);
-    const notices = page.locator(visible('session-notices'));
+    const notices = page.locator(visible('session-notices') + ' .application-notice');
     await expect(notices).toBeVisible();
     for (const theme of ['dracula', 'catalog-atom-one-light-vscode-atom-one-light']) {
       await fixture.editPreferences(JSON.stringify({ 'appearance.theme': theme, 'appearance.backgroundOpacity': 65, 'appearance.frostedBackground': false }));
       await expect(page.locator('html')).toHaveAttribute('data-translucency', 'window');
       const surfaceAlphas: number[] = [];
-      for (const selector of [visible('composer-area'), visible('activity'), visible('session-notices')]) {
+      for (const selector of [visible('composer-area'), visible('activity'), visible('session-notices') + ' .application-notice']) {
         const color = await page.locator(selector).evaluate(node => getComputedStyle(node).backgroundColor);
         surfaceAlphas.push(alpha(color));
       }
@@ -77,7 +77,7 @@ test('Status area, notices and buttons retain hierarchy across the slider, inclu
         const base = alpha(await color(opacity === 100 ? 'html' : '#workspace-content'));
         const interaction = alpha(await color(visible('composer-area')));
         const panel = alpha(await color(visible('activity')));
-        const notice = alpha(await color(visible('session-notices')));
+        const notice = alpha(await color(visible('session-notices') + ' .application-notice'));
         const button = alpha(await color('#sidebar-new'));
         const primary = await page.locator('#sidebar-new').evaluate(node => {
           const style = getComputedStyle(node);
@@ -110,7 +110,7 @@ test('Status area, notices and buttons retain hierarchy across the slider, inclu
           // recipe, including palette colors/foregrounds, not just alpha=1.
           const endpoint = await page.evaluate(() => {
             const root = document.documentElement;
-            const selectors = ['[data-pi-id="activity"]', '.session-notices', '#sidebar-new', '#toggle-sidebar'];
+            const selectors = ['[data-pi-id="activity"]', '.session-notices .application-notice', '#sidebar-new', '#toggle-sidebar'];
             const pixel = (color: string) => {
               const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
               const context = canvas.getContext('2d')!; context.fillStyle = color; context.fillRect(0, 0, 1, 1);

@@ -222,23 +222,24 @@ until reported; the catalog maximum is picker detail, never a Status-area guess.
 
 `onEvent` is registered before SDK create/resume so early events are buffered.
 Permission and user-input callbacks await explicit choices inside their owning
-conversation. Permissions use the concrete FIFO panel below; questions and plan
+conversation. Permissions use the concrete FIFO interaction below; questions and plan
 continuations retain the shared mounted decision surface and their existing
 native choices/cancellation.
 
-### Permission choices and panel
+### Permission choices and interaction
 
 `copilot/permissions.mjs` owns the exact options and bridge validation for the
 concrete `CopilotDecision` permission union (declared in `permissions.d.mts`).
 **Allow once** returns `{kind:'approve-once', approvedInteractively:true}`;
-**Deny** returns `{kind:'reject'}`, optionally with literal feedback. Unavailable
-UI/Stop/Close/disconnect never approves; bridge teardown resolves callbacks with
+**Deny** returns `{kind:'reject'}`, optionally with literal feedback.
+Stop/Close/disconnect never approves; bridge teardown resolves callbacks with
 `{kind:'user-not-available'}`. There is no ordinary **Cancel request** permission
 button: use Deny for rejection or Stop for cancelling the turn. Input/plan
 cancellation remains separate.
 
-**More approval options…** is a local, initially closed disclosure containing
-explicit buttons, not an on-change select that can approve while arrowing:
+Permission rows are searchable choices in one retained command-palette interaction,
+not application commands/MRU entries or an on-change select. Only an explicit
+selection approves:
 
 - Read: `approve-for-session` with `approval:{kind:'read'}`, labelled **Allow all
   file reads this session**. This is deliberately not described as directory-
@@ -247,7 +248,7 @@ explicit buttons, not an on-change select that can approve while arrowing:
   file writes this session**.
 - Shell: only when the runtime supplied a nonempty valid `commands` catalog;
   exact de-duplicated `identifier` values form `approval:{kind:'commands',
-  commandIdentifiers:[…]}`. The button names the identifiers and **any arguments**;
+  commandIdentifiers:[…]}`. The choice names the identifiers and **any arguments**;
   the current full command text is not misrepresented as the remembered scope.
 - MCP: `approval:{kind:'mcp',serverName,toolName}` for this exact tool, never all
   tools on a server.
@@ -277,30 +278,55 @@ until installed-CLI support is verified. The added session/domain decision
 payloads have source/schema evidence and authored unrun fixtures, not live
 runtime acceptance.
 
-`src/copilot/permission-panel.ts` mounts one bounded, independently overflowing
-panel per conversation above the Status area. The oldest request alone is
-actionable, with an exact pending count and collapsed list of other requests.
-Appending/removing queue entries retains the active preview, raw/scoped/feedback
-disclosures, typed feedback and mounted controls. Arrival never focuses, changes
-drafts, navigates sessions or requests transcript following; hidden conversations
-retain their own queues. Choices require the owning conversation to be presented
-and no open modal. If a completed request owned focus, move to the next active
-request's primary button, or the owning composer when the queue empties; never
-focus a hidden/obscured conversation. Abort removes entries without returning an
-approval. The panel has no live-region announcement that leaks background work.
+`src/copilot/permission-interaction.ts` retains each session's FIFO independently
+of modal visibility. The selected, eligible session can open the shared palette
+through `startRetainedSelection`; existing dialogs keep priority and background
+requests never summon/replace a modal or navigate. A persistent, non-dismissable
+`pending-action` session notice reads **Waiting for permission · N requests**,
+with **Review requests**. It is neutral unresolved state, not an error, and stays
+first above the independently scrolling error banners. Review is presentation
+only, not an SDK decision, reconnect or replay. See [notice policy](error-presentation.md).
+
+The oldest request alone supplies choices. Accepted choices synchronously advance
+the same open shell without closing/reopening it. The header shows **N more**
+(excluding the current request), or **Last request**. New arrivals update only
+the count/banner: keep the current filter, selection, preview/raw disclosure and
+any nested feedback input. Advancing resets the filter for the next request.
+Long scope labels wrap instead of truncating away important grant information.
+
+Escape/native cancellation dismisses the presentation **without answering**;
+pending SDK callbacks, waiting status and the banner remain. New arrivals do not
+reopen an explicitly dismissed interaction. Review reopens it. Explicit navigation
+may show undismissed pending work, but never overrides another modal. Switching
+away suspends the UI without answering; returning preserves explicit dismissal.
+No transcript following, draft mutation or harness persistence comes from opening,
+closing or advancing this interaction. Last settlement closes once and restores
+the original still-visible focus target through the shared palette lifecycle.
+
+**Deny with feedback…** opens the shared host input dialog above the retained
+palette on the z-axis. Its title asks for a reason/suggested alternative and its
+submit label is **Send denial**. Native modality owns topmost focus containment;
+the parent remains mounted at its existing size. Escape/Cancel returns to the
+same picker/filter without answering. Submit sends `reject` plus trimmed optional
+feedback and advances the parent. Generation/entry/AbortSignal/presentation guards
+reject stale replies. Stop, owner disposal and disconnect close owned child and
+parent UI and retire the banner without approval; ordinary dismissal does not.
+The pending queue/options are touched only at existing request/choice/cancellation
+or explicit navigation boundaries, not per streaming update. No animation changes
+or universal modal manager are introduced.
 
 `CopilotSession` tracks outstanding decision IDs at existing receive/settle/cancel
 boundaries. Presentation snapshots override activity text with **Waiting for
 permission…** (or **Waiting for input…**) until all decisions settle, while keeping
 underlying busy/Stop/configuration semantics intact. Dirty-row publications and
 stable Status-area contributions remain on the existing shared view/scroll path;
-streaming never rebuilds the panel, scans the pending queue to recalculate status, or clears its waiting text. The busy composer hint is simply **Stop to cancel · Shift+Enter for newline**, avoiding a contradictory Working label while waiting.
+streaming never rebuilds the picker, scans the pending queue to recalculate status, or clears its waiting text. The busy composer hint is simply **Stop to cancel · Shift+Enter for newline**, avoiding a contradictory Working label while waiting.
 
 SDK 1.0.98 logs established actual read/shell/fetch failures when the old host returned `approved`, despite the SDK's permissive generated union and old fake accepting it. The production SDK forwards the handler result directly to `permissions.handlePendingPermissionRequest`; no legacy-to-modern conversion is assumed. The offline fake now validates decision forms for shell and URL callbacks, and new bridge fixtures reject the old forms before accepting an explicit single-use choice. Those new fixtures are authored but unrun for this follow-up. No live prompts are replayed or reissued to validate the fix.
 
-Compact permission previews are SDK-owned parsing through `src/copilot/permission-presentation.ts`, with a shared public display-only `operationPreview` helper. Commands/intention, owning-project paths, URL/MCP scope and supplied diffs/arguments are visible; raw details stays closed after the core choices. Sandbox-bypass reasons and managed-approval requirements remain prominent. Read-kind requests with native `Search in directory:` / `Search in file:` intentions use **Search directory** / **Search file**, not misleading **Read file** titles. Other read intentions remain visible. Unknown scopes remain literal rather than being hidden or auto-approved. The helper cannot make decisions or invoke tools.
+Compact permission previews are SDK-owned parsing through `src/copilot/permission-presentation.ts`, with a shared public display-only `operationPreview` helper. Commands/intention, owning-project paths, URL/MCP scope and supplied diffs/arguments are visible; raw details stays initially closed in the operation context above the choice list. Sandbox-bypass reasons and managed-approval requirements remain prominent. Read-kind requests with native `Search in directory:` / `Search in file:` intentions use **Search directory** / **Search file**, not misleading **Read file** titles. Other read intentions remain visible. Unknown scopes remain literal rather than being hidden or auto-approved. The helper cannot make decisions or invoke tools.
 
-Authored **unrun** follow-up fixtures: `test/copilot-permissions.test.ts` covers option/validator parity, exact scope restrictions, one retained FIFO panel, draft/focus/disclosure retention, feedback, background isolation and cancellation; `test/copilot-sdk-presentation.test.ts` covers search intentions; `test/copilot-bridge.test.ts` forwards modern scoped decisions and rejects policy/mismatched/injected scopes; `test/copilot-sdk.test.ts` covers overlapping waiting states/streaming/cancellation; `test/shell.test.ts` covers mounted routing and draft/status retention. Staging, native build watch and macOS resource verification include `permissions.mjs`. No requested tests/build/app launch or live permission probes were performed; mandatory post-merge compile checking is tracked separately. Native UI, remembered-rule lifetime and macOS/Linux acceptance remain pending.
+Authored **unrun** follow-up fixtures: `test/copilot-permissions.test.ts` covers option/validator parity, exact scope restrictions, one retained modal with remaining counts, Escape/review without answering, nested feedback cancellation/submit, draft/focus/disclosure retention, background isolation and stale-entry cancellation; `test/copilot-sdk-presentation.test.ts` covers search intentions; `test/copilot-bridge.test.ts` forwards modern scoped decisions and rejects policy/mismatched/injected scopes; `test/copilot-sdk.test.ts` covers overlapping waiting states/streaming/cancellation; `test/shell.test.ts` covers mounted routing, banner reopen, scoped replies and draft/status retention. `test/command-palette.test.ts` covers retained-shell selection/close counts and stale callbacks. Offline `test/browser/copilot-sdk.spec.ts`, `copilot-web-cards.spec.ts`, `application-notices.spec.ts` and `translucency.spec.ts` target native-dialog-like nesting/focus, banner order/overflow and per-row styling. These additions are unrun. Staging, native build watch and macOS resource verification include `permissions.mjs`. No requested tests/build/app launch or live permission probes were performed; mandatory post-merge compile checking is tracked separately. Native UI, remembered-rule lifetime and macOS/Linux acceptance remain pending.
 Background requests do not navigate/focus or approve. Stop, disconnect and Close
 retire exact connection-bound AbortSignals and settle/reject callbacks safely.
 Notifications reuse shared preference/focus/token checks; replay never alerts.
