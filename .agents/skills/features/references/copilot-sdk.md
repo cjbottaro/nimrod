@@ -176,7 +176,15 @@ efforts come only from the selected or pending target model's catalog. The
 session-bound [configuration port](model-thinking.md) accepts latest-wins intent
 during work/configuration/commands, publishes one local shimmering transcript
 entry and defers mutation until real root idle. The Status area stays on
-confirmed selections, without pending indicators. Disconnection cancels intent;
+confirmed selections, without pending indicators. The native `write_copilot`
+validator accepts the same private `{method:'configure', setting, value}` shape
+as the controller and Node bridge: setting is one of `model`, `effort`, `mode`,
+`context-tier`, and value is a string. It rejects the obsolete top-level `model`
+payload and malformed/unsupported settings before writing. Regression fixtures
+in `src-tauri/src/copilot_tests.rs` cover all four settings and invalid shapes;
+these new fixtures are authored but unrun. This corrects native rejection that
+previously disconnected idle sessions before configuration reached Copilot.
+Disconnection cancels intent;
 there is no durable queue or replay. Idle-only `setModel` and
 the pinned release's experimental `session.rpc.model.getCurrent()` read actual
 model/effort state; later native events outrank older results. Failed configuration

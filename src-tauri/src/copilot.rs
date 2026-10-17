@@ -180,7 +180,11 @@ fn validate_message(value: &Value) -> Result<(), String> {
                         .any(|c| c.is_whitespace() || c.is_control() || c == '/')
             }) && value.get("input").is_none_or(|input| input.is_string()) => {}
         Some("prompt") if value["text"].is_string() => {}
-        Some("configure") if value["model"].is_string() => {}
+        Some("configure")
+            if matches!(
+                value["setting"].as_str(),
+                Some("model" | "effort" | "mode" | "context-tier")
+            ) && value["value"].is_string() => {}
         Some("delete") if value["sessionId"].as_str().is_some_and(|id| !id.is_empty()) => {}
         Some("decision") if value["decisionId"].is_string() && value["value"].is_object() => {}
         _ => return Err("Unsupported Copilot SDK bridge operation".into()),

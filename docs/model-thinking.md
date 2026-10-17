@@ -22,7 +22,7 @@ Model pickers show readable names without numbered prefixes. Copilot places the 
 You can choose configuration while the agent is working. Nimrod applies it as soon as that harness permits:
 
 - **Pi** normally applies model/thinking changes during work, including compaction, for upcoming model requests. A response already streaming keeps its original configuration; a continuation after tool execution can use the new one.
-- **Copilot** applies configuration while idle. You can choose while it is working or handling another configuration/command operation; the change waits for the supported idle boundary without stopping the agent or sending another message.
+- **Copilot** applies configuration while idle. Model, thinking level, mode and context-window changes apply in the existing session without reconnecting or sending another message. You can choose while it is working or handling another configuration/command operation; the change waits for the supported idle boundary without stopping the agent.
 
 A pending **configuration change** appears in the transcript like Queued/Steering: a shimmering title and the requested value, pinned in the same bottom stack. It says **Model change queued** while waiting and **Changing model** while applying. Choosing another model updates the **same entry**, rather than adding another pending change. An already-dispatched change finishes before the latest choice is applied.
 
