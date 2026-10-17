@@ -217,13 +217,13 @@ export class CopilotSession {
     try {
       const version = this.configurationVersion;
       const result = await this.connection.request('configure', { model: setting === 'model' ? value : model, ...(setting === 'effort' ? { effort: value } : {}) });
-      if (version === this.configurationVersion) this.configuration(result);
+      if (version === this.configurationVersion) this.applyConfigurationSnapshot(result);
     } catch (error) {
       this.disconnect(`Copilot configuration was not confirmed: ${String(error)}. Reconnect explicitly to read the authoritative configuration.`);
       throw error;
     } finally { this.configuring = false; this.publish([]); }
   }
-  private configuration(value: unknown): void {
+  private applyConfigurationSnapshot(value: unknown): void {
     if (!record(value)) throw new Error('Invalid Copilot model snapshot');
     this.model = typeof value.modelId === 'string' ? value.modelId : undefined;
     this.effort = typeof value.reasoningEffort === 'string' ? value.reasoningEffort : undefined;
@@ -241,7 +241,7 @@ export class CopilotSession {
       this.replaying = true;
       try { for (const event of packet.events) this.event(event); this.finish(); }
       finally { this.replaying = false; }
-      this.configuration(packet.model);
+      this.applyConfigurationSnapshot(packet.model);
       this.state = { ...this.state, sessionUnavailable: false, busy: false, status: 'Idle' }; this.publish();
     } else if (packet.kind === 'commands') {
       if (!Array.isArray(packet.commands)) throw new Error('Invalid Copilot command catalog');

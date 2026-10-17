@@ -74,7 +74,7 @@ Startup still resolves the session catalog before reading model/effort; no expli
 
 ## Authored verification and remaining gaps
 
-**No tests, checks, builds or app launches were run for this implementation.**
+The feature's tests/checks and native behavior remain **unrun/unverified**. A subsequent compile correction renamed Copilot's private snapshot reader to `applyConfigurationSnapshot`, avoiding its collision with the public `configuration` port (TS2300/TS2349). `mise exec -- npm run build` passes TypeScript and frontend production bundling for that correction; it does not establish configuration behavior or native acceptance. No app launch or live harness operation was performed.
 
 - `test/session-configuration.test.ts`: latest-wins queued/in-flight requests, supersession during pre-dispatch validation, stable operation publications, dependency ordering, stale effort choices, revocation, failure/no-retry, dispose/late completion and local projection anchoring.
 - `test/pi-session-configuration.test.ts`: provider identity, scope, changes during work/compaction, preflight deferral and revoked choices. Existing `model-thinking-controller.test.ts` remains the concrete readiness/mutation regression base.
