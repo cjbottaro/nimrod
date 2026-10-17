@@ -288,6 +288,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
 
   function cardDomHost(): import('./pi/dom-card-renderer').CardDomHost {
     return {
+      projectDirectory: host.projectDirectory,
       markdown: renderMarkdown,
       code: (source, language) => { const node = element('div', 'markdown'); node.innerHTML = markdown.renderCode(source, language); return node; },
       copy: host.cardActions?.copy,

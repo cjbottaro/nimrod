@@ -40,9 +40,9 @@ Pi and ACP sessions share the transcript, reasoning/tool-card runtime, disclosur
 
 Copilot has compact bundled cards for common inspection tools:
 
-- **Read file** puts the filename first, followed by a requested line range when supplied and its directory.
-- **Search** puts the complete text pattern first, followed by the supplied search scope and optional file filter.
-- **Find files** shows a filename pattern and supplied search scope.
+- **Read file** shows the path relative to your project directory when it is inside the project, or its absolute path otherwise, followed by a middle dot and requested line numbers when supplied: `src/client.ts · lines 20–40`. The filename and directory are no longer split into separate fields.
+- **Search** puts the complete text pattern first, followed by the supplied search scope and optional file filter. Scope paths use the same project-relative/otherwise-absolute display rule.
+- **Find files** shows a filename pattern and supplied search scope, with the same path display rule.
 
 Recognized Copilot output wrappers show their plain content rather than duplicate JSON/diff representations. The complete original output remains in a collapsed **Raw output** disclosure; **Raw inputs** follows the result. Source and search results stay literal, not executable HTML. Unknown agents, unsupported payload shapes and other tools keep their generic presentation. New cards retain the existing disclosure, status and reading-position behavior; these presentation changes have not yet been validated in the native app.
 

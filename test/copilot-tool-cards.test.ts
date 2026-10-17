@@ -8,10 +8,10 @@ import { bundledAcpPlugin } from '../src/acp/card-plugins';
 import type { ToolCardData } from '../src/card-plugin-api';
 
 const source = { backend: 'acp' as const, agent: 'Copilot' };
-function fixture(data: ToolCardData) {
+function fixture(data: ToolCardData, projectDirectory = '/fixture') {
   const dom = new JSDOM('<body></body>');
   const doc = dom.window.document;
-  const card = renderToolCard(doc, data, doc.createElement('details')); doc.body.append(card);
+  const card = renderToolCard(doc, data, doc.createElement('details'), undefined, undefined, { projectDirectory }); doc.body.append(card);
   return { dom, card, close() { disposeToolCard(card); dom.window.close(); } };
 }
 function readData(arguments_: unknown = { path: '/fixture/src/client.ts', view_range: [20, 40] }): ToolCardData {
@@ -20,12 +20,12 @@ function readData(arguments_: unknown = { path: '/fixture/src/client.ts', view_r
     toolStatus: 'result', resultOutput: JSON.stringify(rawOutput, null, 2) };
 }
 
-test('captured Copilot reads show filename/requested range first and content without JSON/diff duplication', () => {
+test('captured Copilot reads show project-relative paths then requested ranges and content without JSON/diff duplication', () => {
   const data = readData(), f = fixture(data);
   try {
     assert.equal(bundledAcpPlugin(data).id, 'nimrod.acp.copilot-read');
     assert.equal(f.card.querySelector('.tool-card-title')?.textContent, 'Read file');
-    assert.equal(f.card.querySelector('.tool-card-preview')?.textContent, 'client.ts · lines 20–40 · /fixture/src/');
+    assert.equal(f.card.querySelector('.tool-card-preview')?.textContent, 'src/client.ts · lines 20–40');
     assert.equal(f.card.querySelector('.card-plugin-body .tool-output')?.textContent, 'const example = "<script>literal</script>";\n');
     assert.equal(f.card.querySelector('script'), null);
     assert.ok(f.card.querySelector('.card-plugin-body + .tool-raw-inputs'));
@@ -37,21 +37,33 @@ test('captured Copilot reads show filename/requested range first and content wit
   } finally { f.close(); }
 });
 
+test('project context is per mounted view; outside paths and raw inputs stay unambiguous', () => {
+  const data = readData();
+  const first = fixture(data, '/fixture'), second = fixture(data, '/fixture/src'), outside = fixture(data, '/fixture-other');
+  try {
+    assert.equal(first.card.querySelector('.tool-card-preview')?.textContent, 'src/client.ts · lines 20–40');
+    assert.equal(second.card.querySelector('.tool-card-preview')?.textContent, 'client.ts · lines 20–40');
+    assert.equal(outside.card.querySelector('.tool-card-preview')?.textContent, '/fixture/src/client.ts · lines 20–40');
+    assert.deepEqual(JSON.parse(first.card.querySelector('.tool-raw-inputs pre')!.textContent!), data.arguments);
+    assert.deepEqual(data.arguments, { path: '/fixture/src/client.ts', view_range: [20, 40] });
+  } finally { first.close(); second.close(); outside.close(); }
+});
+
 test('Copilot requested ranges handle EOF, single lines and malformed values without fabricated ranges', () => {
   for (const [range, expected] of [
-    [[3, -1], 'client.ts · from line 3 · /fixture/src/'],
-    [[3, 3], 'client.ts · line 3 · /fixture/src/'],
-    [[0, 10], 'client.ts · /fixture/src/'],
-    [[20, 10], 'client.ts · /fixture/src/'],
-    [['1', 10], 'client.ts · /fixture/src/'],
-    [[1, Number.MAX_SAFE_INTEGER + 1], 'client.ts · /fixture/src/'],
+    [[3, -1], 'src/client.ts · from line 3'],
+    [[3, 3], 'src/client.ts · line 3'],
+    [[0, 10], 'src/client.ts'],
+    [[20, 10], 'src/client.ts'],
+    [['1', 10], 'src/client.ts'],
+    [[1, Number.MAX_SAFE_INTEGER + 1], 'src/client.ts'],
   ] as const) {
     const f = fixture(readData({ path: '/fixture/src/client.ts', view_range: range }));
     try { assert.equal(f.card.querySelector('.tool-card-preview')?.textContent, expected); }
     finally { f.close(); }
   }
   const f = fixture(readData({ path: 'C:\\fixture\\client.ts' }));
-  try { assert.equal(f.card.querySelector('.tool-card-preview')?.textContent, 'client.ts · C:\\fixture\\'); }
+  try { assert.equal(f.card.querySelector('.tool-card-preview')?.textContent, 'C:\\fixture\\client.ts'); }
   finally { f.close(); }
 });
 
@@ -63,7 +75,7 @@ test('Copilot grep uses the complete pattern, scope and file filter despite bein
   try {
     assert.equal(bundledAcpPlugin(data).id, 'nimrod.acp.copilot-search');
     assert.equal(f.card.querySelector('.tool-card-title')?.textContent, 'Search');
-    assert.equal(f.card.querySelector('.tool-card-preview')?.textContent, 'deleteSession|session/delete · in /fixture/src · files *.ts');
+    assert.equal(f.card.querySelector('.tool-card-preview')?.textContent, 'deleteSession|session/delete · in src · files *.ts');
     assert.equal(f.card.querySelector('.card-plugin-body .tool-output')?.textContent, data.resultOutput);
     assert.equal(f.card.querySelector('img'), null);
   } finally { f.close(); }
@@ -73,7 +85,7 @@ test('file-pattern searches are not confused with reads, and unknown Copilot ope
   const found = fixture({ source, kind: 'read', arguments: { pattern: '**/*schema*', paths: ['/fixture/src', '/fixture/test'] }, toolStatus: 'result', resultOutput: 'No files found' });
   try {
     assert.equal(found.card.querySelector('.tool-card-title')?.textContent, 'Find files');
-    assert.equal(found.card.querySelector('.tool-card-preview')?.textContent, '**/*schema* · in /fixture/src · /fixture/test');
+    assert.equal(found.card.querySelector('.tool-card-preview')?.textContent, '**/*schema* · in src · test');
   } finally { found.close(); }
   for (const data of [
     { source, kind: 'read', title: 'Unknown read', arguments: { custom: true } },
@@ -124,9 +136,9 @@ test('standard ACP content and structured errors are not replaced by a rawOutput
   }
 });
 
-test('external authors can bundle the same filename-first and query-first public components', async () => {
+test('external authors can bundle the same path-first and query-first public components', async () => {
   const bundle = await build({ stdin: { contents: `import { fileReadPresentation, searchPresentation } from './src/card-plugin-ui'; export { fileReadPresentation, searchPresentation };`, resolveDir: process.cwd() }, bundle: true, format: 'esm', platform: 'browser', write: false });
   const external = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
-  assert.equal(external.fileReadPresentation({ path: '/fixture/example.ts', sections: [] }).preview, 'example.ts · /fixture/');
+  assert.equal(external.fileReadPresentation({ path: '/fixture/example.ts', sections: [] }).preview, '/fixture/example.ts');
   assert.equal(external.searchPresentation({ query: 'fixture', scope: 'src', sections: [] }).preview, 'fixture · in src');
 });

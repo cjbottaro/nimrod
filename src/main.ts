@@ -828,6 +828,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
   }
   const projectPi = createPiViewProjection();
   tab.view = mountConversationView({
+    projectDirectory: workspace,
     interaction: acpProfile ? acpInteraction(acpProfile.name, text => tab.starting || !acpSession(tab)
       ? 'ACP is still connecting. Your draft was kept.' : acpSession(tab)!.validatePrompt(text)) : piInteraction,
     sendAutoFollow: () => preferences.sendAutoFollow(),

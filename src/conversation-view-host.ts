@@ -41,6 +41,8 @@ export interface ConversationInteraction {
 }
 export interface ConversationView { setActive(active: boolean): void; scrollToBottom(): void; dispose(): void; }
 export interface ConversationViewHost {
+  /** Stable owning-project display context, independent of harness-reported tool paths. */
+  projectDirectory?: string;
   interaction: ConversationInteraction;
   performance?: import('./performance-diagnostics').PerformanceProbe;
   cardRenderer?: (data: Readonly<import('./card-plugin-api').ToolCardData>) => import('./pi/tool-card').ToolCardRenderer;

@@ -12,6 +12,7 @@ test('offline Copilot read/search cards keep compact previews, exact raw recover
     await expect(page.locator(visible('send'))).toBeEnabled();
     const connection = demo.calls.find(call => call.command === 'write_acp' && (call.args.message as { method?: string }).method === 'session/new')!;
     const token = connection.args.token as string;
+    const project = (demo.calls.find(call => call.command === 'start_acp' && call.args.token === token)!.args.config as { cwd: string }).cwd;
     const emit = (updates: object[]) => page.evaluate(({ token, updates }) => {
       const channels = (window as unknown as { __fixtureChannels: Record<string, { onmessage(packet: unknown): void }> }).__fixtureChannels;
       for (const update of updates) channels[token].onmessage({ kind: 'rpc', value: { jsonrpc: '2.0', method: 'session/update', params: { sessionId: 'fixture-acp', update } } });
@@ -19,17 +20,19 @@ test('offline Copilot read/search cards keep compact previews, exact raw recover
     const content = Array.from({ length: 80 }, (_, index) => `line ${index}: <script>literal source</script>`).join('\n');
     const rawOutput = { content, detailedContent: 'redundant diff representation' };
     await emit([
-      { sessionUpdate: 'tool_call', toolCallId: 'read-fixture', kind: 'read', title: 'Viewing .../client.ts', status: 'in_progress', rawInput: { path: '/fixture/src/client.ts', view_range: [1, 80] } },
+      { sessionUpdate: 'tool_call', toolCallId: 'read-fixture', kind: 'read', title: 'Viewing .../client.ts', status: 'in_progress', rawInput: { path: `${project}/src/client.ts`, view_range: [1, 80] } },
       { sessionUpdate: 'tool_call_update', toolCallId: 'read-fixture', rawOutput },
-      { sessionUpdate: 'tool_call', toolCallId: 'search-fixture', kind: 'other', title: "Searching for 'deleteSession...'", rawInput: { pattern: 'deleteSession|session/delete', paths: '/fixture/src', glob: '*.ts', output_mode: 'content' } },
+      { sessionUpdate: 'tool_call', toolCallId: 'search-fixture', kind: 'other', title: "Searching for 'deleteSession...'", rawInput: { pattern: 'deleteSession|session/delete', paths: `${project}/src`, glob: '*.ts', output_mode: 'content' } },
       { sessionUpdate: 'tool_call_update', toolCallId: 'search-fixture', status: 'completed', rawOutput: { content: 'client.ts:20: deleteSession', detailedContent: 'same search in another format' } },
+      { sessionUpdate: 'tool_call', toolCallId: 'outside-fixture', kind: 'read', title: 'Read outside project', status: 'completed', rawInput: { path: `${project}-sibling/client.ts`, view_range: [2, 4] } },
     ]);
     const read = page.locator('details[data-detail-key="tool:read-fixture"]');
     const search = page.locator('details[data-detail-key="tool:search-fixture"]');
     await expect(read.locator('.tool-card-title')).toHaveText('Read file');
-    await expect(read.locator('.tool-card-preview')).toHaveText('client.ts · lines 1–80 · /fixture/src/');
+    await expect(read.locator('.tool-card-preview')).toHaveText('src/client.ts · lines 1–80');
     await expect(search.locator('.tool-card-title')).toHaveText('Search');
-    await expect(search.locator('.tool-card-preview')).toHaveText('deleteSession|session/delete · in /fixture/src · files *.ts');
+    await expect(search.locator('.tool-card-preview')).toHaveText('deleteSession|session/delete · in src · files *.ts');
+    await expect(page.locator('details[data-detail-key="tool:outside-fixture"] .tool-card-preview')).toHaveText(`${project}-sibling/client.ts · lines 2–4`);
     await read.evaluate(node => { if (!(node as HTMLDetailsElement).open) node.querySelector('summary')!.click(); });
     const output = read.locator('.card-plugin-body [data-output-kind="result"] .tool-output');
     expect(await output.textContent()).toBe(content);

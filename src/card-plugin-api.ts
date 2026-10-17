@@ -27,6 +27,8 @@ export interface CardPresentation {
 export interface CardUpdateState { streaming: boolean; }
 /** Supported API for explicitly trusted in-process code; not a sandbox or permission boundary. */
 export interface CardPluginContext {
+  /** Owning project's canonical directory; display context only, not file-access authority. */
+  readonly projectDirectory?: string;
   readonly document: Document;
   readonly summary: HTMLElement;
   readonly body: HTMLElement;
