@@ -9,6 +9,7 @@ import { validatePresentation, type CardPresentation, type CardRenderer } from '
 import type { CardPlugin as DomCardRenderer, CardPluginInstance as DomCardInstance, CardPluginContext, CardUpdateState } from '../card-plugin-api';
 export type { CardPlugin as DomCardRenderer, CardPluginInstance as DomCardInstance, CardPluginContext, CardUpdateState } from '../card-plugin-api';
 export interface CardDomHost {
+  projectDirectory?: string;
   markdown?: (source: string) => HTMLElement;
   code?: (source: string, language?: string) => HTMLElement;
   copy?: (text: string) => Promise<void>;
@@ -56,7 +57,7 @@ export class DomCardController<Data> {
     private readonly host: CardDomHost = {}) {
     const owner = this;
     this.context = {
-      document: body.ownerDocument, summary, body,
+      document: body.ownerDocument, summary, body, projectDirectory: host.projectDirectory,
       get signal() { return owner.resources.signal; },
       capabilities: Object.freeze({ copy: !!host.copy, openLink: !!host.openLink, popOutCode: !!host.popOutCode }),
       copy: text => this.action(() => { this.validateText(text); if (!host.copy) throw new Error('Copy capability unavailable'); return host.copy(text); }),

@@ -15,9 +15,9 @@ function requestedRange(value: unknown): string | undefined {
   if (end < start) return;
   return start === end ? `line ${start}` : `lines ${start}–${end}`;
 }
-function searchScope(value: unknown): string | undefined {
+function searchScope(value: unknown): string | string[] | undefined {
   if (typeof value === 'string' && value.trim()) return value;
-  if (Array.isArray(value) && value.length && value.every(path => typeof path === 'string' && path.trim())) return value.join(' · ');
+  if (Array.isArray(value) && value.length && value.every(path => typeof path === 'string' && path.trim())) return value as string[];
 }
 
 // Callbacks receive immutable snapshots. Reuse the existing flattened string after checking it
@@ -53,13 +53,13 @@ export const copilotShellPlugin: CardPlugin = definePresentationPlugin<ToolCardD
 /** Category-level selection stays fixed while incomplete read/find inputs arrive. */
 export const copilotReadPlugin: CardPlugin = definePresentationPlugin<ToolCardData>({
   id: 'nimrod.acp.copilot-read', supports: data => isCopilot(data) && data.kind === 'read',
-  mount: () => ({ update(data) {
+  mount: context => ({ update(data) {
     const input = argumentRecord(data.arguments);
     if (typeof input?.path === 'string' && input.path.trim()) {
-      return fileReadPresentation({ path: input.path, range: requestedRange(input.view_range), sections: copilotSections(data) });
+      return fileReadPresentation({ path: input.path, projectDirectory: context.projectDirectory, range: requestedRange(input.view_range), sections: copilotSections(data) });
     }
     if (typeof input?.pattern === 'string' && searchScope(input.paths)) {
-      return searchPresentation({ title: 'Find files', query: input.pattern, scope: searchScope(input.paths), sections: copilotSections(data) });
+      return searchPresentation({ title: 'Find files', query: input.pattern, projectDirectory: context.projectDirectory, scope: searchScope(input.paths), sections: copilotSections(data) });
     }
     return rawToolPresentation(data);
   }, dispose() {} }),
@@ -67,10 +67,10 @@ export const copilotReadPlugin: CardPlugin = definePresentationPlugin<ToolCardDa
 /** Copilot currently categorizes local grep calls as other, not search. */
 export const copilotSearchPlugin: CardPlugin = definePresentationPlugin<ToolCardData>({
   id: 'nimrod.acp.copilot-search', supports: data => isCopilot(data) && ['other', 'search'].includes(data.kind || 'other'),
-  mount: () => ({ update(data) {
+  mount: context => ({ update(data) {
     const input = argumentRecord(data.arguments);
     if (typeof input?.pattern !== 'string' || typeof input.output_mode !== 'string') return rawToolPresentation(data);
-    return searchPresentation({ query: input.pattern, scope: searchScope(input.paths), glob: typeof input.glob === 'string' ? input.glob : undefined,
+    return searchPresentation({ query: input.pattern, projectDirectory: context.projectDirectory, scope: searchScope(input.paths), glob: typeof input.glob === 'string' ? input.glob : undefined,
       sections: copilotSections(data) });
   }, dispose() {} }),
 });

@@ -1,6 +1,8 @@
 /** Public runtime building blocks. Bundled and external plugins use this same module. */
-import type { CardPlugin, CardPresentation, ToolCardData } from './card-plugin-api';
+import type { CardPlugin, CardPluginContext, CardPresentation, ToolCardData } from './card-plugin-api';
 import { normalizedToolName } from './pi/card-plugins/tool-input';
+import { displayFilePath } from './card-display-path';
+export { displayFilePath } from './card-display-path';
 export { argumentRecord, firstString, fieldCountPreview, normalizedToolName } from './pi/card-plugins/tool-input';
 
 const purePresentations = new WeakSet<object>();
@@ -10,10 +12,10 @@ export function definePresentationPlugin<Data>(definition: {
   id: string;
   supports(data: Readonly<Data>): boolean;
   matches?(data: Readonly<Data>): boolean;
-  mount(): { update(data: Readonly<Data>): CardPresentation; dispose(): void };
+  mount(context: CardPluginContext): { update(data: Readonly<Data>): CardPresentation; dispose(): void };
 }): CardPlugin<Data> {
   const plugin: CardPlugin<Data> = { apiVersion: 2, id: definition.id, matches: definition.matches, supports: data => definition.supports(data), mount(context) {
-    const instance = definition.mount();
+    const instance = definition.mount(context);
     return { update(data) { context.renderPresentation(instance.update(data)); }, dispose: () => instance.dispose() };
   } };
   purePresentations.add(plugin);
@@ -33,16 +35,15 @@ export function rawToolPresentation(block: Readonly<ToolCardData>): CardPresenta
   if (output) sections.push({ key: 'result', label: block.toolStatus === 'running' && !block.resultOutput ? 'Live output' : 'Result', text: output });
   return { title: block.title || (typeof block.name === 'string' && block.name) || 'tool', sections };
 }
-/** Compact filename-first read summary; ranges describe requested input, not returned line counts. */
-export function fileReadPresentation(value: { path: string; range?: string; sections: CardPresentation['sections'] }): CardPresentation {
-  const split = Math.max(value.path.lastIndexOf('/'), value.path.lastIndexOf('\\'));
-  const filename = value.path.slice(split + 1) || value.path;
-  const directory = split >= 0 ? value.path.slice(0, split + 1) : '';
-  return { title: 'Read file', preview: [filename, value.range, directory].filter(Boolean).join(' · '), rawInputsPlacement: 'after', sections: value.sections };
+/** Path first, then requested lines. Native arguments and results are never rewritten. */
+export function fileReadPresentation(value: { path: string; projectDirectory?: string; range?: string; sections: CardPresentation['sections'] }): CardPresentation {
+  return { title: 'Read file', preview: [displayFilePath(value.path, value.projectDirectory), value.range].filter(Boolean).join(' · '), rawInputsPlacement: 'after', sections: value.sections };
 }
 /** Query-first search summary, shared by content and filename searches without parsing results. */
-export function searchPresentation(value: { title?: string; query: string; scope?: string; glob?: string; sections: CardPresentation['sections'] }): CardPresentation {
-  return { title: value.title || 'Search', preview: [value.query || '""', value.scope ? `in ${value.scope}` : undefined, value.glob ? `files ${value.glob}` : undefined].filter(Boolean).join(' · '),
+export function searchPresentation(value: { title?: string; query: string; scope?: string | readonly string[]; projectDirectory?: string; glob?: string; sections: CardPresentation['sections'] }): CardPresentation {
+  const scopes = typeof value.scope === 'string' ? [value.scope] : value.scope || [];
+  const scope = scopes.map(path => displayFilePath(path, value.projectDirectory)).filter(Boolean).join(' · ');
+  return { title: value.title || 'Search', preview: [value.query || '""', scope ? `in ${scope}` : undefined, value.glob ? `files ${value.glob}` : undefined].filter(Boolean).join(' · '),
     rawInputsPlacement: 'after', sections: value.sections };
 }
 /** Shared command/output component through the public keyed presentation runtime. */
