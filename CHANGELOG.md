@@ -6,6 +6,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Added
 
+- Nested modals now apply in-app depth blur to the lower modal and app content on supported translucent macOS windows. The CSS renderer follows the same effective 0–40 strength, live preview, Off/opaque and Reduce Transparency behavior as native background blur through one explicit mapping; AppKit and CSS remain perceptually calibrated rather than pixel-identical. Linux compositor blur cannot expose a portable strength to the webview, so nested depth blur remains off there pending an explicit app-owned contract and WebKitGTK verification.
+
 - Global Appearance typography controls provide separate conversation/composer and code/tool-output fonts and sizes, searchable installed-font pickers with family samples and monospace-first ordering, a live preview and reset to system defaults. Choices synchronize across projects and pop-outs without changing interface typography or zoom; missing fonts keep their saved choice and use portable system fallbacks. Native macOS/Linux acceptance remains pending.
 
 - Completed Copilot questions show a compact question/answer transcript card: a speech-bubble icon beside the question and an inset reply with a theme-accent line using the app's compact nested-quote spacing. Offered options appear as a numbered list in conversation typography, with exact raw inputs/output behind the disclosure; the separate Question picker is unchanged. Native visual acceptance remains pending.

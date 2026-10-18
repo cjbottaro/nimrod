@@ -2,7 +2,7 @@ import { buttonSurface, primaryButtonSurfaces, buttonDensity, buttonUnderlayCred
 import { updateRangeFill } from './range-input';
 import { appliedTheme, subscribeAppliedTheme } from './themes/applied-theme';
 import { installAppearanceEffects, type NativeAppearanceHost } from './window-appearance-effects';
-import { titlebarTint, windowSurfaceOpacities, type AppearanceCapabilities, type WindowAppearance } from './window-appearance';
+import { modalDepthBlurRadius, titlebarTint, windowSurfaceOpacities, type AppearanceCapabilities, type WindowAppearance } from './window-appearance';
 
 export interface AppearanceControls {
   opacity: HTMLInputElement; value: HTMLOutputElement;
@@ -59,11 +59,13 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
     if (disposed) return;
     const value = current();
     const enabled = !!capabilities?.transparency && !reduceTransparency() && value.opacity < 100;
+    const blur = !!capabilities?.frost && enabled ? value.blur : 0;
     const signature = JSON.stringify([value, enabled, capabilities, !!reduced?.matches, primary, hover, secondary, secondaryHover, danger, credits]);
     if (signature !== paintSignature) {
       paintSignature = signature;
       root.dataset.translucency = enabled ? 'window' : 'off';
       root.style.setProperty('--nimrod-background-opacity', `${value.opacity}%`);
+      root.style.setProperty('--nimrod-depth-blur-radius', `${modalDepthBlurRadius(blur)}px`);
       const surfaces = windowSurfaceOpacities(value.opacity);
       const properties = {
         '--nimrod-control-overlay-opacity': surfaces.control,
@@ -111,7 +113,6 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
           : 'Opacity controls the theme tint. Adjustable background blur is unavailable on this macOS version; plain transparency is still available.';
       }
     }
-    const blur = !!capabilities?.frost && !reduceTransparency() && value.opacity < 100 ? value.blur : 0;
     const tint = capabilities?.platform === 'macos' && host.tintTitlebar ? titlebarTint(background, enabled ? value.opacity : 100) : undefined;
     effects.request({ material: capabilities?.platform === 'macos' ? { blur, dark: theme.mode === null ? null : theme.mode === 'dark' } : undefined, tint });
   }

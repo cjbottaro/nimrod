@@ -2,11 +2,26 @@ import { DEFAULT_MODAL_DURATIONS, DEFAULT_SCAN_SPEEDS, isScanStyle, modalExitDur
 import { initialScanEdges, planScan, sampleScan, scanOffsets, scanClip, edgesFromClip, type ScanPlan } from './modal-scan';
 
 interface Motion { style: ModalAnimationStyle; duration: number; scanSpeed: number }
-interface Snapshot { shell: HTMLElement; rect: DOMRect; zoom: number; backdrop: string; motion: Motion; opacity: string; clip: string; restoreScroll(): void }
+interface Snapshot { shell: HTMLElement; rect: DOMRect; zoom: number; backdrop: string; backdropFilter: string; motion: Motion; opacity: string; clip: string; restoreScroll(): void }
 interface Layer { source: HTMLElement; node: HTMLElement; animations: Animation[]; revision: number; frame?: number; observer?: ResizeObserver }
 interface NativeDismissal { event: Event; generation?: number; epoch: number; snapshot?: Snapshot }
 const owners = new WeakMap<Document, ReturnType<typeof createModalMotion>>();
 const styles = new WeakMap<CSSStyleSheet, { count: number; text: string }>();
+const depthBlurAttribute = 'data-modal-depth-blur';
+function hasPresentedModal(document: Document, source: HTMLElement): boolean {
+  return [...document.querySelectorAll<HTMLElement>('dialog[open], .modal-overlay.open')].some(candidate => candidate !== source);
+}
+function prepareModalDepth(source: HTMLElement): void {
+  source.toggleAttribute(depthBlurAttribute, hasPresentedModal(source.ownerDocument, source));
+}
+function clearModalDepth(source: HTMLElement): void {
+  source.removeAttribute(depthBlurAttribute);
+}
+function applyBackdropFilter(element: HTMLElement, value: string): void {
+  if (!value || value === 'none') return;
+  element.style.setProperty('backdrop-filter', value);
+  element.style.setProperty('-webkit-backdrop-filter', value);
+}
 function motion(document: Document, exit = false): Motion {
   const root = document.documentElement, view = document.defaultView!;
   const style = root.dataset.modalAnimation as ModalAnimationStyle || 'subtle';
@@ -177,7 +192,9 @@ function createModalMotion(document: Document) {
     if (!rect.width || !rect.height) return;
     const computed = view.getComputedStyle(shell);
     const opacity = computed.opacity || '1', clip = computed.clipPath || 'none';
-    const backdrop = view.getComputedStyle(source, source.localName === 'dialog' ? '::backdrop' : '::before').backgroundColor;
+    const backdropStyle = view.getComputedStyle(source, source.localName === 'dialog' ? '::backdrop' : '::before');
+    const backdrop = backdropStyle.backgroundColor;
+    const backdropFilter = backdropStyle.getPropertyValue('backdrop-filter') || backdropStyle.getPropertyValue('-webkit-backdrop-filter');
     // A detached clone has no listeners and never owns an interaction.
     const clone = shell.cloneNode(true) as HTMLElement;
     for (const node of [clone, ...clone.querySelectorAll<HTMLElement>('*')]) {
@@ -215,7 +232,7 @@ function createModalMotion(document: Document) {
     const shadow = host.attachShadow({ mode: 'open' }), css = document.createElement('style');
     css.textContent = snapshotStyles(document) + '\n*, *::before, *::after { animation:none!important;transition:none!important;caret-color:transparent!important;pointer-events:none!important; }';
     shadow.append(css, clone);
-    return { shell: host, rect, zoom, backdrop, motion: settings, opacity, clip,
+    return { shell: host, rect, zoom, backdrop, backdropFilter, motion: settings, opacity, clip,
       restoreScroll: () => positions.forEach(({ copy, top, left }) => { copy.scrollTop = top; copy.scrollLeft = left; }),
     };
   }
@@ -236,10 +253,12 @@ function createModalMotion(document: Document) {
       const backdrop = document.createElement('div'); backdrop.dataset.modalMotionBackdrop = '';
       backdrop.style.cssText = 'position:absolute;inset:0;pointer-events:none;';
       backdrop.style.background = snapshot.backdrop; layer.node.prepend(backdrop);
+      applyBackdropFilter(backdrop, snapshot.backdropFilter);
       scan(layer, snapshot.shell, style, snapshot.motion.scanSpeed, true, snapshot.clip, backdrop, { rect: snapshot.rect, zoom: snapshot.zoom });
       return;
     } else {
       layer.node.style.background = snapshot.backdrop;
+      applyBackdropFilter(layer.node, snapshot.backdropFilter);
       animate(layer, layer.node, [{ opacity: 1 }, { opacity: 0 }], duration);
       animate(layer, snapshot.shell, [{ opacity: snapshot.opacity, transform: 'none' }, { opacity: 0, transform: 'translateY(4px) scale(.98)' }], duration, 'ease-in');
     }
@@ -284,6 +303,7 @@ function createModalMotion(document: Document) {
     const dialog = event.target;
     if (!(dialog instanceof view.HTMLDialogElement)) return;
     const record = pending.get(dialog); pending.delete(dialog);
+    clearModalDepth(dialog);
     if (record && !record.event.defaultPrevented && !dialog.open && epoch === record.epoch && generations.get(dialog) === record.generation) {
       bump(dialog); present(dialog, record.snapshot);
     }
@@ -313,16 +333,18 @@ export function installModalMotion(document: Document) {
 }
 export function clearModalMotion(document: Document): void { owners.get(document)?.clear(); }
 export function showModal(dialog: HTMLDialogElement): void {
-  dialog.showModal(); installModalMotion(dialog.ownerDocument).opening(dialog);
+  prepareModalDepth(dialog);
+  try { dialog.showModal(); } catch (error) { clearModalDepth(dialog); throw error; }
+  installModalMotion(dialog.ownerDocument).opening(dialog);
 }
 export function closeModal(dialog: HTMLDialogElement, result?: string): void {
   if (!dialog.open) return;
   installModalMotion(dialog.ownerDocument).closing(dialog, () => { if (result === undefined) dialog.close(); else dialog.close(result); });
 }
 export function showModalOverlay(overlay: HTMLElement): void {
-  overlay.classList.add('open'); installModalMotion(overlay.ownerDocument).opening(overlay);
+  prepareModalDepth(overlay); overlay.classList.add('open'); installModalMotion(overlay.ownerDocument).opening(overlay);
 }
 export function closeModalOverlay(overlay: HTMLElement): void {
   if (!overlay.classList.contains('open')) return;
-  installModalMotion(overlay.ownerDocument).closing(overlay, () => overlay.classList.remove('open'));
+  installModalMotion(overlay.ownerDocument).closing(overlay, () => { overlay.classList.remove('open'); clearModalDepth(overlay); });
 }
