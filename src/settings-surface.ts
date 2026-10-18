@@ -201,6 +201,10 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     animationStyle.value = animation.style;
     if (force || document.activeElement !== animationDuration) animationDuration.value = String(animation.duration);
     required('modal-animation-options').hidden = animation.style === 'none';
+    required('modal-animation-hint').textContent = (animation.style === 'crt'
+      ? 'A theme-accent horizontal line expands up and down like a CRT powering on.'
+      : animation.style === 'subtle' ? 'A short fade, lift and gentle scale.' : 'Dialogs appear and disappear instantly; your duration is remembered.')
+      + ' Default duration: 160 ms; dismissal is 25% faster where supported. Reduced motion disables animations.';
   }
   async function saveModalAnimation(values: Parameters<typeof preferences.saveModalAnimation>[0]): Promise<void> {
     if (savingAnimation) return;

@@ -38,13 +38,18 @@ test('modal animation defaults, global saves, JSONC preservation and external va
     await p.saveModalAnimation({ duration: 1200 });
     await p.saveModalAnimation({ style: 'none' });
     assert.deepEqual(p.modalAnimation(), { style: 'none', duration: 1200 });
-    await p.saveModalAnimation({ style: 'subtle' });
+    await p.saveModalAnimation({ style: 'crt' });
+    assert.deepEqual(p.modalAnimation(), { style: 'crt', duration: 1200 });
+    await p.saveModalAnimation({ style: 'subtle', duration: 1200 });
     assert.deepEqual(p.modalAnimation(), { style: 'subtle', duration: 1200 });
     assert.match(f.host.value.text, /keep animation comment/);
     assert.equal(parseSettings(f.host.value.text).custom, true);
     assert.equal(f.host.value.projectText, '{"appearance.theme":"dracula"}');
+    f.host.external('{"appearance.modalAnimation":"crt","appearance.modalAnimationDuration":800}');
+    assert.deepEqual(p.modalAnimation(), { style: 'crt', duration: 800 });
+    await p.saveModalAnimation({ style: 'subtle', duration: 1200 });
     for (const [key, values] of [
-      ['appearance.modalAnimation', [null, true, 1, 'crt', ['subtle']]],
+      ['appearance.modalAnimation', [null, true, 1, 'unknown', ['subtle']]],
       ['appearance.modalAnimationDuration', [null, true, -1, 2001, .5, '160']],
     ] as const) {
       for (const value of values) {

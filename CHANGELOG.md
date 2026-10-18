@@ -6,7 +6,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Added
 
-- Configurable modal motion in global Appearance: a restrained **Subtle** fade/lift/scale by default, **None**, a remembered duration and preview dialog. Reduced-motion preferences disable it; input, focus and dialog settlement stay immediate. Animated exits depend on webview support.
+- Configurable modal motion in global Appearance: a restrained **Subtle** fade/lift/scale by default, a theme-accent **CRT power-on** line expanding vertically from the center, **None**, a remembered shared duration and preview dialog. Reduced-motion preferences disable it; input, focus and dialog settlement stay immediate. Animated exits depend on webview support.
 
 - Copilot plan review supports optional feedback and **Request changes**, returning revisions through the plan decision rather than sending another prompt or replacing the composer draft.
 

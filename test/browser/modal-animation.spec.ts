@@ -17,6 +17,10 @@ test('modal style options, duration retention, preview and cross-window synchron
     await style.selectOption('none');
     await expect(settings.locator('#modal-animation-options')).toBeHidden();
     await expect(page.locator('html')).toHaveCSS('--modal-enter-duration', '0ms');
+    await style.selectOption('crt');
+    await expect(duration).toHaveValue('1200');
+    await expect(settings.locator('#modal-animation-hint')).toContainText('CRT powering on');
+    await expect(page.locator('html')).toHaveAttribute('data-modal-animation', 'crt');
     await style.selectOption('subtle');
     await expect(duration).toHaveValue('1200');
     await settings.locator('#modal-animation-preview').click();
