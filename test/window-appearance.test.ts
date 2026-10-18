@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
-import { DEFAULT_WINDOW_APPEARANCE, readWindowAppearance, windowSurfaceOpacities, titlebarTint, type TitlebarTint, type AppearanceCapabilities, type WindowAppearance } from '../src/window-appearance';
+import { DEFAULT_WINDOW_APPEARANCE, modalDepthBlurRadius, readWindowAppearance, windowSurfaceOpacities, titlebarTint, type TitlebarTint, type AppearanceCapabilities, type WindowAppearance } from '../src/window-appearance';
 
 import { installWindowAppearance } from '../src/window-appearance-controller';
 import { primaryButtonSurfaces, buttonDensity, buttonUnderlayCredit, tintedButtonDensity } from '../src/button-surfaces';
@@ -65,6 +65,21 @@ test('appearance range fills exist before interaction and track reloads/previews
     f.controls.blur.value = '30'; f.event(f.controls.blur, 'input');
     assert.equal(f.controls.blur.style.getPropertyValue('--range-fill'), '75%');
     assert.equal(f.saves.length, 0);
+  } finally { f.close(); }
+});
+
+test('modal depth blur keeps an explicit one-to-one CSS mapping to effective native strength', async () => {
+  assert.equal(modalDepthBlurRadius(0), 0);
+  assert.equal(modalDepthBlurRadius(20), 20);
+  assert.equal(modalDepthBlurRadius(40), 40);
+  const f = fixture(mac, { opacity: 65, blur: 20 });
+  try {
+    await f.controller.ready;
+    assert.equal(f.root.style.getPropertyValue('--nimrod-depth-blur-radius'), '20px');
+    f.external({ blur: 7 });
+    assert.equal(f.root.style.getPropertyValue('--nimrod-depth-blur-radius'), '7px');
+    f.external({ opacity: 100 });
+    assert.equal(f.root.style.getPropertyValue('--nimrod-depth-blur-radius'), '0px');
   } finally { f.close(); }
 });
 
@@ -298,6 +313,7 @@ test('Linux exposes whole-window opacity without frosting or any native effect w
     assert.match(f.controls.hint.textContent!, /compositor/);
     f.controls.opacity.value = '65'; f.event(f.controls.opacity, 'input');
     assert.equal(f.root.dataset.translucency, 'window'); assert.equal(f.controls.value.value, '65%');
+    assert.equal(f.root.style.getPropertyValue('--nimrod-depth-blur-radius'), '0px');
     assert.equal(f.saves.length, 0);
     f.event(f.controls.opacity, 'change'); await tick();
     assert.deepEqual(f.saves, [{ opacity: 65 }]);

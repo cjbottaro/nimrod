@@ -45,6 +45,11 @@ export function windowSurfaceOpacities(opacity: number) {
   };
 }
 
+/** CSS and native blur use different renderers; keep their current strength mapping explicit. */
+export function modalDepthBlurRadius(blur: number): number {
+  return blur;
+}
+
 export type TitlebarTint = [number, number, number, number];
 
 /** Theme imports are hex-only; keep the native title bar on the Project-bar recipe. */
@@ -56,4 +61,3 @@ export function titlebarTint(color: string, opacity: number): TitlebarTint | und
   const alpha = hex.length === 8 ? parseInt(hex.slice(6), 16) : 255;
   return [channels[0], channels[1], channels[2], Math.round(alpha * opacity / 100)];
 }
-

@@ -110,6 +110,35 @@ test('native default capture survives early microtasks and respects prevented/co
   } finally { f.dispose(); }
 });
 
+test('only modal layers above an existing dialog receive depth blur state', async () => {
+  const f = fixture('subtle');
+  try {
+    const parent = f.document.createElement('dialog');
+    parent.setAttribute('open', '');
+    f.document.body.append(parent);
+    showModal(f.dialog);
+    assert.equal(f.dialog.hasAttribute('data-modal-depth-blur'), true);
+    closeModal(f.dialog);
+    assert.equal(f.dialog.hasAttribute('data-modal-depth-blur'), false);
+
+    parent.removeAttribute('open');
+    showModal(f.dialog);
+    assert.equal(f.dialog.hasAttribute('data-modal-depth-blur'), false);
+    f.dialog.close();
+    assert.equal(f.dialog.hasAttribute('data-modal-depth-blur'), false);
+
+    parent.setAttribute('open', '');
+    const overlay = f.document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = '<div class="nimrod-modal"></div>';
+    f.document.body.append(overlay);
+    showModalOverlay(overlay);
+    assert.equal(overlay.hasAttribute('data-modal-depth-blur'), true);
+    closeModalOverlay(overlay);
+    assert.equal(overlay.hasAttribute('data-modal-depth-blur'), false);
+  } finally { f.dispose(); }
+});
+
 test('overlay, hidden/disposed windows, None and completion never settle or reopen real dialogs', async () => {
   const f = fixture();
   try {
