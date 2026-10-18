@@ -222,9 +222,42 @@ until reported; the catalog maximum is picker detail, never a Status-area guess.
 
 `onEvent` is registered before SDK create/resume so early events are buffered.
 Permission and user-input callbacks await explicit choices inside their owning
-conversation. Permissions use the concrete FIFO interaction below; questions and plan
-continuations retain the shared mounted decision surface and their existing
-native choices/cancellation.
+conversation. Permissions and questions use concrete FIFO interactions in the
+shared modal system, with separate SDK response semantics. Plan continuations
+retain the shared mounted decision surface and their existing native choices/cancellation.
+
+### Questions and custom answers
+
+`src/copilot/question-interaction.ts` owns a session/connection-bound FIFO of SDK
+user-input callbacks. The **Question picker** uses `startRetainedSelection`, the
+same shared palette lifecycle as permissions, not an inline form above the
+composer. The question is the context above searchable literal SDK choices;
+choosing one returns `{answer: choice, wasFreeform:false}` without rewriting it.
+When `allowFreeform !== false`, **Enter your own answer…** opens `Dialogs.input`
+above the unchanged picker, with the question as title and **Submit answer**.
+Submitting non-whitespace text returns the exact input with `wasFreeform:true`.
+Blank input reports a session-owned notice and keeps the question pending.
+Cancel/Escape in the child returns to the same picker/filter without answering.
+
+The queue follows permission presentation rules: oldest first, **N more** or
+**Last question**, one shell through sequential answers, and count-only updates
+on arrivals that retain query/selection/context and any child input. Escape/native
+parent dismissal does not answer or cancel the SDK turn. A non-dismissable neutral
+**Waiting for input · N questions** session banner with **Answer question** reopens
+it. New arrivals do not reopen explicit dismissal. Existing dialogs keep priority;
+background sessions never summon a modal or navigate. Explicit session navigation
+suspends/reveals undismissed work, never answers. Permissions and questions have
+separate queues/banners; neither replaces the other's active picker.
+
+Stop/Close/disconnect retire the owning AbortSignal and close owned picker/child
+input; there is no ambiguous **Cancel request** question choice. Generation,
+entry, active-presentation and abort guards reject stale replies. No composer
+mutation, prompt submission, transcript entry, replay or follow change is involved.
+Plan review is unchanged. `test/copilot-questions.test.ts` and the question fixture
+in `test/shell.test.ts` cover literal/custom answers, freeform capability, FIFO,
+dismiss/review, nested cancel/empty input, retained draft/focus, background/modal
+priority, navigation, abort/disposal and stale input. These fixtures are authored
+but unrun; native macOS/Linux stacking, focus and visual acceptance remain pending.
 
 ### Permission choices and interaction
 

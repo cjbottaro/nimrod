@@ -67,8 +67,8 @@ permission picker. Enter a reason or suggest what to do instead, then choose
 picker without answering. Submitting advances the picker to the next request.
 
 Use **Stop** to cancel the turn (dismiss the picker first if necessary); there is
-no ambiguous Cancel request permission button. Questions and plan continuations
-retain their separate answers and cancellation controls.
+no ambiguous Cancel request permission button. Questions follow the same picker
+workflow (below); plan continuations retain their separate review controls.
 
 Shell requests show their intention and exact command. File requests show
 project-relative paths (absolute outside the project), with **Search directory**
@@ -79,6 +79,25 @@ literal details. Background requests do not steal focus or alter your draft;
 return to their conversation to act. Stop/Close/disconnect cancel pending choices
 without approving and remove the pending banner. The modal interaction still needs installed-CLI/native
 acceptance after a requested build.
+
+### Answer agent questions
+
+Agent questions use the **Question picker**, not an inline form above the
+composer. Choose an answer with arrows/Enter, filtering or a click. If Copilot
+allows a custom answer, choose **Enter your own answer…** to open a separate input
+modal above the unchanged picker, then **Submit answer**. Cancel/Escape in that
+input modal returns to the picker without answering; blank input leaves the
+question pending.
+
+Escape in the picker dismisses it **without answering or cancelling the turn**.
+A non-dismissable **Waiting for input · N questions** banner remains in that
+session; **Answer question** reopens the queue. Answers advance the same picker,
+with **N more** or **Last question** in the header. Additional questions update the
+count without disrupting an open custom answer or reopening a dismissed picker.
+Background sessions never open a modal over your current conversation, and other
+dialogs keep priority. Your composer draft stays untouched. Use **Stop** to cancel
+the turn; Stop/Close/disconnect remove its pending questions and owned modals.
+Native focus/stacking and visual acceptance remain pending after a requested build.
 
 ### Change permissions during work
 

@@ -1278,6 +1278,54 @@ test('Copilot permissions retain one modal, escape without answering, reopen thr
   } finally { f.win.close(); }
 });
 
+test('Copilot questions use retained picker and nested input without cancelling on dismissal or changing drafts', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    f.openPalette();
+    const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New Copilot session'; input.dispatchEvent(new f.win.Event('input'));
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    const target = [...f.sdkSessions.values()].find(session => session.sessionId === 'sdk-fixture')!;
+    const draft = f.element<HTMLTextAreaElement>('prompt'); draft.value = 'keep question draft'; draft.dispatchEvent(new f.win.Event('input')); draft.focus();
+    const host = draft.closest('.session-view')!;
+    const request = (id: string) => target.channel.onmessage({ kind: 'rpc', value: { kind: 'input', id, request: { question: 'What scope?', choices: ['Conversation only', 'Include interface'] } } });
+    const writes = () => f.calls.filter(call => call.command === 'write_copilot').map(call => call.args.message as JsonRecord);
+    const click = (label: string) => {
+      const row = [...f.element('palette-list').querySelectorAll<HTMLElement>('[role=option]')].find(row => row.querySelector('.palette-item-label')?.textContent === label)!;
+      assert.ok(row, label); row.click();
+    };
+    request('first'); request('second'); await f.tick();
+    assert.equal(host.querySelector('.acp-permission'), null);
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
+    assert.equal(f.element('palette-title').textContent, 'Copilot question');
+    assert.equal(f.element('palette-context').textContent, 'What scope?');
+    assert.match(host.querySelector('.notice-pending')!.textContent!, /Waiting for input · 2 questions/);
+    assert.match(f.element('activity').textContent!, /Waiting for input/);
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+    assert.equal(writes().some(message => message.method === 'cancel' || message.method === 'decision'), false);
+    host.querySelector<HTMLButtonElement>('.notice-pending button')!.click(); await f.tick();
+    click('Enter your own answer…'); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('host-dialog').open, true);
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
+    assert.equal(f.element('host-dialog-title').textContent, 'What scope?');
+    assert.equal(f.element('host-dialog').querySelector('button[value="ok"]')!.textContent, 'Submit answer');
+    f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
+    assert.equal(writes().some(message => message.method === 'decision'), false);
+    click('Enter your own answer…'); await f.tick();
+    f.element<HTMLTextAreaElement>('host-dialog-input').value = 'My custom scope';
+    f.element<HTMLDialogElement>('host-dialog').close('ok'); await f.tick(); await f.tick();
+    assert.deepEqual(writes().filter(message => message.method === 'decision').at(-1)?.value, { answer: 'My custom scope', wasFreeform: true });
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
+    click('Conversation only'); await f.tick();
+    assert.deepEqual(writes().filter(message => message.method === 'decision').at(-1)?.value, { answer: 'Conversation only', wasFreeform: false });
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+    assert.equal(host.querySelector('.notice-pending > .application-notice'), null);
+    assert.equal(draft.value, 'keep question draft');
+    assert.equal(writes().some(message => message.method === 'prompt' || message.method === 'cancel'), false);
+  } finally { f.win.close(); }
+});
+
 test('Copilot plan review returns feedback without sending a prompt or changing the draft', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   try {
