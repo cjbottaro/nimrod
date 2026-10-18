@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test';
 import { demoFixture } from './demo-fixture';
 
-for (const dismissal of ['button', 'Escape'] as const) {
-  test(`preview native ${dismissal} dismissal shows an exit after trusted user input`, async ({ page }) => {
+for (const [style, dismissal] of [['subtle', 'button'], ['subtle', 'Escape'], ['hologram', 'button'], ['hologram', 'Escape']] as const) {
+  test(`${style} preview native ${dismissal} dismissal shows an exit after trusted user input`, async ({ page }) => {
     const fixture = await demoFixture(page);
     try {
-      await fixture.editPreferences('{"appearance.modalAnimation":"subtle","appearance.modalAnimationDuration":1200}');
+      await fixture.editPreferences(JSON.stringify({ 'appearance.modalAnimation': style, 'appearance.modalAnimationDuration': 1200 }));
       const settings = await fixture.settingsWindow();
       await settings.emulateMedia({ reducedMotion: 'no-preference' });
       const launch = settings.locator('#modal-animation-preview');

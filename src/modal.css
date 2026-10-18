@@ -16,6 +16,7 @@
   --modal-enter-easing:cubic-bezier(.16,1,.3,1);
   --modal-transform-origin:center top;
   --modal-shadow:0 12px 48px var(--vscode-widget-shadow);
+  --modal-beam-accent:var(--vscode-focusBorder, var(--vscode-progressBar-background, currentColor));
 }
 :root[data-modal-animation="crt"] {
   --modal-enter-duration:300ms;
@@ -23,7 +24,12 @@
   --modal-enter-animation:modal-crt-enter;
   --modal-enter-easing:cubic-bezier(.2,.8,.2,1);
   --modal-transform-origin:center;
-  --modal-crt-accent:var(--vscode-focusBorder, var(--vscode-progressBar-background, currentColor));
+}
+:root[data-modal-animation="hologram"] {
+  --modal-enter-duration:500ms;
+  --modal-exit-duration:400ms;
+  --modal-enter-animation:modal-hologram-enter;
+  --modal-enter-easing:linear;
 }
 .nimrod-modal {
   box-sizing:border-box;
@@ -79,6 +85,11 @@ dialog.nimrod-modal[open]::backdrop, .modal-overlay.open {
 @keyframes modal-crt-enter {
   0%, 18% { clip-path:inset(50% 0); }
   100% { clip-path:inset(0); }
+}
+/* A steady scan reveals the panel without flicker or tinting its contents. */
+@keyframes modal-hologram-enter {
+  from { clip-path:inset(0 0 100% 0); }
+  to { clip-path:inset(0); }
 }
 @keyframes modal-backdrop-enter { from { opacity:0; } to { opacity:1; } }
 @media (prefers-reduced-motion:reduce) {

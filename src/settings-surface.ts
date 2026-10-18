@@ -206,8 +206,9 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     required('modal-animation-options').hidden = animation.style === 'none';
     required('modal-animation-hint').textContent = (animation.style === 'crt'
       ? 'A theme-accent horizontal line expands up and down like a CRT powering on.'
+      : animation.style === 'hologram' ? 'A glowing scan line reveals the panel from top to bottom, with a soft trailing glow and no flicker.'
       : animation.style === 'subtle' ? 'A short fade, lift and gentle scale.' : 'Dialogs appear and disappear instantly; your duration is remembered.')
-      + (animation.style === 'crt'
+      + (animation.style === 'crt' || animation.style === 'hologram'
         ? ' Closing reverses the motion without fading the panel and takes 20% less time.'
         : animation.style === 'subtle' ? ' Dismissal is 25% faster.' : '')
       + ` Default duration: ${DEFAULT_MODAL_DURATIONS[animation.style]} ms. Reduced motion disables animations.`;

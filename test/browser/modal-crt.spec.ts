@@ -34,6 +34,7 @@ for (const duration of [160, 500]) {
       const exit = await settings.evaluate(async () => {
         const dialog = document.querySelector<HTMLDialogElement>('#modal-animation-preview-dialog')!;
         dialog.querySelector<HTMLButtonElement>('button')!.click(); await Promise.resolve();
+        if (!document.querySelector('[data-modal-motion=exit]')) await new Promise<void>(resolve => dialog.addEventListener('close', () => resolve(), { once: true }));
         const layer = document.querySelector<HTMLElement>('[data-modal-motion=exit]')!;
         const animations = layer.getAnimations({ subtree: true });
         animations.forEach(animation => { animation.pause(); animation.currentTime = Number(animation.effect!.getTiming().duration) * .5; });
@@ -79,6 +80,7 @@ test('visual exit still works without popovers or CSS overlay retention, above i
       const dialog = document.querySelector<HTMLDialogElement>('#modal-animation-preview-dialog')!;
       dialog.getAnimations().forEach(animation => animation.finish());
       dialog.querySelector<HTMLButtonElement>('button')!.click(); await Promise.resolve();
+      if (!document.querySelector('[data-modal-motion=exit]')) await new Promise<void>(resolve => dialog.addEventListener('close', () => resolve(), { once: true }));
       const layer = document.querySelector<HTMLElement>('[data-modal-motion=exit]')!;
       layer.getAnimations({ subtree: true }).forEach(animation => animation.pause());
       return { open: dialog.open, parent: layer.parentElement?.id, focused: document.activeElement?.id, parentOpen: document.querySelector<HTMLDialogElement>('#settings-page')!.open };

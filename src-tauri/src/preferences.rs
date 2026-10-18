@@ -202,8 +202,8 @@ pub(crate) fn validate(text: &str) -> Result<(), String> {
         }
     }
     if let Some(style) = object.get("appearance.modalAnimation") {
-        if !matches!(style.as_str(), Some("none" | "subtle" | "crt")) {
-            return Err("appearance.modalAnimation must be none, subtle or crt".into());
+        if !matches!(style.as_str(), Some("none" | "subtle" | "crt" | "hologram")) {
+            return Err("appearance.modalAnimation must be none, subtle, crt or hologram".into());
         }
     }
     if let Some(duration) = object.get("appearance.modalAnimationDuration") {
@@ -662,7 +662,7 @@ mod tests {
     }
     #[test]
     fn modal_animation_settings_are_bounded_and_typed() {
-        for style in ["none", "subtle", "crt"] {
+        for style in ["none", "subtle", "crt", "hologram"] {
             validate(&format!(r#"{{"appearance.modalAnimation":"{style}"}}"#)).unwrap();
         }
         for style in ["null", "true", "1", r#""unknown""#] {

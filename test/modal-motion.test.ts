@@ -5,7 +5,7 @@ import { applyModalAnimation } from '../src/modal-animation';
 import { closeModal, installModalMotion, showModal, showModalOverlay, closeModalOverlay } from '../src/modal-motion';
 import { stubDialogs } from './dialog-fixture';
 
-function fixture(style: 'crt' | 'subtle' = 'crt') {
+function fixture(style: 'crt' | 'subtle' | 'hologram' = 'crt') {
   const dom = new JSDOM('<style>#sample { background:rgb(30,40,50); } .nimrod-modal { clip-path:none; }</style><button id="opener">Open</button><dialog id="sample" class="nimrod-modal"><form method="dialog"><textarea id="field"></textarea><button>Close</button></form></dialog>', { pretendToBeVisual: true });
   const { document } = dom.window;
   stubDialogs(dom.window);
@@ -58,6 +58,36 @@ test('closing is immediate, exit copies are inert and isolated, and new opens re
     assert.equal(layer.isConnected, false);
     assert.equal(f.dialog.open, true);
     assert.equal(field.value, 'Current edited text');
+  } finally { f.dispose(); }
+});
+
+test('hologram scans down once and reverses upward without panel fading or delaying closure', async () => {
+  const f = fixture('hologram');
+  try {
+    f.opener.focus(); showModal(f.dialog); await Promise.resolve();
+    const entering = f.records.find(record => record.node.hasAttribute('data-modal-hologram-line'))!;
+    assert.equal(entering.options.duration, 500); assert.equal(entering.options.easing, 'linear');
+    assert.equal(entering.node.style.height, '2px'); assert.equal(entering.node.style.top, '40px');
+    assert.ok(entering.node.querySelector('[data-modal-hologram-trail]'));
+    assert.equal(entering.frames[0].transform, 'translateY(-50%)');
+    assert.equal(entering.frames.at(-1)!.transform, 'translateY(240px) translateY(-50%)');
+    closeModal(f.dialog);
+    assert.equal(f.dialog.open, false); assert.equal(f.document.activeElement, f.opener);
+    const layer = f.document.querySelector<HTMLElement>('[data-modal-motion=exit]')!;
+    const exits = f.records.filter(record => layer.contains(record.node));
+    assert.ok(exits.every(record => record.options.duration === 400 && record.options.direction === 'reverse'));
+    assert.equal(exits.some(record => record.node === layer), false);
+    const panel = exits.find(record => record.node.shadowRoot)!;
+    assert.deepEqual(panel.frames, [{ clipPath: 'inset(0 0 100% 0)' }, { clipPath: 'inset(0)' }]);
+    assert.deepEqual(exits.find(record => record.node.hasAttribute('data-modal-hologram-line'))!.frames, entering.frames);
+    showModal(f.dialog); await Promise.resolve();
+    f.dialog.style.clipPath = 'inset(0 0 50% 0)'; // Close halfway through reveal.
+    closeModal(f.dialog);
+    const partial = f.document.querySelector<HTMLElement>('[data-modal-motion=exit]')!;
+    const partialBeam = f.records.find(record => partial.contains(record.node) && record.node.hasAttribute('data-modal-hologram-line'))!;
+    assert.equal(partialBeam.frames.at(-1)!.transform, 'translateY(120px) translateY(-50%)');
+    applyModalAnimation(f.document.documentElement, { style: 'none', duration: 500 });
+    assert.equal(f.document.querySelectorAll('[data-modal-motion]').length, 0);
   } finally { f.dispose(); }
 });
 

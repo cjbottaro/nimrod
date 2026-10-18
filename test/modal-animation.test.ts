@@ -6,7 +6,8 @@ import { applyModalAnimation, readModalAnimation } from '../src/modal-animation'
 test('style-specific defaults apply only when duration is omitted', () => {
   assert.deepEqual(readModalAnimation({}), { style: 'subtle', duration: 500 });
   assert.deepEqual(readModalAnimation({ 'appearance.modalAnimation': 'crt' }), { style: 'crt', duration: 300 });
-  for (const style of ['subtle', 'crt', 'none']) {
+  assert.deepEqual(readModalAnimation({ 'appearance.modalAnimation': 'hologram' }), { style: 'hologram', duration: 500 });
+  for (const style of ['subtle', 'crt', 'hologram', 'none']) {
     for (const duration of [0, 160, 500, 1200]) {
       assert.deepEqual(readModalAnimation({ 'appearance.modalAnimation': style, 'appearance.modalAnimationDuration': duration }), { style, duration });
     }
@@ -26,6 +27,10 @@ test('modal animation applies presentation tokens without touching focus or open
     assert.equal(document.documentElement.dataset.modalAnimation, 'crt');
     assert.equal(document.documentElement.style.getPropertyValue('--modal-enter-duration'), '800ms');
     assert.equal(document.documentElement.style.getPropertyValue('--modal-exit-duration'), '640ms');
+    applyModalAnimation(document.documentElement, readModalAnimation({ 'appearance.modalAnimation': 'hologram' }));
+    assert.equal(document.documentElement.dataset.modalAnimation, 'hologram');
+    assert.equal(document.documentElement.style.getPropertyValue('--modal-enter-duration'), '500ms');
+    assert.equal(document.documentElement.style.getPropertyValue('--modal-exit-duration'), '400ms');
     applyModalAnimation(document.documentElement, { style: 'none', duration: 1200 });
     assert.equal(document.documentElement.dataset.modalAnimation, 'none');
     assert.equal(document.documentElement.style.getPropertyValue('--modal-enter-duration'), '0ms');

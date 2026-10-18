@@ -9,6 +9,23 @@ const styles = new WeakMap<CSSStyleSheet, { count: number; text: string }>();
 // Shared beam sequence: CRT dismissal plays exactly this entrance backwards.
 const CRT_BEAM: Keyframe[] = [{ opacity: 1 }, { opacity: 1, offset: .18 }, { opacity: 0, offset: .3 }, { opacity: 0 }];
 
+function hologramBeam(height: number): Keyframe[] {
+  return [
+    { transform: 'translateY(-50%)', opacity: 0, offset: 0 },
+    { transform: `translateY(${height * .05}px) translateY(-50%)`, opacity: 1, offset: .05 },
+    { transform: `translateY(${height * .95}px) translateY(-50%)`, opacity: 1, offset: .95 },
+    { transform: `translateY(${height}px) translateY(-50%)`, opacity: 0, offset: 1 },
+  ];
+}
+
+function visibleScanHeight(clip: string, height: number): number {
+  const insets = clip.match(/^inset\(([^)]+)\)$/)?.[1].trim().split(/\s+/);
+  if (!insets) return height;
+  const bottom = insets[2] ?? insets[0], amount = parseFloat(bottom);
+  if (!Number.isFinite(amount)) return height;
+  return Math.max(0, Math.min(height, height - (bottom.endsWith('%') ? height * amount / 100 : amount)));
+}
+
 function motion(document: Document, exit = false): Motion {
   const root = document.documentElement, view = document.defaultView!;
   const style = root.dataset.modalAnimation as ModalAnimationStyle || 'subtle';
@@ -95,11 +112,19 @@ function createModalMotion(document: Document) {
     const zoom = root.offsetWidth ? root.getBoundingClientRect().width / root.offsetWidth : 1;
     return { rect, zoom: zoom || 1 };
   }
-  function line(layer: ReturnType<typeof mount>, rect: DOMRect, zoom: number) {
-    const node = document.createElement('div'); node.dataset.modalCrtLine = '';
-    const accent = view.getComputedStyle(document.documentElement).getPropertyValue('--modal-crt-accent').trim() || 'currentColor';
-    node.style.cssText = `position:absolute;left:${rect.left / zoom}px;top:${(rect.top + rect.height / 2) / zoom}px;width:${rect.width / zoom}px;height:2px;transform:translateY(-50%);pointer-events:none;`;
+  function line(layer: ReturnType<typeof mount>, rect: DOMRect, zoom: number, style: 'crt' | 'hologram' = 'crt') {
+    const node = document.createElement('div');
+    if (style === 'hologram') node.dataset.modalHologramLine = ''; else node.dataset.modalCrtLine = '';
+    const accent = view.getComputedStyle(document.documentElement).getPropertyValue('--modal-beam-accent').trim() || 'currentColor';
+    const top = rect.top + (style === 'crt' ? rect.height / 2 : 0);
+    node.style.cssText = `position:absolute;left:${rect.left / zoom}px;top:${top / zoom}px;width:${rect.width / zoom}px;height:2px;transform:translateY(-50%);pointer-events:none;`;
     node.style.background = accent; node.style.boxShadow = `0 0 12px ${accent}`;
+    if (style === 'hologram') {
+      const trail = document.createElement('div'); trail.dataset.modalHologramTrail = '';
+      trail.style.cssText = 'position:absolute;inset:auto 0 100%;height:16px;opacity:.25;pointer-events:none;';
+      trail.style.background = `linear-gradient(to bottom, transparent, ${accent})`;
+      node.append(trail);
+    }
     layer.node.append(node); return node;
   }
   function capture(source: HTMLElement): Snapshot | undefined {
@@ -164,20 +189,22 @@ function createModalMotion(document: Document) {
     const layer = mount(source, 'exit'), { duration, style } = snapshot.motion;
     layer.node.append(snapshot.shell);
     snapshot.restoreScroll();
-    if (style === 'crt') {
-      // Reverse the live CSS entrance's per-segment easing and hold, not a fade
-      // approximating it. Only the backdrop fades; the panel remains opaque.
+    if (style === 'crt' || style === 'hologram') {
+      // Reverse the live reveal instead of fading its contents. Only the
+      // independent backdrop fades; both scan styles keep the panel opaque.
       const backdrop = document.createElement('div'); backdrop.dataset.modalMotionBackdrop = '';
       backdrop.style.cssText = 'position:absolute;inset:0;pointer-events:none;';
       backdrop.style.background = snapshot.backdrop; layer.node.prepend(backdrop);
       animate(layer, backdrop, [{ opacity: 0 }, { opacity: 1 }], duration, 'ease-out', 'reverse');
-      animate(layer, snapshot.shell, [
+      const endClip = snapshot.clip === 'none' ? 'inset(0)' : snapshot.clip;
+      const frames: Keyframe[] = style === 'crt' ? [
         { clipPath: 'inset(50% 0)', offset: 0, easing: 'cubic-bezier(.2,.8,.2,1)' },
         { clipPath: 'inset(50% 0)', offset: .18, easing: 'cubic-bezier(.2,.8,.2,1)' },
-        { clipPath: snapshot.clip === 'none' ? 'inset(0)' : snapshot.clip, offset: 1 },
-      ], duration, 'linear', 'reverse');
-      const beam = line(layer, snapshot.rect, snapshot.zoom);
-      animate(layer, beam, CRT_BEAM, duration, 'linear', 'reverse');
+        { clipPath: endClip, offset: 1 },
+      ] : [{ clipPath: 'inset(0 0 100% 0)' }, { clipPath: endClip }];
+      animate(layer, snapshot.shell, frames, duration, 'linear', 'reverse');
+      const beam = line(layer, snapshot.rect, snapshot.zoom, style);
+      animate(layer, beam, style === 'crt' ? CRT_BEAM : hologramBeam(visibleScanHeight(snapshot.clip, snapshot.rect.height / snapshot.zoom)), duration, 'linear', 'reverse');
     } else {
       layer.node.style.background = snapshot.backdrop;
       animate(layer, layer.node, [{ opacity: 1 }, { opacity: 0 }], duration);
@@ -192,11 +219,11 @@ function createModalMotion(document: Document) {
         if (disposed || epoch !== openingEpoch || generations.get(source) !== generation || !source.isConnected) return;
         const settings = motion(document);
         const shell = source.matches('.nimrod-modal') ? source : source.querySelector<HTMLElement>('.nimrod-modal');
-        if (settings.style !== 'crt' || !settings.duration || !shell || typeof shell.animate !== 'function') return;
+        if ((settings.style !== 'crt' && settings.style !== 'hologram') || !settings.duration || !shell || typeof shell.animate !== 'function') return;
         if (source.localName === 'dialog' ? !(source as HTMLDialogElement).open : !source.classList.contains('open')) return;
         const { rect, zoom } = geometry(shell); if (!rect.width || !rect.height) return;
-        const layer = mount(source, 'enter'), beam = line(layer, rect, zoom);
-        animate(layer, beam, CRT_BEAM, settings.duration);
+        const layer = mount(source, 'enter'), beam = line(layer, rect, zoom, settings.style);
+        animate(layer, beam, settings.style === 'crt' ? CRT_BEAM : hologramBeam(rect.height / zoom), settings.duration);
         finish(layer, settings.duration);
       } catch { for (const layer of [...layers]) if (layer.source === source) remove(layer); }
     });
