@@ -88,7 +88,7 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 }
 #zoom-level { display:block; width:140px; max-width:100%; }
 .appearance-duration { display:flex; align-items:center; gap:16px; width:400px; max-width:100%; }
-.appearance-duration input[type=range] { flex:1; min-width:0; padding:0; accent-color:var(--vscode-focusBorder); }
+.appearance-duration input[type=range] { flex:1; min-width:0; padding:0; }
 .appearance-duration output { flex:none; min-width:64px; font-size:12px; color:var(--vscode-descriptionForeground); text-align:right; font-variant-numeric:tabular-nums; }
 #modal-animation-style { display:block; width:220px; max-width:100%; }
 #zoom-error { padding:10px; color:var(--vscode-errorForeground); background:var(--vscode-editorWidget-background); border:1px solid var(--vscode-panel-border); border-radius:6px; }

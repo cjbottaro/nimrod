@@ -11,6 +11,8 @@ When adding or changing error paths, notices, banners, flash messages or operati
 
 When adding or changing a modal, dialog, picker or preview, load the [modal implementation checklist](references/modal-layout.md#implementation-checklist). Ordinary modals **must** use the shared shell and `src/modal-motion.ts` lifecycle helpers (or an existing component that uses them), not raw dialog methods or custom open/close animations. Full-window Settings and native OS choosers are explicit exceptions documented there. Shared styling alone does not wire all motion paths.
 
+When adding or changing Settings sliders, follow [shared range inputs](references/settings-layout.md#range-inputs): use the shared track styling and initialize/update fill after programmatic value changes, not only after user input. Never dispatch fake input/change events to force initial paint.
+
 ## Interaction policy
 
 Apply the [optimistic interaction policy](references/architecture.md#optimistic-interaction-policy) to all UI work: local user actions drive immediate feedback; RPC success is not a general UI gate. Late errors annotate the affected operation, and authoritative harness events reconcile data without replay, draft restoration or repeat navigation. Any result-gated exception must have a concrete authoritative-state or destructive-operation requirement documented in its feature reference.

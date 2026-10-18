@@ -1,4 +1,5 @@
 import { buttonSurface, primaryButtonSurfaces, buttonDensity, buttonUnderlayCredit, tintedButtonDensity } from './button-surfaces';
+import { updateRangeFill } from './range-input';
 import { appliedTheme, subscribeAppliedTheme } from './themes/applied-theme';
 import { installAppearanceEffects, type NativeAppearanceHost } from './window-appearance-effects';
 import { titlebarTint, windowSurfaceOpacities, type AppearanceCapabilities, type WindowAppearance } from './window-appearance';
@@ -97,6 +98,7 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
         controls.opacity.value = String(value.opacity);
         controls.value.value = value.opacity === 100 ? '100% · Opaque' : `${value.opacity}%`;
         controls.area.value = value.area; controls.blur.value = String(value.blur);
+        updateRangeFill(controls.opacity); updateRangeFill(controls.blur);
         controls.blurValue.value = value.blur === 0 ? '0 · Off' : String(value.blur);
         controls.opacity.disabled = !capabilities?.transparency;
         controls.area.disabled = !capabilities?.transparency;

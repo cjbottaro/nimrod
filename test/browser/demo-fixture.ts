@@ -30,7 +30,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
       builder.onLoad({ filter: /.*/, namespace: 'raw' }, args => ({ contents: readFileSync(args.path, 'utf8'), loader: 'text' }));
     } }],
   });
-  const css = ['src/pi/transcript.css', 'src/theme.css', 'src/workspace.css', 'src/keybindings.css', 'src/modal.css', 'src/application-notices.css', 'src/window-appearance.css', 'src/acp/session.css'].map(p => readFileSync(p, 'utf8')).join('\n');
+  const css = ['src/pi/transcript.css', 'src/theme.css', 'src/range-input.css', 'src/workspace.css', 'src/keybindings.css', 'src/modal.css', 'src/application-notices.css', 'src/window-appearance.css', 'src/acp/session.css'].map(p => readFileSync(p, 'utf8')).join('\n');
   let html = readFileSync('index.html', 'utf8').replace('<script type="module" src="/src/main.ts"></script>', '').replace('</head>', `<style>${css}</style></head>`);
   if (fixtureOptions?.enforceCsp) {
     const policy = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8')).app.security.csp as string;

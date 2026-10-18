@@ -13,6 +13,7 @@ import { installThemes } from './themes/picker';
 import { installZoom } from './zoom';
 import { installModalMotion, showModal, closeModal } from './modal-motion';
 import { applyModalAnimation, type ModalAnimationStyle } from './modal-animation';
+import { updateRangeFill } from './range-input';
 import { DEFAULT_MODAL_DURATIONS } from './modal-animation-defaults';
 import { installNativeWindowAppearance } from './native-window-appearance';
 import { installPerformanceDiagnostics } from './performance-diagnostics';
@@ -202,6 +203,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   const animationPreview = required<HTMLDialogElement>('modal-animation-preview-dialog');
   let savingAnimation = 0, durationRevision = 0, durationEditing = false;
   function showAnimationDuration(): void {
+    updateRangeFill(animationDuration);
     animationDurationValue.value = `${animationDuration.value} ms`;
     animationDuration.setAttribute('aria-valuetext', `${animationDuration.value} milliseconds`);
   }

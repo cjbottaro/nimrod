@@ -12,6 +12,13 @@ Each project control shows its effective value and source (`Global default` / `P
 
 Settings categories remain mounted with independent reading/dirty-control state. Its app-wide sidebar width is independent of project widths; browser modality and resize guards preserve the underlying conversation and nested-dialog focus.
 
+## Range inputs
+
+- `src/range-input.css`, imported by `src/main.ts`, owns Settings slider tracks/thumbs. Explicit themed tracks avoid depending on the native widget's first-interaction accent paint. WebKit/Blink use an authored track gradient; Gecko uses its progress pseudo-element. The actual `<input type=range>` remains in place with native min/max/step, keyboard, labels and focus semantics. Disabled controls are muted; forced-colors uses system colors, and RTL reverses the fill direction. No native-window/material work is introduced.
+- `src/range-input.ts::updateRangeFill(input)` publishes `--range-fill` from the input's current bounds/value. Call it after **initial/programmatic `.value` assignment**, reload/rollback, and live input. It only paints: no input/change dispatch, preference write, native preview, focus change, observer or DOM replacement. Do not initialize by manufacturing a drag event.
+- Opacity and blur call it in `window-appearance-controller.ts::paint`; duration calls it alongside its readout in `settings-surface.ts`. Theme colors remain CSS variables, so changing palettes recolors a filled track without touching the value or interacting. Include the shared CSS in standalone/offline fixtures that discard CSS imports.
+- Authored **unrun** fixtures: `test/range-input.test.ts` (bounds/defaults/endpoints/no events), `test/window-appearance.test.ts` (initial fills, reload/input and no writes/previews at installation), `test/browser/settings-sliders.spec.ts` (actual first-display track pixels for all three sliders, external value/theme reload and native keyboard/focus). Browser native IPC is mocked; real WKWebView initial paint, Linux/WebKitGTK, forced-colors and accessibility acceptance remain pending.
+
 ## First native presentation
 
 Cold Settings creation uses `.visible(false)` / `.focused(false)` and an ephemeral UUID `settingsGeneration` in its entry URL. After the page/category is mounted, `surface.settled()` waits for current initial appearance and zoom work; `window-presentation.ts::presentWhenPrepared` owns layout flush, once-only reveal and unload cancellation before `settings_window_ready`. Do not wait for hidden-webview rAF or arbitrary timers: they can be throttled. Runtime PATH/mise discovery starts **after** reveal and leaves only its fields disabled while pending; it must not gate the window's first appearance.
