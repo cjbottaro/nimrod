@@ -44,7 +44,7 @@ test('all bundled palettes use the same primary, hover and danger contrast polic
     assert.equal(hover.foreground, normal.foreground, theme.id);
     for (const opacity of opacities) {
       const endpoint = (opacity / 100) ** 8;
-      for (const [surface, minimum, role] of [[normal, normal.minimum, .35], [hover, Math.max(normal.minimum, hover.minimum), .45], [normal, normal.minimum, .18], [hover, Math.max(normal.minimum, hover.minimum), .32], [danger, danger.minimum, .45], [secondary.normal, secondary.normal.minimum, .10], [secondary.hover, Math.max(secondary.normal.minimum, secondary.hover.minimum), .30]] as const) {
+      for (const [surface, minimum, role] of [[normal, normal.minimum, .35], [hover, Math.max(normal.minimum, hover.minimum), .45], [danger, danger.minimum, .45], [secondary.normal, secondary.normal.minimum, .10], [secondary.hover, Math.max(secondary.normal.minimum, secondary.hover.minimum), .30]] as const) {
         const density = buttonDensity(minimum, endpoint, role);
         assert.ok(buttonContrast(surface.foreground, surface.background, density) >= BUTTON_CONTRAST, `${theme.id} at ${opacity}`);
       }
@@ -70,7 +70,6 @@ test('all palettes retain contrast and monotonic composited density over tinted 
     const colors = themeProperties(theme);
     const surfaces = [
       [buttonSurface(colors['--vscode-button-foreground'], colors['--vscode-button-background'])!, .35],
-      [buttonSurface(colors['--vscode-button-foreground'], colors['--vscode-button-background'])!, .18],
       [buttonSurface(colors['--vscode-button-secondaryForeground'], colors['--vscode-button-secondaryBackground'])!, .10],
       [buttonSurface(colors['--vscode-editor-background'], colors['--vscode-errorForeground'])!, .45],
     ] as const;
