@@ -36,6 +36,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- Nimrod is now licensed under GNU AGPLv3 only instead of MIT. Third-party licenses and previously granted MIT permissions are unchanged; see [License](README.md#license).
+
 - Copilot questions now use a sequential Question picker instead of an inline form above the composer. **Enter your own answer…** opens a nested input modal, like permission denial feedback. Escape dismisses without answering; a session-local **Answer question** banner reopens pending questions. Drafts stay untouched, and background questions never replace another dialog. Native acceptance remains pending.
 
 - Translucency always applies to the whole window: translucency controls now consist of background opacity and blur, with no area selector. Legacy sidebar-only settings are ignored without rewriting the settings file; 100% opacity and Reduce Transparency keep windows opaque.

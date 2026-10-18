@@ -69,3 +69,18 @@ macOS is the current development platform; Linux is next, and Windows is a possi
 There is no background process continuity, integrated diff editor, fork/tree-navigation UI, Pi `/reload` or in-app update system. [Built-in Copilot](docs/copilot.md) uses SDK 1.0.22 (declared CLI 1.0.98 compatibility), a supported installed Node and an explicitly resolved user-installed CLI—not a bundled CLI. Copilot identities/drafts persist with exact-ID Resume and permanent deletion. The earlier Copilot integration is removed; old stored drafts are not migrated or deleted. SDK checks, packaging and native macOS/Linux acceptance remain pending; Windows SDK launch is unavailable. SDK/ACP Restart and ACP attachment sending remain unavailable; Copilot supports inline image input with installed-CLI/native acceptance pending; generic ACP infrastructure is not exposed in the UI. macOS local bundles use ad-hoc signing; the separate [release workflow](CONTRIBUTING.md#release-setup) uses Developer ID signing/notarization and DMG packaging. Opening a project never loads Copilot automatically; explicit selection reconnects without sending a prompt. Closing a project stops its owned agents.
 
 Send clears the composer and previews ordinary messages in the transcript immediately (images after local preparation), then reconciles the harness's user turn in place. Failed or uncertain sends show an error without restoring the message or blocking a new draft; nothing is automatically replayed. Pi owns conversation history; Nimrod cannot coordinate external applications writing the same session file.
+
+## License
+
+Copyright (c) 2026 Christopher J. Bottaro.
+
+Nimrod is free software licensed under the **GNU Affero General Public License,
+version 3 only** (`AGPL-3.0-only`). You may use, modify and redistribute it under
+the terms in [LICENSE](LICENSE). Nimrod is provided without warranty.
+
+Third-party components retain their respective licenses; see
+[Third-party notices](THIRD_PARTY_NOTICES.md) and
+[Theme catalog notices](THEME_CATALOG_NOTICES.md).
+
+Earlier revisions made available under MIT remain available under those terms;
+this license change does not revoke previously granted permissions.
