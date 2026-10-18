@@ -99,6 +99,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Signed GitHub releases, Homebrew cask and packaged launcher | [Release distribution](references/releases.md) | [Installation](../../../docs/installation.md), [Release setup](../../../CONTRIBUTING.md#release-setup) |
 | Explicit builds, publication and compiler cache | [Build workflow](references/build-cache.md) | [Contributing](../../../CONTRIBUTING.md#app-builds) |
 | Optional external renderer for Pi web search/fetch/stored content/source check | [Pi Web Access cards](references/pi-web-access-plugin.md) | [Pi Web Access cards](../../../docs/pi-web-access-plugin.md) |
+| Built-in Pi/Copilot card inventory, manual prompt recipes and automated coverage map | [Card inventory](references/card-plugins.md#built-in-inventory-and-manual-acceptance), [SQL](references/card-plugins.md#copilot-sql-cards) | [Built-in card cookbook](../../../docs/builtin-card-cookbook.md) |
 | Mounted DOM renderers, cached personal TypeScript discovery/reload and legacy packages | [Card plugins](references/card-plugins.md) | [Card plugins](../../../docs/card-plugins.md), [Authoring](../../../docs/card-plugin-api.md) |
 
 ## Workflow and documentation

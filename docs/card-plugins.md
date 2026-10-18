@@ -6,6 +6,8 @@ Pi extensions define agent capabilities; Nimrod card plugins define their transc
 
 [ACP POC cards](acp.md) use the same plugin runtime with separate harness/agent matching. Existing plugins remain Pi-only unless their executable export explicitly adds an ACP or `copilot-sdk` target. External authors can use the same public shell/presentation helpers as bundled cards; see [harness targets and shared runtime](card-plugin-api.md#harness-targets-and-shared-runtime).
 
+For a catalogue of bundled Pi/Copilot presentations, copy/paste prompts and what to inspect in a live session, see the [Built-in card cookbook](builtin-card-cookbook.md). It includes SQL, questions, web/GitHub cards and fallback/parallel/reasoning recipes—not just plugin installation.
+
 ## Personal TypeScript plugins
 
 Place a `.ts` or `.tsx` file here:

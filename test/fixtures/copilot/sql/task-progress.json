@@ -1,0 +1,28 @@
+{
+  "start": {
+    "type": "tool.execution_start",
+    "data": {
+      "toolCallId": "fixture-sql-progress",
+      "toolName": "sql",
+      "arguments": {
+        "description": "Advance depth blur todos",
+        "query": "UPDATE todos SET status = 'done', updated_at = CURRENT_TIMESTAMP WHERE id IN ('depth-blur-implementation', 'depth-blur-documentation');\nUPDATE todos SET status = 'in_progress', updated_at = CURRENT_TIMESTAMP WHERE id = 'depth-blur-merge';"
+      }
+    }
+  },
+  "complete": {
+    "type": "tool.execution_complete",
+    "data": {
+      "toolCallId": "fixture-sql-progress",
+      "success": true,
+      "result": {
+        "content": "Executed 2 statement(s):\n\n1. UPDATE\n   2 row(s) updated.\n\n2. UPDATE\n   1 row(s) updated.",
+        "detailedContent": "SQL: UPDATE todos SET status = 'done', updated_at = CURRENT_TIMESTAMP WHERE id IN ('depth-blur-implementation', 'depth-blur-documentation');\nUPDATE todos SET status = 'in_progress', updated_at = CURRENT_TIMESTAMP WHERE id = 'depth-blur-merge';\n\nExecuted 2 statement(s):\n\n1. UPDATE\n   2 row(s) updated.\n\n2. UPDATE\n   1 row(s) updated."
+      },
+      "toolTelemetry": {
+        "metrics": { "result_token_count": 30, "rowsAffected": 3, "rowsReturned": 0, "statementCount": 2 },
+        "properties": { "queryType": "BATCH", "statementTypes": "[\"UPDATE\",\"UPDATE\"]" }
+      }
+    }
+  }
+}
