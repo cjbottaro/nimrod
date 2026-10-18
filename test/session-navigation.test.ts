@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { SessionNavigation, SESSION_VIEWS, type SelectionIntent } from '../src/session-navigation';
 
-interface Session { id: string; lastUsed: number; attention: boolean; working: boolean; connected: boolean; }
+interface Session { id: string; lastUsed: number; pinned?: boolean; attention: boolean; working: boolean; connected: boolean; }
 const session = (id: string, lastUsed = 0): Session => ({ id, lastUsed, attention: false, working: false, connected: false });
 const model = () => new SessionNavigation<Session>({ needsAttention: s => s.attention, isWorking: s => s.working, isConnected: s => s.connected });
 const ids = (sessions: readonly Session[]) => sessions.map(s => s.id);
@@ -15,6 +15,38 @@ function assertTraversal(navigation: SessionNavigation<Session>): void {
     assert.equal(navigation.adjacent(current, -1), displayed[(index + displayed.length - 1) % displayed.length]);
   }
 }
+
+test('pin groups preserve recency, inbox arrival, filter membership and canonical traversal', () => {
+  const navigation = model(), a = session('a', 10), b = session('b', 20), c = session('c', 30);
+  [a, b, c].forEach(s => { navigation.add(s); s.attention = true; s.working = true; });
+  navigation.snapshot('unread');
+  a.pinned = true; c.pinned = true;
+  assert.deepEqual(ids(navigation.all()), ['c', 'a', 'b']);
+  assert.deepEqual(ids(navigation.snapshot('unread').visible), ['a', 'c', 'b']);
+  assert.deepEqual(ids(navigation.snapshot('working').visible), ['c', 'a', 'b']);
+  assertTraversal(navigation);
+  b.lastUsed = navigation.nextRecency(100);
+  assert.deepEqual(ids(navigation.all()), ['c', 'a', 'b'], 'Send cannot escape the unpinned group');
+  a.lastUsed = navigation.nextRecency(100);
+  assert.deepEqual(ids(navigation.all()), ['a', 'c', 'b']);
+  assert.deepEqual(ids(navigation.snapshot('unread').visible), ['a', 'c', 'b'], 'arrival order within groups is unchanged');
+  a.working = false; a.attention = false;
+  assert.deepEqual(ids(navigation.snapshot('working').visible), ['c', 'b']);
+  assert.deepEqual(ids(navigation.snapshot('unread').visible), ['c', 'b']);
+  assert.deepEqual(navigation.counts(), { all: 3, unread: 2, working: 2 });
+  a.pinned = false; c.pinned = false;
+  assert.deepEqual(ids(navigation.all()), ['a', 'b', 'c'], 'unpin reveals unchanged recency');
+  assert.deepEqual(ids(navigation.open()), ['a', 'b', 'c'], 'membership order is never sorted in place');
+});
+
+test('pins do not override connected-first recency cleanup', () => {
+  const navigation = model(), selected = session('selected'), pinned = session('pinned', 1), recent = session('recent', 2);
+  pinned.pinned = true; pinned.connected = true; recent.connected = true;
+  [selected, pinned, recent].forEach(s => navigation.add(s));
+  const before = navigation.snapshot('all', selected, selected);
+  navigation.remove(selected);
+  assert.equal(navigation.replacement(before, navigation.snapshot('all')).target, recent);
+});
 
 test('canonical projection and both traversal directions remain identical through membership and recency changes', () => {
   // Deterministic exhaustive small layouts, including legacy timestamps and ties.

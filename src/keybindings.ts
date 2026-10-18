@@ -17,6 +17,7 @@ export const ACTIONS = [
   { id: 'cancel-configuration', label: 'Cancel pending configuration change', scope: 'project', context: 'session', defaults: [] },
   { id: 'context-window', label: 'Select context window…', keywords: 'limit tier long context', scope: 'project', context: 'session', defaults: [] },
   { id: 'palette', label: 'Command palette', scope: 'project', context: 'project', defaults: ['primary+shift+p'] },
+  { id: 'pin', label: 'Pin / Unpin session', scope: 'project', context: 'session', defaults: [] },
   { id: 'close', label: 'Close session', scope: 'project', context: 'session', defaults: ['primary+w'] },
   { id: 'sidebar', label: 'Toggle session sidebar', scope: 'project', context: 'project', defaults: ['primary+b'] },
   { id: 'previous', label: 'Previous open session', scope: 'project', context: 'project', defaults: ['primary+shift+['] },

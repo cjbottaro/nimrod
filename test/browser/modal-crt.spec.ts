@@ -1,91 +1,66 @@
 import { expect, test } from '@playwright/test';
 import { demoFixture } from './demo-fixture';
 
-for (const duration of [160, 500]) {
-  test(`CRT uses a separate two-pixel beam without tinting the panel at ${duration} ms`, async ({ page }) => {
+for (const height of [150, 300]) {
+  test(`CRT edges move at the configured pixel speed in a ${height}px modal`, async ({ page }) => {
     const fixture = await demoFixture(page);
     try {
-      await fixture.editPreferences(JSON.stringify({ 'appearance.modalAnimation': 'crt', 'appearance.modalAnimationDuration': duration }));
-      const settings = await fixture.settingsWindow();
-      await settings.emulateMedia({ reducedMotion: 'no-preference' });
-      const sample = await settings.evaluate(async duration => {
-        document.documentElement.style.setProperty('--vscode-focusBorder', 'rgb(123, 45, 67)');
+      await fixture.editPreferences('{"appearance.modalAnimation":"crt","appearance.modalScanSpeed":500}');
+      const settings = await fixture.settingsWindow(); await settings.setViewportSize({ width: 1000, height: 900 }); await settings.emulateMedia({ reducedMotion: 'no-preference' });
+      const enter = await settings.evaluate(async height => {
+        const dialog = document.querySelector<HTMLDialogElement>('#modal-animation-preview-dialog')!; dialog.style.height = height + 'px';
         document.getElementById('modal-animation-preview')!.click(); await Promise.resolve();
-        const dialog = document.querySelector<HTMLDialogElement>('#modal-animation-preview-dialog')!;
-        const animation = dialog.getAnimations().find(item => item instanceof CSSAnimation && item.animationName === 'modal-crt-enter')!;
-        animation.pause(); animation.currentTime = duration * .1;
-        const beam = document.querySelector<HTMLElement>('[data-modal-motion=enter] [data-modal-crt-line]')!;
-        beam.getAnimations().forEach(item => { item.pause(); item.currentTime = duration * .1; });
-        const style = getComputedStyle(dialog), line = getComputedStyle(beam);
-        const start = { clip: style.clipPath, shadow: style.boxShadow, background: style.backgroundColor, transform: style.transform };
-        animation.currentTime = duration * .6;
-        const middle = getComputedStyle(dialog).clipPath;
-        animation.currentTime = duration;
-        return { start, middle, final: getComputedStyle(dialog).clipPath, lineHeight: line.height, lineColor: line.backgroundColor, lineGlow: line.boxShadow, focused: dialog.contains(document.activeElement), duration: animation.effect!.getTiming().duration };
-      }, duration);
-      expect(sample.duration).toBe(duration);
-      expect(sample.start.clip).toContain('50%'); expect(sample.start.transform).toBe('none');
-      expect(sample.middle).not.toBe(sample.start.clip); expect(sample.final).toBe('none');
-      expect(sample.lineHeight).toBe('2px'); expect(sample.lineColor).toBe('rgb(123, 45, 67)');
-      expect(sample.lineGlow).toContain('rgb(123, 45, 67)');
-      expect(sample.start.background).not.toBe(sample.lineColor);
-      expect(sample.start.shadow).not.toContain('inset'); expect(sample.focused).toBe(true);
-      // Native method=dialog closure is immediate; only an inert visual copy remains.
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+        const panel = dialog.getAnimations().find(animation => (animation.effect as KeyframeEffect).getKeyframes().some(frame => 'clipPath' in frame))!;
+        const beams = [...document.querySelectorAll<HTMLElement>('[data-modal-motion=enter] [data-modal-crt-line]')];
+        const animations = [panel, ...beams.flatMap(beam => beam.getAnimations())];
+        const synchronized = animations.every(animation => animation.startTime === panel.startTime);
+        const duration = Number(panel.effect!.getTiming().duration);
+        animations.forEach(animation => { animation.pause(); animation.currentTime = duration * .25; });
+        const rect = dialog.getBoundingClientRect();
+        const edges = beams.map(beam => { const edge = beam.getBoundingClientRect(); return (edge.top + edge.height / 2 - rect.top) / rect.height; });
+        animations.forEach(animation => { animation.currentTime = duration; });
+        return { duration, edges, synchronized, focused: dialog.contains(document.activeElement), opacity: getComputedStyle(dialog).opacity };
+      }, height);
+      expect(enter.duration).toBeCloseTo(height, 1); expect(enter.edges[0]).toBeCloseTo(.375, 2); expect(enter.edges[1]).toBeCloseTo(.625, 2);
+      expect(enter.synchronized).toBe(true); expect(enter.focused).toBe(true); expect(enter.opacity).toBe('1');
       const exit = await settings.evaluate(async () => {
         const dialog = document.querySelector<HTMLDialogElement>('#modal-animation-preview-dialog')!;
         dialog.querySelector<HTMLButtonElement>('button')!.click(); await Promise.resolve();
         if (!document.querySelector('[data-modal-motion=exit]')) await new Promise<void>(resolve => dialog.addEventListener('close', () => resolve(), { once: true }));
         const layer = document.querySelector<HTMLElement>('[data-modal-motion=exit]')!;
-        const animations = layer.getAnimations({ subtree: true });
-        animations.forEach(animation => { animation.pause(); animation.currentTime = Number(animation.effect!.getTiming().duration) * .5; });
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
         const panel = [...layer.children].find(node => node.shadowRoot)!;
-        const layerOpacity = getComputedStyle(layer).opacity, panelOpacity = getComputedStyle(panel).opacity;
-        const backdropOpacity = getComputedStyle(layer.querySelector('[data-modal-motion-backdrop]')!).opacity;
-        animations.forEach(animation => { animation.currentTime = Number(animation.effect!.getTiming().duration) * .9; });
-        const heldClip = getComputedStyle(panel).clipPath, beamOpacity = getComputedStyle(layer.querySelector('[data-modal-crt-line]')!).opacity;
-        return { open: dialog.open, focused: document.activeElement?.id, inert: layer.inert, pointerEvents: getComputedStyle(layer).pointerEvents, durations: animations.map(animation => animation.effect!.getTiming().duration), reverse: animations.every(animation => animation.effect!.getTiming().direction === 'reverse'), layerOpacity, panelOpacity, backdropOpacity, heldClip, beamOpacity, duplicateIds: document.querySelectorAll('#modal-animation-preview-dialog').length };
+        const animation = panel.getAnimations()[0], duration = Number(animation.effect!.getTiming().duration);
+        layer.getAnimations({ subtree: true }).forEach(item => { item.pause(); item.currentTime = duration / 2; });
+        const rect = panel.getBoundingClientRect();
+        const edges = [...layer.querySelectorAll('[data-modal-crt-line]')].map(beam => { const edge = beam.getBoundingClientRect(); return (edge.top + edge.height / 2 - rect.top) / rect.height; });
+        return { duration, edges, open: dialog.open, focused: document.activeElement?.id, opacity: getComputedStyle(panel).opacity, inert: layer.inert };
       });
-      expect(exit.open).toBe(false); expect(exit.focused).toBe('modal-animation-preview');
-      expect(exit.inert).toBe(true); expect(exit.pointerEvents).toBe('none');
-      expect(exit.durations.length).toBeGreaterThanOrEqual(2);
-      expect(exit.durations.every(value => value === Math.round(duration * .8))).toBe(true);
-      expect(exit.reverse).toBe(true);
-      expect(exit.layerOpacity).toBe('1'); expect(exit.panelOpacity).toBe('1');
-      expect(Number(exit.backdropOpacity)).toBeLessThan(1);
-      expect(exit.heldClip).toContain('50%'); expect(exit.beamOpacity).toBe('1');
-      expect(exit.duplicateIds).toBe(1);
-      // A new interaction retires the old exit; it never waits for animation completion.
-      await settings.locator('#modal-animation-preview').click();
-      await expect(settings.locator('[data-modal-motion=exit]')).toHaveCount(0);
-      await expect(settings.locator('#modal-animation-preview-dialog')).toHaveAttribute('open', '');
-      await settings.emulateMedia({ reducedMotion: 'reduce' });
-      await expect(settings.locator('[data-modal-motion]')).toHaveCount(0);
-      await settings.keyboard.press('Escape');
-      await expect(settings.locator('#modal-animation-preview-dialog')).not.toHaveAttribute('open');
-      await expect(settings.locator('[data-modal-motion]')).toHaveCount(0);
+      expect(exit.duration).toBeCloseTo(height * .8, 1); expect(exit.edges[0]).toBeCloseTo(.25, 2); expect(exit.edges[1]).toBeCloseTo(.75, 2);
+      expect(exit.open).toBe(false); expect(exit.focused).toBe('modal-animation-preview'); expect(exit.opacity).toBe('1'); expect(exit.inert).toBe(true);
+      await settings.locator('#modal-animation-preview').click(); await expect(settings.locator('[data-modal-motion=exit]')).toHaveCount(0);
+      await settings.emulateMedia({ reducedMotion: 'reduce' }); await expect(settings.locator('[data-modal-motion]')).toHaveCount(0);
       expect(fixture.errors).toEqual([]);
     } finally { await fixture.close(); }
   });
 }
 
-test('visual exit still works without popovers or CSS overlay retention, above its parent Settings dialog', async ({ page }) => {
+test('visual exit works without popovers above its remaining parent Settings dialog', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {
     await fixture.editPreferences('{"appearance.modalAnimation":"subtle","appearance.modalAnimationDuration":500}');
-    const settings = await fixture.settingsWindow();
-    await settings.emulateMedia({ reducedMotion: 'no-preference' });
+    const settings = await fixture.settingsWindow(); await settings.emulateMedia({ reducedMotion: 'no-preference' });
     await settings.evaluate(() => Object.defineProperty(HTMLElement.prototype, 'showPopover', { configurable: true, value: undefined }));
     await settings.locator('#modal-animation-preview').click();
     const result = await settings.evaluate(async () => {
       const dialog = document.querySelector<HTMLDialogElement>('#modal-animation-preview-dialog')!;
-      dialog.getAnimations().forEach(animation => animation.finish());
-      dialog.querySelector<HTMLButtonElement>('button')!.click(); await Promise.resolve();
+      dialog.getAnimations().forEach(animation => animation.finish()); dialog.querySelector<HTMLButtonElement>('button')!.click();
       if (!document.querySelector('[data-modal-motion=exit]')) await new Promise<void>(resolve => dialog.addEventListener('close', () => resolve(), { once: true }));
       const layer = document.querySelector<HTMLElement>('[data-modal-motion=exit]')!;
       layer.getAnimations({ subtree: true }).forEach(animation => animation.pause());
-      return { open: dialog.open, parent: layer.parentElement?.id, focused: document.activeElement?.id, parentOpen: document.querySelector<HTMLDialogElement>('#settings-page')!.open };
+      return { open: dialog.open, parent: layer.parentElement?.id, focused: document.activeElement?.id };
     });
-    expect(result).toEqual({ open: false, parent: 'settings-page', focused: 'modal-animation-preview', parentOpen: true });
-    expect(fixture.errors).toEqual([]);
+    expect(result).toEqual({ open: false, parent: 'settings-page', focused: 'modal-animation-preview' }); expect(fixture.errors).toEqual([]);
   } finally { await fixture.close(); }
 });

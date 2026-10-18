@@ -14,7 +14,7 @@ import { installZoom } from './zoom';
 import { installModalMotion, showModal, closeModal } from './modal-motion';
 import { applyModalAnimation, type ModalAnimationStyle } from './modal-animation';
 import { updateRangeFill } from './range-input';
-import { DEFAULT_MODAL_DURATIONS } from './modal-animation-defaults';
+import { DEFAULT_MODAL_DURATIONS, DEFAULT_SCAN_SPEEDS, isScanStyle } from './modal-animation-defaults';
 import { installNativeWindowAppearance } from './native-window-appearance';
 import { installPerformanceDiagnostics } from './performance-diagnostics';
 import { createToolCapture } from './tool-capture';
@@ -202,16 +202,23 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   const animationDurationValue = required<HTMLOutputElement>('modal-animation-duration-value');
   const animationPreview = required<HTMLDialogElement>('modal-animation-preview-dialog');
   let savingAnimation = 0, durationRevision = 0, durationEditing = false;
+  let pendingStyle: ModalAnimationStyle | undefined;
+  let valueKind: 'duration' | 'scanSpeed' = 'duration';
   function showAnimationDuration(): void {
     updateRangeFill(animationDuration);
-    animationDurationValue.value = `${animationDuration.value} ms`;
-    animationDuration.setAttribute('aria-valuetext', `${animationDuration.value} milliseconds`);
+    const scan = valueKind === 'scanSpeed';
+    animationDurationValue.value = `${animationDuration.value} ${scan ? 'px/s' : 'ms'}`;
+    animationDuration.setAttribute('aria-valuetext', `${animationDuration.value} ${scan ? 'pixels per second' : 'milliseconds'}`);
   }
   function reloadModalAnimation(force = false): void {
-    const animation = preferences.modalAnimation();
+    const animation = preferences.modalAnimation(pendingStyle);
     applyModalAnimation(document.documentElement, animation);
     animationStyle.value = animation.style;
-    if (force || (!durationEditing && !savingAnimation)) animationDuration.value = String(animation.duration);
+    const scan = isScanStyle(animation.style), kind = scan ? 'scanSpeed' : 'duration';
+    const kindChanged = valueKind !== kind; valueKind = kind;
+    animationDuration.step = scan ? '50' : '10';
+    required('modal-animation-value-label').textContent = scan ? 'Scan speed (pixels/second)' : 'Duration (milliseconds)';
+    if (kindChanged || force || (!durationEditing && !savingAnimation)) animationDuration.value = String(scan ? animation.scanSpeed : animation.duration);
     showAnimationDuration();
     required('modal-animation-options').hidden = animation.style === 'none';
     required('modal-animation-hint').textContent = (animation.style === 'crt'
@@ -219,9 +226,10 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
       : animation.style === 'hologram' ? 'A glowing scan line reveals the panel from top to bottom, with a soft trailing glow and no flicker.'
       : animation.style === 'subtle' ? 'A short fade, lift and gentle scale.' : 'Dialogs appear and disappear instantly; your duration is remembered.')
       + (animation.style === 'crt' || animation.style === 'hologram'
-        ? ' Closing reverses the motion without fading the panel and takes 20% less time.'
+        ? ' Speed is independent of modal size; closing scans 25% faster. Filtering retargets the reveal without restarting it.'
         : animation.style === 'subtle' ? ' Dismissal is 25% faster.' : '')
-      + ` Default duration: ${DEFAULT_MODAL_DURATIONS[animation.style]} ms. Reduced motion disables animations.`;
+      + (scan ? ` Default scan speed: ${DEFAULT_SCAN_SPEEDS[animation.style as 'crt' | 'hologram']} px/s.` : ` Default duration: ${DEFAULT_MODAL_DURATIONS[animation.style]} ms.`)
+      + ' Reduced motion disables animations.';
   }
   async function saveModalAnimation(values: Parameters<typeof preferences.saveModalAnimation>[0]): Promise<void> {
     const revision = durationRevision;
@@ -240,12 +248,18 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
       }
     }
   }
-  const changeAnimationStyle = () => { void saveModalAnimation({ style: animationStyle.value as ModalAnimationStyle }); };
+  const changeAnimationStyle = () => {
+    pendingStyle = animationStyle.value as ModalAnimationStyle;
+    reloadModalAnimation(true);
+    void saveModalAnimation({ style: pendingStyle }).finally(() => { pendingStyle = undefined; if (!unloading) reloadModalAnimation(); });
+  };
   const inputAnimationDuration = () => { durationRevision++; durationEditing = true; showAnimationDuration(); };
   const changeAnimationDuration = () => {
     if (!animationDuration.reportValidity()) return;
     durationRevision++; durationEditing = false;
-    void saveModalAnimation({ duration: animationDuration.valueAsNumber });
+    const values: Parameters<typeof preferences.saveModalAnimation>[0] = {};
+    values[valueKind] = animationDuration.valueAsNumber;
+    void saveModalAnimation(values);
   };
   animationStyle.addEventListener('change', changeAnimationStyle);
   animationDuration.addEventListener('input', inputAnimationDuration);

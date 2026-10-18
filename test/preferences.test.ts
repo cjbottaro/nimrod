@@ -33,10 +33,10 @@ test('modal animation defaults, global saves, JSONC preservation and external va
   try {
     assert.deepEqual(p.modalAnimation(), { style: 'subtle', duration: 500 });
     await p.saveModalAnimation({ style: 'crt' });
-    assert.deepEqual(p.modalAnimation(), { style: 'crt', duration: 300 });
+    assert.deepEqual(p.modalAnimation(), { style: 'crt', duration: 300, scanSpeed: 500 });
     assert.equal(parseSettings(f.host.value.text)['appearance.modalAnimationDuration'], undefined);
     await p.saveModalAnimation({ style: 'hologram' });
-    assert.deepEqual(p.modalAnimation(), { style: 'hologram', duration: 300 });
+    assert.deepEqual(p.modalAnimation(), { style: 'hologram', duration: 300, scanSpeed: 1000 });
     assert.equal(parseSettings(f.host.value.text)['appearance.modalAnimationDuration'], undefined);
     await p.saveModalAnimation({ style: 'subtle' });
     assert.deepEqual(p.modalAnimation(), { style: 'subtle', duration: 500 });
@@ -47,16 +47,16 @@ test('modal animation defaults, global saves, JSONC preservation and external va
     await p.saveModalAnimation({ style: 'none' });
     assert.deepEqual(p.modalAnimation(), { style: 'none', duration: 1200 });
     await p.saveModalAnimation({ style: 'crt' });
-    assert.deepEqual(p.modalAnimation(), { style: 'crt', duration: 1200 });
+    assert.deepEqual(p.modalAnimation(), { style: 'crt', duration: 1200, scanSpeed: 500 });
     await p.saveModalAnimation({ style: 'hologram' });
-    assert.deepEqual(p.modalAnimation(), { style: 'hologram', duration: 1200 });
+    assert.deepEqual(p.modalAnimation(), { style: 'hologram', duration: 1200, scanSpeed: 1000 });
     await p.saveModalAnimation({ style: 'subtle', duration: 1200 });
     assert.deepEqual(p.modalAnimation(), { style: 'subtle', duration: 1200 });
     assert.match(f.host.value.text, /keep animation comment/);
     assert.equal(parseSettings(f.host.value.text).custom, true);
     assert.equal(f.host.value.projectText, '{"appearance.theme":"dracula"}');
     f.host.external('{"appearance.modalAnimation":"crt","appearance.modalAnimationDuration":800}');
-    assert.deepEqual(p.modalAnimation(), { style: 'crt', duration: 800 });
+    assert.deepEqual(p.modalAnimation(), { style: 'crt', duration: 800, scanSpeed: 500 });
     await p.saveModalAnimation({ style: 'subtle', duration: 1200 });
     for (const [key, values] of [
       ['appearance.modalAnimation', [null, true, 1, 'unknown', ['subtle']]],
@@ -76,6 +76,21 @@ test('modal animation defaults, global saves, JSONC preservation and external va
     f.host.externalProject('{"appearance.modalAnimation":"none"}');
     assert.match(f.errors.at(-1) ?? '', /global-only/);
     assert.deepEqual(p.modalAnimation(), { style: 'subtle', duration: 500 });
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
+test('scan speed is global, independent of duration, validated, and retained across styles', async () => {
+  const f = fixture(), p = await f.install();
+  try {
+    f.host.external('// keep scan setting\n{"appearance.modalAnimationDuration":1200,"custom":true}');
+    assert.equal(p.modalAnimation('crt').scanSpeed, 500);
+    assert.equal(p.modalAnimation('hologram').scanSpeed, 1000);
+    await p.saveModalAnimation({ scanSpeed: 750, style: 'hologram' });
+    assert.equal(p.modalAnimation().scanSpeed, 750); assert.equal(p.modalAnimation().duration, 1200);
+    await p.saveModalAnimation({ style: 'crt' }); assert.equal(p.modalAnimation().scanSpeed, 750);
+    assert.match(f.host.value.text, /keep scan setting/);
+    assert.equal(parseSettings(f.host.value.text).custom, true);
+    for (const invalid of [null, true, '750', 99, 1501, 500.5]) assert.throws(() => parseSettings(JSON.stringify({ 'appearance.modalScanSpeed': invalid })));
   } finally { p.dispose(); f.dom.window.close(); }
 });
 

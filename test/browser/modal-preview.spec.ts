@@ -5,7 +5,7 @@ for (const [style, dismissal] of [['subtle', 'button'], ['subtle', 'Escape'], ['
   test(`${style} preview native ${dismissal} dismissal shows an exit after trusted user input`, async ({ page }) => {
     const fixture = await demoFixture(page);
     try {
-      await fixture.editPreferences(JSON.stringify({ 'appearance.modalAnimation': style, 'appearance.modalAnimationDuration': 1200 }));
+      await fixture.editPreferences(JSON.stringify({ 'appearance.modalAnimation': style, 'appearance.modalAnimationDuration': 1200, 'appearance.modalScanSpeed': 100 }));
       const settings = await fixture.settingsWindow();
       await settings.emulateMedia({ reducedMotion: 'no-preference' });
       const launch = settings.locator('#modal-animation-preview');

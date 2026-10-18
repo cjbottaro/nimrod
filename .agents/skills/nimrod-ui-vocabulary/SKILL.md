@@ -89,6 +89,7 @@ A **card** needn't have a visible rectangle. A **disclosure** expands/collapses;
 ## Controls and feedback
 
 - **Action** — an operation that must be available in the command palette. A keybinding is optional; buttons and menus may provide additional entry points to the same action. “Command” is synonymous in command-palette discussions; not every button or UI interaction is an action.
+- **Session-row context menu** — OS-rendered menu opened by right-click/Control-click or Menu key/Shift+F10 on a sidebar row; actions target that row, not necessarily the selected session. **Pinned session** means an open session organized above unpinned rows, not protected from Close/Delete.
 - **Command palette** — modal action selector; subordinate pickers are pages in that interaction.
 - **MCP inspector** — read-only session-server inspection page in the command palette, with selected-server details and Refresh. [MCP inspector](../features/references/mcp-inspector.md) owns its contract.
 - **Model picker / thinking-level picker / mode picker / context-window picker** — session configuration selection pages; “effort” is a thinking-level search alias. Mode and context-window pickers appear only when the selected session contributes those actions.
