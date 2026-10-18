@@ -71,6 +71,10 @@ Explicitly requested builds use checkout-local targets and publish verified whol
 
 `src-tauri/build.rs` records the local checkout's Git revision, dirty/unknown flag and build-script timestamp for native [performance reports](performance-diagnostics.md). It resolves per-worktree HEAD/index/shared refs and watches frontend/native source plus checkout-local `dist` so a changed source/build identity is not silently reused. Git-unavailable builds explicitly record unknown identity; no repository paths or raw status output enter reports. Revision + dirty flag + build time distinguishes builds but is not a dirty-tree content fingerprint, nor proof that a dev server serves matching frontend source. This metadata does not authorize builds/checks or alter publication/cache isolation.
 
+## macOS material helper
+
+`src-tauri/build.rs` compiles `src/macos_blur.m` with the existing `cc` toolchain dependency, ARC and blocks only for macOS. The helper uses AppKit/QuartzCore and catches private material/filter Objective-C exceptions before the Rust boundary. Its object/library output stays in the checkout-local Cargo target; no compiler-cache or signing policy changes. The standalone blur probe links this same source for native validation, separately from app packaging.
+
 ## Personal plugin compiler asset
 
 `src-tauri/build.rs` stages a target-matching native esbuild executable and license from already-installed npm dependencies. It is a Tauri `externalBin` sidecar, not a Node backend. Cargo check/test may prepare this ignored asset; that is dependency staging, not app packaging. No runtime downloads or package installation. Cross compilation requires the matching target esbuild dependency installed locally; wrong-target helpers fail staging.

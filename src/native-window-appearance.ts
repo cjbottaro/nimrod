@@ -13,6 +13,21 @@ export function installNativeWindowAppearance(host: Pick<AppearanceHost, 'read' 
   let disposed = false;
   let remote: AppearancePreviewSnapshot = { revision: -1, opacity: null, blur: null };
   let previewListener: (() => void) | undefined;
+  let failureListener: (() => void) | undefined;
+  let nativeRequest = '';
+  const nativeFailures = new Map<string, string>();
+  const failureReady = listen<{ request: string; message: string }>('nimrod-window-appearance-error', event => {
+    const { request, message } = event.payload;
+    if (disposed || request !== nativeRequest || typeof message !== 'string') return;
+    nativeFailures.set(request, message);
+    host.report(`Could not update the window background: ${message}`, 'native');
+  }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } }).then(stop => {
+    if (disposed) { stop(); return false; }
+    failureListener = stop; host.report(undefined, 'native-observer'); return true;
+  }).catch(error => {
+    if (!disposed) host.report(`Could not observe native window background updates: ${String(error)}`, 'native-observer');
+    return false;
+  });
   const desired: PreviewValues = { opacity: null, blur: null };
   let sent = JSON.stringify(desired);
   let publishing: Promise<void> | undefined;
@@ -52,8 +67,24 @@ export function installNativeWindowAppearance(host: Pick<AppearanceHost, 'read' 
     },
     previewOpacity: controls ? value => publishPreview('opacity', value) : undefined,
     previewBlur: controls ? value => publishPreview('blur', value) : undefined,
-    capabilities: () => invoke<AppearanceCapabilities>('window_appearance_capabilities'),
-    apply: (blur, dark, updateTheme) => invoke<AppearanceCapabilities>('apply_window_appearance', { blur, dark, updateTheme }),
+    capabilities: async () => {
+      const observed = await failureReady;
+      const next = await invoke<AppearanceCapabilities>('window_appearance_capabilities');
+      return observed ? next : { ...next, frost: false };
+    },
+    apply: async (blur, dark, updateTheme) => {
+      const request = crypto.randomUUID();
+      nativeRequest = request; nativeFailures.clear();
+      const observed = await failureReady;
+      if (disposed) throw new Error('Window appearance was disposed');
+      if (blur > 0 && !observed) throw new Error('Native blur failure observation is unavailable');
+      const next = await invoke<AppearanceCapabilities>('apply_window_appearance', { blur, dark, updateTheme, request });
+      // A callback can precede the command reply. Do not clear its failure just
+      // because that older reply says the initial setup succeeded.
+      const failure = nativeFailures.get(request);
+      if (failure) throw new Error(failure);
+      return observed ? next : { ...next, frost: false };
+    },
     tintTitlebar: color => invoke<void>('tint_window_titlebar', { color }),
   }, controls);
   const previewReady = listen<AppearancePreviewSnapshot>('nimrod-window-appearance-preview', event => receivePreview(event.payload)).then(async stop => {
@@ -81,6 +112,6 @@ export function installNativeWindowAppearance(host: Pick<AppearanceHost, 'read' 
     },
     diagnostics: appearance.diagnostics,
     reload: appearance.reload,
-    dispose() { disposed = true; unlisten?.(); previewListener?.(); appearance.dispose(); },
+    dispose() { disposed = true; nativeFailures.clear(); failureListener?.(); unlisten?.(); previewListener?.(); appearance.dispose(); },
   };
 }

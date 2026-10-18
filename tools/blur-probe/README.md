@@ -79,6 +79,9 @@ directory's optional `options.json` supports:
 | `material` | `zed`: cleaned NSVisualEffectView; `system`: stock material. Replaces the numeric setter with fixed-strength live insertion/removal |
 | `materialRadius` | With `material: "zed"`, experimentally copy/replace the Gaussian filter to adjust strength; not upstream Zed behavior |
 | `landmarks` | Add large red/green bands so real backdrop sampling can be distinguished from a flat-grey fill |
+| `production` | Call the linked `src-tauri/src/macos_blur.m` helper, including native-frame/title-bar placement and cleanup |
+| `resize` / `cycleTheme` | In production mode, resize and/or change dark/light appearance while blurred |
+| `productionHidden` | Prepare the production helper on the hidden WKWebView target before first show (a separate startup case, not a zero-start transition run) |
 
 These are **experiments, not production recommendations**. The redraw/flush cases
 deliberately test work excluded from Nimrod's synchronous batch contract. No sleep
@@ -139,11 +142,20 @@ shows one window's setter flashing an unchanged peer. Existing batching is not a
 effective fix on this host. This experiment does not identify the precise internal
 WindowServer allocation/rendering bug or prove behavior on other OS releases.
 
-No production workaround is landed. The [upstream comparison and follow-up](upstream-comparison.md)
-found a promising Zed-style material-backed candidate, including a separately tested
-adjustable-radius extension. It did not require a persistent warm effect at zero.
-This remains fixture evidence, with independent tint, truly sharp zero, native title
-bar/corners, accessibility and resize/full-screen integration still requiring validation. A hidden nonzero minimum, screenshots covering the transition, changing
+The former setter is retained in the probe as a diagnostic control, not in the app.
+The [upstream comparison and follow-up](upstream-comparison.md) led to a production
+material-backed helper. Use `production: true` (without `material`, with `plain`)
+to exercise that exact linked helper rather than the earlier prototype. It covers
+the complete native frame/title bar, preserves content and first-responder identity,
+rejects hit testing, asserts one effect/nonzero and none/zero, and checks invalid
+inputs and closing while blurred. `resize` and `cycleTheme` exercise its host and
+AppKit layer-rebuild handling. Basic (782 frames), resize (774), theme (754) and
+combined lifecycle (655) runs on the original host captured no grey flash. A
+separate hidden-startup run successfully prepared the effect before first show
+(`status=0`, `visible=0`) and completed without native helper errors. Native
+fixtures still do not establish packaged Nimrod fullscreen/accessibility/performance
+acceptance. The [feature reference](../../.agents/skills/features/references/translucency.md)
+owns the current product contract and remaining gates. A hidden nonzero minimum, screenshots covering the transition, changing
 window geometry, disabling shadows or a new tinted material would change the
 contract rather than establish a correct fix.
 

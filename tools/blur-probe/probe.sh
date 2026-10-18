@@ -8,7 +8,7 @@ case "${1:-}" in
   build)
     mkdir -p "$app/Contents/MacOS"
     cp tools/blur-probe/Info.plist "$app/Contents/Info.plist"
-    xcrun clang -fobjc-arc -O1 -Wall tools/blur-probe/main.m \
+    xcrun clang -fobjc-arc -O1 -Wall tools/blur-probe/main.m src-tauri/src/macos_blur.m \
       -o "$app/Contents/MacOS/probe" \
       -framework Cocoa -framework WebKit -framework ScreenCaptureKit \
       -framework QuartzCore -framework CoreMedia -framework CoreVideo -framework ImageIO
@@ -26,7 +26,7 @@ case "${1:-}" in
     # the terminal/Nimrod process that happens to host the coding session.
     open -W -n --stdout "$output/stdout.log" --stderr "$output/probe.log" \
       "$app" --args "$output" "${3:-plain}" "${4:-standard}"
-    grep -q 'COMPLETE .* error=(null)' "$output/probe.log" || {
+    grep -q 'COMPLETE .* error=(null) nativeFailure=0' "$output/probe.log" || {
       echo "Probe did not complete; inspect $output/probe.log (first run may need Screen Recording approval)." >&2
       exit 1
     }

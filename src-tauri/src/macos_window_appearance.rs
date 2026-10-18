@@ -1,99 +1,39 @@
-//! AppKit/WindowServer-only blur/title implementation. All entry points run on the main thread.
-//! The portable presentation layer owns callers, ordering and error routing.
+//! AppKit-only window presentation. All entry points run on the main thread.
+//! Private material/filter operations and Objective-C exceptions are isolated in macos_blur.m.
 
-// This private WindowServer API applies blur without an NSVisualEffectView's
-// material tint. Resolve at runtime: unsupported systems retain plain alpha.
-// Keep the framework loaded for the lifetime of these cached function pointers.
-struct BackgroundBlur {
-    connection: unsafe extern "C" fn() -> *mut std::ffi::c_void,
-    set_radius: unsafe extern "C" fn(*mut std::ffi::c_void, isize, i64) -> i32,
-    disable_updates: unsafe extern "C" fn(i32) -> i32,
-    reenable_updates: unsafe extern "C" fn(i32) -> i32,
-}
+use block2::{DynBlock, RcBlock};
+use std::ffi::c_void;
+use tauri::Emitter;
 
-fn background_blur() -> Option<&'static BackgroundBlur> {
-    use std::ffi::{c_char, c_int, c_void};
-    unsafe extern "C" {
-        fn dlopen(path: *const c_char, mode: c_int) -> *mut c_void;
-        fn dlsym(handle: *mut c_void, name: *const c_char) -> *mut c_void;
-    }
-    static API: std::sync::OnceLock<Option<BackgroundBlur>> = std::sync::OnceLock::new();
-    API.get_or_init(|| {
-        // SAFETY: fixed framework/symbol names, checked pointers, C signatures
-        // used by winit 0.30.13's macOS ffi.rs. Connection IDs are opaque:
-        // never dereference the returned pointer.
-        unsafe {
-            let handle = dlopen(
-                c"/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight".as_ptr(),
-                1,
-            );
-            if handle.is_null() {
-                return None;
-            }
-            let connection = dlsym(handle, c"CGSMainConnectionID".as_ptr());
-            let set_radius = dlsym(handle, c"CGSSetWindowBackgroundBlurRadius".as_ptr());
-            let disable_updates = dlsym(handle, c"SLSDisableUpdate".as_ptr());
-            let reenable_updates = dlsym(handle, c"SLSReenableUpdate".as_ptr());
-            if connection.is_null() || set_radius.is_null()
-                || disable_updates.is_null() || reenable_updates.is_null() {
-                return None;
-            }
-            Some(BackgroundBlur {
-                connection: std::mem::transmute::<*mut c_void, unsafe extern "C" fn() -> *mut c_void>(connection),
-                set_radius: std::mem::transmute::<
-                    *mut c_void,
-                    unsafe extern "C" fn(*mut c_void, isize, i64) -> i32,
-                >(set_radius),
-                // CGSConnectionID is an int32 token; see yabai's extern.h.
-                disable_updates: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(i32) -> i32>(disable_updates),
-                reenable_updates: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(i32) -> i32>(reenable_updates),
-            })
-        }
-    })
-    .as_ref()
-}
-
-// Balance connection-scoped WindowServer update suppression in this stack
-// frame, even when the operation fails or unwinds. Never await, sleep, call
-// WebKit/display code or return to the run loop while a batch is open.
-struct UpdateBatch<F: FnOnce() -> i32>(Option<F>);
-impl<F: FnOnce() -> i32> UpdateBatch<F> {
-    fn finish(mut self) -> i32 {
-        self.0.take().expect("unfinished update batch")()
-    }
-}
-impl<F: FnOnce() -> i32> Drop for UpdateBatch<F> {
-    fn drop(&mut self) {
-        if let Some(resume) = self.0.take() {
-            resume();
-        }
-    }
-}
-
-fn with_update_batch<T>(
-    begin: impl FnOnce() -> i32,
-    resume: impl FnOnce() -> i32,
-    operation: impl FnOnce() -> Result<T, String>,
-) -> Result<T, String> {
-    let status = begin();
-    if status != 0 {
-        return Err(format!("Could not begin background-blur update ({status})"));
-    }
-    let guard = UpdateBatch(Some(resume));
-    let result = operation();
-    let status = guard.finish();
-    if status != 0 {
-        let cause = result
-            .err()
-            .map(|error| format!("; {error}"))
-            .unwrap_or_default();
-        return Err(format!("Could not resume window updates ({status}){cause}"));
-    }
-    result
+unsafe extern "C" {
+    fn nimrod_blur_supported() -> i32;
+    fn nimrod_blur_apply(
+        window: *mut c_void,
+        radius: u8,
+        failure: *const DynBlock<dyn Fn(i32)>,
+    ) -> i32;
 }
 
 pub fn blur_supported() -> bool {
-    background_blur().is_some()
+    // SAFETY: portable dispatch calls this on AppKit's main thread.
+    unsafe { nimrod_blur_supported() != 0 }
+}
+
+fn blur_error(status: i32) -> String {
+    let reason = match status {
+        1 => "adjustable material blur is unavailable",
+        2 => "the native window frame is unsupported",
+        3 => "background blur must be from 0 to 40",
+        4 => "the native material has an unsupported filter layout",
+        _ => "macOS could not configure the native blur material",
+    };
+    format!("{reason}; using plain transparency")
+}
+
+#[derive(Clone, serde::Serialize)]
+struct BlurFailure {
+    request: String,
+    message: String,
 }
 
 pub fn reduced_transparency() -> bool {
@@ -111,6 +51,7 @@ pub fn apply(
     blur: u8,
     dark: Option<bool>,
     update_theme: bool,
+    request: &str,
 ) -> Result<(), String> {
     if blur > 40 {
         return Err("Background blur must be from 0 to 40".into());
@@ -155,41 +96,26 @@ pub fn apply(
             native.setAppearance(None);
         }
     }
-    if let Some(api) = background_blur() {
-        let number = native.windowNumber();
-        if number <= 0 {
-            return Err("Native window number is unavailable".into());
-        }
-        // SAFETY: only the invoking window is mutated on the main thread.
-        // The borrowed winit ABI represents the connection token as a pointer;
-        // update batching uses its underlying CGSConnectionID (int32), not an
-        // address to dereference. No external connection/window is accessed.
-        let connection = unsafe { (api.connection)() };
-        let connection_id = connection as usize as i32;
-        with_update_batch(
-            || unsafe { (api.disable_updates)(connection_id) },
-            || unsafe { (api.reenable_updates)(connection_id) },
-            || {
-                // Batch only these synchronous setters: don't present the
-                // intermediate WindowServer backdrop when blur is enabled.
-                // Zero still removes blur, including under Reduce Transparency.
-                let result = unsafe { (api.set_radius)(connection, number, i64::from(blur)) };
-                if result == 0 {
-                    return Ok(());
-                }
-                // Best effort removal stays inside the same presentation batch.
-                let cleared = unsafe { (api.set_radius)(connection, number, 0) };
-                Err(if cleared == 0 {
-                    format!("Native background blur failed ({result}); using plain transparency")
-                } else {
-                    format!(
-                        "Native background blur failed ({result}); could not remove the previous blur ({cleared})"
-                    )
-                })
+    let target = window.clone();
+    let request = request.to_owned();
+    let failure = RcBlock::new(move |status: i32| {
+        // Rebuild failures can occur after the command has returned. Both the
+        // event target and opaque request identity fence other/newer windows.
+        let _ = target.emit_to(
+            tauri::EventTarget::webview_window(target.label()),
+            "nimrod-window-appearance-error",
+            BlurFailure {
+                request: request.clone(),
+                message: blur_error(status),
             },
-        )?;
-    } else if blur != 0 {
-        return Err("Native background blur is unavailable; using plain transparency".into());
+        );
+    });
+    // SAFETY: native remains retained by Tauri on the main thread. The helper
+    // copies this block while needed and releases it when blur is removed or
+    // the native window closes. Private ObjC exceptions never cross this FFI.
+    let status = unsafe { nimrod_blur_apply(pointer, blur, RcBlock::as_ptr(&failure)) };
+    if status != 0 {
+        return Err(blur_error(status));
     }
     Ok(())
 }
@@ -241,74 +167,3 @@ pub fn tint_titlebar(window: &tauri::WebviewWindow, color: [u8; 4]) -> Result<()
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::with_update_batch;
-    use std::cell::{Cell, RefCell};
-
-    #[test]
-    fn update_batch_resumes_once_after_success_or_native_failure() {
-        for fail in [false, true] {
-            let trace = RefCell::new(Vec::new());
-            let result = with_update_batch(
-                || {
-                    trace.borrow_mut().push("begin");
-                    0
-                },
-                || {
-                    trace.borrow_mut().push("resume");
-                    0
-                },
-                || {
-                    trace.borrow_mut().push("set blur");
-                    if fail {
-                        Err("blur failed".into())
-                    } else {
-                        Ok(())
-                    }
-                },
-            );
-            assert_eq!(*trace.borrow(), ["begin", "set blur", "resume"]);
-            assert_eq!(result.is_err(), fail);
-        }
-    }
-
-    #[test]
-    fn failed_begin_does_not_change_blur_or_unbalance_updates() {
-        let result = with_update_batch(
-            || 17,
-            || panic!("must not resume a batch that never opened"),
-            || -> Result<(), String> { panic!("must not change blur") },
-        );
-        assert!(result.unwrap_err().contains("17"));
-    }
-
-    #[test]
-    fn failed_resume_is_reported_with_the_native_failure() {
-        let result = with_update_batch(
-            || 0,
-            || 23,
-            || -> Result<(), String> { Err("blur failed".into()) },
-        );
-        let error = result.unwrap_err();
-        assert!(error.contains("resume window updates (23)"));
-        assert!(error.contains("blur failed"));
-    }
-
-    #[test]
-    fn update_batch_resumes_even_when_the_operation_unwinds() {
-        let resumes = Cell::new(0);
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let _ = with_update_batch(
-                || 0,
-                || {
-                    resumes.set(resumes.get() + 1);
-                    0
-                },
-                || -> Result<(), String> { panic!("operation unwound") },
-            );
-        }));
-        assert!(result.is_err());
-        assert_eq!(resumes.get(), 1);
-    }
-}

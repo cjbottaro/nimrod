@@ -35,6 +35,8 @@ interface ShellOptions {
   appearanceCapabilities?: import('../src/window-appearance').AppearanceCapabilities;
   appearanceGate?: Promise<void>;
   appearanceError?: string;
+  appearanceObserverError?: string;
+  appearanceApply?: (args: JsonRecord, fail: (payload: { request: string; message: string }) => void) => Promise<void>;
   titlebarGate?: Promise<void>;
   runtimeDefaultsGate?: Promise<void>;
   storage?: Record<string, unknown>;
@@ -135,6 +137,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   let notificationClick: ((event: unknown, target?: string) => void) | undefined;
   let projectPicker: ((target?: string) => void) | undefined;
   let linkError: ((message: string, target?: string) => void) | undefined;
+  let nativeBlurFailure: ((payload: { request: string; message: string }, target?: string) => void) | undefined;
   let projectPickerPending = options.projectPickerPending || false;
   Object.assign(win, { TextEncoder, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener() {} }, __TAURI_INTERNALS__: {
     metadata: { currentWindow: { label: options.windowLabel || 'main' }, currentWebview: { label: options.windowLabel || 'main' } },
@@ -148,6 +151,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       }
       if (command === 'window_appearance_capabilities' || command === 'apply_window_appearance') {
         if (command === 'window_appearance_capabilities') { await options.appearanceGate; if (options.appearanceError) throw new Error(options.appearanceError); }
+        else await options.appearanceApply?.(args, payload => nativeBlurFailure?.(payload, options.windowLabel || 'main'));
         return options.appearanceCapabilities ?? { platform: 'macos', transparency: true, frost: true, reducedTransparency: false };
       }
       if (command === 'tint_window_titlebar') { await options.titlebarGate; return; }
@@ -159,6 +163,13 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       if (command === 'drafts_flush') { await options.draftFlushGate; if (options.draftFlushError) throw new Error(options.draftFlushError); return; }
       if (command === 'drafts_references') return [];
       if (command === 'plugin:event|listen') {
+        if (args.event === 'nimrod-window-appearance-error') {
+          if (options.appearanceObserverError) throw new Error(options.appearanceObserverError);
+          nativeBlurFailure = (payload, target) => {
+            const listenerTarget = args.target as { kind: string; label?: string };
+            if (!target || listenerTarget.kind === 'Any' || listenerTarget.label === target) callbacks.get(Number(args.handler))?.({ payload });
+          };
+        }
         if (args.event === 'nimrod-session-menu') sessionMenuEvent = (request, action) => callbacks.get(Number(args.handler))?.({ payload: { request, action } });
         if (args.event === 'nimrod-open-project') projectPicker = target => {
           const listenerTarget = args.target as { kind: string; label?: string };
@@ -371,6 +382,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     deletionEvent: (event: DeletionEvent, target?: string) => deletionEvent?.(event, target),
     projectPicker: (target?: string) => projectPicker?.(target),
     linkError: (message: string, target?: string) => linkError?.(message, target),
+    nativeBlurFailure: (payload: { request: string; message: string }, target?: string) => nativeBlurFailure?.(payload, target),
     notificationClick: (event: unknown, target?: string) => notificationClick?.(event, target),
     captureChannel: () => channel,
     emit: (event: JsonRecord) => channel.onmessage({ kind: 'rpc', value: event }),
@@ -4104,6 +4116,59 @@ test('brand-new unwritten session can select its first model and effort through 
   } finally { f.dom.window.close(); }
 });
 
+
+test('native material rebuild failures are window/request scoped and do not replay appearance', async () => {
+  const f = await fixture(undefined, { globalSettings: true, windowLabel: 'settings' });
+  try {
+    const prefs = (blur: number) => f.preferences.external(JSON.stringify({ 'appearance.backgroundOpacity': 60, 'appearance.backgroundBlur': blur }));
+    prefs(7); await f.tick(); await f.tick();
+    const apply = () => f.calls.filter(call => call.command === 'apply_window_appearance');
+    const request = String(apply().at(-1)!.args.request);
+    assert.ok(request.length > 0);
+    f.nativeBlurFailure({ request, message: 'Other window material failure' }, 'other-window');
+    f.nativeBlurFailure({ request: 'obsolete-request', message: 'Obsolete material failure' }, 'settings');
+    await f.tick();
+    assert.doesNotMatch(f.element('application-notices').textContent!, /material failure/);
+    f.nativeBlurFailure({ request, message: 'Native material rebuild failed; using plain transparency' }, 'settings');
+    await f.tick();
+    assert.match(f.element('application-notices').textContent!, /Native material rebuild failed/);
+    const count = apply().length;
+    prefs(7); await f.tick(); await f.tick();
+    assert.equal(apply().length, count, 'an unchanged preference broadcast does not retry');
+    assert.match(f.element('application-notices').textContent!, /Native material rebuild failed/);
+    prefs(20); await f.tick(); await f.tick();
+    assert.notEqual(apply().at(-1)!.args.request, request);
+    f.nativeBlurFailure({ request, message: 'Late old material failure' }, 'settings'); await f.tick();
+    assert.doesNotMatch(f.element('application-notices').textContent!, /material failure|rebuild failed/i);
+    const current = String(apply().at(-1)!.args.request);
+    f.win.dispatchEvent(new f.win.Event('unload'));
+    f.nativeBlurFailure({ request: current, message: 'Disposed material failure' }, 'settings'); await f.tick();
+    assert.doesNotMatch(f.element('application-notices').textContent!, /Disposed material/);
+  } finally { f.win.close(); }
+});
+
+test('a material callback preceding its command reply is not cleared by that reply', async () => {
+  const f = await fixture(undefined, { globalSettings: true, appearanceApply: async (args, fail) => {
+    if (args.blur === 7) fail({ request: String(args.request), message: 'Layer failed before reply' });
+  } });
+  try {
+    f.preferences.external('{"appearance.backgroundOpacity":60,"appearance.backgroundBlur":7}');
+    await f.tick(); await f.tick();
+    assert.match(f.element('application-notices').textContent!, /Layer failed before reply/);
+  } finally { f.win.close(); }
+});
+
+test('failure to observe native material rebuilds disables blur without disabling transparency', async () => {
+  const f = await fixture(undefined, { globalSettings: true, appearanceObserverError: 'Fixture material observer unavailable' });
+  try {
+    f.preferences.external('{"appearance.backgroundOpacity":60,"appearance.backgroundBlur":20}');
+    await f.tick(); await f.tick();
+    assert.equal(f.element('settings-background-blur').hidden, true);
+    assert.equal(f.win.document.documentElement.dataset.translucency, 'window');
+    assert.match(f.element('application-notices').textContent!, /Fixture material observer unavailable/);
+    assert.ok(f.calls.filter(call => call.command === 'apply_window_appearance').every(call => call.args.blur === 0));
+  } finally { f.win.close(); }
+});
 
 test('global Appearance exposes native-supported controls and applies immediately across preference snapshots', async () => {
   const f = await fixture(undefined, { globalSettings: true });

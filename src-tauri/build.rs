@@ -186,5 +186,16 @@ fn main() {
     stage_compiler(&PathBuf::from(
         std::env::var_os("CARGO_MANIFEST_DIR").unwrap(),
     ));
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+        println!("cargo:rerun-if-changed=src/macos_blur.m");
+        println!("cargo:rerun-if-changed=src/macos_blur.h");
+        cc::Build::new()
+            .file("src/macos_blur.m")
+            .flag("-fobjc-arc")
+            .flag("-fblocks")
+            .compile("nimrod_macos_blur");
+        println!("cargo:rustc-link-lib=framework=AppKit");
+        println!("cargo:rustc-link-lib=framework=QuartzCore");
+    }
     tauri_build::build();
 }

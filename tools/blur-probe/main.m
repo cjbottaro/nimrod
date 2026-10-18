@@ -7,6 +7,7 @@
 #import <CoreMedia/CoreMedia.h>
 #import <dlfcn.h>
 #import <stdatomic.h>
+#import "../../src-tauri/src/macos_blur.h"
 
 static int (*connectionID)(void);
 static int (*threadConnectionID)(void);
@@ -21,6 +22,7 @@ static NSString *output;
 static BOOL batched, alternateStyle;
 static NSDictionary *options;
 static int resultCode = 1;
+static BOOL hadNativeFailure;
 
 @interface Scene : NSView
 @property BOOL backdrop;
@@ -149,6 +151,13 @@ static NSInteger stripMaterialTint(CALayer *layer, NSNumber *radius) {
         [w setValue:@YES forKey:@"canHostLayersInWindowServer"];
     }
     [self.windows addObject:w];
+    if ([options[@"productionHidden"] boolValue] && [title isEqualToString:@"WKWebView target"]) {
+        int32_t status=nimrod_blur_apply((__bridge void *)w,7,^(int32_t code) {
+            hadNativeFailure=YES; NSLog(@"hidden production material rebuild failure=%d",code);
+        });
+        NSLog(@"hidden production setup status=%d visible=%d",status,w.visible);
+        if (status || w.visible) hadNativeFailure=YES;
+    }
     [w orderFront:nil];
     [w invalidateShadow];
     return w;
@@ -167,6 +176,9 @@ static NSInteger stripMaterialTint(CALayer *layer, NSNumber *radius) {
     if (!NSContainsRect(visible,self.backdropFrame)) { NSLog(@"Screen is too small for the complete fixture; aborting"); [NSApp terminate:nil]; return; }
     [self windowAt:self.backdropFrame title:@"Blur probe synthetic backdrop" web:NO backdrop:YES];
     for (int i=0;i<3;i++) [self windowAt:NSMakeRect(self.backdropFrame.origin.x+30+i*350,self.backdropFrame.origin.y+80,320,400) title:@[@"AppKit target",@"WKWebView target",@"Untouched control"][i] web:i!=0 backdrop:NO];
+    if ([options[@"production"] boolValue]) {
+        if (nimrod_blur_apply(NULL,7,nil)!=2 || nimrod_blur_apply((__bridge void *)self.windows[1],41,nil)!=3) hadNativeFailure=YES;
+    }
     [NSApp activateIgnoringOtherApps:YES];
     for (NSWindow *w in self.windows) [w displayIfNeeded];
     // WindowServer must see the initial windows before SCShareableContent takes
@@ -228,7 +240,19 @@ static NSInteger stripMaterialTint(CALayer *layer, NSNumber *radius) {
         [self.stream stopCaptureWithCompletionHandler:^(NSError *error){
             dispatch_async(self.captureQueue, ^{
                 if(self.metrics) {fclose(self.metrics);self.metrics=NULL;}
-                dispatch_async(dispatch_get_main_queue(), ^{ resultCode = error ? 1 : 0; NSLog(@"COMPLETE %@ error=%@",output,error); [NSApp terminate:nil]; });
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if ([options[@"production"] boolValue]) {
+                        NSWindow *window=self.windows[1];
+                        if (nimrod_blur_apply((__bridge void *)window,7,nil)!=0) hadNativeFailure=YES;
+                        NSView *owned=nil;
+                        for (NSView *view in window.contentView.superview.subviews) if ([NSStringFromClass(view.class) isEqualToString:@"NimrodWindowBlurView"]) owned=view;
+                        [window close];
+                        if (!owned || owned.superview) hadNativeFailure=YES;
+                        NSLog(@"production close removed owned effect=%d",owned && !owned.superview);
+                    }
+                    resultCode = error || hadNativeFailure ? 1 : 0;
+                    NSLog(@"COMPLETE %@ error=%@ nativeFailure=%d",output,error,hadNativeFailure); [NSApp terminate:nil];
+                });
             });
         }];
         return;
@@ -240,6 +264,29 @@ static NSInteger stripMaterialTint(CALayer *layer, NSNumber *radius) {
     int begin=batched ? disableUpdates(cid) : 0;
     if (begin==0) {
         for (int i=1;i<=2;i++) if (targets[phase]&i) {
+            if ([options[@"production"] boolValue]) {
+                NSView *content=self.windows[i].contentView;
+                NSResponder *responder=self.windows[i].firstResponder;
+                int32_t status=nimrod_blur_apply((__bridge void *)self.windows[i],radii[phase],^(int32_t code) {
+                    hadNativeFailure=YES;
+                    NSLog(@"production material asynchronous failure=%d target=%d",code,i);
+                });
+                if (status) hadNativeFailure=YES;
+                NSUInteger owned=0;
+                for (NSView *view in content.superview.subviews) if ([NSStringFromClass(view.class) isEqualToString:@"NimrodWindowBlurView"]) {
+                    ++owned;
+                    if ([view hitTest:NSMakePoint(10,10)] || !NSEqualRects(view.frame,view.superview.bounds)) hadNativeFailure=YES;
+                }
+                if (owned != (radii[phase] ? 1 : 0) || self.windows[i].contentView!=content || self.windows[i].firstResponder!=responder) hadNativeFailure=YES;
+                NSLog(@"phase=%d time=%.6f target=%d production radius=%d status=%d",phase,before-started,i,radii[phase],status);
+                if ([options[@"resize"] boolValue] && (phase==2 || phase==3 || phase==7 || phase==8)) {
+                    [self.windows[i] setContentSize:NSMakeSize(radii[phase] ? 335 : 320,radii[phase] ? 420 : 400)];
+                }
+                if ([options[@"cycleTheme"] boolValue] && (phase==2 || phase==3 || phase==7 || phase==8)) {
+                    self.windows[i].appearance=[NSAppearance appearanceNamed:radii[phase] ? NSAppearanceNameAqua : NSAppearanceNameDarkAqua];
+                }
+                continue;
+            }
             if (options[@"material"]) {
                 NSVisualEffectView *effect=self.effectViews[@(i)];
                 if (radii[phase]==0) {

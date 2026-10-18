@@ -66,6 +66,7 @@ pub async fn apply_window_appearance(
     blur: u8,
     dark: Option<bool>,
     update_theme: bool,
+    request: String,
 ) -> Result<Capabilities, String> {
     if blur > 40 {
         return Err("Background blur must be from 0 to 40".into());
@@ -83,9 +84,10 @@ pub async fn apply_window_appearance(
             },
             dark,
             update_theme,
+            &request,
         )?;
         #[cfg(not(target_os = "macos"))]
-        let _ = (target, blur, dark, update_theme);
+        let _ = (target, blur, dark, update_theme, request);
         Ok(support)
     })
     .await
@@ -120,11 +122,20 @@ mod tests {
         assert!(!source.contains("NSColor::clearColor()"));
         assert!(source.contains("native.invalidateShadow()"));
         assert!(source.contains("if update_theme"));
-        assert!(source.contains("CGSSetWindowBackgroundBlurRadius"));
-        assert!(source.contains("CGSMainConnectionID"));
-        assert!(source.contains("SLSDisableUpdate"));
-        assert!(source.contains("SLSReenableUpdate"));
-        assert!(source.contains("with_update_batch("));
+        assert!(!source.contains("CGSSetWindowBackgroundBlurRadius"));
+        assert!(!source.contains("SLSDisableUpdate"));
+        assert!(source.contains("nimrod_blur_apply("));
+        let material = include_str!("macos_blur.m");
+        assert!(material.contains("NSVisualEffectMaterialUnderWindowBackground"));
+        assert!(material.contains("NSVisualEffectBlendingModeBehindWindow"));
+        assert!(material.contains("id replacement = [filter copy]"));
+        assert!(material.contains("inputRadius"));
+        assert!(material.contains("CAChameleonLayer"));
+        assert!(material.contains("@catch (NSException"));
+        assert!(material.contains("if (radius == 0)"));
+        assert!(material.contains("removeBlur(window)"));
+        assert!(material.contains("content.superview"));
+        assert!(material.contains("- (NSView *)hitTest:(NSPoint)point { return nil; }"));
         assert!(!source.contains("disableScreenUpdatesUntilFlush"));
         assert!(source.contains("fn blur_supported()"));
         assert!(!source.contains("apply_vibrancy"));
