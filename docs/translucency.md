@@ -30,7 +30,7 @@ Nimrod requests compositor-level background blur rather than a tinted native mat
 
 Save/native failures appear in the shared [application notice strip](error-messages.md). Correct the settings or change the control explicitly; settings writes are not automatically retried.
 
-The independent macOS blur implementation still needs native visual acceptance, including sharp transparency at zero blur, adjustable strength, removal, rounded corners and flicker-free changes, accessibility, resizing/full-screen behavior and performance. The first independent-blur trial exposed a square backdrop and a flash when enabling blur; the backing/update-path workaround still needs native confirmation. Earlier native feedback accepted improvements to surface hierarchy, not this new blur implementation. Linux native behavior remains unverified.
+The independent macOS blur implementation still needs native visual acceptance, including sharp transparency at zero blur, adjustable strength, removal, rounded corners and flicker-free changes, accessibility, resizing/full-screen behavior and performance. The first independent-blur trial exposed a square backdrop and a flash when enabling blur; the user subsequently confirmed that the backing workaround fixes the corners, while enabling blur still flickers. Native blur changes are now submitted in a synchronous compositor update batch to avoid exposing intermediate states; that transition mitigation still needs visual confirmation. Earlier native feedback accepted improvements to surface hierarchy, not this new blur implementation. Linux native behavior remains unverified.
 
 ## Configuration
 

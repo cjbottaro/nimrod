@@ -122,6 +122,10 @@ mod tests {
         assert!(source.contains("if update_theme"));
         assert!(source.contains("CGSSetWindowBackgroundBlurRadius"));
         assert!(source.contains("CGSMainConnectionID"));
+        assert!(source.contains("SLSDisableUpdate"));
+        assert!(source.contains("SLSReenableUpdate"));
+        assert!(source.contains("with_update_batch("));
+        assert!(!source.contains("disableScreenUpdatesUntilFlush"));
         assert!(source.contains("fn blur_supported()"));
         assert!(!source.contains("apply_vibrancy"));
         assert!(source.contains("standardWindowButton(NSWindowButton::CloseButton)"));
