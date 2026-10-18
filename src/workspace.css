@@ -76,6 +76,9 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor:col-resize !important; u
 .deletion-tree-text > small { color:var(--vscode-descriptionForeground); font-size:11px; line-height:16px; }
 .deletion-tree-root .deletion-tree-name { font-weight:600; }
 .deletion-tree-root .deletion-tree-icon { color:var(--vscode-progressBar-background); }
+#deletion-description[role="status"] { display:grid; }
+#deletion-description[role="status"] > span { grid-area:1 / 1; }
+.deletion-description-reserved { visibility:hidden; }
 #deletion-confirm { background:var(--nimrod-danger-background, var(--vscode-errorForeground)); color:var(--nimrod-danger-foreground, var(--vscode-editor-background)); }
 .deletion-loading { display:flex; align-items:center; gap:10px; min-height:80px; color:var(--vscode-descriptionForeground); }
 .deletion-spinner { width:16px; height:16px; flex:none; border:2px solid var(--vscode-panel-border); border-top-color:var(--vscode-descriptionForeground); border-radius:50%; animation:deletion-spin .8s linear infinite; }

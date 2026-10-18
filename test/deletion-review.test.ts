@@ -229,7 +229,14 @@ test('confirmation keeps the modal open, blocks cancel/repeated submit and repor
     const answer = f.controller.review({ id: 'execute', sessions });
     const confirm = f.doc.querySelector<HTMLButtonElement>('#deletion-confirm')!;
     const cancel = f.doc.querySelector<HTMLButtonElement>('#deletion-cancel')!;
+    const reviewedDescription = f.doc.querySelector('#deletion-description')!.textContent;
+    const reviewedLabel = confirm.textContent;
     confirm.click(); assert.equal(await answer, true);
+    const reserved = f.doc.querySelector('.deletion-description-reserved')!;
+    assert.equal(reserved.textContent, reviewedDescription);
+    assert.equal(reserved.getAttribute('aria-hidden'), 'true');
+    assert.equal(confirm.textContent, reviewedLabel);
+    assert.equal(confirm.hasAttribute('aria-keyshortcuts'), false);
     assert.equal(f.dialog.open, true); assert.equal(confirm.disabled, true); assert.equal(cancel.disabled, true);
     assert.match(f.doc.querySelector('#deletion-description')!.textContent!, /Stopping sessions/);
     assert.equal(f.doc.activeElement?.id, 'deletion-tree');
@@ -240,11 +247,15 @@ test('confirmation keeps the modal open, blocks cancel/repeated submit and repor
     confirm.form!.dispatchEvent(new f.dom.window.SubmitEvent('submit', { submitter: confirm, cancelable: true }));
     cancel.click(); assert.equal(f.dialog.open, true);
     assert.equal(await f.controller.review({ id: 'duplicate', sessions }), false);
-    f.controller.progress('deleting'); assert.match(f.doc.querySelector('#deletion-description')!.textContent!, /Deleting sessions/);
+    f.controller.progress('deleting'); assert.equal(f.doc.querySelector('.deletion-progress')!.textContent, 'Deleting sessions…');
+    assert.equal(f.doc.querySelector('.deletion-description-reserved'), reserved);
+    assert.equal(confirm.textContent, reviewedLabel);
     f.controller.cancel(); assert.equal(f.dialog.open, false);
     const next = f.controller.review({ id: 'next', sessions });
     assert.equal(confirm.disabled, false); assert.equal(cancel.disabled, false);
     assert.match(f.doc.querySelector('#deletion-description')!.textContent!, /Stops work/);
+    assert.equal(f.doc.querySelector('.deletion-description-reserved'), null);
+    assert.equal(f.doc.querySelector('.deletion-progress'), null);
     cancel.click(); assert.equal(await next, false);
   } finally { f.dispose(); }
 });
