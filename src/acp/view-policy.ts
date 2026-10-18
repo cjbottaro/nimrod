@@ -1,6 +1,7 @@
 import type { ConversationInteraction } from '../conversation-view-host';
 import type { SlashCommand } from '../pi/slash-completion';
 import { keyboardSubmissionMode } from '../pi/composer-dom';
+import { newlineHint, sendHint } from '../composer-hints';
 import type { AcpSession } from './session';
 import type { SessionAction } from '../session-backend';
 
@@ -29,7 +30,7 @@ export function acpInteraction(label: string, validate: (text: string) => string
     label,
     commands: agentSlashCommands,
     keyboardMode: event => keyboardSubmissionMode(event, false),
-    composer: state => ({ hint: state.busy ? 'Agent working · Stop to cancel · Shift+Enter for newline' : 'Enter to send · Shift+Enter for newline', stopLabel: `Stop ${label}` }),
+    composer: state => ({ hint: state.busy ? [{ text: 'Agent working' }, { text: 'Stop to cancel' }, newlineHint] : [sendHint, newlineHint], stopLabel: `Stop ${label}` }),
     prepare(text) {
       const error = validate(text);
       return error ? { kind: 'reject', error } : { kind: 'request', message: { type: 'prompt' }, preview: !text.startsWith('/'), navigate: true };

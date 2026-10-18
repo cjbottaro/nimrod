@@ -1,5 +1,6 @@
 import type { ConversationInteraction } from '../conversation-view-host';
 import { keyboardSubmissionMode } from '../pi/composer-dom';
+import { newlineHint, sendHint } from '../composer-hints';
 import type { SessionAction } from '../session-backend';
 import type { CopilotSession } from './session';
 import { copilotSlashCommands } from './commands';
@@ -16,7 +17,7 @@ export function copilotInteraction(validate: (text: string) => string | undefine
     label: 'Copilot',
     commands: copilotSlashCommands,
     keyboardMode: event => keyboardSubmissionMode(event, false),
-    composer: state => ({ hint: state.busy ? 'Stop to cancel · Shift+Enter for newline' : 'Enter to send · Shift+Enter for newline', stopLabel: 'Stop Copilot' }),
+    composer: state => ({ hint: [state.busy ? { text: 'Stop to cancel' } : sendHint, newlineHint], stopLabel: 'Stop Copilot' }),
     prepare(text) {
       const error = validate(text);
       const command = text.startsWith('/');

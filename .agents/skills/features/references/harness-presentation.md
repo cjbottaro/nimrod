@@ -56,6 +56,8 @@ ACP is a broad fallback, not a ceiling or universal harness protocol. Copilot us
 
 Control updates preserve existing button nodes by ID, hide unsupported controls/separators, and do not navigate or focus. New controls use the same Status-area layout. Connected configuration controls accept immediate or deferred intent, including replacements during a mutation. Pi can apply during work/compaction; Copilot model/effort/mode/context and dormant ACP apply at their supported idle boundary. Copilot's [live permission configuration](live-permissions.md) is a separate owner and uses advertised live-command readiness, without another renderer or backend-specific picker. [Model/thinking](model-thinking.md) owns the shared configuration port, readiness, dependencies and local transcript progress.
 
+Composer hints are presentation contributions: policies supply structured text plus exact modifier metadata to the shared `src/composer-hints.ts` renderer (or a status-only string). Focus-scoped color feedback is shared by current and future integrations without label parsing or harness checks; it never adds shortcuts/capabilities or changes policy-owned delivery. See [shared modifier feedback](composer.md#shared-modifier-feedback).
+
 Local draft clearing, previews, Send recency/follow effects, uncertain-delivery handling and no replay remain governed by [composer](composer.md) and [architecture](architecture.md#optimistic-interaction-policy). Policies classify intent before draft clearing; the shared view performs local effects, and later results never repeat them.
 
 ## Status-area interface

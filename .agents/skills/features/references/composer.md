@@ -23,13 +23,24 @@ Idle sends and busy Enter steering clear the editable draft immediately, indepen
 
 ## Code map
 
-- `src/pi/composer-dom.ts`: keyboard delivery mapping and hint ordering.
+- `src/composer-hints.ts`: harness-independent structured hint rendering, modifier feedback and event lifetime.
+- `src/pi/composer-dom.ts`: Pi keyboard delivery mapping and hint ordering.
 - `src/conversation-view.ts`: policy-driven keyboard submission, send-local image preparation, receipt-correlated operation-card outcomes, fallback notices and input lock. Pi compatibility entry: `src/pi/webview-client.ts`.
 - `src/pi/session.ts`: authoritative session-state gate and Pi prompt RPC.
 - `src/pi/steering-transcript.ts`: live pending-turn projection, queue reconciliation and user-turn key aliases.
 - `src/conversation-view.ts`: applies every ordered snapshot before coalesced painting, including while hidden; hidden views retain the latest pending presentation for synchronous reveal catch-up. Queue/consumption/receipt/recovery observations are never deferred or discarded. Patches pending-status labels in the existing user article.
 
 Image attachment behavior and its text-only queue recovery boundary are covered in [Image paste](image-paste.md). Error/uncertainty presentation follows the [error presentation policy](error-presentation.md); this reference owns delivery semantics, not a separate error surface.
+
+## Shared modifier feedback
+
+All mounted conversations use `src/composer-hints.ts`. `ConversationInteraction.composer().hint` accepts structured `ComposerHint` entries (`text`, optional exact `modifiers`) or a status-only string. Integrations contribute only hints for their real capabilities; new integrations reuse this metadata and shared renderer, never parse labels or add harness branches. `newlineHint` and `sendHint` are shared contributions; Pi separately contributes its busy-only Alt/Option queue hint. Existing hint text and order are unchanged.
+
+While the prompt field is focused and editable, holding exactly a hint's nonempty modifier combination changes that entire hint from description color to the normal theme foreground. Unmodified/status hints stay muted. Extra modifiers do not match. Feedback is immediate and color-only: no shimmer, weight change, animation, reserved width or layout change. Modifier observation never consumes events or alters keyboard delivery, drafts, persistence, focus or scroll. IME suppresses highlighting. Prompt/window blur, document visibility changes, session hiding and disposal clear held state; re-entry never restores stale modifiers. Input locks suppress and clear feedback. A newly offered hint can reflect modifiers still held in the focused field; removed hints cannot stay active.
+
+Hint nodes are rebuilt only when contribution content changes. Modifier changes toggle only affected classes; ordinary/repeated typing with unchanged modifiers performs no hint DOM mutations, geometry reads, transcript/status rendering or draft/storage work.
+
+Authored, **unrun** fixtures: `test/composer-hints.test.ts` covers exact/custom combinations, literal labels, stable nodes/mutation counts, focus/release/window/visibility/IME/lock/disposal; `test/conversation-view.test.ts` exercises Pi, Copilot and retained ACP contributions through the real mounted view, including snapshot transitions, hidden-session reset and unchanged drafts/submission. Native macOS appearance/focus and Linux keyboard acceptance remain pending user/platform validation.
 
 ## Contract
 

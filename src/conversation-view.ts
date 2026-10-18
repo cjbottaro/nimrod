@@ -7,6 +7,7 @@ import { installSlashCompletion } from "./pi/slash-completion";
 import { reconcileContentBlock } from "./pi/content-dom";
 import { clearDraft, ComposerState, recoverClearedQueue, restoreRecoveredQueueItem, SubmissionMode, updateDraft } from "./pi/composer-state";
 import { renderPrimaryAction, resizeComposer } from "./pi/composer-dom";
+import { installComposerHints } from "./composer-hints";
 import { codeBlockSource, createSafeMarkdownRenderer, isSafeLink } from "./pi/safe-markdown";
 import { showCopyResult, setCodeIcon } from './pi/code-actions';
 import { persistWebviewState, restoreComposerState } from "./pi/webview-state";
@@ -51,7 +52,10 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   let errorNoticeSequence = 0;
   let composerNoticeCause: string | undefined;
   let composerNoticeOperation: string | undefined;
-  const keyboardHintNode = required("keyboard-hint");
+  const keyboardHints = installComposerHints(prompt, required("keyboard-hint"), {
+    enabled: () => active && !disposed && !prompt.readOnly,
+    signal: listeners.signal,
+  });
   const controlsNode = required('status-controls');
   const controlNodes = new Map<string, HTMLButtonElement>(['model', 'thinking'].map(id => [id, required<HTMLButtonElement>(id)]));
   for (const [id, node] of controlNodes) node.dataset.controlId = id;
@@ -258,7 +262,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       preparing: preparing > 0,
       sessionUnavailable: displayedState.sessionUnavailable === true,
     });
-    keyboardHintNode.textContent = presentation.hint;
+    keyboardHints.render(presentation.hint);
     if (mainBusy || inputLocked) { send.title = presentation.stopLabel; send.setAttribute('aria-label', send.title); }
     if (host.reportNotice) {
       submissionNotice.hidden = true; submissionNotice.replaceChildren();
@@ -1119,6 +1123,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     setActive(value) {
       if (disposed || active === value) return;
       if (!value) {
+        keyboardHints.reset();
         // Capture inspection with real geometry, before the shell hides the root.
         suspendedOutputPositions = new Map(Array.from(toolCards, ([key, card]) => [key,
           pendingOutputPositions.has(key) ? pendingOutputPositions.get(key) : captureStreamingOutput(card)]));
