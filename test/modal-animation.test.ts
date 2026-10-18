@@ -5,6 +5,8 @@ import { applyModalAnimation, readModalAnimation } from '../src/modal-animation'
 
 test('scan speeds have independent style defaults and never reinterpret a duration as px/s', () => {
   assert.deepEqual(readModalAnimation({}), { style: 'subtle', duration: 500 });
+  assert.deepEqual(readModalAnimation({ 'appearance.modalAnimation': 'pixel' }), { style: 'pixel', duration: 500 });
+  assert.equal(readModalAnimation({ 'appearance.modalAnimation': 'pixel', 'appearance.modalAnimationDuration': 1200 }).duration, 1200);
   assert.equal(readModalAnimation({ 'appearance.modalAnimation': 'crt', 'appearance.modalAnimationDuration': 1200 }).scanSpeed, 500);
   assert.equal(readModalAnimation({ 'appearance.modalAnimation': 'hologram', 'appearance.modalAnimationDuration': 1200 }).scanSpeed, 1000);
   for (const style of ['crt', 'hologram']) {
@@ -33,6 +35,9 @@ test('root presentation uses speed for scan styles and duration for Subtle, pres
       assert.equal(document.documentElement.dataset.modalAnimation, style);
       assert.equal(document.documentElement.style.getPropertyValue('--modal-scan-speed'), speed);
     }
+    applyModalAnimation(document.documentElement, { style: 'pixel', duration: 500 });
+    assert.equal(document.documentElement.style.getPropertyValue('--modal-enter-duration'), '500ms');
+    assert.equal(document.documentElement.style.getPropertyValue('--modal-exit-duration'), '400ms');
     applyModalAnimation(document.documentElement, { style: 'none', duration: 1200 });
     assert.equal(document.documentElement.style.getPropertyValue('--modal-enter-duration'), '0ms');
     assert.equal(document.documentElement.style.getPropertyValue('--modal-exit-duration'), '0ms');

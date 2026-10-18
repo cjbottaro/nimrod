@@ -5,7 +5,7 @@ import { applyModalAnimation } from '../src/modal-animation';
 import { closeModal, installModalMotion, showModal, showModalOverlay, closeModalOverlay } from '../src/modal-motion';
 import { stubDialogs } from './dialog-fixture';
 
-function fixture(style: 'crt' | 'subtle' | 'hologram' = 'crt') {
+function fixture(style: 'crt' | 'subtle' | 'hologram' | 'pixel' = 'crt') {
   const dom = new JSDOM('<style>#sample { background:rgb(30,40,50); } .nimrod-modal { clip-path:none; }</style><button id="opener">Open</button><dialog id="sample" class="nimrod-modal"><form method="dialog"><textarea id="field"></textarea><button>Close</button></form></dialog>', { pretendToBeVisual: true });
   const { document } = dom.window; stubDialogs(dom.window);
   const getStyle = dom.window.getComputedStyle.bind(dom.window); dom.window.getComputedStyle = element => getStyle(element);
@@ -15,7 +15,7 @@ function fixture(style: 'crt' | 'subtle' | 'hologram' = 'crt') {
   dom.window.cancelAnimationFrame = id => { frames.delete(id); };
   const tick = (time: number) => { timeline.currentTime = time; const callbacks = [...frames.values()]; frames.clear(); callbacks.forEach(callback => callback(time)); };
   const observers = new Set<() => void>();
-  Object.assign(dom.window, { ResizeObserver: class {
+  Object.assign(dom.window, { CSS: { supports: () => true }, ResizeObserver: class {
     callback: () => void;
     constructor(callback: () => void) { this.callback = callback; }
     observe() { observers.add(this.callback); } disconnect() { observers.delete(this.callback); }
@@ -87,6 +87,45 @@ test('retarget preserves Hologram pixel position/speed and old cancellation cann
     f.resize(80); await Promise.resolve();
     assert.equal(f.document.querySelectorAll('[data-modal-motion]').length, 0);
     assert.equal(f.dialog.open, true);
+  } finally { f.dispose(); }
+});
+
+test('Pixel partial close preserves the current mask/progress and resize completes its opening', async () => {
+  const f = fixture('pixel');
+  try {
+    f.opener.focus(); showModal(f.dialog); await Promise.resolve(); f.tick(1000);
+    const entrance = f.records.find(record => record.node === f.dialog && !record.cancelled)!;
+    assert.equal(entrance.options.duration, 500); assert.equal(entrance.frames.length, 13);
+    entrance.currentTime = 250;
+    closeModal(f.dialog);
+    assert.equal(f.dialog.open, false); assert.equal(f.document.activeElement, f.opener);
+    const layer = f.document.querySelector<HTMLElement>('[data-modal-motion=exit]')!;
+    const panel = f.records.find(record => layer.contains(record.node) && record.node.shadowRoot)!;
+    assert.equal(panel.options.duration, 200); assert.equal(panel.options.direction, 'reverse');
+    assert.ok(panel.frames.every(frame => !('opacity' in frame)));
+    assert.ok(Number(layer.dataset.modalPixelTiles) <= 96);
+    showModal(f.dialog); await Promise.resolve(); f.tick(2000);
+    f.resize(100); await Promise.resolve(); await Promise.resolve();
+    assert.equal(f.dialog.open, true); assert.equal(f.document.querySelectorAll('[data-modal-motion]').length, 0);
+    // No source effect remains to confuse a later complete close.
+    closeModal(f.dialog);
+    const complete = f.document.querySelector<HTMLElement>('[data-modal-motion=exit]')!;
+    const completePanel = f.records.find(record => complete.contains(record.node) && record.node.shadowRoot)!;
+    assert.equal(completePanel.options.duration, 400);
+    applyModalAnimation(f.document.documentElement, { style: 'none', duration: 500 });
+    assert.equal(f.document.querySelectorAll('[data-modal-motion]').length, 0);
+  } finally { f.dispose(); }
+});
+
+test('unsupported pixel clipping falls back to an immediately usable plain dialog', async () => {
+  const f = fixture('pixel');
+  try {
+    Object.assign(f.dom.window, { CSS: { supports: () => false } });
+    showModal(f.dialog); await Promise.resolve();
+    assert.equal(f.dialog.open, true); assert.equal(f.document.querySelectorAll('[data-modal-motion]').length, 0);
+    closeModal(f.dialog, 'cancel');
+    assert.equal(f.dialog.open, false); assert.equal(f.dialog.returnValue, 'cancel');
+    assert.equal(f.document.querySelectorAll('[data-modal-motion]').length, 0);
   } finally { f.dispose(); }
 });
 

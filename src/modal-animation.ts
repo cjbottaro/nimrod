@@ -11,7 +11,7 @@ export const MODAL_ANIMATION_KEYS = {
 
 export function readModalAnimation(settings: Record<string, unknown>): ModalAnimation {
   const style = settings[MODAL_ANIMATION_KEYS.style] === undefined ? 'subtle' : settings[MODAL_ANIMATION_KEYS.style];
-  if (style !== 'none' && style !== 'subtle' && style !== 'crt' && style !== 'hologram') throw new Error('appearance.modalAnimation must be none, subtle, crt or hologram.');
+  if (style !== 'none' && style !== 'subtle' && style !== 'crt' && style !== 'hologram' && style !== 'pixel') throw new Error('appearance.modalAnimation must be none, subtle, crt, hologram or pixel.');
   const duration = settings[MODAL_ANIMATION_KEYS.duration] === undefined ? DEFAULT_MODAL_DURATIONS[style] : settings[MODAL_ANIMATION_KEYS.duration];
   if (typeof duration !== 'number' || !Number.isInteger(duration) || duration < 0 || duration > 2000) {
     throw new Error('appearance.modalAnimationDuration must be an integer from 0 to 2000 milliseconds.');

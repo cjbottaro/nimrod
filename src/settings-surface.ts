@@ -234,9 +234,11 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     required('modal-animation-hint').textContent = (animation.style === 'crt'
       ? 'A theme-accent horizontal line expands up and down like a CRT powering on.'
       : animation.style === 'hologram' ? 'A glowing scan line reveals the panel from top to bottom, with a soft trailing glow and no flicker.'
+      : animation.style === 'pixel' ? 'Chunky shuffled tiles assemble into the panel, then dissolve away on close.'
       : animation.style === 'subtle' ? 'A short fade, lift and gentle scale.' : 'Dialogs appear and disappear instantly; your duration is remembered.')
       + (animation.style === 'crt' || animation.style === 'hologram'
         ? ' Speed is independent of modal size; closing scans 25% faster. Filtering retargets the reveal without restarting it.'
+        : animation.style === 'pixel' ? ' Closing reverses the tiles without fading the panel and takes 20% less time.'
         : animation.style === 'subtle' ? ' Dismissal is 25% faster.' : '')
       + (scan ? ` Default scan speed: ${DEFAULT_SCAN_SPEEDS[animation.style as 'crt' | 'hologram']} px/s.` : ` Default duration: ${DEFAULT_MODAL_DURATIONS[animation.style]} ms.`)
       + ' Reduced motion disables animations.';

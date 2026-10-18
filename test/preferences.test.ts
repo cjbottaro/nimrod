@@ -141,6 +141,17 @@ test('modal animation defaults, global saves, JSONC preservation and external va
   } finally { p.dispose(); f.dom.window.close(); }
 });
 
+test('Pixel dissolve uses the existing global duration without touching scan speed', async () => {
+  const f = fixture(), p = await f.install();
+  try {
+    await p.saveModalAnimation({ style: 'pixel', duration: 700, scanSpeed: 750 });
+    assert.equal(p.modalAnimation().style, 'pixel');
+    assert.equal(p.modalAnimation().duration, 700); assert.equal(p.modalAnimation().scanSpeed, 750);
+    await p.saveModalAnimation({ style: 'subtle' }); assert.equal(p.modalAnimation().duration, 700);
+    await p.saveModalAnimation({ style: 'hologram' }); assert.equal(p.modalAnimation().scanSpeed, 750);
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
 test('scan speed is global, independent of duration, validated, and retained across styles', async () => {
   const f = fixture(), p = await f.install();
   try {
