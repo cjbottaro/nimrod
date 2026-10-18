@@ -10,6 +10,7 @@ mod links;
 #[cfg(target_os = "macos")]
 mod macos_window_appearance;
 mod native_menu;
+mod session_menu;
 mod notifications;
 mod performance_diagnostics;
 mod plugin_compiler;
@@ -466,6 +467,7 @@ fn main() {
         .manage(ExitState::default())
         .manage(popouts::Popouts::default())
         .manage(native_menu::ProjectPickerRequests::default())
+        .manage(session_menu::SessionMenus::default())
         .manage(cli::CliRequests::default());
     // Keep the existing Linux/Windows integration. macOS elects/binds above,
     // rather than using the plugin's racy connect/unlink/asynchronous-bind path.
@@ -569,6 +571,7 @@ fn main() {
             workspace_windows::list_projects,
             workspace_windows::open_project_directory,
             native_menu::take_project_picker_request,
+            session_menu::popup_session_menu,
             window_workspace,
             list_workspace_sessions,
             inspect_workspace_session,
@@ -586,6 +589,7 @@ fn main() {
             open_card_link
         ])
         .on_menu_event(|app, event| {
+            session_menu::dispatch(app, event.id().as_ref());
             if native_menu::is_quit(event.id().as_ref()) {
                 request_exit(app);
             } else if event.id().as_ref() == native_menu::SETTINGS_ID {
@@ -617,6 +621,9 @@ fn main() {
             }
         })
         .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                session_menu::forget(window);
+            }
             if window.label() == settings_window::LABEL {
                 if matches!(event, tauri::WindowEvent::Destroyed) {
                     settings_window::destroyed(window.app_handle());

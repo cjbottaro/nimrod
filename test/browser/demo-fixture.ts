@@ -77,6 +77,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'drafts_flush') return;
     if (command === 'drafts_references') return [];
     if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 1;
+    if (command === 'popup_session_menu') return; // Record native popup intent only; browser cannot render OS menus.
     if (command === 'scoped_preferences_snapshot') return preferences.snapshot();
     if (command === 'open_global_settings') { await openSettingsWindow(typeof args.category === 'string' ? args.category : undefined); return; }
     if (command === 'open_owned_project_settings') { await page.bringToFront(); return; }

@@ -67,6 +67,8 @@ The original matcher compared Command+Option+N to `event.key === 'n'`, and the r
 
 ## Tests and remaining acceptance
 
+The session-context `pin` action toggles Pin/Unpin through the same dispatcher as inline/native-menu actions. It has no default shortcut and is omitted when no session is presented; `test/keybindings-fixture.ts` explicitly lists it as intentionally unbound. Native Menu key/Shift+F10 on a focused sidebar row opens that row's popup, not the selected session's palette. [Sidebar menu contract](sidebar-attention.md#pinning-and-native-row-menus) owns routing and native acceptance gaps.
+
 Palette-cleanup coverage: `test/keybindings-fixture.ts` explicitly lists the intentionally unbound actions, shared by registry-default and shell shortcut assertions. Shell tests require shortcut hints on other visible commands and no hints on intentionally unbound commands, removed `demo`/`file` controls/actions and inert old overrides; Cmd-R tests retain mounted draft/file identity and modal/repeat/IME/eligibility guards, plus rebinding/unbinding. WebKit checks command shortcut coverage, removed rows/controls, temporary Restart no-op and direct keybinding-search focus.
 
 - `test/keybindings.test.ts`: defaults, grammar, unbinding/reset, unknown IDs, Cmd/Ctrl/Shift/layout matching, IME/repeat/unavailable/modal priority, conflict reassign/reset, nested JSONC patches, stale/new conflicts, invalid external edits, recording/search/failure/focus.

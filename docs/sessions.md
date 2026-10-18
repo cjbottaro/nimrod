@@ -50,7 +50,7 @@ Restart is unavailable for temporary sessions, before first save or during lifec
 
 ## Delete session tree
 
-The **trash icon left of Close** targets that row without switching to or resuming it. The Project bar trash icon and **Delete session tree…** / **⌘/Ctrl+Backspace** target the selected saved session.
+Right-click a Session sidebar row and choose **Delete session tree…** to target it without switching to or resuming it. The Project bar trash icon and **Delete session tree…** / **⌘/Ctrl+Backspace** target the selected saved session.
 
 This section describes **Pi's tree deletion**. Built-in SDK Copilot uses the same controls and shortcut as **Delete session…**, reviewing only one saved session through the SDK deletion API; see [Copilot deletion](copilot.md#history-close-and-delete). Restart remains Pi-only and is independent of deletion.
 

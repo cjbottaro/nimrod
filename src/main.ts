@@ -30,6 +30,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { notificationPreview, sessionNotifications, type NotificationDispatch, type NotificationClick } from './notifications';
 import { SessionNavigation, SESSION_VIEWS, type SessionView, type SelectionIntent, type NavigationSnapshot } from './session-navigation';
 import { SessionConnection } from './session-connection';
+import { installSessionContextMenu } from './session-context-menu';
 import { installSidebarResize, sidebarWidthKey } from './sidebar-resize';
 import { lastUsed, sortByRecency, captureSidebarScroll, revealSidebarRow, SessionRecency } from './session-recency';
 import { sessionStatus, sessionListLabel, createSessionRowContent, updateSessionRowContent, updateSessionRowTime, installSessionTimeRefresh } from './session-sidebar';
@@ -147,6 +148,7 @@ let active: Tab | undefined;
 // Remember navigation separately from the conversation actually shown by the filter.
 let presented: Tab | undefined;
 const navigation = new SessionNavigation<Tab>({ needsAttention, isWorking, isConnected });
+const sessionContextMenu = installSessionContextMenu();
 // Read-only lifecycle/storage membership; UI order comes only from navigation projections.
 const tabs = navigation.open();
 let recency = new SessionRecency(undefined);
@@ -172,7 +174,7 @@ function syncPopouts(): void {
 interface Tab {
   readonly backend: SessionBackend;
   readonly lifecycle: SessionLifecycle;
-  id: string; token?: string; title: string; lastUsed: number; mode: LaunchMode; file?: SessionFile;
+  id: string; token?: string; title: string; lastUsed: number; pinned: boolean; mode: LaunchMode; file?: SessionFile;
   root: HTMLElement; view: ConversationView; drafts: SessionDrafts; receive?: (message: HostMessage | ConversationViewMessage) => void;
   starting: boolean; closing: boolean; restarting: boolean; deleting: boolean; deletionExecuting: boolean; ended: boolean;
   awaitingSelection: boolean;
@@ -180,7 +182,7 @@ interface Tab {
   notices: ReturnType<typeof installApplicationNotices>;
   cancelPreference?: () => void;
   cancelInspector?: () => void;
-  closeButton: HTMLButtonElement; deleteButton: HTMLButtonElement;
+  closeButton: HTMLButtonElement; pinButton: HTMLButtonElement;
   row: HTMLButtonElement; rowLabel: HTMLElement; rowIndicator: HTMLElement; rowTime: HTMLTimeElement; rowHarness: HTMLElement; rowNode: HTMLElement;
 }
 function stored(key: string): unknown {
@@ -325,7 +327,7 @@ window.addEventListener('unload', () => {
   settingsSurface.dispose();
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
   pluginLoading.dispose();
-  sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); unlistenLinkErrors(); deletions.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
+  sessionContextMenu.dispose(); sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); unlistenLinkErrors(); deletions.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
   for (const tab of tabs) { copilotPermissions.get(tab)?.dispose(); tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.lifecycle.disconnect('Window closed'); }
   keybindingDispatch.dispose(); unlistenProjectSettings();
   unlistenProjectPicker(); palette.dispose();
@@ -364,9 +366,40 @@ function touchTab(tab: Tab): void {
   tab.lastUsed = navigation.nextRecency();
   refreshTime(tab);
   renderSidebar(tab.rowNode);
-  // All/Working use recency order; Unread keeps its independent arrival order.
-  if (presented === tab && sidebarView !== 'unread') required('sidebar-session-panel').scrollTop = 0;
+  // Recency moves only within its pin group; Unread retains inbox arrival.
+  if (presented === tab && sidebarView !== 'unread') {
+    if (tab.pinned || !tabs.some(item => item.pinned)) required('sidebar-session-panel').scrollTop = 0;
+    else revealSidebarRow(required('sidebar-session-panel'), tab.rowNode);
+  }
   persistTabs();
+}
+function canPin(tab: Tab): boolean {
+  return ready && !unloading && tabs.includes(tab) && !tab.closing && !tab.restarting && !tab.deleting && !deletion.locked(tab.file?.path);
+}
+function canClose(tab: Tab): boolean {
+  return canPin(tab) && !tab.starting;
+}
+async function runSessionRowAction(tab: Tab, action: 'pin' | 'close' | 'delete', pinned = !tab.pinned): Promise<void> {
+  if (!ready || unloading || !tabs.includes(tab) || settings.isOpen) return;
+  if (action === 'pin') {
+    if (!canPin(tab) || tab.pinned === pinned) return;
+    tab.pinned = pinned;
+    // Presentation-only: no activation, connection, transcript reset or recency change.
+    updateTab(tab); persistTabs();
+  } else if (action === 'close') {
+    if (canClose(tab)) await closeTab(tab);
+  } else await deleteSession(tab);
+}
+async function showSessionContextMenu(tab: Tab, position: { x: number; y: number }): Promise<void> {
+  if (!ready || unloading || settings.isOpen || document.querySelector('dialog[open]') || !tabs.includes(tab)) return;
+  const pinned = !tab.pinned;
+  await sessionContextMenu.show({
+    valid: () => !unloading && tabs.includes(tab) && !settings.isOpen && !document.querySelector('dialog[open]'),
+    pin: { label: pinned ? 'Pin session' : 'Unpin session', enabled: canPin(tab), run: () => runSessionRowAction(tab, 'pin', pinned) },
+    close: { label: 'Close session', enabled: canClose(tab), run: () => runSessionRowAction(tab, 'close') },
+    delete: { label: tabDeletion(tab)?.label || 'Delete session…', enabled: deletable(tab), run: () => runSessionRowAction(tab, 'delete') },
+    error: error => notices.report({ id: `session-menu:${++noticeSequence}`, owner: tab.id, operation: 'Session menu', message: String(error) }),
+  }, { x: position.x * window.devicePixelRatio, y: position.y * window.devicePixelRatio });
 }
 function renderSidebar(moved?: HTMLElement): void {
   measureWork(settingsSurface.performanceProbe, 'sidebar-reconcile', () => reconcileSidebar(moved));
@@ -380,7 +413,11 @@ function reconcileSidebar(moved?: HTMLElement): void {
   const restoreScroll = captureSidebarScroll(sidebar, [...list.children] as HTMLElement[], moved);
   const focused = document.activeElement;
   const filteredFocus = tabs.some(tab => !membership.has(tab) && focused instanceof Node && tab.rowNode.contains(focused));
-  for (const tab of tabs) tab.rowNode.hidden = !membership.has(tab);
+  const firstUnpinned = visible.find(tab => !tab.pinned);
+  for (const tab of tabs) {
+    tab.rowNode.hidden = !membership.has(tab);
+    tab.rowNode.classList.toggle('pin-boundary', tab === firstUnpinned && !!visible[0]?.pinned);
+  }
   // Move only out-of-order nodes: routine snapshots never rebuild sidebar rows
   // or touch the mounted transcript. Hidden rows follow the visible inbox.
   const ordered = [...visible, ...tabs.filter(tab => !membership.has(tab))];
@@ -495,7 +532,7 @@ function prepareTabBookkeeping(): void {
   if (changed) save(recencyKey(), recency.dump());
   save(layoutKey(), { tabs: tabs.flatMap<SavedSidebarSession>(tab => {
     const identity = tab.lifecycle.identity;
-    return identity ? [{ ...identity, name: tab.title, lastUsed: tab.lastUsed }] : [];
+    return identity ? [{ ...identity, name: tab.title, lastUsed: tab.lastUsed, ...(tab.pinned ? { pinned: true } : {}) }] : [];
   }), active: active?.lifecycle.key });
 }
 function recentWorkspaces(): string[] { const raw = stored(recentKey); return Array.isArray(raw) ? raw.filter((s): s is string => typeof s === 'string') : []; }
@@ -544,7 +581,7 @@ async function enterWorkspace(path: string): Promise<void> {
     if (!t) continue;
     if ('kind' in t) {
       if (tabs.some(tab => tab.lifecycle.key === copilotSdkScope(t.sessionId))) continue;
-      const tab = createTab('resume', undefined, t.name, lastUsed(t.lastUsed), undefined, t.sessionId, true);
+      const tab = createTab('resume', undefined, t.name, lastUsed(t.lastUsed), undefined, t.sessionId, true, t.pinned);
       tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
       continue;
     }
@@ -558,7 +595,7 @@ async function enterWorkspace(path: string): Promise<void> {
     }
     if (unloading) return;
     if (deletion.removed(t.path)) continue;
-    const tab = createTab('resume', { path: t.path, sessionId: t.sessionId, exists: true }, typeof t.name === 'string' ? t.name : 'Session', used);
+    const tab = createTab('resume', { path: t.path, sessionId: t.sessionId, exists: true }, typeof t.name === 'string' ? t.name : 'Session', used, undefined, undefined, false, t.pinned);
     tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
   }
   ready = true;
@@ -722,10 +759,13 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
       { id: 'restart', label: 'Restart session', detail: 'Restart Pi and retain this conversation', run: () => restartSession(active!) },
     ] : []),
     ...(active && tabDeletion(active)?.available() ? [{
-      id: 'delete', label: tabDeletion(active)!.label, detail: tabDeletion(active)!.detail, run: () => deleteSession(active),
+      id: 'delete', label: tabDeletion(active)!.label, detail: tabDeletion(active)!.detail, run: () => runSessionRowAction(active, 'delete'),
     }] : []),
     { id: 'temporary', label: 'New temporary session', detail: 'Pi · conversation without saved history', run: () => newSession('temporary') },
-    ...(active ? [{ id: 'close', label: 'Close session', detail: 'Stop its agent and remove it from the sidebar; saved history stays', run: () => closeTab(active!) }] : []),
+    ...(active ? [
+      { id: 'pin', label: active.pinned ? 'Unpin session' : 'Pin session', detail: 'Keep this session above unpinned sessions in the sidebar', run: () => runSessionRowAction(active, 'pin') },
+      { id: 'close', label: 'Close session', detail: 'Stop its agent and remove it from the sidebar; saved history stays', run: () => runSessionRowAction(active, 'close') },
+    ] : []),
     { id: 'sidebar', label: sidebarVisible ? 'Hide sidebar' : 'Show sidebar', detail: 'Toggle the open-session navigation pane', run: () => required<HTMLButtonElement>('toggle-sidebar').click() },
     { id: 'settings', label: 'Global Settings…', detail: 'Defaults for all projects, notifications and keybindings', run: () => invoke('open_global_settings') },
     ...(workspace ? [{ id: 'project-settings', label: 'Project settings…', detail: 'Override global appearance and runtime defaults for this project', run: () => settings.open() }] : []),
@@ -774,7 +814,7 @@ const unlistenProjectPicker = await listen('nimrod-open-project', () => { void t
 function button(text: string, click: () => void): HTMLButtonElement {
   const node = document.createElement('button'); node.type = 'button'; node.textContent = text; node.addEventListener('click', click); return node;
 }
-function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'temporary' ? 'Temporary session' : 'Session', used = 0, acpProfile?: AcpProfile, copilotSessionId?: string, sdk = false): Tab {
+function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'temporary' ? 'Temporary session' : 'Session', used = 0, acpProfile?: AcpProfile, copilotSessionId?: string, sdk = false, pinned = false): Tab {
   const id = crypto.randomUUID();
   const root = document.createElement('section'); root.className = 'session-view'; root.id = `panel-${id}`; root.setAttribute('role', 'region'); root.hidden = true;
   root.innerHTML = transcript;
@@ -787,10 +827,25 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
   const row = button('', () => activate(tab, 'row')); row.className = 'session-row'; row.id = `session-${id}`; row.setAttribute('aria-controls', root.id);
   root.setAttribute('aria-labelledby', row.id);
   const { rowLabel, rowIndicator, rowTime, rowHarness } = createSessionRowContent(row, `session-time-${id}`);
-  const deleteButton = button('', () => { void deleteSession(tab); }); deleteButton.className = 'session-delete';
-  deleteButton.append(required('delete-session').querySelector('svg')!.cloneNode(true));
-  const closeButton = button('×', () => { void closeTab(tab); }); closeButton.className = 'session-close';
-  rowNode.append(row, deleteButton, closeButton); required('open-sessions').append(rowNode);
+  const pinButton = button('', () => { void runSessionRowAction(tab, 'pin'); }); pinButton.className = 'session-pin';
+  pinButton.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 3 5 5-4 1-3 5v4l-8-8h4l5-3zM9 15l-6 6"/></svg>';
+  const closeButton = button('×', () => { void runSessionRowAction(tab, 'close'); }); closeButton.className = 'session-close';
+  rowNode.append(row, pinButton, closeButton); required('open-sessions').append(rowNode);
+  rowNode.addEventListener('mousedown', event => {
+    // Opening a context menu must not blur the composer or select its row.
+    if (event.button === 2 || event.button === 0 && event.ctrlKey && isMac(window)) event.preventDefault();
+  });
+  rowNode.addEventListener('contextmenu', event => {
+    event.preventDefault(); event.stopPropagation();
+    if (event.clientX || event.clientY) void showSessionContextMenu(tab, { x: event.clientX, y: event.clientY });
+    else { const rect = row.getBoundingClientRect(); void showSessionContextMenu(tab, { x: rect.left, y: rect.bottom }); }
+  });
+  rowNode.addEventListener('keydown', event => {
+    if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
+    event.preventDefault(); event.stopPropagation();
+    if (event.repeat) return;
+    const rect = row.getBoundingClientRect(); void showSessionContextMenu(tab, { x: rect.left, y: rect.bottom });
+  });
   const backend: SessionBackend = sdk ? { kind: 'copilot-sdk', savedSessionId: copilotSessionId } : acpProfile ? { kind: 'acp', profile: acpProfile } : { kind: 'pi' };
   const lifecycle: SessionLifecycle = backend.kind === 'copilot-sdk' ? copilotSessionLifecycle(() => tab, backend, {
     connect: options => launchCopilot(tab, options.acceptedAction),
@@ -805,7 +860,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
     stop: token => invoke<void>('stop_pi', { token }),
     gate: () => deletion.blocked(tab.file?.path) ? 'unavailable' : tab.deleting || deletion.locked(tab.file?.path) ? 'blocked' : 'ready',
   });
-  const tab: Tab = { id, mode, file, title, backend, lifecycle, lastUsed: Math.max(lastUsed(used), file ? recency.get(file) : 0), root, notice, notices: sessionNotices, closeButton, deleteButton, row, rowLabel, rowIndicator, rowTime, rowHarness, rowNode,
+  const tab: Tab = { id, mode, file, title, pinned, backend, lifecycle, lastUsed: Math.max(lastUsed(used), file ? recency.get(file) : 0), root, notice, notices: sessionNotices, closeButton, pinButton, row, rowLabel, rowIndicator, rowTime, rowHarness, rowNode,
     drafts: drafts.fork(), starting: false, closing: false, restarting: false, deleting: false, deletionExecuting: false, ended: false, awaitingSelection: false, inputCount: 0, unread: false, failed: deletion.blocked(file?.path),
     view: { setActive() {}, scrollToBottom() {}, dispose() {} } };
   root.addEventListener('focusin', event => { if (event.target instanceof HTMLElement) tab.focus = event.target; });
@@ -979,10 +1034,12 @@ function updateTabPresentation(tab: Tab): void {
   updateSessionRowContent(tab, entry, false);
   tab.row.disabled = !ready;
   tab.row.setAttribute('aria-current', String(tab === presented)); tab.closeButton.setAttribute('aria-label', `Close ${name}`); tab.closeButton.disabled = !ready || tab.deleting || deletion.locked(tab.file?.path) || tab.closing || tab.starting || tab.restarting;
-  const remove = tabDeletion(tab);
-  tab.deleteButton.setAttribute('aria-label', `${remove?.label.replace('…', '') || 'Delete session'} for ${name}`);
-  tab.deleteButton.disabled = !deletable(tab);
-  tab.deleteButton.title = `${remove?.label || 'Delete session…'}${!remove?.available() && remove?.unavailableReason ? ` — ${remove.unavailableReason}` : ''}`;
+  tab.pinButton.setAttribute('aria-label', `${tab.pinned ? 'Unpin' : 'Pin'} ${name}`);
+  tab.pinButton.setAttribute('aria-pressed', String(tab.pinned));
+  tab.pinButton.title = tab.pinned ? 'Unpin session' : 'Pin session';
+  tab.pinButton.disabled = !canPin(tab);
+  tab.rowNode.classList.toggle('pinned', tab.pinned);
+  if (tab.pinned) tab.row.setAttribute('aria-label', `${tab.row.getAttribute('aria-label')} — Pinned`);
   if (presented === tab) presentConversation(tab);
   renderSidebar();
 }
@@ -1672,7 +1729,7 @@ required('recover-draft').addEventListener('click', () => {
   });
 });
 required('restart-session').addEventListener('click', () => { if (presented) void restartSession(presented); });
-required('delete-session').addEventListener('click', () => { if (presented) void deleteSession(presented); });
+required('delete-session').addEventListener('click', () => { if (presented) void runSessionRowAction(presented, 'delete'); });
 required('toggle-sidebar').addEventListener('click', () => { sidebarVisible = !sidebarVisible; save('nimrod.sidebar.visible', sidebarVisible); controls(); });
 for (const view of sidebarViews) required(`sidebar-${view}`).addEventListener('click', () => selectSidebarView(view));
 required('sidebar-views').addEventListener('keydown', event => {
@@ -1724,6 +1781,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
     if (presented) {
       for (const action of sessionActions(presented)) contributed.add(action.id);
       contributed.add('close');
+      if (canPin(presented)) contributed.add('pin');
       if (restartable(presented)) contributed.add('restart');
       if (tabDeletion(presented)?.available()) contributed.add('delete');
     }
@@ -1741,14 +1799,15 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'new': return newSession();
       case 'new-copilot': return newCopilotSession();
       case 'temporary': return newSession('temporary');
-      case 'delete': return presented ? deleteSession(presented) : undefined;
+      case 'delete': return presented ? runSessionRowAction(presented, 'delete') : undefined;
+      case 'pin': return presented ? runSessionRowAction(presented, 'pin') : undefined;
       case 'delete-sessions': return palette.deleteSessions();
       case 'capture-performance': return capturePerformance(true);
       case 'reload-card-plugins': return reloadCardPlugins(true);
       case 'select-theme': return pickTheme();
       case 'mcp': case 'model': case 'thinking': case 'mode': case 'context-window': case 'permissions': case 'cancel-configuration': return presented ? runSessionAction(presented, id) : undefined;
       case 'palette': palette.open(); return;
-      case 'close': return presented ? closeTab(presented) : undefined;
+      case 'close': return presented ? runSessionRowAction(presented, 'close') : undefined;
       case 'sidebar': required<HTMLButtonElement>('toggle-sidebar').click(); return;
       case 'previous': cycleTab(-1); return;
       case 'next': cycleTab(1); return;

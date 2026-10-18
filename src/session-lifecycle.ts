@@ -5,7 +5,7 @@ export type LaunchMode = 'saved' | 'temporary' | 'resume';
 export type SavedSessionIdentity =
   | { path: string; sessionId: string }
   | { kind: 'copilot-sdk'; sessionId: string };
-export type SavedSidebarSession = SavedSessionIdentity & { name: string; lastUsed: number };
+export type SavedSidebarSession = SavedSessionIdentity & { name: string; lastUsed: number; pinned?: boolean };
 /** A previously accepted user action may outlive the palette/settings surface that accepted it. */
 export interface ConnectSessionOptions { acceptedAction?: boolean; }
 export type SessionConnectionState = 'disconnected' | 'connecting' | 'connected';
@@ -74,7 +74,7 @@ export function readSavedSidebarSession(value: unknown): SavedSidebarSession | u
   const entry = value as Record<string, unknown>;
   if (typeof entry.sessionId !== 'string' || !entry.sessionId.trim()) return;
   const metadata = { name: typeof entry.name === 'string' ? entry.name : entry.kind === 'copilot-sdk' ? 'Copilot session' : 'Session',
-    lastUsed: lastUsed(entry.lastUsed) };
+    lastUsed: lastUsed(entry.lastUsed), ...(entry.pinned === true ? { pinned: true } : {}) };
   if (entry.kind === 'copilot-sdk') return { kind: 'copilot-sdk', sessionId: entry.sessionId, ...metadata };
   if (entry.kind === undefined && typeof entry.path === 'string') {
     return { path: entry.path, sessionId: entry.sessionId, ...metadata };

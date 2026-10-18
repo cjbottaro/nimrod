@@ -18,6 +18,8 @@ import { copilotSdkScope } from '../src/copilot/session-lifecycle';
 
 // Real shell/renderer/controller bundle, mocked native boundary—not native WebKit acceptance.
 interface ShellOptions {
+  menuError?: string;
+  menuGate?: Promise<void>;
   sdkCommands?: JsonRecord[];
   sdkCommand?: (request: JsonRecord) => Promise<unknown>;
   acpCleanupError?: string;
@@ -126,6 +128,8 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   const preferences = new MemoryPreferences();
   Object.assign(preferences.value.state, options.appState);
   const callbacks = new Map<number, (event: unknown) => void>();
+  let menu: { request: string; options: JsonRecord } | undefined;
+  let sessionMenuEvent: ((request: string, action: string) => void) | undefined;
   const preferenceCallbacks = new Set<number>();
   let deletionEvent: ((event: DeletionEvent, target?: string) => void) | undefined;
   let notificationClick: ((event: unknown, target?: string) => void) | undefined;
@@ -137,6 +141,11 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     transformCallback: (callback: (event: unknown) => void) => { const id = callbacks.size + 1; callbacks.set(id, callback); return id; }, unregisterCallback: () => {},
     invoke: async (command: string, args: JsonRecord = {}) => {
       calls.push({ command, args });
+      if (command === 'popup_session_menu') {
+        await options.menuGate;
+        if (options.menuError) throw new Error(options.menuError);
+        menu = { request: String(args.request), options: args.options as JsonRecord }; return;
+      }
       if (command === 'window_appearance_capabilities' || command === 'apply_window_appearance') {
         if (command === 'window_appearance_capabilities') { await options.appearanceGate; if (options.appearanceError) throw new Error(options.appearanceError); }
         return options.appearanceCapabilities ?? { platform: 'macos', transparency: true, frost: true, reducedTransparency: false };
@@ -150,6 +159,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       if (command === 'drafts_flush') { await options.draftFlushGate; if (options.draftFlushError) throw new Error(options.draftFlushError); return; }
       if (command === 'drafts_references') return [];
       if (command === 'plugin:event|listen') {
+        if (args.event === 'nimrod-session-menu') sessionMenuEvent = (request, action) => callbacks.get(Number(args.handler))?.({ payload: { request, action } });
         if (args.event === 'nimrod-open-project') projectPicker = target => {
           const listenerTarget = args.target as { kind: string; label?: string };
           if (!target || listenerTarget.kind === 'Any' || listenerTarget.label === target) {
@@ -340,7 +350,21 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   const openPalette = () => win.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'p', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
   // Identify sessions by mounted conversation order, not mutable sidebar positions.
   const rows = () => [...win.document.querySelectorAll('.session-view')].map(root => win.document.querySelector<HTMLButtonElement>(`.session-row[aria-controls="${root.id}"]`)!);
-  return { dom, win, tick, calls, element, openSettings, back, preferences, openPalette, rows,
+  async function rowMenu(row: HTMLElement) {
+    row.dispatchEvent(new win.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 20, clientY: 50 }));
+    await tick(); await tick();
+    assert.ok(menu, 'native popup requested');
+    const current = menu;
+    function item(key: string, label: string, enabled: boolean) {
+      return { label, disabled: !enabled, click: () => { if (enabled) sessionMenuEvent?.(current.request, key); } };
+    }
+    return {
+      pin: item('pin', String(current.options.pinLabel), current.options.pinEnabled === true),
+      close: item('close', 'Close session', current.options.closeEnabled === true),
+      delete: item('delete', String(current.options.deleteLabel), current.options.deleteEnabled === true),
+    };
+  }
+  return { dom, win, tick, calls, element, openSettings, back, preferences, openPalette, rows, rowMenu,
     confirm: async () => { await tick(); element<HTMLDialogElement>('host-dialog').close('ok'); await tick(); await tick(); },
     saved: (): { drafts: Record<string, any>; last: unknown } => ({ drafts: Object.fromEntries([...nativeDrafts].filter(([, record]) => record.value !== null).map(([key, record]) => [key, record.value])), last: preferences.value.state['nimrod.last-session.v1'] }),
     sessions, acpSessions, sdkSessions,
@@ -353,6 +377,82 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     disconnect: () => channel.onmessage({ kind: 'disconnected', message: 'fixture closed' }),
   };
 }
+
+test('native row menu pins its background target without selection, connection, recency or draft effects', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', appState: {
+    'nimrod.tabs.v1:/project': { tabs: [
+      { path: '/sessions/older', sessionId: 'fixture-id', name: 'Older', lastUsed: 10 },
+      { path: '/sessions/newer', sessionId: 'fixture-id', name: 'Newer', lastUsed: 20 },
+    ], active: '/sessions/newer' },
+  } });
+  try {
+    const [older, newer] = f.rows(), prompt = f.element<HTMLTextAreaElement>('prompt');
+    prompt.value = 'Keep my draft'; prompt.dispatchEvent(new f.win.Event('input')); prompt.focus();
+    const before = f.calls.length, time = older.querySelector('time')!.getAttribute('datetime');
+    const native = await f.rowMenu(older);
+    assert.equal(newer.getAttribute('aria-current'), 'true');
+    assert.equal(f.win.document.activeElement, prompt);
+    native.pin.click(); await f.tick(); await f.tick();
+    assert.equal(f.win.document.querySelector('#open-sessions .session-row'), older);
+    assert.equal(older.querySelector('time')!.getAttribute('datetime'), time);
+    assert.equal(newer.getAttribute('aria-current'), 'true');
+    assert.equal(prompt.value, 'Keep my draft'); assert.equal(f.win.document.activeElement, prompt);
+    assert.equal(older.parentElement!.querySelector('.session-pin')!.getAttribute('aria-pressed'), 'true');
+    assert.equal(newer.parentElement!.classList.contains('pin-boundary'), true);
+    assert.equal(f.calls.slice(before).some(call => ['start_pi', 'write_pi', 'stop_pi'].includes(call.command)), false);
+    const layout = f.preferences.value.state['nimrod.tabs.v1:/project'] as { tabs: { pinned?: boolean }[] };
+    assert.equal(layout.tabs[0].pinned, true);
+    const registration = f.calls.find(call => call.command === 'plugin:event|listen' && call.args.event === 'nimrod-session-menu')!;
+    assert.equal((registration.args.target as JsonRecord).kind, 'WebviewWindow');
+    assert.equal((registration.args.target as JsonRecord).label, 'main');
+    // A delayed event from an older popup must not act on the newly clicked row.
+    const oldMenu = await f.rowMenu(older);
+    const newMenu = await f.rowMenu(newer);
+    oldMenu.close.click(); await f.tick();
+    assert.equal(f.rows().length, 2);
+    newMenu.pin.click(); await f.tick();
+    assert.equal(newer.parentElement!.querySelector('.session-pin')!.getAttribute('aria-pressed'), 'true');
+    older.parentElement!.querySelector<HTMLButtonElement>('.session-pin')!.click(); await f.tick();
+    assert.equal(older.parentElement!.querySelector('.session-pin')!.getAttribute('aria-pressed'), 'false');
+  } finally { f.win.close(); }
+});
+
+test('saved Pi and Copilot pins restore without loading background sessions and palette pin is bindable', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', appState: {
+    'nimrod.tabs.v1:/project': { tabs: [
+      { path: '/sessions/pinned', sessionId: 'fixture-id', name: 'Pinned Pi', lastUsed: 10, pinned: true },
+      { kind: 'copilot-sdk', sessionId: 'saved-id', name: 'Pinned SDK', lastUsed: 20, pinned: true },
+      { path: '/sessions/selected', sessionId: 'fixture-id', name: 'Selected', lastUsed: 30 },
+    ], active: '/sessions/selected' },
+  } });
+  try {
+    assert.deepEqual([...f.win.document.querySelectorAll('#open-sessions .session-row-label')].map(node => node.textContent), ['Pinned SDK', 'Pinned Pi', 'Selected']);
+    assert.equal(f.calls.filter(call => call.command === 'start_pi').length, 1);
+    assert.equal(f.calls.some(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'connect'), false);
+    f.openPalette();
+    const input = f.element<HTMLInputElement>('palette-input'); input.value = 'Pin session'; input.dispatchEvent(new f.win.Event('input'));
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
+    assert.equal(f.rows()[2].parentElement!.querySelector('.session-pin')!.getAttribute('aria-pressed'), 'true');
+    assert.equal(ACTIONS.find(action => action.id === 'pin')!.defaults.length, 0);
+  } finally { f.win.close(); }
+});
+
+test('keyboard row menu suppresses the webview default and native failures stay session-owned', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', menuError: 'Native popup unavailable' });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const row = f.rows()[0]; row.focus();
+    const event = new f.win.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true });
+    row.dispatchEvent(event); await f.tick(); await f.tick();
+    assert.equal(event.defaultPrevented, true);
+    assert.equal(f.calls.filter(call => call.command === 'popup_session_menu').length, 1);
+    assert.match(f.win.document.querySelector('.session-view:not([hidden]) .application-notices')?.textContent || f.win.document.querySelector('.session-view:not([hidden])')!.textContent!, /Native popup unavailable/);
+    assert.doesNotMatch(f.element('application-notices').textContent!, /Native popup unavailable/);
+    const repeat = new f.win.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, repeat: true, bubbles: true, cancelable: true });
+    row.dispatchEvent(repeat); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'popup_session_menu').length, 1);
+  } finally { f.win.close(); }
+});
 
 test('an unavailable ACP host cannot prevent Pi startup or enable ACP launches', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project', acpCleanupError: 'ACP host unavailable' });
@@ -686,7 +786,7 @@ test('row deletion stops only the owning Copilot conversation, retains review th
       const conversation = f.calls.filter(call => call.command === 'start_copilot').at(-1)!.args.token;
       const discovery = f.calls.find(call => call.command === 'start_copilot')!.args.token;
       const callsBefore = f.calls.length;
-      f.rows()[0].parentElement!.querySelector<HTMLButtonElement>('.session-delete')!.click(); await f.tick();
+      (await f.rowMenu(f.rows()[0])).delete.click(); await f.tick();
       assert.equal(f.element<HTMLDialogElement>('deletion-review').open, true);
       assert.equal(f.calls.slice(callsBefore).some(call => call.command === 'stop_copilot'), false, 'review does not stop work');
       f.element<HTMLButtonElement>('deletion-confirm').click(); await f.tick(); await f.tick();
@@ -2113,7 +2213,8 @@ test('Close and Delete share connected-first selection and reconnect an inactive
       const before = f.calls.filter(c => c.command === 'start_pi').length;
       const recency = rows.map(row => row.querySelector('time')!.getAttribute('datetime'));
       const target = rows[selectedIndex].parentElement!;
-      target.querySelector<HTMLButtonElement>(action === 'close' ? '.session-close' : '.session-delete')!.click();
+      if (action === 'close') target.querySelector<HTMLButtonElement>('.session-close')!.click();
+      else (await f.rowMenu(rows[selectedIndex])).delete.click();
       await f.tick(); await f.tick(); await f.tick();
       assert.equal(rows[expected].getAttribute('aria-current'), 'true', `${action}/${scenario}`);
       assert.equal(f.element(`sidebar-${view}`).getAttribute('aria-selected'), 'true', `${action}/${scenario} view`);
@@ -2311,7 +2412,7 @@ test('confirmed snapshot tombstones clean stale restored layouts and closed draf
   } finally { f.dom.window.close(); }
 });
 
-test('sidebar trash targets a background row without selecting/resuming it and preserves confirmed-only cleanup', async () => {
+test('sidebar menu deletion targets a background row without selecting/resuming it and preserves confirmed-only cleanup', async () => {
   const root = '/sessions/root', child = '/sessions/child', selected = '/sessions/selected';
   for (const outcome of ['confirmed', 'cancelled', 'partial', 'failed']) {
     let release!: () => void, answer!: (confirmed: boolean) => void;
@@ -2338,15 +2439,16 @@ test('sidebar trash targets a background row without selecting/resuming it and p
     try {
       await f.tick(); await f.tick();
       const rows = f.rows(), prompt = f.element<HTMLTextAreaElement>('prompt');
-      const trash = rows[0].parentElement!.querySelector<HTMLButtonElement>('.session-delete')!;
-      assert.equal(trash.nextElementSibling, rows[0].parentElement!.querySelector('.session-close'));
-      assert.equal(trash.getAttribute('aria-label'), 'Delete session tree for Root');
+      const trash = (await f.rowMenu(rows[0])).delete;
+      assert.equal(rows[0].parentElement!.querySelector('.session-delete'), null);
+      assert.equal(trash.label, 'Delete session tree…');
       assert.equal(trash.disabled, false); assert.equal(rows[2].getAttribute('aria-current'), 'true');
       const starts = f.calls.filter(call => call.command === 'start_pi').length;
       trash.click(); trash.click();
       assert.equal(f.element<HTMLDialogElement>('deletion-review').open, false, 'row action waits briefly before showing loading');
       assert.equal(f.element<HTMLButtonElement>('deletion-confirm').disabled, true);
-      for (const button of f.win.document.querySelectorAll<HTMLButtonElement>('.session-delete')) assert.equal(button.disabled, true);
+      await f.tick();
+      assert.equal((await f.rowMenu(rows[1])).delete.disabled, true);
       release(); await f.tick(); await f.tick();
       assert.equal(f.win.document.activeElement, f.element('deletion-confirm'));
       assert.equal(rows[2].getAttribute('aria-current'), 'true'); assert.equal(rows[0].getAttribute('aria-current'), 'false');
@@ -2367,35 +2469,35 @@ test('sidebar trash targets a background row without selecting/resuming it and p
   }
 });
 
-test('sidebar trash allows working and pending sessions but guards unsaved, temporary and quarantined sessions', async () => {
+test('sidebar menu deletion allows working and pending sessions but guards unsaved, temporary and quarantined sessions', async () => {
   let exists = false;
   const f = await fixture(undefined, { windowWorkspace: '/project', fileExists: () => exists, holdPrompts: true });
   try {
     f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
-    assert.equal(f.rows()[0].parentElement!.querySelector<HTMLButtonElement>('.session-delete')!.disabled, true, 'unwritten saved sessions cannot be deleted');
+    assert.equal((await f.rowMenu(f.rows()[0])).delete.disabled, true, 'unwritten saved sessions cannot be deleted');
     exists = true; f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
-    const trash = f.rows()[1].parentElement!.querySelector<HTMLButtonElement>('.session-delete')!;
-    assert.equal(trash.disabled, false);
-    f.emit({ type: 'agent_start' }); assert.equal(trash.disabled, false, 'working sessions can be deleted');
+    const trash = () => f.rowMenu(f.rows()[1]).then(menu => menu.delete);
+    assert.equal((await trash()).disabled, false);
+    f.emit({ type: 'agent_start' }); assert.equal((await trash()).disabled, false, 'working sessions can be deleted');
     assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
-    f.emit({ type: 'agent_settled' }); assert.equal(trash.disabled, false);
+    f.emit({ type: 'agent_settled' }); assert.equal((await trash()).disabled, false);
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Pending send'; prompt.dispatchEvent(new f.win.Event('input'));
     prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
-    assert.equal(trash.disabled, false, 'pending acknowledgement does not prevent native shutdown');
+    assert.equal((await trash()).disabled, false, 'pending acknowledgement does not prevent native shutdown');
     assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
     const request = f.calls.find(call => (call.args.message as JsonRecord)?.type === 'prompt')!.args.message as JsonRecord;
     f.captureChannel().onmessage({ kind: 'rpc', value: { type: 'response', id: request.id, success: true } }); await f.tick();
-    assert.equal(trash.disabled, false, 'receipt settlement refreshes eligibility without an activity event');
+    assert.equal((await trash()).disabled, false, 'receipt settlement refreshes eligibility without an activity event');
     assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
     f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
-    assert.equal(f.rows()[2].parentElement!.querySelector<HTMLButtonElement>('.session-delete')!.disabled, true);
+    assert.equal((await f.rowMenu(f.rows()[2])).delete.disabled, true);
     assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false);
   } finally { f.win.close(); }
   const quarantined = await fixture(undefined, { windowWorkspace: '/project', deletionSnapshot: { pending: false, quarantine: ['/sessions/root'], files: [] }, appState: {
     'nimrod.tabs.v1:/project': { tabs: [{ path: '/sessions/root', sessionId: 'fixture-id', name: 'Root' }], active: '/sessions/root' },
   } });
   try {
-    const trash = quarantined.rows()[0].parentElement!.querySelector<HTMLButtonElement>('.session-delete')!;
+    const trash = (await quarantined.rowMenu(quarantined.rows()[0])).delete;
     assert.equal(trash.disabled, true); trash.click();
     assert.equal(quarantined.calls.some(call => call.command === 'delete_session_tree' || call.command === 'start_pi'), false);
   } finally { quarantined.win.close(); }
