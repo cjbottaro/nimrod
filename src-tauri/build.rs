@@ -157,6 +157,7 @@ fn main() {
         "copilot/bridge.mjs",
         "copilot/configuration.mjs",
         "copilot/permissions.mjs",
+        "copilot/permission-configuration.mjs",
         "scripts/prepare-copilot.mjs",
         "package-lock.json",
     ] {

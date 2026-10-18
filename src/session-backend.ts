@@ -13,10 +13,12 @@ export type SessionBackend =
   | { readonly kind: 'copilot-sdk'; session?: CopilotSession; savedSessionId?: string }
   | { readonly kind: 'acp'; readonly profile: AcpProfile; session?: AcpSession };
 export interface SessionAction {
-  id: Extract<ActionId, 'mcp' | 'model' | 'thinking' | 'mode' | 'context-window' | 'cancel-configuration'> | 'acp-options';
+  id: Extract<ActionId, 'mcp' | 'model' | 'thinking' | 'mode' | 'context-window' | 'permissions' | 'cancel-configuration'> | 'acp-options';
   label: string;
   detail: string;
   keywords?: string;
+  /** Opaque setting routed through the shared configuration picker. */
+  configurationSetting?: string;
 }
 interface Owner { readonly backend: SessionBackend; }
 export function piSession(owner: Owner): PiSession | undefined { return owner.backend.kind === 'pi' ? owner.backend.session : undefined; }
@@ -27,6 +29,8 @@ export function sessionConfiguration(owner: Owner): import('./session-configurat
 export function sessionActions(owner: Owner): readonly SessionAction[] {
   const actions = owner.backend.kind === 'pi' ? piSessionActions : owner.backend.kind === 'copilot-sdk' ? copilotSessionActions(owner.backend.session) : acpSessionActions(owner.backend.session);
   const configuration = sessionConfiguration(owner);
+  const contributed: readonly SessionAction[] = configuration?.capabilities.some(setting => setting.id === 'permissions')
+    ? [...actions, { id: 'permissions', label: 'Select permissions…', detail: 'Change the permission policy for this session', configurationSetting: 'permissions' }] : actions;
   return configuration?.cancel && configuration.operations.some(operation => operation.cancellable)
-    ? [...actions, { id: 'cancel-configuration', label: 'Cancel pending configuration change', detail: 'Withdraw configuration that has not been dispatched' }] : actions;
+    ? [...contributed, { id: 'cancel-configuration', label: 'Cancel pending configuration change', detail: 'Withdraw configuration that has not been dispatched' }] : contributed;
 }

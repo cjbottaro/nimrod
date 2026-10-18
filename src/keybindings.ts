@@ -13,6 +13,7 @@ export const ACTIONS = [
   { id: 'model', label: 'Select model…', scope: 'project', context: 'session', defaults: ['primary+shift+m'] },
   { id: 'thinking', label: 'Select thinking level…', keywords: 'effort reasoning', scope: 'project', context: 'session', defaults: ['primary+shift+e'] },
   { id: 'mode', label: 'Select mode…', keywords: 'interactive plan autopilot', scope: 'project', context: 'session', defaults: [] },
+  { id: 'permissions', label: 'Select permissions…', scope: 'project', context: 'session', defaults: [] },
   { id: 'cancel-configuration', label: 'Cancel pending configuration change', scope: 'project', context: 'session', defaults: [] },
   { id: 'context-window', label: 'Select context window…', keywords: 'limit tier long context', scope: 'project', context: 'session', defaults: [] },
   { id: 'palette', label: 'Command palette', scope: 'project', context: 'project', defaults: ['primary+shift+p'] },

@@ -1007,9 +1007,23 @@ function cancelConfiguration(tab: Tab, key?: string): void {
   const target = key ?? configuration?.operations.find(operation => operation.cancellable)?.key;
   if (target) configuration?.cancel?.(target);
 }
+async function pickConfigurationCancellation(tab: Tab): Promise<void> {
+  const configuration = sessionConfiguration(tab);
+  const operations = configuration?.operations.filter(operation => operation.cancellable) || [];
+  if (operations.length <= 1) { if (operations[0]) cancelConfiguration(tab, operations[0].key); return; }
+  const request = palette.startSelection('Cancel pending configuration change', () => { void pickConfigurationCancellation(tab); });
+  if (!request) return;
+  tab.cancelPreference?.(); tab.cancelPreference = request.cancel;
+  try {
+    const key = await request.chooseItems(operations.map(operation => ({ id: operation.key, label: operation.title, detail: operation.text })));
+    if (key && tab.cancelPreference === request.cancel && sessionConfiguration(tab) === configuration) cancelConfiguration(tab, key);
+  } finally { request.finish(); if (tab.cancelPreference === request.cancel) tab.cancelPreference = undefined; }
+}
 async function runSessionAction(tab: Tab, id: SessionAction['id']): Promise<void> {
   if (!tabs.includes(tab) || tab.closing || tab.restarting || tab.deleting || !ACTIONS.some(action => action.id === id) || !sessionActions(tab).some(action => action.id === id)) return;
-  if (id === 'cancel-configuration') return cancelConfiguration(tab);
+  if (id === 'cancel-configuration') return pickConfigurationCancellation(tab);
+  const action = sessionActions(tab).find(action => action.id === id);
+  if (action?.configurationSetting) return pickConfigurationSetting(tab, action.configurationSetting, action.label.replace(/…$/, ''));
   if (id === 'mcp') return inspectMcp(tab);
   if (id === 'acp-options') return pickAcpOption(tab);
   return pickPreference(tab, id as 'model' | 'thinking' | 'mode' | 'context-window');
@@ -1057,7 +1071,11 @@ async function inspectMcp(tab: Tab): Promise<void> {
 async function pickPreference(tab: Tab, kind: 'model' | 'thinking' | 'mode' | 'context-window'): Promise<void> {
   const operation = kind === 'model' ? 'Select model' : kind === 'thinking' ? 'Select thinking level'
     : kind === 'mode' ? 'Select mode' : 'Select context window';
-  const request = palette.startSelection(operation, () => { void pickPreference(tab, kind); }, message => {
+  const setting = kind === 'model' ? 'model' : kind === 'thinking' ? 'effort' : kind === 'context-window' ? 'context-tier' : 'mode';
+  return pickConfigurationSetting(tab, setting, operation);
+}
+async function pickConfigurationSetting(tab: Tab, setting: string, operation: string): Promise<void> {
+  const request = palette.startSelection(operation, () => { void pickConfigurationSetting(tab, setting, operation); }, message => {
     if (tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:preference:${++noticeSequence}`, owner: tab.id, operation, message });
   });
   if (!request) return;
@@ -1067,7 +1085,6 @@ async function pickPreference(tab: Tab, kind: 'model' | 'thinking' | 'mode' | 'c
   const valid = () => tabs.includes(tab) && sessionConfiguration(tab) === configuration && tab.cancelPreference === request.cancel
     && !tab.ended && !tab.closing && !tab.restarting && !tab.deleting;
   try {
-    const setting = kind === 'model' ? 'model' : kind === 'thinking' ? 'effort' : kind === 'context-window' ? 'context-tier' : 'mode';
     await pickConfiguration(configuration, setting,
       (options, current) => request.chooseItems(options.map(option => ({ id: option.value, label: option.label, detail: option.detail, keywords: option.keywords })), current), valid);
   } catch (error) { if (valid()) request.error(String(error)); }
@@ -1714,7 +1731,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
     if (!ready) return false;
     if (id === 'new-copilot') return copilotReady;
     if (id === 'capture-performance') return preferences.performanceEnabled() && !settingsSurface.capturingPerformance;
-    if (['mcp', 'model', 'thinking', 'mode', 'context-window', 'cancel-configuration'].includes(id)) return !!presented && sessionActions(presented).some(action => action.id === id);
+    if (['mcp', 'model', 'thinking', 'mode', 'context-window', 'permissions', 'cancel-configuration'].includes(id)) return !!presented && sessionActions(presented).some(action => action.id === id);
     return true;
   },
   run: (id: ActionId) => {
@@ -1728,7 +1745,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'capture-performance': return capturePerformance(true);
       case 'reload-card-plugins': return reloadCardPlugins(true);
       case 'select-theme': return pickTheme();
-      case 'mcp': case 'model': case 'thinking': case 'mode': case 'context-window': case 'cancel-configuration': return presented ? runSessionAction(presented, id) : undefined;
+      case 'mcp': case 'model': case 'thinking': case 'mode': case 'context-window': case 'permissions': case 'cancel-configuration': return presented ? runSessionAction(presented, id) : undefined;
       case 'palette': palette.open(); return;
       case 'close': return presented ? closeTab(presented) : undefined;
       case 'sidebar': required<HTMLButtonElement>('toggle-sidebar').click(); return;

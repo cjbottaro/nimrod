@@ -80,6 +80,35 @@ return to their conversation to act. Stop/Close/disconnect cancel pending choice
 without approving and remove the pending banner. The modal interaction still needs installed-CLI/native
 acceptance after a requested build.
 
+### Change permissions during work
+
+If you started a task before allowing its tools, you can submit
+`/permissions allow-any` while Copilot is working, or choose
+**Select permissions… → Allow all** in the command palette. The action appears
+when your runtime advertises that permission operation. Advertised command-name
+aliases work too.
+
+If the permission picker is open, press Escape first. This hides it without
+answering its requests. Submit the policy change, then use **Review requests**
+to answer any older requests still waiting.
+
+A **PERMISSION CHANGE** operation card appears immediately, shimmering and pinned
+while pending. It stops shimmering and joins normal transcript flow when Copilot
+confirms the policy. The operation runs independently of queued model changes;
+it does not stop or resend your task, replace a newer draft, or answer existing
+permission requests. Copilot's native policy governs subsequent requests.
+
+Nimrod invokes the exact Copilot command rather than installing an auto-approval
+rule of its own. Copilot controls its scope and managed-policy restrictions.
+If the runtime does not advertise that the command can run during work, the
+operation waits for terminal idle instead. Failures/unknown outcomes stay on the
+card with details and are never automatically retried.
+
+This initial picker exposes **Allow all** only. Other native permission commands
+retain their existing idle-only slash-command workflow. The implementation and
+offline fixtures are present, but tests and real active-turn/native acceptance
+remain pending; retroactive resolution of older permission requests is not promised.
+
 ## Session configuration
 
 Model, thinking and mode controls use Copilot’s reported catalog and current state,
@@ -231,8 +260,10 @@ returned report as labelled **Copilot command** output in the transcript, withou
 an assistant/model request. The installed CLI's post-fix behavior still needs
 native verification.
 
-Commands run while idle and consume the submitted draft immediately, without a
-literal user-turn preview or forced transcript navigation. You can edit a newer
+Generic commands run while idle and consume the submitted draft immediately, without a
+literal user-turn preview or forced transcript navigation. The advertised
+`/permissions allow-any` mutation is the [live configuration exception](#change-permissions-during-work), including when selected from the argument picker.
+You can edit a newer
 draft while waiting, but another submission waits until the command interaction
 settles. Switching sessions, Stop or disconnect cancels pending choices; late
 results never open a picker in another conversation or overwrite your draft.

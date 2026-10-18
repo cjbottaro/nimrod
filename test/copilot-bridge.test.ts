@@ -45,6 +45,23 @@ function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) =>
     },
   };
 }
+test('live native permission command applies before old requests resolve and prevents subsequent prompts', { timeout: 5000 }, async () => {
+  const f = bridge();
+  try {
+    await f.request('initialize'); await f.request('connect');
+    await f.request('prompt', { text: 'live permission change fixture' });
+    const pending = await f.waitFor(packet => packet.kind === 'permission');
+    const result = await f.request('permission-change', { value: 'allow-any' });
+    assert.deepEqual(result, { outcome: 'applied', mode: 'allow-all' });
+    assert.equal(f.packets.filter(packet => packet.kind === 'permission').length, 1);
+    assert.equal(f.packets.some(packet => packet.kind === 'event' && packet.event.type === 'assistant.message'), false, 'old approval is still waiting');
+    await f.request('decision', { decisionId: pending.id, value: { kind: 'approve-once', approvedInteractively: true } });
+    const answer = await f.waitFor(packet => packet.kind === 'event' && packet.event.type === 'assistant.message');
+    assert.equal(answer.event.data.content, 'Continued after live permission change');
+    assert.equal(f.packets.filter(packet => packet.kind === 'permission').length, 1, 'the second tool uses native allow-all policy');
+  } finally { await f.close(); }
+});
+
 test('production SDK bridge loads only exact project members and disconnects without deleting', { timeout: 5000 }, async () => {
   const f = bridge();
   try {

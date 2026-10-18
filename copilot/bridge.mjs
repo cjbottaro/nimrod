@@ -1,6 +1,7 @@
 import { createInterface } from 'node:readline';
 import { isAbsolute } from 'node:path';
 import { createCopilotConfiguration } from './configuration.mjs';
+import { permissionMode, applyPermissionChange } from './permission-configuration.mjs';
 import { validPermissionDecision } from './permissions.mjs';
 
 const [cli, cwd] = process.argv.slice(2);
@@ -20,6 +21,20 @@ let replaying = false, buffered = [];
 let commandRefresh;
 let usageRead;
 let commandExecuting = false;
+let working = false, permissionRevision = 0;
+async function refreshPermissionMode(owner) {
+  const revision = permissionRevision;
+  try {
+    const mode = await permissionMode(owner);
+    if (!closing && session === owner && permissionRevision === revision) send({ kind: 'permission-mode', mode });
+  } catch { /* Optional metadata leaves the current value unknown; never gate chat. */ }
+}
+function observeWork(value) {
+  if (value.agentId) return;
+  if (value.type === 'session.permissions_changed' && value.data?.mode !== undefined) permissionRevision++;
+  if (value.type === 'assistant.turn_start' || value.type === 'user.message') working = true;
+  if (value.type === 'session.error' || value.type === 'session.idle' && (value.data?.mode !== 'autopilot' || value.data?.aborted === true)) working = false;
+}
 async function refreshCommands() {
   if (!session || closing) return;
   if (commandRefresh) return commandRefresh;
@@ -54,6 +69,7 @@ function event(value) {
     || value.type === 'session.idle' && (value.data?.mode !== 'autopilot' || value.data?.aborted === true))) cancelDecisions();
   if (replaying) buffered.push(value);
   else {
+    observeWork(value);
     send({ kind: 'event', event: value });
     if (!value.agentId && value.type === 'commands.changed') void refreshCommands().catch(error => send({ kind: 'command-error', error: `Command discovery failed: ${failure(error)}` }));
   }
@@ -125,6 +141,7 @@ async function dispatch(message) {
         const seen = new Set(events.map(item => item.id));
         for (const item of buffered) if (!seen.has(item.id)) eventAfterReplay(item);
         buffered = []; replaying = false;
+        void refreshPermissionMode(session);
         // Command discovery is optional: failure must not disable ordinary chat.
         try { await refreshCommands(); }
         catch (error) { send({ kind: 'command-error', error: `Command discovery failed: ${failure(error)}` }); }
@@ -156,6 +173,14 @@ async function dispatch(message) {
     case 'commands':
       if (!session) throw new Error('No connected Copilot session');
       return await refreshCommands();
+    case 'permission-change': {
+      if (!session) throw new Error('No connected Copilot session');
+      if (commandExecuting) throw new Error('A Copilot command is already executing. Nothing was invoked.');
+      commandExecuting = true;
+      permissionRevision++; // Fence an older optional read before this mutation.
+      try { return await applyPermissionChange(session, message.value, () => working, commands => send({ kind: 'commands', commands })); }
+      finally { commandExecuting = false; }
+    }
     case 'command': {
       if (!session) throw new Error('No connected Copilot session');
       if (commandExecuting) throw new Error('A Copilot command is already executing');
@@ -166,7 +191,10 @@ async function dispatch(message) {
         const command = commands.find(item => item.name.toLowerCase() === message.name.toLowerCase())
           ?? commands.find(item => item.aliases?.some(alias => alias.toLowerCase() === message.name.toLowerCase()));
         if (!command) throw new Error('This command is not advertised by Copilot. Nothing was invoked.');
+        const permissions = command.kind === 'builtin' && command.name.toLowerCase() === 'permissions';
+        if (permissions) permissionRevision++;
         const result = await session.rpc.commands.invoke({ name: command.name, ...(message.input !== undefined ? { input: message.input } : {}) });
+        if (permissions) void refreshPermissionMode(session);
         // Refresh metadata without re-invoking the command or changing its result.
         try { await refreshCommands(); }
         catch (error) { send({ kind: 'command-error', error: `Command discovery failed: ${failure(error)}` }); }
@@ -176,6 +204,7 @@ async function dispatch(message) {
     case 'prompt':
       if (!session) throw new Error('No connected Copilot session');
       if (typeof message.text !== 'string' || message.text.trimStart().startsWith('/')) throw new Error('Slash commands must use the command invocation API');
+      working = true;
       return await session.send({ prompt: message.text, mode: 'immediate' });
     case 'cancel':
       if (!session) throw new Error('No connected Copilot session');
@@ -189,7 +218,7 @@ async function dispatch(message) {
     default: throw new Error('Unsupported Copilot bridge operation');
   }
 }
-function eventAfterReplay(value) { send({ kind: 'event', event: value }); }
+function eventAfterReplay(value) { observeWork(value); send({ kind: 'event', event: value }); }
 function cancelDecisions() {
   for (const pending of decisions.values()) {
     if (pending.kind === 'permission') pending.resolve({ kind: 'user-not-available' });

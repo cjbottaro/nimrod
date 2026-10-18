@@ -16,6 +16,11 @@ test('action contexts retain project commands without a selected session and gat
   assert.equal(actionContextAvailable('model', emptyProject), false);
   assert.equal(actionContextAvailable('mode', { project: true, sessionActions: new Set(['mode']) }), true);
   assert.equal(actionContextAvailable('context-window', { project: true, sessionActions: new Set(['model']) }), false);
+  assert.equal(actionContextAvailable('permissions', emptyProject), false);
+  assert.equal(actionContextAvailable('permissions', { project: true, sessionActions: new Set(['permissions']) }), true);
+  assert.deepEqual(bindingsFor('permissions', {}), []);
+  assert.deepEqual(bindingsFor('permissions', { permissions: ['primary+shift+y'] }), ['primary+shift+y']);
+  assert.deepEqual(bindingsFor('permissions', { permissions: [] }), []);
 });
 function fixture() {
   const dom = new JSDOM('<button id="origin">Settings</button><dialog id="settings-page"><div class="settings-content"></div></dialog><dialog id="pi-dialog"></dialog>', { pretendToBeVisual: true });

@@ -33,13 +33,15 @@ export interface SessionConfiguration {
   cancel?(key: string): boolean;
 }
 export interface ConfigurationAdapter {
+  /** Stable operation title for this concrete configuration domain. */
+  readonly operationTitle?: string;
   capabilities(desired: Readonly<Record<string, string>>): readonly ConfigurationSetting[];
   get(setting: string): string | undefined;
   choices(setting: string, desired: Readonly<Record<string, string>>): Promise<readonly ConfigurationChoice[]>;
   /** Revalidate concrete readiness before dispatch; return only after authoritative reconciliation. */
   apply(setting: string, value: string, current: () => boolean, dispatched: () => void): Promise<void>;
 }
-/** Only for a pre-dispatch readiness race. Never use after a mutation might have been delivered. */
+/** Readiness deferral proven before native mutation. Never use for ambiguous mutation delivery. */
 export class ConfigurationDeferred extends Error {}
 /** A newer intent superseded metadata validation before any mutation was dispatched. */
 export class ConfigurationSuperseded extends Error {}
@@ -95,7 +97,7 @@ export class SessionConfigurationController implements SessionConfiguration {
     this.pending.set(setting, { choice: { ...choice }, dependencies });
     if (!this.current) {
       this.dispatched = false;
-      this.current = { key: `configuration:${crypto.randomUUID()}`, phase: 'queued', title: 'Configuration change', text: '' };
+      this.current = { key: `configuration:${crypto.randomUUID()}`, phase: 'queued', title: this.adapter.operationTitle || 'Configuration change', text: '' };
     }
     this.progress(this.active ? 'applying' : 'queued');
     this.update();
@@ -125,7 +127,7 @@ export class SessionConfigurationController implements SessionConfiguration {
     if (this.active) desired.set(this.active.setting, this.active.intent);
     for (const entry of this.pending) desired.set(...entry);
     const text = [...desired].map(([id, intent]) => `${this.capabilities.find(item => item.id === id)?.label || id}: ${intent.choice.label}`).join(' · ');
-    const title = 'Configuration change', cancellable = !this.active && !this.dispatched;
+    const title = this.adapter.operationTitle || 'Configuration change', cancellable = !this.active && !this.dispatched;
     if (this.current.phase === phase && this.current.title === title && this.current.text === text && this.current.cancellable === cancellable) return;
     this.current = { ...this.current, phase, title, text, cancellable };
     this.publish();
@@ -139,7 +141,7 @@ export class SessionConfigurationController implements SessionConfiguration {
   }
   private finish(phase: 'completed' | 'failed' | 'unknown' | 'not-applied', details?: string, cause?: 'connection'): void {
     if (!this.current) return;
-    this.current = { ...this.current, phase, title: 'Configuration change', cancellable: false, details, cause };
+    this.current = { ...this.current, phase, title: this.adapter.operationTitle || 'Configuration change', cancellable: false, details, cause };
     this.publish(); this.current = undefined;
   }
   private async drain(): Promise<void> {
@@ -173,11 +175,15 @@ export class SessionConfigurationController implements SessionConfiguration {
         // Recheck dependencies after asynchronous metadata reads as well.
         if (Object.entries(intent.dependencies).some(([key, value]) => this.get(key) !== value)) throw new Error('Configuration changed while validating the selection. Choose again.');
         this.pending.delete(id); this.active = { setting: id, intent }; this.progress('applying');
+        const dispatchedBefore = this.dispatched;
         try { await this.adapter.apply(id, intent.choice.value, () => !this.disposed && !this.pending.has(id)
           && Object.entries(intent.dependencies).every(([key, value]) => (this.desired()[key] ?? this.get(key)) === value), () => { this.dispatched = true; }); }
         catch (error) {
           if (error instanceof ConfigurationSuperseded) { this.active = undefined; continue; }
           if (error instanceof ConfigurationDeferred) {
+            // The adapter guarantees no native mutation was attempted. A bridge
+            // may establish that after its own readiness/metadata preflight.
+            this.dispatched = dispatchedBefore;
             if (!this.pending.has(id)) this.pending.set(id, intent);
             this.active = undefined; this.progress('queued');
             if (this.capabilities.find(item => item.id === id)?.availability === 'ready') continue;

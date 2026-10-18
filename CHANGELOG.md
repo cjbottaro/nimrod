@@ -6,6 +6,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Added
 
+- Copilot **Select permissions… → Allow all** and `/permissions allow-any` use a live **PERMISSION CHANGE** operation card when the runtime advertises active-turn support. Permission policy applies independently of queued model changes without stopping/resending the task or answering older approvals; native policy controls subsequent requests. Independent configuration owners share the existing picker/cards so future integrations can contribute the same capability without backend-specific UI changes. Other permission commands remain idle-only; native acceptance is pending.
 - Copilot plan review supports optional feedback and **Request changes**, returning revisions through the plan decision rather than sending another prompt or replacing the composer draft.
 
 - Copilot SDK cards for GitHub MCP code-search results and repository contents, skill-name previews, and compact command/file/URL/MCP permission details with raw recovery.

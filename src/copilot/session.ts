@@ -8,7 +8,9 @@ import { createCopilotStatusArea } from './status-area';
 import { CopilotUsageController } from './usage';
 import { initialCopilotUsage, type CopilotUsageSeed } from './usage-seed';
 import { createCopilotConfiguration } from './session-configuration';
-import { ConfigurationDeferred, ConfigurationSuperseded, type SessionConfigurationController } from '../session-configuration';
+import { createCopilotPermissionConfiguration, isPermissionChange, permissionCommand } from './permission-configuration';
+import { SessionConfigurationSet } from '../session-configuration-set';
+import { ConfigurationDeferred, ConfigurationSuperseded, ConfigurationUncertain, type SessionConfigurationController } from '../session-configuration';
 import { pickConfiguration } from '../configuration-picker';
 import { commandChoices, copilotCommands, findCopilotCommand, parseCopilotCommand, type CommandChoice, type CopilotCommand } from './commands';
 
@@ -39,7 +41,12 @@ export interface CopilotSessionUi {
 /** SDK semantic events project directly to shared presentation, never Pi/ACP events. */
 export class CopilotSession {
   readonly connection: CopilotConnection;
-  readonly configuration: SessionConfigurationController;
+  readonly configuration: SessionConfigurationSet;
+  private readonly modelConfiguration: SessionConfigurationController;
+  private readonly permissionConfiguration: SessionConfigurationController;
+  private permissionMode?: string;
+  private permissionVersion = 0;
+  private permissionChanging = false;
   state: Omit<ConversationViewState, 'messages'> & { messages: DisplayMessage[]; sessionName?: string } = {
     messages: [], sessionUnavailable: true, busy: false, status: 'Connecting Copilot…',
   };
@@ -81,7 +88,7 @@ export class CopilotSession {
       this.state = { ...this.state, sessionUnavailable: true, busy: false, status: 'Disconnected' };
       this.publish(); ui.disconnected(reason);
     });
-    this.configuration = createCopilotConfiguration({
+    this.modelConfiguration = createCopilotConfiguration({
       models: () => this.models.map(model => ({ id: model.id, label: model.name,
         efforts: model.capabilities?.supports?.reasoningEffort === false ? undefined : model.supportedReasoningEfforts,
         maxContextTokens: model.capabilities?.limits?.max_context_window_tokens })),
@@ -92,11 +99,18 @@ export class CopilotSession {
       apply: (setting, value, current, dispatched) => this.applyPreference(setting, value, current, dispatched), changed: () => this.publish([]),
       error: message => this.ui.notice(`Configuration change failed: ${message}`),
     });
+    this.permissionConfiguration = createCopilotPermissionConfiguration({
+      commands: () => this.commands, mode: () => this.permissionMode,
+      availability: command => this.ended || this.state.sessionUnavailable ? 'unavailable'
+        : this.permissionChanging || this.commandOperation || this.state.busy && !command.allowDuringAgentExecution ? 'deferred' : 'ready',
+      apply: (value, current, dispatched) => this.applyPermissions(value, current, dispatched), changed: () => this.publish([]),
+    });
+    this.configuration = new SessionConfigurationSet([this.modelConfiguration, this.permissionConfiguration]);
     this.usage = new CopilotUsageController(() => this.connection.request('usage', {}, 'reject'), () => this.publish([]),
       () => this.configuring ? Promise.resolve(null) : this.connection.request('context', {}, 'reject'));
     this.updateStatusArea();
   }
-  get canSubmit(): boolean { return !this.ended && !this.state.sessionUnavailable && !this.state.busy && !this.configuring && !this.commandOperation; }
+  get canSubmit(): boolean { return !this.ended && !this.state.sessionUnavailable && !this.state.busy && !this.configuring && !this.permissionChanging && !this.commandOperation; }
   supports(kind: 'model' | 'thinking' | 'mode' | 'context'): boolean {
     const model = this.models.find(model => model.id === this.model);
     return kind === 'model' ? this.models.length > 0 : kind === 'thinking'
@@ -104,6 +118,11 @@ export class CopilotSession {
       : kind === 'mode' ? !!this.mode : !!model?.capabilities?.limits?.max_context_window_tokens;
   }
   validatePrompt(text: string): string | undefined {
+    if (isPermissionChange(this.commands, text)) {
+      if (this.ended || this.state.sessionUnavailable) return 'Connect Copilot before changing permissions. Your draft was kept.';
+      if (!permissionCommand(this.commands)) return 'Copilot did not advertise /permissions allow-any. Nothing was invoked; your draft was kept.';
+      return;
+    }
     if (!this.canSubmit) return 'Copilot is not idle or is still connecting. Your draft was kept.';
     if (text.trimStart().startsWith('/')) {
       const invocation = parseCopilotCommand(text);
@@ -140,11 +159,20 @@ export class CopilotSession {
     if (invalid || !text.trim() || message.images !== undefined) {
       this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', error: invalid || 'Copilot sessions currently accept non-empty text only.' }); return;
     }
+    if (isPermissionChange(this.commands, text)) { await this.acceptPermissionIntent(id); return; }
     if (text.trimStart().startsWith('/')) { await this.runCommand(id, text); return; }
     if (message.type === 'command') {
       this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', error: 'Invalid Copilot slash command. Nothing was invoked.' }); return;
     }
     await this.sendPrompt(id, text);
+  }
+  private async acceptPermissionIntent(id: string): Promise<void> {
+    try {
+      const choices = await this.configuration.choices('permissions');
+      this.configuration.set('permissions', choices.find(choice => choice.value === 'allow-any')!);
+      // Local intent accepted; operation publications own authoritative completion.
+      this.ui.publish({ type: 'submissionReceipt', id, outcome: 'accepted' });
+    } catch (error) { this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', error: String(error) }); }
   }
   private async sendPrompt(id: string, text: string, display = text): Promise<void> {
     const key = `copilot:user:pending:${id}`;
@@ -175,7 +203,6 @@ export class CopilotSession {
     this.commandOperation = operation;
     this.state = { ...this.state, status: `Running /${invocation.name}…` };
     this.publish([]);
-    this.usage.workStarted();
     try {
       let name = invocation.name, input = invocation.input;
       const command = findCopilotCommand(this.commands, name);
@@ -197,8 +224,9 @@ export class CopilotSession {
       }
       // Each iteration requires a fresh user choice; never retry an invocation.
       while (!operation.signal.aborted && !this.ended) {
+        if (isPermissionChange(this.commands, `/${name} ${input ?? ''}`)) { await this.acceptPermissionIntent(id); return; }
         if (this.state.busy) throw new Error('Copilot started working before the command could be invoked. Nothing was invoked again.');
-        invoked = true;
+        invoked = true; this.usage.workStarted();
         const result = await this.connection.request('command', { name, ...(input !== undefined ? { input } : {}) });
         if (operation.signal.aborted || this.ended) return;
         if (!record(result) || typeof result.kind !== 'string') throw new Error('Copilot returned an invalid command result.');
@@ -291,13 +319,31 @@ export class CopilotSession {
       if (version === this.configurationVersion) this.applyConfigurationSnapshot(result);
     } catch (error) {
       const reason = `Copilot configuration was not confirmed: ${String(error)}. Reconnect explicitly to read the authoritative configuration.`;
-      this.configuration.dispose(reason, error instanceof CopilotResponseError ? 'failed' : undefined);
+      this.modelConfiguration.dispose(reason, error instanceof CopilotResponseError ? 'failed' : undefined);
       this.disconnect(reason);
       throw error;
     } finally {
       this.configuring = false;
       this.invalidateContext(); this.publish([]);
     }
+  }
+  private async applyPermissions(value: string, current: () => boolean, dispatched: () => void): Promise<void> {
+    const command = permissionCommand(this.commands);
+    if (this.ended || this.state.sessionUnavailable || !command) throw new Error('Copilot permission configuration is unavailable.');
+    if (this.commandOperation || this.permissionChanging || this.state.busy && !command.allowDuringAgentExecution) throw new ConfigurationDeferred();
+    if (!current()) throw new ConfigurationSuperseded();
+    this.permissionChanging = true; this.publish([]);
+    try {
+      const version = this.permissionVersion;
+      dispatched();
+      const result = await this.connection.request('permission-change', { value });
+      if (!record(result)) throw new ConfigurationUncertain('Copilot returned an invalid permission result. Nothing was retried.');
+      if (result.outcome === 'deferred') throw new ConfigurationDeferred();
+      if (version === this.permissionVersion && ['manual', 'assisted', 'allow-all'].includes(String(result.mode))) this.permissionMode = String(result.mode);
+      if (result.outcome !== 'applied' || result.mode !== 'allow-all') throw new ConfigurationUncertain(typeof result.details === 'string' ? result.details : 'Copilot did not confirm the permission change. Nothing was retried.');
+      // Existing permission callbacks belong to the user/runtime. Do not answer,
+      // cancel or hide them here, and do not refresh usage or alter agent activity.
+    } finally { this.permissionChanging = false; this.publish([]); }
   }
   private applyConfigurationSnapshot(value: unknown): void {
     if (!record(value)) throw new Error('Invalid Copilot configuration snapshot');
@@ -340,6 +386,10 @@ export class CopilotSession {
       this.usage.seed(this.initialUsage);
       this.state = { ...this.state, sessionUnavailable: false, busy: false, status: 'Idle' }; this.publish();
       this.usage.refresh(); this.usage.refreshContext();
+    } else if (packet.kind === 'permission-mode') {
+      if (!['manual', 'assisted', 'allow-all'].includes(String(packet.mode))) throw new Error('Invalid Copilot permission mode');
+      // The bridge fences its optional read against native events and mutations.
+      this.permissionMode = String(packet.mode); this.publish([]);
     } else if (packet.kind === 'commands') {
       if (!Array.isArray(packet.commands)) throw new Error('Invalid Copilot command catalog');
       this.commands = copilotCommands(packet.commands); this.publish([]);
@@ -437,6 +487,12 @@ export class CopilotSession {
         ...(type === 'tool.execution_partial_result' ? { output: string('partialOutput'), hasStreamingOutput: true } : {}),
         ...(complete ? { isError: data.success === false, resultOutput: result ? copilotToolResult(result) : JSON.stringify(error ?? data, null, 2) } : {}),
       });
+    } else if (type === 'session.permissions_changed' && !raw.agentId) {
+      if (data.mode !== undefined) {
+        this.permissionVersion++;
+        this.permissionMode = ['manual', 'assisted', 'allow-all'].includes(String(data.mode)) ? String(data.mode) : undefined;
+        this.publish([]);
+      }
     } else if (type === 'session.model_change' && !raw.agentId) {
       this.configurationVersion++;
       const model = string('newModel') || undefined;

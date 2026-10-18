@@ -20,9 +20,7 @@ This feature applies to **Copilot SDK sessions**. Pi's existing `/name`,
 separate Pi contract change. Generic ACP keeps advertised-only passthrough; the Copilot ACP integration has been removed.
 
 New commands using implemented metadata/result shapes work without command-name
-handlers. This is not universal CLI/TUI parity. The existing SDK controller stays
-idle-only even when a command advertises `allowDuringAgentExecution`; no steering,
-queueing, mode switching, new session ownership or permission policy is invented.
+handlers. This is not universal CLI/TUI parity. Generic command workflows remain idle-only. The deliberate exception is advertised builtin `/permissions allow-any`: the [live permission configuration adapter](live-permissions.md) accepts it during work, honours `allowDuringAgentExecution`, and executes the exact native command through its own configuration owner. It neither sends a steering prompt nor invents a host permission policy.
 
 ## Discovery and autocomplete
 
@@ -51,7 +49,7 @@ queueing, mode switching, new session ownership or permission policy is invented
   Required finite-choice input can also be supplied this way. Explicit arguments
   bypass this picker; commands without choices keep their SDK default behavior.
   Escape dismisses suggestions; IME/modifier and mid-draft editing are unchanged.
-- Local validation precedes draft clearing for unavailable/busy sessions,
+- Local validation precedes draft clearing for unavailable/busy sessions (except the supported live permission intent),
   unadvertised commands, required input and attachments. No optimistic literal
   slash user turn, Send-recency bump or forced transcript navigation. Clear the
   submitted command immediately; later output/errors never replace a newer draft.
@@ -69,6 +67,8 @@ queueing, mode switching, new session ownership or permission policy is invented
 | `set-model`, `set-plan-model` | Explicit unsupported notice, no approximation or fallback setter. The pinned release's invocation-effect finalizer is internal, not a public SDK consumer API. Existing Nimrod model controls still work independently. |
 | Unknown/malformed result or unknown mode | Session-owned error; no speculative prompt/action or automatic replay. Supported Interactive, Plan and Autopilot changes reconcile through the session mode configuration; unknown values disconnect before follow-on work. |
 
+Supported permission mutation uses one **PERMISSION CHANGE** operation card instead of a duplicate command-output row. Choosing `allow-any` in the existing argument/result-choice workflow converges on that same owner. Native policy confirmation, pending-callback retention and failure/uncertainty semantics are specified in [Live permissions](live-permissions.md).
+
 Command-output rows are **connection-local presentation**, not invented persisted
 Copilot events. They survive switching within that connection, not Close/Resume.
 The normal transcript renderer owns escaping, Markdown, stable keys, reading
@@ -82,8 +82,8 @@ Advertised argument choices are available before invocation and must not require
 executing a bare command to discover its default behavior. Separately, waiting
 for a returned `select-subcommand` choice is result-gated because those choices
 are unavailable before invocation. Neither path gates clearing the composer on RPC.
-Other submissions/configuration remain locally unavailable until this workflow
-settles; the draft stays editable. Ordinary agent turns retain SDK `session.idle`
+Other ordinary submissions/model configuration remain locally unavailable until this workflow
+settles; live permission intent may be accepted while it waits for that command owner to finish; the draft stays editable. Ordinary agent turns retain SDK `session.idle`
 semantics, separate from local command completion.
 
 Returned choices open only for their still-presented, connected owner with no

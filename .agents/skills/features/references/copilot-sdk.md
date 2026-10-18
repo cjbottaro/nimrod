@@ -36,7 +36,7 @@ Nimrod leaves authentication to the installed CLI; no tokens enter settings.
 
 ## Distribution and native ownership
 
-- `copilot/bridge.mjs` imports the bundled official SDK, its concrete `copilot/configuration.mjs` adapter and the shared UI/bridge decision-scope validator `copilot/permissions.mjs`. All three modules are staged checkout-locally, watched by `build.rs` and required by the bundle verifier. The bridge's JSON-line
+- `copilot/bridge.mjs` imports the bundled official SDK, its concrete `copilot/configuration.mjs` adapter and the shared UI/bridge decision-scope validator `copilot/permissions.mjs`. The live permission helper `copilot/permission-configuration.mjs` is staged with those modules; all are staged checkout-locally, watched by `build.rs` and required by the bundle verifier. The bridge's JSON-line
   records are private Nimrod IPC, **not another harness protocol**.
 - `scripts/prepare-copilot.mjs`, called by `src-tauri/build.rs`, stages the bridge,
   SDK dist/package metadata and required dependency packages into ignored
@@ -267,6 +267,8 @@ selection approves:
 - Managed-approval and sandbox-bypass requests offer only one-time approval or
   rejection, retaining prominent policy/escalation notes. Unknown or incomplete
   scopes retain literal details and one-time approval/rejection.
+
+The separate [live permission configuration](live-permissions.md) invokes the exact advertised `/permissions allow-any` command through SDK command RPC, honours live-use metadata and confirms native mode. It is not a host decision or substitute approval policy; existing callback promises remain independently owned. Generic model configuration remains idle-only.
 
 Every decision is checked against the bridge's retained original request using
 the same option builder; unrelated domains, broader MCP scopes, mismatched

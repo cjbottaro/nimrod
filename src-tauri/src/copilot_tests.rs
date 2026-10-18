@@ -6,6 +6,14 @@ fn bridge_records_are_not_acp_or_pi_packets() {
     assert!(validate_message(&json!({"id":"one","method":"prompt","text":"fixture"})).is_ok());
     assert!(validate_message(&json!({"id":"one","method":"connect","sessionId":"exact"})).is_ok());
     assert!(validate_message(&json!({"id":"one","method":"commands"})).is_ok());
+    assert!(
+        validate_message(&json!({"id":"one","method":"permission-change","value":"allow-any"}))
+            .is_ok()
+    );
+    assert!(
+        validate_message(&json!({"id":"one","method":"permission-change","value":"invented-policy"}))
+            .is_err()
+    );
     assert!(validate_message(&json!({"id":"one","method":"usage"})).is_ok());
     assert!(validate_message(&json!({"id":"one","method":"context"})).is_ok());
     assert!(

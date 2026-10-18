@@ -49,7 +49,7 @@ Without installation, use `./bin/nimrod .`. The launcher opens or focuses a proj
 - [Writing messages](docs/writing-messages.md) — send, steer, queue, Stop, slash commands and recovery. [Error messages](docs/error-messages.md) describes session-local notices and the application notice strip.
 - [Reading conversations](docs/reading-conversations.md) — operation cards, tool/reasoning cards, code actions, links and auto-follow.
 - [Paste images](docs/image-paste.md) — image attachments and delivery behavior.
-- [Session configuration](docs/model-thinking.md) — change supported model, thinking, mode and context-window settings during work.
+- [Session configuration](docs/model-thinking.md) — change supported model, thinking, mode and context-window settings during work, plus [Copilot live permission policy](docs/copilot.md#change-permissions-during-work).
 - [Pop-outs](docs/pop-outs.md) — persistent reference windows for code and rendered Markdown.
 - [Notifications](docs/notifications.md) — background-session alerts and delivery troubleshooting.
 - [MCP inspector](docs/mcp.md) — read-only session server status, exposure, counts and reported errors.

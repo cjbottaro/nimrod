@@ -60,13 +60,15 @@ class Session {
   contextTier;
   mode = process.env.NIMROD_FIXTURE_COPILOT_MODE || 'interactive';
   configured = false;
+  permissionMode = 'manual';
   totalNanoAiu = 0;
   commandCatalog = [
     { name: 'permissions', aliases: ['perms'], description: 'Manage permissions', kind: 'builtin', allowDuringAgentExecution: true,
-      input: { hint: 'Permission operation', choices: [{ name: 'show', description: 'Show permissions' }, { name: 'reset', description: 'Clear approvals' }] } },
+      input: { hint: 'Permission operation', choices: [{ name: 'show', description: 'Show permissions' }, { name: 'reset', description: 'Clear approvals' }, { name: 'allow-any', description: 'Allow all permissions for this session' }] } },
     { name: 'discover-fixture', description: 'Add a new fixture command', kind: 'builtin', allowDuringAgentExecution: false },
   ];
   rpc = {
+    permissions: { getMode: async () => ({ mode: this.permissionMode }) },
     metadata: { contextInfo: async parameters => {
       assert.deepEqual(parameters, { promptTokenLimit: 0, outputTokenLimit: 0 }, 'the runtime resolves the current model/tier');
       const state = process.env.NIMROD_FIXTURE_COPILOT_CONTEXT_STATE;
@@ -108,7 +110,10 @@ class Session {
       list: async () => ({ commands: this.commandCatalog }),
       invoke: async ({ name, input }) => {
         // The CLI can own its picker even when SDK invocation defaults to text.
-        if (name === 'permissions') return { kind: 'text', text: `Fixture permission report: ${input ?? 'show'}`, markdown: false };
+        if (name === 'permissions') {
+          if (input === 'allow-any') { this.permissionMode = 'allow-all'; this.emit('session.permissions_changed', { mode: 'allow-all' }); }
+          return { kind: 'text', text: `Fixture permission report: ${input ?? 'show'}`, markdown: false };
+        }
         if (name === 'discover-fixture') {
           this.commandCatalog.push({ name: 'new-fixture', kind: 'builtin', description: 'Newly advertised command', allowDuringAgentExecution: false });
           this.emit('commands.changed', { commands: [] }); return { kind: 'completed' };
@@ -135,6 +140,8 @@ class Session {
     return { messageId: `turn-${turn}` };
   }
   async permission(request) {
+    // Only future requests see the new policy; existing callback promises remain pending.
+    if (this.permissionMode === 'allow-all') return { kind: 'approve-once', approvedInteractively: true };
     const decision = await this.config.onPermissionRequest(request);
     assert.ok(['approve-once', 'approve-for-session', 'approve-permanently', 'reject', 'user-not-available'].includes(decision.kind), 'The live CLI accepts decisions, not legacy permission outcomes');
     if (decision.kind === 'approve-once') assert.equal(decision.approvedInteractively, true, 'Only an explicit UI choice may approve');
@@ -153,6 +160,12 @@ class Session {
       const choice = await result;
       this.emit('assistant.message', { messageId: `plan-${turn}`, content: JSON.stringify(choice) });
       this.emit('session.idle', { mode: 'interactive' }); return;
+    }
+    if (prompt === 'live permission change fixture') {
+      await this.permission({ kind: 'shell', fullCommandText: 'first fixture command' });
+      await this.permission({ kind: 'shell', fullCommandText: 'second fixture command' });
+      this.emit('assistant.message', { messageId: `live-permissions-${turn}`, content: 'Continued after live permission change' });
+      this.emit('session.idle', {}); return;
     }
     if (prompt === 'parallel permission fixture') {
       const results = await Promise.all(['one', 'two', 'three'].map(name =>

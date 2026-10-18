@@ -8,12 +8,14 @@ Human guide: [Model and thinking preferences](../../../../docs/model-thinking.md
 
 `src/session-configuration.ts::SessionConfiguration` is a small session-bound consumer port, not a universal session/controller or wire protocol. `main.ts` and `configuration-picker.ts` no longer dispatch model/effort selection by backend:
 
-- `capabilities`: supported setting descriptors with opaque IDs, labels, optional dependencies and live `ready` / `deferred` / `unavailable` availability/reasons. The common picker uses `model` and `effort`; Copilot additionally contributes `mode` and `context-tier`, while concrete ACP options can contribute additional IDs. No common provider/model/effort/mode enum.
+- `capabilities`: supported setting descriptors with opaque IDs, labels, optional dependencies and live `ready` / `deferred` / `unavailable` availability/reasons. The common picker uses `model` and `effort`; Copilot additionally contributes `mode`, `context-tier` and advertised `permissions`, while concrete ACP options can contribute additional IDs. No common provider/model/effort/mode enum.
 - `get(id)`: current harness-confirmed value, including undefined when unknown. Successfully accepted Copilot creation inputs provide initial values until concrete SDK values arrive; they are not reused on Resume or later deselection. It never returns pending intent as effective state.
 - `choices(id)`: fresh advertised choices bound to this configuration object, setting and dependency values. Each choice has an opaque value, primary label and optional secondary detail/search terms for the shared picker; concrete integrations own that presentation metadata. The shared selection layout reserves the current-value marker column for every heading and aligns secondary detail with the primary label, not the marker. `set(id, choice)` accepts one of those choices synchronously; it is acceptance of local intent, not an RPC acknowledgement or a success promise.
 - `operations`: immutable-by-convention, reference-stable local progress publications. Owners publish them as `configurationOperations` on the existing synchronous conversation snapshot channel. No additional subscription/event bus, persistence or process ownership.
 
-`SessionConfigurationController` owns only latest-wins intents, dependency ordering, validation and operation publication. `ConfigurationAdapter` retains concrete metadata/readiness, mutation and authoritative reconciliation. `ConfigurationDeferred` is exclusively a **pre-dispatch** readiness-race result: it must never be thrown after a mutation might have been delivered. Adapters also receive a current-intent predicate and recheck it immediately before dispatch; `ConfigurationSuperseded` retires obsolete metadata preparation without sending its mutation. Ready unrelated settings can proceed without waiting behind a deferred independent setting; prerequisites still run first.
+`SessionConfigurationController` owns only latest-wins intents, dependency ordering, validation and operation publication. `ConfigurationAdapter` retains concrete metadata/readiness, mutation and authoritative reconciliation. `ConfigurationDeferred` is exclusively a readiness result proven **before native mutation**: it must never be used when a mutation might have been delivered. A bridge's explicit pre-mutation deferral can arrive after private IPC dispatch; it restores only that attempt's prior dispatch flag and publishes fresh readiness before waiting. Adapters also receive a current-intent predicate and recheck it immediately before dispatch; `ConfigurationSuperseded` retires obsolete metadata preparation without sending its mutation. Ready unrelated settings can proceed without waiting behind a deferred independent setting; prerequisites still run first.
+
+`SessionConfigurationSet` composes independent configuration owners behind this same port. Each owner keeps its own ordering/dependencies/latest-wins queue; a ready live permission operation can bypass deferred or in-flight model work. Combined operation publications remain stable and ordered by first observation. Cross-owner dependencies are unsupported. [Live permissions](live-permissions.md) owns the concrete Copilot mapping and reusable consumer contract.
 
 The composition helper `sessionConfiguration` accesses the selected concrete owner's port. Session identity, transport, initialization, lifecycle, permissions and prompt/cancel semantics remain bespoke. Status projections read the same confirmed concrete configuration, behind their separate presentation interface.
 
@@ -29,10 +31,10 @@ The composition helper `sessionConfiguration` accesses the selected concrete own
 
 ## Local configuration transcript entries
 
-Configuration uses the shared [Operation card](operation-cards.md) specification: stable **CONFIGURATION CHANGE** title and literal setting/value content in every state. Queued/applying shimmer and pin; confirmed success becomes a normal-flow marker without a redundant success label. Failed operations have a red accent/Failed/Error details. Connection loss before dispatch produces grey Not applied; potentially dispatched work without confirmation produces grey Outcome unknown. Details remain on the card rather than a duplicate banner.
+Configuration uses the shared [Operation card](operation-cards.md) specification: the adapter supplies a stable title, defaulting to **CONFIGURATION CHANGE** (**PERMISSION CHANGE** for the independent permission owner), with literal setting/value content in every state. Queued/applying shimmer and pin; confirmed success becomes a normal-flow marker without a redundant success label. Failed operations have a red accent/Failed/Error details. Connection loss before dispatch produces grey Not applied; potentially dispatched work without confirmation produces grey Outcome unknown. Details remain on the card rather than a duplicate banner.
 
 - `SessionConfiguration.cancel(key)` synchronously removes the exact operation only while all represented work is safely withdrawable. Cancel is unavailable during adapter application and after any represented mutation has dispatched, even if a later dependent setting is queued. Revalidate the key/capability at invocation; never erase already-applied evidence.
-- The card's Cancel and bindable **Cancel pending configuration change** palette action share the session-bound dispatcher. No default shortcut. Removing a focused Cancel restores the owning composer without scrolling or replacing its draft.
+- The card's Cancel and bindable **Cancel pending configuration change** palette action share the session-bound dispatcher. If multiple owners have cancellable entries, the palette asks which operation; each card is already key-bound. No default shortcut. Removing a focused Cancel restores the owning composer without scrolling or replacing its draft.
 - Concrete adapters mark the actual dispatch boundary. Pi distinguishes RPC rejection from unknown transport/post-mutation reconciliation outcomes; Copilot/ACP disconnection settles pending work conservatively. `ConfigurationUncertain` carries unconfirmed mutation outcomes; local validation/rejection produces Failed. Disposal carries an explicit connection cause for presentation deduplication, not a new transport state.
 - Terminal anchoring is captured from the ordered outcome snapshot before hidden/coalesced paint. Empty history means before future entries. Other markers anchor after the current non-sticky tail, excluding pending messages. Missing anchors settle once at the remaining tail/empty start rather than following every append.
 - Same-key replacement patches the retained article/title without lazy history reads; terminal unpin/insertion/removal uses existing structural fallback. No Send-style navigation, new scroll owner, focus/draft mutation or speculative Status-area values.
@@ -54,7 +56,7 @@ Pi exposes levels only for its currently selected model. If another model is pen
 
 ### Copilot SDK
 
-`src/copilot/session-configuration.ts` uses the filtered catalog/current root model and supported reasoning efforts. Pending target models can supply their own advertised effort choices. `CopilotSession` owns idle-only SDK configuration, including command/configuration-in-flight guards; the picker can accept intent while those guards defer mutation. Pending work begins after the actual root idle boundary, not a child event or an acceptance response.
+`src/copilot/session-configuration.ts` uses the filtered catalog/current root model and supported reasoning efforts. Pending target models can supply their own advertised effort choices. `CopilotSession` owns idle-only model/effort/mode/context configuration, including command/configuration-in-flight guards; the picker can accept intent while those guards defer mutation. Pending work begins after the actual root idle boundary, not a child event or an acceptance response.
 
 Copilot also projects the SDK’s authoritative `interactive` / `plan` /
 `autopilot` session mode and `default` / `long_context` context tier. Mode is the
@@ -65,7 +67,9 @@ the tier name as the primary label and a reported/catalog token amount as
 secondary detail when available. Model changes do not carry an effort or context
 tier that may be invalid for the target model.
 
-Autopilot intermediate idle is not configuration readiness. Accepted changes
+[Live permission policy](live-permissions.md) uses an independent owner and honours the command's advertised live-use capability; it is not held behind model configuration or old permission callbacks.
+
+Autopilot intermediate idle is not model/effort/mode/context configuration readiness. Accepted changes
 remain queued until a terminal root idle/abort/error boundary; no host-generated
 continuation is sent. Mode choices are opaque shared configuration, while SDK
 continuation and exit-plan semantics stay in the concrete Copilot integration.
@@ -81,6 +85,7 @@ New sessions honor non-null Copilot model/effort preferences read through the SD
 
 ## Code map
 
+- `src/session-configuration-set.ts`: independent owner composition, stable operation publications and key-bound cancellation; same consumer port, no new transport protocol.
 - `src/session-configuration.ts`: port, descriptors, capability/availability, choice provenance/dependencies, serialized latest-wins coordinator, disposal and local operations.
 - `src/configuration-picker.ts`, `src/main.ts`: one session-bound choice path, palette lifecycle and originating-owner revalidation. Picker completion means intent accepted; it does not await a later idle turn.
 - `src/pi/session-configuration.ts`, `src/pi/model-thinking-controller.ts`, `src/pi/session.ts`: concrete Pi port, fresh scoped metadata, guarded direct mutation and acknowledged refresh.

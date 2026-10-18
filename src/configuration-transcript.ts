@@ -26,7 +26,7 @@ export class ConfigurationTranscript {
       const sticky = pending(operation);
       if (!before || before.row.sticky !== sticky) structural = true;
       const row: RenderMessage = { key: operation.key, role: 'configuration', configurationOperation: operation, sticky,
-        operation: { title: 'Configuration change', state: sticky ? 'pending' : operation.phase === 'completed' ? 'succeeded'
+        operation: { title: operation.title, state: sticky ? 'pending' : operation.phase === 'completed' ? 'succeeded'
           : operation.phase === 'failed' ? 'failed' : operation.phase === 'unknown' ? 'unknown' : 'not-applied',
           details: operation.details, cancelId: operation.cancellable ? operation.key : undefined } };
       let anchor = before?.anchor;

@@ -26,7 +26,9 @@ Model pickers show readable names without numbered prefixes. Copilot places the 
 You can choose configuration while the agent is working. Nimrod applies it as soon as that harness permits:
 
 - **Pi** normally applies model/thinking changes during work, including compaction, for upcoming model requests. A response already streaming keeps its original configuration; a continuation after tool execution can use the new one.
-- **Copilot** applies configuration while idle. Model, thinking level, mode and context-window changes apply in the existing session without reconnecting or sending another message. You can choose while it is working or handling another configuration/command operation; the change waits for the supported idle boundary without stopping the agent.
+- **Copilot** applies model/thinking/mode/context configuration while idle. Model, thinking level, mode and context-window changes apply in the existing session without reconnecting or sending another message. You can choose while it is working or handling another configuration/command operation; the change waits for the supported idle boundary without stopping the agent.
+
+Copilot's [permission-policy changes](copilot.md#change-permissions-during-work) use an independent configuration operation. **Select permissions… → Allow all** or `/permissions allow-any` can apply during work when the runtime advertises live support, without waiting behind a queued model change or answering older permission requests. Its stable title is **PERMISSION CHANGE**.
 
 A pending **configuration change** appears in the transcript like Queued/Steering: a shimmering title and the requested value, pinned in the same bottom stack. Its title is always **CONFIGURATION CHANGE**, using the same uppercase typography whether pending or settled. Choosing another model updates the **same entry**, rather than adding another pending change. An already-dispatched change finishes before the latest choice is applied.
 
@@ -34,7 +36,7 @@ The **Status area shows confirmed values only**. There is no pending badge or sp
 
 If a setting is truly unavailable rather than temporarily deferred, Nimrod accepts no change and shows the reason in that session's notice banner at the top of the conversation area. It does not create a queued configuration card.
 
-A queued change offers **Cancel** while all its work can safely be withdrawn. It removes the intent and card immediately. The same action is available as **Cancel pending configuration change** in the command palette, with no default shortcut. Cancel is omitted during application and after any represented change has dispatched; it never merely hides work that could still take effect.
+A queued change offers **Cancel** while all its work can safely be withdrawn. It removes the intent and card immediately. The same action is available as **Cancel pending configuration change** in the command palette, with no default shortcut. If more than one operation can be cancelled, the palette asks which one. Cancel is omitted during application and after any represented change has dispatched; it never merely hides work that could still take effect.
 
 Changing models can change thinking effort according to the harness's defaults and supported levels. Selecting another pending model drops effort queued for the previous target. Copilot can offer efforts advertised for a pending target model; for Pi, wait until the model changes before choosing its supported thinking levels. Nimrod revalidates choices before applying, rather than silently carrying an incompatible effort across models.
 
