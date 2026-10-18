@@ -53,7 +53,7 @@ export function installNativeWindowAppearance(host: Pick<AppearanceHost, 'read' 
     previewOpacity: controls ? value => publishPreview('opacity', value) : undefined,
     previewBlur: controls ? value => publishPreview('blur', value) : undefined,
     capabilities: () => invoke<AppearanceCapabilities>('window_appearance_capabilities'),
-    apply: (blur, dark) => invoke<AppearanceCapabilities>('apply_window_appearance', { blur, dark }),
+    apply: (blur, dark, updateTheme) => invoke<AppearanceCapabilities>('apply_window_appearance', { blur, dark, updateTheme }),
     tintTitlebar: color => invoke<void>('tint_window_titlebar', { color }),
   }, controls);
   const previewReady = listen<AppearancePreviewSnapshot>('nimrod-window-appearance-preview', event => receivePreview(event.payload)).then(async stop => {

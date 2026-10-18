@@ -53,7 +53,18 @@ pub fn reduced_transparency() -> bool {
     objc2_app_kit::NSWorkspace::sharedWorkspace().accessibilityDisplayShouldReduceTransparency()
 }
 
-pub fn apply(window: &tauri::WebviewWindow, blur: u8, dark: Option<bool>) -> Result<(), String> {
+// A fully clear NSWindow uses content-derived shadows, which can leave stale
+// rectangular backdrops with WindowServer blur. A 0.01%-alpha backing keeps the
+// standard titled-window frame/shadow path without a visible material tint.
+// Prior art: Ghostty TerminalWindow.syncAppearance and Zed PR #27403.
+const NATIVE_BACKING_ALPHA: f64 = 0.0001;
+
+pub fn apply(
+    window: &tauri::WebviewWindow,
+    blur: u8,
+    dark: Option<bool>,
+    update_theme: bool,
+) -> Result<(), String> {
     if blur > 40 {
         return Err("Background blur must be from 0 to 40".into());
     }
@@ -66,24 +77,40 @@ pub fn apply(window: &tauri::WebviewWindow, blur: u8, dark: Option<bool>) -> Res
     // main-thread callback. NSWindow appearance is local; Tauri/Tao's
     // set_theme changes NSApplication appearance and leaks across windows.
     let native = unsafe { &*pointer.cast::<NSWindow>() };
-    native.setOpaque(false);
-    native.setBackgroundColor(Some(&NSColor::clearColor()));
+    // Initialize backing once; changing blur must not reset the native frame,
+    // rebuild its shadow or reapply an unchanged theme on every slider tick.
+    if native.isOpaque()
+        || native
+            .backgroundColor()
+            .is_none_or(|color| color.alphaComponent() == 0.0)
+    {
+        native.setOpaque(false);
+        native.setBackgroundColor(Some(&NSColor::colorWithSRGBRed_green_blue_alpha(
+            0.0,
+            0.0,
+            0.0,
+            NATIVE_BACKING_ALPHA,
+        )));
+        native.invalidateShadow();
+    }
     // Title/text appearance follows the window theme even without blur.
-    if let Some(dark) = dark {
-        // SAFETY: AppKit's named appearance constants are immutable globals.
-        let name = unsafe {
-            if dark {
-                objc2_app_kit::NSAppearanceNameDarkAqua
-            } else {
-                objc2_app_kit::NSAppearanceNameAqua
-            }
-        };
-        let appearance =
-            NSAppearance::appearanceNamed(name).ok_or("Native window appearance is unavailable")?;
-        native.setAppearance(Some(&appearance));
-    } else {
-        // Nimrod (system) must keep following OS appearance changes.
-        native.setAppearance(None);
+    if update_theme {
+        if let Some(dark) = dark {
+            // SAFETY: AppKit's named appearance constants are immutable globals.
+            let name = unsafe {
+                if dark {
+                    objc2_app_kit::NSAppearanceNameDarkAqua
+                } else {
+                    objc2_app_kit::NSAppearanceNameAqua
+                }
+            };
+            let appearance = NSAppearance::appearanceNamed(name)
+                .ok_or("Native window appearance is unavailable")?;
+            native.setAppearance(Some(&appearance));
+        } else {
+            // Nimrod (system) must keep following OS appearance changes.
+            native.setAppearance(None);
+        }
     }
     if let Some(api) = background_blur() {
         let number = native.windowNumber();

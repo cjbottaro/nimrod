@@ -36,7 +36,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
-- macOS background opacity and blur are independent: a 0–40 blur slider replaces the tinted frosted-material toggle, preserving sharp transparency at zero blur. Both sliders preview across windows; older frosting settings remain compatible. Linux blur remains compositor-controlled.
+- macOS background opacity and blur are independent: a 0–40 blur slider replaces the tinted frosted-material toggle, preserving sharp transparency at zero blur. Both sliders preview across windows; older frosting settings remain compatible. Blur-only changes no longer reapply the native theme/title tint, and a practically transparent backing keeps the normal macOS shadow path instead of the fully clear backing implicated in square-backdrop artifacts. Linux blur remains compositor-controlled.
 
 - Copilot `/permissions allow-all` now enters the live permission-change path instead of reporting that Copilot must be idle. Command recognition, native admission and fixtures use the runtime's advertised `allow-all` spelling, correcting the earlier `allow-any` mismatch.
 - Accepted configuration cards stay in normal transcript flow instead of following new output at the bottom. Changes confirmed before the first message remain at the start; coalesced updates and background sessions preserve the confirmation-time position.

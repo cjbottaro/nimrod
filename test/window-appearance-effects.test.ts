@@ -26,6 +26,50 @@ test('one native pipeline orders material before tint, serializes stages and coa
   } finally { release(); effects.dispose(); }
 });
 
+test('blur-only changes do not reapply the native theme or re-tint unchanged chrome', async () => {
+  const updates: { blur: number; dark: boolean | null; updateTheme: boolean }[] = [];
+  const tints: number[] = [];
+  const effects = installAppearanceEffects({
+    apply: async (blur, dark, updateTheme) => { updates.push({ blur, dark, updateTheme }); return capabilities; },
+    tintTitlebar: async color => { tints.push(color[0]); }, report: () => {},
+  }, () => {});
+  const tint: [number, number, number, number] = [10, 20, 30, 128];
+  try {
+    for (const blur of [0, 7, 20, 0]) {
+      effects.request({ material: { blur, dark: true }, tint });
+      await effects.settled();
+    }
+    assert.deepEqual([...updates], [
+      { blur: 0, dark: true, updateTheme: true },
+      { blur: 7, dark: true, updateTheme: false },
+      { blur: 20, dark: true, updateTheme: false },
+      { blur: 0, dark: true, updateTheme: false },
+    ]);
+    assert.deepEqual([...tints], [10]);
+    effects.request({ material: { blur: 0, dark: false }, tint });
+    await effects.settled();
+    assert.equal(updates.at(-1)!.updateTheme, true);
+    assert.deepEqual([...tints], [10, 10]); // Same-colour theme changes still re-tint.
+    effects.refreshTint(); await effects.settled();
+    assert.equal(tints.length, 3); assert.equal(updates.length, 5);
+  } finally { effects.dispose(); }
+});
+
+test('blur changes cannot retry a failed unchanged title tint', async () => {
+  let tints = 0;
+  const effects = installAppearanceEffects({
+    apply: async () => capabilities,
+    tintTitlebar: async () => { ++tints; throw new Error('tint unavailable'); }, report: () => {},
+  }, () => {});
+  try {
+    for (const blur of [0, 7, 20, 0]) {
+      effects.request({ material: { blur, dark: null }, tint: [10, 20, 30, 128] });
+      await effects.settled();
+    }
+    assert.equal(tints, 1);
+  } finally { effects.dispose(); }
+});
+
 test('failed stages are not repeated by unchanged requests or native refresh', async () => {
   let tints = 0; const failures: string[] = [];
   const effects = installAppearanceEffects({

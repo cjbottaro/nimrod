@@ -65,6 +65,7 @@ pub async fn apply_window_appearance(
     window: tauri::WebviewWindow,
     blur: u8,
     dark: Option<bool>,
+    update_theme: bool,
 ) -> Result<Capabilities, String> {
     if blur > 40 {
         return Err("Background blur must be from 0 to 40".into());
@@ -81,9 +82,10 @@ pub async fn apply_window_appearance(
                 blur
             },
             dark,
+            update_theme,
         )?;
         #[cfg(not(target_os = "macos"))]
-        let _ = (target, blur, dark);
+        let _ = (target, blur, dark, update_theme);
         Ok(support)
     })
     .await
@@ -108,13 +110,16 @@ pub async fn tint_window_titlebar(
 #[cfg(test)]
 mod tests {
     #[test]
-    fn appkit_is_isolated_and_keeps_native_controls_clear_backing_and_bounded_tint() {
+    fn appkit_is_isolated_and_keeps_native_controls_nearly_clear_backing_and_bounded_tint() {
         let source = include_str!("macos_window_appearance.rs");
         assert!(!source.contains(".set_theme("));
         assert!(source.contains("native.setAppearance(Some(&appearance))"));
         assert!(source.contains("native.setAppearance(None)"));
         assert!(source.contains("native.setOpaque(false)"));
-        assert!(source.contains("NSColor::clearColor()"));
+        assert!(source.contains("NATIVE_BACKING_ALPHA: f64 = 0.0001"));
+        assert!(!source.contains("NSColor::clearColor()"));
+        assert!(source.contains("native.invalidateShadow()"));
+        assert!(source.contains("if update_theme"));
         assert!(source.contains("CGSSetWindowBackgroundBlurRadius"));
         assert!(source.contains("CGSMainConnectionID"));
         assert!(source.contains("fn blur_supported()"));

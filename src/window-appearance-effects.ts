@@ -5,7 +5,7 @@ export interface NativeAppearance {
   tint?: TitlebarTint;
 }
 export interface NativeAppearanceHost {
-  apply(blur: number, dark: boolean | null): Promise<AppearanceCapabilities>;
+  apply(blur: number, dark: boolean | null, updateTheme: boolean): Promise<AppearanceCapabilities>;
   tintTitlebar?(color: TitlebarTint): Promise<void>;
   report(message?: string, cause?: string): void;
 }
@@ -18,11 +18,12 @@ export function installAppearanceEffects(host: NativeAppearanceHost, receiveCapa
   let desired: NativeAppearance | undefined;
   let desiredKey = '';
   let appliedMaterial: string | undefined, failedMaterial: string | undefined;
+  let appliedTheme: boolean | null | undefined;
   let appliedTint: string | undefined, failedTint: string | undefined;
   let tintRevision = 0;
   let running: Promise<void> | undefined;
   const materialKey = (value: NativeAppearance) => value.material ? JSON.stringify(value.material) : undefined;
-  const tintKey = (value: NativeAppearance) => value.tint ? JSON.stringify([value.tint, value.material, tintRevision]) : undefined;
+  const tintKey = (value: NativeAppearance) => value.tint ? JSON.stringify([value.tint, value.material?.dark, tintRevision]) : undefined;
   const needed = (value: NativeAppearance | undefined) => {
     if (!value || disposed) return false;
     const material = materialKey(value), tint = tintKey(value);
@@ -35,9 +36,14 @@ export function installAppearanceEffects(host: NativeAppearanceHost, receiveCapa
       const material = materialKey(target);
       if (material !== undefined && material !== appliedMaterial && material !== failedMaterial) {
         try {
-          const next = await host.apply(target.material!.blur, target.material!.dark);
+          const updateTheme = appliedTheme !== target.material!.dark;
+          const next = await host.apply(target.material!.blur, target.material!.dark, updateTheme);
           if (disposed) return;
-          appliedMaterial = material; failedMaterial = undefined; appliedTint = undefined;
+          appliedMaterial = material; failedMaterial = undefined;
+          appliedTheme = target.material!.dark;
+          // A radius change does not rebuild native chrome. Re-tinting here
+          // caused avoidable full-window appearance/layout work on every tick.
+          if (updateTheme) appliedTint = undefined;
           host.report(undefined, 'native'); receiveCapabilities(next);
         } catch (error) {
           if (disposed) return;
