@@ -40,9 +40,9 @@ Each Pi built-in has a dedicated [card plugin](card-plugins.md#matching-and-over
 
 ### Copilot question/answer cards
 
-After Copilot reports an answer, its question card shows just the question with a small speech-bubble icon and your answer inset beneath it, marked by a short theme-accent line. There is no extra title, badge or enclosing box. Long questions and answers wrap; multiline replies stay literal.
+After Copilot reports an answer, its question card shows just the question with a small speech-bubble icon and your answer inset beneath it, marked by a short theme-accent line. The reply line begins beneath the speech-bubble icon, using the same 2px line and 12px inner spacing as nested quotes rather than adding another question-text indent. There is no extra title, badge or enclosing box. Long questions and answers wrap; multiline replies stay literal.
 
-Expand the disclosure to see the offered options, **Raw inputs** and the original **Raw output**. Older schema-based questions retain their labelled answers. Pending, cancelled, interrupted, failed or unrecognized results retain the ordinary tool presentation rather than inventing an answer. This read-only transcript card is separate from the [Question picker](copilot.md#answer-agent-questions) and never submits a decision.
+Expand the disclosure to see the offered options as a numbered list in conversation typography (not a code block), **Raw inputs** and the original **Raw output**. Older schema-based questions retain their labelled answers. Pending, cancelled, interrupted, failed or unrecognized results retain the ordinary tool presentation rather than inventing an answer. This read-only transcript card is separate from the [Question picker](copilot.md#answer-agent-questions) and never submits a decision.
 
 ### Copilot web cards
 
