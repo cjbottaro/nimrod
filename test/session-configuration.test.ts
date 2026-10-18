@@ -126,7 +126,7 @@ test('queued cancellation removes only its exact operation and never dispatches 
   assert.equal(operation.cancellable, true);
   assert.equal(f.configuration.cancel('stale-key'), false);
   assert.equal(f.configuration.cancel(operation.key), true);
-  assert.deepEqual(f.configuration.operations, []);
+  assert.equal(f.configuration.operations.length, 0);
   f.ready(); await flush();
   assert.deepEqual(f.calls, []);
   await f.choose('model', 'c'); await flush();
