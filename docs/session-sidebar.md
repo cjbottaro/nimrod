@@ -24,13 +24,13 @@ Empty Unread shows **N sessions working…** while agents are busy, otherwise **
 
 ## Pinning
 
-Pin sessions you want to keep near the top. Pinned rows appear above unpinned rows, separated by a subtle divider when both groups are present. Pins do not bypass Unread/Working filters or change counts. **Pin session / Unpin session** is also in the command palette and can be assigned a shortcut in Keybindings (none by default).
+Pin sessions you want to keep near the top. Pinned rows appear above unpinned rows, separated by a subtle divider when both groups are present. Pins do not bypass Unread/Working filters or change counts. Pinning scrolls to the top if the newly pinned row fits there; with a long pin group, it scrolls only far enough from the top to show that row in full, without centering it. Unpinning preserves your sidebar reading position rather than scrolling to the top. A hidden or filtered-out target causes no scrolling. **Pin session / Unpin session** is also in the command palette and can be assigned a shortcut in Keybindings (none by default).
 
 Pinning never selects, connects or restarts a session, marks it read, or changes its message time. Pins on saved open sessions survive reopening the project. Temporary sessions can be pinned for the current window only. Close still works normally and removes the pin along with sidebar membership; resuming a closed session starts unpinned. Pinning is organization, not protection against Close or Delete.
 
 ## Ordering and navigation
 
-When a project opens, the remembered selected session's row scrolls into view with only the movement needed to make it visible. This preserves your chosen view: a session excluded by Unread or Working stays hidden, and a collapsed sidebar stays collapsed. Later activity updates do not repeat this startup scroll.
+When a project opens, the sidebar starts at the top if the remembered selected session's entire row is visible there. Otherwise, it scrolls only far enough from the top to reveal the full row—not to center it. This rule starts from the top of the list, not a previous scroll position. It preserves your chosen view: a session excluded by Unread or Working stays hidden without changing filters or scrolling, and a collapsed sidebar stays collapsed. Later activity updates do not repeat this startup scroll. Ordinary session switching keeps its existing scroll behavior.
 
 New sessions start at the top of the unpinned group. Resumed Pi sessions insert using remembered recency or their latest saved user-message time; closed Copilot history uses the agent's reported update time when available. Already-open history entries reuse their sidebar time and status. Sending a message immediately moves its session to the top of its pin group—including Pi steering, queued follow-ups and image-only messages—without waiting for the agent. A later send error does not undo that ordering. Selecting, reading, renaming, changing models, compaction and background output do not reorder All.
 
