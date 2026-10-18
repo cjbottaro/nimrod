@@ -81,7 +81,11 @@ details { margin:8px 0; border:0; border-radius:0; padding:0; }
 .card-plugin-summary.card-question-answer { display:grid; grid-template-columns:14px minmax(0, 1fr); column-gap:7px; row-gap:5px; flex:1; min-width:0; }
 .card-question-icon { grid-column:1; grid-row:1; width:14px; height:14px; margin-top:.25em; fill:none; stroke:currentColor; stroke-width:1.2; stroke-linejoin:round; }
 .card-question-answer > .tool-card-title { grid-column:2; grid-row:1; min-width:0; font:inherit; white-space:pre-wrap; overflow-wrap:anywhere; }
-.card-question-reply { grid-column:2; padding-left:10px; border-left:2px solid var(--vscode-progressBar-background, var(--vscode-textLink-foreground)); color:var(--vscode-foreground); white-space:pre-wrap; overflow-wrap:anywhere; }
+.card-question-reply { grid-column:1 / -1; padding:2px 0 2px 12px; border-left:2px solid var(--vscode-progressBar-background, var(--vscode-textLink-foreground)); color:var(--vscode-foreground); white-space:pre-wrap; overflow-wrap:anywhere; }
+[data-output-kind="question-options"] > .tool-output { font-family:var(--vscode-font-family, sans-serif); white-space:normal; background:transparent; padding:0; }
+[data-output-kind="question-options"] .markdown { overflow-wrap:anywhere; }
+[data-output-kind="question-options"] .markdown ol { margin:4px 0; padding-left:1.6em; }
+[data-output-kind="question-options"] .markdown li + li { margin-top:.25em; }
 .tool-output-web-markdown { font-family:var(--vscode-font-family, sans-serif); white-space:normal; background:transparent; padding:0; }
 .tool-output-web-markdown > .markdown { white-space:normal; overflow-wrap:anywhere; }
 .tool-output-web-markdown .markdown :is(h1, h2) { font-size:1.12em; line-height:1.4; }

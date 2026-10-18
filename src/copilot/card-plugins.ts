@@ -178,7 +178,9 @@ function questionPresentation(data: Readonly<ToolCardData>, input: Record<string
       if (choices.length) options.push(`${typeof field.title === 'string' ? field.title : key}:\n${choices.map(choice => `  • ${choice}`).join('\n')}`);
     }
   }
-  return questionAnswerPresentation({ question, answer, sections: options.length ? [{ key: 'question-options', label: 'Available options', text: options.join('\n') }] : [] });
+  // Escape literal SDK labels before adding list markup: options are not agent-authored Markdown.
+  const list = options.map(option => `1. ${option.replace(/[^\p{L}\p{N}\s]/gu, character => `&#${character.codePointAt(0)};`).replace(/\r\n|\r|\n/g, '<br>')}`).join('\n');
+  return questionAnswerPresentation({ question, answer, sections: options.length ? [{ key: 'question-options', label: 'Available options', text: list, format: 'markdown' }] : [] });
 }
 /** Late names/categories/SDK metadata update content inside the same mounted adapter. */
 function copilotPresentation(data: Readonly<ToolCardData>, context: CardPluginContext): CardPresentation {

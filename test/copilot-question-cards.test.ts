@@ -7,6 +7,7 @@ import { renderToolCard, updateToolCard, disposeToolCard } from '../src/pi/tool-
 import { validatePresentation } from '../src/pi/card-renderer';
 import { questionAnswerPresentation } from '../src/card-plugin-ui';
 import { copilotToolResult } from '../src/copilot/tool-result';
+import { createSafeMarkdownRenderer } from '../src/pi/safe-markdown';
 
 // Scrubbed native ask_user start/completion shapes observed in local Copilot history
 // on October 17–18, 2026: simple question/choices and older schema elicitation.
@@ -21,7 +22,10 @@ function data(input: unknown = { question, choices }, result: Record<string, unk
 }
 function fixture(block: ToolCardData) {
   const dom = new JSDOM('<body></body>'), doc = dom.window.document;
-  const card = renderToolCard(doc, block, doc.createElement('details')); doc.body.append(card);
+  const renderer = createSafeMarkdownRenderer(dom.window as unknown as Window);
+  const card = renderToolCard(doc, block, doc.createElement('details'), undefined, undefined, { markdown(source) {
+    const result = doc.createElement('div'); result.className = 'markdown'; result.innerHTML = renderer.render(source); return result;
+  } }); doc.body.append(card);
   return { dom, doc, card, close() { disposeToolCard(card); dom.window.close(); } };
 }
 
@@ -39,7 +43,8 @@ test('completed native questions show only the question and reply in the closed 
     assert.ok(!summary.textContent!.includes('Recommended'));
     assert.equal(f.card.querySelector('[title]'), null);
     assert.equal(f.card.querySelector('button, textarea, input'), null, 'the card never answers a request');
-    assert.equal(f.card.querySelector('[data-output-kind="question-options"] .tool-output')?.textContent, choices.join('\n'));
+    assert.deepEqual(Array.from(f.card.querySelectorAll('[data-output-kind="question-options"] ol > li'), item => item.textContent), choices);
+    assert.equal(f.card.querySelector('[data-output-kind="question-options"] :is(code, .code-block)'), null);
     assert.deepEqual(JSON.parse(f.card.querySelector('.tool-raw-inputs pre')!.textContent!), block.arguments);
     assert.equal(f.card.querySelector('.tool-raw-output pre')?.textContent, block.resultOutput);
     assert.equal(f.card.querySelector<HTMLDetailsElement>('.tool-raw-output')?.open, false);
@@ -54,6 +59,19 @@ test('freeform replies preserve literal multiline text and never interpret marku
     assert.equal(f.card.querySelector('.card-question-reply')?.textContent, reply);
     assert.equal(f.card.querySelector('script, img'), null);
     assert.equal(f.card.querySelector('[data-output-kind="question-options"]'), null);
+  } finally { f.close(); }
+});
+
+test('option lists keep SDK labels literal, including markup, links and multiline choices', () => {
+  const choices = ['<img src=x onerror=alert(1)>', '**literal** [not a link](https://example.com)', 'First line\nSecond line', '1. Not a nested item', '`not code`', '&amp; stays literal'];
+  const f = fixture(data({ question, choices }));
+  try {
+    const list = f.card.querySelector('[data-output-kind="question-options"] ol')!;
+    assert.equal(list.children.length, choices.length);
+    assert.deepEqual(Array.from(list.children, item => item.textContent), choices.map(choice => choice.replace(/\n/g, '')));
+    assert.equal(list.querySelector('img, a, strong, code, ol, ul'), null);
+    assert.equal(list.children[2].querySelectorAll('br').length, 1);
+    assert.deepEqual(JSON.parse(f.card.querySelector('.tool-raw-inputs pre')!.textContent!).choices, choices);
   } finally { f.close(); }
 });
 

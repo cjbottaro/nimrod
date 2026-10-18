@@ -6,7 +6,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Added
 
-- Completed Copilot questions show a compact question/answer transcript card: a speech-bubble icon beside the question and an inset reply with a theme-accent line. Offered options and exact raw inputs/output remain behind the disclosure; the separate Question picker is unchanged. Native visual acceptance remains pending.
+- Completed Copilot questions show a compact question/answer transcript card: a speech-bubble icon beside the question and an inset reply with a theme-accent line using the app's compact nested-quote spacing. Offered options appear as a numbered list in conversation typography, with exact raw inputs/output behind the disclosure; the separate Question picker is unchanged. Native visual acceptance remains pending.
 
 - Composer keyboard hints brighten while their exact modifier keys are held in the focused prompt field, with no animation or layout shift. Shared hint metadata supports all integrations without inventing unsupported shortcuts; focus loss, session switching and input locks clear the emphasis.
 
