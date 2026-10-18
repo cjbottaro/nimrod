@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom';
 import { DEFAULT_WINDOW_APPEARANCE, readWindowAppearance, windowSurfaceOpacities, titlebarTint, type TitlebarTint, type AppearanceCapabilities, type WindowAppearance } from '../src/window-appearance';
 
 import { installWindowAppearance } from '../src/window-appearance-controller';
+import { primaryButtonSurfaces, buttonDensity, buttonUnderlayCredit, tintedButtonDensity } from '../src/button-surfaces';
 import { applyTheme } from '../src/themes/theme';
 
 const mac: AppearanceCapabilities = { platform: 'macos', transparency: true, frost: true, reducedTransparency: false };
@@ -67,44 +68,37 @@ test('appearance range fills exist before interaction and track reloads/previews
   } finally { f.close(); }
 });
 
-test('lighter primary roles ease into translucency and are disabled at the opaque endpoint', async () => {
+test('primary buttons retain the shared theme density policy across Nimrod and Tokyo Night', async () => {
   const f = fixture(mac);
   try {
     await f.controller.ready;
-    applyTheme(f.root, { id: 'button-fixture', name: 'Buttons', mode: 'dark', syntax: {}, colors: {
-      'editor.background': '#151c20', 'editorWidget.background': '#182126',
-      'button.foreground': '#102921', 'button.background': '#77d8bd', 'button.hoverBackground': '#99e7d1',
-    } });
-    const number = (key: string) => parseFloat(f.root.style.getPropertyValue(key));
-    const foreground = f.root.style.getPropertyValue('--nimrod-primary-foreground');
-    assert.equal(number('--nimrod-button-lightness'), 0);
-    assert.equal(f.root.dataset.translucency, 'off');
-    for (const opacity of [99, 95, 85, 65, 25, 0]) {
-      f.external({ opacity });
-      assert.equal(f.root.dataset.translucency, 'window');
-      assert.ok(Math.abs(number('--nimrod-button-lightness') - (1 - (opacity / 100) ** 8)) < 1e-10);
-      for (const context of ['', 'sidebar-', 'project-bar-', 'modal-']) {
-        const normal = number(`--nimrod-${context}ethereal-button-opacity`);
-        const hover = number(`--nimrod-${context}ethereal-button-hover-opacity`);
-        assert.ok(normal <= number(`--nimrod-${context}button-opacity`) + .0001);
-        assert.ok(hover >= normal);
+    for (const [foreground, background, hoverBackground, sidebar] of [
+      ['#102921', '#77d8bd', '#99e7d1', '#182126'],
+      ['#c0caf5', '#292e42', '#414868', '#24283b'],
+    ]) {
+      applyTheme(f.root, { id: 'button-fixture', name: 'Buttons', mode: 'dark', syntax: {}, colors: {
+        'editor.background': '#151c20', 'editorWidget.background': sidebar,
+        'button.foreground': foreground, 'button.background': background, 'button.hoverBackground': hoverBackground,
+      } });
+      const pair = primaryButtonSurfaces(foreground, background, hoverBackground);
+      const normal = pair.normal!, hover = pair.hover!;
+      const alpha = (key: string) => parseFloat(f.root.style.getPropertyValue(key)) / 100;
+      for (const opacity of [0, 25, 65, 85, 95, 99, 100]) {
+        f.external({ opacity });
+        const p = opacity / 100, endpoint = p ** 8;
+        const density = buttonDensity(normal.minimum, endpoint, .35);
+        const hoverDensity = buttonDensity(Math.max(normal.minimum, hover.minimum), endpoint, .45);
+        const sidebarDensity = tintedButtonDensity(density, p, buttonUnderlayCredit(normal, sidebar), .35, endpoint);
+        const sidebarHover = Math.max(sidebarDensity,
+          tintedButtonDensity(hoverDensity, p, buttonUnderlayCredit(hover, sidebar), .45, endpoint));
+        assert.ok(Math.abs(alpha('--nimrod-button-opacity') - density) < .000001);
+        assert.ok(Math.abs(alpha('--nimrod-sidebar-button-opacity') - sidebarDensity) < .000001);
+        assert.ok(Math.abs(alpha('--nimrod-sidebar-button-hover-opacity') - sidebarHover) < .000001);
+        assert.equal(f.root.style.getPropertyValue('--nimrod-primary-foreground'), foreground);
+        assert.equal(f.root.dataset.translucency, opacity === 100 ? 'off' : 'window');
       }
-      assert.equal(f.root.style.getPropertyValue('--nimrod-primary-foreground'), foreground);
     }
-    f.external({ opacity: 100 });
-    assert.equal(f.root.dataset.translucency, 'off');
-    assert.equal(number('--nimrod-button-lightness'), 0);
-    assert.equal(number('--nimrod-ethereal-button-opacity'), 100);
-    assert.equal(number('--nimrod-ethereal-button-hover-opacity'), 100);
   } finally { f.close(); }
-  for (const support of [{ ...mac, reducedTransparency: true }, { ...mac, transparency: false }]) {
-    const fallback = fixture(support, { opacity: 65 });
-    try {
-      await fallback.controller.ready;
-      assert.equal(fallback.root.dataset.translucency, 'off');
-      assert.equal(fallback.root.style.getPropertyValue('--nimrod-button-lightness'), '0');
-    } finally { fallback.close(); }
-  }
 });
 
 test('opacity input publishes a paint-only preview and only its matching save clears it', async () => {
