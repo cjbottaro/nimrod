@@ -21,6 +21,8 @@ test('modal style options, duration retention, preview and cross-window synchron
     await expect(duration).toHaveValue('1200');
     await expect(settings.locator('#modal-animation-hint')).toContainText('CRT powering on');
     await expect(page.locator('html')).toHaveAttribute('data-modal-animation', 'crt');
+    await expect(page.locator('html')).toHaveCSS('--modal-exit-duration', '1500ms');
+    await expect(settings.locator('#modal-animation-hint')).toContainText('takes 25% longer');
     await style.selectOption('subtle');
     await expect(duration).toHaveValue('1200');
     await settings.locator('#modal-animation-preview').click();

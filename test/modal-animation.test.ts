@@ -15,7 +15,7 @@ test('modal animation applies presentation tokens without touching focus or open
     applyModalAnimation(document.documentElement, readModalAnimation({ 'appearance.modalAnimation': 'crt', 'appearance.modalAnimationDuration': 800 }));
     assert.equal(document.documentElement.dataset.modalAnimation, 'crt');
     assert.equal(document.documentElement.style.getPropertyValue('--modal-enter-duration'), '800ms');
-    assert.equal(document.documentElement.style.getPropertyValue('--modal-exit-duration'), '600ms');
+    assert.equal(document.documentElement.style.getPropertyValue('--modal-exit-duration'), '1000ms');
     applyModalAnimation(document.documentElement, { style: 'none', duration: 1200 });
     assert.equal(document.documentElement.dataset.modalAnimation, 'none');
     assert.equal(document.documentElement.style.getPropertyValue('--modal-enter-duration'), '0ms');

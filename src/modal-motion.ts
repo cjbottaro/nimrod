@@ -5,13 +5,15 @@ interface Snapshot { shell: HTMLElement; rect: DOMRect; zoom: number; backdrop: 
 interface Layer { source: HTMLElement; node: HTMLElement; animations: Animation[]; timer?: number }
 const owners = new WeakMap<Document, ReturnType<typeof createModalMotion>>();
 const styles = new WeakMap<CSSStyleSheet, { count: number; text: string }>();
+// Shared beam sequence: CRT dismissal plays exactly this entrance backwards.
+const CRT_BEAM: Keyframe[] = [{ opacity: 1 }, { opacity: 1, offset: .18 }, { opacity: 0, offset: .3 }, { opacity: 0 }];
 
 function motion(document: Document, exit = false): Motion {
   const root = document.documentElement, view = document.defaultView!;
   const style = root.dataset.modalAnimation as ModalAnimationStyle || 'subtle';
   const reduced = view.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const duration = parseFloat(view.getComputedStyle(root).getPropertyValue(exit ? '--modal-exit-duration' : '--modal-enter-duration'));
-  return { style, duration: reduced || style === 'none' ? 0 : Number.isFinite(duration) ? duration : exit ? 120 : 160 };
+  return { style, duration: reduced || style === 'none' ? 0 : Number.isFinite(duration) ? duration : exit ? style === 'crt' ? 200 : 120 : 160 };
 }
 
 /** Preserve ID-based styling without duplicating live DOM IDs, even across shadow queries. */
@@ -70,8 +72,8 @@ function createModalMotion(document: Document) {
     const layer = { source, node, animations: [] as Animation[], timer: undefined as number | undefined };
     layers.add(layer); return layer;
   }
-  function animate(layer: ReturnType<typeof mount>, element: HTMLElement, frames: Keyframe[], duration: number, easing = 'linear') {
-    const animation = element.animate(frames, { duration, easing, fill: 'both' });
+  function animate(layer: ReturnType<typeof mount>, element: HTMLElement, frames: Keyframe[], duration: number, easing = 'linear', direction: PlaybackDirection = 'normal') {
+    const animation = element.animate(frames, { duration, easing, direction, fill: 'both' });
     layer.animations.push(animation); return animation;
   }
   function finish(layer: ReturnType<typeof mount>, duration: number) {
@@ -152,15 +154,27 @@ function createModalMotion(document: Document) {
     if (!snapshot || disposed || !source.isConnected || !motion(document, true).duration) return;
     for (const layer of [...layers]) if (layer.source === source) remove(layer);
     const layer = mount(source, 'exit'), { duration, style } = snapshot.motion;
-    layer.node.style.background = snapshot.backdrop;
     layer.node.append(snapshot.shell);
     snapshot.restoreScroll();
-    animate(layer, layer.node, [{ opacity: 1 }, { opacity: 0 }], duration);
     if (style === 'crt') {
-      animate(layer, snapshot.shell, [{ clipPath: snapshot.clip === 'none' ? 'inset(0)' : snapshot.clip }, { clipPath: 'inset(50% 0)', offset: .75 }, { clipPath: 'inset(50% 0)' }], duration, 'ease-in');
+      // Reverse the live CSS entrance's per-segment easing and hold, not a fade
+      // approximating it. Only the backdrop fades; the panel remains opaque.
+      const backdrop = document.createElement('div'); backdrop.dataset.modalMotionBackdrop = '';
+      backdrop.style.cssText = 'position:absolute;inset:0;pointer-events:none;';
+      backdrop.style.background = snapshot.backdrop; layer.node.prepend(backdrop);
+      animate(layer, backdrop, [{ opacity: 0 }, { opacity: 1 }], duration, 'ease-out', 'reverse');
+      animate(layer, snapshot.shell, [
+        { clipPath: 'inset(50% 0)', offset: 0, easing: 'cubic-bezier(.2,.8,.2,1)' },
+        { clipPath: 'inset(50% 0)', offset: .18, easing: 'cubic-bezier(.2,.8,.2,1)' },
+        { clipPath: snapshot.clip === 'none' ? 'inset(0)' : snapshot.clip, offset: 1 },
+      ], duration, 'linear', 'reverse');
       const beam = line(layer, snapshot.rect, snapshot.zoom);
-      animate(layer, beam, [{ opacity: 0 }, { opacity: 0, offset: .7 }, { opacity: 1, offset: .8 }, { opacity: 0 }], duration);
-    } else animate(layer, snapshot.shell, [{ opacity: snapshot.opacity, transform: 'none' }, { opacity: 0, transform: 'translateY(4px) scale(.98)' }], duration, 'ease-in');
+      animate(layer, beam, CRT_BEAM, duration, 'linear', 'reverse');
+    } else {
+      layer.node.style.background = snapshot.backdrop;
+      animate(layer, layer.node, [{ opacity: 1 }, { opacity: 0 }], duration);
+      animate(layer, snapshot.shell, [{ opacity: snapshot.opacity, transform: 'none' }, { opacity: 0, transform: 'translateY(4px) scale(.98)' }], duration, 'ease-in');
+    }
     finish(layer, duration);
   }
   function opening(source: HTMLElement) {
@@ -174,7 +188,7 @@ function createModalMotion(document: Document) {
         if (source.localName === 'dialog' ? !(source as HTMLDialogElement).open : !source.classList.contains('open')) return;
         const { rect, zoom } = geometry(shell); if (!rect.width || !rect.height) return;
         const layer = mount(source, 'enter'), beam = line(layer, rect, zoom);
-        animate(layer, beam, [{ opacity: 1 }, { opacity: 1, offset: .18 }, { opacity: 0, offset: .3 }, { opacity: 0 }], settings.duration);
+        animate(layer, beam, CRT_BEAM, settings.duration);
         finish(layer, settings.duration);
       } catch { for (const layer of [...layers]) if (layer.source === source) remove(layer); }
     });

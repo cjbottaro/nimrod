@@ -40,11 +40,20 @@ test('closing is immediate, exit copies are inert and isolated, and new opens re
     const layer = f.document.querySelector<HTMLElement>('[data-modal-motion=exit]')!;
     assert.equal(layer.inert, true); assert.equal(layer.getAttribute('aria-hidden'), 'true');
     assert.equal(layer.style.pointerEvents, 'none');
-    const snapshot = layer.querySelector('div')!.shadowRoot!;
+    const snapshot = [...layer.children].find(node => node.shadowRoot)!.shadowRoot!;
     assert.equal(snapshot.querySelector<HTMLTextAreaElement>('[data-modal-snapshot-id=field]')!.value, 'Current edited text');
     assert.equal(snapshot.querySelectorAll('[id]').length, 0);
     assert.equal(f.document.querySelectorAll('#sample').length, 1);
-    assert.ok(f.records.filter(record => layer.contains(record.node)).every(record => record.options.duration === 375));
+    const exits = f.records.filter(record => layer.contains(record.node));
+    assert.ok(exits.every(record => record.options.duration === 625 && record.options.direction === 'reverse'));
+    assert.equal(exits.some(record => record.node === layer), false); // No whole-layer opacity fade.
+    const panel = exits.find(record => record.node.shadowRoot)!;
+    assert.ok(panel.frames.every(frame => !('opacity' in frame)));
+    assert.equal(panel.frames[1].offset, .18); // Reverse the entrance hold and per-segment easing.
+    assert.equal(panel.frames[1].easing, 'cubic-bezier(.2,.8,.2,1)');
+    const enteringBeam = f.records.find(record => record.node.hasAttribute('data-modal-crt-line') && record.options.direction === 'normal')!;
+    const exitingBeam = exits.find(record => record.node.hasAttribute('data-modal-crt-line'))!;
+    assert.deepEqual(exitingBeam.frames, enteringBeam.frames);
     showModal(f.dialog);
     assert.equal(layer.isConnected, false);
     assert.equal(f.dialog.open, true);
@@ -62,6 +71,7 @@ test('native form/default cancel coverage does not change defaults, duplicate co
     f.dialog.close('ok'); // Simulate the native method=dialog default.
     await Promise.resolve();
     assert.equal(f.document.querySelectorAll('[data-modal-motion=exit]').length, 1);
+    assert.ok(f.records.every(record => record.options.duration === 375)); // Subtle remains faster.
     showModal(f.dialog);
     const prevented = new f.dom.window.Event('cancel', { cancelable: true });
     f.dialog.addEventListener('cancel', event => event.preventDefault(), { once: true });

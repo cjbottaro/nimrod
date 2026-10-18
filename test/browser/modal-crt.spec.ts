@@ -36,13 +36,22 @@ for (const duration of [160, 500]) {
         dialog.querySelector<HTMLButtonElement>('button')!.click(); await Promise.resolve();
         const layer = document.querySelector<HTMLElement>('[data-modal-motion=exit]')!;
         const animations = layer.getAnimations({ subtree: true });
-        animations.forEach(animation => { animation.pause(); animation.currentTime = 0; });
-        return { open: dialog.open, focused: document.activeElement?.id, inert: layer.inert, pointerEvents: getComputedStyle(layer).pointerEvents, durations: animations.map(animation => animation.effect!.getTiming().duration), duplicateIds: document.querySelectorAll('#modal-animation-preview-dialog').length };
+        animations.forEach(animation => { animation.pause(); animation.currentTime = Number(animation.effect!.getTiming().duration) * .5; });
+        const panel = [...layer.children].find(node => node.shadowRoot)!;
+        const layerOpacity = getComputedStyle(layer).opacity, panelOpacity = getComputedStyle(panel).opacity;
+        const backdropOpacity = getComputedStyle(layer.querySelector('[data-modal-motion-backdrop]')!).opacity;
+        animations.forEach(animation => { animation.currentTime = Number(animation.effect!.getTiming().duration) * .9; });
+        const heldClip = getComputedStyle(panel).clipPath, beamOpacity = getComputedStyle(layer.querySelector('[data-modal-crt-line]')!).opacity;
+        return { open: dialog.open, focused: document.activeElement?.id, inert: layer.inert, pointerEvents: getComputedStyle(layer).pointerEvents, durations: animations.map(animation => animation.effect!.getTiming().duration), reverse: animations.every(animation => animation.effect!.getTiming().direction === 'reverse'), layerOpacity, panelOpacity, backdropOpacity, heldClip, beamOpacity, duplicateIds: document.querySelectorAll('#modal-animation-preview-dialog').length };
       });
       expect(exit.open).toBe(false); expect(exit.focused).toBe('modal-animation-preview');
       expect(exit.inert).toBe(true); expect(exit.pointerEvents).toBe('none');
       expect(exit.durations.length).toBeGreaterThanOrEqual(2);
-      expect(exit.durations.every(value => value === Math.round(duration * .75))).toBe(true);
+      expect(exit.durations.every(value => value === Math.round(duration * 1.25))).toBe(true);
+      expect(exit.reverse).toBe(true);
+      expect(exit.layerOpacity).toBe('1'); expect(exit.panelOpacity).toBe('1');
+      expect(Number(exit.backdropOpacity)).toBeLessThan(1);
+      expect(exit.heldClip).toContain('50%'); expect(exit.beamOpacity).toBe('1');
       expect(exit.duplicateIds).toBe(1);
       // A new interaction retires the old exit; it never waits for animation completion.
       await settings.locator('#modal-animation-preview').click();

@@ -206,7 +206,10 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     required('modal-animation-hint').textContent = (animation.style === 'crt'
       ? 'A theme-accent horizontal line expands up and down like a CRT powering on.'
       : animation.style === 'subtle' ? 'A short fade, lift and gentle scale.' : 'Dialogs appear and disappear instantly; your duration is remembered.')
-      + ' Default duration: 160 ms; dismissal is 25% faster. Reduced motion disables animations.';
+      + (animation.style === 'crt'
+        ? ' Closing reverses the motion without fading the panel and takes 25% longer.'
+        : animation.style === 'subtle' ? ' Dismissal is 25% faster.' : '')
+      + ' Default duration: 160 ms. Reduced motion disables animations.';
   }
   async function saveModalAnimation(values: Parameters<typeof preferences.saveModalAnimation>[0]): Promise<void> {
     if (savingAnimation) return;
