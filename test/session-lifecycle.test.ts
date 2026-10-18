@@ -124,6 +124,10 @@ test('saved reference decoding preserves legacy Pi entries and tagged Copilot en
   const copilot = { kind: 'copilot-sdk', sessionId: 'saved-id', name: 'Copilot', lastUsed: 100 };
   assert.deepEqual(readSavedSidebarSession(pi), pi);
   assert.deepEqual(readSavedSidebarSession(copilot), copilot);
+  for (const saved of [pi, copilot]) {
+    assert.deepEqual(readSavedSidebarSession({ ...saved, pinned: true }), { ...saved, pinned: true });
+    for (const pinned of [false, 'true', 1, null, {}]) assert.deepEqual(readSavedSidebarSession({ ...saved, pinned }), saved);
+  }
   for (const invalid of [null, [], {}, { ...copilot, kind: 'acp', profile: 'copilot' }, { ...copilot, sessionId: ' ' }, { ...pi, kind: 'unknown' }])
     assert.equal(readSavedSidebarSession(invalid), undefined);
   const p = fixture('pi'), c = fixture('copilot'); p.save(); c.save();

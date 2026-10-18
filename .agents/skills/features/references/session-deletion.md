@@ -17,7 +17,7 @@ Unknown results retain SDK identity/draft; no retries or private-directory
 removal. Old draft files from the removed integration are never purged by SDK
 cleanup. [SDK deletion](copilot-sdk.md#close-and-delete) owns concrete semantics.
 
-`src/session-deletion-operation.ts` owns the consumer-oriented `SessionDeletionOperation`, `SessionDeletionSource` and source-scoped `SessionDeletionContext` interfaces. The named consumers are the Session sidebar trash buttons, Project bar trash control, selected-session palette/shortcut and repeated Delete sessions picker. A source binds a saved reference/title to an operation, returning `undefined` only for identities it does not own. Operations supply a cleanup target (`key`, `draftScope`), integration-specific `label`/`detail`, live `supported` and `available()` projections, an optional `unavailableReason`, and reviewed execution. An owned but unsupported identity can still explain its disabled controls; Delete discovery includes only supported operations. Completion also includes cancellation or a reported failure; only authoritative tombstones prove removal. This port is separate from `SessionLifecycle`: persistence, connectivity, discovery, Restart and deletion are independent capabilities.
+`src/session-deletion-operation.ts` owns the consumer-oriented `SessionDeletionOperation`, `SessionDeletionSource` and source-scoped `SessionDeletionContext` interfaces. The named consumers are the Session sidebar native row menus, Project bar trash control, selected-session palette/shortcut and repeated Delete sessions picker. A source binds a saved reference/title to an operation, returning `undefined` only for identities it does not own. Operations supply a cleanup target (`key`, `draftScope`), integration-specific `label`/`detail`, live `supported` and `available()` projections, an optional `unavailableReason`, and reviewed execution. An owned but unsupported identity can still explain its disabled controls; Delete discovery includes only supported operations. Completion also includes cancellation or a reported failure; only authoritative tombstones prove removal. This port is separate from `SessionLifecycle`: persistence, connectivity, discovery, Restart and deletion are independent capabilities.
 
 - `src/session-deletion-coordinator.ts::SessionDeletionCoordinator` registers sources, serializes local deletion, incorporates integration-owned external pending state, revalidates generic window/mounted-session gates, and owns one confirmed-success ledger. Its scoped context owns dialog presentation/progress, review ownership, mounted participant locks/observed stop, project-lifetime cancellation and application error routing. A Pi release/snapshot cannot dismiss another source's review. Locks are captured once per target, and all owned stops settle before failure releases them. Authoritative success effects deduplicate batches before the shared reconciliation callback; recovery explicitly retires a tombstone. Resolving `run()` is not an acknowledgement of successful deletion.
 - `src/pi/session-deletion.ts::piSessionDeletion` constructs/adapts the existing `SessionDeletion` native transaction. It maps native files to cleanup targets and routes review/progress/errors and confirmed event/IPC/snapshot successes through its scoped context. The transaction retains ordered event processing, native writer coordination, partial results, persisted quarantine and recovery. Its native tombstone deduplication remains integration bookkeeping, not a separate UI deletion ledger.
@@ -257,15 +257,9 @@ models Any semantics and tests two distinct window labels.
 
 ## Sidebar action and review UI
 
-`createTab` mounts `.session-delete` immediately before `.session-close`, as a
-sibling of the conversation-selection control, never nested. Its trusted SVG is
-cloned from the Project bar and aria-hidden; label is `Delete session tree for
-<name>`. Both buttons have compact equal-sized hit targets, transparent surfaces
-and whole-row hover; enabled trash has a destructive hover accent. Disabled trash
-stays transparent. No session-row tooltip is added.
+`createTab` exposes Delete through the OS-rendered session-row context menu, not an inline `.session-delete` button. Pin/Close retain compact sibling controls; [sidebar pinning/menu specification](sidebar-attention.md#pinning-and-native-row-menus) owns native popup routing, input, state and lifecycle. The Project bar trash control and palette/shortcut remain unchanged.
 
-The callback captures its row's `Tab`, calls `deleteSession(tab)` without
-`activate`, and never resumes/selects a background target. Shared `deletable`
+The menu captures its row's `Tab` and popup request, invokes shared `runSessionRowAction(tab, 'delete')` → `deleteSession(tab)` without `activate`, and never resumes/selects a background target. Shared `deletable`
 checks saved, non-demo/non-temporary, lifecycle and deletion pending/lock/quarantine
 state. Working, queued and pending-submission sessions remain eligible; starting,
 closing or restarting the target does not. Native identity/ownership checks still win.
@@ -380,8 +374,7 @@ Snapshots reconcile locks and missed completion as well as guards.
   cancellation, disposal and existing-modal transitions. Execution fixtures cover
   keeping the modal open, native cancel/form-submit suppression, per-operation
   reset, progress and closing only after event/IPC/snapshot reconciliation.
-- Offline WebKit tests retain scroll/footer/theme/focus behavior and sidebar trash
-  geometry/eligibility. Tree geometry checks 32px even rows, 24px indentation,
+- Offline WebKit tests retain scroll/footer/theme/focus behavior; `sidebar-pinning.spec.ts` covers replacement Pin/Close geometry and records native popup intent/disabled deletion without rendering an OS menu. Tree geometry checks 32px even rows, 24px indentation,
   icon/name alignment and guide lines at 125% zoom, plus wrapped secondary-detail
   alignment/no horizontal overflow at a narrow viewport. Browser fixtures do not
   execute native deletion.

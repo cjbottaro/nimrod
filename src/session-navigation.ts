@@ -4,7 +4,11 @@ import { nextLastUsed, recentSessions } from './session-recency';
 export const SESSION_VIEWS = ['all', 'unread', 'working'] as const;
 export type SessionView = typeof SESSION_VIEWS[number];
 export type SelectionIntent = 'explicit' | 'row' | 'startup' | 'restore' | 'cleanup' | 'notification';
-export interface NavigationSession { id: string; lastUsed: number; }
+export interface NavigationSession { id: string; lastUsed: number; pinned?: boolean; }
+/** Stable partition preserves recency/inbox arrival within each pin group. */
+function pinnedFirst<T extends NavigationSession>(sessions: readonly T[]): T[] {
+  return [...sessions.filter(session => session.pinned), ...sessions.filter(session => !session.pinned)];
+}
 export interface NavigationPolicy<T> {
   needsAttention(session: T): boolean;
   isWorking(session: T): boolean;
@@ -44,7 +48,7 @@ export class SessionNavigation<T extends NavigationSession> {
     const index = this.sessions.indexOf(session);
     if (index >= 0) this.sessions.splice(index, 1);
   }
-  all(): readonly T[] { return recentSessions(this.sessions); }
+  all(): readonly T[] { return pinnedFirst(recentSessions(this.sessions)); }
   nextRecency(now = Date.now()): number { return nextLastUsed(this.sessions, now); }
 
   snapshot(view: SessionView, presented?: T, selected?: T): NavigationSnapshot<T> {
@@ -52,7 +56,7 @@ export class SessionNavigation<T extends NavigationSession> {
     const unread = this.unread.reconcile(this.sessions.map(session => ({ id: session.id, needsAttention: this.policy.needsAttention(session) })), presented?.id);
     const working = new Set(this.working.reconcile(this.sessions.map(session => ({ id: session.id, needsAttention: this.policy.isWorking(session) })), view === 'working' ? presented?.id : undefined));
     const byId = new Map(this.sessions.map(session => [session.id, session]));
-    const visible = view === 'unread' ? unread.map(id => byId.get(id)!) : all.filter(session => view === 'all' || working.has(session.id));
+    const visible = view === 'unread' ? pinnedFirst(unread.map(id => byId.get(id)!)) : all.filter(session => view === 'all' || working.has(session.id));
     return { all, visible, view, selected };
   }
   counts(): Record<SessionView, number> {
@@ -81,12 +85,14 @@ export class SessionNavigation<T extends NavigationSession> {
   replacement(before: NavigationSnapshot<T>, after: NavigationSnapshot<T>): { target?: T; view: SessionView } {
     if (before.selected && this.has(before.selected)) return { target: before.selected, view: after.view };
     const visible = new Set(after.visible);
-    let target = after.all.find(session => visible.has(session) && this.policy.isConnected(session));
+    // Cleanup retains connected-first recency, independent of pin grouping.
+    const recent = recentSessions(this.sessions);
+    let target = recent.find(session => visible.has(session) && this.policy.isConnected(session));
     if (target) return { target, view: after.view };
-    target = after.all.find(session => this.policy.isConnected(session));
+    target = recent.find(session => this.policy.isConnected(session));
     if (target) return { target, view: 'all' };
-    target = after.all.find(session => visible.has(session));
+    target = recent.find(session => visible.has(session));
     if (target || after.view === 'all') return { target, view: after.view };
-    return { target: after.all[0], view: 'all' };
+    return { target: recent[0], view: 'all' };
   }
 }
