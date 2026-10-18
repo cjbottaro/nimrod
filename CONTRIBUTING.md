@@ -77,6 +77,10 @@ NIMROD_TEST_PI="$(command -v pi)" mise exec -- cargo test \
 
 Fixture evidence is not native/platform acceptance. Record native observations separately.
 
+### Native blur diagnostic
+
+The standalone [macOS blur probe](tools/blur-probe/README.md) isolates AppKit versus WKWebView blur activation using synthetic windows. Build/run it only explicitly; it is not part of `mise run test` and does not build, launch or access Nimrod. Its README covers Screen Recording approval, cropped-display versus window-filtered capture, experimental switches and the native evidence. Captures/bundles stay ignored and checkout-local in `tmp/blur-probe/`. Do not treat missing captured flashes as a passing native acceptance test.
+
 ## App builds
 
 Do not automatically build/package for validation, task completion or merge/cleanup. Run only on an explicit app-build request:
