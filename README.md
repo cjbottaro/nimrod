@@ -60,7 +60,7 @@ Without installation, use `./bin/nimrod .`. The launcher opens or focuses a proj
 - [Themes](docs/themes.md) and [Syntax highlighting](docs/syntax-highlighting.md) — bundled palettes, local imports and labeled code.
 - [Translucency](docs/translucency.md) — whole-window background opacity and independently adjustable macOS blur; Linux blur is compositor-owned.
 
-See the [user-guide index](docs/README.md). [Card plugins](docs/card-plugins.md) power bundled cards, requested-edit previews and automatically loaded/cached personal TypeScript tool customization (with compiled-JS compatibility). See [plugin authoring](docs/card-plugin-api.md) for the mounted DOM API, or try the optional [Pi Web Access cards](docs/pi-web-access-plugin.md).
+See the [user-guide index](docs/README.md). [Card plugins](docs/card-plugins.md) power bundled cards, requested-edit previews and automatically loaded/cached personal TypeScript tool customization (with compiled-JS compatibility). Use the [built-in card cookbook](docs/builtin-card-cookbook.md) for real-session prompts and expected presentations. See [plugin authoring](docs/card-plugin-api.md) for the mounted DOM API, or try the optional [Pi Web Access cards](docs/pi-web-access-plugin.md).
 
 ## Platform status and limitations
 

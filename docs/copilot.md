@@ -167,6 +167,15 @@ beneath the result through generation, execution and errors.
 incomplete-result notices, paths and literal code snippets instead of repeated
 JSON. **GitHub contents** shows the repository/path; **Use skill** shows the skill
 name and native outcome. Unknown result shapes keep the generic fallback.
+Built-in **SQL** cards show the supplied description, concise literal results and
+reported statement/affected/returned row counts when available. SQL and original
+metadata remain in raw disclosures; Nimrod does not reconstruct a task checklist
+or infer database scope from queries. Unknown/mismatched results retain literal
+fallback, and failures show their native error rather than success counts.
+
+For prompts that exercise these cards (including SQL, questions and local/web/MCP
+tools), see the [Built-in card cookbook](builtin-card-cookbook.md).
+
 Clipped agent-text previews are distinguished from structured search results.
 Cards do not repair external MCP header/rate-limit errors or install missing
 Copilot skills. Full original output remains available; links open only through

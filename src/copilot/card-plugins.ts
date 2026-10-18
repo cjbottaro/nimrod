@@ -148,6 +148,23 @@ function repositoryResult(output: Record<string, unknown>): string | undefined {
     notice: typeof output.content === 'string' && output.content.startsWith('Output too large to read at once (') && output.content.includes('Saved to:') ? 'Agent text preview was clipped; showing structured results.' : undefined });
   repositoryResults.set(output, text); return text;
 }
+/** Native SQL presentation only: never parse queries or reconstruct task/database state. */
+function sqlPresentation(data: Readonly<ToolCardData>, input: Record<string, unknown> | undefined): CardPresentation | undefined {
+  const start = object(object(data.native)?.['tool.execution_start']);
+  if (data.name !== 'sql' || start?.mcpServerName !== undefined || start?.mcpToolName !== undefined || typeof input?.query !== 'string' || !input.query.trim()) return;
+  const complete = object(object(data.native)?.['tool.execution_complete']);
+  const native = !data.isError && !data.uiPhase && ['finished', 'result'].includes(data.toolStatus || '') && complete?.success === true ? nativeResult(data) : undefined;
+  const metrics = native?.text !== undefined ? object(object(complete?.toolTelemetry)?.metrics) : undefined;
+  const counts: string[] = [];
+  for (const [key, singular, plural] of [['statementCount', 'statement', 'statements'], ['rowsAffected', 'row affected', 'rows affected'], ['rowsReturned', 'row returned', 'rows returned']]) {
+    const count = metrics?.[key];
+    if (typeof count === 'number' && Number.isSafeInteger(count) && count >= 0) counts.push(`${count} ${count === 1 ? singular : plural}`);
+  }
+  const sections = data.isError ? copilotSections(data) : rawToolPresentation(data).sections;
+  return namedToolPresentation({ title: 'SQL', preview: firstString(input, ['description']), sections: sections.map(section =>
+    section.key === 'result' && native?.text !== undefined && section.text === native.source
+      ? { ...section, label: ['Results', ...counts].join(' · '), text: native.text, format: 'text' as const } : section) });
+}
 /** Completed questions are a read-only transcript exchange, never a second decision surface. */
 function questionPresentation(data: Readonly<ToolCardData>, input: Record<string, unknown> | undefined): CardPresentation | undefined {
   if (data.name !== 'ask_user' || data.isError || data.uiPhase || !['finished', 'result'].includes(data.toolStatus || '')) return;
@@ -207,6 +224,8 @@ function copilotPresentation(data: Readonly<ToolCardData>, context: CardPluginCo
     }
     return namedToolPresentation({ title: raw.title, preview: `${start.mcpServerName} · ${start.mcpToolName}`, sections });
   }
+  const sql = sqlPresentation(data, input);
+  if (sql) return sql;
   if (data.kind === 'execute') {
     const command = firstString(input, ['command', 'cmd']);
     return data.isError ? namedToolPresentation({ title: raw.title, preview: command, sections }) : shellPresentation({ title: raw.title, command, sections });
