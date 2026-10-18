@@ -1,3 +1,4 @@
+import { showModal, closeModal } from './modal-motion';
 import { confirmationKey, labelDialogAction } from './dialog-actions';
 
 export interface DeletionTreeSession { file: string; title: string; parent?: string | null; cwd?: string; }
@@ -43,7 +44,7 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
     if (loadingTimer !== undefined || (!pending && preview !== 'loading') || disposed || dialog.open ||
       [...doc.querySelectorAll<HTMLDialogElement>('dialog[open]')].some(other => !options.canCover?.(other))) return;
     dialog.returnValue = '';
-    dialog.showModal(); (confirm.disabled ? cancel : confirm).focus();
+    showModal(dialog); (confirm.disabled ? cancel : confirm).focus();
   }
   function onOtherClose(event: Event): void { if (event.target !== dialog) tryShow(); }
   function finish(answer = false): void {
@@ -56,7 +57,7 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
     executing = false;
     cancel.disabled = false; labelDialogAction(cancel, 'Cancel', 'Escape');
     preview = 'idle';
-    if (dialog.open) dialog.close('cancel'); else finish();
+    if (dialog.open) closeModal(dialog, 'cancel'); else finish();
   }
   function progress(phase: 'stopping' | 'deleting'): void {
     if (!executing || disposed) return;
@@ -66,7 +67,7 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
   }
   function activate(button: HTMLButtonElement): void {
     if (executing || button.disabled) return;
-    if (button === cancel) { dialog.close('cancel'); return; }
+    if (button === cancel) { closeModal(dialog, 'cancel'); return; }
     if (!pending) return;
     executing = true;
     cancel.disabled = true; confirm.disabled = true;

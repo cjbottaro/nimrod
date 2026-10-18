@@ -1,3 +1,5 @@
+import { closeModal } from './modal-motion';
+
 /** Plain action labels with non-visual shortcut metadata. */
 export function labelDialogAction(button: HTMLButtonElement, label: string, shortcut?: 'Enter' | 'Escape'): void {
   button.textContent = label;
@@ -30,6 +32,6 @@ export function confirmationKey(event: KeyboardEvent, dialog: HTMLDialogElement,
   const button = event.key === 'Escape' || cancel.contains(event.target as Node) ? cancel : confirm;
   if (button.disabled) return;
   if (activate) activate(button);
-  else if (button.form?.method === 'dialog') dialog.close(button.value);
+  else if (button.form?.method === 'dialog') closeModal(dialog, button.value);
   else button.click();
 }

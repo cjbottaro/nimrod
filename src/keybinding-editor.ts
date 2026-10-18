@@ -1,3 +1,4 @@
+import { showModal, closeModal } from './modal-motion';
 import { confirmationKey, labelDialogAction, navigateDialogActions } from './dialog-actions';
 import { ACTIONS, bindingsFor, bindingConflicts, isMac, recordBinding, shortcutLabel, type ActionId, type KeyOverrides } from './keybindings';
 
@@ -94,7 +95,7 @@ export function installKeybindingEditor(window: Window, content: HTMLElement, ho
     labelDialogAction(get<HTMLButtonElement>('keybinding-cancel'), 'Cancel', 'Escape');
     labelDialogAction(save, resetAll ? 'Reset all keybindings' : action?.reset ? 'Reset shortcuts' : 'Save', input.hidden ? 'Enter' : undefined);
     save.disabled = !!action && !action.reset;
-    recorder.showModal(); updateRecorder(); (input.hidden && !save.disabled ? save : input.hidden ? get('keybinding-cancel') : input).focus({ preventScroll: true });
+    showModal(recorder); updateRecorder(); (input.hidden && !save.disabled ? save : input.hidden ? get('keybinding-cancel') : input).focus({ preventScroll: true });
   }
   async function commit(operation: () => Promise<void>, close = false) {
     if (saving) return;
@@ -102,7 +103,7 @@ export function installKeybindingEditor(window: Window, content: HTMLElement, ho
     try {
       await operation();
       if (disposed) return;
-      if (close) recorder.close();
+      if (close) closeModal(recorder);
       notice('Saved. Keybindings updated.'); host.error?.();
     } catch (error) {
       if (disposed) return;
@@ -117,7 +118,7 @@ export function installKeybindingEditor(window: Window, content: HTMLElement, ho
     }
     if (recorder.open && navigateDialogActions(event, get<HTMLButtonElement>('keybinding-cancel'), save)) return;
     if (event.isComposing || event.keyCode === 229) return;
-    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (!saving) recorder.close(); return; }
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (!saving) closeModal(recorder); return; }
     if (event.target !== input) return;
     // Tab navigates to Save/Cancel; shortcuts containing Tab remain reserved.
     if (event.key === 'Tab' && !event.metaKey && !event.ctrlKey && !event.altKey) return;
@@ -128,13 +129,13 @@ export function installKeybindingEditor(window: Window, content: HTMLElement, ho
       candidate = binding; recorderNotice = ''; input.value = shortcutLabel(binding, mac); reassign.checked = false; updateRecorder();
     } catch (error) { candidate = undefined; input.value = ''; save.disabled = true; if (host.error) { host.error(String(error)); get('keybinding-conflicts').textContent = ''; } else get('keybinding-conflicts').textContent = String(error); }
   };
-  const cancel = (event: Event) => { event.preventDefault(); if (!saving) recorder.close(); };
+  const cancel = (event: Event) => { event.preventDefault(); if (!saving) closeModal(recorder); };
   recorder.addEventListener('keydown', record); recorder.addEventListener('cancel', cancel);
   recorder.addEventListener('close', () => {
     // Saving redraws the originating row; do not restore focus to a detached button.
     if (!disposed && !document.querySelector('dialog[open]:not(#settings-page)')) search.focus({ preventScroll: true });
   });
-  get('keybinding-cancel').addEventListener('click', () => { if (!saving) recorder.close(); });
+  get('keybinding-cancel').addEventListener('click', () => { if (!saving) closeModal(recorder); });
   save.addEventListener('click', () => {
     if (save.disabled || saving) return;
     if (resetAll) void commit(() => host.resetAll(), true);

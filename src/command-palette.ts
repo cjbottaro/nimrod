@@ -1,3 +1,4 @@
+import { showModal, closeModal } from './modal-motion';
 import { vscodeMruRanking, type CommandRanking } from './command-ranking';
 import { createPickerEnterHint } from './picker-hints';
 import { createSessionRowContent, updateSessionRowContent, sessionStatusPresentation } from './session-sidebar';
@@ -143,7 +144,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     cancelChoice(); createNamed = undefined; retryAction = undefined; generation++;
     historyRequest?.abort(); historyRequest = undefined;
     closing = true;
-    dialog.close();
+    closeModal(dialog);
   }
   function validName(): boolean { return !!input.value.trim() && !/[\r\n\0]/.test(input.value); }
   function draw(): void {
@@ -409,7 +410,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     if (disposed || closing || !options.canOpen() || doc.querySelector('dialog[open]')) return false;
     opener = doc.activeElement instanceof realm.HTMLElement ? doc.activeElement : undefined;
     commandQuery = ''; afterClose = undefined;
-    dialog.showModal(); commands(); return true;
+    showModal(dialog); commands(); return true;
   }
   function choose(index = selected): void {
     const item = matches[index];

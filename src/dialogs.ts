@@ -1,3 +1,4 @@
+import { showModal, closeModal } from './modal-motion';
 import { confirmationKey, labelDialogAction, navigateDialogActions } from './dialog-actions';
 
 export class Dialogs {
@@ -12,7 +13,7 @@ export class Dialogs {
   cancel(owner?: string): void {
     if (owner) this.owners.set(owner, (this.owners.get(owner) || 0) + 1);
     else this.generation++;
-    if (this.dialog.open && (!owner || this.activeOwner === owner)) this.dialog.close('cancel');
+    if (this.dialog.open && (!owner || this.activeOwner === owner)) closeModal(this.dialog, 'cancel');
   }
 
   private show(title: string, options?: string[], prefill?: string, message?: string, owner?: string, action = 'Confirm'): Promise<string | undefined> {
@@ -44,7 +45,7 @@ export class Dialogs {
         this.dialog.removeEventListener('keydown', onKey);
         resolve(this.dialog.returnValue !== 'ok' ? undefined : options ? this.select.value : message !== undefined ? 'confirmed' : this.inputNode.value);
       }, { once: true });
-      this.dialog.showModal();
+      showModal(this.dialog);
       if (options) this.select.focus(); else if (message === undefined) this.inputNode.focus(); else confirm.focus();
     }));
     this.queue = result.then(() => {}, () => {});
