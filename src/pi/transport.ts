@@ -1,6 +1,6 @@
 import type { JsonRecord } from './types';
 
-export type Packet = { kind: 'rpc'; value: JsonRecord } | { kind: 'disconnected'; message: string };
+export type Packet = { kind: 'rpc'; value: JsonRecord } | { kind: 'disconnected'; message: string } | { kind: 'logBarrier'; id: string };
 export class RpcResponseError extends Error {}
 export class RpcTransportError extends Error {}
 interface Pending {
@@ -22,6 +22,7 @@ export class PiTransport {
   constructor(private readonly write: (message: JsonRecord) => Promise<void>) {}
 
   receive(packet: Packet): void {
+    if (packet.kind === 'logBarrier') throw new Error('Transcript log barrier must be acknowledged by the native delivery owner');
     if (this.failure) return;
     if (packet.kind === 'disconnected') { this.disconnect(packet.message); return; }
     const event = packet.value;

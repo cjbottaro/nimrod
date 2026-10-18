@@ -1,5 +1,6 @@
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { installApplicationNotices } from './application-notices';
@@ -121,6 +122,22 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     },
     recovered: () => { transcriptLogFailure = ''; notices.resolve('transcript-logs'); },
   });
+  let pressureRevision = -1, unlistenLogPressure: UnlistenFn | undefined;
+  const logPressure = (pressure: { revision: number; blocked: number }) => {
+    if (unloading || pressure.revision < pressureRevision) return;
+    pressureRevision = pressure.revision;
+    if (pressure.blocked > 0) notices.report({ id: 'transcript-log-pressure', operation: 'Transcript debug logs', severity: 'warning',
+      message: 'Transcript logging is catching up. Session processing may be slower while debug logging is enabled.' });
+    else notices.resolve('transcript-log-pressure');
+  };
+  void listen<{ revision: number; blocked: number }>('transcript-log-pressure', event => logPressure(event.payload))
+    .then(async unlisten => {
+      if (unloading) { unlisten(); return; }
+      unlistenLogPressure = unlisten;
+      logPressure(await invoke<{ revision: number; blocked: number }>('transcript_log_pressure'));
+    }).catch(error => {
+      if (!unloading) notices.report({ id: 'transcript-log-pressure-monitor', operation: 'Monitor transcript logging', message: String(error) });
+    });
   function reloadTranscriptLog(): void {
     const enabled = preferences.transcriptLogEnabled();
     transcriptLog.setEnabled(enabled && !global);
@@ -459,7 +476,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
       animationDuration.removeEventListener('change', changeAnimationDuration);
       pixelBindings.forEach(dispose => dispose()); pixelFade.removeEventListener('change', changePixelFade);
       if (animationPreview.open) closeModal(animationPreview);
-      performanceDiagnostics.dispose(); transcriptLog.dispose();
+      performanceDiagnostics.dispose(); transcriptLog.dispose(); unlistenLogPressure?.();
       keybindingEditor?.dispose(); settingsNavigation.dispose(); settingsSidebarResize.dispose();
       appearance.dispose(); zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose(); modalMotion.dispose();
     },

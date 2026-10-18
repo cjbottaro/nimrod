@@ -170,7 +170,7 @@ async fn owned_offline_sdk_bridge_drains_and_exits_without_a_real_cli() {
         stderr,
         writes,
         stopped,
-        Arc::new(move |packet| output.send(packet).map_err(|error| error.to_string())),
+        Output::new(move |packet| output.send(packet).map_err(|error| error.to_string())),
     ));
     for (id, method) in [("init", "initialize"), ("connect", "connect")] {
         let (reply, delivered) = oneshot::channel();

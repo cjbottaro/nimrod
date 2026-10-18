@@ -2,7 +2,14 @@
 use futures_util::StreamExt;
 use serde::Serialize;
 use serde_json::Value;
-use std::{path::PathBuf, process::Stdio, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    process::Stdio,
+    sync::{Arc, LazyLock, Mutex as StdMutex},
+    time::Duration,
+};
+use tauri::{Manager, ipc::Channel};
 use tokio::{
     io::AsyncWriteExt,
     process::{Child, Command},
@@ -21,9 +28,83 @@ const MAX_RECORD: usize = 256 * 1024 * 1024;
 pub enum Packet {
     Rpc { value: Value },
     Disconnected { message: String },
+    LogBarrier { id: String },
 }
 
-pub type Output = Arc<dyn Fn(Packet) -> Result<(), String> + Send + Sync>;
+static DELIVERIES: LazyLock<StdMutex<HashMap<String, (String, oneshot::Sender<()>)>>> =
+    LazyLock::new(|| StdMutex::new(HashMap::new()));
+
+#[derive(Clone)]
+pub struct Output {
+    notify: Arc<dyn Fn(Packet) -> Result<(), String> + Send + Sync>,
+    window: Option<tauri::Window>,
+}
+impl Output {
+    #[cfg(test)]
+    pub fn new(notify: impl Fn(Packet) -> Result<(), String> + Send + Sync + 'static) -> Self {
+        Self {
+            notify: Arc::new(notify),
+            window: None,
+        }
+    }
+    pub fn channel(window: tauri::Window, channel: Channel<Packet>) -> Self {
+        Self {
+            notify: Arc::new(move |packet| channel.send(packet).map_err(|error| error.to_string())),
+            window: Some(window),
+        }
+    }
+    pub(crate) fn notify(&self, packet: Packet) -> Result<(), String> {
+        (self.notify)(packet)
+    }
+    pub async fn send(&self, packet: Packet) -> Result<(), String> {
+        let logging = self.window.as_ref().is_some_and(|window| {
+            let preferences = window.state::<crate::preferences::Preferences>();
+            crate::transcript_logs::enabled(&preferences.snapshot())
+        });
+        if !logging {
+            return self.notify(packet);
+        }
+        let window = self.window.as_ref().ok_or("Missing logging window")?;
+        let id = uuid::Uuid::new_v4().to_string();
+        let (reply, result) = oneshot::channel();
+        DELIVERIES
+            .lock()
+            .map_err(|_| "Transcript delivery unavailable")?
+            .insert(id.clone(), (window.label().into(), reply));
+        let _delivery = Delivery(id.clone());
+        self.notify(packet)?;
+        self.notify(Packet::LogBarrier { id })?;
+        result
+            .await
+            .map_err(|_| "Transcript delivery acknowledgement lost".into())
+    }
+}
+struct Delivery(String);
+impl Drop for Delivery {
+    fn drop(&mut self) {
+        match DELIVERIES.lock() {
+            Ok(mut deliveries) => {
+                deliveries.remove(&self.0);
+            }
+            Err(error) => eprintln!("Could not retire transcript delivery: {error}"),
+        }
+    }
+}
+#[tauri::command]
+pub fn acknowledge_transcript_delivery(window: tauri::Window, id: String) -> Result<(), String> {
+    let mut deliveries = DELIVERIES
+        .lock()
+        .map_err(|_| "Transcript delivery unavailable")?;
+    if let Some((owner, _)) = deliveries.get(id) {
+        if owner != window {
+            return Err("Transcript delivery belongs to another window".into());
+        }
+    }
+    if let Some((_, reply)) = deliveries.remove(id) {
+        let _ = reply.send(());
+    }
+    Ok(())
+}
 
 struct WriteRequest {
     message: Value,
@@ -51,6 +132,9 @@ impl ProcessHost {
         token: String,
         output: Output,
     ) -> Result<(), String> {
+        acknowledge_delivery(window.label(), &id)
+    }
+    fn acknowledge_delivery(window: &str, id: &str) -> Result<(), String> {
         let mut slot = self.session.lock().await;
         if slot.is_some() {
             return Err("A session is already owned. Disconnect before starting another.".into());
@@ -194,8 +278,11 @@ async fn supervise(
                 match record {
                     Some(Ok(line)) if line.trim().is_empty() => {},
                     Some(Ok(line)) => match parse_record(&line) {
-                        Ok(value) => if output(Packet::Rpc { value }).is_err() {
-                            break "Frontend disconnected".to_owned();
+                        Ok(value) => {
+                            tokio::select! {
+                                _ = &mut stop => break "Session disconnected by Nimrod".to_owned(),
+                                result = output.send(Packet::Rpc { value }) => if result.is_err() { break "Frontend disconnected".to_owned(); },
+                            }
                         },
                         Err(error) => break error,
                     },
@@ -231,7 +318,7 @@ async fn supervise(
         Ok(()) => reason,
         Err(error) => format!("{reason}; {error}"),
     };
-    let _ = output(Packet::Disconnected { message });
+    let _ = output.notify(Packet::Disconnected { message });
     result
 }
 
@@ -277,6 +364,35 @@ mod smoke;
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[tokio::test]
+    async fn transcript_delivery_is_window_scoped_and_cancellable() {
+        let id = uuid::Uuid::new_v4().to_string();
+        let (reply, mut result) = oneshot::channel();
+        DELIVERIES
+            .lock()
+            .unwrap()
+            .insert(id.clone(), ("one".into(), reply));
+        let delivery = Delivery(id.clone());
+        assert!(acknowledge_delivery("two", &id).is_err());
+        assert!(matches!(
+            result.try_recv(),
+            Err(oneshot::error::TryRecvError::Empty)
+        ));
+        acknowledge_delivery("one", &id).unwrap();
+        result.await.unwrap();
+        drop(delivery);
+        acknowledge_delivery("one", &id).unwrap();
+        let id = uuid::Uuid::new_v4().to_string();
+        let (reply, result) = oneshot::channel();
+        DELIVERIES
+            .lock()
+            .unwrap()
+            .insert(id.clone(), ("one".into(), reply));
+        drop(Delivery(id.clone()));
+        assert!(result.await.is_err());
+        assert!(!DELIVERIES.lock().unwrap().contains_key(&id));
+    }
 
     #[test]
     fn validates_records_and_commands() {
@@ -324,7 +440,7 @@ mod tests {
     async fn owns_child_orders_output_rejects_stale_writes_and_waits_for_exit() {
         let host = ProcessHost::default();
         let (tx, mut rx) = mpsc::unbounded_channel();
-        let output: Output = Arc::new(move |p| tx.send(p).map_err(|e| e.to_string()));
+        let output = Output::new(move |p| tx.send(p).map_err(|e| e.to_string()));
         let mut command = Command::new("/bin/sh");
         command.args(["-c", "printf '{\"type\":\"first\"}\\n'; while IFS= read -r line; do printf '%s\\n' \"$line\"; done"]);
         let cwd = std::env::temp_dir();

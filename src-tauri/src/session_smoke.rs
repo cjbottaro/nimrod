@@ -6,7 +6,6 @@ use crate::{
 use serde_json::{Value, json};
 use std::{
     path::{Path, PathBuf},
-    sync::Arc,
     time::Duration,
 };
 use tokio::{process::Command, sync::mpsc, time::timeout};
@@ -63,7 +62,7 @@ async fn start(
         command,
         cwd.to_owned(),
         "smoke".into(),
-        Arc::new(move |packet| tx.send(packet).map_err(|e| e.to_string())),
+        crate::process::Output::new(move |packet| tx.send(packet).map_err(|e| e.to_string())),
     )
     .await
     .unwrap();

@@ -131,9 +131,9 @@ Incremental streaming now adds indexed tool updates, dirty-row presentation, app
 
 ## Transcript logging
 
-Expanded full-content native/history/request/UI logging, rotation, retention and chunking fixtures are authored but unrun. The naming cleanup and new/legacy setting precedence/migration fixtures are also unrun; compile checks are not behavioral or platform acceptance. Earlier tool-only offline evidence is preserved in [history](history/transcript-logging.md), not evidence for the expanded logger.
+Expanded full-content native/history/request/UI logging, rotation and retention fixtures are authored but unrun. The bounded native MPSC writer/backpressure change replaces overflow-stop/chunk generation; new fixtures for waiting producer ordering, whole large events, delayed native acknowledgements and the one-second warning/recovery/cancellation are authored but unrun. The naming cleanup and new/legacy setting precedence/migration fixtures are also unrun; compile checks are not behavioral or platform acceptance. Earlier tool-only offline evidence is preserved in [history](history/transcript-logging.md), not evidence for the expanded logger.
 
-Remaining macOS/Linux acceptance: actual Pi/extensions, SDK and dormant ACP traffic; empty/duplicate/history correlation; large-event reconstruction/replay limits and overhead; global setting synchronization; multi-window/process writes; disk failures, recovery and shutdown tails. Windows behavior is unverified. [Transcript logging](transcript-logs.md) owns contracts and fixture locations.
+Remaining macOS/Linux acceptance: actual Pi/extensions, SDK and dormant ACP traffic; empty/duplicate/history correlation; large-event/replay limits and overhead; bounded-channel waiting under slow storage and responsive/cancellable native delivery; one shared warning across concurrent producers/windows and its recovery; global setting synchronization; multi-window/process writes; disk failures, recovery and shutdown tails. Windows behavior is unverified. [Transcript logging](transcript-logs.md) owns contracts and fixture locations.
 
 ## Remaining acceptance by area
 

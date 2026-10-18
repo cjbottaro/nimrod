@@ -137,7 +137,7 @@ console.log(greeting); // 0123456789</code></pre>
         <h2>Diagnostics</h2>
         <label for="transcript-logs-mode">Transcript debug logs</label>
         <select id="transcript-logs-mode"><option value="off">Off (default)</option><option value="on">On</option></select>
-        <p class="settings-hint">Log native conversation events, prompts, assistant text/reasoning, tools, history, configuration and requests/results locally. Logs include full content and may contain secrets. Nothing is uploaded. While logging, files rotate at 25 MiB; oldest logs are deleted to keep at most 250 MiB and seven days. Agent history is untouched.</p>
+        <p class="settings-hint">Log native conversation events, prompts, assistant text/reasoning, tools, history, configuration and requests/results locally. Logs include full content and may contain secrets. Nothing is uploaded. Slow logging can slow session processing; a warning appears for sustained waits and clears when logging catches up. Files rotate at a 25 MiB target, keeping large events whole; oldest logs are deleted to keep at most 250 MiB and seven days. Agent history is untouched.</p>
         <p id="transcript-logs-status" role="status">Transcript debug logging is off.</p>
         <label for="performance-mode">Performance diagnostics</label>
         <select id="performance-mode"><option value="off">Off (default)</option><option value="on">On</option></select>

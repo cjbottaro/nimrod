@@ -52,8 +52,9 @@ export class AcpSession {
   private captureConnectionId = crypto.randomUUID();
 
   constructor(send: (packet: AcpPacket) => void | Promise<void>, private ui: AcpSessionUi) {
-    this.client = new AcpClient(packet => {
+    this.client = new AcpClient(async packet => {
       this.capture(typeof packet.method === 'string' ? `request.${packet.method}` : 'response', packet, this.client?.sessionId || '', '');
+      if (this.ui.transcriptLog?.enabled && this.ui.transcriptLog.flush) await this.ui.transcriptLog.flush();
       return send(packet);
     }, {
       created: configuration => {

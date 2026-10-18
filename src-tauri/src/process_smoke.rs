@@ -23,7 +23,7 @@ async fn demo_exercises_real_process_transport_streaming_steering_and_stop() {
         command,
         cwd.path().to_owned(),
         "demo".into(),
-        Arc::new(move |p| tx.send(p).map_err(|e| e.to_string())),
+        Output::new(move |p| tx.send(p).map_err(|e| e.to_string())),
     )
     .await
     .unwrap();
@@ -108,7 +108,7 @@ async fn local_pi_metadata_only_no_models_or_user_resources() {
         command,
         fixture.path().to_owned(),
         "smoke".into(),
-        Arc::new(move |p| tx.send(p).map_err(|e| e.to_string())),
+        Output::new(move |p| tx.send(p).map_err(|e| e.to_string())),
     )
     .await
     .unwrap();

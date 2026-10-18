@@ -3,6 +3,7 @@ import test from 'node:test';
 import { createTranscriptLog, type TranscriptLogRecord } from '../src/transcript-logs';
 import { PiTranscriptLog } from '../src/pi/transcript-logs';
 import { PiTransport } from '../src/pi/transport';
+import { transcriptLogDelivery } from '../src/transcript-log-delivery';
 
 const event = (payload: unknown = { args: { path: 'fixture' } }): TranscriptLogRecord => ({
   source: { backend: 'pi', agent: 'pi' }, sessionId: 'fixture-session', toolCallId: 'extension-call',
@@ -45,7 +46,7 @@ test('synchronous replay bursts span bounded native batches instead of stopping 
     assert.deepEqual(f.batches.flat().map(line => JSON.parse(line).payload.index), Array.from({ length: 600 }, (_, index) => index));
   } finally { f.capture.dispose(); }
 });
-test('large bursts dispatch early and drain subsequent batches without another debounce', async () => {
+test('a producer waits for the consumer and drains a history burst without dropping records', async () => {
   const batches: string[][] = [];
   let finish!: () => void;
   const f = fixture(lines => {
@@ -55,17 +56,22 @@ test('large bursts dispatch early and drain subsequent batches without another d
   try {
     f.capture.setEnabled(true);
     for (let index = 0; index < 1100; index++) f.capture.append(event({ index }));
-    assert.deepEqual(batches.map(batch => batch.length), [512], 'first batch dispatches during synchronous replay');
+    const flushing = f.capture.flush();
+    let done = false; void flushing.then(() => { done = true; });
+    assert.deepEqual(batches.map(batch => batch.length), [512]);
+    assert.equal(done, false);
     finish(); await Promise.resolve(); await Promise.resolve();
     assert.deepEqual(batches.map(batch => batch.length), [512, 512]);
     finish(); await Promise.resolve(); await Promise.resolve();
     assert.deepEqual(batches.map(batch => batch.length), [512, 512, 76]);
     finish(); await Promise.resolve(); await Promise.resolve();
+    await flushing;
+    assert.equal(done, true);
     assert.deepEqual(batches.flat().map(line => JSON.parse(line).payload.index), Array.from({ length: 1100 }, (_, index) => index));
     assert.deepEqual(f.errors, []);
   } finally { f.capture.dispose(); }
 });
-test('byte pressure starts a write before the pending buffer fills and real overflow stays explicit', async () => {
+test('a history operation above the former 8 Mi-character limit waits without stopping capture', async () => {
   let finish!: () => void;
   const batches: string[][] = [];
   const f = fixture(lines => {
@@ -74,15 +80,17 @@ test('byte pressure starts a write before the pending buffer fills and real over
   });
   try {
     f.capture.setEnabled(true);
-    f.capture.append(event('x'.repeat(1024 * 1024)));
+    for (let index = 0; index < 10; index++) f.capture.append(event({ index, text: 'x'.repeat(1024 * 1024) }));
+    const flushing = f.capture.flush();
     assert.equal(batches.length, 1);
-    assert.equal(f.capture.enabled, true);
-    for (let index = 0; index < 9; index++) f.capture.append(event('x'.repeat(1024 * 1024)));
-    assert.equal(f.capture.enabled, false);
-    assert.equal(f.errors.length, 1);
-    assert.match(f.errors[0], /Conversation unaffected.*pending buffer/);
-    finish(); await Promise.resolve(); await Promise.resolve();
-    assert.equal(batches.length, 1, 'overflow never retries the ambiguous in-flight batch');
+    for (let index = 0; index < 10; index++) {
+      assert.equal(f.capture.enabled, true);
+      finish(); await Promise.resolve(); await Promise.resolve();
+    }
+    await flushing;
+    assert.deepEqual(f.errors, []);
+    assert.equal(batches.length, 10);
+    assert.deepEqual(batches.flat().map(line => JSON.parse(line).payload.index), Array.from({ length: 10 }, (_, index) => index));
   } finally { f.capture.dispose(); }
 });
 
@@ -107,27 +115,23 @@ test('disable drops undispatched buffers; a previous generation cannot fail a ne
   f.capture.append(event()); f.capture.setEnabled(false); await f.capture.flush();
   f.capture.dispose();
 });
-test('oversized records are losslessly chunked; unserializable records still fail visibly', async () => {
+test('large native events remain one exact record; unserializable records still fail visibly', async () => {
   const f = fixture();
   const payload = { text: 'x"\\\n\u{1f600}'.repeat(350_000) };
   f.capture.setEnabled(true); f.capture.append(event(payload));
   await f.capture.flush();
-  const chunks = f.batches.flat().map(line => JSON.parse(line));
-  assert.ok(chunks.length > 1);
-  assert.ok(chunks.every(chunk => chunk.event === 'capture.record_chunk'));
-  assert.deepEqual(chunks.map(chunk => chunk.payload.index), Array.from({ length: chunks.length }, (_, index) => index));
-  assert.ok(chunks.every(chunk => chunk.payload.count === chunks.length && chunk.payload.recordId === chunks[0].payload.recordId));
-  assert.deepEqual(chunks.map(chunk => chunk.sequence), Array.from({ length: chunks.length }, (_, index) => index + 1));
-  const restored = JSON.parse(chunks.map(chunk => chunk.payload.data).join(''));
+  const records = f.batches.flat().map(line => JSON.parse(line));
+  assert.equal(records.length, 1);
+  const restored = records[0];
   assert.deepEqual(restored.payload, payload);
   assert.equal(restored.event, event().event);
   assert.equal(f.errors.length, 0); assert.equal(f.capture.enabled, true);
-  f.capture.append(event({ afterChunks: true })); await f.capture.flush();
-  assert.equal(JSON.parse(f.batches.flat().at(-1)!).sequence, chunks.length + 1);
+  f.capture.append(event({ afterLargeEvent: true })); await f.capture.flush();
+  assert.equal(JSON.parse(f.batches.flat().at(-1)!).sequence, 2);
   f.capture.append(event({ toJSON() { throw new Error('fixture serialization'); } }));
   assert.equal(f.errors.length, 1); assert.equal(f.capture.enabled, false); f.capture.dispose();
 });
-test('a synchronous storage failure stops oversized-event chunking immediately', async () => {
+test('a synchronous storage failure stops logging without retry', async () => {
   let writes = 0;
   const f = fixture(() => { writes++; throw new Error('fixture synchronous failure'); });
   try {
@@ -138,6 +142,23 @@ test('a synchronous storage failure stops oversized-event chunking immediately',
     assert.equal(writes, 1);
     assert.equal(f.errors.length, 1);
   } finally { f.capture.dispose(); }
+});
+test('native delivery applies each packet synchronously and acknowledges only after logging drains', async () => {
+  let finish!: () => void;
+  const f = fixture(() => new Promise<void>(resolve => { finish = resolve; }));
+  const received: unknown[] = [], acknowledgements: string[] = [], errors: unknown[] = [];
+  f.capture.setEnabled(true);
+  const receive = transcriptLogDelivery(packet => { received.push(packet); f.capture.append(event(packet)); },
+    f.capture, async id => { acknowledgements.push(id); }, error => errors.push(error));
+  receive({ kind: 'rpc', value: { type: 'fixture' } });
+  assert.equal(received.length, 1, 'authoritative state is applied before any promise continuation');
+  receive({ kind: 'logBarrier', id: 'delivery' });
+  assert.deepEqual(acknowledgements, []);
+  finish();
+  await f.capture.flush(); await Promise.resolve(); await Promise.resolve();
+  assert.deepEqual(acknowledgements, ['delivery']);
+  assert.deepEqual(errors, []);
+  f.capture.dispose();
 });
 test('Pi transcript logs preserve native prose, reasoning, partial inputs and authoritative results', () => {
   const records: TranscriptLogRecord[] = [];

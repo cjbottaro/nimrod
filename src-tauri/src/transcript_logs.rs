@@ -1,18 +1,172 @@
 //! Opt-in transcript debug logs; never mutates harness-owned history.
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     fs::{self, File, OpenOptions},
     io::{Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Arc, Mutex},
     time::{Duration, SystemTime},
 };
+use tauri::Emitter;
+use tokio::sync::{mpsc, oneshot};
 
 static WRITER: Mutex<()> = Mutex::new(());
-const MAX_BATCH: usize = 32 * 1024 * 1024;
-const MAX_LINE: usize = 8 * 1024 * 1024;
+const MAX_BATCH: usize = 512 * 1024 * 1024;
+const MAX_LINE: usize = 512 * 1024 * 1024;
+const QUEUE_CAPACITY: usize = 32;
+const BLOCKED_WARNING: Duration = Duration::from_secs(1);
+
+struct WriteJob {
+    root: PathBuf,
+    lines: Vec<String>,
+    reply: oneshot::Sender<Result<(), String>>,
+}
+
+#[derive(Clone, Copy, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Pressure {
+    revision: u64,
+    blocked: usize,
+    #[serde(skip)]
+    active: usize,
+    #[serde(skip)]
+    warning: bool,
+}
+
+pub struct TranscriptLogs {
+    sender: mpsc::Sender<WriteJob>,
+    pressure: Arc<Mutex<Pressure>>,
+}
+
+impl TranscriptLogs {
+    pub fn new() -> Result<Self, String> {
+        Self::with_writer(QUEUE_CAPACITY, |root, lines| {
+            groups(lines).and_then(|groups| write_groups(root, groups))
+        })
+    }
+
+    fn with_writer(
+        capacity: usize,
+        write: impl Fn(&Path, Vec<String>) -> Result<(), String> + Send + 'static,
+    ) -> Result<Self, String> {
+        let (sender, mut receiver) = mpsc::channel::<WriteJob>(capacity);
+        std::thread::Builder::new()
+            .name("transcript-log-writer".into())
+            .spawn(move || {
+                while let Some(job) = receiver.blocking_recv() {
+                    let result = write(&job.root, job.lines);
+                    // The producer can disappear during shutdown; never retry accepted writes.
+                    let _ = job.reply.send(result);
+                }
+            })
+            .map_err(|error| format!("Could not start transcript log writer: {error}"))?;
+        Ok(Self {
+            sender,
+            pressure: Arc::new(Mutex::new(Pressure::default())),
+        })
+    }
+
+    async fn append(
+        &self,
+        app: &tauri::AppHandle,
+        root: PathBuf,
+        lines: Vec<String>,
+    ) -> Result<(), String> {
+        let waiting = WaitingProducer::new(app.clone(), self.pressure.clone())?;
+        let write = async {
+            let permit = self
+                .sender
+                .reserve()
+                .await
+                .map_err(|_| "Transcript log writer unavailable")?;
+            let (reply, result) = oneshot::channel();
+            permit.send(WriteJob { root, lines, reply });
+            result
+                .await
+                .map_err(|_| "Transcript log writer stopped during write".to_string())?
+        };
+        wait_for_write(write, || waiting.warn()).await
+    }
+}
+
+async fn wait_for_write<G>(
+    write: impl std::future::Future<Output = Result<(), String>>,
+    waiting: impl FnOnce() -> Result<G, String>,
+) -> Result<(), String> {
+    tokio::pin!(write);
+    match tokio::time::timeout(BLOCKED_WARNING, &mut write).await {
+        Ok(result) => result,
+        Err(_) => {
+            let _waiting = waiting()?;
+            write.await
+        }
+    }
+}
+
+struct WaitingProducer {
+    app: tauri::AppHandle,
+    pressure: Arc<Mutex<Pressure>>,
+}
+impl WaitingProducer {
+    fn new(app: tauri::AppHandle, pressure: Arc<Mutex<Pressure>>) -> Result<Self, String> {
+        let waiting = Self { app, pressure };
+        waiting.change(true)?;
+        Ok(waiting)
+    }
+    fn change(&self, blocked: bool) -> Result<(), String> {
+        let mut pressure = self
+            .pressure
+            .lock()
+            .map_err(|_| "Transcript logging pressure unavailable")?;
+        if blocked {
+            pressure.active += 1;
+        } else {
+            pressure.active -= 1;
+        }
+        if pressure.active == 0 {
+            pressure.warning = false;
+        }
+        self.publish(&mut pressure);
+        Ok(())
+    }
+    fn warn(&self) -> Result<(), String> {
+        let mut pressure = self
+            .pressure
+            .lock()
+            .map_err(|_| "Transcript logging pressure unavailable")?;
+        pressure.warning = true;
+        self.publish(&mut pressure);
+        Ok(())
+    }
+    fn publish(&self, pressure: &mut Pressure) {
+        let blocked = if pressure.warning { pressure.active } else { 0 };
+        if pressure.blocked == blocked {
+            return;
+        }
+        pressure.blocked = blocked;
+        pressure.revision += 1;
+        if let Err(error) = self.app.emit("transcript-log-pressure", *pressure) {
+            eprintln!("Could not report transcript logging pressure: {error}");
+        }
+    }
+}
+impl Drop for WaitingProducer {
+    fn drop(&mut self) {
+        if let Err(error) = self.change(false) {
+            eprintln!("Could not report transcript logging recovery: {error}");
+        }
+    }
+}
+
+#[tauri::command]
+pub fn transcript_log_pressure(logs: tauri::State<'_, TranscriptLogs>) -> Result<Pressure, String> {
+    logs.pressure
+        .lock()
+        .map(|pressure| *pressure)
+        .map_err(|_| "Transcript logging pressure unavailable".into())
+}
 #[derive(Clone, Copy)]
 struct Limits {
     file_bytes: u64,
@@ -54,7 +208,7 @@ fn directory(snapshot: &crate::preferences::Snapshot) -> Result<PathBuf, String>
         .ok_or("Missing Nimrod state directory")?
         .join("transcript-logs"))
 }
-fn enabled(snapshot: &crate::preferences::Snapshot) -> bool {
+pub(crate) fn enabled(snapshot: &crate::preferences::Snapshot) -> bool {
     snapshot.error.is_none()
         && crate::preferences::jsonc(&snapshot.text)
             .ok()
@@ -199,10 +353,17 @@ fn append_file(path: &Path, bytes: &[u8], limit: u64) -> Result<usize, String> {
         }
     }
     let available = limit.saturating_sub(metadata.len()).min(bytes.len() as u64) as usize;
-    let length = bytes[..available]
+    let mut length = bytes[..available]
         .iter()
         .rposition(|byte| *byte == b'\n')
         .map_or(0, |index| index + 1);
+    // A native history record may exceed the rotation target. Keep it whole in its own segment.
+    if metadata.len() == 0 && length == 0 {
+        length = bytes
+            .iter()
+            .position(|byte| *byte == b'\n')
+            .map_or(0, |index| index + 1);
+    }
     file.write_all(&bytes[..length])
         .map_err(|e| e.to_string())?;
     file.flush().map_err(|e| e.to_string())?;
@@ -252,13 +413,6 @@ fn append_rotating(path: &Path, bytes: &[u8], limit: u64) -> Result<(), String> 
         let written = append_file(&parent.join(name), remaining, limit)?;
         remaining = &remaining[written..];
         if !remaining.is_empty() {
-            if !remaining
-                .iter()
-                .take(limit as usize)
-                .any(|byte| *byte == b'\n')
-            {
-                return Err("Transcript debug record exceeds the file size limit".into());
-            }
             index = index
                 .checked_add(1)
                 .ok_or("Too many transcript debug segments")?;
@@ -377,6 +531,8 @@ pub fn transcript_logs_directory(
 }
 #[tauri::command]
 pub async fn append_transcript_logs(
+    app: tauri::AppHandle,
+    logs: tauri::State<'_, TranscriptLogs>,
     preferences: tauri::State<'_, crate::preferences::Preferences>,
     lines: Vec<String>,
 ) -> Result<(), String> {
@@ -386,9 +542,7 @@ pub async fn append_transcript_logs(
         return Err("Transcript debug logging is disabled or global settings are invalid".into());
     }
     let root = directory(&snapshot)?;
-    tauri::async_runtime::spawn_blocking(move || write_groups(&root, groups(lines)?))
-        .await
-        .map_err(|e| e.to_string())?
+    logs.append(&app, root, lines).await
 }
 
 #[cfg(test)]
@@ -401,6 +555,138 @@ mod tests {
             "source":{"backend":backend,"agent":agent},"sessionId":"fixture","event":"tool_call",
             "payload":{"rawInput":{"code":"a\nb"}}})
         .to_string()
+    }
+    #[tokio::test]
+    async fn bounded_channel_waits_and_one_consumer_preserves_jobs_without_retry() {
+        let (entered, observed) = std::sync::mpsc::channel();
+        let (release, released) = std::sync::mpsc::channel();
+        let logs = TranscriptLogs::with_writer(1, move |_, lines| {
+            entered.send(lines.clone()).unwrap();
+            released.recv().unwrap();
+            if lines == ["fail"] {
+                Err("fixture disk error".into())
+            } else {
+                Ok(())
+            }
+        })
+        .unwrap();
+        let job = |line: &str| {
+            let (reply, result) = oneshot::channel();
+            (
+                WriteJob {
+                    root: PathBuf::from("unused"),
+                    lines: vec![line.into()],
+                    reply,
+                },
+                result,
+            )
+        };
+        let (first, first_result) = job("first");
+        logs.sender.send(first).await.unwrap();
+        assert_eq!(observed.recv().unwrap(), ["first"]);
+        let (second, second_result) = job("fail");
+        logs.sender.send(second).await.unwrap();
+        assert!(matches!(
+            logs.sender.try_reserve(),
+            Err(mpsc::error::TrySendError::Full(_))
+        ));
+        let reservation = logs.sender.reserve();
+        tokio::pin!(reservation);
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), &mut reservation)
+                .await
+                .is_err()
+        );
+        release.send(()).unwrap();
+        let permit = reservation.await.unwrap();
+        assert_eq!(observed.recv().unwrap(), ["fail"]);
+        let (third, third_result) = job("third");
+        permit.send(third);
+        assert_eq!(first_result.await.unwrap(), Ok(()));
+        release.send(()).unwrap();
+        assert_eq!(
+            second_result.await.unwrap(),
+            Err("fixture disk error".into())
+        );
+        assert_eq!(observed.recv().unwrap(), ["third"]);
+        release.send(()).unwrap();
+        assert_eq!(third_result.await.unwrap(), Ok(()));
+    }
+    #[test]
+    fn oversized_native_records_use_one_segment_without_chunks_or_rewriting() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("transcript-logs");
+        let record = line("pi", "pi", 1);
+        let limits = Limits {
+            file_bytes: 10,
+            ..LIMITS
+        };
+        write_groups_with_limits(
+            &root,
+            groups(vec![record.clone(), line("pi", "pi", 2)]).unwrap(),
+            limits,
+        )
+        .unwrap();
+        assert_eq!(
+            fs::read_to_string(root.join("pi/2026-10-16.jsonl")).unwrap(),
+            format!("{record}\n")
+        );
+        assert_eq!(
+            fs::read_to_string(root.join("pi/2026-10-16.000001.jsonl")).unwrap(),
+            format!("{}\n", line("pi", "pi", 2))
+        );
+    }
+    #[tokio::test]
+    async fn only_sustained_waits_warn_and_recovery_or_cancellation_clears_them() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        struct Guard(Arc<AtomicUsize>);
+        impl Drop for Guard {
+            fn drop(&mut self) {
+                self.0.fetch_sub(1, Ordering::SeqCst);
+            }
+        }
+        let blocked = Arc::new(AtomicUsize::new(0));
+        wait_for_write(async { Ok(()) }, || -> Result<Guard, String> {
+            panic!("An immediately available writer must not warn");
+        })
+        .await
+        .unwrap();
+        let (finish, finished) = oneshot::channel::<()>();
+        let warning = Arc::new(tokio::sync::Notify::new());
+        let started = std::time::Instant::now();
+        let write = wait_for_write(
+            async {
+                finished.await.unwrap();
+                Ok(())
+            },
+            || {
+                blocked.fetch_add(1, Ordering::SeqCst);
+                warning.notify_one();
+                Ok(Guard(blocked.clone()))
+            },
+        );
+        tokio::pin!(write);
+        tokio::select! {
+            result = &mut write => panic!("Producer finished before release: {result:?}"),
+            _ = warning.notified() => {},
+        }
+        assert!(started.elapsed() >= BLOCKED_WARNING);
+        assert_eq!(blocked.load(Ordering::SeqCst), 1);
+        finish.send(()).unwrap();
+        write.await.unwrap();
+        assert_eq!(blocked.load(Ordering::SeqCst), 0);
+        let mut write = Box::pin(wait_for_write(std::future::pending(), || {
+            blocked.fetch_add(1, Ordering::SeqCst);
+            warning.notify_one();
+            Ok(Guard(blocked.clone()))
+        }));
+        tokio::select! {
+            _ = &mut write => panic!("A blocked producer must keep waiting"),
+            _ = warning.notified() => {},
+        }
+        assert_eq!(blocked.load(Ordering::SeqCst), 1);
+        drop(write);
+        assert_eq!(blocked.load(Ordering::SeqCst), 0);
     }
     #[test]
     fn appends_and_separates_native_sources_without_rewriting() {
@@ -586,9 +872,11 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let prefs = crate::preferences::Preferences::isolated(temp.path());
         assert!(!enabled(&prefs.snapshot()));
-        assert!(directory(&prefs.snapshot())
-            .unwrap()
-            .ends_with("transcript-logs"));
+        assert!(
+            directory(&prefs.snapshot())
+                .unwrap()
+                .ends_with("transcript-logs")
+        );
         let root = temp.path().join("transcript-logs");
         write_groups(&root, groups(vec![line("pi", "pi", 1)]).unwrap()).unwrap();
         let path = root.join("pi/2026-10-16.jsonl");

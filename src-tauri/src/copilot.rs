@@ -369,8 +369,7 @@ pub async fn start_copilot(
         let stderr = child.stderr.take().ok_or("Missing bridge stderr")?;
         let (writer, writes) = mpsc::channel(32);
         let (stop, stopped) = oneshot::channel();
-        let output: Output =
-            Arc::new(move |packet| on_event.send(packet).map_err(|error| error.to_string()));
+        let output = Output::channel(window.clone(), on_event);
         let task = tokio::spawn(supervise(
             child, stdin, stdout, stderr, writes, stopped, output,
         ));
@@ -463,7 +462,13 @@ async fn supervise(
                     Some(Ok(line)) if line.trim().is_empty() => {},
                     Some(Ok(line)) => match serde_json::from_str::<Value>(&line) {
                         Ok(value) if value["kind"] == "stopped" => { graceful = true; break "Copilot bridge stopped".into(); },
-                        Ok(value) if value.is_object() && value["kind"].is_string() => if output(Packet::Rpc { value }).is_err() { break "Copilot frontend disconnected".into(); },
+                        Ok(value) if value.is_object() && value["kind"].is_string() => {
+                            tokio::select! {
+                                _ = &mut stop => break "Copilot connection stopped by Nimrod".to_owned(),
+                                result = output.send(Packet::Rpc { value }) => if result.is_err() { break "Copilot frontend disconnected".into(); },
+                                reason = &mut writer => break reason,
+                            }
+                        },
                         _ => break "Invalid Copilot bridge record".into(),
                     },
                     Some(Err(error)) => break format!("Invalid Copilot bridge stdout: {error}"),
@@ -508,7 +513,7 @@ async fn supervise(
         Ok(()) => reason,
         Err(error) => format!("{reason}; {error}"),
     };
-    let _ = output(Packet::Disconnected { message });
+    let _ = output.notify(Packet::Disconnected { message });
     result.map_err(|error| FailedStop {
         child,
         group,

@@ -278,7 +278,7 @@ mod tests {
     fn output() -> (Output, mpsc::UnboundedReceiver<Packet>) {
         let (tx, rx) = mpsc::unbounded_channel();
         (
-            Arc::new(move |packet| tx.send(packet).map_err(|e| e.to_string())),
+            crate::process::Output::new(move |packet| tx.send(packet).map_err(|e| e.to_string())),
             rx,
         )
     }

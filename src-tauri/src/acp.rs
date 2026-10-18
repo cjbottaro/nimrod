@@ -359,7 +359,7 @@ pub async fn start_acp(
         token,
         cwd.clone(),
         command,
-        Arc::new(move |packet| on_event.send(packet).map_err(|error| error.to_string())),
+        Output::channel(window.clone(), on_event),
     )
     .await?;
     Ok(cwd)
@@ -410,7 +410,13 @@ async fn supervise(
                 record = records.next() => match record {
                     Some(Ok(line)) if line.trim().is_empty() => {},
                     Some(Ok(line)) => match serde_json::from_str::<Value>(&line) {
-                        Ok(value) if value.is_object() && value["jsonrpc"] == "2.0" => if output(Packet::Rpc { value }).is_err() { break "ACP frontend disconnected".into(); },
+                        Ok(value) if value.is_object() && value["jsonrpc"] == "2.0" => {
+                            tokio::select! {
+                                _ = &mut stop => break "ACP session stopped by Nimrod".to_owned(),
+                                result = output.send(Packet::Rpc { value }) => if result.is_err() { break "ACP frontend disconnected".into(); },
+                                reason = &mut writer => break reason,
+                            }
+                        },
                         _ => break "Invalid ACP stdout JSON-RPC record".into(),
                     },
                     Some(Err(error)) => break format!("Invalid ACP stdout: {error}"),
@@ -429,7 +435,7 @@ async fn supervise(
         Ok(()) => reason,
         Err(error) => format!("{reason}; {error}"),
     };
-    let _ = output(Packet::Disconnected { message });
+    let _ = output.notify(Packet::Disconnected { message });
     result
 }
 async fn write_records(
@@ -573,8 +579,7 @@ mod tests {
             command
         };
         let (tx, mut rx) = mpsc::unbounded_channel();
-        let output: Output =
-            Arc::new(move |packet| tx.send(packet).map_err(|error| error.to_string()));
+        let output = Output::new(move |packet| tx.send(packet).map_err(|error| error.to_string()));
         let cwd = std::env::temp_dir();
         host.start(
             "one",
@@ -622,8 +627,7 @@ mod tests {
                 while IFS= read -r request; do :; done"#,
         ]);
         let (tx, mut rx) = mpsc::unbounded_channel();
-        let output: Output =
-            Arc::new(move |packet| tx.send(packet).map_err(|error| error.to_string()));
+        let output = Output::new(move |packet| tx.send(packet).map_err(|error| error.to_string()));
         host.start(
             "duplex",
             "large".into(),
@@ -674,7 +678,7 @@ mod tests {
             "stop".into(),
             std::env::temp_dir(),
             command,
-            Arc::new(|_| Ok(())),
+            Output::new(|_| Ok(())),
         )
         .await
         .unwrap();
