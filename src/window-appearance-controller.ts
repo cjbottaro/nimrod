@@ -5,7 +5,7 @@ import { installAppearanceEffects, type NativeAppearanceHost } from './window-ap
 import { titlebarTint, windowSurfaceOpacities, type AppearanceCapabilities, type WindowAppearance } from './window-appearance';
 
 export interface AppearanceControls {
-  opacity: HTMLInputElement; value: HTMLOutputElement; area: HTMLSelectElement;
+  opacity: HTMLInputElement; value: HTMLOutputElement;
   blurGroup: HTMLElement; blur: HTMLInputElement; blurValue: HTMLOutputElement; hint: HTMLElement;
 }
 export interface AppearanceHost extends NativeAppearanceHost {
@@ -62,7 +62,7 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
     const signature = JSON.stringify([value, enabled, capabilities, !!reduced?.matches, primary, hover, secondary, secondaryHover, danger, credits]);
     if (signature !== paintSignature) {
       paintSignature = signature;
-      root.dataset.translucency = enabled ? value.area : 'off';
+      root.dataset.translucency = enabled ? 'window' : 'off';
       root.style.setProperty('--nimrod-background-opacity', `${value.opacity}%`);
       const surfaces = windowSurfaceOpacities(value.opacity);
       // Decorative strength goes to zero at the opaque endpoint. No foreground
@@ -104,11 +104,10 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
       if (controls) {
         controls.opacity.value = String(value.opacity);
         controls.value.value = value.opacity === 100 ? '100% · Opaque' : `${value.opacity}%`;
-        controls.area.value = value.area; controls.blur.value = String(value.blur);
+        controls.blur.value = String(value.blur);
         updateRangeFill(controls.opacity); updateRangeFill(controls.blur);
         controls.blurValue.value = value.blur === 0 ? '0 · Off' : String(value.blur);
         controls.opacity.disabled = !capabilities?.transparency;
-        controls.area.disabled = !capabilities?.transparency;
         controls.blurGroup.hidden = !capabilities?.frost;
         controls.blur.disabled = !capabilities?.frost;
         controls.hint.textContent = !capabilities ? 'Reading window appearance support…'
@@ -169,13 +168,11 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
   }
   const previewOpacity = () => edit('opacity', Number(controls!.opacity.value), false);
   const saveOpacity = () => edit('opacity', Number(controls!.opacity.value), true);
-  const saveArea = () => edit('area', controls!.area.value as WindowAppearance['area'], true);
   const previewBlur = () => edit('blur', Number(controls!.blur.value), false);
   const saveBlur = () => edit('blur', Number(controls!.blur.value), true);
   const systemSchemeChanged = () => { if (theme.mode === null) readPalette(); paint(); };
   controls?.opacity.addEventListener('input', previewOpacity);
   controls?.opacity.addEventListener('change', saveOpacity);
-  controls?.area.addEventListener('change', saveArea);
   controls?.blur.addEventListener('input', previewBlur);
   controls?.blur.addEventListener('change', saveBlur);
   dark?.addEventListener('change', systemSchemeChanged); reduced?.addEventListener('change', paint);
@@ -187,7 +184,7 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
     diagnostics() {
       const value = current();
       const enabled = !!capabilities?.transparency && !reduceTransparency() && value.opacity < 100;
-      return { effectiveArea: enabled ? value.area : 'off' as const,
+      return { effectiveArea: enabled ? 'window' as const : 'off' as const,
         effectiveBackgroundOpacity: enabled ? value.opacity : 100,
         reducedTransparency: reduceTransparency(), frostSupported: !!capabilities?.frost };
     },
@@ -196,7 +193,6 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
       dark?.removeEventListener('change', systemSchemeChanged); reduced?.removeEventListener('change', paint);
       controls?.opacity.removeEventListener('input', previewOpacity);
       controls?.opacity.removeEventListener('change', saveOpacity);
-      controls?.area.removeEventListener('change', saveArea);
       controls?.blur.removeEventListener('input', previewBlur);
       controls?.blur.removeEventListener('change', saveBlur);
     },

@@ -72,8 +72,8 @@ test('whole-window glass is shared by every modal and restores opaque fallbacks'
     await mountAuxiliaryShells(page);
     const prompt = page.locator(visible('prompt')); await prompt.fill('Keep my draft');
     for (const theme of ['nimrod', 'dracula', 'catalog-atom-one-light-vscode-atom-one-light']) {
-      for (const [opacity, area] of [[65, 'window'], [99, 'window'], [100, 'window'], [65, 'chrome']] as const) {
-        await demo.editPreferences(JSON.stringify({ 'appearance.theme': theme, 'appearance.backgroundOpacity': opacity, 'appearance.translucencyArea': area }));
+      for (const [opacity, legacyArea] of [[65, undefined], [99, undefined], [100, undefined], [65, 'chrome']] as const) {
+        await demo.editPreferences(JSON.stringify({ 'appearance.theme': theme, 'appearance.backgroundOpacity': opacity, 'appearance.translucencyArea': legacyArea }));
         const fills = await page.evaluate(() => {
           const pixel = (color: string) => {
             const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
@@ -96,7 +96,7 @@ test('whole-window glass is shared by every modal and restores opaque fallbacks'
         });
         for (const fill of fills) {
           expect(fill.surface).toEqual(fills[0].surface); expect(fill.opacity).toBe('1');
-          if (area === 'window' && opacity < 100) {
+          if (opacity < 100) {
             expect(fill.surface[3]).toBeLessThan(255); expect(fill.surface[3]).toBeGreaterThan(180);
             if (fill.inset) expect(fill.inset[3]).toBeLessThan(255);
           } else { expect(fill.surface[3]).toBe(255); }

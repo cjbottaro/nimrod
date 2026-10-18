@@ -1,7 +1,6 @@
 export interface WindowAppearance {
   opacity: number;
   blur: number;
-  area: 'chrome' | 'window';
 }
 export interface AppearanceCapabilities {
   platform: string;
@@ -10,9 +9,9 @@ export interface AppearanceCapabilities {
   frost: boolean;
   reducedTransparency: boolean;
 }
-export const DEFAULT_WINDOW_APPEARANCE: WindowAppearance = { opacity: 100, blur: 20, area: 'window' };
+export const DEFAULT_WINDOW_APPEARANCE: WindowAppearance = { opacity: 100, blur: 20 };
 export const APPEARANCE_KEYS = {
-  opacity: 'appearance.backgroundOpacity', blur: 'appearance.backgroundBlur', area: 'appearance.translucencyArea',
+  opacity: 'appearance.backgroundOpacity', blur: 'appearance.backgroundBlur',
 } as const;
 
 export function readWindowAppearance(settings: Record<string, unknown>): WindowAppearance {
@@ -20,13 +19,12 @@ export function readWindowAppearance(settings: Record<string, unknown>): WindowA
   const legacyFrost = settings['appearance.frostedBackground'];
   if (legacyFrost !== undefined && typeof legacyFrost !== 'boolean') throw new Error('appearance.frostedBackground must be a boolean.');
   const blur = settings[APPEARANCE_KEYS.blur] ?? (legacyFrost === false ? 0 : DEFAULT_WINDOW_APPEARANCE.blur);
-  const area = settings[APPEARANCE_KEYS.area] ?? DEFAULT_WINDOW_APPEARANCE.area;
+  // The removed translucencyArea preference is an ignored unknown field.
   // Explicit nulls are invalid too; missing keys alone use defaults.
   for (const key of Object.values(APPEARANCE_KEYS)) if (settings[key] === null) throw new Error(`${key} cannot be null.`);
   if (typeof opacity !== 'number' || !Number.isInteger(opacity) || opacity < 0 || opacity > 100) throw new Error(`${APPEARANCE_KEYS.opacity} must be an integer from 0 to 100.`);
   if (typeof blur !== 'number' || !Number.isInteger(blur) || blur < 0 || blur > 40) throw new Error(`${APPEARANCE_KEYS.blur} must be an integer from 0 to 40.`);
-  if (area !== 'chrome' && area !== 'window') throw new Error(`${APPEARANCE_KEYS.area} must be chrome or window.`);
-  return { opacity, blur, area };
+  return { opacity, blur };
 }
 
 /** Preserve surface hierarchy and converge to the opaque palette, not a 99% style switch.

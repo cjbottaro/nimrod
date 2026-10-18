@@ -39,7 +39,7 @@ History-save failures are reported without blocking or retrying the action.
 
 ## Confirmation dialogs
 
-The palette, session pickers and confirmation dialogs share a denser glass panel when **Whole window** [translucency](translucency.md#glass-dialogs) is enabled. Opaque mode, sidebar-only mode and Reduce Transparency keep solid dialogs. This changes their appearance, not keyboard behavior or focus restoration.
+The palette, session pickers and confirmation dialogs share a denser glass panel when [translucency](translucency.md#glass-dialogs) is enabled. Opaque mode and Reduce Transparency keep solid dialogs. This changes their appearance, not keyboard behavior or focus restoration.
 
 Ordinary dialogs and the palette use a restrained **Subtle** entrance by default. In global **Settings → Appearance → Modal animation**, choose None, Subtle, **CRT power-on** or **Hologram**, then adjust Subtle's duration or CRT/Hologram's scan speed and preview it. Reduced motion disables animation; focus and keyboard handling stay immediate. See [Appearance](settings.md#appearance).
 

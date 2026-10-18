@@ -82,14 +82,12 @@ struct WorkSample {
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 enum Area {
-    Chrome,
     Window,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 enum EffectiveArea {
     Off,
-    Chrome,
     Window,
 }
 #[derive(Deserialize, Serialize)]

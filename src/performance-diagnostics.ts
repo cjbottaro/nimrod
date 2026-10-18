@@ -33,8 +33,8 @@ export interface PerformanceEnvironment {
   zoom: number;
   devicePixelRatio: number;
   hardwareConcurrency: number;
-  appearance?: { backgroundOpacity: number; frostedBackground: boolean; backgroundBlur?: number; area: 'chrome' | 'window';
-    effectiveArea: 'off' | 'chrome' | 'window'; effectiveBackgroundOpacity: number; reducedTransparency: boolean; frostSupported: boolean };
+  appearance?: { backgroundOpacity: number; frostedBackground: boolean; backgroundBlur?: number; area: 'window';
+    effectiveArea: 'off' | 'window'; effectiveBackgroundOpacity: number; reducedTransparency: boolean; frostSupported: boolean };
 }
 export interface PerformanceReport {
   version: 2;
