@@ -8,9 +8,15 @@ test('style-specific defaults apply only when duration is omitted', () => {
   assert.deepEqual(readModalAnimation({ 'appearance.modalAnimation': 'crt' }), { style: 'crt', duration: 300 });
   assert.deepEqual(readModalAnimation({ 'appearance.modalAnimation': 'hologram' }), { style: 'hologram', duration: 300 });
   for (const style of ['subtle', 'crt', 'hologram', 'none']) {
-    for (const duration of [0, 160, 500, 1200]) {
+    for (const duration of [100, 160, 500, 1200, 1500]) {
       assert.deepEqual(readModalAnimation({ 'appearance.modalAnimation': style, 'appearance.modalAnimationDuration': duration }), { style, duration });
     }
+  }
+});
+
+test('legacy durations are clamped and snapped to the shared slider bounds', () => {
+  for (const [saved, expected] of [[0, 100], [50, 100], [100, 100], [105, 110], [251, 250], [1495, 1500], [1500, 1500], [2000, 1500]]) {
+    assert.equal(readModalAnimation({ 'appearance.modalAnimationDuration': saved }).duration, expected);
   }
 });
 
