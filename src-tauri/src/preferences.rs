@@ -9,6 +9,17 @@ use std::{
 use tauri::{Emitter, Manager};
 
 const MAX_BYTES: u64 = 8 * 1024 * 1024;
+const TRANSCRIPT_LOGS_SETTING: &str = "diagnostics.transcriptLogs";
+// Read compatibility only; frontend saves replace this key atomically.
+const LEGACY_TRANSCRIPT_LOGS_SETTING: &str = "diagnostics.toolCapture";
+
+pub(crate) fn transcript_logs_enabled(settings: &Value) -> bool {
+    settings
+        .get(TRANSCRIPT_LOGS_SETTING)
+        .or_else(|| settings.get(LEGACY_TRANSCRIPT_LOGS_SETTING))
+        .and_then(Value::as_bool)
+        == Some(true)
+}
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -176,11 +187,10 @@ pub(crate) fn validate(text: &str) -> Result<(), String> {
     {
         return Err("diagnostics.performance must be a boolean".into());
     }
-    if object
-        .get("diagnostics.toolCapture")
-        .is_some_and(|v| !v.is_boolean())
-    {
-        return Err("diagnostics.toolCapture must be a boolean".into());
+    for key in [TRANSCRIPT_LOGS_SETTING, LEGACY_TRANSCRIPT_LOGS_SETTING] {
+        if object.get(key).is_some_and(|v| !v.is_boolean()) {
+            return Err(format!("{key} must be a boolean"));
+        }
     }
     if let Some(opacity) = object.get("appearance.backgroundOpacity") {
         if !opacity

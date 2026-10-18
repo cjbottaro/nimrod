@@ -127,10 +127,10 @@ console.log(greeting); // 0123456789</code></pre>
       </section>
       <section id="settings-panel-diagnostics" class="settings-panel" data-category="diagnostics" role="tabpanel" aria-labelledby="settings-category-diagnostics" tabindex="0" hidden>
         <h2>Diagnostics</h2>
-        <label for="tool-capture-mode">Transcript debug logs</label>
-        <select id="tool-capture-mode"><option value="off">Off (default)</option><option value="on">On</option></select>
-        <p class="settings-hint">Log native conversation events, prompts, assistant text/reasoning, tools, history, configuration and requests/results locally. Logs include full content and may contain secrets. Nothing is uploaded. While logging, files rotate at 25 MiB; oldest logs are deleted to keep at most 250 MiB and seven days. Agent history and old tool-only captures are untouched.</p>
-        <p id="tool-capture-status" role="status">Transcript debug logging is off.</p>
+        <label for="transcript-logs-mode">Transcript debug logs</label>
+        <select id="transcript-logs-mode"><option value="off">Off (default)</option><option value="on">On</option></select>
+        <p class="settings-hint">Log native conversation events, prompts, assistant text/reasoning, tools, history, configuration and requests/results locally. Logs include full content and may contain secrets. Nothing is uploaded. While logging, files rotate at 25 MiB; oldest logs are deleted to keep at most 250 MiB and seven days. Agent history is untouched.</p>
+        <p id="transcript-logs-status" role="status">Transcript debug logging is off.</p>
         <label for="performance-mode">Performance diagnostics</label>
         <select id="performance-mode"><option value="off">Off (default)</option><option value="on">On</option></select>
         <p class="settings-hint">Keep up to 60 seconds of timing data in memory. No prompt text, responses, key values or session paths are recorded. Enabling applies to all project windows; reports capture only this window.</p>

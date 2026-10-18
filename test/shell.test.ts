@@ -208,8 +208,8 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       if (command === 'list_project_overrides') return [];
       if (command === 'plugin:window|is_focused') return options.focused?.() ?? true;
       if (command === 'plugin:clipboard-manager|write_text' && options.performanceControl?.copyError) throw new Error(options.performanceControl.copyError);
-      if (command === 'tool_capture_directory') return '/fixture/.local/state/nimrod/transcript-logs';
-      if (command === 'append_tool_capture') return;
+      if (command === 'transcript_logs_directory') return '/fixture/.local/state/nimrod/transcript-logs';
+      if (command === 'append_transcript_logs') return;
       if (command === 'write_performance_report') {
         if (options.performanceControl?.writeError) throw new Error(options.performanceControl.writeError);
         return '/fixture/.local/state/nimrod/performance-captures/2026-10-14_12-00-00.000Z.json';
@@ -1179,22 +1179,22 @@ test('palette commands show shortcuts except intentionally unbound actions and r
   } finally { f.win.close(); }
 });
 
-test('tool capture setting enables native Pi logging without changing the mounted conversation', async () => {
+test('transcript logging setting enables native Pi logging without changing the mounted conversation', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   try {
-    assert.equal(f.element<HTMLSelectElement>('tool-capture-mode').value, 'off');
+    assert.equal(f.element<HTMLSelectElement>('transcript-logs-mode').value, 'off');
     f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
     f.emit({ type: 'tool_execution_start', toolCallId: 'disabled', toolName: 'extension_tool' }); await f.tick();
-    assert.equal(f.calls.some(c => c.command === 'append_tool_capture'), false);
+    assert.equal(f.calls.some(c => c.command === 'append_transcript_logs'), false);
     const prompt = f.element<HTMLTextAreaElement>('prompt');
     prompt.value = 'keep draft'; prompt.dispatchEvent(new f.win.Event('input')); prompt.focus();
     const view = prompt.closest('.session-view');
     const starts = f.calls.filter(c => c.command === 'start_pi').length;
-    f.preferences.external('{"diagnostics.toolCapture":true}'); await f.tick();
-    assert.equal(f.element<HTMLSelectElement>('tool-capture-mode').value, 'on');
+    f.preferences.external('{"diagnostics.transcriptLogs":true}'); await f.tick();
+    assert.equal(f.element<HTMLSelectElement>('transcript-logs-mode').value, 'on');
     f.emit({ type: 'tool_execution_start', toolCallId: 'custom', toolName: 'extension_tool', args: { value: 1 } });
     await new Promise(resolve => setTimeout(resolve, 150)); await f.tick();
-    const writes = f.calls.filter(c => c.command === 'append_tool_capture');
+    const writes = f.calls.filter(c => c.command === 'append_transcript_logs');
     assert.equal(writes.length, 1);
     const captured = (writes[0].args.lines as string[]).map(line => JSON.parse(line));
     assert.equal(captured[0].payload.toolName, 'extension_tool');
@@ -1206,7 +1206,7 @@ test('tool capture setting enables native Pi logging without changing the mounte
   } finally { f.win.close(); }
 });
 
-test('SDK tool capture uses the global setting and native append bridge for tools and permissions', async () => {
+test('SDK transcript logging uses the global setting and native append bridge for tools and permissions', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   try {
     const enter = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
@@ -1214,17 +1214,17 @@ test('SDK tool capture uses the global setting and native append bridge for tool
     const target = [...f.sdkSessions.values()].find(session => session.sessionId === 'sdk-fixture')!;
     const event = (id: string, type: string, data: JsonRecord) => target.channel.onmessage({ kind: 'rpc', value: { kind: 'event', event: { id, type, data } } });
     event('disabled-capture', 'tool.extension_specific', { toolCallId: 'disabled' });
-    assert.equal(f.calls.some(call => call.command === 'append_tool_capture'), false);
+    assert.equal(f.calls.some(call => call.command === 'append_transcript_logs'), false);
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'keep SDK draft'; prompt.dispatchEvent(new f.win.Event('input')); prompt.focus();
     const starts = f.calls.filter(call => call.command === 'start_copilot').length;
-    f.preferences.external('{"diagnostics.toolCapture":true}'); await f.tick();
+    f.preferences.external('{"diagnostics.transcriptLogs":true}'); await f.tick();
     event('sdk-delta', 'assistant.tool_call_delta', { toolCallId: 'captured', inputDelta: '{"url":' });
     event('sdk-start', 'tool.execution_start', { toolCallId: 'captured', toolName: 'web_fetch', arguments: { url: 'https://example.test/fixture' } });
     const request = { kind: 'url', toolCallId: 'captured', url: 'https://example.test/fixture' };
     event('sdk-permission-event', 'permission.requested', { requestId: 'native-request', permissionRequest: request });
     target.channel.onmessage({ kind: 'rpc', value: { kind: 'permission', id: 'capture-permission', request } });
     await new Promise(resolve => setTimeout(resolve, 150)); await f.tick();
-    const captured = f.calls.filter(call => call.command === 'append_tool_capture').flatMap(call => (call.args.lines as string[]).map(line => JSON.parse(line)));
+    const captured = f.calls.filter(call => call.command === 'append_transcript_logs').flatMap(call => (call.args.lines as string[]).map(line => JSON.parse(line)));
     assert.deepEqual(captured.map(record => record.event), ['assistant.tool_call_delta', 'tool.execution_start', 'permission.requested', 'permission.request']);
     assert.ok(captured.every(record => record.source.backend === 'copilot-sdk' && record.sessionId === 'sdk-fixture' && record.toolCallId === 'captured'));
     assert.deepEqual(captured.at(-1).payload, { kind: 'permission', id: 'capture-permission', request });

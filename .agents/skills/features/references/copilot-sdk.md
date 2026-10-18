@@ -373,7 +373,7 @@ Authored **unrun** follow-up fixtures: `test/copilot-permissions.test.ts` covers
 Background requests do not navigate/focus or approve. Stop, disconnect and Close
 retire exact connection-bound AbortSignals and settle/reject callbacks safely.
 Notifications reuse shared preference/focus/token checks; replay never alerts.
-[Transcript debug logs](tool-capture.md#copilot-sdk) now record all native SDK events, including empty assistant messages, prose/reasoning, tool/input/permission lifecycle, distinguished history, duplicate deliveries, bridge requests/results and local UI/configuration markers without SDK-to-Pi conversion. That reference owns concrete mapping, early identity/version, storage compatibility and verification boundaries; expanded fixtures are unrun and do not establish installed-CLI/native acceptance.
+[Transcript logging](transcript-logs.md#copilot-sdk) owns the SDK diagnostic event mapping, including replay and pre-deduplication capture.
 
 Plugin source/target is **`copilot-sdk`**, distinct from ACP. Existing Pi-only
 defaults/overrides remain Pi-only; exact-agent plugins rank above generic SDK

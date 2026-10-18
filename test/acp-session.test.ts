@@ -8,13 +8,13 @@ import { JSDOM } from 'jsdom';
 import { slashCommands } from '../src/pi/slash-completion';
 import type { AcpPacket, AcpRecord } from '../src/acp/connection';
 import type { ConversationViewMessage } from '../src/conversation-view-host';
-import type { ToolCaptureRecord } from '../src/tool-capture';
+import type { TranscriptLogRecord } from '../src/transcript-logs';
 const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 const options = (current = 'small') => [{ id: 'model', category: 'model', name: 'Model', type: 'select', currentValue: current, options: [{ value: 'small', name: 'Small' }, { value: 'large', name: 'Large' }] }];
 async function fixture(permission?: AcpSessionUi['permission']) {
   const sent: AcpPacket[] = [], published: ConversationViewMessage[] = [], completed: boolean[] = [], permissions: AcpPermissionRequest[] = [];
-  const captured: ToolCaptureRecord[] = [];
-  const session = new AcpSession(packet => { sent.push(packet); }, { toolCapture: { enabled: true, append: record => captured.push(structuredClone(record)) }, publish: message => published.push(message), changed() {}, notice() {}, permission: async (request, signal) => { permissions.push(request); return permission?.(request, signal); }, disconnected() {}, completed: failed => completed.push(failed) });
+  const captured: TranscriptLogRecord[] = [];
+  const session = new AcpSession(packet => { sent.push(packet); }, { transcriptLog: { enabled: true, append: record => captured.push(structuredClone(record)) }, publish: message => published.push(message), changed() {}, notice() {}, permission: async (request, signal) => { permissions.push(request); return permission?.(request, signal); }, disconnected() {}, completed: failed => completed.push(failed) });
   const last = (method: string) => { const value = [...sent].reverse().find(value => value.method === method); assert.ok(value); return value; };
   const reply = (method: string, result: unknown) => session.receive({ jsonrpc: '2.0', id: last(method).id, result });
   const update = (update: AcpRecord) => session.receive({ jsonrpc: '2.0', method: 'session/update', params: { sessionId: 'test-session', update } });
@@ -24,10 +24,10 @@ async function fixture(permission?: AcpSessionUi['permission']) {
   return { session, sent, published, completed, permissions, captured, last, reply, update };
 }
 test('ACP history replay finalizes reasoning and tools without sends, permission UI or completion alerts', async () => {
-  const sent: AcpPacket[] = [], completed: boolean[] = [], captured: ToolCaptureRecord[] = [];
+  const sent: AcpPacket[] = [], completed: boolean[] = [], captured: TranscriptLogRecord[] = [];
   let permissions = 0;
   const session = new AcpSession(packet => { sent.push(packet); }, {
-    toolCapture: { enabled: true, append: record => captured.push(record) },
+    transcriptLog: { enabled: true, append: record => captured.push(record) },
     publish() {}, changed() {}, notice() {}, disconnected() {}, completed: failed => completed.push(failed),
     permission: async () => { permissions++; return 'allow'; },
   });

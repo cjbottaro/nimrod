@@ -187,7 +187,7 @@ The user built/restarted the baseline and reported existing cards/edit previews 
 
 ## Tool payload discovery
 
-Opt-in [transcript debug logs](tool-capture.md) record full native Pi (including extension tools), Copilot SDK and dormant ACP conversation traffic, including tools, text/reasoning, history and requests/results, in append-only JSONL state files. Use them for card inventory, transcript debugging and offline fixture development. Logging does not alter plugin matching, card snapshots or execution permissions. Expanded transcript-logging fixtures are authored but unrun; the linked specification owns prior capture evidence and current verification gaps.
+Use [transcript debug logs](transcript-logs.md) for native tool-payload discovery and offline card fixtures. Logging is independent of plugin matching and card execution.
 
 ## Material constraints
 

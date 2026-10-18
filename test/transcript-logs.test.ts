@@ -1,16 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createToolCapture, type ToolCaptureRecord } from '../src/tool-capture';
-import { PiToolCapture } from '../src/pi/tool-capture';
+import { createTranscriptLog, type TranscriptLogRecord } from '../src/transcript-logs';
+import { PiTranscriptLog } from '../src/pi/transcript-logs';
 import { PiTransport } from '../src/pi/transport';
 
-const event = (payload: unknown = { args: { path: 'fixture' } }): ToolCaptureRecord => ({
+const event = (payload: unknown = { args: { path: 'fixture' } }): TranscriptLogRecord => ({
   source: { backend: 'pi', agent: 'pi' }, sessionId: 'fixture-session', toolCallId: 'extension-call',
   event: 'tool_execution_start', payload,
 });
 function fixture(write?: (lines: string[]) => Promise<unknown>) {
   const batches: string[][] = [], errors: string[] = [];
-  const capture = createToolCapture({ write: write ?? (async lines => { batches.push(lines); }), failure: error => errors.push(error), recovered() {} });
+  const capture = createTranscriptLog({ write: write ?? (async lines => { batches.push(lines); }), failure: error => errors.push(error), recovered() {} });
   return { capture, batches, errors };
 }
 test('disabled capture never reads payloads; enabled capture snapshots native data and stamps ordered records', async () => {
@@ -140,8 +140,8 @@ test('a synchronous storage failure stops oversized-event chunking immediately',
   } finally { f.capture.dispose(); }
 });
 test('Pi transcript logs preserve native prose, reasoning, partial inputs and authoritative results', () => {
-  const records: ToolCaptureRecord[] = [];
-  const capture = new PiToolCapture({ enabled: true, append: record => { records.push(record); } });
+  const records: TranscriptLogRecord[] = [];
+  const capture = new PiTranscriptLog({ enabled: true, append: record => { records.push(record); } });
   const observe = (value: Record<string, unknown>) => capture.observe(value, 'pi-session');
   observe({ type: 'message_start', message: { role: 'assistant', content: [] } });
   observe({ type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: 'private reasoning' } });
@@ -164,7 +164,7 @@ test('Pi transport traces requests, history responses and extension choices with
   const f = fixture();
   const sent: Record<string, unknown>[] = [];
   const rpc = new PiTransport(async message => { sent.push(message); });
-  const capture = new PiToolCapture(f.capture);
+  const capture = new PiTranscriptLog(f.capture);
   rpc.onTrace = (event, payload) => capture.capture(event, payload, 'pi-session');
   rpc.onEvent = event => capture.observe(event, 'pi-session');
   try {

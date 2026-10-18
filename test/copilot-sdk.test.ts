@@ -9,7 +9,7 @@ import { copilotSessionDeletion } from '../src/copilot/session-deletion';
 import type { SessionDeletionContext } from '../src/session-deletion-operation';
 import type { CopilotSessionHistory } from '../src/copilot/session-history';
 import type { ConversationViewMessage } from '../src/conversation-view-host';
-import type { ToolCaptureRecord } from '../src/tool-capture';
+import type { TranscriptLogRecord } from '../src/transcript-logs';
 
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 const models = [
@@ -17,14 +17,14 @@ const models = [
   { id: 'large', name: 'Large' },
 ];
 async function fixture(events: unknown[] = [], decision: CopilotSessionUi['decision'] = async () => undefined, autoUsage = true, fresh = false, catalog: unknown[] = models) {
-  const sent: BridgeRequest[] = [], published: ConversationViewMessage[] = [], completed: boolean[] = [], captured: ToolCaptureRecord[] = [];
+  const sent: BridgeRequest[] = [], published: ConversationViewMessage[] = [], completed: boolean[] = [], captured: TranscriptLogRecord[] = [];
   const session: CopilotSession = new CopilotSession(async request => {
     sent.push(request);
     if (autoUsage && ['usage', 'context'].includes(request.method)) queueMicrotask(() => session.receive({ kind: 'result', id: request.id, result: request.method === 'usage' ? {} : null }));
   }, {
     publish: message => published.push(message), changed() {}, identified() {}, disconnected() {}, notice() {},
     completed: failed => completed.push(failed), decision,
-    toolCapture: { enabled: true, append: record => captured.push(structuredClone(record)) },
+    transcriptLog: { enabled: true, append: record => captured.push(structuredClone(record)) },
   });
   const last = (method: string) => { const request = [...sent].reverse().find(request => request.method === method); assert.ok(request); return request; };
   const reply = (method: string, result: unknown = null) => session.receive({ kind: 'result', id: last(method).id, result });

@@ -61,4 +61,13 @@ Transcript/reducer/composer modules and baseline tests originated in the user's 
 
 ## Documentation ownership
 
-[Features index](../SKILL.md) routes tasks to current specifications. Keep shared contracts in one reference and link consumers. [User guides](../../../../docs/README.md) explain usage; [historical records](history/verification.md) preserve evidence, not current instructions. Development setup is in [Contributing](../../../../CONTRIBUTING.md).
+Use one owner per fact, not a feature summary copied into every related document:
+
+- [Features index](../SKILL.md) routes work with short labels/links, not specifications or validation status.
+- Each feature reference owns its current contract, invariants, storage/schema, code map and fixture locations. Shared contracts have one reference; consumers link to the relevant heading and document only their integration-specific differences.
+- [User guides](../../../../docs/README.md) own usage, observable behavior and relevant limitations. Keep implementation symbols, fixture inventories and run histories out. Some user-visible facts necessarily appear in both audiences; do not copy whole internal sections.
+- [Verification](verification.md) owns executed evidence and current acceptance gaps. Feature references link there instead of repeating pass counts, failed runs or acceptance matrices. Significant superseded investigations/results go in `references/history/`, clearly historical.
+- [Contributing](../../../../CONTRIBUTING.md) owns developer setup/tooling. README and guide indexes provide discovery links. The [changelog](../../../../CHANGELOG.md) summarizes meaningful user-visible changes, not implementation contracts or an activity log.
+- Behavior changes update the canonical internal reference and relevant user guide; implementation-only changes update internal references. Add new references to the feature index and new user guides to both docs/README and the main README.
+
+Before adding a paragraph, locate its owner. Update that owner and replace dependent copies with links; do not append another summary to every related page. Renaming a feature includes private symbols, files, IPC, DOM IDs, tests and links; retain old names only at actual persisted/external compatibility boundaries or in clearly historical records.

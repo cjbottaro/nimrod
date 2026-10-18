@@ -1,13 +1,13 @@
-import type { ToolCaptureSink } from '../tool-capture';
+import type { TranscriptLogSink } from '../transcript-logs';
 import type { JsonRecord } from './types';
 const record = (value: unknown): JsonRecord => value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {};
 const string = (value: unknown): string | undefined => typeof value === 'string' && value ? value : undefined;
 
-/** Native Pi transcript/debug capture. The legacy module/type names preserve existing plumbing. */
-export class PiToolCapture {
+/** Native Pi transcript logging without changing event payloads or processing order. */
+export class PiTranscriptLog {
   private calls = new Map<unknown, string>();
   private connectionId = crypto.randomUUID();
-  constructor(private sink: ToolCaptureSink | undefined) {}
+  constructor(private sink: TranscriptLogSink | undefined) {}
   observe(event: JsonRecord, sessionId: string): void {
     if (event.type === 'message_start' && record(event.message).role === 'assistant') this.calls.clear();
     if (!this.sink?.enabled) return;

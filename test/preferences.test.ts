@@ -40,19 +40,53 @@ test('typography saves globally, preserves JSONC/project settings, rejects malfo
   } finally { p.dispose(); f.dom.window.close(); }
 });
 
-test('tool capture defaults off, saves globally and retains last valid settings', async () => {
+test('transcript logging defaults off, saves globally and retains last valid settings', async () => {
   const f = fixture(), p = await f.install();
   try {
-    assert.equal(p.toolCaptureEnabled(), false);
+    assert.equal(p.transcriptLogEnabled(), false);
     f.host.external('// keep capture comment\n{"custom":true}');
-    await p.saveToolCapture(true);
-    assert.equal(p.toolCaptureEnabled(), true);
+    await p.saveTranscriptLog(true);
+    assert.equal(p.transcriptLogEnabled(), true);
     assert.match(f.host.value.text, /keep capture comment/);
     assert.equal(parseSettings(f.host.value.text).custom, true);
-    assert.throws(() => parseSettings('{"diagnostics.toolCapture":"true"}'));
+    assert.throws(() => parseSettings('{"diagnostics.transcriptLogs":"true"}'));
+    f.host.external('{"diagnostics.transcriptLogs":null}');
+    assert.equal(p.transcriptLogEnabled(), true);
+    f.host.external('{}'); assert.equal(p.transcriptLogEnabled(), false);
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
+test('transcript logging reads the legacy opt-in, prefers the new key and migrates only on an explicit global save', async () => {
+  const f = fixture(), p = await f.install();
+  try {
+    const legacy = '// keep logging comment\n{"custom":true,"diagnostics.toolCapture":true}';
+    f.host.external(legacy);
+    assert.equal(p.transcriptLogEnabled(), true);
+    assert.equal(f.host.value.text, legacy, 'reading does not rewrite user settings');
+    f.host.value.projectPath = '/project/.nimrod/settings.json';
+    f.host.externalProject('{"appearance.theme":"dracula"}');
+    await p.saveTranscriptLog(false);
+    const saved = parseSettings(f.host.value.text);
+    assert.equal(saved['diagnostics.transcriptLogs'], false);
+    assert.equal(Object.hasOwn(saved, 'diagnostics.toolCapture'), false);
+    assert.equal(saved.custom, true);
+    assert.match(f.host.value.text, /keep logging comment/);
+    assert.equal(f.host.value.projectText, '{"appearance.theme":"dracula"}');
+    assert.equal(p.transcriptLogEnabled(), false);
+
+    for (const [legacy, current] of [[true, false], [false, true]]) {
+      f.host.external(JSON.stringify({ 'diagnostics.toolCapture': legacy, 'diagnostics.transcriptLogs': current }));
+      assert.equal(p.transcriptLogEnabled(), current, 'new key wins, including explicit false');
+    }
+    for (const key of ['diagnostics.transcriptLogs', 'diagnostics.toolCapture']) {
+      for (const value of ['true', null, 1]) assert.throws(() => parseSettings(JSON.stringify({ [key]: value })));
+      f.host.externalProject(JSON.stringify({ [key]: true }));
+      assert.match(f.errors.at(-1) ?? '', /global-only/);
+    }
+    f.host.externalProject('{"appearance.theme":"dracula"}');
     f.host.external('{"diagnostics.toolCapture":null}');
-    assert.equal(p.toolCaptureEnabled(), true);
-    f.host.external('{}'); assert.equal(p.toolCaptureEnabled(), false);
+    await assert.rejects(p.saveTranscriptLog(false));
+    assert.equal(f.host.value.text, '{"diagnostics.toolCapture":null}', 'malformed source is not overwritten');
   } finally { p.dispose(); f.dom.window.close(); }
 });
 

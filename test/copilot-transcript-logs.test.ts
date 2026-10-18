@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { CopilotSession } from '../src/copilot/session';
 import type { BridgeRequest } from '../src/copilot/connection';
-import { createToolCapture } from '../src/tool-capture';
+import { createTranscriptLog } from '../src/transcript-logs';
 
 const tick = async () => { for (let index = 0; index < 12; index++) await Promise.resolve(); };
 function fixture(enabled = true) {
   const sent: BridgeRequest[] = [], lines: string[] = [], errors: string[] = [];
-  const capture = createToolCapture({
+  const capture = createTranscriptLog({
     write: async batch => {
       for (const line of batch) {
         const record = JSON.parse(line);
@@ -26,7 +26,7 @@ function fixture(enabled = true) {
   }, {
     publish() {}, changed() {}, identified() {}, disconnected() {}, completed() {}, notice: message => errors.push(message),
     decision: async kind => kind === 'permission' ? { kind: 'reject' as const } : { answer: 'private input', wasFreeform: true },
-    toolCapture: capture,
+    transcriptLog: capture,
   });
   const initializing = session.initialize('sdk-fixture');
   const reply = (method: string, result: unknown) => {

@@ -17,7 +17,7 @@ import { updateRangeFill } from './range-input';
 import { DEFAULT_MODAL_DURATIONS, DEFAULT_SCAN_SPEEDS, isScanStyle } from './modal-animation-defaults';
 import { installNativeWindowAppearance } from './native-window-appearance';
 import { installPerformanceDiagnostics } from './performance-diagnostics';
-import { createToolCapture } from './tool-capture';
+import { createTranscriptLog } from './transcript-logs';
 import type { NotificationDispatch } from './notifications';
 import { installTypography } from './typography-controls';
 import type { InstalledFont } from './font-picker';
@@ -107,36 +107,36 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     apply: scale => getCurrentWebview().setZoom(scale),
     error: feedback('zoom', 'App zoom'),
   }, false);
-  const toolCapturePicker = required<HTMLSelectElement>('tool-capture-mode');
-  const toolCaptureStatus = required('tool-capture-status');
-  let toolCapturePath = '', toolCaptureFailure = '';
-  const toolCapture = createToolCapture({
-    write: lines => invoke('append_tool_capture', { lines }),
+  const transcriptLogPicker = required<HTMLSelectElement>('transcript-logs-mode');
+  const transcriptLogStatus = required('transcript-logs-status');
+  let transcriptLogPath = '', transcriptLogFailure = '';
+  const transcriptLog = createTranscriptLog({
+    write: lines => invoke('append_transcript_logs', { lines }),
     failure: message => {
       if (unloading) return;
-      toolCaptureFailure = message;
-      toolCaptureStatus.textContent = message;
-      notices.report({ id: 'tool-capture', operation: 'Record transcript debug logs', message });
+      transcriptLogFailure = message;
+      transcriptLogStatus.textContent = message;
+      notices.report({ id: 'transcript-logs', operation: 'Record transcript debug logs', message });
     },
-    recovered: () => { toolCaptureFailure = ''; notices.resolve('tool-capture'); },
+    recovered: () => { transcriptLogFailure = ''; notices.resolve('transcript-logs'); },
   });
-  function reloadToolCapture(): void {
-    const enabled = preferences.toolCaptureEnabled();
-    toolCapture.setEnabled(enabled && !global);
-    toolCapturePicker.value = enabled ? 'on' : 'off';
-    toolCaptureStatus.textContent = toolCaptureFailure || `${enabled ? 'Transcript debug logging enabled for project windows.' : 'Transcript debug logging is off; existing logs are retained.'}${toolCapturePath ? ` Logs: ${toolCapturePath}` : ''}`;
+  function reloadTranscriptLog(): void {
+    const enabled = preferences.transcriptLogEnabled();
+    transcriptLog.setEnabled(enabled && !global);
+    transcriptLogPicker.value = enabled ? 'on' : 'off';
+    transcriptLogStatus.textContent = transcriptLogFailure || `${enabled ? 'Transcript debug logging enabled for project windows.' : 'Transcript debug logging is off; existing logs are retained.'}${transcriptLogPath ? ` Logs: ${transcriptLogPath}` : ''}`;
   }
-  toolCapturePicker.addEventListener('change', () => {
-    toolCapturePicker.disabled = true;
-    void preferences.saveToolCapture(toolCapturePicker.value === 'on').then(() => notices.resolve('tool-capture-settings'))
-      .catch(error => notices.report({ id: 'tool-capture-settings', operation: 'Save transcript debug logging setting', message: String(error) }))
-      .finally(() => { if (!unloading) { reloadToolCapture(); toolCapturePicker.disabled = false; } });
+  transcriptLogPicker.addEventListener('change', () => {
+    transcriptLogPicker.disabled = true;
+    void preferences.saveTranscriptLog(transcriptLogPicker.value === 'on').then(() => notices.resolve('transcript-logs-settings'))
+      .catch(error => notices.report({ id: 'transcript-logs-settings', operation: 'Save transcript debug logging setting', message: String(error) }))
+      .finally(() => { if (!unloading) { reloadTranscriptLog(); transcriptLogPicker.disabled = false; } });
   });
-  reloadToolCapture();
-  void invoke<string>('tool_capture_directory').then(path => {
-    if (!unloading) { toolCapturePath = path; reloadToolCapture(); }
+  reloadTranscriptLog();
+  void invoke<string>('transcript_logs_directory').then(path => {
+    if (!unloading) { transcriptLogPath = path; reloadTranscriptLog(); }
   }).catch(error => {
-    if (!unloading) notices.report({ id: 'tool-capture-path', operation: 'Locate transcript debug logs', message: String(error) });
+    if (!unloading) notices.report({ id: 'transcript-logs-path', operation: 'Locate transcript debug logs', message: String(error) });
   });
   const performanceDiagnostics = installPerformanceDiagnostics(window, () => ({
     userAgent: navigator.userAgent.slice(0, 512), fieldSizing: window.CSS?.supports('field-sizing', 'content') ?? false,
@@ -398,7 +398,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   const unsubscribe = preferences.subscribe(() => {
     const width = preferences.readState(settingsSidebarWidthKey);
     if (!Object.is(width, settingsSidebarWidth)) { settingsSidebarWidth = width; settingsSidebarResize.reload(); }
-    runtime.reload(); themes.reload(); typography.reload(); appearance.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadToolCapture(); reloadSendAutoFollow(); reloadModalAnimation(); keybindingEditor?.reload(); reloadSources();
+    runtime.reload(); themes.reload(); typography.reload(); appearance.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadTranscriptLog(); reloadSendAutoFollow(); reloadModalAnimation(); keybindingEditor?.reload(); reloadSources();
   });
   reloadSources();
   return {
@@ -408,7 +408,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     initializeRuntime(defaults: { pi: string; node: string }) { runtimeDefaults = defaults; runtime.initialize(defaults); },
     notificationError, notificationProgress, capturePerformance,
     performanceProbe: performanceDiagnostics.probe,
-    toolCapture,
+    transcriptLog,
     get capturingPerformance() { return capturingPerformance; },
     get performancePath() { return performancePath; },
     openKeybindings() { settings.open(); if (settings.isOpen && settingsNavigation.select('keybindings')) keybindingEditor?.focus(); },
@@ -420,7 +420,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
       animationDuration.removeEventListener('input', inputAnimationDuration);
       animationDuration.removeEventListener('change', changeAnimationDuration);
       if (animationPreview.open) closeModal(animationPreview);
-      performanceDiagnostics.dispose(); toolCapture.dispose();
+      performanceDiagnostics.dispose(); transcriptLog.dispose();
       keybindingEditor?.dispose(); settingsNavigation.dispose(); settingsSidebarResize.dispose();
       appearance.dispose(); zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose(); modalMotion.dispose();
     },

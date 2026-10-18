@@ -5,7 +5,7 @@ import { CopilotConnection, CopilotResponseError, record, type BridgeRequest } f
 import { immutableSnapshot } from '../pi/immutable-snapshot';
 import type { DisplayMessage } from '../conversation-model';
 import type { ConversationViewMessage, ConversationViewState } from '../conversation-view-host';
-import type { ToolCaptureSink } from '../tool-capture';
+import type { TranscriptLogSink } from '../transcript-logs';
 import { copilotToolResult } from './tool-result';
 import { createCopilotStatusArea } from './status-area';
 import { CopilotUsageController } from './usage';
@@ -39,7 +39,7 @@ export interface CopilotSessionUi {
   notice(message: string): void;
   decision(kind: 'permission' | 'input' | 'plan', request: Record<string, unknown>, signal: AbortSignal): Promise<CopilotDecision | undefined>;
   commandChoice?(title: string, choices: readonly CommandChoice[], signal: AbortSignal): Promise<string | undefined>;
-  toolCapture?: ToolCaptureSink;
+  transcriptLog?: TranscriptLogSink;
 }
 /** SDK semantic events project directly to shared presentation, never Pi/ACP events. */
 export class CopilotSession {
@@ -389,7 +389,7 @@ export class CopilotSession {
       if (!this.sessionId) { this.ui.identified(packet.sessionId); this.sessionId = packet.sessionId; }
       this.models = packet.models.filter(record).filter(model => typeof model.id === 'string' && typeof model.name === 'string' && (!record(model.policy) || model.policy.state === 'enabled'))
         .map(model => ({ ...model, supportedReasoningEfforts: Array.isArray(model.supportedReasoningEfforts) ? model.supportedReasoningEfforts.filter((value): value is string => typeof value === 'string' && !!value) : undefined })) as unknown as Model[];
-      if (this.ui.toolCapture?.enabled) {
+      if (this.ui.transcriptLog?.enabled) {
         const { events: _events, ...connection } = packet;
         this.capture('bridge.connected', connection);
       }
@@ -586,11 +586,11 @@ export class CopilotSession {
   }
   private cancelDecisions(): void { this.pendingDecisions.clear(); this.waitingStatus = undefined; this.decisions.abort(); this.decisions = new AbortController(); }
   private capture(event: string, payload: Record<string, unknown>): void {
-    if (!this.ui.toolCapture?.enabled) return;
+    if (!this.ui.transcriptLog?.enabled) return;
     const data = record(payload.data) ? payload.data : record(payload.request) ? payload.request : payload;
     const permission = record(data.permissionRequest) ? data.permissionRequest : undefined;
     const toolCallId = typeof data.toolCallId === 'string' ? data.toolCallId : typeof permission?.toolCallId === 'string' ? permission.toolCallId : undefined;
-    this.ui.toolCapture.append({ source: { backend: 'copilot-sdk', agent: 'copilot', ...(this.runtimeVersion ? { version: this.runtimeVersion } : {}) },
+    this.ui.transcriptLog.append({ source: { backend: 'copilot-sdk', agent: 'copilot', ...(this.runtimeVersion ? { version: this.runtimeVersion } : {}) },
       // SDK callbacks can arrive before create/resume publishes its authoritative identity.
       sessionId: this.sessionId || `connecting:${this.captureConnectionId}`, connectionId: this.captureConnectionId, toolCallId, event, payload });
   }

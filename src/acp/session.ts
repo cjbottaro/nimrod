@@ -1,5 +1,5 @@
 import type { SessionMessageInput } from '../session-message-input';
-import type { ToolCaptureSink } from '../tool-capture';
+import type { TranscriptLogSink } from '../transcript-logs';
 import { AcpClient, type AcpPermissionRequest, type AcpSessionUpdate } from './client';
 import { AcpConnectionError, isRecord, type AcpPacket, type AcpRecord } from './connection';
 import type { DisplayMessage, ContentBlock } from '../conversation-model';
@@ -11,7 +11,7 @@ import { ConfigurationDeferred, ConfigurationSuperseded, SessionConfigurationCon
 import { pickConfiguration } from '../configuration-picker';
 
 export interface AcpSessionUi {
-  toolCapture?: ToolCaptureSink;
+  transcriptLog?: TranscriptLogSink;
   publish(message: ConversationViewMessage): void;
   changed(): void;
   notice(message: string): void;
@@ -261,9 +261,9 @@ export class AcpSession {
     this.publish([]);
   }
   private capture(event: string, payload: unknown, sessionId: string, toolCallId: string): void {
-    if (!this.ui.toolCapture?.enabled) return;
+    if (!this.ui.transcriptLog?.enabled) return;
     const info = this.client.initialization?.agentInfo;
-    this.ui.toolCapture?.append({ source: { backend: 'acp', agent: this.agent || 'unknown',
+    this.ui.transcriptLog?.append({ source: { backend: 'acp', agent: this.agent || 'unknown',
       ...(isRecord(info) && typeof info.version === 'string' ? { version: info.version } : {}) }, sessionId: sessionId || `connecting:${this.captureConnectionId}`, connectionId: this.captureConnectionId, toolCallId: toolCallId || undefined, event, payload });
   }
   private updateTool(update: AcpRecord): AcpRecord {

@@ -1,5 +1,5 @@
-/** Transcript debug capture; legacy ToolCapture identifiers retain one shared logging pipeline. */
-export interface ToolCaptureRecord {
+/** Shared opt-in transcript logging; native payloads retain their harness-specific shapes. */
+export interface TranscriptLogRecord {
   source: { backend: string; agent: string; version?: string };
   sessionId: string;
   /** Stable for one integration connection, including early native-identity discovery. */
@@ -8,12 +8,12 @@ export interface ToolCaptureRecord {
   event: string;
   payload: unknown;
 }
-export interface ToolCaptureSink {
+export interface TranscriptLogSink {
   readonly enabled: boolean;
   /** Synchronous snapshot/enqueue only; never waits for storage or throws into an integration. */
-  append(record: ToolCaptureRecord): void;
+  append(record: TranscriptLogRecord): void;
 }
-export interface ToolCaptureHost {
+export interface TranscriptLogHost {
   write(lines: string[]): Promise<unknown>;
   failure(message: string): void;
   recovered(): void;
@@ -24,7 +24,7 @@ const FLUSH_CHARS = 1024 * 1024;
 const CHUNK_CHARS = 128 * 1024;
 
 /** One writer per project window. A failed/overflowed capture stays stopped until toggled. */
-export function createToolCapture(host: ToolCaptureHost) {
+export function createTranscriptLog(host: TranscriptLogHost) {
   let enabled = false, failed = false, disposed = false, writing = false;
   let captureId = '', sequence = 0, generation = 0;
   let pending: string[] = [], queuedChars = 0;
@@ -72,7 +72,7 @@ export function createToolCapture(host: ToolCaptureHost) {
       enabled = value; generation++; clear(); failed = false;
       if (value) { captureId = crypto.randomUUID(); sequence = 0; host.recovered(); }
     },
-    append(record: ToolCaptureRecord): void {
+    append(record: TranscriptLogRecord): void {
       if (!enabled || failed || disposed) return;
       try {
         // Snapshot now: native reducers may subsequently change retained objects.

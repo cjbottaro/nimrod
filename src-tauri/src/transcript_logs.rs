@@ -58,12 +58,7 @@ fn enabled(snapshot: &crate::preferences::Snapshot) -> bool {
     snapshot.error.is_none()
         && crate::preferences::jsonc(&snapshot.text)
             .ok()
-            .and_then(|value| {
-                value
-                    .get("diagnostics.toolCapture")
-                    .and_then(serde_json::Value::as_bool)
-            })
-            == Some(true)
+            .is_some_and(|value| crate::preferences::transcript_logs_enabled(&value))
 }
 // Preserve ordinary agent names; encode unsafe/long names without collisions or path traversal.
 fn segment(name: &str) -> String {
@@ -375,13 +370,13 @@ fn write_groups_with_limits(
 }
 
 #[tauri::command]
-pub fn tool_capture_directory(
+pub fn transcript_logs_directory(
     preferences: tauri::State<'_, crate::preferences::Preferences>,
 ) -> Result<String, String> {
     directory(&preferences.snapshot()).map(|p| p.to_string_lossy().into_owned())
 }
 #[tauri::command]
-pub async fn append_tool_capture(
+pub async fn append_transcript_logs(
     preferences: tauri::State<'_, crate::preferences::Preferences>,
     lines: Vec<String>,
 ) -> Result<(), String> {
@@ -410,7 +405,7 @@ mod tests {
     #[test]
     fn appends_and_separates_native_sources_without_rewriting() {
         let temp = tempfile::tempdir().unwrap();
-        let root = temp.path().join("tool-captures");
+        let root = temp.path().join("transcript-logs");
         write_groups(
             &root,
             groups(vec![line("pi", "pi", 1), line("acp", "fixture-agent", 2)]).unwrap(),
@@ -594,7 +589,7 @@ mod tests {
         assert!(directory(&prefs.snapshot())
             .unwrap()
             .ends_with("transcript-logs"));
-        let root = temp.path().join("tool-captures");
+        let root = temp.path().join("transcript-logs");
         write_groups(&root, groups(vec![line("pi", "pi", 1)]).unwrap()).unwrap();
         let path = root.join("pi/2026-10-16.jsonl");
         OpenOptions::new()
@@ -610,7 +605,7 @@ mod tests {
     #[test]
     fn concurrent_appends_and_utc_rollover_preserve_complete_records() {
         let temp = tempfile::tempdir().unwrap();
-        let root = temp.path().join("tool-captures");
+        let root = temp.path().join("transcript-logs");
         std::thread::scope(|scope| {
             for sequence in 1..=12 {
                 let root = &root;
@@ -636,22 +631,49 @@ mod tests {
         );
     }
     #[test]
-    fn global_capture_setting_requires_explicit_boolean_opt_in() {
+    fn transcript_logging_opt_in_preserves_legacy_settings_and_prefers_the_new_key() {
         let temp = tempfile::tempdir().unwrap();
         let prefs = crate::preferences::Preferences::isolated(temp.path());
         let mut snapshot = prefs.snapshot();
-        snapshot.text = "{\"diagnostics.toolCapture\":true}".into();
-        assert!(enabled(&snapshot));
-        crate::preferences::validate(&snapshot.text).unwrap();
-        snapshot.text = "{\"diagnostics.toolCapture\":\"true\"}".into();
+        for (text, expected) in [
+            (r#"{}"#, false),
+            (r#"{"diagnostics.transcriptLogs":true}"#, true),
+            (r#"{"diagnostics.transcriptLogs":false}"#, false),
+            (r#"{"diagnostics.toolCapture":true}"#, true),
+            (r#"{"diagnostics.toolCapture":false}"#, false),
+            (
+                r#"{"diagnostics.toolCapture":true,"diagnostics.transcriptLogs":false}"#,
+                false,
+            ),
+            (
+                r#"{"diagnostics.toolCapture":false,"diagnostics.transcriptLogs":true}"#,
+                true,
+            ),
+        ] {
+            snapshot.text = text.into();
+            crate::preferences::validate(text).unwrap();
+            assert_eq!(enabled(&snapshot), expected, "{text}");
+        }
+        snapshot.error = Some("Settings unavailable".into());
         assert!(!enabled(&snapshot));
-        assert!(crate::preferences::validate(&snapshot.text).is_err());
+        snapshot.error = None;
+        for key in ["diagnostics.transcriptLogs", "diagnostics.toolCapture"] {
+            for value in [
+                serde_json::json!("true"),
+                serde_json::Value::Null,
+                serde_json::json!(1),
+            ] {
+                snapshot.text = serde_json::json!({key: value}).to_string();
+                assert!(!enabled(&snapshot));
+                assert!(crate::preferences::validate(&snapshot.text).is_err());
+            }
+        }
     }
     #[cfg(unix)]
     #[test]
     fn refuses_symlink_destinations() {
         let temp = tempfile::tempdir().unwrap();
-        let root = temp.path().join("tool-captures");
+        let root = temp.path().join("transcript-logs");
         write_groups(&root, groups(vec![line("pi", "pi", 1)]).unwrap()).unwrap();
         let target = root.join("pi/2026-10-16.jsonl");
         fs::remove_file(&target).unwrap();

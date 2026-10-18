@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import test from 'node:test';
 import { CopilotSession } from '../src/copilot/session';
-import { createToolCapture } from '../src/tool-capture';
+import { createTranscriptLog } from '../src/transcript-logs';
 
 function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) => void, modelState = 'resolved', defaults: Record<string, unknown> = { model: 'small', effortLevel: 'low' }, usageState = 'complete', contextState = 'default') {
   const child = spawn(process.execPath, ['--import', './test/fixtures/copilot-sdk-register.mjs', 'copilot/bridge.mjs', '/fixture/copilot', '/fixture/project'], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, NIMROD_FIXTURE_COPILOT_MODE: mode, NIMROD_FIXTURE_COPILOT_MODEL_STATE: modelState, NIMROD_FIXTURE_COPILOT_DEFAULTS: JSON.stringify(defaults), NIMROD_FIXTURE_COPILOT_USAGE_STATE: usageState, NIMROD_FIXTURE_COPILOT_CONTEXT_STATE: contextState } });
@@ -302,7 +302,7 @@ test('optional SDK accounting failures leave the connected conversation usable',
 
 test('production SDK bridge tool and permission packets reach the JSONL capture sink unchanged', { timeout: 5000 }, async () => {
   const lines: string[] = [], errors: string[] = [];
-  const capture = createToolCapture({ write: async batch => { lines.push(...batch); }, failure: message => errors.push(message), recovered() {} });
+  const capture = createTranscriptLog({ write: async batch => { lines.push(...batch); }, failure: message => errors.push(message), recovered() {} });
   capture.setEnabled(true);
   let completed!: () => void;
   const finished = new Promise<void>(resolve => { completed = resolve; });
@@ -310,7 +310,7 @@ test('production SDK bridge tool and permission packets reach the JSONL capture 
   const f = bridge('interactive', packet => session?.receive(packet));
   session = new CopilotSession(async message => f.send(message), {
     publish() {}, changed() {}, identified() {}, disconnected() {}, notice: message => errors.push(message),
-    completed: () => completed(), decision: async () => ({ kind: 'approve-once', approvedInteractively: true } as const), toolCapture: capture,
+    completed: () => completed(), decision: async () => ({ kind: 'approve-once', approvedInteractively: true } as const), transcriptLog: capture,
   });
   try {
     await session.initialize();

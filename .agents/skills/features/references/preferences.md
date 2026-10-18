@@ -16,7 +16,7 @@ Missing keys use defaults; malformed external files retain the last valid snapsh
 
 ## Code map
 
-- `src/preferences.ts`: JSONC patches, validation, legacy migration, revision ordering, pending state-write comparison and native bridge. Global-only `diagnostics.toolCapture` defaults false and retains its compatibility name; [transcript debug logging](tool-capture.md) owns the full-content Pi/SDK/ACP logging contract.
+- `src/preferences.ts`: JSONC patches, validation, legacy migration, revision ordering, pending state-write comparison and native bridge. [Transcript logging](transcript-logs.md#boundary-and-settings) owns its global opt-in schema and legacy-setting migration.
 - `src/settings.ts`: Runtime per-field dirty state, explicit Save, page modality and focus.
 - `src/settings-surface.ts`, `src/global-settings.ts`, `src-tauri/src/settings_window.rs`: shared scoped controls, isolated global Settings boot and singleton native window.
 - `src/settings-navigation.ts`, `src/sidebar-resize.ts`: layout-only policies; [Settings layout](settings-layout.md) owns these contracts.

@@ -1348,7 +1348,7 @@ async function launchCopilot(tab: Tab, acceptedAction = false): Promise<void> {
   const valid = () => !unloading && tabs.includes(tab) && tab.token === token;
   let shellSignature = '';
   const session: CopilotSession = new CopilotSession(message => invoke('write_copilot', { token, message }), {
-    toolCapture: settingsSurface.toolCapture,
+    transcriptLog: settingsSurface.transcriptLog,
     publish: message => { if (valid()) tab.receive?.(message); },
     identified: id => {
       if (!valid()) throw new Error('Copilot connection is no longer owned');
@@ -1425,7 +1425,7 @@ async function launchAcp(tab: Tab, acceptedAction = false): Promise<void> {
   const valid = () => !unloading && tabs.includes(tab) && tab.token === token;
   let shellSignature = '';
   const session = new AcpSession(message => invoke('write_acp', { token, message }), {
-    toolCapture: settingsSurface.toolCapture,
+    transcriptLog: settingsSurface.transcriptLog,
     publish: message => { if (valid()) tab.receive?.(message); },
     changed: () => {
       if (!valid()) return;
@@ -1487,7 +1487,7 @@ async function launchPi(tab: Tab, copyDraft?: string, acceptedAction = false, in
   let confirmedRaw: { path: string; sessionId: string } | undefined;
   let shellState: ConversationState | undefined;
   const current = new PiSession(rpc, {
-    toolCapture: settingsSurface.toolCapture,
+    transcriptLog: settingsSurface.transcriptLog,
     performance: settingsSurface.performanceProbe,
     active: () => presented === tab,
     publish: message => { if (currentToken()) tab.receive?.(message); },
