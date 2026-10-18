@@ -1,0 +1,64 @@
+/* Explicit track painting avoids native range-fill state depending on a first
+ * interaction. Keep the real range input's keyboard, form and ARIA semantics.
+ */
+.settings-content input[type=range] {
+  --range-accent:var(--vscode-focusBorder);
+  --range-track:var(--vscode-input-border, var(--vscode-panel-border));
+  --range-thumb-border:var(--vscode-editor-background);
+  --range-direction:to right;
+  accent-color:var(--range-accent);
+  appearance:none;
+  -webkit-appearance:none;
+  height:24px;
+  margin:0;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+}
+.settings-content input[type=range]:dir(rtl) { --range-direction:to left; }
+.settings-content input[type=range]::-webkit-slider-runnable-track {
+  height:4px;
+  border-radius:999px;
+  background:linear-gradient(var(--range-direction), var(--range-accent) 0%, var(--range-accent) var(--range-fill, 0%), var(--range-track) var(--range-fill, 0%), var(--range-track) 100%);
+}
+.settings-content input[type=range]::-webkit-slider-thumb {
+  appearance:none;
+  -webkit-appearance:none;
+  box-sizing:border-box;
+  width:14px;
+  height:14px;
+  margin-top:-5px;
+  border:1px solid var(--range-thumb-border);
+  border-radius:50%;
+  background:var(--range-accent);
+}
+.settings-content input[type=range]::-moz-range-track {
+  height:4px;
+  border-radius:999px;
+  background:var(--range-track);
+}
+.settings-content input[type=range]::-moz-range-progress {
+  height:4px;
+  border-radius:999px;
+  background:var(--range-accent);
+}
+.settings-content input[type=range]::-moz-range-thumb {
+  box-sizing:border-box;
+  width:14px;
+  height:14px;
+  border:1px solid var(--range-thumb-border);
+  border-radius:50%;
+  background:var(--range-accent);
+}
+.settings-content input[type=range]:disabled { --range-accent:var(--vscode-descriptionForeground); opacity:.5; }
+@media (forced-colors:active) {
+  .settings-content input[type=range] {
+    --range-accent:Highlight;
+    --range-track:GrayText;
+    --range-thumb-border:Canvas;
+    forced-color-adjust:none;
+  }
+  .settings-content input[type=range]:focus { outline-color:Highlight; }
+  .settings-content input[type=range]:disabled { --range-accent:GrayText; }
+}

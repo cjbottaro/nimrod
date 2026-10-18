@@ -28,6 +28,8 @@ Escape during a drag cancels resizing; the next Escape closes Settings.
 
 ## Appearance
 
+Sliders show the current value with an accent-colored filled track as soon as Settings opens, without needing a first adjustment. The fill follows theme changes and settings reloaded from disk.
+
 - **Theme:** global changes update inheriting windows; project changes apply only to that project. See [Themes](themes.md) for live previews, bundled themes and imports.
 - **Translucency (global only):** background opacity (default **100% / Opaque**), **Whole window / Sidebar and Project bar**, and a macOS-only **Background blur** slider (0–40, default **20**) independent of opacity. Linux blur is configured in the desktop compositor. See [Translucency](translucency.md) for preview, accessibility and platform limitations.
 - **Zoom (global only):** scales every project, Settings and reference window, default **125%**, range **75–200%**. Use the picker in global Settings or **⌘/Ctrl + / −** in a project window; shortcuts change the same global value. **⌘/Ctrl+0** resets to 100%. Zoom is remembered and doesn't change drafts.

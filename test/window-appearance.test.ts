@@ -48,6 +48,25 @@ function fixture(support = mac, initial: Partial<WindowAppearance> = {}, tintTit
   };
 }
 
+test('appearance range fills exist before interaction and track reloads/previews without writes', async () => {
+  const f = fixture(mac, { opacity: 65, blur: 20 });
+  try {
+    // paint() runs during installation, before capability readiness or input.
+    assert.equal(f.controls.opacity.style.getPropertyValue('--range-fill'), '65%');
+    assert.equal(f.controls.blur.style.getPropertyValue('--range-fill'), '50%');
+    await f.controller.ready;
+    assert.equal(f.saves.length, 0); assert.equal(f.previews.length, 0); assert.equal(f.blurPreviews.length, 0);
+    f.external({ opacity: 30, blur: 8 });
+    assert.equal(f.controls.opacity.style.getPropertyValue('--range-fill'), '30%');
+    assert.equal(f.controls.blur.style.getPropertyValue('--range-fill'), '20%');
+    f.controls.opacity.value = '70'; f.event(f.controls.opacity, 'input');
+    assert.equal(f.controls.opacity.style.getPropertyValue('--range-fill'), '70%');
+    f.controls.blur.value = '30'; f.event(f.controls.blur, 'input');
+    assert.equal(f.controls.blur.style.getPropertyValue('--range-fill'), '75%');
+    assert.equal(f.saves.length, 0);
+  } finally { f.close(); }
+});
+
 test('opacity input publishes a paint-only preview and only its matching save clears it', async () => {
   const f = fixture();
   let release!: () => void;

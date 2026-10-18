@@ -8,11 +8,11 @@ import { buildSync } from 'esbuild';
 if (!process.env.CHROMIUM) throw new Error('Set CHROMIUM to a local chrome-headless-shell executable');
 const dir = mkdtempSync(join(tmpdir(), 'nimrod-settings-check-'));
 try {
-  const css = ['src/pi/transcript.css', 'src/theme.css', 'src/workspace.css'].map(path => readFileSync(path, 'utf8')).join('\n');
+  const css = ['src/pi/transcript.css', 'src/theme.css', 'src/range-input.css', 'src/workspace.css'].map(path => readFileSync(path, 'utf8')).join('\n');
   const transcript = readFileSync('src/pi/transcript.html', 'utf8');
   const html = readFileSync('index.html', 'utf8').replace('<script type="module" src="/src/main.ts"></script>', '<script src="fixture.js"></script>')
     .replace('</head>', `<style>${css}</style></head>`);
-  const bundle = buildSync({ stdin: { contents: "export {installSettings,installRuntimeSettings} from './src/settings'; export {installSettingsNavigation} from './src/settings-navigation'; export {mountPiView} from './src/pi/webview-client'; export {installThemes} from './src/themes/picker';", resolveDir: process.cwd() }, bundle: true, format: 'iife', globalName: 'Fixture', write: false }).outputFiles[0].text;
+  const bundle = buildSync({ stdin: { contents: "export {installSettings,installRuntimeSettings} from './src/settings'; export {installSettingsNavigation} from './src/settings-navigation'; export {mountPiView} from './src/pi/webview-client'; export {installThemes} from './src/themes/picker'; export {updateRangeFill} from './src/range-input';", resolveDir: process.cwd() }, bundle: true, format: 'iife', globalName: 'Fixture', write: false }).outputFiles[0].text;
   const script = `
 (async () => {
   const result = document.createElement('pre'); result.id = 'settings-result'; result.style.display='none'; document.body.append(result);
@@ -24,6 +24,7 @@ try {
   const frame = () => new Promise(resolve => setTimeout(resolve, 48));
   try {
     const get = id => document.getElementById(id);
+    document.querySelectorAll('input[type=range]').forEach(Fixture.updateRangeFill);
     get('welcome').hidden = true;
     get('conversation').hidden = false;
     get('conversation').innerHTML = ${JSON.stringify(transcript)};
