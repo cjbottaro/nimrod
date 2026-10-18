@@ -5,7 +5,7 @@
 }
 .message > .markdown, .skill-invocation .markdown, .reasoning-body, .configuration-text, .operation-outcome,
 .card-question-answer, .tool-output-web-markdown, .popout-document.popout-markdown,
-.typography-prose, .reasoning-body .tool-output {
+.typography-prose {
   font-family:var(--nimrod-conversation-font);
   font-size:var(--nimrod-conversation-size);
 }
@@ -20,6 +20,10 @@ pre, code, .tool-output:not(.tool-output-web-markdown), .tool-card-preview,
   font-size:var(--nimrod-monospace-size);
 }
 pre > code { font-size:inherit; }
+.reasoning-body .tool-output, [data-output-kind="question-options"] > .tool-output {
+  font-family:var(--nimrod-conversation-font);
+  font-size:var(--nimrod-conversation-size);
+}
 .tool-card-title, .label, .tool-label, .reasoning-card > summary,
 .tool-raw-inputs > summary, .code-block-header {
   font-family:var(--vscode-font-family);
