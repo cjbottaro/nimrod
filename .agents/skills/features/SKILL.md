@@ -88,6 +88,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Completed performance work, rationale/results and potential future optimizations (catalogue, not replacement feature contracts) | [Performance optimizations skill](../performance-optimizations/SKILL.md) | Agent-facing only |
 | Shared window creation/focus, presentation readiness/lifetime and explicit theme propagation | [Window presentation](references/window-presentation.md) | [Settings](../../../docs/settings.md), [Translucency](../../../docs/translucency.md) |
 | Independent window opacity/macOS blur, continuous surface hierarchy and accessibility | [Translucency](references/translucency.md) | [Translucency](../../../docs/translucency.md) |
+| macOS blur-enable flash: end-to-end investigation, failed approaches and solution history | [Blur case study](references/history/macos-blur-enablement.md) | [Translucency](../../../docs/translucency.md) |
 | Theme selection, preview, import and synchronization | [Themes](references/themes.md) | [Themes](../../../docs/themes.md) |
 | Theme-catalog maintenance and pinned sources | [Theme catalog](references/theme-catalog.md) | [Contributing](../../../CONTRIBUTING.md) |
 | Changelog maintenance, rapid local development and release preparation | [Development/changelog policy](references/releases.md#development-and-changelog-policy) | [Changelog](../../../CHANGELOG.md), [Contributing](../../../CONTRIBUTING.md#changelog-and-local-development) |

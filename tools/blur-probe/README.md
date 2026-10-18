@@ -1,5 +1,10 @@
 # Isolated macOS blur probe
 
+For the complete symptom → investigation → solution narrative, see the
+[macOS blur case study](../../.agents/skills/features/references/history/macos-blur-enablement.md),
+including failed experiments, capture pitfalls, production integration and the
+user's direct visual confirmation. This README owns probe operation and its matrices.
+
 Explicit developer diagnostic, **not part of `mise run test` or Nimrod**. It creates a
 synthetic checkerboard, one AppKit target, one transparent WKWebView target and an
 unchanged WKWebView control. No Nimrod process/session/configuration is accessed.

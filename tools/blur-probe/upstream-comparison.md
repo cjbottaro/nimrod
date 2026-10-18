@@ -1,5 +1,8 @@
 # Ghostty/Zed blur comparison and native follow-up
 
+The [end-to-end case study](../../.agents/skills/features/references/history/macos-blur-enablement.md)
+connects this upstream investigation to the original reproduction and final production integration.
+
 **Historical investigation/prototype record.** The subsequent production integration now lives in `src-tauri/src/macos_blur.m`; use the probe's `production` mode and current [feature reference](../../.agents/skills/features/references/translucency.md) for that implementation. The statements below describe this earlier investigation, not the later integration. Public upstream source was pinned on
 2026-10-18 UTC. Native experiments ran in the existing isolated probe on macOS
 27.0.1 (26A434), Apple Silicon. Neither Ghostty, Zed nor Nimrod was built/launched
