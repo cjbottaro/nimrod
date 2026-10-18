@@ -67,6 +67,46 @@ test('appearance range fills exist before interaction and track reloads/previews
   } finally { f.close(); }
 });
 
+test('lighter primary roles ease into translucency and are disabled at the opaque endpoint', async () => {
+  const f = fixture(mac);
+  try {
+    await f.controller.ready;
+    applyTheme(f.root, { id: 'button-fixture', name: 'Buttons', mode: 'dark', syntax: {}, colors: {
+      'editor.background': '#151c20', 'editorWidget.background': '#182126',
+      'button.foreground': '#102921', 'button.background': '#77d8bd', 'button.hoverBackground': '#99e7d1',
+    } });
+    const number = (key: string) => parseFloat(f.root.style.getPropertyValue(key));
+    const foreground = f.root.style.getPropertyValue('--nimrod-primary-foreground');
+    assert.equal(number('--nimrod-button-lightness'), 0);
+    assert.equal(f.root.dataset.translucency, 'off');
+    for (const opacity of [99, 95, 85, 65, 25, 0]) {
+      f.external({ opacity });
+      assert.equal(f.root.dataset.translucency, 'window');
+      assert.ok(Math.abs(number('--nimrod-button-lightness') - (1 - (opacity / 100) ** 8)) < 1e-10);
+      for (const context of ['', 'sidebar-', 'project-bar-', 'modal-']) {
+        const normal = number(`--nimrod-${context}ethereal-button-opacity`);
+        const hover = number(`--nimrod-${context}ethereal-button-hover-opacity`);
+        assert.ok(normal <= number(`--nimrod-${context}button-opacity`) + .0001);
+        assert.ok(hover >= normal);
+      }
+      assert.equal(f.root.style.getPropertyValue('--nimrod-primary-foreground'), foreground);
+    }
+    f.external({ opacity: 100 });
+    assert.equal(f.root.dataset.translucency, 'off');
+    assert.equal(number('--nimrod-button-lightness'), 0);
+    assert.equal(number('--nimrod-ethereal-button-opacity'), 100);
+    assert.equal(number('--nimrod-ethereal-button-hover-opacity'), 100);
+  } finally { f.close(); }
+  for (const support of [{ ...mac, reducedTransparency: true }, { ...mac, transparency: false }]) {
+    const fallback = fixture(support, { opacity: 65 });
+    try {
+      await fallback.controller.ready;
+      assert.equal(fallback.root.dataset.translucency, 'off');
+      assert.equal(fallback.root.style.getPropertyValue('--nimrod-button-lightness'), '0');
+    } finally { fallback.close(); }
+  }
+});
+
 test('opacity input publishes a paint-only preview and only its matching save clears it', async () => {
   const f = fixture();
   let release!: () => void;
