@@ -65,6 +65,7 @@ test('Pi prompt-acceptance blocking defers intent and revalidates scope before a
   revoked.configuration.set('model', offered[1]); revoked.revoke(); revoked.unblock(); await flush();
   assert.equal(revoked.calls.some(call => call.type === 'set_model'), false);
   assert.equal(revoked.configuration.operations[0].phase, 'failed');
-  assert.equal(revoked.errors.length, 1);
+  assert.equal(revoked.errors.length, 0);
+  assert.ok(revoked.configuration.operations[0].details);
   f.disconnect(); revoked.disconnect();
 });

@@ -1,5 +1,6 @@
 import { JsonRecord } from "./types";
-import { ConfigurationDeferred, ConfigurationSuperseded } from '../session-configuration';
+import { ConfigurationDeferred, ConfigurationSuperseded, ConfigurationUncertain } from '../session-configuration';
+import { RpcResponseError } from './transport';
 
 export interface ModelIdentity {
   id: string;
@@ -104,11 +105,12 @@ export class ModelThinkingController {
     return this.getSupportedThinkingLevels();
   }
   /** Direct configuration mutations for the session-bound consumer port. */
-  async setConfiguration(kind: 'model' | 'thinking', value: ModelIdentity | string, current: () => boolean = () => true): Promise<void> {
+  async setConfiguration(kind: 'model' | 'thinking', value: ModelIdentity | string, current: () => boolean = () => true, dispatched: () => void = () => {}): Promise<void> {
     if (!this.beginChange()) {
       if (!this.disconnected && this.state.ready) throw new ConfigurationDeferred();
       throw new Error('Pi configuration is unavailable.');
     }
+    let sent = false, confirmed = false;
     try {
       if (!await this.revalidateAvailable()) {
         if (!this.disconnected) throw new ConfigurationDeferred();
@@ -119,16 +121,23 @@ export class ModelThinkingController {
         if (!models.some(model => model.provider === value.provider && model.id === value.id)) throw new Error('The selected Pi model is no longer available.');
         this.assertDirectAvailable();
         if (!current()) throw new ConfigurationSuperseded();
+        dispatched(); sent = true;
         await this.rpc.request('set_model', { provider: value.provider, modelId: value.id });
       } else if (kind === 'thinking' && typeof value === 'string') {
         const levels = await this.getSupportedThinkingLevels();
         if (!levels.includes(value)) throw new Error('The selected thinking level is no longer supported by the current model.');
         this.assertDirectAvailable();
         if (!current()) throw new ConfigurationSuperseded();
+        dispatched(); sent = true;
         await this.rpc.request('set_thinking_level', { level: value });
       } else throw new Error('Invalid Pi configuration choice.');
+      confirmed = true;
       await this.refresh();
-    } catch (error) { await this.resyncAfterFailure(); throw error; }
+    } catch (error) {
+      await this.resyncAfterFailure();
+      if (sent && (confirmed || !(error instanceof RpcResponseError))) throw new ConfigurationUncertain(String(error));
+      throw error;
+    }
     finally { this.patch({ changing: false }); }
   }
 

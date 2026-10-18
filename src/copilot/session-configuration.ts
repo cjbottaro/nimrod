@@ -9,7 +9,7 @@ export function createCopilotConfiguration(host: {
   contextTier(): string | undefined;
   contextLimit(model: string, tier: string): number | undefined;
   availability(): ConfigurationAvailability;
-  apply(setting: string, value: string, current: () => boolean): Promise<void>;
+  apply(setting: string, value: string, current: () => boolean, dispatched: () => void): Promise<void>;
   changed(): void;
   error(message: string): void;
 }): SessionConfigurationController {

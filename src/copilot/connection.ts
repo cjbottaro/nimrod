@@ -1,5 +1,7 @@
 export const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 export class CopilotConnectionError extends Error {}
+/** An explicit error response, distinct from transport loss/unknown delivery. */
+export class CopilotResponseError extends Error {}
 export interface BridgeRequest { id: string; method: string; [key: string]: unknown; }
 
 /** Correlation for Nimrod's bridge, not a client for the SDK's wire protocol. */
@@ -33,7 +35,7 @@ export class CopilotConnection {
         const pending = this.pending.get(value.id);
         if (!pending) return;
         clearTimeout(pending.timer); this.pending.delete(value.id);
-        if (typeof value.error === 'string') pending.reject(new Error(value.error));
+        if (typeof value.error === 'string') pending.reject(new CopilotResponseError(value.error));
         else pending.resolve(value.result);
       } else if (value.kind === 'fatal') throw new Error(String(value.error));
       else this.event(value);

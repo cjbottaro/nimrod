@@ -33,7 +33,11 @@ export interface ConversationInteraction {
   userText?(document: Document, text: string, key: string, expanded: Map<string, boolean>,
     markdown: (text: string) => HTMLElement, previous?: HTMLElement): HTMLElement | undefined;
 }
-export interface ConversationView { setActive(active: boolean): void; scrollToBottom(): void; dispose(): void; }
+export interface ConversationView {
+  setActive(active: boolean): void; scrollToBottom(): void; dispose(): void;
+  /** Error presentation ownership only; never used to infer transport/delivery state. */
+  hasConnectionOutcome?(): boolean;
+}
 export interface ConversationViewHost {
   /** Stable owning-project display context, independent of harness-reported tool paths. */
   projectDirectory?: string;
@@ -96,6 +100,7 @@ export interface RenderBlock extends ToolCardData {
 }
 
 export interface RenderMessage {
+  operation?: import('./operation-card').OperationCard;
   configurationOperation?: import('./session-configuration').ConfigurationOperation;
   steeringStatus?: SteeringStatus;
   steering?: boolean;

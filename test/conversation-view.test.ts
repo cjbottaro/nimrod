@@ -185,14 +185,14 @@ test('configuration progress reuses queued-turn layout and one shimmering title 
   try {
     const native = [{ key: 'native', role: 'assistant', content: 'Retained answer' }];
     const statusArea = { capabilities: {}, controlsLabel: 'Fixture', controls: [{ id: 'model', label: 'Current model', title: 'Select model', disabled: false }] };
-    const operation = { key: 'configuration:fixture', phase: 'queued' as const, title: 'Model change queued', text: 'Model: requested' };
+    const operation = { key: 'configuration:fixture', phase: 'queued' as const, title: 'Configuration change', text: 'Model: requested' };
     f.receive({ type: 'snapshot', state: { messages: native, statusArea }, transcript: { base: 0, revision: 1 } }); f.flush();
     const assistant = f.win.document.querySelector('article')!;
     f.receive({ type: 'snapshot', state: { messages: native, statusArea, configurationOperations: [operation] }, transcript: { base: 1, revision: 2, rows: [] } }); f.flush();
     const row = f.win.document.querySelector<HTMLElement>('.message.configuration')!;
     const title = row.querySelector<HTMLElement>('.delivery-status-text')!;
     assert.equal(row.parentElement?.className, 'queued-turns');
-    assert.equal(title.textContent, 'Model change queued');
+    assert.equal(title.textContent, 'Configuration change');
     assert.equal(title.classList.contains('delivery-status-shimmer'), true);
     assert.equal(f.win.document.querySelector('#model')!.textContent, 'Current model');
     let reads = 0;
@@ -204,7 +204,7 @@ test('configuration progress reuses queued-turn layout and one shimmering title 
     assert.equal(row.querySelector('.configuration-text')!.textContent, 'Model: latest');
     assert.equal(f.win.document.querySelector('article.assistant'), assistant);
     f.view.setActive(false);
-    const complete = { ...replacement, phase: 'completed' as const, title: 'Configuration changed' };
+    const complete = { ...replacement, phase: 'completed' as const, title: 'Configuration change' };
     f.receive({ type: 'snapshot', state: { messages: native, statusArea: { ...statusArea, controls: [{ ...statusArea.controls[0], label: 'Latest model' }] }, configurationOperations: [complete] }, transcript: { base: 3, revision: 4, rows: [] } }); f.flush();
     assert.equal(title.classList.contains('delivery-status-shimmer'), true, 'hidden sessions defer painting');
     f.view.setActive(true); f.flush();
@@ -225,7 +225,7 @@ for (const hidden of [false, true]) for (const empty of [false, true]) {
     try {
       const document = f.win.document;
       const native = empty ? [] : [{ key: 'native', role: 'assistant', content: 'Existing answer' }];
-      const operation = { key: 'configuration:fixture', phase: 'queued' as const, title: 'Model change queued', text: 'Model: requested' };
+      const operation = { key: 'configuration:fixture', phase: 'queued' as const, title: 'Configuration change', text: 'Model: requested' };
       f.receive({ type: 'snapshot', state: { messages: native, configurationOperations: [operation] }, transcript: { base: 0, revision: 1 } }); f.flush();
       const row = document.querySelector<HTMLElement>('.message.configuration')!;
       const title = row.querySelector<HTMLElement>('.delivery-status-text')!;
@@ -233,7 +233,7 @@ for (const hidden of [false, true]) for (const empty of [false, true]) {
       prompt.value = 'Keep newer draft'; prompt.dispatchEvent(new f.win.Event('input')); prompt.focus();
       assert.equal(row.parentElement?.className, 'queued-turns');
       if (hidden) f.view.setActive(false);
-      const operations = [{ ...operation, phase: 'completed' as const, title: 'Configuration changed' }];
+      const operations = [{ ...operation, phase: 'completed' as const, title: 'Configuration change' }];
       f.receive({ type: 'snapshot', state: { messages: native, configurationOperations: operations }, transcript: { base: 1, revision: 2, rows: [] } });
       const future = { key: 'future', role: 'assistant', content: 'Later output' };
       f.receive({ type: 'snapshot', state: { messages: [...native, future], configurationOperations: operations }, transcript: { base: 2, revision: 3 } });

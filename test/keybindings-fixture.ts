@@ -9,5 +9,6 @@ export const INTENTIONALLY_UNBOUND_ACTIONS = [
   'mcp',
   'mode',
   'context-window',
+  'cancel-configuration',
   'keybindings',
 ] as const satisfies readonly ActionId[];

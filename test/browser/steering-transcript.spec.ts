@@ -92,7 +92,7 @@ for (const readingHistory of [false, true]) test(`steering reconciles without du
     await expect(turn).toHaveAttribute('data-test-identity', 'pending-steer');
     await page.waitForFunction(() => (window as unknown as { __fixtureSettled: number }).__fixtureSettled >= 3);
     await expect(turn).toHaveCount(1);
-    await expect(turn.locator('.steering-status')).toHaveCount(0);
+    await expect(turn.locator('.delivery-status-shimmer')).toHaveCount(0);
     await expect(turn).toHaveAttribute('data-test-identity', 'pending-steer');
     if (readingHistory) expect(Math.abs((await demo.metrics()).top - readingTop)).toBeLessThanOrEqual(2);
     else await expect.poll(async () => (await demo.metrics()).gap).toBeLessThanOrEqual(2);

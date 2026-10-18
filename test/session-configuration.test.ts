@@ -17,9 +17,9 @@ function fixture() {
     ],
     get: id => values[id],
     choices: async (id, desired) => (id === 'model' ? models : (desired.model ?? values.model) === 'b' ? ['high'] : ['low', 'high']).map(value => ({ value, label: value })),
-    apply: async (setting, value) => {
+    apply: async (setting, value, _current, dispatched) => {
       if (availability !== 'ready' || inFlight) throw new ConfigurationDeferred();
-      inFlight = true; calls.push({ setting, value });
+      dispatched(); inFlight = true; calls.push({ setting, value });
       await new Promise<void>((done, fail) => { resolve = () => { values[setting] = value; inFlight = false; done(); }; reject = error => { inFlight = false; fail(error); }; });
     },
   }, () => { publications++; configuration.update(); }, message => errors.push(message));
@@ -98,22 +98,63 @@ test('revocation, failure and disconnect terminate shimmer without retry or appl
   const revoked = fixture(); await revoked.choose('model', 'b'); revoked.revoke(); revoked.ready(); await flush();
   assert.equal(revoked.calls.length, 0);
   assert.equal(revoked.configuration.operations[0].phase, 'failed');
-  assert.equal(revoked.errors.length, 1);
+  assert.equal(revoked.errors.length, 0);
+  assert.match(revoked.configuration.operations[0].details!, /no longer supported/);
   const failed = fixture(); failed.ready(); await failed.choose('model', 'b'); await flush();
   await failed.choose('model', 'c'); failed.reject(new Error('ambiguous delivery')); await flush();
   failed.configuration.update(); await flush();
   assert.equal(failed.calls.length, 1);
   assert.equal(failed.configuration.operations[0].phase, 'failed');
-  assert.equal(failed.errors.length, 1);
+  assert.equal(failed.errors.length, 0);
+  assert.match(failed.configuration.operations[0].details!, /ambiguous delivery/);
   const disconnected = fixture(); await disconnected.choose('model', 'b');
   disconnected.configuration.dispose(); disconnected.ready(); await flush();
   assert.equal(disconnected.calls.length, 0);
-  assert.equal(disconnected.configuration.operations[0].phase, 'cancelled');
+  assert.equal(disconnected.configuration.operations[0].phase, 'not-applied');
   await assert.rejects(disconnected.configuration.choices('model'), /unavailable/);
   const active = fixture(); active.ready(); await active.choose('model', 'b'); await flush();
   active.configuration.dispose(); const cancelled = active.configuration.operations;
+  assert.equal(cancelled[0].phase, 'unknown');
   active.resolve(); await flush();
   assert.equal(active.configuration.operations, cancelled, 'late completion cannot revive a disposed operation');
+});
+
+test('queued cancellation removes only its exact operation and never dispatches it later', async () => {
+  const f = fixture(); await f.choose('model', 'b');
+  const operation = f.configuration.operations[0];
+  assert.equal(operation.title, 'Configuration change');
+  assert.equal(operation.cancellable, true);
+  assert.equal(f.configuration.cancel('stale-key'), false);
+  assert.equal(f.configuration.cancel(operation.key), true);
+  assert.deepEqual(f.configuration.operations, []);
+  f.ready(); await flush();
+  assert.deepEqual(f.calls, []);
+  await f.choose('model', 'c'); await flush();
+  const active = f.configuration.operations[0];
+  assert.equal(active.cancellable, false);
+  assert.equal(f.configuration.cancel(active.key), false);
+  assert.equal(f.configuration.cancel(operation.key), false);
+  f.resolve(); await flush();
+  assert.equal(f.configuration.operations[0].phase, 'completed');
+});
+
+test('cancellation during asynchronous validation fences old failures from newer intent', async () => {
+  let reads = 0, reject!: (error: Error) => void, value = 'a';
+  const calls: string[] = [];
+  const choices = ['a', 'b', 'c'].map(value => ({ value, label: value }));
+  const configuration = new SessionConfigurationController({
+    capabilities: () => [{ id: 'model', label: 'Model', availability: 'ready' }], get: () => value,
+    choices: async () => ++reads === 2 ? new Promise((_resolve, fail) => { reject = fail; }) : choices,
+    apply: async (_id, selected, _current, dispatched) => { dispatched(); calls.push(selected); value = selected; },
+  }, () => {});
+  const offered = await configuration.choices('model');
+  configuration.set('model', offered[1]); await flush();
+  assert.equal(configuration.cancel(configuration.operations[0].key), true);
+  configuration.set('model', offered[2]);
+  reject(new Error('Old cancelled validation failed')); await flush();
+  assert.deepEqual(calls, ['c']);
+  assert.equal(configuration.operations.length, 1);
+  assert.equal(configuration.operations[0].phase, 'completed');
 });
 
 test('a replacement during concrete pre-dispatch validation suppresses the old mutation rather than dispatching it first', async () => {
@@ -140,7 +181,7 @@ test('a replacement during concrete pre-dispatch validation suppresses the old m
 
 test('local operation projection retains row identity, pins pending work, and anchors completed operations without touching native records', () => {
   const transcript = new ConfigurationTranscript();
-  const queued = { key: 'configuration:fixture', phase: 'queued' as const, title: 'Model change queued', text: 'Model: b' };
+  const queued = { key: 'configuration:fixture', phase: 'queued' as const, title: 'Configuration change', text: 'Model: b' };
   const native = [{ key: 'native', role: 'assistant', content: 'Native answer' }];
   assert.equal(transcript.sync([queued], () => native).structural, true);
   const projected = transcript.project(native);
@@ -149,7 +190,7 @@ test('local operation projection retains row identity, pins pending work, and an
   const changed = transcript.sync([replaced], () => assert.fail('pending replacement must not read history'));
   assert.equal(changed.structural, false);
   assert.equal(changed.rows[0].key, queued.key);
-  const completed = { ...replaced, phase: 'completed' as const, title: 'Configuration changed' };
+  const completed = { ...replaced, phase: 'completed' as const, title: 'Configuration change' };
   assert.equal(transcript.sync([completed], () => native).structural, true);
   const done = transcript.project(native);
   const future = { key: 'future', role: 'user', content: 'Next question' };

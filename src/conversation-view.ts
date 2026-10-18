@@ -16,7 +16,8 @@ import { DEFAULT_SEND_AUTO_FOLLOW, TranscriptScroll } from "./pi/transcript-scro
 import { disposeParallelCard } from './pi/parallel-card';
 import { renderReasoningCard, updateReasoningCard, disposeReasoningCard } from "./pi/reasoning-card";
 import { isEmptyAssistantMessage, transcriptRolePresentation } from "./pi/transcript-presentation";
-import { SteeringTranscript, steeringStatusLabel } from "./pi/steering-transcript";
+import { SteeringTranscript } from "./pi/steering-transcript";
+import { renderOperationCard } from './operation-card';
 import { clipboardImages, imageContent, validImageContent, validateAttachments } from './pi/image-attachments';
 import { renderParallelToolCard } from "./pi/tool-progress";
 
@@ -359,7 +360,24 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     if (!label) { label = element('div', 'message-origin'); messageOrigins.set(node, label); node.prepend(label); }
     if (label.textContent !== message.originLabel) label.textContent = message.originLabel;
   }
+  messages.addEventListener('click', event => {
+    const button = event.target instanceof Element ? event.target.closest<HTMLButtonElement>('[data-cancel-operation]') : null;
+    if (button && active && !disposed && !deletionLocked) post('cancelOperation', { id: button.dataset.cancelOperation });
+  }, { signal: listeners.signal });
+  function restoreOperationFocus(): void {
+    if (active && !disposed) prompt.focus({ preventScroll: true });
+  }
+  function renderOperation(node: HTMLElement, message: DisplayMessage): void {
+    node.classList.toggle('queued-turn', message.queued === true);
+    node.classList.toggle('sticky-turn', message.sticky === true);
+    renderOperationCard(node, message.operation, restoreOperationFocus);
+  }
   function renderMessage(message: DisplayMessage): HTMLElement {
+    const node = renderMessageContent(message);
+    renderOperation(node, message);
+    return node;
+  }
+  function renderMessageContent(message: DisplayMessage): HTMLElement {
     const role = safeText(message.role);
     const article = element("article", `message ${role}`);
     article.hidden = isEmptyAssistantMessage(message);
@@ -372,7 +390,6 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       label.textContent = presentation.visibleLabel;
       article.append(label);
     }
-    renderSteeringStatus(article, message);
     if (message.configurationOperation) { renderConfigurationOperation(article, message.configurationOperation); return article; }
     if (message.isError) article.classList.add("error");
     if (message.role === "parallel" && message.parallelCluster) {
@@ -403,39 +420,10 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     return article;
   }
 
-  function renderSteeringStatus(node: HTMLElement, message: DisplayMessage): void {
-    let label = node.querySelector<HTMLElement>(".steering-status");
-    node.classList.toggle('queued-turn', message.queued === true);
-    node.classList.toggle('sticky-turn', message.sticky === true);
-    if (message.configurationOperation) return;
-    const pending = message.steeringStatus === 'sending' || message.steeringStatus === 'pending';
-    const showSteering = message.steering && pending;
-    if (!message.steeringStatus || (pending && !message.queued && !showSteering)) { label?.remove(); return; }
-    if (!label) label = ensureDeliveryStatus(node);
-    const text = label.firstElementChild as HTMLElement;
-    const status = pending ? message.queued ? 'Queued' : 'Steering' : steeringStatusLabel(message.steeringStatus);
-    if (text.textContent !== status) text.textContent = status;
-    text.classList.toggle('delivery-status-shimmer', pending);
-    node.setAttribute("aria-label", `User message: ${status}`);
-  }
-
-  function ensureDeliveryStatus(node: HTMLElement): HTMLElement {
-    const label = element('div', 'steering-status');
-    label.append(element('span', 'delivery-status-text'));
-    node.prepend(label);
-    return label;
-  }
-
   function renderConfigurationOperation(node: HTMLElement, operation: import('./session-configuration').ConfigurationOperation): void {
-    let label = node.querySelector<HTMLElement>('.steering-status');
-    if (!label) label = ensureDeliveryStatus(node);
-    const title = label.firstElementChild as HTMLElement;
-    if (title.textContent !== operation.title) title.textContent = operation.title;
-    title.classList.toggle('delivery-status-shimmer', operation.phase === 'queued' || operation.phase === 'applying');
     let text = node.querySelector<HTMLElement>('.configuration-text');
     if (!text) { text = element('div', 'configuration-text'); node.append(text); }
     if (text.textContent !== operation.text) text.textContent = operation.text;
-    node.setAttribute('aria-label', `Nimrod configuration: ${operation.title}`);
   }
 
   function disposeMessageCards(node: HTMLElement): void {
@@ -445,12 +433,16 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
 
   /** Patches tool cards in their existing article so active spinner nodes never disconnect. */
   function patchMessage(node: HTMLElement, message: DisplayMessage): boolean {
+    if (!patchMessageContent(node, message)) return false;
+    renderOperation(node, message);
+    return true;
+  }
+  function patchMessageContent(node: HTMLElement, message: DisplayMessage): boolean {
     if (node.dataset.key !== safeText(message.key) || node.classList.contains(safeText(message.role)) === false) return false;
     node.hidden = isEmptyAssistantMessage(message);
     renderMessageOrigin(node, message);
     node.classList.toggle("error", message.isError === true);
     if (message.role === "user") node.setAttribute("aria-label", message.originLabel ? `${message.originLabel} · User message` : "User message");
-    renderSteeringStatus(node, message);
     if (message.configurationOperation) { renderConfigurationOperation(node, message.configurationOperation); return true; }
     if (message.role === "parallel" && message.parallelCluster) {
       const details = node.querySelector<HTMLDetailsElement>(".parallel-tool-card");
@@ -797,6 +789,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
         if (currentAtIndex !== entry.node) parent.insertBefore(entry.node, currentAtIndex || (parent === messages && queuedTurns.parentElement === messages ? queuedTurns : null));
       });
       for (const [key, entry] of rendered) if (!nextKeys.has(key)) {
+        if (entry.node.querySelector('.operation-cancel') === document.activeElement) restoreOperationFocus();
         disposeMessageCards(entry.node); entry.node.remove(); rendered.delete(key);
       }
       queuedTurns.hidden = queuedTurns.childElementCount === 0;
@@ -1070,11 +1063,11 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       // The following ordered snapshot supplies the authoritative content/position.
     }
     if (data.type === "submissionReceipt" && typeof data.id === "string" && (data.outcome === "accepted" || data.outcome === "rejected" || data.outcome === "cancelled" || data.outcome === "unknown")) {
-      steeringTranscript.receipt(data.id, data.outcome);
+      const cardOwnsOutcome = steeringTranscript.receipt(data.id, data.outcome, safeText(data.error));
       queueRender(pendingState || displayedState);
       if (data.outcome === 'accepted') {
         if (typeof data.noticeCause === 'string') host.resolveNoticeCause?.(data.noticeCause);
-      } else if (data.outcome !== 'cancelled') {
+      } else if (data.outcome !== 'cancelled' && !cardOwnsOutcome) {
         const unknown = data.outcome === 'unknown';
         const error = safeText(data.error);
         const harness = host.interaction.label;
@@ -1113,6 +1106,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   return {
     dispose,
     scrollToBottom: () => { if (!disposed) transcriptScroll.scrollToBottom(); },
+    hasConnectionOutcome: () => steeringTranscript.hasConnectionOutcome || configurationTranscript.hasConnectionOutcome,
     setActive(value) {
       if (disposed || active === value) return;
       if (!value) {

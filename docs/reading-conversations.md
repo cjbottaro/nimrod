@@ -19,7 +19,7 @@ Configuration changes and delivery errors already represented by a card do not a
 
 Pi's matching user event—not its enqueue acknowledgement—settles a steering/queued card at Pi's authoritative position. Its title stays on the adopted user turn for this connection; Nimrod does not write that title into Pi history. Ordinary idle sends remain ordinary user turns.
 
-This pattern's migration is in progress; native visual acceptance remains pending.
+The migration is source-implemented; regression tests and native visual acceptance remain pending. Configuration Cancel is also available as **Cancel pending configuration change** in the command palette (no default shortcut).
 
 ## Tool and reasoning cards
 

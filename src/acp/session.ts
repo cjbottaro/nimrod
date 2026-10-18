@@ -75,7 +75,7 @@ export class AcpSession {
       disconnected: error => {
         this.capture('connection.disconnected', { error: error.message }, this.client.sessionId || '', '');
         this.ended = true;
-        this.configuration?.dispose();
+        this.configuration?.dispose(error.message);
         this.finishMessages();
         this.state = { ...this.state, sessionUnavailable: true, busy: false, status: 'Disconnected' };
         this.publish(); ui.disconnected(error.message);
@@ -92,12 +92,12 @@ export class AcpSession {
         if (id === 'effort' && desired.model && desired.model !== this.controlOption('model')?.current) throw new Error('Wait for the pending ACP model change before choosing its thinking level.');
         return option.options.map(item => ({ value: item.value, label: item.name }));
       },
-      apply: async (id, value, current) => {
+      apply: async (id, value, current, dispatched) => {
         if (!this.canSubmit) throw new ConfigurationDeferred();
         const option = this.options.find(option => this.configurationId(option) === id);
         if (!option || !option.options.some(item => item.value === value)) throw new Error('This ACP choice is no longer available.');
         if (!current()) throw new ConfigurationSuperseded();
-        await this.applyOption(option, value);
+        await this.applyOption(option, value, dispatched);
       },
     }, () => this.publish([]), message => this.ui.notice(`Configuration change failed: ${message}`));
   }
@@ -179,12 +179,13 @@ export class AcpSession {
       return choices[labels.indexOf(selected || '')]?.value;
     });
   }
-  private async applyOption(option: AcpOption, value: string): Promise<void> {
+  private async applyOption(option: AcpOption, value: string, dispatched: () => void = () => {}): Promise<void> {
     if (this.ended || this.state.sessionUnavailable) throw new Error('ACP configuration is unavailable.');
     if (!this.canSubmit) throw new ConfigurationDeferred();
     this.configuring = true;
     this.controls(); this.publish([]);
     try {
+      dispatched();
       if (option.legacy === 'model') await this.deadline(this.client.setModel(value));
       else if (option.legacy === 'mode') await this.deadline(this.client.setMode(value));
       else await this.deadline(this.client.setConfigOption(option.id, value));

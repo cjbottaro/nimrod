@@ -14,9 +14,12 @@ export interface ConfigurationSetting {
 }
 export interface ConfigurationOperation {
   readonly key: string;
-  readonly phase: 'queued' | 'applying' | 'completed' | 'failed' | 'cancelled';
+  readonly phase: 'queued' | 'applying' | 'completed' | 'failed' | 'unknown' | 'not-applied';
   readonly title: string;
   readonly text: string;
+  readonly details?: string;
+  readonly cause?: 'connection';
+  readonly cancellable?: boolean;
 }
 /** Narrow, session-bound configuration port; no transport, lifecycle or UI authority. */
 export interface SessionConfiguration {
@@ -26,18 +29,22 @@ export interface SessionConfiguration {
   choices(setting: string): Promise<readonly ConfigurationChoice[]>;
   /** Accept local intent synchronously. Completion is reported through operations/effective getters. */
   set(setting: string, choice: ConfigurationChoice): void;
+  /** Withdraw only if this exact operation has not entered mutation dispatch. */
+  cancel?(key: string): boolean;
 }
 export interface ConfigurationAdapter {
   capabilities(desired: Readonly<Record<string, string>>): readonly ConfigurationSetting[];
   get(setting: string): string | undefined;
   choices(setting: string, desired: Readonly<Record<string, string>>): Promise<readonly ConfigurationChoice[]>;
   /** Revalidate concrete readiness before dispatch; return only after authoritative reconciliation. */
-  apply(setting: string, value: string, current: () => boolean): Promise<void>;
+  apply(setting: string, value: string, current: () => boolean, dispatched: () => void): Promise<void>;
 }
 /** Only for a pre-dispatch readiness race. Never use after a mutation might have been delivered. */
 export class ConfigurationDeferred extends Error {}
 /** A newer intent superseded metadata validation before any mutation was dispatched. */
 export class ConfigurationSuperseded extends Error {}
+/** Mutation may have applied, but its authoritative outcome could not be established. */
+export class ConfigurationUncertain extends Error {}
 interface Intent { choice: ConfigurationChoice; dependencies: Record<string, string | undefined>; }
 
 /** Latest-wins local intents; concrete integrations retain mutation/uncertainty semantics. */
@@ -49,9 +56,9 @@ export class SessionConfigurationController implements SessionConfiguration {
   private running = false;
   private updateRequested = false;
   private disposed = false;
-  private changedSettings = new Set<string>();
+  private dispatched = false;
   private offered = new WeakMap<ConfigurationChoice, { setting: string; dependencies: Record<string, string | undefined> }>();
-  constructor(private adapter: ConfigurationAdapter, private changed: () => void, private error: (message: string) => void) {}
+  constructor(private adapter: ConfigurationAdapter, private changed: () => void, _legacyError?: (message: string) => void) {}
   get capabilities(): readonly ConfigurationSetting[] {
     const capabilities = this.adapter.capabilities(this.desired());
     return this.disposed ? capabilities.map(item => ({ ...item, availability: 'unavailable' as const, reason: 'Configuration is unavailable because the connection ended.' })) : capabilities;
@@ -86,8 +93,10 @@ export class SessionConfigurationController implements SessionConfiguration {
     const desired = this.desired();
     const dependencies = Object.fromEntries((capability.dependsOn || []).map(id => [id, desired[id] ?? this.get(id)]));
     this.pending.set(setting, { choice: { ...choice }, dependencies });
-    this.changedSettings.add(setting);
-    if (!this.current) this.current = { key: `configuration:${crypto.randomUUID()}`, phase: 'queued', title: '', text: '' };
+    if (!this.current) {
+      this.dispatched = false;
+      this.current = { key: `configuration:${crypto.randomUUID()}`, phase: 'queued', title: 'Configuration change', text: '' };
+    }
     this.progress(this.active ? 'applying' : 'queued');
     this.update();
   }
@@ -97,21 +106,28 @@ export class SessionConfigurationController implements SessionConfiguration {
     if (this.running) { this.updateRequested = true; return; }
     void this.drain();
   }
-  dispose(): void {
+  cancel(key: string): boolean {
+    if (this.disposed || !this.current || this.current.key !== key || this.active || this.dispatched) return false;
+    this.pending.clear(); this.current = undefined;
+    this.operations = this.operations.filter(operation => operation.key !== key);
+    this.changed();
+    return true;
+  }
+  dispose(reason = 'The configuration connection ended.', outcome?: 'failed'): void {
     if (this.disposed) return;
     this.disposed = true; this.pending.clear();
-    if (this.current) this.finish('cancelled');
+    if (this.current) this.finish(outcome ?? (this.dispatched ? 'unknown' : 'not-applied'),
+      `${reason} ${outcome === 'failed' ? 'The harness reported a configuration error.' : this.dispatched ? 'The requested changes were not fully confirmed.' : 'The requested changes were not dispatched.'} Nothing was retried.`, 'connection');
   }
   private progress(phase: 'queued' | 'applying'): void {
     if (!this.current || this.disposed) return;
-    const label = this.changedSettings.size === 1 ? this.capabilities.find(item => item.id === [...this.changedSettings][0])?.label.toLowerCase() || 'configuration' : 'configuration';
     const desired = new Map<string, Intent>();
     if (this.active) desired.set(this.active.setting, this.active.intent);
     for (const entry of this.pending) desired.set(...entry);
     const text = [...desired].map(([id, intent]) => `${this.capabilities.find(item => item.id === id)?.label || id}: ${intent.choice.label}`).join(' · ');
-    const title = phase === 'queued' ? `${label[0].toUpperCase()}${label.slice(1)} change queued` : `Changing ${label}`;
-    if (this.current.phase === phase && this.current.title === title && this.current.text === text) return;
-    this.current = { ...this.current, phase, title, text };
+    const title = 'Configuration change', cancellable = !this.active && !this.dispatched;
+    if (this.current.phase === phase && this.current.title === title && this.current.text === text && this.current.cancellable === cancellable) return;
+    this.current = { ...this.current, phase, title, text, cancellable };
     this.publish();
   }
   private publish(): void {
@@ -121,10 +137,10 @@ export class SessionConfigurationController implements SessionConfiguration {
     }
     this.changed();
   }
-  private finish(phase: 'completed' | 'failed' | 'cancelled'): void {
+  private finish(phase: 'completed' | 'failed' | 'unknown' | 'not-applied', details?: string, cause?: 'connection'): void {
     if (!this.current) return;
-    this.current = { ...this.current, phase, title: phase === 'completed' ? 'Configuration changed' : phase === 'failed' ? 'Configuration change failed' : 'Configuration change cancelled' };
-    this.publish(); this.current = undefined; this.changedSettings.clear();
+    this.current = { ...this.current, phase, title: 'Configuration change', cancellable: false, details, cause };
+    this.publish(); this.current = undefined;
   }
   private async drain(): Promise<void> {
     this.running = true;
@@ -141,7 +157,13 @@ export class SessionConfigurationController implements SessionConfiguration {
         if (!capability || capability.availability === 'unavailable') throw new Error(capability?.reason || 'The requested setting is no longer supported.');
         if (capability.availability === 'deferred') { this.progress('queued'); return; }
         if (Object.entries(intent.dependencies).some(([key, value]) => this.get(key) !== value)) throw new Error('Configuration changed; choose the dependent setting again. Nothing was applied for that setting.');
-        const choices = await this.adapter.choices(id, this.desired());
+        const operationKey = this.current?.key;
+        let choices: readonly ConfigurationChoice[];
+        try { choices = await this.adapter.choices(id, this.desired()); }
+        catch (error) {
+          if (this.current?.key !== operationKey) continue;
+          throw error;
+        }
         if (this.disposed) return;
         if (this.pending.get(id) !== intent) continue;
         const available = this.capabilities.find(item => item.id === id)?.availability;
@@ -152,7 +174,7 @@ export class SessionConfigurationController implements SessionConfiguration {
         if (Object.entries(intent.dependencies).some(([key, value]) => this.get(key) !== value)) throw new Error('Configuration changed while validating the selection. Choose again.');
         this.pending.delete(id); this.active = { setting: id, intent }; this.progress('applying');
         try { await this.adapter.apply(id, intent.choice.value, () => !this.disposed && !this.pending.has(id)
-          && Object.entries(intent.dependencies).every(([key, value]) => (this.desired()[key] ?? this.get(key)) === value)); }
+          && Object.entries(intent.dependencies).every(([key, value]) => (this.desired()[key] ?? this.get(key)) === value), () => { this.dispatched = true; }); }
         catch (error) {
           if (error instanceof ConfigurationSuperseded) { this.active = undefined; continue; }
           if (error instanceof ConfigurationDeferred) {
@@ -164,13 +186,13 @@ export class SessionConfigurationController implements SessionConfiguration {
           throw error;
         }
         if (!this.disposed && (this.get(id) !== intent.choice.value || Object.entries(intent.dependencies).some(([key, value]) => this.get(key) !== value)))
-          throw new Error('The harness did not confirm the requested configuration and its dependencies. No retry was made.');
+          throw new ConfigurationUncertain('The harness did not confirm the requested configuration and its dependencies. No retry was made.');
         this.active = undefined;
       }
       if (!this.disposed && this.current) this.finish('completed');
     } catch (error) {
       this.pending.clear(); this.active = undefined;
-      if (!this.disposed) { this.finish('failed'); this.error(String(error)); }
+      if (!this.disposed) this.finish(error instanceof ConfigurationUncertain ? 'unknown' : 'failed', String(error));
     } finally {
       this.running = false;
       if (this.updateRequested && !this.disposed && this.pending.size) queueMicrotask(() => this.update());

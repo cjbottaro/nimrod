@@ -1,8 +1,10 @@
+import type { OperationCard } from '../operation-card';
 import type { ImageContent } from './image-attachments';
 import type { SubmissionMode, SubmissionOutcome } from './composer-state';
 
 export type SteeringStatus = 'sending' | 'pending' | 'unknown' | 'interrupted' | 'rejected' | 'cancelled';
 export interface SteeringMessage {
+  operation?: OperationCard;
   key?: string;
   role?: string;
   content?: unknown;
@@ -19,19 +21,20 @@ interface PendingSteering {
   status: SteeringStatus;
   kind: 'steering' | 'followUp';
   steering?: boolean;
+  details?: string;
+  anchor?: string;
+  anchored?: boolean;
+  connectionLost?: boolean;
 }
-
-export const steeringStatusLabel = (status: SteeringStatus): string => ({
-  sending: 'Steering', pending: 'Steering', unknown: 'Acceptance unknown',
-  interrupted: 'Delivery unconfirmed', rejected: 'Not sent', cancelled: 'Cancelled',
-})[status];
 
 /** Presentation only: neither queue membership nor a user event acknowledges a draft. */
 export class SteeringTranscript {
   private pending: PendingSteering[] = [];
   private seen = new Set<string>();
-  private aliases = new Map<string, string>();
+  private aliases = new Map<string, { key: string; operation?: OperationCard }>();
+  private tail?: string;
   private nextKey = 0;
+  get hasConnectionOutcome(): boolean { return this.pending.some(entry => entry.connectionLost); }
 
   begin(id: string, text: string, status: SteeringStatus = 'sending', images?: ImageContent[], mode: SubmissionMode = 'steer'): void {
     this.pending.push({ key: `steering:${id}`, submissionId: id, text, status, images,
@@ -39,10 +42,27 @@ export class SteeringTranscript {
     });
   }
 
-  receipt(id: string, outcome: SubmissionOutcome): void {
+  /** Returns whether the existing card owns this result (and its error details). */
+  receipt(id: string, outcome: SubmissionOutcome, details?: string): boolean {
     const index = this.pending.findIndex(item => item.submissionId === id);
-    if (index < 0) return;
-    this.pending[index].status = outcome === 'accepted' ? 'pending' : outcome === 'rejected' || outcome === 'cancelled' ? outcome : 'unknown';
+    if (index < 0) return false;
+    if (outcome === 'cancelled') { this.pending.splice(index, 1); return true; }
+    const entry = this.pending[index];
+    // A late enqueue acknowledgement cannot revive a terminal/uncertain card.
+    // Only an actual user event can establish delivery after uncertainty.
+    if (outcome === 'accepted' && entry.anchored) return true;
+    entry.status = outcome === 'accepted' ? 'pending' : outcome === 'rejected' ? 'rejected' : 'unknown';
+    if (details) entry.details = details;
+    if (outcome !== 'accepted') this.settle(entry);
+    return true;
+  }
+
+  private settle(entry: PendingSteering): void {
+    if (entry.anchored) return;
+    entry.anchor = this.tail; entry.anchored = true;
+  }
+  private adopt(entry: PendingSteering, key: string): void {
+    this.aliases.set(key, { key: entry.key, operation: operation(entry, 'succeeded') });
   }
 
   /** Explicit live Pi correlation; content may have been normalized by the harness. */
@@ -50,14 +70,19 @@ export class SteeringTranscript {
     const index = this.pending.findIndex(item => item.submissionId === id && eligible(item) && !!item.images?.length);
     if (index < 0) return;
     const [entry] = this.pending.splice(index, 1);
-    this.aliases.set(userKey, entry.key);
+    this.adopt(entry, userKey);
     this.seen.add(userKey);
   }
 
   disconnect(): void {
     for (const entry of this.pending) {
-      if (entry.status === 'sending') entry.status = 'unknown';
-      else if (entry.status === 'pending') entry.status = 'interrupted';
+      if (entry.status === 'unknown' || entry.status === 'interrupted') entry.connectionLost = true;
+      if (entry.status === 'sending' || entry.status === 'pending') {
+        entry.connectionLost = true;
+        entry.status = entry.status === 'sending' ? 'unknown' : 'interrupted';
+        entry.details ||= 'The connection ended before Pi confirmed delivery. Nothing was replayed.';
+        this.settle(entry);
+      }
     }
   }
 
@@ -71,6 +96,7 @@ export class SteeringTranscript {
 
   /** Apply every ordered snapshot, even when DOM painting is coalesced into one frame. */
   snapshot(messages: SteeringMessage[], steering?: string[], followUp?: string[]): void {
+    this.tail = messages.at(-1)?.key;
     for (const message of messages) {
       if (!message.key || this.seen.has(message.key)) continue;
       this.seen.add(message.key);
@@ -82,7 +108,7 @@ export class SteeringTranscript {
       const entry = candidates.find(item => item.kind === 'steering') ?? candidates[0];
       if (!entry) continue;
       this.pending.splice(this.pending.indexOf(entry), 1);
-      this.aliases.set(message.key, entry.key);
+      this.adopt(entry, message.key);
     }
     for (const [kind, texts] of [['steering', steering], ['followUp', followUp]] as const) {
       if (!texts) continue;
@@ -101,16 +127,38 @@ export class SteeringTranscript {
   }
 
   project<T extends SteeringMessage>(messages: T[]): Array<T | SteeringMessage> {
-    return [
-      ...messages.map(message => this.aliases.has(message.key || '')
-        ? { ...message, key: this.aliases.get(message.key!) } : message),
-      ...this.pending.map(entry => ({ key: entry.key, role: 'user', content: entry.images?.length ? [{ type: 'text', text: entry.text }, ...entry.images] : entry.text, steeringStatus: entry.status,
-        ...(entry.kind === 'followUp' ? { queued: true, sticky: entry.status === 'sending' || entry.status === 'pending' } : entry.steering ? { steering: true } : {}),
-      })),
-    ];
+    const keys = new Set(messages.map(message => message.key));
+    const settled = new Map<string | undefined, SteeringMessage[]>(), pending: SteeringMessage[] = [];
+    for (const entry of this.pending) {
+      const card = operation(entry);
+      const row: SteeringMessage = { key: entry.key, role: 'user',
+        content: entry.images?.length ? [{ type: 'text', text: entry.text }, ...entry.images] : entry.text,
+        steeringStatus: entry.status, operation: card,
+        ...(entry.kind === 'followUp' ? { queued: true } : entry.steering ? { steering: true } : {}),
+        sticky: card?.state === 'pending',
+      };
+      if (!entry.anchored) { pending.push(row); continue; }
+      if (entry.anchor !== undefined && !keys.has(entry.anchor)) entry.anchor = messages.at(-1)?.key;
+      const rows = settled.get(entry.anchor) || []; rows.push(row); settled.set(entry.anchor, rows);
+    }
+    const result: Array<T | SteeringMessage> = [...(settled.get(undefined) || [])];
+    settled.delete(undefined);
+    for (const message of messages) {
+      const alias = this.aliases.get(message.key || '');
+      result.push(alias ? { ...message, ...alias } : message);
+      if (settled.has(message.key)) { result.push(...settled.get(message.key)!); settled.delete(message.key); }
+    }
+    return [...result, ...pending];
   }
 }
 
+function operation(entry: PendingSteering, state?: OperationCard['state']): OperationCard | undefined {
+  const pending = entry.status === 'sending' || entry.status === 'pending';
+  if (entry.kind !== 'followUp' && !entry.steering && (pending || state === 'succeeded')) return undefined;
+  return { title: entry.kind === 'followUp' ? 'Queued' : entry.steering ? 'Steering' : 'Message',
+    state: state ?? (pending ? 'pending' : entry.status === 'rejected' ? 'failed' : entry.status === 'cancelled' ? 'not-applied' : 'unknown'),
+    details: state === 'succeeded' ? undefined : entry.details };
+}
 function eligible(entry: PendingSteering): boolean {
   return entry.status !== 'rejected' && entry.status !== 'cancelled';
 }

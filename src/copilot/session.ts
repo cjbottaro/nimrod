@@ -1,4 +1,4 @@
-import { CopilotConnection, record, type BridgeRequest } from './connection';
+import { CopilotConnection, CopilotResponseError, record, type BridgeRequest } from './connection';
 import { immutableSnapshot } from '../pi/immutable-snapshot';
 import type { DisplayMessage } from '../conversation-model';
 import type { ConversationViewMessage, ConversationViewState } from '../conversation-view-host';
@@ -77,7 +77,7 @@ export class CopilotSession {
       return send(message);
     }, packet => this.packet(packet), reason => {
       this.capture('bridge.disconnected', { reason });
-      this.ended = true; this.cancelDecisions(); this.commandOperation?.abort(); this.configuration?.dispose(); this.usage?.dispose(); this.finish();
+      this.ended = true; this.cancelDecisions(); this.commandOperation?.abort(); this.configuration?.dispose(reason); this.usage?.dispose(); this.finish();
       this.state = { ...this.state, sessionUnavailable: true, busy: false, status: 'Disconnected' };
       this.publish(); ui.disconnected(reason);
     });
@@ -89,7 +89,7 @@ export class CopilotSession {
       mode: () => this.mode, contextTier: () => this.contextTier,
       contextLimit: (model, tier) => this.contextLimits.get(`${model}:${tier}`),
       availability: () => this.ended || this.state.sessionUnavailable ? 'unavailable' : this.canSubmit ? 'ready' : 'deferred',
-      apply: (setting, value, current) => this.applyPreference(setting, value, current), changed: () => this.publish([]),
+      apply: (setting, value, current, dispatched) => this.applyPreference(setting, value, current, dispatched), changed: () => this.publish([]),
       error: message => this.ui.notice(`Configuration change failed: ${message}`),
     });
     this.usage = new CopilotUsageController(() => this.connection.request('usage', {}, 'reject'), () => this.publish([]),
@@ -275,7 +275,7 @@ export class CopilotSession {
       return options[labels.indexOf(selected || '')]?.value;
     });
   }
-  private async applyPreference(setting: string, value: string, current: () => boolean): Promise<void> {
+  private async applyPreference(setting: string, value: string, current: () => boolean, dispatched: () => void): Promise<void> {
     if (this.ended || this.state.sessionUnavailable) throw new Error('Copilot configuration is unavailable.');
     if (!this.canSubmit) throw new ConfigurationDeferred();
     if (!['model', 'effort', 'mode', 'context-tier'].includes(setting)) throw new Error('This Copilot setting is unsupported.');
@@ -286,10 +286,13 @@ export class CopilotSession {
     this.usage.clearContext(); this.publish([]);
     try {
       const version = this.configurationVersion;
+      dispatched();
       const result = await this.connection.request('configure', { setting, value });
       if (version === this.configurationVersion) this.applyConfigurationSnapshot(result);
     } catch (error) {
-      this.disconnect(`Copilot configuration was not confirmed: ${String(error)}. Reconnect explicitly to read the authoritative configuration.`);
+      const reason = `Copilot configuration was not confirmed: ${String(error)}. Reconnect explicitly to read the authoritative configuration.`;
+      this.configuration.dispose(reason, error instanceof CopilotResponseError ? 'failed' : undefined);
+      this.disconnect(reason);
       throw error;
     } finally {
       this.configuring = false;

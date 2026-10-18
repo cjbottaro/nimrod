@@ -12,6 +12,7 @@ const pending = (operation: ConfigurationOperation) => operation.phase === 'queu
 export class ConfigurationTranscript {
   private source?: readonly ConfigurationOperation[];
   private entries = new Map<string, Entry>();
+  get hasConnectionOutcome(): boolean { return this.source?.some(operation => operation.cause === 'connection') === true; }
   sync(operations: readonly ConfigurationOperation[] | undefined, messages: () => RenderMessage[]): { structural: boolean; rows: RenderMessage[] } {
     if (this.source === operations) return { structural: false, rows: [] };
     this.source = operations;
@@ -24,7 +25,10 @@ export class ConfigurationTranscript {
       if (before?.operation === operation) continue;
       const sticky = pending(operation);
       if (!before || before.row.sticky !== sticky) structural = true;
-      const row: RenderMessage = { key: operation.key, role: 'configuration', configurationOperation: operation, sticky };
+      const row: RenderMessage = { key: operation.key, role: 'configuration', configurationOperation: operation, sticky,
+        operation: { title: 'Configuration change', state: sticky ? 'pending' : operation.phase === 'completed' ? 'succeeded'
+          : operation.phase === 'failed' ? 'failed' : operation.phase === 'unknown' ? 'unknown' : 'not-applied',
+          details: operation.details, cancelId: operation.cancellable ? operation.key : undefined } };
       let anchor = before?.anchor;
       if (!sticky && (!before || before.row.sticky)) {
         // Observe the terminal boundary synchronously, not at the next (possibly

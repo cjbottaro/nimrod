@@ -18,27 +18,23 @@ Background subagent activity alone does not enable follow-up queueing. Composer 
 
 Ordinary messages appear in the transcript immediately, without waiting for Pi and without a sending/pending label. Image messages appear after their local image preparation finishes. Pi’s actual user message reconciles in place, without a duplicate turn. Reconciliation does not steal focus, change a newer draft or repeat submission navigation. By default, idle Send jumps to the bottom and enables auto-follow; busy steering and queued follow-ups preserve reading position. Configure **Auto-follow after sending** in [Settings → Appearance](settings.md#appearance). Send also immediately moves the session to the top of All/Working and scrolls that session list to the top; it does not wait for image preparation or Pi's response. Unread keeps its arrival order and list position.
 
-Rejected local turns remain marked **Not sent**; cancelled ones show **Cancelled**, and uncertain ones show **Acceptance unknown**. An acknowledged message disconnected before its actual user event shows **Delivery unconfirmed**. Previews are not saved as conversation history, and nothing retries automatically.
+Rejected local turns show a red **Failed** outcome with error details when available. Unconfirmed delivery shows grey **Outcome unknown** with optional details. Ordinary failed/uncertain previews use a **MESSAGE** title. Confirmed user cancellation removes the preview. Previews are not saved as conversation history, and nothing retries automatically.
 
 Slash commands do not create literal previews because Pi may handle them as controls or expand their content.
 
 ### Steering messages
 
-A steer immediately appears at the bottom of the transcript after live output, with a **STEERING** status. The status stays visible until Pi adds the actual user message to the transcript, then disappears as the turn reconciles in place without a duplicate. There are no intermediate sending/accepted/consumed labels. Steering turns are never sticky. Visible or acknowledged does not mean the agent has consumed it.
+A steer immediately appears as a **STEERING** [operation card](reading-conversations.md#operation-cards), pinned in the shared bottom stack with a shimmering title. It stays pending through acknowledgement and queue removal until Pi adds the actual user message. That event adopts the same card at Pi's transcript position, stops shimmering and unpins it. The **STEERING** title remains, without a redundant success label.
 
-The Status area shows the authoritative steering and queued follow-up counts; message text appears in the transcript.
-
-Rejected local steering turns remain marked **Not sent**; the error also appears in that session's notices above the transcript pane. Uncertain previews remain labeled **Acceptance unknown**. An acknowledged steer disconnected before confirmed consumption shows **Delivery unconfirmed**. Nothing retries automatically.
+The Status area shows authoritative steering and queued counts; message text stays in the transcript. Visible or acknowledged does not mean consumed.
 
 ### Queued messages
 
-Queued follow-ups appear as normal user turns pinned to the bottom of the transcript pane, even while you read older history. They use the same styling and spacing as other user turns, with no queue separator. New assistant/tool output continues above them. Multiple queued turns stack in order; a long stack scrolls independently.
+Follow-ups use the same pattern with a stable **QUEUED** title. Both kinds remain visible while you read older history; a long stack scrolls independently, with ordinary user-turn styling and no queue separator. New assistant/tool entries appear above pending cards.
 
-Their status is simply **QUEUED** throughout the wait. They stay pinned until Pi consumes them as actual user turns, then lose the status and stickiness in place, without a duplicate. Accepting a message into Pi’s queue is not the same as consuming it.
+Titles use the normal UI font, uppercase with spaced letters, in every state. Only pending titles shimmer; reduced motion keeps them static and readable. Failed cards unpin with a red accent, **Failed** and optional **Error details**. Unconfirmed delivery unpins with grey **Outcome unknown** and optional **Details**. Diagnostics appear on the card, not as a duplicate session banner. Newer drafts remain unchanged.
 
-**STEERING** and **QUEUED** use the usual UI font in uppercase with spaced-out letters, without trailing dots, and have a subtle highlight that sweeps across the text from left to right. With reduced motion enabled, the labels remain static. Outcome/error labels do not animate.
-
-Rejected, cancelled or uncertain queued sends become non-sticky turns with the same outcome labels as other sends. Disconnect also unpins them with an **Acceptance unknown** or **Delivery unconfirmed** label. Nothing retries automatically, and newer drafts remain unchanged.
+Individual steering/queued cards do not offer Cancel because Pi does not expose targeted queue withdrawal. Nimrod never clears and replays other queued messages to emulate it. The whole-queue Stop/recovery workflow below remains separate. Runtime operation titles are not saved into Pi's history.
 
 ## Stop and recover
 

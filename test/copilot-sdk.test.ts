@@ -36,6 +36,26 @@ async function fixture(events: unknown[] = [], decision: CopilotSessionUi['decis
   return { session, sent, published, completed, captured, last, reply, event };
 }
 
+for (const rejected of [false, true]) test(`configuration ${rejected ? 'error response is failed' : 'connection loss is unknown'} after dispatch`, async () => {
+  const f = await fixture();
+  try {
+    const choices = await f.session.configuration.choices('model');
+    f.session.configuration.set('model', choices.find(choice => choice.value === 'large')!);
+    await flush();
+    const request = f.last('configure');
+    assert.equal(f.session.configuration.operations[0].cancellable, false);
+    if (rejected) f.session.receive({ kind: 'result', id: request.id, error: 'Fixture configuration rejected' });
+    else f.session.disconnect('Fixture transport lost');
+    await flush();
+    const operation = f.session.configuration.operations[0];
+    assert.equal(operation.phase, rejected ? 'failed' : 'unknown');
+    assert.equal(operation.title, 'Configuration change');
+    assert.equal(operation.cause, 'connection');
+    assert.match(operation.details!, rejected ? /Fixture configuration rejected/ : /Fixture transport lost/);
+    assert.equal(f.sent.filter(request => request.method === 'configure').length, 1);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
 test('SDK replay is read-only and final content wins over buffered deltas', async () => {
   const f = await fixture([
     { id: 'u', type: 'user.message', data: { content: 'Saved question' } },
@@ -496,7 +516,7 @@ test('SDK disconnect cancels queued configuration and never replays it on a new 
   const f = await fixture(); f.event('assistant.turn_start', {});
   await f.session.selectPreference('model', async values => values[1]);
   f.session.disconnect('fixture disconnected');
-  assert.equal(f.session.configuration.operations[0].phase, 'cancelled');
+  assert.equal(f.session.configuration.operations[0].phase, 'not-applied');
   assert.equal(f.sent.some(request => request.method === 'configure'), false);
   const replacement = await fixture();
   assert.deepEqual(replacement.session.configuration.operations, []);

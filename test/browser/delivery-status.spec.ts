@@ -114,7 +114,7 @@ test('immediately acknowledged steering shimmers until the authoritative user ev
     const label = turn.locator('.delivery-status-shimmer');
     await expect(label).toHaveText('Steering');
     await expectHeaderTypography(label);
-    await expect(turn).not.toHaveClass(/sticky-turn/);
+    await expect(turn).toHaveClass(/sticky-turn/);
     await label.evaluate(node => { (node as HTMLElement).dataset.testIdentity = 'same-steering-label'; });
     await prompt.fill('Newer draft');
     await page.evaluate(() => {
@@ -130,7 +130,7 @@ test('immediately acknowledged steering shimmers until the authoritative user ev
       const channel = Object.values((window as unknown as { __fixtureChannels: Record<string, { onmessage(packet: unknown): void }> }).__fixtureChannels)[0];
       channel.onmessage({ kind: 'rpc', value: { type: 'message_end', message: { role: 'user', timestamp: 123457, content: 'Change course' } } });
     });
-    await expect(turn.locator('.steering-status')).toHaveCount(0);
+    await expect(turn.locator('.delivery-status-shimmer')).toHaveCount(0);
     await expect(turn).toHaveAttribute('data-test-identity', 'same-steering-turn');
     await expect(turn).toHaveCount(1);
     await expect(prompt).toHaveValue('Newer draft'); await expect(prompt).toBeFocused();

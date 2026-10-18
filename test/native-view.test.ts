@@ -217,7 +217,7 @@ test('hidden ordered queue consumption adopts the existing pending article despi
     assert.ok(pending.closest('.queued-turns'), 'hidden DOM is untouched');
     f.view.setActive(true);
     assert.equal(f.win.document.querySelector('#messages > .user'), pending);
-    assert.equal(pending.querySelector('.steering-status'), null);
+    assert.equal(pending.querySelector('.delivery-status-shimmer'), null);
     assert.equal(f.win.document.querySelectorAll('#messages .user').length, 2);
     assert.equal(f.prompt.value, 'New draft');
     assert.equal(f.sent.filter(message => message.type === 'prompt').length, 1);
@@ -711,6 +711,48 @@ for (const eventFirst of [false, true]) test(`idle send previews immediately and
   } finally { f.dom.window.close(); }
 });
 
+for (const queued of [false, true]) for (const outcome of ['accepted', 'rejected', 'unknown', 'cancelled'] as const) {
+  test(`${queued ? 'Queued' : 'Steering'} operation cards retain titles, settle in place and own diagnostics: ${outcome}`, () => {
+    const notices: string[] = [];
+    const f = fixture({ reportNotice: notice => notices.push(notice.message) });
+    try {
+      f.snapshot({ busy: true, messages: [] });
+      f.draft('Operation content');
+      if (queued) f.prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true, cancelable: true }));
+      else f.send();
+      f.flush();
+      const submission = f.sent.find(message => message.type === 'prompt')!;
+      const article = f.win.document.querySelector<HTMLElement>('.queued-turns .user')!;
+      const title = article.querySelector('.delivery-status-text');
+      assert.equal(title?.textContent, queued ? 'Queued' : 'Steering');
+      assert.equal(article.querySelector('.operation-cancel'), null, 'Pi does not offer targeted queue cancellation');
+      f.draft('Preserve draft'); f.view.setActive(false);
+      f.receive({ type: 'submissionReceipt', id: submission.id, outcome, error: outcome === 'rejected' || outcome === 'unknown' ? '<literal diagnostics>\nFull detail' : undefined });
+      const actual = { key: 'actual', role: 'user', content: 'Operation content' };
+      const future = { key: 'future', role: 'assistant', content: 'New output' };
+      f.snapshot({ busy: true, messages: outcome === 'accepted' ? [actual, future] : [future] });
+      f.view.setActive(true); f.flush();
+      if (outcome === 'cancelled') assert.equal(article.isConnected, false);
+      else {
+        assert.equal(f.win.document.querySelector('#messages > .user'), article);
+        assert.equal(article.querySelector('.delivery-status-text'), title);
+        assert.equal(article.querySelector('.delivery-status-shimmer'), null);
+        assert.equal(article.nextElementSibling?.getAttribute('data-key'), 'future');
+        assert.equal(article.dataset.operationState, outcome === 'accepted' ? 'succeeded' : outcome === 'rejected' ? 'failed' : 'unknown');
+        if (outcome !== 'accepted') {
+          const details = article.querySelector('details')!; details.open = true;
+          assert.equal(details.querySelector('pre')?.textContent, '<literal diagnostics>\nFull detail');
+          f.snapshot({ busy: true, messages: [future] });
+          assert.equal(article.querySelector('details'), details); assert.equal(details.open, true);
+        }
+      }
+      assert.deepEqual(notices, []);
+      assert.equal(f.prompt.value, 'Preserve draft');
+      assert.equal(f.sent.filter(message => message.type === 'prompt').length, 1);
+    } finally { f.dom.window.close(); }
+  });
+}
+
 test('steering appears before acknowledgement, remains after live output, and reconciles in place', () => {
   const f = fixture();
   try {
@@ -736,13 +778,13 @@ test('steering appears before acknowledgement, remains after live output, and re
     assert.equal(f.prompt.value, 'new draft');
     assert.equal(pending.querySelector('.delivery-status-shimmer'), label, 'acceptance does not settle steering');
     f.snapshot({ busy: true, messages: [assistant, { key: 'tool', role: 'tool', toolCallId: 't', toolName: 'bash', toolStatus: 'running' }], queue: { authoritative: true, steering: [], followUp: [] } });
-    assert.equal(f.win.document.querySelector('#messages')!.lastElementChild?.previousElementSibling, pending);
+    assert.equal(f.win.document.querySelector('.queued-turns')!.firstElementChild, pending);
     assert.equal(pending.querySelector('.delivery-status-shimmer'), label, 'dequeue does not settle steering');
-    assert.equal(pending.closest('.queued-turns'), null);
+    assert.ok(pending.closest('.queued-turns'));
     f.snapshot({ busy: true, messages: [assistant, { key: 'user', role: 'user', content: [{ type: 'text', text: submission.text }] }] });
     assert.equal(f.win.document.querySelector('#messages .user'), pending);
-    assert.equal(pending.querySelector('.steering-status'), null);
-    assert.equal(pending.getAttribute('aria-label'), 'User message');
+    assert.equal(pending.querySelector('.delivery-status-shimmer'), null);
+    assert.equal(pending.getAttribute('aria-label'), 'Steering: Succeeded');
     assert.equal(f.win.document.querySelectorAll('#messages .user').length, 2);
     assert.equal(f.win.document.activeElement, f.prompt);
   } finally { f.dom.window.close(); }
@@ -764,7 +806,7 @@ for (const eventFirst of [false, true]) test(`steering status is removed only by
       assert.equal(turn.querySelector('.delivery-status-shimmer')?.textContent, 'Steering');
       f.snapshot({ busy: true, messages: [actual] });
     }
-    assert.equal(turn.querySelector('.steering-status'), null);
+    assert.equal(turn.querySelector('.delivery-status-shimmer'), null);
     assert.equal(f.win.document.querySelector('#messages .user'), turn);
     assert.equal(f.prompt.value, 'newer draft');
   } finally { f.dom.window.close(); }
@@ -787,24 +829,24 @@ test('steering status shimmers after local image preparation through acceptance 
     f.receive({ type: 'submissionReceipt', id: submission.id, outcome: 'accepted' }); f.flush();
     assert.equal(turn.querySelector('.delivery-status-shimmer'), label);
     f.snapshot({ busy: true, messages: [{ key: 'actual-image-steer', role: 'user', content: [{ type: 'text', text: 'caption' }, ...(submission.images as object[])] }] });
-    assert.equal(turn.querySelector('.steering-status'), null);
+    assert.equal(turn.querySelector('.delivery-status-shimmer'), null);
     assert.equal(f.win.document.querySelector('#messages .user'), turn);
   } finally { f.dom.window.close(); }
 });
 
-test('authoritative steering queue entries shimmer until consumed, without becoming sticky', () => {
+test('authoritative steering queue entries shimmer until consumed, in the shared pinned stack', () => {
   const f = fixture();
   try {
     f.snapshot({ busy: true, messages: [], queue: { authoritative: true, steering: ['queued steer'], followUp: [] } });
     const turn = f.win.document.querySelector('#messages .user')!;
     const label = turn.querySelector('.delivery-status-shimmer');
     assert.equal(label?.textContent, 'Steering');
-    assert.equal(turn.closest('.queued-turns'), null);
+    assert.ok(turn.closest('.queued-turns'));
     f.snapshot({ busy: true, messages: [], queue: { authoritative: true, steering: [], followUp: [] } });
     assert.equal(turn.querySelector('.delivery-status-shimmer'), label);
     f.snapshot({ busy: true, messages: [{ key: 'actual', role: 'user', content: 'queued steer' }] });
     assert.equal(f.win.document.querySelector('#messages .user'), turn);
-    assert.equal(turn.querySelector('.steering-status'), null);
+    assert.equal(turn.querySelector('.delivery-status-shimmer'), null);
   } finally { f.dom.window.close(); }
 });
 
@@ -833,8 +875,8 @@ for (const busy of [false, true]) for (const outcome of ['rejected', 'unknown'] 
     f.draft('uncertain steer'); f.send();
     const submission = f.sent.find(m => m.type === 'prompt')!;
     f.receive({ type: 'submissionReceipt', id: submission.id, outcome }); f.flush();
-    if (outcome === 'unknown') assert.match(f.win.document.querySelector('#messages .user')!.textContent!, /Acceptance unknown/);
-    else assert.match(f.win.document.querySelector('#messages .user')!.textContent!, /Not sent/);
+    if (outcome === 'unknown') assert.match(f.win.document.querySelector('#messages .user')!.textContent!, /Outcome unknown/);
+    else assert.match(f.win.document.querySelector('#messages .user')!.textContent!, /Failed/);
     assert.equal(f.win.document.querySelector('.delivery-status-shimmer'), null, 'errors do not animate');
     assert.equal(f.prompt.value, '');
     assert.equal(f.win.document.querySelector('[data-recovery-id]'), null);
@@ -866,14 +908,15 @@ test('follow-ups stay pinned through acceptance and dequeue, then reconcile in p
     f.snapshot({ busy: true, messages: [{ key: 'actual', role: 'user', content: 'Later' }] });
     assert.equal(f.win.document.querySelector('#messages .user'), pending);
     assert.equal(pending.parentElement?.id, 'messages');
-    assert.equal(pending.querySelector('.steering-status'), null);
+    assert.equal(pending.querySelector('.delivery-status-shimmer'), null);
+    assert.equal(pending.querySelector('.delivery-status-text')?.textContent, 'Queued');
     f.draft('/name renamed'); f.send(); f.flush();
     assert.equal(f.win.document.querySelectorAll('#messages .user').length, 1);
   } finally { f.dom.window.close(); }
 });
 
 
-for (const hidden of [false, true]) for (const outcome of ['rejected', 'unknown', 'cancelled', 'disconnected'] as const) test(`queued ${outcome} becomes an ordinary transcript turn without losing identity (hidden: ${hidden})`, () => {
+for (const hidden of [false, true]) for (const outcome of ['rejected', 'unknown', 'disconnected'] as const) test(`queued ${outcome} becomes an ordinary transcript turn without losing identity (hidden: ${hidden})`, () => {
   const f = fixture();
   try {
     f.snapshot({ busy: true, messages: [] });
@@ -896,7 +939,7 @@ for (const hidden of [false, true]) test(`queued recovery handles coalesced remo
   const f = fixture();
   try {
     f.snapshot({ busy: true, messages: [], queue: { authoritative: true, steering: ['same'], followUp: ['same', 'same'] } });
-    assert.equal(f.win.document.querySelectorAll('.queued-turns .user').length, 2);
+    assert.equal(f.win.document.querySelectorAll('.queued-turns .user').length, 3);
     if (hidden) f.view.setActive(false);
     f.receive({ type: 'snapshot', state: { busy: true, messages: [], queue: { authoritative: true, steering: ['same'], followUp: [] } } });
     f.receive({ type: 'queueRecovery', steering: [], followUp: ['same', 'same'] }); f.flush();
@@ -982,7 +1025,8 @@ for (const eventFirst of [false, true]) for (const queuedFallback of [false, tru
     assert.equal(f.win.document.querySelector('#messages .user'), preview);
     assert.equal(f.win.document.querySelectorAll('#messages .transcript-image img').length, 1);
     assert.equal(preview.closest('.queued-turns'), null);
-    assert.equal(preview.querySelector('.steering-status'), null);
+    assert.equal(preview.querySelector('.delivery-status-shimmer'), null);
+    assert.equal(preview.querySelector('.delivery-status-text')?.textContent, queuedFallback ? 'Queued' : undefined);
     assert.match(preview.textContent!, /Pi normalization hint/);
     f.snapshot({ busy: true, messages: [actual, { key: 'assistant', role: 'assistant', content: 'Continuing work' }] });
     assert.equal(f.win.document.querySelectorAll('#messages .transcript-image img').length, 1);
@@ -1067,7 +1111,7 @@ for (const outcome of ['rejected', 'unknown'] as const) test(`image send ${outco
     assert.equal(f.win.document.querySelector('.image-recovery'), null);
     assert.equal(f.win.document.querySelector('[data-recovery-id]'), null);
     assert.equal(f.prompt.value, '');
-    assert.match(f.win.document.querySelector('#submission-notice')!.textContent!, outcome === 'unknown' ? /did not confirm/ : /Fixture error/);
+    assert.match(f.win.document.querySelector('.operation-diagnostics')!.textContent!, /Fixture error/);
     assert.equal(f.win.document.querySelector("[data-action='dismiss-unknown']"), null);
     assert.equal(f.win.document.querySelectorAll('.composer-attachments img').length, 0);
     f.send(); assert.equal(f.sent.filter(message => message.type === 'prompt').length, 1);

@@ -187,7 +187,7 @@ test('busy SDK configuration updates one queued transcript row and applies at id
     await selectModel('Fixture large');
     const row = page.locator('.session-view:not([hidden]) .message.configuration');
     await expect(row).toHaveCount(1);
-    await expect(row.locator('.delivery-status-shimmer')).toHaveText('Model change queued');
+    await expect(row.locator('.delivery-status-shimmer')).toHaveText('Configuration change');
     await row.evaluate(node => { node.setAttribute('data-fixture-identity', 'configuration'); });
     await row.locator('.delivery-status-text').evaluate(node => { node.setAttribute('data-fixture-title', 'retained'); });
     await expect(page.locator(visible('model'))).toHaveText('small');
@@ -212,6 +212,35 @@ test('busy SDK configuration updates one queued transcript row and applies at id
   } finally { await demo.close(); }
 });
 
+test('queued configuration cancellation removes intent and restores focus without dispatching it', async ({ page }) => {
+  const demo = await demoFixture(page);
+  try {
+    await page.keyboard.press('Meta+Shift+P');
+    await page.locator('#palette-input').fill('New Copilot session'); await page.locator('#palette-input').press('Enter');
+    await expect(page.locator(visible('model'))).toHaveText('small');
+    const prompt = page.locator(visible('prompt'));
+    for (const content of ['First fixture turn', 'Second fixture turn']) {
+      await prompt.fill(content); await prompt.press('Enter');
+      await page.locator('#command-palette').getByRole('option', { name: 'Allow once', exact: true }).click();
+      if (content.startsWith('First')) await expect(page.locator(visible('send'))).toHaveAttribute('aria-label', 'Send message');
+    }
+    await expect(page.locator(visible('send'))).toHaveAttribute('aria-label', 'Stop Copilot');
+    await prompt.fill('Keep newer draft');
+    await page.locator(visible('model')).click();
+    await page.locator('#palette-input').fill('Fixture large'); await page.locator('#palette-input').press('Enter');
+    const row = page.locator('.session-view:not([hidden]) .message.configuration');
+    await expect(row.locator('.delivery-status-shimmer')).toHaveText('Configuration change');
+    await row.getByRole('button', { name: 'Cancel configuration change', exact: true }).click();
+    await expect(row).toHaveCount(0); await expect(prompt).toBeFocused();
+    await expect(prompt).toHaveValue('Keep newer draft');
+    await page.locator(visible('send')).click();
+    await expect(page.locator(visible('send'))).toHaveAttribute('aria-label', 'Send message');
+    expect(demo.calls.filter(call => call.command === 'write_copilot' && (call.args.message as { method?: string }).method === 'configure')).toHaveLength(0);
+    await expect(page.locator(visible('model'))).toHaveText('small');
+    expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
 test('SDK configuration accepted before the first prompt stays at the start as conversation arrives', async ({ page }) => {
   const demo = await demoFixture(page);
   try {
@@ -224,7 +253,7 @@ test('SDK configuration accepted before the first prompt stays at the start as c
     const messages = page.locator(visible('messages'));
     const row = messages.locator('.message.configuration');
     await expect(row).toHaveCount(1);
-    await expect(row.locator('.delivery-status-text')).toHaveText('Configuration changed');
+    await expect(row.locator('.delivery-status-text')).toHaveText('Configuration change');
     await expect(row.locator('.delivery-status-shimmer')).toHaveCount(0);
     await row.evaluate(node => { node.setAttribute('data-fixture-identity', 'accepted-before-first-prompt'); });
     const prompt = page.locator(visible('prompt'));

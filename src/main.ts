@@ -888,6 +888,10 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
         return;
       }
       if (tab.closing || tab.restarting) return;
+      if (message.type === 'cancelOperation') {
+        if (typeof message.id === 'string') cancelConfiguration(tab, message.id);
+        return;
+      }
       if (message.type === 'selectControl') {
         const action = sessionActions(tab).find(candidate => candidate.id === message.id);
         if (action) void runSessionAction(tab, action.id);
@@ -995,10 +999,17 @@ async function withTabDialog<T>(tab: Tab, action: (title: string) => Promise<T>,
 }
 function sessionCommands(tab: Tab) {
   return sessionActions(tab).filter(action => ACTIONS.some(registered => registered.id === action.id))
-    .map(action => ({ ...action, next: true, run: () => runSessionAction(tab, action.id) }));
+    .map(action => ({ ...action, next: action.id !== 'cancel-configuration', run: () => runSessionAction(tab, action.id) }));
+}
+function cancelConfiguration(tab: Tab, key?: string): void {
+  if (!tabs.includes(tab) || tab.ended || tab.closing || tab.restarting || tab.deleting || deletion.blocked(tab.file?.path)) return;
+  const configuration = sessionConfiguration(tab);
+  const target = key ?? configuration?.operations.find(operation => operation.cancellable)?.key;
+  if (target) configuration?.cancel?.(target);
 }
 async function runSessionAction(tab: Tab, id: SessionAction['id']): Promise<void> {
   if (!tabs.includes(tab) || tab.closing || tab.restarting || tab.deleting || !ACTIONS.some(action => action.id === id) || !sessionActions(tab).some(action => action.id === id)) return;
+  if (id === 'cancel-configuration') return cancelConfiguration(tab);
   if (id === 'mcp') return inspectMcp(tab);
   if (id === 'acp-options') return pickAcpOption(tab);
   return pickPreference(tab, id as 'model' | 'thinking' | 'mode' | 'context-window');
@@ -1260,7 +1271,7 @@ async function launchCopilot(tab: Tab, acceptedAction = false): Promise<void> {
     disconnected: message => {
       if (!valid()) return;
       tab.ended = true; tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' });
-      if (!tab.closing && !tab.deleting) showNotice(tab, `${message}. Your draft and any saved identity remain. Nothing was replayed or replaced by a new session.`, !!tab.lifecycle.identity);
+      if (!tab.closing && !tab.deleting && !tab.view.hasConnectionOutcome?.()) showNotice(tab, `${message}. Your draft and any saved identity remain. Nothing was replayed or replaced by a new session.`, !!tab.lifecycle.identity);
       void tab.lifecycle.stop().catch(error => { if (valid()) showNotice(tab, `Could not stop Copilot: ${String(error)}`, !!tab.lifecycle.identity); });
       updateTab(tab);
     },
@@ -1323,7 +1334,7 @@ async function launchAcp(tab: Tab, acceptedAction = false): Promise<void> {
     disconnected: message => {
       if (!valid()) return;
       tab.ended = true; tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' });
-      if (!tab.closing && !tab.deleting) showNotice(tab, `${message}. Nothing was retried. Create a new ACP session explicitly.`);
+      if (!tab.closing && !tab.deleting && !tab.view.hasConnectionOutcome?.()) showNotice(tab, `${message}. Nothing was retried. Create a new ACP session explicitly.`);
       void tab.lifecycle.stop().catch(error => { if (valid()) showNotice(tab, `Could not stop ACP agent: ${error}`, !!tab.lifecycle.identity); });
       updateTab(tab);
     },
@@ -1393,7 +1404,7 @@ async function launchPi(tab: Tab, copyDraft?: string, acceptedAction = false, in
       if (!currentToken()) return;
       tab.ended = true; tab.cancelPreference?.(); tab.cancelInspector?.(); tab.receive?.({ type: 'sessionDisconnected' }); dialogs.cancel(token);
       void tab.lifecycle.stop().catch(e => { if (currentToken()) showNotice(tab, `Could not stop Pi: ${e}`); });
-      if (!tab.closing && !tab.restarting && !tab.deleting) showNotice(tab, `${reason || 'Session disconnected'}. Nothing will be sent automatically.`, !!tab.file?.exists);
+      if (!tab.closing && !tab.restarting && !tab.deleting && !tab.view.hasConnectionOutcome?.()) showNotice(tab, `${reason || 'Session disconnected'}. Nothing will be sent automatically.`, !!tab.file?.exists);
       updateTab(tab); controls();
     },
     identity: async (file, id) => {
@@ -1703,7 +1714,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
     if (!ready) return false;
     if (id === 'new-copilot') return copilotReady;
     if (id === 'capture-performance') return preferences.performanceEnabled() && !settingsSurface.capturingPerformance;
-    if (['mcp', 'model', 'thinking', 'mode', 'context-window'].includes(id)) return !!presented && sessionActions(presented).some(action => action.id === id);
+    if (['mcp', 'model', 'thinking', 'mode', 'context-window', 'cancel-configuration'].includes(id)) return !!presented && sessionActions(presented).some(action => action.id === id);
     return true;
   },
   run: (id: ActionId) => {
@@ -1717,7 +1728,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'capture-performance': return capturePerformance(true);
       case 'reload-card-plugins': return reloadCardPlugins(true);
       case 'select-theme': return pickTheme();
-      case 'mcp': case 'model': case 'thinking': case 'mode': case 'context-window': return presented ? runSessionAction(presented, id) : undefined;
+      case 'mcp': case 'model': case 'thinking': case 'mode': case 'context-window': case 'cancel-configuration': return presented ? runSessionAction(presented, id) : undefined;
       case 'palette': palette.open(); return;
       case 'close': return presented ? closeTab(presented) : undefined;
       case 'sidebar': required<HTMLButtonElement>('toggle-sidebar').click(); return;

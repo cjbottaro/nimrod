@@ -30,7 +30,7 @@ export function createPiConfiguration(model: ModelThinkingController, host: {
       if (desired.model && desired.model !== identity(model.current.model)) throw new Error('Wait for the pending model change before choosing Pi thinking levels for that model.');
       return (await model.availableThinkingLevels()).map(value => ({ value, label: value }));
     },
-    apply: async (setting, value, current) => {
+    apply: async (setting, value, current, dispatched) => {
       if (availability() === 'deferred') throw new ConfigurationDeferred();
       if (availability() !== 'ready') throw new Error('Pi configuration is unavailable.');
       if (setting === 'model') {
@@ -41,8 +41,8 @@ export function createPiConfiguration(model: ModelThinkingController, host: {
         await model.setConfiguration('model', selected, () => {
           if (!host.scoped([selected]).length) throw new Error('This model is no longer in Pi’s scope.');
           return current();
-        });
-      } else if (setting === 'effort') await model.setConfiguration('thinking', value, current);
+        }, dispatched);
+      } else if (setting === 'effort') await model.setConfiguration('thinking', value, current, dispatched);
       else throw new Error('This Pi setting is unsupported.');
     },
   }, host.changed, host.error);

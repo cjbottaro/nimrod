@@ -3,11 +3,11 @@ import test from 'node:test';
 import { ConfigurationTranscript } from '../src/configuration-transcript';
 import type { RenderMessage } from '../src/conversation-view-host';
 
-const operation = { key: 'configuration:fixture', phase: 'queued' as const, title: 'Model change queued', text: 'Model: b' };
+const operation = { key: 'configuration:fixture', phase: 'queued' as const, title: 'Configuration change', text: 'Model: b' };
 const message = (key: string): RenderMessage => ({ key, role: 'assistant', content: key });
 const noHistory = (): never => assert.fail('unchanged or pending operations must not read history');
 
-for (const phase of ['completed', 'failed', 'cancelled'] as const) {
+for (const phase of ['completed', 'failed', 'unknown', 'not-applied'] as const) {
   test(`${phase} configuration in an empty transcript stays before future messages and pending work`, () => {
     const transcript = new ConfigurationTranscript();
     transcript.sync([operation], noHistory);

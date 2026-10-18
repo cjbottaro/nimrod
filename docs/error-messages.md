@@ -7,8 +7,8 @@ resolution still need refinement; native macOS and Linux acceptance is unverifie
 
 Errors belonging to a session appear at the top of its **conversation area**, above
 and outside the scrolling transcript, aligned with the transcript's side gutters.
-These include connection/startup failures, sending or pasting images, clipboard
-actions, Pi notices and model/thinking changes. A failed model/thinking picker
+These include startup/connection failures without an owning operation card, image
+preparation/paste, clipboard actions, Pi notices and model/thinking picker failures. A failed model/thinking picker
 returns to the conversation to show its error.
 
 Only the selected session's notices are visible. Another open session can record
@@ -22,6 +22,19 @@ Session notices are not conversation entries and do not become Pi history. Actua
 agent/provider/tool failures supplied as conversation output remain in the
 transcript or their tool card. The **Status area** continues to show activity,
 model/thinking, usage and queues—not arbitrary error messages.
+
+## Operation-card outcomes
+
+An existing [operation card](reading-conversations.md#operation-cards) owns its
+operation's result instead of adding a duplicate banner. Failed operations show
+a red accent, **Failed**, and an **Error details** disclosure when diagnostics
+exist. Uncertain outcomes and known non-execution use muted grey accents with
+**Outcome unknown** or **Not applied**, and optional **Details**.
+
+Configuration changes, steering/queued messages and failed message previews use
+this presentation. The same disconnect is not repeated in a banner when pending
+cards already explain its effect; independent session problems still use notices.
+These are local presentation records, not extra messages sent to the agent.
 
 ## Pending permissions
 

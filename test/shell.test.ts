@@ -3925,7 +3925,9 @@ test('model apply failure after picker acceptance remains session-local and pres
     f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await f.tick(); await f.tick();
     assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
-    assert.match(f.element('session-notices').textContent!, /Fixture model change rejected/);
+    assert.match(f.element('messages').querySelector('.operation-diagnostics')!.textContent!, /Fixture model change rejected/);
+    assert.equal(f.element('messages').querySelector<HTMLElement>('.configuration')!.dataset.operationState, 'failed');
+    assert.equal(f.element('session-notices').hidden, true);
     assert.equal(f.element('application-notices').hidden, true);
     assert.equal(prompt.value, 'Keep draft'); assert.equal(f.win.document.activeElement, prompt);
     assert.equal(f.calls.filter(call => (call.args.message as JsonRecord)?.type === 'set_model').length, 1);

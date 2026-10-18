@@ -233,9 +233,9 @@ export class PiSession {
       // Model disconnection publishes synchronously. Mark availability first so
       // that intermediate control snapshots cannot resolve a connection notice.
       this.state = { ...this.state, sessionUnavailable: true, extensionStatuses: {}, extensionWidgets: {} };
+      this.configuration.dispose(errorText(event.error || 'Pi disconnected'));
       this.ui.disconnected?.(errorText(event.error || 'Pi disconnected'));
       this.stats.dispose();
-      this.configuration.dispose();
       this.model.disconnect();
     }
     if (event.type === 'extension_error') this.notice(`Extension error: ${errorText(event.error)}`);

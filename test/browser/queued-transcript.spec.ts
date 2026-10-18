@@ -109,7 +109,7 @@ for (const readingHistory of [false, true]) test(`queued turns pin and reconcile
     });
     await expect(messages.locator('.queued-turns .message')).toHaveCount(1);
     await expect(first).toHaveAttribute('data-test-identity', 'queued-first');
-    await expect(first.locator('.steering-status')).toHaveCount(0);
+    await expect(first.locator('.delivery-status-shimmer')).toHaveCount(0);
     await expect(first).not.toHaveClass(/sticky-turn/);
     await expect(second).toHaveClass(/sticky-turn/);
     await expect(prompt).toHaveValue('Newer draft'); await expect(prompt).toBeFocused();

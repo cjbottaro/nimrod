@@ -1,6 +1,6 @@
 # Operation cards
 
-**Status: approved specification; migration in progress.** This reference owns the shared presentation pattern. Concrete features own execution, completion, cancellation and persistence. It is not a universal harness protocol. Human guide: [Reading conversations](../../../../docs/reading-conversations.md#operation-cards).
+**Status: configuration, Pi steering/queued and failed-send preview migration source-implemented; new/updated fixtures unrun.** This reference owns the shared presentation pattern. Concrete features own execution, completion, cancellation and persistence. It is not a universal harness protocol. Human guide: [Reading conversations](../../../../docs/reading-conversations.md#operation-cards).
 
 ## Structure and typography
 
@@ -59,8 +59,10 @@ Expose operation state accessibly, independent of colour/animation. Reduced moti
 
 ## Implementation and verification targets
 
+Code: `src/operation-card.ts` owns the shared mounted header/footer; `conversation-view.ts` integrates content, scrolling, focus and card-owned receipt errors; `configuration-transcript.ts` / `pi/steering-transcript.ts` project concrete lifecycle/placement. `session-configuration.ts` and concrete adapters own cancellation/dispatch tracking. `main.ts`, `session-backend.ts` and `keybindings.ts` route the card and palette's owner-bound cancellation action. `ConversationView.hasConnectionOutcome` is only a notice-deduplication query, not a delivery/connection state source.
+
 Share the mounted title/outcome/details/cancel presentation across consumers; keep lifecycle decisions in their concrete controllers/projectors. Same-key progress patches exact dirty rows without lazy history reads; insertion/unpin/removal uses existing structural reconciliation. Ordered lifecycle observation must precede the hidden/coalesced paint gate.
 
 Required fixture coverage: pending-to-success identity and placement, empty-history and hidden/coalesced settlement, red failures, grey uncertainty/non-execution, full diagnostics and retained disclosure, safe cancellation/removal/focus and dispatch races, unchanged drafts and independent reader intent, no duplicate banners, reduced motion and shared stack geometry. Pi cases retain receipt-before/event-before acknowledgement, duplicates, normalized images, queue recovery, no replay and authoritative message content.
 
-Migration fixtures will be authored without running them unless requested. The mandatory post-merge compile check is not behavioral/native acceptance. Native macOS visual/focus/scroll acceptance and Linux/possible Windows verification remain pending. Requested layout validation uses `mise run test` and `npm run test:browser`; builds and live harness work require separate authorization.
+Authored coverage: `test/operation-card.test.ts`, configuration/controller/projector, Pi configuration, shared/native view, steering projector and existing offline Copilot/steering/queued/delivery-status browser fixtures, plus `test/browser/operation-cards.spec.ts` for retained title typography, reduced motion and themed outcome accents. Shell configuration-error coverage expects card details instead of duplicate notices; keybinding defaults include the unbound cancellation action. Migration tests are unrun; no app was launched. Ordinary idle previews retain no pending title; their failed/unknown receipts use MESSAGE cards instead of duplicate banners. The mandatory post-merge compile check is not behavioral/native acceptance. Native macOS visual/focus/scroll acceptance and Linux/possible Windows verification remain pending. Requested layout validation uses `mise run test` and `npm run test:browser`; builds and live harness work require separate authorization.

@@ -38,8 +38,16 @@ button { color:var(--nimrod-button-foreground, var(--vscode-button-foreground));
 .transcript-image img { display:block; max-width:100%; max-height:360px; width:auto; height:auto; border-radius:6px; }
 .steering-status { font-size:.78em; color:var(--vscode-descriptionForeground); margin-bottom:6px; }
 .configuration-text { white-space:pre-wrap; overflow-wrap:anywhere; }
-.delivery-status-text { display:inline-block; font:inherit; }
-.delivery-status-shimmer { text-transform:uppercase; letter-spacing:.05em; }
+.delivery-status-text { display:inline-block; font:inherit; font-weight:normal; text-transform:uppercase; letter-spacing:.05em; }
+.operation-header { display:flex; align-items:baseline; gap:12px; margin-bottom:6px; }
+.operation-header > .steering-status { margin-bottom:0; }
+.operation-cancel { margin-left:auto; padding:0 4px; color:var(--vscode-descriptionForeground); background:transparent; font:inherit; font-size:.78em; }
+.operation-cancel:hover { color:var(--vscode-foreground); background:var(--vscode-toolbar-hoverBackground); }
+.message.operation-card[data-operation-state="failed"] { border-left-color:var(--vscode-errorForeground); }
+.message.operation-card:is([data-operation-state="unknown"], [data-operation-state="not-applied"]) { border-left-color:var(--vscode-descriptionForeground); }
+.operation-outcome { margin-top:6px; font-size:.85em; color:var(--vscode-descriptionForeground); }
+.operation-details > summary { cursor:pointer; font-size:.85em; }
+.operation-diagnostics { white-space:pre-wrap; overflow-wrap:anywhere; }
 @supports (background-clip: text) or (-webkit-background-clip: text) {
   .delivery-status-shimmer { color:transparent; background:linear-gradient(90deg, var(--vscode-descriptionForeground) 35%, var(--vscode-foreground) 50%, var(--vscode-descriptionForeground) 65%); background-size:300% 100%; background-clip:text; -webkit-background-clip:text; animation:delivery-status-shimmer 2.4s linear infinite; }
 }
