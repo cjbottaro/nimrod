@@ -79,7 +79,7 @@ function createModalMotion(document: Document) {
   function mount(source: HTMLElement, kind: 'enter' | 'exit') {
     const node = document.createElement('div');
     node.dataset.modalMotion = kind; node.setAttribute('aria-hidden', 'true'); node.inert = true;
-    node.style.cssText = 'position:fixed;inset:0;margin:0;padding:0;border:0;width:100vw;height:100vh;max-width:none;max-height:none;background:transparent;overflow:visible;pointer-events:none;z-index:2147483647;';
+    node.style.cssText = 'position:fixed;inset:0;margin:0;padding:0;border:0;width:auto;height:auto;max-width:none;max-height:none;background:transparent;overflow:visible;pointer-events:none;z-index:2147483647;';
     document.body.append(node);
     // A manual popover is non-modal: no focus transfer or inerting of the page.
     // This does not require CSS overlay-retention/discrete-transition support.
