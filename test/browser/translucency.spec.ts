@@ -185,11 +185,16 @@ test('an uncommitted drag updates project windows and native Settings close rest
       for (const opacity of [45, 20, 10]) { input.value = String(opacity); input.dispatchEvent(new Event('input', { bubbles: true })); }
     });
     await expect(page.locator('html')).toHaveCSS('--nimrod-background-opacity', '10%');
+    await settings.locator('#background-blur').evaluate((input: HTMLInputElement) => {
+      input.value = '7'; input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await expect.poll(() => fixture.calls.filter(call => call.command === 'apply_window_appearance').at(-1)?.args.blur).toBe(7);
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dracula');
     expect(fixture.settingsText()).toBe(before);
     expect(fixture.calls.filter(call => call.command === 'preferences_settings').length).toBe(writes);
     await settings.close();
     await expect(page.locator('html')).toHaveCSS('--nimrod-background-opacity', '65%');
+    await expect.poll(() => fixture.calls.filter(call => call.command === 'apply_window_appearance').at(-1)?.args.blur).toBe(20);
     expect(fixture.errors).toEqual([]);
   } finally { await fixture.close(); }
 });
@@ -206,7 +211,7 @@ test('whole-window and chrome-only tint synchronize without rebuilding the conve
     const writes = () => fixture.calls.filter(call => call.command === 'preferences_settings').length;
     const beforeWrites = writes();
     await expect(settings.locator('#settings-translucency')).toBeVisible();
-    await expect(settings.locator('#settings-frosted-background')).toBeVisible();
+    await expect(settings.locator('#settings-background-blur')).toBeVisible();
     await settings.locator('#background-opacity').evaluate((input: HTMLInputElement) => {
       input.value = '65'; input.dispatchEvent(new Event('input', { bubbles: true }));
     });
@@ -231,9 +236,9 @@ test('whole-window and chrome-only tint synchronize without rebuilding the conve
     await expect(prompt).toHaveValue('Keep this draft');
     expect(await page.evaluate(() => (window as Window & { __appearancePrompt?: Element }).__appearancePrompt === document.querySelector('.session-view:not([hidden]) [data-pi-id="prompt"]'))).toBe(true);
     const nativeEffects = fixture.calls.filter(call => call.command === 'apply_window_appearance');
-    expect(nativeEffects.some(call => call.args.frosted === true)).toBe(true);
-    await settings.locator('#frosted-background').uncheck();
-    await expect.poll(() => fixture.calls.filter(call => call.command === 'apply_window_appearance').at(-1)?.args.frosted).toBe(false);
+    expect(nativeEffects.some(call => Number(call.args.blur) > 0)).toBe(true);
+    await settings.locator('#background-blur').evaluate((input: HTMLInputElement) => { input.value = '0'; input.dispatchEvent(new Event('change', { bubbles: true })); });
+    await expect.poll(() => fixture.calls.filter(call => call.command === 'apply_window_appearance').at(-1)?.args.blur).toBe(0);
     await fixture.editPreferences('{}');
     await expect(page.locator('html')).toHaveAttribute('data-translucency', 'off');
     expect(fixture.errors).toEqual([]);

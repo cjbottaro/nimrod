@@ -9,64 +9,75 @@ pub struct SettingsWindow {
     projects: std::sync::Mutex<std::collections::HashSet<String>>,
     keybindings_requested: std::sync::Mutex<bool>,
     presentation: crate::window_presentation::PreparationGate,
-    opacity_preview: std::sync::Mutex<OpacityPreview>,
+    appearance_preview: std::sync::Mutex<AppearancePreview>,
 }
 
 #[derive(Clone, Default, serde::Serialize)]
-pub struct OpacityPreviewSnapshot {
+pub struct AppearancePreviewSnapshot {
     revision: u64,
     opacity: Option<u8>,
+    blur: Option<u8>,
 }
 #[derive(Default)]
-struct OpacityPreview {
+struct AppearancePreview {
     generation: Option<String>,
-    snapshot: OpacityPreviewSnapshot,
+    snapshot: AppearancePreviewSnapshot,
 }
-impl OpacityPreview {
-    fn update(&mut self, generation: &str, opacity: Option<u8>) -> Result<bool, String> {
+impl AppearancePreview {
+    fn update(
+        &mut self,
+        generation: &str,
+        opacity: Option<u8>,
+        blur: Option<u8>,
+    ) -> Result<bool, String> {
         if self.generation.as_deref() != Some(generation) {
-            return Err("Opacity preview belongs to a closed Settings window".into());
+            return Err("Appearance preview belongs to a closed Settings window".into());
         }
         if opacity.is_some_and(|value| value > 100) {
             return Err("Background opacity must be from 0 to 100".into());
         }
-        Ok(self.set(opacity))
+        if blur.is_some_and(|value| value > 40) {
+            return Err("Background blur must be from 0 to 40".into());
+        }
+        Ok(self.set(opacity, blur))
     }
-    fn set(&mut self, opacity: Option<u8>) -> bool {
-        if self.snapshot.opacity == opacity {
+    fn set(&mut self, opacity: Option<u8>, blur: Option<u8>) -> bool {
+        if self.snapshot.opacity == opacity && self.snapshot.blur == blur {
             return false;
         }
         self.snapshot.revision += 1;
         self.snapshot.opacity = opacity;
+        self.snapshot.blur = blur;
         true
     }
 }
 
 /// Paint-only state: never a settings-file write or a project/theme override.
 #[tauri::command]
-pub fn window_opacity_preview_snapshot(app: tauri::AppHandle) -> OpacityPreviewSnapshot {
+pub fn window_appearance_preview_snapshot(app: tauri::AppHandle) -> AppearancePreviewSnapshot {
     app.state::<SettingsWindow>()
-        .opacity_preview
+        .appearance_preview
         .lock()
         .unwrap()
         .snapshot
         .clone()
 }
 #[tauri::command]
-pub fn preview_window_opacity(
+pub fn preview_window_appearance(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     generation: String,
     opacity: Option<u8>,
-) -> Result<OpacityPreviewSnapshot, String> {
+    blur: Option<u8>,
+) -> Result<AppearancePreviewSnapshot, String> {
     use tauri::Emitter;
     if window.label() != LABEL {
-        return Err("Only global Settings can preview window opacity".into());
+        return Err("Only global Settings can preview window appearance".into());
     }
     let state = app.state::<SettingsWindow>();
-    let mut preview = state.opacity_preview.lock().unwrap();
-    if preview.update(&generation, opacity)? {
-        app.emit("nimrod-window-opacity-preview", &preview.snapshot)
+    let mut preview = state.appearance_preview.lock().unwrap();
+    if preview.update(&generation, opacity, blur)? {
+        app.emit("nimrod-window-appearance-preview", &preview.snapshot)
             .map_err(|error| error.to_string())?;
     }
     Ok(preview.snapshot.clone())
@@ -75,10 +86,10 @@ pub fn preview_window_opacity(
 pub fn destroyed(app: &tauri::AppHandle) {
     use tauri::Emitter;
     let state = app.state::<SettingsWindow>();
-    let mut preview = state.opacity_preview.lock().unwrap();
+    let mut preview = state.appearance_preview.lock().unwrap();
     preview.generation = None;
-    if preview.set(None) {
-        let _ = app.emit("nimrod-window-opacity-preview", &preview.snapshot);
+    if preview.set(None, None) {
+        let _ = app.emit("nimrod-window-appearance-preview", &preview.snapshot);
     }
 }
 
@@ -119,7 +130,7 @@ pub fn open(app: &tauri::AppHandle, category: Option<&str>) -> Result<(), String
     // A failed/closed earlier window must not leave a stale category request.
     *state.keybindings_requested.lock().unwrap() = category == "keybindings";
     let generation = state.presentation.begin();
-    state.opacity_preview.lock().unwrap().generation = Some(generation.clone());
+    state.appearance_preview.lock().unwrap().generation = Some(generation.clone());
     let builder = tauri::WebviewWindowBuilder::new(
         app,
         LABEL,
@@ -233,23 +244,31 @@ mod tests {
 
     #[test]
     fn preview_is_bounded_generation_owned_revisioned_and_cleared_on_close() {
-        let mut preview = OpacityPreview {
+        let mut preview = AppearancePreview {
             generation: Some("first".into()),
             ..Default::default()
         };
-        assert!(preview.update("old", Some(50)).is_err());
-        assert!(preview.update("first", Some(101)).is_err());
-        assert!(preview.update("first", Some(65)).unwrap());
+        assert!(preview.update("old", Some(50), None).is_err());
+        assert!(preview.update("first", Some(101), None).is_err());
+        assert!(preview.update("first", Some(65), None).unwrap());
         assert_eq!(preview.snapshot.opacity, Some(65));
         assert_eq!(preview.snapshot.revision, 1);
-        assert!(!preview.update("first", Some(65)).unwrap());
+        assert!(!preview.update("first", Some(65), None).unwrap());
         preview.generation = None;
-        assert!(preview.set(None));
+        assert!(preview.set(None, None));
         assert_eq!(preview.snapshot.revision, 2);
-        assert!(preview.update("first", Some(20)).is_err());
+        assert!(preview.update("first", Some(20), None).is_err());
         preview.generation = Some("second".into());
-        assert!(preview.update("first", Some(20)).is_err());
-        assert!(preview.update("second", Some(0)).unwrap());
+        assert!(preview.update("first", Some(20), None).is_err());
+        assert!(preview.update("second", Some(0), None).unwrap());
+        assert!(preview.update("second", None, Some(41)).is_err());
+        assert!(preview.update("second", Some(50), Some(12)).unwrap());
+        assert_eq!(preview.snapshot.blur, Some(12));
+        assert!(preview.update("second", None, Some(12)).unwrap());
+        assert_eq!(preview.snapshot.opacity, None);
+        assert_eq!(preview.snapshot.blur, Some(12)); // Clearing opacity preserves blur.
+        assert!(preview.set(None, None));
+        assert_eq!(preview.snapshot.blur, None);
     }
 
     #[test]

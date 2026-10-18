@@ -5,12 +5,13 @@ import { titlebarTint, windowSurfaceOpacities, type AppearanceCapabilities, type
 
 export interface AppearanceControls {
   opacity: HTMLInputElement; value: HTMLOutputElement; area: HTMLSelectElement;
-  frostGroup: HTMLElement; frosted: HTMLInputElement; hint: HTMLElement;
+  blurGroup: HTMLElement; blur: HTMLInputElement; blurValue: HTMLOutputElement; hint: HTMLElement;
 }
 export interface AppearanceHost extends NativeAppearanceHost {
   read(): WindowAppearance;
   save?(patch: Partial<WindowAppearance>): Promise<void>;
   previewOpacity?(opacity: number | null): Promise<void>;
+  previewBlur?(blur: number | null): Promise<void>;
   capabilities(): Promise<AppearanceCapabilities>;
 }
 
@@ -95,21 +96,23 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
       if (controls) {
         controls.opacity.value = String(value.opacity);
         controls.value.value = value.opacity === 100 ? '100% · Opaque' : `${value.opacity}%`;
-        controls.area.value = value.area; controls.frosted.checked = value.frosted;
+        controls.area.value = value.area; controls.blur.value = String(value.blur);
+        controls.blurValue.value = value.blur === 0 ? '0 · Off' : String(value.blur);
         controls.opacity.disabled = !capabilities?.transparency;
         controls.area.disabled = !capabilities?.transparency;
-        controls.frostGroup.hidden = !capabilities?.frost;
-        controls.frosted.disabled = !capabilities?.frost;
+        controls.blurGroup.hidden = !capabilities?.frost;
+        controls.blur.disabled = !capabilities?.frost;
         controls.hint.textContent = !capabilities ? 'Reading window appearance support…'
           : !capabilities.transparency ? 'Translucency is not available on this platform.'
           : reduceTransparency() ? 'Reduce Transparency is enabled by the system. Windows remain opaque; your preferences are retained.'
           : capabilities.platform === 'linux' ? 'Configure background blur in your desktop compositor. Support depends on your desktop setup.'
-          : 'Lower opacity reveals more of the desktop. Frosted background uses macOS blur; text stays crisp. At 100%, the background is opaque.';
+          : capabilities.frost ? 'Opacity controls the theme tint; blur independently softens the desktop behind the window. At 0 blur it stays sharp. At 100% opacity the background is opaque.'
+          : 'Opacity controls the theme tint. Adjustable background blur is unavailable on this macOS version; plain transparency is still available.';
       }
     }
-    const frosted = !!capabilities?.frost && !reduceTransparency() && value.opacity < 100 && value.frosted;
+    const blur = !!capabilities?.frost && !reduceTransparency() && value.opacity < 100 ? value.blur : 0;
     const tint = capabilities?.platform === 'macos' && host.tintTitlebar ? titlebarTint(background, enabled ? value.opacity : 100) : undefined;
-    effects.request({ material: capabilities?.frost ? { frosted, dark: theme.mode === null ? null : theme.mode === 'dark' } : undefined, tint });
+    effects.request({ material: capabilities?.platform === 'macos' ? { blur, dark: theme.mode === null ? null : theme.mode === 'dark' } : undefined, tint });
   }
   function refreshCapabilities(): Promise<void> {
     const generation = ++capabilityGeneration;
@@ -135,8 +138,9 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
     preview[key] = value;
     const version = (versions.get(key) ?? 0) + 1; versions.set(key, version);
     paint();
-    if (key === 'opacity' && host.previewOpacity) void host.previewOpacity(value as number).catch(error => {
-      if (!disposed) host.report(`Could not preview window opacity: ${String(error)}`, 'preview');
+    const publish = key === 'opacity' ? host.previewOpacity : key === 'blur' ? host.previewBlur : undefined;
+    if (publish) void publish(value as number).catch(error => {
+      if (!disposed) host.report(`Could not preview window ${key}: ${String(error)}`, 'preview');
     });
     if (!commit || !host.save) return;
     const patch: Partial<WindowAppearance> = {}; patch[key] = value;
@@ -149,19 +153,22 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
     });
   }
   function clearPreview(key: keyof WindowAppearance) {
-    if (key === 'opacity' && host.previewOpacity) void host.previewOpacity(null).catch(error => {
-      if (!disposed) host.report(`Could not finish window opacity preview: ${String(error)}`, 'preview');
+    const publish = key === 'opacity' ? host.previewOpacity : key === 'blur' ? host.previewBlur : undefined;
+    if (publish) void publish(null).catch(error => {
+      if (!disposed) host.report(`Could not finish window ${key} preview: ${String(error)}`, 'preview');
     });
   }
   const previewOpacity = () => edit('opacity', Number(controls!.opacity.value), false);
   const saveOpacity = () => edit('opacity', Number(controls!.opacity.value), true);
   const saveArea = () => edit('area', controls!.area.value as WindowAppearance['area'], true);
-  const saveFrost = () => edit('frosted', controls!.frosted.checked, true);
+  const previewBlur = () => edit('blur', Number(controls!.blur.value), false);
+  const saveBlur = () => edit('blur', Number(controls!.blur.value), true);
   const systemSchemeChanged = () => { if (theme.mode === null) readPalette(); paint(); };
   controls?.opacity.addEventListener('input', previewOpacity);
   controls?.opacity.addEventListener('change', saveOpacity);
   controls?.area.addEventListener('change', saveArea);
-  controls?.frosted.addEventListener('change', saveFrost);
+  controls?.blur.addEventListener('input', previewBlur);
+  controls?.blur.addEventListener('change', saveBlur);
   dark?.addEventListener('change', systemSchemeChanged); reduced?.addEventListener('change', paint);
   const unsubscribeTheme = subscribeAppliedTheme(root, next => { theme = next; readPalette(); paint(); });
   readPalette(); paint(); void refreshCapabilities();
@@ -181,7 +188,8 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
       controls?.opacity.removeEventListener('input', previewOpacity);
       controls?.opacity.removeEventListener('change', saveOpacity);
       controls?.area.removeEventListener('change', saveArea);
-      controls?.frosted.removeEventListener('change', saveFrost);
+      controls?.blur.removeEventListener('input', previewBlur);
+      controls?.blur.removeEventListener('change', saveBlur);
     },
   };
 }

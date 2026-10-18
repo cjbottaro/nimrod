@@ -1,29 +1,32 @@
 export interface WindowAppearance {
   opacity: number;
-  frosted: boolean;
+  blur: number;
   area: 'chrome' | 'window';
 }
 export interface AppearanceCapabilities {
   platform: string;
   transparency: boolean;
+  /** Compatibility field name: runtime support for independent native blur. */
   frost: boolean;
   reducedTransparency: boolean;
 }
-export const DEFAULT_WINDOW_APPEARANCE: WindowAppearance = { opacity: 100, frosted: true, area: 'window' };
+export const DEFAULT_WINDOW_APPEARANCE: WindowAppearance = { opacity: 100, blur: 20, area: 'window' };
 export const APPEARANCE_KEYS = {
-  opacity: 'appearance.backgroundOpacity', frosted: 'appearance.frostedBackground', area: 'appearance.translucencyArea',
+  opacity: 'appearance.backgroundOpacity', blur: 'appearance.backgroundBlur', area: 'appearance.translucencyArea',
 } as const;
 
 export function readWindowAppearance(settings: Record<string, unknown>): WindowAppearance {
   const opacity = settings[APPEARANCE_KEYS.opacity] ?? DEFAULT_WINDOW_APPEARANCE.opacity;
-  const frosted = settings[APPEARANCE_KEYS.frosted] ?? DEFAULT_WINDOW_APPEARANCE.frosted;
+  const legacyFrost = settings['appearance.frostedBackground'];
+  if (legacyFrost !== undefined && typeof legacyFrost !== 'boolean') throw new Error('appearance.frostedBackground must be a boolean.');
+  const blur = settings[APPEARANCE_KEYS.blur] ?? (legacyFrost === false ? 0 : DEFAULT_WINDOW_APPEARANCE.blur);
   const area = settings[APPEARANCE_KEYS.area] ?? DEFAULT_WINDOW_APPEARANCE.area;
   // Explicit nulls are invalid too; missing keys alone use defaults.
   for (const key of Object.values(APPEARANCE_KEYS)) if (settings[key] === null) throw new Error(`${key} cannot be null.`);
   if (typeof opacity !== 'number' || !Number.isInteger(opacity) || opacity < 0 || opacity > 100) throw new Error(`${APPEARANCE_KEYS.opacity} must be an integer from 0 to 100.`);
-  if (typeof frosted !== 'boolean') throw new Error(`${APPEARANCE_KEYS.frosted} must be a boolean.`);
+  if (typeof blur !== 'number' || !Number.isInteger(blur) || blur < 0 || blur > 40) throw new Error(`${APPEARANCE_KEYS.blur} must be an integer from 0 to 40.`);
   if (area !== 'chrome' && area !== 'window') throw new Error(`${APPEARANCE_KEYS.area} must be chrome or window.`);
-  return { opacity, frosted, area };
+  return { opacity, blur, area };
 }
 
 /** Preserve surface hierarchy and converge to the opaque palette, not a 99% style switch.

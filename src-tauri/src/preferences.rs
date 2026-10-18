@@ -190,6 +190,14 @@ pub(crate) fn validate(text: &str) -> Result<(), String> {
             return Err("appearance.backgroundOpacity must be an integer from 0 to 100".into());
         }
     }
+    if let Some(blur) = object.get("appearance.backgroundBlur") {
+        if !blur
+            .as_f64()
+            .is_some_and(|value| value.fract() == 0.0 && (0.0..=40.0).contains(&value))
+        {
+            return Err("appearance.backgroundBlur must be an integer from 0 to 40".into());
+        }
+    }
     if object
         .get("appearance.frostedBackground")
         .is_some_and(|value| !value.is_boolean())
@@ -658,6 +666,12 @@ mod tests {
         .unwrap();
         validate(r#"{"appearance.translucencyArea":"window"}"#).unwrap();
         assert!(validate(r#"{"appearance.frostedBackground":null}"#).is_err());
+        for blur in ["0", "20", "40"] {
+            validate(&format!(r#"{{"appearance.backgroundBlur":{blur}}}"#)).unwrap();
+        }
+        for blur in ["-1", "41", "1.5", "true", "null", r#""20""#] {
+            assert!(validate(&format!(r#"{{"appearance.backgroundBlur":{blur}}}"#)).is_err());
+        }
         assert!(validate(r#"{"appearance.translucencyArea":"sidebar"}"#).is_err());
     }
     #[test]
@@ -669,11 +683,17 @@ mod tests {
             assert!(validate(&format!(r#"{{"appearance.modalAnimation":{style}}}"#)).is_err());
         }
         for duration in ["0", "160", "2000", "160.0"] {
-            validate(&format!(r#"{{"appearance.modalAnimationDuration":{duration}}}"#)).unwrap();
+            validate(&format!(
+                r#"{{"appearance.modalAnimationDuration":{duration}}}"#
+            ))
+            .unwrap();
         }
         for duration in ["-1", "2001", "0.5", "null", "true", r#""160""#] {
             assert!(
-                validate(&format!(r#"{{"appearance.modalAnimationDuration":{duration}}}"#)).is_err()
+                validate(&format!(
+                    r#"{{"appearance.modalAnimationDuration":{duration}}}"#
+                ))
+                .is_err()
             );
         }
     }

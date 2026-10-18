@@ -97,6 +97,8 @@ enum EffectiveArea {
 struct Appearance {
     background_opacity: u8,
     frosted_background: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    background_blur: Option<u8>,
     area: Area,
     effective_area: EffectiveArea,
     effective_background_opacity: u8,
@@ -177,7 +179,9 @@ fn validate(report: &Report) -> Result<(), String> {
             || !finite(environment.device_pixel_ratio)
             || environment.device_pixel_ratio > 16.0
             || environment.appearance.as_ref().is_some_and(|appearance| {
-                appearance.background_opacity > 100 || appearance.effective_background_opacity > 100
+                appearance.background_opacity > 100
+                    || appearance.effective_background_opacity > 100
+                    || appearance.background_blur.is_some_and(|value| value > 40)
             })
         {
             return Err("Invalid performance environment".into());

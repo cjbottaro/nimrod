@@ -16,7 +16,16 @@ fn capabilities() -> Capabilities {
     Capabilities {
         platform: std::env::consts::OS,
         transparency: cfg!(any(target_os = "macos", target_os = "linux")),
-        frost: cfg!(target_os = "macos"),
+        frost: {
+            #[cfg(target_os = "macos")]
+            {
+                crate::macos_window_appearance::blur_supported()
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                false
+            }
+        },
         reduced_transparency,
     }
 }
@@ -54,20 +63,27 @@ pub async fn window_appearance_capabilities(
 #[tauri::command]
 pub async fn apply_window_appearance(
     window: tauri::WebviewWindow,
-    frosted: bool,
+    blur: u8,
     dark: Option<bool>,
 ) -> Result<Capabilities, String> {
+    if blur > 40 {
+        return Err("Background blur must be from 0 to 40".into());
+    }
     let target = window.clone();
     on_main_thread(&window, move || {
         let support = capabilities();
         #[cfg(target_os = "macos")]
         crate::macos_window_appearance::apply(
             &target,
-            frosted && !support.reduced_transparency,
+            if support.reduced_transparency {
+                0
+            } else {
+                blur
+            },
             dark,
         )?;
         #[cfg(not(target_os = "macos"))]
-        let _ = (target, frosted, dark);
+        let _ = (target, blur, dark);
         Ok(support)
     })
     .await
@@ -99,7 +115,10 @@ mod tests {
         assert!(source.contains("native.setAppearance(None)"));
         assert!(source.contains("native.setOpaque(false)"));
         assert!(source.contains("NSColor::clearColor()"));
-        assert!(source.contains("NSVisualEffectMaterial::Popover"));
+        assert!(source.contains("CGSSetWindowBackgroundBlurRadius"));
+        assert!(source.contains("CGSMainConnectionID"));
+        assert!(source.contains("fn blur_supported()"));
+        assert!(!source.contains("apply_vibrancy"));
         assert!(source.contains("standardWindowButton(NSWindowButton::CloseButton)"));
         assert!(source.contains("size.height <= 120.0"));
         assert!(source.contains("layer.setBackgroundColor"));
