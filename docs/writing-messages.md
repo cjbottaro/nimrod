@@ -4,6 +4,10 @@ Focus the **prompt field** in the composer, write a message and press Enter. Pi 
 
 The send/steer/queue and slash-control behavior below describes **Pi sessions**. [Copilot SDK slash commands](copilot.md#slash-commands) use Copilot's command API, discovered argument suggestions, harness-requested modal choices and labelled command output—not Nimrod action aliases. [ACP POC sessions](acp.md) accept text while idle, expose their own advertised commands and use Stop rather than Pi steering/queues.
 
+## Keyboard hint feedback
+
+Across harnesses, holding **Shift** while the prompt field is focused brightens the newline hint. Holding **Option** (macOS) or **Alt** (Linux) brightens a corresponding hint when the current harness offers one—for example, Pi's queue shortcut while working. Only the exact modifier combination matches; other hints stay muted. Release the modifier or leave the field/window to clear the emphasis. This changes only text color, without animation or layout movement; shortcut behavior is unchanged.
+
 ## Send, steer or queue
 
 | Key | Idle | Main agent working |

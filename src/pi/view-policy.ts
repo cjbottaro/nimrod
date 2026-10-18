@@ -1,7 +1,7 @@
 import type { ConversationInteraction, ConversationViewState } from '../conversation-view-host';
 import { presentActivity } from './activity-state';
 import { createPiStatusArea } from './status-area';
-import { keyboardHint, keyboardSubmissionMode } from './composer-dom';
+import { keyboardHints, keyboardSubmissionMode } from './composer-dom';
 import { renderSkillInvocation } from './skill-invocation';
 import { slashCommands } from './slash-completion';
 import type { PiViewState } from './view-state';
@@ -18,7 +18,7 @@ export const piInteraction: ConversationInteraction = {
   label: 'Pi',
   commands: slashCommands,
   keyboardMode: keyboardSubmissionMode,
-  composer: state => ({ hint: state.inputLocked ? 'Compacting context… · Stop to cancel' : keyboardHint(state.busy === true), stopLabel: state.inputLocked ? 'Cancel compaction' : 'Stop Pi' }),
+  composer: state => ({ hint: state.inputLocked ? 'Compacting context… · Stop to cancel' : keyboardHints(state.busy === true), stopLabel: state.inputLocked ? 'Cancel compaction' : 'Stop Pi' }),
   prepare(text, state) {
     const compact = /^\/compact(?:\s+([\s\S]*))?$/.exec(text);
     if (/^\/(?:resume|delete|new|fork|clone|tree|reload|quit)(?:\s|$)/.test(text)) return { kind: 'reject', error: 'Use the project session controls for session management. This slash operation is not supported; nothing was sent.' };

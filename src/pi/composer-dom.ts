@@ -1,3 +1,5 @@
+import { newlineHint, sendHint, type ComposerHint } from '../composer-hints';
+
 export interface PrimaryActionState {
   mainBusy: boolean;
   preparing: boolean;
@@ -22,9 +24,14 @@ export function keyboardSubmissionMode(event: ComposerKeyboardEvent, mainBusy: b
   return event.altKey ? "followUp" : "steer";
 }
 
+export function keyboardHints(mainBusy: boolean): readonly ComposerHint[] {
+  return mainBusy
+    ? [{ text: 'Enter to steer' }, { text: 'Option-Enter to queue', modifiers: ['alt'] }, newlineHint]
+    : [sendHint, newlineHint];
+}
+
 export function keyboardHint(mainBusy: boolean): string {
-  if (!mainBusy) return "Enter to send · Shift+Enter for newline";
-  return "Enter to steer · Option-Enter to queue · Shift+Enter for newline";
+  return keyboardHints(mainBusy).map(hint => hint.text).join(' · ');
 }
 
 /** Keep the primary composer affordance stable while its main-agent action changes. */

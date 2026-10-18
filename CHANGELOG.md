@@ -6,6 +6,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Added
 
+- Composer keyboard hints brighten while their exact modifier keys are held in the focused prompt field, with no animation or layout shift. Shared hint metadata supports all integrations without inventing unsupported shortcuts; focus loss, session switching and input locks clear the emphasis.
+
 - Copilot image paste, including image-only messages, shared thumbnails/drafts/auto-follow, in-place user-echo adoption and restored inline images. Model-advertised image support and limits are respected; busy sends keep the draft without inventing steering or queueing. Unavailable saved image bytes remain explicit. New offline fixtures are authored but unrun; installed-CLI and native macOS/Linux acceptance remain pending.
 
 - Session pinning keeps chosen sidebar rows above unpinned sessions, with saved open-session pins remembered per project. Pin/Close controls reveal on hover or keyboard focus; pinned rows keep their pin visible. Native right-click menus offer Pin/Unpin, Close and capability-aware Delete for the clicked session without selecting it; Delete moves out of the inline row controls. Pin/Unpin is also a bindable command-palette action. Pinning and startup restoration prefer the top of the sidebar, scrolling only enough from the top to fully reveal a deeper target; unpinning preserves normal reading-position anchoring, and hidden/filtered targets do not scroll. Native macOS/Linux acceptance is pending.

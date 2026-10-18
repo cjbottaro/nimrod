@@ -4,6 +4,7 @@ import type { SlashCommand } from './pi/slash-completion';
 import type { SteeringStatus } from './pi/steering-transcript';
 import type { ParallelToolCluster } from './pi/tool-progress';
 import type { StatusAreaSnapshot } from './status-area';
+import type { ComposerHints } from './composer-hints';
 
 export interface ConversationViewState {
   configurationOperations?: readonly import('./session-configuration').ConfigurationOperation[];
@@ -27,7 +28,8 @@ export interface ConversationInteraction {
   commands(raw: unknown): SlashCommand[];
   keyboardMode(event: ComposerKeyboardEvent, busy: boolean): KeyboardSubmissionMode | undefined;
   prepare(text: string, state: ConversationViewState): PreparedSubmission;
-  composer(state: ConversationViewState): { hint: string; stopLabel: string };
+  /** Structured hints opt into shared modifier feedback; strings are status-only. */
+  composer(state: ConversationViewState): { hint: ComposerHints; stopLabel: string };
   /** Optional harness-owned user-content presentation (e.g. Pi skill disclosures). */
   userText?(document: Document, text: string, key: string, expanded: Map<string, boolean>,
     markdown: (text: string) => HTMLElement, previous?: HTMLElement): HTMLElement | undefined;

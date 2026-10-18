@@ -5,6 +5,7 @@ import { buildSync } from 'esbuild';
 import { webviewHtml } from './view-fixture';
 import { createPiViewProjection, piInteraction } from '../src/pi/view-policy';
 import { acpInteraction } from '../src/acp/view-policy';
+import { copilotInteraction } from '../src/copilot/view-policy';
 import { sessionActions, type SessionBackend } from '../src/session-backend';
 import type { ConversationView, ConversationViewHost, ConversationViewMessage, ConversationViewState } from '../src/conversation-view-host';
 
@@ -62,7 +63,7 @@ test('session action contributions expose only the owning integration operations
   assert.deepEqual(sessionActions({ backend: acp }), []);
 });
 
-function fixture() {
+function fixture(interaction: ConversationViewHost['interaction'] = acpInteraction('Fixture', () => undefined)) {
   const dom = new JSDOM(webviewHtml(), { runScripts: 'outside-only', pretendToBeVisual: true });
   const win = dom.window;
   const frames = new Map<number, FrameRequestCallback>(); let frameId = 0;
@@ -71,7 +72,7 @@ function fixture() {
   let receive: (message: ConversationViewMessage) => void = () => {};
   const sent: Record<string, unknown>[] = [];
   const host: ConversationViewHost = {
-    interaction: acpInteraction('Fixture', () => undefined),
+    interaction,
     messageInput: { capabilities: () => ({}), submit: async message => { sent.push({ ...message, type: 'prompt' }); } },
     getState: () => undefined, setState() {}, postMessage: message => sent.push(message),
     onMessage: listener => { receive = listener; },
@@ -84,6 +85,41 @@ function fixture() {
   const view = (win as unknown as { testView: ConversationView }).testView;
   return { dom, win, sent, snapshot, receive, view, flush };
 }
+
+test('all integration policies use shared modifier hints without changing submission or draft state', () => {
+  for (const interaction of [piInteraction, copilotInteraction(() => undefined), acpInteraction('Fixture', () => undefined)]) {
+    const f = fixture(interaction);
+    try {
+      const prompt = f.win.document.querySelector<HTMLTextAreaElement>('#prompt')!;
+      const hint = f.win.document.querySelector<HTMLElement>('#keyboard-hint')!;
+      const key = (type: string, init: KeyboardEventInit) => prompt.dispatchEvent(new f.win.KeyboardEvent(type, { bubbles: true, ...init }));
+      const active = () => hint.querySelector('.composer-hint-active')?.textContent;
+      prompt.value = 'Retain this draft'; prompt.dispatchEvent(new f.win.Event('input'));
+      prompt.focus();
+      key('keydown', { key: 'Shift', shiftKey: true });
+      assert.equal(active(), 'Shift+Enter for newline', interaction.label);
+      f.snapshot({ messages: [], busy: true });
+      assert.equal(active(), 'Shift+Enter for newline', 'snapshot keeps the held modifier feedback');
+      key('keyup', { key: 'Shift' });
+      key('keydown', { key: 'Alt', altKey: true });
+      assert.equal(active(), interaction === piInteraction ? 'Option-Enter to queue' : undefined, 'never invent Pi queueing for another integration');
+      f.snapshot({ messages: [], busy: false });
+      assert.equal(active(), undefined, 'removed shortcuts cannot stay highlighted');
+      key('keydown', { key: 'Shift', shiftKey: true });
+      f.view.setActive(false);
+      assert.equal(active(), undefined);
+      f.view.setActive(true);
+      assert.equal(active(), undefined, 'session reveal cannot revive stale key state');
+      key('keydown', { key: 'Shift', shiftKey: true });
+      f.snapshot({ messages: [], inputLocked: true });
+      assert.equal(active(), undefined, 'compaction/input locks suppress feedback');
+      assert.equal(prompt.value, 'Retain this draft');
+      assert.equal(f.sent.some(message => message.type === 'prompt'), false);
+      f.view.dispose();
+      assert.equal(active(), undefined);
+    } finally { f.dom.window.close(); }
+  }
+});
 
 test('empty assistant envelopes stay mounted without visible markers through streaming and hidden catch-up', () => {
   const f = fixture();
