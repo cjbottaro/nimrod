@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import capturedPermissionCommand from './fixtures/copilot-permission-command.json' with { type: 'json' };
 import { CopilotSession, type CopilotSessionUi, type CopilotDecision } from '../src/copilot/session';
 import { CopilotConnection, type BridgeRequest } from '../src/copilot/connection';
 import { copilotSdkScope } from '../src/copilot/session-lifecycle';
@@ -56,23 +57,25 @@ for (const rejected of [false, true]) test(`configuration ${rejected ? 'error re
   } finally { f.session.disconnect('fixture complete'); }
 });
 
-const permissionCatalog = (allowDuringAgentExecution = true) => [{ name: 'permissions', aliases: ['perms'], kind: 'builtin', description: 'Permissions', allowDuringAgentExecution,
-  input: { hint: 'Permission operation', choices: [{ name: 'allow-any', description: 'Allow all' }] } }];
+const permissionCatalog = (allowDuringAgentExecution = true) => [{ ...capturedPermissionCommand, allowDuringAgentExecution }];
 
-for (const outcome of ['applied', 'rejected', 'stale'] as const) test(`live permission ${outcome} bypasses queued model configuration without answering old approvals`, async () => {
+for (const commandText of ['/permissions allow-all', '/perms allow-all'])
+for (const outcome of ['applied', 'rejected', 'stale'] as const) test(`live ${commandText} ${outcome} bypasses queued model configuration without answering old approvals`, async () => {
   let answer!: (value: CopilotDecision) => void;
   const f = await fixture([], () => new Promise(resolve => { answer = resolve; }));
   try {
-    f.session.receive({ kind: 'commands', commands: permissionCatalog() });
+    const commands = permissionCatalog();
+    // The capture uses /permissions; add an alias only for explicit alias coverage.
+    f.session.receive({ kind: 'commands', commands: commandText.startsWith('/perms ') ? commands.map(command => ({ ...command, aliases: ['perms'] })) : commands });
     f.event('assistant.turn_start', {});
     f.session.receive({ kind: 'permission', id: 'old-permission', request: { kind: 'read', path: '/fixture' } });
     const model = (await f.session.configuration.choices('model')).find(choice => choice.value === 'large')!;
     f.session.configuration.set('model', model); await flush();
-    assert.equal(f.session.validatePrompt('/perms allow-any'), undefined);
+    assert.equal(f.session.validatePrompt(commandText), undefined);
     assert.match(f.session.validatePrompt('ordinary new prompt')!, /not idle/);
-    await f.session.handle({ type: 'command', id: 'live-policy', text: '/perms allow-any' }); await flush();
+    await f.session.handle({ type: 'command', id: 'live-policy', text: commandText }); await flush();
     const request = f.last('permission-change');
-    assert.equal(request.value, 'allow-any');
+    assert.equal(request.value, 'allow-all');
     assert.equal(f.sent.some(request => ['configure', 'command', 'prompt', 'decision', 'cancel'].includes(request.method)), false);
     if (outcome === 'rejected') f.session.receive({ kind: 'result', id: request.id, error: 'Policy denied the change' });
     else {
@@ -97,7 +100,7 @@ test('permission configuration respects a harness that only allows the command a
   try {
     f.session.receive({ kind: 'commands', commands: permissionCatalog(false) });
     f.event('assistant.turn_start', {});
-    await f.session.handle({ type: 'command', id: 'queued-policy', text: '/permissions allow-any' }); await flush();
+    await f.session.handle({ type: 'command', id: 'queued-policy', text: '/permissions allow-all' }); await flush();
     assert.equal(f.session.configuration.operations[0].phase, 'queued');
     assert.equal(f.sent.some(request => request.method === 'permission-change'), false);
     f.event('session.idle', { mode: 'autopilot' }); await flush();

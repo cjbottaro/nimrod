@@ -51,7 +51,7 @@ test('live native permission command applies before old requests resolve and pre
     await f.request('initialize'); await f.request('connect');
     await f.request('prompt', { text: 'live permission change fixture' });
     const pending = await f.waitFor(packet => packet.kind === 'permission');
-    const result = await f.request('permission-change', { value: 'allow-any' });
+    const result = await f.request('permission-change', { value: 'allow-all' });
     assert.deepEqual(result, { outcome: 'applied', mode: 'allow-all' });
     assert.equal(f.packets.filter(packet => packet.kind === 'permission').length, 1);
     assert.equal(f.packets.some(packet => packet.kind === 'event' && packet.event.type === 'assistant.message'), false, 'old approval is still waiting');

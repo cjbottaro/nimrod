@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import permissionCommand from './copilot-permission-command.json' with { type: 'json' };
 export const RuntimeConnection = { forStdio: ({ path }) => ({ path }) };
 export class CopilotClient {
   constructor(options) {
@@ -63,8 +64,8 @@ class Session {
   permissionMode = 'manual';
   totalNanoAiu = 0;
   commandCatalog = [
-    { name: 'permissions', aliases: ['perms'], description: 'Manage permissions', kind: 'builtin', allowDuringAgentExecution: true,
-      input: { hint: 'Permission operation', choices: [{ name: 'show', description: 'Show permissions' }, { name: 'reset', description: 'Clear approvals' }, { name: 'allow-any', description: 'Allow all permissions for this session' }] } },
+    // Captured CLI metadata; the extra alias is synthetic alias-routing coverage.
+    { ...permissionCommand, aliases: ['perms'] },
     { name: 'discover-fixture', description: 'Add a new fixture command', kind: 'builtin', allowDuringAgentExecution: false },
   ];
   rpc = {
@@ -111,7 +112,7 @@ class Session {
       invoke: async ({ name, input }) => {
         // The CLI can own its picker even when SDK invocation defaults to text.
         if (name === 'permissions') {
-          if (input === 'allow-any') { this.permissionMode = 'allow-all'; this.emit('session.permissions_changed', { mode: 'allow-all' }); }
+          if (input === 'allow-all') { this.permissionMode = 'allow-all'; this.emit('session.permissions_changed', { mode: 'allow-all' }); }
           return { kind: 'text', text: `Fixture permission report: ${input ?? 'show'}`, markdown: false };
         }
         if (name === 'discover-fixture') {

@@ -29,7 +29,7 @@ for (const entry of ['composer', 'palette']) test(`live permission change via ${
       };
     });
     if (entry === 'composer') {
-      await prompt.fill('/permissions allow-any'); await prompt.press('Escape'); await prompt.press('Enter');
+      await prompt.fill('/permissions allow-all'); await prompt.press('Escape'); await prompt.press('Enter');
       await expect(prompt).toHaveValue('');
       await prompt.fill('Keep newer draft');
     } else {
@@ -59,6 +59,33 @@ for (const entry of ['composer', 'palette']) test(`live permission change via ${
     await expect(picker).toBeHidden(); await expect(banner).toBeHidden();
     await expect(prompt).toHaveValue('Keep newer draft');
     expect(demo.calls.filter(call => call.command === 'write_copilot' && (call.args.message as { method?: string }).method === 'permission-change')).toHaveLength(1);
+    expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
+test('screenshot regression: /permissions allow-all submits during streaming instead of hitting the idle-only guard', async ({ page }) => {
+  const demo = await demoFixture(page);
+  try {
+    await page.keyboard.press('Meta+Shift+P');
+    await page.locator('#palette-input').fill('New Copilot session'); await page.locator('#palette-input').press('Enter');
+    await expect(page.locator(visible('model'))).toHaveText('small');
+    const prompt = page.locator(visible('prompt'));
+    for (const text of ['First fixture turn', 'Second fixture turn']) {
+      await prompt.fill(text); await prompt.press('Enter');
+      await page.locator('#command-palette').getByRole('option', { name: 'Allow once', exact: true }).click();
+      if (text.startsWith('First')) await expect(page.locator(visible('send'))).toHaveAttribute('aria-label', 'Send message');
+    }
+    await expect(page.locator(visible('send'))).toHaveAttribute('aria-label', 'Stop Copilot');
+    await prompt.fill('/permissions allow-all'); await prompt.press('Escape'); await prompt.press('Enter');
+    await expect(prompt).toHaveValue('');
+    const row = page.locator(visible('messages')).locator('.message.configuration').filter({ hasText: 'Permission change' });
+    await expect(row).toHaveAttribute('data-operation-state', 'succeeded');
+    await expect(page.locator(visible('session-notices'))).not.toContainText('Copilot is not idle');
+    await expect(page.locator(visible('send'))).toHaveAttribute('aria-label', 'Stop Copilot');
+    const requests = demo.calls.filter(call => call.command === 'write_copilot').map(call => call.args.message as { method: string; value?: string });
+    expect(requests.filter(request => request.method === 'permission-change').map(request => request.value)).toEqual(['allow-all']);
+    expect(requests.filter(request => request.method === 'prompt')).toHaveLength(2);
+    expect(requests.some(request => request.method === 'cancel')).toBe(false);
     expect(demo.errors).toEqual([]);
   } finally { await demo.close(); }
 });

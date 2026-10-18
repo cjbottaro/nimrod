@@ -179,7 +179,7 @@ fn validate_message(value: &Value) -> Result<(), String> {
                         .chars()
                         .any(|c| c.is_whitespace() || c.is_control() || c == '/')
             }) && value.get("input").is_none_or(|input| input.is_string()) => {}
-        Some("permission-change") if value["value"].as_str() == Some("allow-any") => {}
+        Some("permission-change") if value["value"].as_str() == Some("allow-all") => {}
         Some("prompt") if value["text"].is_string() => {}
         Some("configure")
             if matches!(

@@ -83,7 +83,7 @@ acceptance after a requested build.
 ### Change permissions during work
 
 If you started a task before allowing its tools, you can submit
-`/permissions allow-any` while Copilot is working, or choose
+`/permissions allow-all` while Copilot is working, or choose
 **Select permissions… → Allow all** in the command palette. The action appears
 when your runtime advertises that permission operation. Advertised command-name
 aliases work too.
@@ -262,7 +262,7 @@ native verification.
 
 Generic commands run while idle and consume the submitted draft immediately, without a
 literal user-turn preview or forced transcript navigation. The advertised
-`/permissions allow-any` mutation is the [live configuration exception](#change-permissions-during-work), including when selected from the argument picker.
+`/permissions allow-all` mutation is the [live configuration exception](#change-permissions-during-work), including when selected from the argument picker.
 You can edit a newer
 draft while waiting, but another submission waits until the command interaction
 settles. Switching sessions, Stop or disconnect cancels pending choices; late

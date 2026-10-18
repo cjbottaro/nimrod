@@ -6,7 +6,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Added
 
-- Copilot **Select permissions… → Allow all** and `/permissions allow-any` use a live **PERMISSION CHANGE** operation card when the runtime advertises active-turn support. Permission policy applies independently of queued model changes without stopping/resending the task or answering older approvals; native policy controls subsequent requests. Independent configuration owners share the existing picker/cards so future integrations can contribute the same capability without backend-specific UI changes. Other permission commands remain idle-only; native acceptance is pending.
+- Copilot **Select permissions… → Allow all** and `/permissions allow-all` use a live **PERMISSION CHANGE** operation card when the runtime advertises active-turn support. Permission policy applies independently of queued model changes without stopping/resending the task or answering older approvals; native policy controls subsequent requests. Independent configuration owners share the existing picker/cards so future integrations can contribute the same capability without backend-specific UI changes. Other permission commands remain idle-only; native acceptance is pending.
 - Configurable modal motion in global Appearance: a restrained **Subtle** fade/lift/scale by default, a theme-accent **CRT power-on** line expanding vertically from the center, **None**, a remembered shared duration and preview dialog. Reduced-motion preferences disable it; input, focus and dialog settlement stay immediate. Animated exits depend on webview support.
 
 - Copilot plan review supports optional feedback and **Request changes**, returning revisions through the plan decision rather than sending another prompt or replacing the composer draft.
@@ -36,6 +36,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Copilot `/permissions allow-all` now enters the live permission-change path instead of reporting that Copilot must be idle. Command recognition, native admission and fixtures use the runtime's advertised `allow-all` spelling, correcting the earlier `allow-any` mismatch.
 - Accepted configuration cards stay in normal transcript flow instead of following new output at the bottom. Changes confirmed before the first message remain at the start; coalesced updates and background sessions preserve the confirmation-time position.
 - Copilot no longer offers or accepts session-wide shell/file-write approval when the runtime disallows it or omits its capability flag. Shell session choices use a concise label with parsed command context and exact approval scope in searchable secondary details, without implying arbitrary-argument access or broadening the returned identifiers.
 - Copilot context-window changes refresh usage after configuration settles rather than caching an intermediate budget under the new tier. Long context keeps the model’s advertised maximum in the picker, and pending-model details no longer reuse another model’s limits.

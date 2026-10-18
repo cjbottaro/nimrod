@@ -4,6 +4,8 @@ export interface PermissionCommand {
   allowDuringAgentExecution?: boolean;
   input?: { choices?: { name: string }[] };
 }
+export const permissionArgument: 'allow-all';
+export function advertisedPermissionCommand<T extends PermissionCommand>(commands: readonly T[]): T | undefined;
 export interface PermissionConfigurationSession {
   rpc: {
     permissions: { getMode(): Promise<{ mode: string }> };

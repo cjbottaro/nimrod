@@ -1,0 +1,15 @@
+{
+  "allowDuringAgentExecution": true,
+  "description": "Switch between permission modes",
+  "input": {
+    "choices": [
+      { "description": "Require approval for each request", "name": "default" },
+      { "description": "Auto-approve all permission requests", "name": "allow-all" },
+      { "description": "Show current permission status", "name": "show" }
+    ],
+    "hint": "[default|allow-all|show]"
+  },
+  "kind": "builtin",
+  "name": "permissions",
+  "schedulable": false
+}

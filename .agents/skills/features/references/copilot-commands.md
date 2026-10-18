@@ -20,7 +20,7 @@ This feature applies to **Copilot SDK sessions**. Pi's existing `/name`,
 separate Pi contract change. Generic ACP keeps advertised-only passthrough; the Copilot ACP integration has been removed.
 
 New commands using implemented metadata/result shapes work without command-name
-handlers. This is not universal CLI/TUI parity. Generic command workflows remain idle-only. The deliberate exception is advertised builtin `/permissions allow-any`: the [live permission configuration adapter](live-permissions.md) accepts it during work, honours `allowDuringAgentExecution`, and executes the exact native command through its own configuration owner. It neither sends a steering prompt nor invents a host permission policy.
+handlers. This is not universal CLI/TUI parity. Generic command workflows remain idle-only. The deliberate exception is advertised builtin `/permissions allow-all`: the [live permission configuration adapter](live-permissions.md) accepts it during work, honours `allowDuringAgentExecution`, and executes the exact native command through its own configuration owner. It neither sends a steering prompt nor invents a host permission policy.
 
 ## Discovery and autocomplete
 
@@ -67,7 +67,7 @@ handlers. This is not universal CLI/TUI parity. Generic command workflows remain
 | `set-model`, `set-plan-model` | Explicit unsupported notice, no approximation or fallback setter. The pinned release's invocation-effect finalizer is internal, not a public SDK consumer API. Existing Nimrod model controls still work independently. |
 | Unknown/malformed result or unknown mode | Session-owned error; no speculative prompt/action or automatic replay. Supported Interactive, Plan and Autopilot changes reconcile through the session mode configuration; unknown values disconnect before follow-on work. |
 
-Supported permission mutation uses one **PERMISSION CHANGE** operation card instead of a duplicate command-output row. Choosing `allow-any` in the existing argument/result-choice workflow converges on that same owner. Native policy confirmation, pending-callback retention and failure/uncertainty semantics are specified in [Live permissions](live-permissions.md).
+Supported permission mutation uses one **PERMISSION CHANGE** operation card instead of a duplicate command-output row. Choosing `allow-all` in the existing argument/result-choice workflow converges on that same owner. Native policy confirmation, pending-callback retention and failure/uncertainty semantics are specified in [Live permissions](live-permissions.md).
 
 Command-output rows are **connection-local presentation**, not invented persisted
 Copilot events. They survive switching within that connection, not Close/Resume.

@@ -8,7 +8,7 @@ import { createCopilotStatusArea } from './status-area';
 import { CopilotUsageController } from './usage';
 import { initialCopilotUsage, type CopilotUsageSeed } from './usage-seed';
 import { createCopilotConfiguration } from './session-configuration';
-import { createCopilotPermissionConfiguration, isPermissionChange, permissionCommand } from './permission-configuration';
+import { createCopilotPermissionConfiguration, isPermissionChange, permissionCommand, permissionArgument } from './permission-configuration';
 import { SessionConfigurationSet } from '../session-configuration-set';
 import { ConfigurationDeferred, ConfigurationSuperseded, ConfigurationUncertain, type SessionConfigurationController } from '../session-configuration';
 import { pickConfiguration } from '../configuration-picker';
@@ -120,7 +120,7 @@ export class CopilotSession {
   validatePrompt(text: string): string | undefined {
     if (isPermissionChange(this.commands, text)) {
       if (this.ended || this.state.sessionUnavailable) return 'Connect Copilot before changing permissions. Your draft was kept.';
-      if (!permissionCommand(this.commands)) return 'Copilot did not advertise /permissions allow-any. Nothing was invoked; your draft was kept.';
+      if (!permissionCommand(this.commands)) return 'Copilot did not advertise /permissions allow-all. Nothing was invoked; your draft was kept.';
       return;
     }
     if (!this.canSubmit) return 'Copilot is not idle or is still connecting. Your draft was kept.';
@@ -169,7 +169,9 @@ export class CopilotSession {
   private async acceptPermissionIntent(id: string): Promise<void> {
     try {
       const choices = await this.configuration.choices('permissions');
-      this.configuration.set('permissions', choices.find(choice => choice.value === 'allow-any')!);
+      const choice = choices.find(choice => choice.value === permissionArgument);
+      if (!choice) throw new Error('Copilot did not advertise a supported permission change.');
+      this.configuration.set('permissions', choice);
       // Local intent accepted; operation publications own authoritative completion.
       this.ui.publish({ type: 'submissionReceipt', id, outcome: 'accepted' });
     } catch (error) { this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', error: String(error) }); }

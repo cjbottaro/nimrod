@@ -268,7 +268,7 @@ selection approves:
   rejection, retaining prominent policy/escalation notes. Unknown or incomplete
   scopes retain literal details and one-time approval/rejection.
 
-The separate [live permission configuration](live-permissions.md) invokes the exact advertised `/permissions allow-any` command through SDK command RPC, honours live-use metadata and confirms native mode. It is not a host decision or substitute approval policy; existing callback promises remain independently owned. Generic model configuration remains idle-only.
+The separate [live permission configuration](live-permissions.md) invokes the exact advertised `/permissions allow-all` command through SDK command RPC, honours live-use metadata and confirms native mode. It is not a host decision or substitute approval policy; existing callback promises remain independently owned. Generic model configuration remains idle-only.
 
 Every decision is checked against the bridge's retained original request using
 the same option builder; unrelated domains, broader MCP scopes, mismatched
