@@ -38,6 +38,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Image messages retain transcript auto-follow when image decoding expands the turn after sending, without overriding later upward scrolling. Pi's image coordinate-scaling notes are hidden in user turns; prompts and saved history are unchanged.
+
 - Session deletion review no longer shrinks or recenters when confirmation switches to stopping/deleting progress; the disabled Delete label and reviewed description's layout footprint stay stable until the shared animated close.
 
 - Appearance sliders show their theme-accent filled track immediately on opening Settings and after external value/theme changes, rather than waiting for the first adjustment. Duration, background opacity and background blur share the same track presentation; keyboard and save/preview behavior are unchanged.
