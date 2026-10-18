@@ -92,6 +92,9 @@ impl Drop for Delivery {
 }
 #[tauri::command]
 pub fn acknowledge_transcript_delivery(window: tauri::Window, id: String) -> Result<(), String> {
+    acknowledge_delivery(window.label(), &id)
+}
+fn acknowledge_delivery(window: &str, id: &str) -> Result<(), String> {
     let mut deliveries = DELIVERIES
         .lock()
         .map_err(|_| "Transcript delivery unavailable")?;
@@ -132,9 +135,6 @@ impl ProcessHost {
         token: String,
         output: Output,
     ) -> Result<(), String> {
-        acknowledge_delivery(window.label(), &id)
-    }
-    fn acknowledge_delivery(window: &str, id: &str) -> Result<(), String> {
         let mut slot = self.session.lock().await;
         if slot.is_some() {
             return Err("A session is already owned. Disconnect before starting another.".into());
