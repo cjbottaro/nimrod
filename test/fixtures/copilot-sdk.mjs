@@ -131,13 +131,19 @@ class Session {
   on(listener) { this.listeners.push(listener); return () => { this.listeners = this.listeners.filter(item => item !== listener); }; }
   emit(type, data) { const event = { id: `fixture-${this.sequence++}`, type, data }; this.listeners.forEach(listener => listener(event)); }
   async getEvents() { return this.saved ? [
-    { id: 'saved-user', type: 'user.message', data: { content: 'Saved SDK question' } },
+    { id: 'saved-user', type: 'user.message', data: { content: 'Saved SDK question', ...(process.env.NIMROD_FIXTURE_COPILOT_MODEL_STATE === 'image-history' ? { attachments: [{ type: 'blob', mimeType: 'image/png', data: 'YWJj' }] } : {}) } },
     { id: 'saved-answer', type: 'assistant.message', data: { messageId: 'saved', content: 'Saved SDK answer' } },
   ] : []; }
-  async send({ prompt, mode }) {
+  async send({ prompt, mode, attachments }) {
     assert.equal(mode, 'immediate');
+    if (attachments) for (const attachment of attachments) {
+      assert.equal(attachment.type, 'blob');
+      assert.ok(['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(attachment.mimeType));
+      assert.ok(Buffer.from(attachment.data, 'base64').length);
+      assert.equal(Object.hasOwn(attachment, 'path'), false, 'image sends never stage temporary files');
+    }
     const turn = ++this.turns;
-    queueMicrotask(() => { void this.run(prompt, turn).catch(error => { this.emit('session.error', { message: String(error) }); this.emit('session.idle', {}); }); });
+    queueMicrotask(() => { void this.run(prompt, turn, attachments).catch(error => { this.emit('session.error', { message: String(error) }); this.emit('session.idle', {}); }); });
     return { messageId: `turn-${turn}` };
   }
   async permission(request) {
@@ -150,8 +156,12 @@ class Session {
       assert.equal(request.canOfferSessionApproval, true, 'This request must explicitly allow session approval');
     return decision;
   }
-  async run(prompt, turn) {
-    this.emit('user.message', { content: prompt }); this.emit('assistant.turn_start', {});
+  async run(prompt, turn, attachments) {
+    this.emit('user.message', { content: prompt, ...(attachments ? { attachments } : {}) }); this.emit('assistant.turn_start', {});
+    if (attachments?.length) {
+      this.emit('assistant.message', { messageId: `image-${turn}`, content: 'Offline SDK image response.' });
+      this.emit('session.idle', {}); return;
+    }
     if (prompt === 'plan mode fixture') {
       const result = this.config.onExitPlanModeRequest({
         summary: 'Fixture plan', planContent: 'Read, change, review.',

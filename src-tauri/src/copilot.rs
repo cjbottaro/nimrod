@@ -158,6 +158,55 @@ impl CopilotHost {
         }
     }
 }
+fn validate_prompt(value: &Value) -> Result<(), String> {
+    let text = value["text"].as_str().ok_or("Invalid Copilot prompt")?;
+    if text.chars().count() > 1_000_000
+        || serde_json::to_vec(value)
+            .map_err(|error| error.to_string())?
+            .len()
+            > 13 * 1024 * 1024
+    {
+        return Err("Copilot prompt exceeds the size limit".into());
+    }
+    let mut count = 0;
+    let mut total = 0;
+    if let Some(images) = value.get("images") {
+        let images = images.as_array().ok_or("Invalid Copilot image attachments")?;
+        count = images.len();
+        if count > 8 {
+            return Err("Too many Copilot image attachments".into());
+        }
+        for image in images {
+            let data = image["data"].as_str().ok_or("Invalid Copilot image data")?;
+            let unpadded = data.trim_end_matches('=');
+            let padding = data.len() - unpadded.len();
+            if image["type"].as_str() != Some("image")
+                || !matches!(
+                    image["mimeType"].as_str(),
+                    Some("image/png" | "image/jpeg" | "image/webp" | "image/gif")
+                )
+                || unpadded.is_empty()
+                || data.len() % 4 != 0
+                || padding > 2
+                || data.len() > (4 * 1024 * 1024_usize).div_ceil(3) * 4
+                || !unpadded.bytes().all(|byte| {
+                    byte.is_ascii_alphanumeric() || byte == b'+' || byte == b'/'
+                })
+            {
+                return Err("Invalid Copilot image attachment".into());
+            }
+            let bytes = data.len() / 4 * 3 - padding;
+            total += bytes;
+            if bytes > 4 * 1024 * 1024 || total > 8 * 1024 * 1024 {
+                return Err("Copilot image attachments exceed the size limit".into());
+            }
+        }
+    }
+    if text.trim().is_empty() && count == 0 || count > 0 && text.trim_start().starts_with('/') {
+        return Err("Images require a message, not a slash command".into());
+    }
+    Ok(())
+}
 fn validate_message(value: &Value) -> Result<(), String> {
     if !value.is_object()
         || value["id"]
@@ -180,7 +229,7 @@ fn validate_message(value: &Value) -> Result<(), String> {
                         .any(|c| c.is_whitespace() || c.is_control() || c == '/')
             }) && value.get("input").is_none_or(|input| input.is_string()) => {}
         Some("permission-change") if value["value"].as_str() == Some("allow-all") => {}
-        Some("prompt") if value["text"].is_string() => {}
+        Some("prompt") => validate_prompt(value)?,
         Some("configure")
             if matches!(
                 value["setting"].as_str(),

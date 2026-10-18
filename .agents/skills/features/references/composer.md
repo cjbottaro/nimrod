@@ -4,7 +4,7 @@
 
 ## Harness boundary
 
-`src/copilot/view-policy.ts` contributes SDK text-only intent validation and
+`src/copilot/view-policy.ts` contributes SDK intent validation and
 model/thinking intent accepted while connected with idle-only application
 ([configuration progress](model-thinking.md) is separate from prompt queues). Busy Enter keeps the newer draft; Stop calls
 SDK abort, with no Pi queue/steer. [Copilot commands](copilot-commands.md) use SDK
@@ -12,7 +12,7 @@ command invocation rather than ordinary prompts or Nimrod action aliases;
 metadata drives argument suggestions and returned choices use a session-bound
 modal. Commands clear immediately without literal previews, recency or forced
 navigation. Ordinary local submission effects still clear/preview immediately; ambiguous results disconnect
-without replay/restoring sent text. [SDK events](copilot-sdk.md#send-events-controls-and-decisions)
+without replay/restoring sent text/images. The shared composer uses the [message-input port](image-paste.md#message-input-interface) for text/image messages; clipboard/draft storage is independent of transport support. [SDK events](copilot-sdk.md#send-events-controls-and-decisions)
 own echo reconciliation, cancellation and decisions. New fixtures are unrun.
 
 The detailed delivery/queue/compaction contract below is Pi-specific. The [shared view boundary](harness-presentation.md) requires an integration-owned interaction policy; there is no `ViewHost.acp` switch. `src/pi/view-policy.ts` owns Pi slash interception, busy steering/queue mapping, skill interpretation and compaction hints. `src/acp/view-policy.ts` owns advertised-only completion, text-only sending and agent-labeled Stop; busy Enter keeps the newer draft. ACP configuration/turn lifecycle stays in `src/acp/session.ts`, not Pi's controller. `mountPiView` remains a compatibility entry supplying Pi policy/projection. Mixed-shell/browser and new/updated extraction fixtures pass in the full offline gates; native acceptance remains separate.

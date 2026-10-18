@@ -1,4 +1,4 @@
-import { attachmentArray } from './image-attachments';
+import { attachmentArray } from '../image-attachments';
 import { ComposerState, initialComposerState } from "./composer-state";
 
 export function restoreComposerState(value: unknown): ComposerState {

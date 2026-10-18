@@ -1,5 +1,5 @@
-import type { ImageAttachment } from './image-attachments';
-export type SubmissionMode = "normal" | "steer" | "followUp";
+import type { ImageAttachment } from '../image-attachments';
+export type { SubmissionMode } from '../session-message-input';
 export type SubmissionOutcome = "accepted" | "rejected" | "cancelled" | "unknown";
 
 export interface QueueState {

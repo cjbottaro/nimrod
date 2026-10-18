@@ -45,6 +45,45 @@ function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) =>
     },
   };
 }
+for (const text of ['', 'Image caption']) test(`SDK bridge maps inline images to blob attachments (${text || 'image only'})`, { timeout: 5000 }, async () => {
+  const f = bridge();
+  try {
+    await f.request('initialize'); await f.request('connect');
+    const images = [{ type: 'image', mimeType: 'image/png', data: 'YWJj' }];
+    await f.request('prompt', { text, images });
+    const echo = await f.waitFor(packet => packet.kind === 'event' && packet.event.type === 'user.message');
+    assert.equal(echo.event.data.content, text);
+    assert.deepEqual(echo.event.data.attachments, [{ type: 'blob', mimeType: 'image/png', data: 'YWJj' }]);
+    await f.waitFor(packet => packet.kind === 'event' && packet.event.type === 'session.idle');
+    assert.equal(f.packets.filter(packet => packet.kind === 'event' && packet.event.type === 'user.message').length, 1);
+  } finally { await f.close(); }
+});
+
+test('SDK bridge rejects malformed and oversized images before invoking send', { timeout: 5000 }, async () => {
+  const f = bridge();
+  try {
+    await f.request('initialize'); await f.request('connect');
+    const image = { type: 'image', mimeType: 'image/png', data: 'YWJj' };
+    for (const images of [null, {}, Array(9).fill(image), [{ ...image, mimeType: 'image/svg+xml' }], [{ ...image, data: 'javascript:evil' }], [{ ...image, data: 'AAAA'.repeat(1_400_000) }]])
+      await assert.rejects(f.request('prompt', { text: '', images }), /image|size/i);
+    await assert.rejects(f.request('prompt', { text: '/permissions show', images: [image] }), /slash commands/);
+    assert.equal(f.packets.some(packet => packet.kind === 'event' && packet.event.type === 'user.message'), false);
+  } finally { await f.close(); }
+});
+
+test('SDK getEvents returns image history through the same controller projection', { timeout: 5000 }, async () => {
+  let session: CopilotSession | undefined;
+  const f = bridge('interactive', packet => session?.receive(packet), 'image-history');
+  session = new CopilotSession(async message => f.send(message), { publish() {}, changed() {}, identified() {}, disconnected() {}, completed() {}, notice() {}, decision: async () => undefined });
+  try {
+    await session.initialize('fixture-sdk');
+    assert.deepEqual(session.state.messages.find(message => message.role === 'user')?.content, [
+      { type: 'text', text: 'Saved SDK question' }, { type: 'image', mimeType: 'image/png', data: 'YWJj' },
+    ]);
+    assert.equal(f.packets.some(packet => packet.kind === 'event' && packet.event.type === 'user.message'), false, 'Resume does not send prompts');
+  } finally { session.disconnect('fixture complete'); await f.close(); }
+});
+
 test('live native permission command applies before old requests resolve and prevents subsequent prompts', { timeout: 5000 }, async () => {
   const f = bridge();
   try {

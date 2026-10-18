@@ -1,7 +1,7 @@
 import type { ToolCaptureSink } from '../tool-capture';
 import { PiToolCapture } from './tool-capture';
 import { measureWork, type PerformanceProbe, type WorkKind } from '../performance-diagnostics';
-import { validateImageContents } from './image-attachments';
+import { DEFAULT_IMAGE_INPUT, validateMessageImages, type SessionMessageInput } from '../session-message-input';
 import { PiTransport, RpcResponseError } from './transport';
 import { initialConversationState, messagesToDisplay, reduceRpcEvent, sanitizeExtensionUiText, setExtensionStatus, setExtensionWidget } from './reducer';
 import { ModelThinkingController, type ModelIdentity } from './model-thinking-controller';
@@ -278,6 +278,11 @@ export class PiSession {
     finally { this.contextRefreshing = false; }
   }
 
+  readonly messageInput: SessionMessageInput = {
+    capabilities: () => ({ images: DEFAULT_IMAGE_INPUT }),
+    submit: message => this.handle({ ...message, type: 'prompt' }),
+  };
+
   async handle(message: JsonRecord): Promise<void> {
     this.toolCapture.capture('ui.action', message, this.captureSessionId);
     try {
@@ -314,7 +319,7 @@ export class PiSession {
     const text = typeof message.text === 'string' ? message.text : '';
     const receipt = (outcome: 'accepted' | 'rejected' | 'cancelled' | 'unknown', error?: string) => this.ui.publish({ type: 'submissionReceipt', id, outcome, error });
     let images;
-    try { images = validateImageContents(message.images); } catch (error) { receipt('rejected', String(error)); return; }
+    try { images = validateMessageImages(message.images, this.messageInput.capabilities()); } catch (error) { receipt('rejected', String(error)); return; }
     if (images.length && text.trim().startsWith('/')) { receipt('rejected', 'Image attachments cannot be sent with slash commands.'); return; }
     if (!id || (!text.trim() && !images.length) || text.length > 1_000_000 || this.state.sessionUnavailable || this.state.compacting || this.state.modelControls.changing) {
       receipt('rejected', 'Pi is not ready for this submission. Nothing was sent.'); return;

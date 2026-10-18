@@ -1,4 +1,4 @@
-import { isAttachment, validateImageBlob, validateImageDimensions, type ImageAttachment } from './pi/image-attachments';
+import { isAttachment, validateImageBlob, validateImageDimensions, type ImageAttachment } from './image-attachments';
 import { invoke } from '@tauri-apps/api/core';
 
 const MAX_STORE_BYTES = 128 * 1024 * 1024;

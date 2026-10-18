@@ -1,5 +1,5 @@
 import type { OperationCard } from '../operation-card';
-import type { ImageContent } from './image-attachments';
+import type { ImageContent } from '../image-attachments';
 import type { SubmissionMode, SubmissionOutcome } from './composer-state';
 
 export type SteeringStatus = 'sending' | 'pending' | 'unknown' | 'interrupted' | 'rejected' | 'cancelled';
@@ -65,7 +65,7 @@ export class SteeringTranscript {
     this.aliases.set(key, { key: entry.key, operation: operation(entry, 'succeeded') });
   }
 
-  /** Explicit live Pi correlation; content may have been normalized by the harness. */
+  /** Explicit integration-owned live correlation; content may have been normalized. */
   reconcile(id: string, userKey: string): void {
     const index = this.pending.findIndex(item => item.submissionId === id && eligible(item) && !!item.images?.length);
     if (index < 0) return;
@@ -80,7 +80,7 @@ export class SteeringTranscript {
       if (entry.status === 'sending' || entry.status === 'pending') {
         entry.connectionLost = true;
         entry.status = entry.status === 'sending' ? 'unknown' : 'interrupted';
-        entry.details ||= 'The connection ended before Pi confirmed delivery. Nothing was replayed.';
+        entry.details ||= 'The connection ended before the agent confirmed delivery. Nothing was replayed.';
         this.settle(entry);
       }
     }

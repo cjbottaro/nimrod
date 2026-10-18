@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { attachmentArray, referencedAttachments, validateImageBlob, validateImageContents, validateAttachments, MAX_IMAGE_BYTES, type ImageAttachment } from '../src/pi/image-attachments';
+import { attachmentArray, referencedAttachments, validateImageBlob, validateImageContents, validateAttachments, MAX_IMAGE_BYTES, type ImageAttachment } from '../src/image-attachments';
 import { clearDraft, initialComposerState } from '../src/pi/composer-state';
 import { persistWebviewState, restoreComposerState } from '../src/pi/webview-state';
 import { SteeringTranscript } from '../src/pi/steering-transcript';

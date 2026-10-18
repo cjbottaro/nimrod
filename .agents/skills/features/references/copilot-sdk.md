@@ -124,10 +124,10 @@ The controller replaces the shared view's permissive `messages` field with
 Final content supersedes deltas. Tool-input deltas create one agent/tool-ID-keyed generation row, accumulating only raw input text; complete execution arguments supersede them and late fragments cannot rewind execution. Late start metadata may fill inputs/names without rewinding a terminal result. Idle/Stop finalizes unstarted generation as interrupted. Tool-native snapshots and authoritative input subtrees use the existing detached immutable branding so later output/model updates do not recopy or reparse unchanged rich results. Tool partial results are replacement snapshots,
 shell-output events append with monotonic sequence deduplication, and terminal
 results cannot rewind to progress.
-Rich result metadata and unsupported saved attachments remain literal JSON.
+Rich result metadata and unsupported saved attachments remain literal JSON. Supported inline image blobs render as images in live and restored user turns; unavailable/omitted blobs have explicit metadata fallback. The [message-input contract](image-paste.md#message-input-interface) owns capabilities, local draft/preview behavior and evidence.
 History replay finalizes interrupted reasoning/tools without capturing or alerting.
 
-Text-only Send clears/previews immediately through shared submission receipts;
+Text/image Send clears/previews immediately through shared submission receipts (images after local byte preparation);
 the SDK user echo adopts that key. `send({prompt,mode:'immediate'})` acceptance is
 not turn completion: `session.idle` ends work. Busy Enter keeps the newer draft,
 with no invented steer/queue. Stop calls `abort`; it is not Close/Delete.
@@ -189,7 +189,7 @@ there is no durable queue or replay. Idle-only `setModel` and
 the pinned release's experimental `session.rpc.model.getCurrent()` read actual
 model/effort state; later native events outrank older results. Failed configuration
 disconnects instead of continuing with unconfirmed settings. No synthetic Pi
-slash aliases to Nimrod actions, ACP mode selectors, image sending, Restart,
+slash aliases to Nimrod actions, ACP mode selectors, Restart,
 MCP inspector or other unsupported controls. [Copilot slash commands](copilot-commands.md)
 use the released SDK's public experimental command discovery/invocation APIs,
 argument metadata and typed results; authored fixtures are unrun. Returned choices

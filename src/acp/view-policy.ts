@@ -27,7 +27,6 @@ export function agentSlashCommands(raw: unknown): SlashCommand[] {
 export function acpInteraction(label: string, validate: (text: string) => string | undefined): ConversationInteraction {
   return {
     label,
-    unsupportedImages: 'This ACP proof of concept accepts text only. No image was attached.',
     commands: agentSlashCommands,
     keyboardMode: event => keyboardSubmissionMode(event, false),
     composer: state => ({ hint: state.busy ? 'Agent working · Stop to cancel · Shift+Enter for newline' : 'Enter to send · Shift+Enter for newline', stopLabel: `Stop ${label}` }),

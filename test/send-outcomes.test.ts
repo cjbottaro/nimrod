@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { clearDraft, initialComposerState, recoverClearedQueue, updateDraft } from '../src/pi/composer-state';
 import { persistWebviewState, restoreComposerState } from '../src/pi/webview-state';
-import { referencedAttachments, type ImageAttachment } from '../src/pi/image-attachments';
+import { referencedAttachments, type ImageAttachment } from '../src/image-attachments';
 
 const image = (id: string): ImageAttachment => ({ id, name: 'Photo.png', mimeType: 'image/png', size: 3 });
 

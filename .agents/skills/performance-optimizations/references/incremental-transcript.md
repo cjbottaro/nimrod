@@ -31,6 +31,7 @@ Existing `timeline-projection`, `snapshot-delivery`, `transcript-render` and she
 
 ## Regression risks and maintenance guardrails
 
+- Shared message-input capabilities are live local getters consulted at paste/Send/pre-dispatch, not per streamed delta or by querying the SDK. Copilot projects inline blobs only at concrete user-event/history boundaries; do not materialize transcript history or serialize images to rediscover capabilities. Shared draft storage/typing, retained image nodes and hidden catch-up remain unchanged. New input/SDK/browser fixtures are authored unrun; [image input](../../features/references/image-paste.md#message-input-interface) owns behavior.
 - Keep canonical arrays/blocks immutable. Only content updates with unchanged locations may inherit an index; tool identity removal/replacement/start/end and history replacement must invalidate or rebuild it. New event types must choose targeted metadata or full fallback explicitly.
 - Revision metadata is optional and session-local. Accumulate IDs until paint, including hidden updates; gaps force authoritative reconciliation. Do not defer or discard queue/receipt/error/identity transitions.
 - Share row semantics between dirty and full projection; extend the differential lifecycle fixtures when adding phases or presentation fields. A fast path selects less work, not a second definition of the visible transcript.

@@ -37,6 +37,58 @@ async function fixture(events: unknown[] = [], decision: CopilotSessionUi['decis
   return { session, sent, published, completed, captured, last, reply, event };
 }
 
+for (const caption of ['', 'Image caption']) test(`image input sends bytes and reconciles the SDK echo (${caption || 'image only'})`, async () => {
+  const f = await fixture();
+  try {
+    const images = [{ type: 'image' as const, mimeType: 'image/png', data: 'YWJj' }];
+    const sending = f.session.messageInput.submit({ id: 'image-send', text: caption, images, mode: 'normal' });
+    assert.deepEqual(f.last('prompt').images, images);
+    const preview = f.session.state.messages.find(message => message.role === 'user')!;
+    assert.ok(Array.isArray(preview.content) && preview.content.some(block => block.type === 'image'));
+    f.event('user.message', { content: `${caption} normalized`, attachments: [{ type: 'blob', mimeType: 'image/jpeg', data: 'ZGVm' }] });
+    assert.equal(f.session.state.messages.filter(message => message.role === 'user').length, 1);
+    const actual = f.session.state.messages.find(message => message.role === 'user')!;
+    assert.equal(actual.key, preview.key);
+    assert.deepEqual(actual.content, [{ type: 'text', text: `${caption} normalized` }, { type: 'image', mimeType: 'image/jpeg', data: 'ZGVm' }]);
+    f.reply('prompt', { messageId: 'native-id' }); await sending;
+    assert.equal(f.published.find(message => message.type === 'submissionReceipt' && message.id === 'image-send')?.outcome, 'accepted');
+    assert.equal(f.session.state.busy, true, 'acceptance is not turn completion');
+    f.event('session.idle', {});
+    assert.equal(f.session.state.busy, false);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('image history uses the same SDK attachment projection without sending a prompt', async () => {
+  const f = await fixture([{ id: 'image-history', type: 'user.message', data: { content: '', attachments: [{ type: 'blob', mimeType: 'image/png', data: 'YWJj' }] } }]);
+  try {
+    assert.deepEqual(f.session.state.messages[0].content, [{ type: 'text', text: '' }, { type: 'image', mimeType: 'image/png', data: 'YWJj' }]);
+    assert.equal(f.sent.filter(request => request.method === 'prompt').length, 0);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+for (const condition of ['busy', 'slash', 'malformed', 'unsupported-model', 'over-limit'] as const) test(`Copilot rejects ${condition} image input before dispatch`, async () => {
+  const catalog = [{ id: 'small', name: 'Small', capabilities: { supports: { vision: condition !== 'unsupported-model' }, limits: { vision: { max_prompt_images: 1 } } } }];
+  const f = await fixture([], undefined, true, false, catalog);
+  try {
+    if (condition === 'busy') f.event('assistant.turn_start', {});
+    const image = { type: 'image' as const, mimeType: 'image/png', data: condition === 'malformed' ? 'invalid' : 'YWJj' };
+    await f.session.messageInput.submit({ id: 'invalid', text: condition === 'slash' ? '/permissions show' : '', images: condition === 'over-limit' ? [image, image] : [image], mode: 'normal' });
+    assert.equal(f.sent.filter(request => request.method === 'prompt' || request.method === 'command').length, 0);
+    assert.equal(f.published.find(message => message.type === 'submissionReceipt' && message.id === 'invalid')?.outcome, 'rejected');
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('image input delivery uncertainty never replays or restores a submitted payload', async () => {
+  const f = await fixture();
+  try {
+    const sending = f.session.messageInput.submit({ id: 'unknown-image', text: '', images: [{ type: 'image', mimeType: 'image/png', data: 'YWJj' }], mode: 'normal' });
+    f.session.disconnect('Fixture connection lost after write'); await sending;
+    assert.equal(f.sent.filter(request => request.method === 'prompt').length, 1);
+    assert.equal(f.published.find(message => message.type === 'submissionReceipt' && message.id === 'unknown-image')?.outcome, 'unknown');
+    assert.equal(f.session.state.sessionUnavailable, true);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
 for (const rejected of [false, true]) test(`configuration ${rejected ? 'error response is failed' : 'connection loss is unknown'} after dispatch`, async () => {
   const f = await fixture();
   try {
