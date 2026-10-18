@@ -24,6 +24,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- With translucency enabled, New session and Send/Stop have a lighter, contrast-protected tint, faint edge highlight and softer corners. Sidebar-only mode changes only New session; 100% opacity and Reduce Transparency retain the original button appearance. Labels, focus indicators and button sizes are unchanged. Native visual acceptance is pending.
 - Configuration changes and Pi steering/queued messages share Operation cards: stable uppercase titles, a shimmering bottom-pinned stack while pending, and normal transcript flow on completion. Steering now pins too; delivered steering/queued turns retain their runtime titles. Failures use red accents and error disclosures; unknown/not-applied outcomes use grey accents and optional details without duplicate banners. Safely withdrawable configuration changes offer Cancel in the card and command palette; Pi messages do not imply unsupported individual queue cancellation.
 - Copilot permissions use a sequential command-palette-style picker with a remaining count and no close/reopen between decisions. Escape dismisses without answering; a persistent session-local **Review requests** banner reopens the queue. Denial feedback uses a nested input modal without resizing the picker. Scope-labelled choices can remember file access, reported command identifiers, exact MCP tools or URL domains for the session; URL-domain approvals can explicitly persist across sessions. Search requests use accurate titles, and the ambiguous permission Cancel request button is removed. Managed/sandbox-escalation requests remain one-time only; directory-only/saved-project grants and native acceptance remain pending.
 - Independent errors/warnings now appear as separate, deduplicated banners with their own actions and dismiss controls, rather than collapsing behind a count/disclosure. The pending-permission banner stays first above the independently scrolling session error list; session/application ownership and per-banner Details remain unchanged.
@@ -37,6 +38,10 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 - GitHub release notes use reviewed changelog entries, with Unreleased snapshots for prereleases.
 
 ### Fixed
+
+- Image messages retain transcript auto-follow when image decoding expands the turn after sending, without overriding later upward scrolling. Pi's image coordinate-scaling notes are hidden in user turns; prompts and saved history are unchanged.
+
+- Session deletion review no longer shrinks or recenters when confirmation switches to stopping/deleting progress; the disabled Delete label and reviewed description's layout footprint stay stable until the shared animated close.
 
 - Appearance sliders show their theme-accent filled track immediately on opening Settings and after external value/theme changes, rather than waiting for the first adjustment. Duration, background opacity and background blur share the same track presentation; keyboard and save/preview behavior are unchanged.
 

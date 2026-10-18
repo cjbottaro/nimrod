@@ -77,11 +77,11 @@ export class TranscriptScroll {
     viewport.addEventListener("keydown", this.onKey);
   }
 
-  /** The pane has already resized at observer delivery. Recover follow intent
-   * from the last settled geometry, then reconcile before paint. */
+  /** Pane reflow and image decoding have already changed layout at delivery.
+   * Recover follow intent from settled geometry, not the newly grown content. */
   resize(): void {
     if (this.suspended) return;
-    const follow = this.capture();
+    const follow = !this.interrupted && (this.pending || this.lastScrollY >= this.lastMaxScroll - 80);
     this.viewportHeight = this.viewport.clientHeight;
     this.viewportWidth = this.viewport.clientWidth;
     this.request(follow);

@@ -87,6 +87,34 @@ test("follow intent survives layout growth and multiple requests coalesce", () =
   f.dispose();
 });
 
+for (const interrupted of [false, true]) test(`decoded image growth retains settled follow intent (interrupted: ${interrupted})`, () => {
+  const f = fixture();
+  try {
+    f.scroll.scrollToBottom(); f.frame();
+    if (interrupted) {
+      f.viewport.dispatchEvent(new f.win.WheelEvent('wheel', { deltaY: -100 }));
+      f.move(120);
+    }
+    f.height(1600); // Image decodes after the render/follow frame; pane size is unchanged.
+    f.scroll.resize(); f.frame();
+    assert.equal(f.viewport.scrollTop, interrupted ? 120 : 1000);
+    assert.equal(f.scroll.capture(), !interrupted);
+    f.height(1900); f.scroll.resize(); f.frame();
+    assert.equal(f.viewport.scrollTop, interrupted ? 120 : 1300, 'later image loads retain the same intent');
+  } finally { f.dispose(); }
+});
+
+test("image growth does not pull an older-history reader to bottom", () => {
+  const f = fixture();
+  try {
+    f.move(100);
+    // Downward movement outside the near-bottom threshold still denotes reading.
+    f.move(150);
+    f.height(1600); f.scroll.resize(); f.frame();
+    assert.equal(f.viewport.scrollTop, 150);
+  } finally { f.dispose(); }
+});
+
 test("pane shrink uses pre-resize height to preserve bottom intent beyond the threshold", () => {
   const f = fixture();
   f.resize(300);

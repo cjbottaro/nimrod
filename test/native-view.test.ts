@@ -976,6 +976,52 @@ test('idle image Send follows before preparation and does not override later upw
   } finally { release(); f.dom.window.close(); }
 });
 
+for (const readAfterSend of [false, true]) test(`decoded image follows after Send frames settle (reader: ${readAfterSend})`, async () => {
+  const f = fixture({ images: true });
+  try {
+    const s = scrollFixture(f);
+    f.snapshot({ sessionUnavailable: false, messages: [] });
+    f.paste(); await tickImages(); s.readHistory(); f.send();
+    const deadline = Date.now() + 2000;
+    while (!f.sent.some(message => message.type === 'prompt') && Date.now() < deadline) await tickImages();
+    assert.ok(f.sent.some(message => message.type === 'prompt'));
+    f.flush();
+    assert.equal(s.pane.scrollTop, 1600);
+    if (readAfterSend) s.readHistory();
+    const image = f.win.document.querySelector<HTMLImageElement>('#messages .transcript-image img')!;
+    assert.ok(image);
+    s.grow(); image.dispatchEvent(new f.win.Event('load')); f.flush();
+    assert.equal(s.pane.scrollTop, readAfterSend ? 200 : 2100);
+  } finally { f.dom.window.close(); }
+});
+
+test('Pi coordinate-scaling hints are hidden in user turns without changing history or other notes', () => {
+  const f = fixture();
+  try {
+    const hint = '[Image: original 3200x1800, displayed at 1600x900. Multiply coordinates by 2.00 to map to original image.]';
+    const content = [
+      { type: 'text', text: `Caption\n\n${hint}\n${hint}\n[Image converted from image/webp to image/png.]` },
+      { type: 'image', mimeType: 'image/png', data: 'YWJj' },
+      { type: 'text', text: hint },
+      { type: 'text', text: '[Image omitted: could not be resized below the inline image size limit.]' },
+    ];
+    f.snapshot({ messages: [{ key: 'resized', role: 'user', content }, { key: 'assistant', role: 'assistant', content: hint }] });
+    const user = f.win.document.querySelector('#messages .user')!;
+    assert.match(user.textContent!, /Caption/);
+    assert.match(user.textContent!, /Image converted/);
+    assert.match(user.textContent!, /Image omitted/);
+    assert.doesNotMatch(user.textContent!, /Multiply coordinates/);
+    assert.equal(user.querySelectorAll('img').length, 1);
+    assert.equal(user.querySelector<HTMLElement>('[data-block-key="text:2"]')!.hidden, true);
+    assert.equal(content[2].text, hint, 'presentation does not mutate Pi history');
+    assert.match(f.win.document.querySelector('#messages .assistant')!.textContent!, /Multiply coordinates/);
+    f.snapshot({ messages: [{ key: 'resized', role: 'user', content: [{ type: 'text', text: `Updated caption\n\n${hint}` }, content[1]] }] });
+    assert.equal(f.win.document.querySelector('#messages .user'), user, 'patches retain article identity');
+    assert.match(user.textContent!, /Updated caption/);
+    assert.doesNotMatch(user.textContent!, /Multiply coordinates/);
+  } finally { f.dom.window.close(); }
+});
+
 test('paste uses event images once, preserves newer attachments on ack, and never persists base64', async () => {
   const f = fixture({ images: true, clipboard: true });
   try {

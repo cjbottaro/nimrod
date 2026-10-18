@@ -1,6 +1,36 @@
 import { expect, test } from '@playwright/test';
 import { demoFixture, visible } from './demo-fixture';
 
+for (const width of [900, 420]) {
+  test(`single-session deletion retains review geometry during progress at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    const demo = await demoFixture(page);
+    try {
+      await demo.editPreferences('{"appearance.modalAnimation":"none"}');
+      const tree = [{ file: '/fixture/root', title: 'Root' }];
+      const event = (phase: 'review' | 'removing' | 'release') => ({
+        id: 'stable-review', phase, files: tree.map(session => session.file), tree, results: [], pending: phase !== 'release',
+      });
+      await demo.deletionEvent(event('review'));
+      const dialog = page.locator('#deletion-review');
+      await expect(page.locator('#deletion-confirm')).toBeFocused();
+      const reviewed = await dialog.boundingBox();
+      const reviewedButton = await page.locator('#deletion-confirm').boundingBox();
+      await page.locator('#deletion-confirm').click();
+      await expect(page.locator('.deletion-progress')).toHaveText('Stopping sessions…');
+      expect(await dialog.boundingBox()).toEqual(reviewed);
+      expect(await page.locator('#deletion-confirm').boundingBox()).toEqual(reviewedButton);
+      await demo.deletionEvent(event('removing'));
+      await expect(page.locator('.deletion-progress')).toHaveText('Deleting sessions…');
+      expect(await dialog.boundingBox()).toEqual(reviewed);
+      expect(await page.locator('#deletion-confirm').boundingBox()).toEqual(reviewedButton);
+      await demo.deletionEvent(event('release'));
+      await expect(dialog).not.toBeVisible();
+      expect(demo.errors).toEqual([]);
+    } finally { await demo.close(); }
+  });
+}
+
 test('another project’s pending deletion does not block a new offline session or disturb the existing draft', async ({ page }) => {
   const demo = await demoFixture(page);
   try {
@@ -218,14 +248,24 @@ test('session-tree confirmation is scrollable app UI with safe default focus, ca
     await expect(page.locator('#deletion-cancel')).toBeFocused();
     await page.keyboard.press('ArrowDown');
     await expect(page.locator('#deletion-confirm')).toBeFocused();
+    // Let entrance motion finish before comparing the actual panel geometry.
+    await dialog.evaluate(async node => { await Promise.allSettled(node.getAnimations().map(animation => animation.finished)); });
+    const reviewedBounds = await dialog.boundingBox();
+    const reviewedButton = await page.locator('#deletion-confirm').boundingBox();
     await page.keyboard.press('Enter');
     await expect(dialog).toBeVisible();
     await expect(page.locator('#deletion-confirm')).toBeDisabled();
     await expect(page.locator('#deletion-cancel')).toBeDisabled();
-    await expect(page.locator('#deletion-description')).toHaveText('Stopping sessions…');
+    await expect(page.locator('.deletion-progress')).toHaveText('Stopping sessions…');
+    await expect(page.locator('.deletion-description-reserved')).toBeHidden();
+    await expect(page.locator('#deletion-confirm')).toHaveText('Delete 101 sessions');
+    expect(await dialog.boundingBox()).toEqual(reviewedBounds);
+    expect(await page.locator('#deletion-confirm').boundingBox()).toEqual(reviewedButton);
     await page.keyboard.press('Escape'); await expect(dialog).toBeVisible();
     await demo.deletionEvent({ id: '', phase: 'removing', files: tree.map(s => s.file), results: [], pending: true });
-    await expect(page.locator('#deletion-description')).toHaveText('Deleting sessions…');
+    await expect(page.locator('.deletion-progress')).toHaveText('Deleting sessions…');
+    expect(await dialog.boundingBox()).toEqual(reviewedBounds);
+    expect(await page.locator('#deletion-confirm').boundingBox()).toEqual(reviewedButton);
     await expect.poll(() => demo.calls.filter(c => c.command === 'confirm_session_deletion')).toHaveLength(2);
     expect(demo.calls.filter(c => c.command === 'confirm_session_deletion')[1].args).toMatchObject({ id: 'accept-review', confirmed: true });
     await demo.deletionEvent({ id: '', phase: 'release', files: tree.map(s => s.file), results: [], pending: false });

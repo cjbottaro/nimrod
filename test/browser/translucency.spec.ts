@@ -39,7 +39,7 @@ test('buttons, Status area and notices use translucent overlays rather than stac
       for (const button of buttons) expect(alpha(button.background), button.id).toBeLessThan(1);
       const send = page.locator(visible('send'));
       await send.hover();
-      const hoverDensity = await page.locator('html').evaluate(root => parseFloat(getComputedStyle(root).getPropertyValue('--nimrod-button-hover-opacity')) / 100);
+      const hoverDensity = await page.locator('html').evaluate(root => parseFloat(getComputedStyle(root).getPropertyValue('--nimrod-ethereal-button-hover-opacity')) / 100);
       expect(alpha(await send.evaluate(node => getComputedStyle(node).backgroundColor))).toBeCloseTo(hoverDensity, 3);
       await page.locator('#toggle-sidebar').hover();
       const secondaryHoverDensity = await page.locator('html').evaluate(root => parseFloat(getComputedStyle(root).getPropertyValue('--nimrod-sidebar-secondary-hover-opacity')) / 100);
@@ -50,7 +50,7 @@ test('buttons, Status area and notices use translucent overlays rather than stac
       await expect(page.locator('html')).toHaveAttribute('data-translucency', 'chrome');
       expect(alpha(await send.evaluate(node => getComputedStyle(node).backgroundColor))).toBe(1);
       expect(alpha(await notices.evaluate(node => getComputedStyle(node).backgroundColor))).toBe(1);
-      const primaryDensity = await page.locator('html').evaluate(root => parseFloat(getComputedStyle(root).getPropertyValue('--nimrod-sidebar-button-opacity')) / 100);
+      const primaryDensity = await page.locator('html').evaluate(root => parseFloat(getComputedStyle(root).getPropertyValue('--nimrod-sidebar-ethereal-button-opacity')) / 100);
       expect(alpha(await page.locator('#sidebar-new').evaluate(node => getComputedStyle(node).backgroundColor))).toBeCloseTo(primaryDensity, 3);
     }
     await fixture.editPreferences('{}');
@@ -132,7 +132,7 @@ test('Status area, notices and buttons retain hierarchy across the slider, inclu
   } finally { await fixture.close(); }
 });
 
-test('normal and hovered primary fills do not exceed the pre-glass recipe at matching settings', async ({ page }) => {
+test('normal and hovered primary base fills do not exceed the pre-glass recipe at matching settings', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {
     for (const scheme of ['dark', 'light'] as const) {
@@ -170,6 +170,59 @@ test('normal and hovered primary fills do not exceed the pre-glass recipe at mat
         }
       }
     }
+    expect(fixture.errors).toEqual([]);
+  } finally { await fixture.close(); }
+});
+
+test('lighter primary actions restore exact opaque styling and respect sidebar-only scope', async ({ page }) => {
+  const fixture = await demoFixture(page);
+  try {
+    await page.locator(visible('prompt')).fill('Unsent fixture draft');
+    const snapshot = async () => {
+      const result = [];
+      for (const selector of ['#sidebar-new', visible('send')]) {
+        const button = page.locator(selector);
+        const styles = async () => button.evaluate(node => {
+          const style = getComputedStyle(node);
+          return { color: style.color, fill: style.backgroundColor, image: style.backgroundImage,
+            border: style.borderColor, radius: style.borderRadius, shadow: style.boxShadow,
+            outline: style.outline, opacity: style.opacity, width: style.width, height: style.height };
+        });
+        await page.mouse.move(799, 1);
+        const rest = await styles();
+        await button.hover();
+        const hover = await styles();
+        await page.mouse.down();
+        const pressed = await styles();
+        // Release outside the button: never activate Send or New session.
+        await page.mouse.move(799, 1); await page.mouse.up();
+        await button.focus();
+        const focus = await styles();
+        await button.evaluate(node => (node as HTMLElement).blur());
+        result.push({ rest, hover, pressed, focus });
+      }
+      return result;
+    };
+    await fixture.editPreferences(JSON.stringify({ 'appearance.theme': 'nimrod', 'appearance.backgroundOpacity': 100 }));
+    await expect(page.locator('html')).toHaveAttribute('data-translucency', 'off');
+    const opaque = await snapshot();
+    await fixture.editPreferences(JSON.stringify({ 'appearance.theme': 'nimrod', 'appearance.backgroundOpacity': 65, 'appearance.translucencyArea': 'window' }));
+    await expect(page.locator('html')).toHaveAttribute('data-translucency', 'window');
+    const light = await snapshot();
+    for (let i = 0; i < light.length; i++) {
+      expect(light[i].rest.image).not.toBe('none');
+      expect(parseFloat(light[i].rest.radius)).toBeGreaterThan(parseFloat(opaque[i].rest.radius));
+      expect(light[i].rest.color).toBe(opaque[i].rest.color);
+      expect(light[i].rest.opacity).toBe('1');
+      expect(light[i].rest.width).toBe(opaque[i].rest.width);
+      expect(light[i].rest.height).toBe(opaque[i].rest.height);
+    }
+    await fixture.editPreferences(JSON.stringify({ 'appearance.theme': 'nimrod', 'appearance.backgroundOpacity': 65, 'appearance.translucencyArea': 'chrome' }));
+    await expect(page.locator('html')).toHaveAttribute('data-translucency', 'chrome');
+    expect((await snapshot())[1]).toEqual(opaque[1]);
+    await fixture.editPreferences(JSON.stringify({ 'appearance.theme': 'nimrod', 'appearance.backgroundOpacity': 100 }));
+    await expect(page.locator('html')).toHaveAttribute('data-translucency', 'off');
+    expect(await snapshot()).toEqual(opaque);
     expect(fixture.errors).toEqual([]);
   } finally { await fixture.close(); }
 });

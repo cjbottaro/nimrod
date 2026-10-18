@@ -35,6 +35,7 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
   let preview: 'idle' | 'loading' | 'cancelled' = 'idle';
   let loadingTimer: number | undefined;
   let executing = false;
+  let progressText: HTMLSpanElement | undefined;
 
   function clearLoadingTimer(): void {
     if (loadingTimer !== undefined) win.clearTimeout(loadingTimer);
@@ -62,17 +63,26 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
   function progress(phase: 'stopping' | 'deleting'): void {
     if (!executing || disposed) return;
     const text = phase === 'stopping' ? 'Stopping sessions…' : 'Deleting sessions…';
-    description.textContent = text;
-    labelDialogAction(confirm, text);
+    if (progressText) progressText.textContent = text;
   }
   function activate(button: HTMLButtonElement): void {
     if (executing || button.disabled) return;
     if (button === cancel) { closeModal(dialog, 'cancel'); return; }
     if (!pending) return;
     executing = true;
+    labelDialogAction(confirm, confirm.textContent || 'Delete sessions');
     cancel.disabled = true; confirm.disabled = true;
     labelDialogAction(cancel, 'Cancel');
     tree.setAttribute('aria-busy', 'true');
+    // Keep the reviewed copy in layout so progress cannot shrink the modal.
+    // Both spans share a grid cell, preserving responsive wrapping without
+    // freezing viewport-dependent shell dimensions in pixels.
+    const reservedDescription = doc.createElement('span');
+    reservedDescription.className = 'deletion-description-reserved';
+    reservedDescription.setAttribute('aria-hidden', 'true');
+    reservedDescription.textContent = description.textContent;
+    progressText = doc.createElement('span'); progressText.className = 'deletion-progress';
+    description.replaceChildren(reservedDescription, progressText);
     description.setAttribute('role', 'status');
     // Resolve the answer without closing the dialog or restoring underlying focus.
     finish(true); progress('stopping');
@@ -98,6 +108,7 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
       if (disposed || pending || executing || preview === 'loading') return;
       preview = 'loading';
       if (title) title.textContent = reviewTitle;
+      progressText = undefined;
       cancel.disabled = false; description.textContent = reviewDescription; description.removeAttribute('role');
       confirm.disabled = true; labelDialogAction(confirm, 'Delete sessions');
       tree.setAttribute('aria-busy', 'true');
@@ -150,6 +161,7 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
       if (seen.size !== files.size) { close(); return Promise.resolve(false); }
       preview = 'idle'; cancel.disabled = false; confirm.disabled = false;
       if (title) title.textContent = data.title || reviewTitle;
+      progressText = undefined;
       description.textContent = data.description || reviewDescription; description.removeAttribute('role');
       tree.setAttribute('aria-busy', 'false');
       tree.replaceChildren(list); tree.scrollTop = 0;
