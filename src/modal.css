@@ -26,8 +26,8 @@
   --modal-transform-origin:center;
 }
 :root[data-modal-animation="hologram"] {
-  --modal-enter-duration:500ms;
-  --modal-exit-duration:400ms;
+  --modal-enter-duration:300ms;
+  --modal-exit-duration:240ms;
   --modal-enter-animation:modal-hologram-enter;
   --modal-enter-easing:linear;
 }
@@ -50,7 +50,7 @@
   overflow:auto;
 }
 .nimrod-modal :is(input, textarea, select) { background:var(--modal-field-surface); color:var(--vscode-input-foreground); }
-.nimrod-modal::backdrop, .modal-overlay { background:var(--nimrod-modal-backdrop, var(--modal-backdrop)); }
+.nimrod-modal::backdrop, .modal-overlay::before { background:var(--nimrod-modal-backdrop, var(--modal-backdrop)); }
 .modal-stack { display:flex; flex-direction:column; gap:var(--modal-gap); min-height:0; }
 dialog.modal-stack:not([open]) { display:none; }
 .nimrod-modal > .modal-stack { max-height:calc(var(--modal-max-height) - 2 * var(--modal-padding) - 2px); }
@@ -61,6 +61,7 @@ dialog.modal-stack:not([open]) { display:none; }
 .modal-body { min-height:0; overflow:auto; }
 .modal-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:8px; margin:0; padding-top:var(--modal-gap); border-top:1px solid var(--vscode-panel-border); }
 .modal-overlay { position:fixed; inset:0; display:none; z-index:4; }
+.modal-overlay::before { content:''; position:fixed; inset:0; pointer-events:none; }
 .modal-overlay.open { display:block; }
 
 /* Entrance stays on the live shell. Exit is a non-interactive visual snapshot
@@ -72,7 +73,7 @@ dialog.nimrod-modal[open], .modal-overlay.open > .nimrod-modal {
 }
 dialog.nimrod-modal:not([open]), dialog.nimrod-modal:not([open])::backdrop,
 .modal-overlay:not(.open) { pointer-events:none; }
-dialog.nimrod-modal[open]::backdrop, .modal-overlay.open {
+dialog.nimrod-modal[open]::backdrop, .modal-overlay.open::before {
   animation:modal-backdrop-enter var(--modal-enter-duration) ease-out;
 }
 @keyframes modal-subtle-enter {

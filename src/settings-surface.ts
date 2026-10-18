@@ -196,13 +196,19 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   const modalMotion = installModalMotion(document);
   const animationStyle = required<HTMLSelectElement>('modal-animation-style');
   const animationDuration = required<HTMLInputElement>('modal-animation-duration');
+  const animationDurationValue = required<HTMLOutputElement>('modal-animation-duration-value');
   const animationPreview = required<HTMLDialogElement>('modal-animation-preview-dialog');
-  let savingAnimation = false;
+  let savingAnimation = 0, durationRevision = 0, durationEditing = false;
+  function showAnimationDuration(): void {
+    animationDurationValue.value = `${animationDuration.value} ms`;
+    animationDuration.setAttribute('aria-valuetext', Number(animationDuration.value) === 0 ? 'Instant' : `${animationDuration.value} milliseconds`);
+  }
   function reloadModalAnimation(force = false): void {
     const animation = preferences.modalAnimation();
     applyModalAnimation(document.documentElement, animation);
     animationStyle.value = animation.style;
-    if (force || document.activeElement !== animationDuration) animationDuration.value = String(animation.duration);
+    if (force || (!durationEditing && !savingAnimation)) animationDuration.value = String(animation.duration);
+    showAnimationDuration();
     required('modal-animation-options').hidden = animation.style === 'none';
     required('modal-animation-hint').textContent = (animation.style === 'crt'
       ? 'A theme-accent horizontal line expands up and down like a CRT powering on.'
@@ -214,25 +220,31 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
       + ` Default duration: ${DEFAULT_MODAL_DURATIONS[animation.style]} ms. Reduced motion disables animations.`;
   }
   async function saveModalAnimation(values: Parameters<typeof preferences.saveModalAnimation>[0]): Promise<void> {
-    if (savingAnimation) return;
-    savingAnimation = true;
-    animationStyle.disabled = animationDuration.disabled = true;
+    const revision = durationRevision;
+    savingAnimation++;
+    animationStyle.disabled = true;
     try {
       await preferences.saveModalAnimation(values);
       notices.resolve('modal-animation-settings');
     } catch (error) {
       notices.report({ id: 'modal-animation-settings', operation: 'Save modal animation', message: String(error) });
     } finally {
-      savingAnimation = false;
-      if (!unloading) { reloadModalAnimation(true); animationStyle.disabled = animationDuration.disabled = false; }
+      savingAnimation--;
+      if (!unloading) {
+        reloadModalAnimation(!durationEditing && !savingAnimation && revision === durationRevision);
+        animationStyle.disabled = savingAnimation > 0;
+      }
     }
   }
   const changeAnimationStyle = () => { void saveModalAnimation({ style: animationStyle.value as ModalAnimationStyle }); };
+  const inputAnimationDuration = () => { durationRevision++; durationEditing = true; showAnimationDuration(); };
   const changeAnimationDuration = () => {
     if (!animationDuration.reportValidity()) return;
+    durationRevision++; durationEditing = false;
     void saveModalAnimation({ duration: animationDuration.valueAsNumber });
   };
   animationStyle.addEventListener('change', changeAnimationStyle);
+  animationDuration.addEventListener('input', inputAnimationDuration);
   animationDuration.addEventListener('change', changeAnimationDuration);
   const previewAnimation = () => { if (!animationPreview.open) showModal(animationPreview); };
   required('modal-animation-preview').addEventListener('click', previewAnimation);
@@ -376,6 +388,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
       unloading = true; unsubscribe();
       required('modal-animation-preview').removeEventListener('click', previewAnimation);
       animationStyle.removeEventListener('change', changeAnimationStyle);
+      animationDuration.removeEventListener('input', inputAnimationDuration);
       animationDuration.removeEventListener('change', changeAnimationDuration);
       if (animationPreview.open) closeModal(animationPreview);
       performanceDiagnostics.dispose(); toolCapture.dispose();

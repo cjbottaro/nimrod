@@ -11,20 +11,31 @@ function fixture(style: 'crt' | 'subtle' | 'hologram' = 'crt') {
   stubDialogs(dom.window);
   const getStyle = dom.window.getComputedStyle.bind(dom.window);
   dom.window.getComputedStyle = element => getStyle(element);
-  const records: { node: HTMLElement; frames: Keyframe[]; options: KeyframeAnimationOptions; cancelled: boolean; finish(): void }[] = [];
+  const timeline = { currentTime: null as number | null };
+  Object.defineProperty(document, 'timeline', { value: timeline });
+  const frames = new Map<number, FrameRequestCallback>(); let nextFrame = 0;
+  dom.window.requestAnimationFrame = callback => { frames.set(++nextFrame, callback); return nextFrame; };
+  dom.window.cancelAnimationFrame = id => { frames.delete(id); };
+  const tick = (timestamp: number) => { timeline.currentTime = timestamp; const callbacks = [...frames.values()]; frames.clear(); callbacks.forEach(callback => callback(timestamp)); };
+  const timers: number[] = [], setTimeout = dom.window.setTimeout.bind(dom.window);
+  dom.window.setTimeout = (handler, delay, ...args) => { timers.push(delay ?? 0); return setTimeout(handler, delay, ...args); };
+  const records: { node: HTMLElement; frames: Keyframe[]; options: KeyframeAnimationOptions; cancelled: boolean; paused: boolean; startTime: number | null; currentTime: number | null; finish(): void }[] = [];
   dom.window.HTMLElement.prototype.animate = function (frames, options) {
     let resolve!: () => void;
     const finished = new Promise<void>(done => { resolve = done; });
-    const record = { node: this as HTMLElement, frames: frames as Keyframe[], options: options as KeyframeAnimationOptions, cancelled: false, finish: () => resolve() };
+    const record = { node: this as HTMLElement, frames: frames as Keyframe[], options: options as KeyframeAnimationOptions, cancelled: false, paused: false, startTime: null as number | null, currentTime: null as number | null, finish: () => resolve() };
     records.push(record);
-    return { finished, cancel: () => { record.cancelled = true; } } as unknown as Animation;
+    return { finished, cancel: () => { record.cancelled = true; }, pause: () => { record.paused = true; }, play: () => { record.paused = false; },
+      get currentTime() { return record.currentTime; }, set currentTime(value: number | null) { record.currentTime = value; },
+      get startTime() { return record.startTime; }, set startTime(value: number | null) { record.startTime = value; },
+    } as unknown as Animation;
   };
   applyModalAnimation(document.documentElement, { style, duration: 500 });
   const owner = installModalMotion(document), dialog = document.querySelector('dialog')!;
   dialog.getBoundingClientRect = () => new dom.window.DOMRect(20, 40, 620, 240);
   const opener = document.getElementById('opener')!;
   const dispose = () => { owner.dispose(); dom.window.close(); };
-  return { dom, document, records, owner, dialog, opener, dispose };
+  return { dom, document, records, owner, dialog, opener, dispose, tick, timers };
 }
 
 test('closing is immediate, exit copies are inert and isolated, and new opens remove old decoration', async () => {
@@ -71,6 +82,10 @@ test('hologram scans down once and reverses upward without panel fading or delay
     assert.ok(entering.node.querySelector('[data-modal-hologram-trail]'));
     assert.equal(entering.frames[0].transform, 'translateY(-50%)');
     assert.equal(entering.frames.at(-1)!.transform, 'translateY(240px) translateY(-50%)');
+    assert.ok(entering.frames.every(frame => frame.opacity === 1));
+    assert.ok(f.records.every(record => record.paused && record.currentTime === 0));
+    f.tick(10000); // Delayed first paint must still start every part at zero.
+    assert.ok(f.records.every(record => record.startTime === 10000 && !record.paused));
     closeModal(f.dialog);
     assert.equal(f.dialog.open, false); assert.equal(f.document.activeElement, f.opener);
     const layer = f.document.querySelector<HTMLElement>('[data-modal-motion=exit]')!;
@@ -80,6 +95,11 @@ test('hologram scans down once and reverses upward without panel fading or delay
     const panel = exits.find(record => record.node.shadowRoot)!;
     assert.deepEqual(panel.frames, [{ clipPath: 'inset(0 0 100% 0)' }, { clipPath: 'inset(0)' }]);
     assert.deepEqual(exits.find(record => record.node.hasAttribute('data-modal-hologram-line'))!.frames, entering.frames);
+    assert.ok(exits.every(record => record.paused && record.currentTime === 0));
+    f.tick(20000);
+    assert.ok(exits.every(record => record.startTime === 20000 && !record.paused));
+    assert.equal(f.timers.length, 0); // No wall-clock deadline can truncate the scan.
+    assert.equal(layer.isConnected, true);
     showModal(f.dialog); await Promise.resolve();
     f.dialog.style.clipPath = 'inset(0 0 50% 0)'; // Close halfway through reveal.
     closeModal(f.dialog);
@@ -87,6 +107,23 @@ test('hologram scans down once and reverses upward without panel fading or delay
     const partialBeam = f.records.find(record => partial.contains(record.node) && record.node.hasAttribute('data-modal-hologram-line'))!;
     assert.equal(partialBeam.frames.at(-1)!.transform, 'translateY(120px) translateY(-50%)');
     applyModalAnimation(f.document.documentElement, { style: 'none', duration: 500 });
+    assert.equal(f.document.querySelectorAll('[data-modal-motion]').length, 0);
+  } finally { f.dispose(); }
+});
+
+test('hidden documents cancel pending scan starts without closing the real dialog', async () => {
+  const f = fixture('hologram');
+  try {
+    showModal(f.dialog); await Promise.resolve();
+    assert.ok(f.records.some(record => record.paused));
+    Object.defineProperty(f.document, 'visibilityState', { configurable: true, value: 'hidden' });
+    f.document.dispatchEvent(new f.dom.window.Event('visibilitychange'));
+    assert.equal(f.dialog.open, true);
+    assert.equal(f.document.querySelectorAll('[data-modal-motion]').length, 0);
+    f.tick(10000);
+    assert.ok(f.records.every(record => record.cancelled && record.startTime === null));
+    closeModal(f.dialog);
+    assert.equal(f.dialog.open, false);
     assert.equal(f.document.querySelectorAll('[data-modal-motion]').length, 0);
   } finally { f.dispose(); }
 });

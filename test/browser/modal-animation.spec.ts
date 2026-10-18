@@ -19,7 +19,20 @@ test('modal style options, duration retention, preview and cross-window synchron
     await expect(page.locator('html')).toHaveCSS('--modal-exit-duration', '240ms');
     await style.selectOption('subtle');
     await expect(duration).toHaveValue('500');
-    await duration.fill('1200'); await duration.press('Tab');
+    await expect(duration).toHaveAttribute('type', 'range');
+    const durationValue = settings.locator('#modal-animation-duration-value');
+    await duration.focus(); await duration.press('Home');
+    await expect(durationValue).toHaveText('0 ms');
+    await expect(page.locator('html')).toHaveCSS('--modal-enter-duration', '0ms');
+    await expect(duration).toBeFocused();
+    await duration.press('End');
+    await expect(durationValue).toHaveText('2000 ms');
+    await expect(page.locator('html')).toHaveCSS('--modal-enter-duration', '2000ms');
+    const writes = fixture.calls.filter(call => call.command === 'preferences_settings').length;
+    await duration.evaluate((input: HTMLInputElement) => { input.value = '1200'; input.dispatchEvent(new Event('input', { bubbles: true })); });
+    await expect(durationValue).toHaveText('1200 ms');
+    expect(fixture.calls.filter(call => call.command === 'preferences_settings')).toHaveLength(writes); // No per-frame saves.
+    await duration.dispatchEvent('change');
     await expect(page.locator('html')).toHaveCSS('--modal-enter-duration', '1200ms');
     await expect(page.locator('html')).toHaveCSS('--modal-exit-duration', '900ms');
     await style.selectOption('none');

@@ -36,7 +36,7 @@ test('modal animation defaults, global saves, JSONC preservation and external va
     assert.deepEqual(p.modalAnimation(), { style: 'crt', duration: 300 });
     assert.equal(parseSettings(f.host.value.text)['appearance.modalAnimationDuration'], undefined);
     await p.saveModalAnimation({ style: 'hologram' });
-    assert.deepEqual(p.modalAnimation(), { style: 'hologram', duration: 500 });
+    assert.deepEqual(p.modalAnimation(), { style: 'hologram', duration: 300 });
     assert.equal(parseSettings(f.host.value.text)['appearance.modalAnimationDuration'], undefined);
     await p.saveModalAnimation({ style: 'subtle' });
     assert.deepEqual(p.modalAnimation(), { style: 'subtle', duration: 500 });

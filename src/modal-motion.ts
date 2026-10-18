@@ -2,7 +2,7 @@ import { DEFAULT_MODAL_DURATIONS, modalExitDuration, type ModalAnimationStyle } 
 
 interface Motion { style: ModalAnimationStyle; duration: number }
 interface Snapshot { shell: HTMLElement; rect: DOMRect; zoom: number; backdrop: string; motion: Motion; opacity: string; clip: string; restoreScroll(): void }
-interface Layer { source: HTMLElement; node: HTMLElement; animations: Animation[]; timer?: number }
+interface Layer { source: HTMLElement; node: HTMLElement; animations: Animation[]; frame?: number; observer?: ResizeObserver }
 interface NativeDismissal { event: Event; generation?: number; epoch: number; snapshot?: Snapshot }
 const owners = new WeakMap<Document, ReturnType<typeof createModalMotion>>();
 const styles = new WeakMap<CSSStyleSheet, { count: number; text: string }>();
@@ -11,10 +11,8 @@ const CRT_BEAM: Keyframe[] = [{ opacity: 1 }, { opacity: 1, offset: .18 }, { opa
 
 function hologramBeam(height: number): Keyframe[] {
   return [
-    { transform: 'translateY(-50%)', opacity: 0, offset: 0 },
-    { transform: `translateY(${height * .05}px) translateY(-50%)`, opacity: 1, offset: .05 },
-    { transform: `translateY(${height * .95}px) translateY(-50%)`, opacity: 1, offset: .95 },
-    { transform: `translateY(${height}px) translateY(-50%)`, opacity: 0, offset: 1 },
+    { transform: 'translateY(-50%)', opacity: 1 },
+    { transform: `translateY(${height}px) translateY(-50%)`, opacity: 1 },
   ];
 }
 
@@ -29,7 +27,7 @@ function visibleScanHeight(clip: string, height: number): number {
 function motion(document: Document, exit = false): Motion {
   const root = document.documentElement, view = document.defaultView!;
   const style = root.dataset.modalAnimation as ModalAnimationStyle || 'subtle';
-  const reduced = view.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const reduced = document.visibilityState === 'hidden' || view.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const duration = parseFloat(view.getComputedStyle(root).getPropertyValue(exit ? '--modal-exit-duration' : '--modal-enter-duration'));
   const fallback = DEFAULT_MODAL_DURATIONS[style] ?? DEFAULT_MODAL_DURATIONS.subtle;
   return { style, duration: reduced || style === 'none' ? 0 : Number.isFinite(duration) ? duration : exit ? modalExitDuration(style, fallback) : fallback };
@@ -67,8 +65,10 @@ function createModalMotion(document: Document) {
   let disposed = false, epoch = 0;
   const bump = (source: HTMLElement) => { const next = (generations.get(source) ?? 0) + 1; generations.set(source, next); return next; };
   function remove(layer: Layer) {
-    layers.delete(layer); layer.animations.forEach(animation => animation.cancel());
-    if (layer.timer !== undefined) view.clearTimeout(layer.timer);
+    if (!layers.delete(layer)) return;
+    if (layer.frame !== undefined) view.cancelAnimationFrame(layer.frame);
+    layer.observer?.disconnect();
+    layer.animations.forEach(animation => animation.cancel());
     layer.node.remove();
   }
   const clear = () => {
@@ -94,18 +94,30 @@ function createModalMotion(document: Document) {
       const dialogs = [...document.querySelectorAll<HTMLDialogElement>('dialog[open]')];
       (dialogs.at(-1) ?? document.body).append(node);
     }
-    const layer = { source, node, animations: [] as Animation[], timer: undefined as number | undefined };
+    const layer: Layer = { source, node, animations: [] };
     layers.add(layer); return layer;
   }
   function animate(layer: ReturnType<typeof mount>, element: HTMLElement, frames: Keyframe[], duration: number, easing = 'linear', direction: PlaybackDirection = 'normal') {
     const animation = element.animate(frames, { duration, easing, direction, fill: 'both' });
     layer.animations.push(animation); return animation;
   }
-  function finish(layer: ReturnType<typeof mount>, duration: number) {
-    // Animation promises may never finish in a hidden/throttled window. Cleanup
-    // owns only these decorative nodes, never a dialog or a request callback.
-    layer.timer = view.setTimeout(() => remove(layer), duration + 100);
-    void Promise.all(layer.animations.map(animation => animation.finished)).then(() => remove(layer), () => {});
+  function startTogether(layer: Layer) {
+    // Freeze frame zero while geometry/styles are prepared. Both CSS and WAAPI
+    // effects then start on the same rendered frame, even after a busy task.
+    layer.animations.forEach(animation => { animation.pause(); animation.currentTime = 0; });
+    layer.frame = view.requestAnimationFrame(timestamp => {
+      layer.frame = undefined;
+      if (!layers.has(layer)) return;
+      try {
+        const start = document.timeline?.currentTime ?? timestamp;
+        layer.animations.forEach(animation => { animation.play(); animation.startTime = start; });
+      } catch { remove(layer); }
+    });
+  }
+  function finish(layer: Layer) {
+    // Never cut a running effect short with a wall-clock deadline: rendering
+    // may start late or be throttled. Hidden windows and disposal clear it.
+    void Promise.all(layer.animations.map(animation => animation.finished)).then(() => remove(layer), () => remove(layer));
   }
   function geometry(shell: HTMLElement) {
     const rect = shell.getBoundingClientRect(), root = document.documentElement;
@@ -134,7 +146,8 @@ function createModalMotion(document: Document) {
     const { rect, zoom } = geometry(shell);
     if (!rect.width || !rect.height) return;
     const computed = view.getComputedStyle(shell);
-    const backdrop = view.getComputedStyle(source, source.localName === 'dialog' ? '::backdrop' : null).backgroundColor;
+    const opacity = computed.opacity || '1', clip = computed.clipPath || 'none';
+    const backdrop = view.getComputedStyle(source, source.localName === 'dialog' ? '::backdrop' : '::before').backgroundColor;
     // A detached clone has no listeners and never owns an interaction.
     const clone = shell.cloneNode(true) as HTMLElement;
     for (const node of [clone, ...clone.querySelectorAll<HTMLElement>('*')]) {
@@ -172,7 +185,7 @@ function createModalMotion(document: Document) {
     const shadow = host.attachShadow({ mode: 'open' }), css = document.createElement('style');
     css.textContent = snapshotStyles(document) + '\n*, *::before, *::after { animation:none!important;transition:none!important;caret-color:transparent!important;pointer-events:none!important; }';
     shadow.append(css, clone);
-    return { shell: host, rect, zoom, backdrop, motion: settings, opacity: computed.opacity || '1', clip: computed.clipPath || 'none',
+    return { shell: host, rect, zoom, backdrop, motion: settings, opacity, clip,
       restoreScroll: () => positions.forEach(({ copy, top, left }) => { copy.scrollTop = top; copy.scrollLeft = left; }),
     };
   }
@@ -210,7 +223,8 @@ function createModalMotion(document: Document) {
       animate(layer, layer.node, [{ opacity: 1 }, { opacity: 0 }], duration);
       animate(layer, snapshot.shell, [{ opacity: snapshot.opacity, transform: 'none' }, { opacity: 0, transform: 'translateY(4px) scale(.98)' }], duration, 'ease-in');
     }
-    finish(layer, duration);
+    if (style === 'hologram') startTogether(layer);
+    finish(layer);
   }
   function opening(source: HTMLElement) {
     clear(); const generation = bump(source), openingEpoch = epoch;
@@ -223,8 +237,26 @@ function createModalMotion(document: Document) {
         if (source.localName === 'dialog' ? !(source as HTMLDialogElement).open : !source.classList.contains('open')) return;
         const { rect, zoom } = geometry(shell); if (!rect.width || !rect.height) return;
         const layer = mount(source, 'enter'), beam = line(layer, rect, zoom, settings.style);
-        animate(layer, beam, settings.style === 'crt' ? CRT_BEAM : hologramBeam(rect.height / zoom), settings.duration);
-        finish(layer, settings.duration);
+        const scan = animate(layer, beam, settings.style === 'crt' ? CRT_BEAM : hologramBeam(rect.height / zoom), settings.duration);
+        if (settings.style === 'hologram') {
+          const live = source.getAnimations?.({ subtree: true }).filter(animation =>
+            'animationName' in animation && ['modal-hologram-enter', 'modal-backdrop-enter'].includes(String(animation.animationName))) ?? [];
+          if (live.some(animation => String((animation as CSSAnimation).animationName) === 'modal-hologram-enter')) layer.animations.push(...live);
+          else animate(layer, shell, [{ clipPath: 'inset(0 0 100% 0)' }, { clipPath: 'inset(0)' }], settings.duration);
+          startTogether(layer);
+          if (typeof view.ResizeObserver === 'function') {
+            layer.observer = new view.ResizeObserver(() => {
+              if (!layers.has(layer)) return;
+              const current = geometry(shell);
+              beam.style.left = `${current.rect.left / current.zoom}px`;
+              beam.style.top = `${current.rect.top / current.zoom}px`;
+              beam.style.width = `${current.rect.width / current.zoom}px`;
+              (scan.effect as KeyframeEffect | null)?.setKeyframes(hologramBeam(current.rect.height / current.zoom));
+            });
+            layer.observer.observe(shell);
+          }
+        }
+        finish(layer);
       } catch { for (const layer of [...layers]) if (layer.source === source) remove(layer); }
     });
   }
@@ -261,11 +293,14 @@ function createModalMotion(document: Document) {
   document.addEventListener('close', nativeClosed, true);
   const reduced = view.matchMedia?.('(prefers-reduced-motion: reduce)');
   reduced?.addEventListener('change', clear);
+  const visibility = () => { if (document.visibilityState === 'hidden') clear(); };
+  document.addEventListener('visibilitychange', visibility);
   view.addEventListener('resize', clear); view.addEventListener('pagehide', clear);
   return { opening, closing, clear, dispose() {
     disposed = true; clear(); owners.delete(document);
     document.removeEventListener('cancel', nativeDismissal, true); document.removeEventListener('submit', nativeDismissal, true);
     document.removeEventListener('close', nativeClosed, true);
+    document.removeEventListener('visibilitychange', visibility);
     reduced?.removeEventListener('change', clear);
     view.removeEventListener('resize', clear); view.removeEventListener('pagehide', clear);
   } };
