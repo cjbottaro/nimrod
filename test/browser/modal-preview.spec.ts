@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { demoFixture } from './demo-fixture';
 
-for (const [style, dismissal] of [['subtle', 'button'], ['subtle', 'Escape'], ['hologram', 'button'], ['hologram', 'Escape']] as const) {
+for (const [style, dismissal] of [['subtle', 'button'], ['subtle', 'Escape'], ['hologram', 'button'], ['hologram', 'Escape'], ['pixel', 'button'], ['pixel', 'Escape']] as const) {
   test(`${style} preview native ${dismissal} dismissal shows an exit after trusted user input`, async ({ page }) => {
     const fixture = await demoFixture(page);
     try {
@@ -11,6 +11,7 @@ for (const [style, dismissal] of [['subtle', 'button'], ['subtle', 'Escape'], ['
       const launch = settings.locator('#modal-animation-preview');
       const preview = settings.locator('#modal-animation-preview-dialog');
       await launch.click();
+      if (style === 'pixel') await preview.evaluate(dialog => dialog.getAnimations().forEach(animation => animation.finish()));
       // Use trusted Playwright input, not element.click() inside page.evaluate:
       // native dispatch can checkpoint microtasks before the dialog default.
       if (dismissal === 'button') await preview.getByRole('button', { name: 'Close', exact: true }).click();

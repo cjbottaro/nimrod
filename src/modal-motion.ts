@@ -1,9 +1,10 @@
 import { DEFAULT_MODAL_DURATIONS, DEFAULT_SCAN_SPEEDS, isScanStyle, modalExitDuration, normalizeScanSpeed, type ModalAnimationStyle, type ScanStyle } from './modal-animation-defaults';
 import { initialScanEdges, planScan, sampleScan, scanOffsets, scanClip, edgesFromClip, type ScanPlan } from './modal-scan';
+import { pixelGrid, pixelFrames } from './modal-pixels';
 
 interface Motion { style: ModalAnimationStyle; duration: number; scanSpeed: number }
-interface Snapshot { shell: HTMLElement; rect: DOMRect; zoom: number; backdrop: string; backdropFilter: string; motion: Motion; opacity: string; clip: string; restoreScroll(): void }
-interface Layer { source: HTMLElement; node: HTMLElement; animations: Animation[]; revision: number; frame?: number; observer?: ResizeObserver }
+interface Snapshot { shell: HTMLElement; rect: DOMRect; zoom: number; backdrop: string; backdropFilter: string; motion: Motion; opacity: string; clip: string; pixelProgress?: number; restoreScroll(): void }
+interface Layer { source: HTMLElement; node: HTMLElement; animations: Animation[]; revision: number; frame?: number; observer?: ResizeObserver; release?(): void }
 interface NativeDismissal { event: Event; generation?: number; epoch: number; snapshot?: Snapshot }
 const owners = new WeakMap<Document, ReturnType<typeof createModalMotion>>();
 const styles = new WeakMap<CSSStyleSheet, { count: number; text: string }>();
@@ -62,6 +63,7 @@ function createModalMotion(document: Document) {
   const layers = new Set<Layer>();
   const generations = new WeakMap<HTMLElement, number>();
   const preparing = new WeakSet<HTMLElement>();
+  const pixels = new WeakMap<HTMLElement, { clock: Animation; duration: number; width: number; height: number }>();
   let pending = new WeakMap<HTMLElement, NativeDismissal>();
   const pendingCleanup = new Set<number>();
   let disposed = false, epoch = 0;
@@ -69,7 +71,7 @@ function createModalMotion(document: Document) {
   function remove(layer: Layer) {
     if (!layers.delete(layer)) return;
     if (layer.frame !== undefined) view.cancelAnimationFrame(layer.frame);
-    layer.observer?.disconnect();
+    layer.observer?.disconnect(); layer.release?.();
     layer.animations.forEach(animation => animation.cancel());
     layer.node.remove();
   }
@@ -184,14 +186,50 @@ function createModalMotion(document: Document) {
       layer.observer.observe(shell);
     }
   }
+  function pixel(layer: Layer, shell: HTMLElement, duration: number, closing = false, progress = 1, clip = 'none', backdrop?: HTMLElement, fixed?: { rect: DOMRect; zoom: number }) {
+    let signature = '';
+    const prepare = () => {
+      if (!layers.has(layer)) return;
+      const box = fixed ?? geometry(shell), next = JSON.stringify([box.rect.left, box.rect.top, box.rect.width, box.rect.height, box.zoom]);
+      if (signature === next) return;
+      // Filtering is more important than the decoration. Before the start frame
+      // rebuild for the final layout; after it starts, finish rather than jump.
+      if (signature && layer.frame === undefined) { remove(layer); return; }
+      signature = next; layer.revision++;
+      if (layer.frame !== undefined) { view.cancelAnimationFrame(layer.frame); layer.frame = undefined; }
+      layer.animations.forEach(animation => animation.cancel()); layer.animations = [];
+      const grid = pixelGrid(box.rect.width / box.zoom, box.rect.height / box.zoom);
+      if (!grid.tiles.length || progress <= 0 || (typeof view.CSS?.supports !== 'function' || !view.CSS.supports('clip-path', 'path("M0 0H1V1H0Z")'))) { remove(layer); return; }
+      const frames = pixelFrames(grid, closing ? progress : 1);
+      if (closing && clip.startsWith('path(')) frames[frames.length - 1].clipPath = clip;
+      const time = duration * (closing ? progress : 1);
+      const clock = animate(layer, shell, frames, time, 'linear', closing ? 'reverse' : 'normal');
+      if (!closing) {
+        pixels.set(shell, { clock, duration, width: grid.width, height: grid.height });
+        layer.release = () => { if (pixels.get(shell)?.clock === clock) pixels.delete(shell); };
+      }
+      layer.node.dataset.modalPixelTiles = String(grid.tiles.length);
+      if (backdrop) animate(layer, backdrop, [{ opacity: 1 }, { opacity: 0 }], Math.min(150, time), 'ease-in');
+      startTogether(layer); finish(layer);
+    };
+    prepare();
+    if (!closing && layers.has(layer) && typeof view.ResizeObserver === 'function') {
+      layer.observer = new view.ResizeObserver(() => { try { prepare(); } catch { remove(layer); } });
+      layer.observer.observe(shell);
+    }
+  }
   function capture(source: HTMLElement): Snapshot | undefined {
     const shell = source.matches('.nimrod-modal') ? source : source.querySelector<HTMLElement>('.nimrod-modal');
     const settings = motion(document, true);
-    if (disposed || !shell || !settings.duration || typeof shell.animate !== 'function' || (isScanStyle(settings.style) && preparing.has(source))) return;
+    if (disposed || !shell || !settings.duration || typeof shell.animate !== 'function' || ((isScanStyle(settings.style) || settings.style === 'pixel') && preparing.has(source))) return;
     const { rect, zoom } = geometry(shell);
     if (!rect.width || !rect.height) return;
     const computed = view.getComputedStyle(shell);
-    const opacity = computed.opacity || '1', clip = computed.clipPath || 'none';
+    const activePixel = pixels.get(shell);
+    const resizedPixel = activePixel && (Math.abs(activePixel.width - rect.width / zoom) > .01 || Math.abs(activePixel.height - rect.height / zoom) > .01);
+    const opacity = computed.opacity || '1', clip = resizedPixel ? 'none' : computed.clipPath || 'none';
+    const pixelProgress = activePixel && !resizedPixel && typeof activePixel.clock.currentTime === 'number'
+      ? Math.max(0, Math.min(1, activePixel.clock.currentTime / activePixel.duration)) : 1;
     const backdropStyle = view.getComputedStyle(source, source.localName === 'dialog' ? '::backdrop' : '::before');
     const backdrop = backdropStyle.backgroundColor;
     const backdropFilter = backdropStyle.getPropertyValue('backdrop-filter') || backdropStyle.getPropertyValue('-webkit-backdrop-filter');
@@ -232,7 +270,7 @@ function createModalMotion(document: Document) {
     const shadow = host.attachShadow({ mode: 'open' }), css = document.createElement('style');
     css.textContent = snapshotStyles(document) + '\n*, *::before, *::after { animation:none!important;transition:none!important;caret-color:transparent!important;pointer-events:none!important; }';
     shadow.append(css, clone);
-    return { shell: host, rect, zoom, backdrop, backdropFilter, motion: settings, opacity, clip,
+    return { shell: host, rect, zoom, backdrop, backdropFilter, motion: settings, opacity, clip, pixelProgress,
       restoreScroll: () => positions.forEach(({ copy, top, left }) => { copy.scrollTop = top; copy.scrollLeft = left; }),
     };
   }
@@ -249,12 +287,14 @@ function createModalMotion(document: Document) {
     const layer = mount(source, 'exit'), { duration, style } = snapshot.motion;
     layer.node.append(snapshot.shell);
     snapshot.restoreScroll();
-    if (isScanStyle(style)) {
+    if (isScanStyle(style) || style === 'pixel') {
       const backdrop = document.createElement('div'); backdrop.dataset.modalMotionBackdrop = '';
       backdrop.style.cssText = 'position:absolute;inset:0;pointer-events:none;';
       backdrop.style.background = snapshot.backdrop; layer.node.prepend(backdrop);
       applyBackdropFilter(backdrop, snapshot.backdropFilter);
-      scan(layer, snapshot.shell, style, snapshot.motion.scanSpeed, true, snapshot.clip, backdrop, { rect: snapshot.rect, zoom: snapshot.zoom });
+      const box = { rect: snapshot.rect, zoom: snapshot.zoom };
+      if (style === 'pixel') pixel(layer, snapshot.shell, duration, true, snapshot.pixelProgress, snapshot.clip, backdrop, box);
+      else scan(layer, snapshot.shell, style, snapshot.motion.scanSpeed, true, snapshot.clip, backdrop, box);
       return;
     } else {
       layer.node.style.background = snapshot.backdrop;
@@ -272,10 +312,12 @@ function createModalMotion(document: Document) {
         if (disposed || epoch !== openingEpoch || generations.get(source) !== generation || !source.isConnected) return;
         const settings = motion(document);
         const shell = source.matches('.nimrod-modal') ? source : source.querySelector<HTMLElement>('.nimrod-modal');
-        if (!isScanStyle(settings.style) || !settings.scanSpeed || !shell || typeof shell.animate !== 'function') return;
+        if ((!isScanStyle(settings.style) && settings.style !== 'pixel') || !settings.duration || !shell || typeof shell.animate !== 'function') return;
         if (source.localName === 'dialog' ? !(source as HTMLDialogElement).open : !source.classList.contains('open')) return;
         const { rect } = geometry(shell); if (!rect.width || !rect.height) return;
-        scan(mount(source, 'enter'), shell, settings.style, settings.scanSpeed);
+        const layer = mount(source, 'enter');
+        if (settings.style === 'pixel') pixel(layer, shell, settings.duration);
+        else scan(layer, shell, settings.style, settings.scanSpeed);
       } catch { for (const layer of [...layers]) if (layer.source === source) remove(layer); }
     });
   }

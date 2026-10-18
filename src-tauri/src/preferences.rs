@@ -243,8 +243,8 @@ pub(crate) fn validate(text: &str) -> Result<(), String> {
         }
     }
     if let Some(style) = object.get("appearance.modalAnimation") {
-        if !matches!(style.as_str(), Some("none" | "subtle" | "crt" | "hologram")) {
-            return Err("appearance.modalAnimation must be none, subtle, crt or hologram".into());
+        if !matches!(style.as_str(), Some("none" | "subtle" | "crt" | "hologram" | "pixel")) {
+            return Err("appearance.modalAnimation must be none, subtle, crt, hologram or pixel".into());
         }
     }
     if let Some(speed) = object.get("appearance.modalScanSpeed") {
@@ -748,7 +748,7 @@ mod tests {
     }
     #[test]
     fn modal_animation_settings_are_bounded_and_typed() {
-        for style in ["none", "subtle", "crt", "hologram"] {
+        for style in ["none", "subtle", "crt", "hologram", "pixel"] {
             validate(&format!(r#"{{"appearance.modalAnimation":"{style}"}}"#)).unwrap();
         }
         for style in ["null", "true", "1", r#""unknown""#] {

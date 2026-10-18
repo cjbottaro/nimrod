@@ -1,5 +1,5 @@
 // Scan-style duration entries only preserve legacy decoding; scan motion uses px/s.
-export const DEFAULT_MODAL_DURATIONS = { none: 500, subtle: 500, crt: 300, hologram: 300 } as const;
+export const DEFAULT_MODAL_DURATIONS = { none: 500, subtle: 500, crt: 300, hologram: 300, pixel: 500 } as const;
 export type ModalAnimationStyle = keyof typeof DEFAULT_MODAL_DURATIONS;
 export type ScanStyle = 'crt' | 'hologram';
 export const DEFAULT_SCAN_SPEEDS = { crt: 500, hologram: 1000 } as const;
@@ -14,5 +14,5 @@ export function normalizeModalDuration(duration: number): number {
 }
 
 export function modalExitDuration(style: ModalAnimationStyle, duration: number): number {
-  return style === 'none' ? 0 : Math.round(duration * (style === 'crt' || style === 'hologram' ? .8 : .75));
+  return style === 'none' ? 0 : Math.round(duration * (style === 'crt' || style === 'hologram' || style === 'pixel' ? .8 : .75));
 }
