@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { applyModalAnimation } from '../src/modal-animation';
@@ -149,33 +150,12 @@ test('native default capture survives early microtasks and respects prevented/co
   } finally { f.dispose(); }
 });
 
-test('only modal layers above an existing dialog receive depth blur state', async () => {
-  const f = fixture('subtle');
-  try {
-    const parent = f.document.createElement('dialog');
-    parent.setAttribute('open', '');
-    f.document.body.append(parent);
-    showModal(f.dialog);
-    assert.equal(f.dialog.hasAttribute('data-modal-depth-blur'), true);
-    closeModal(f.dialog);
-    assert.equal(f.dialog.hasAttribute('data-modal-depth-blur'), false);
-
-    parent.removeAttribute('open');
-    showModal(f.dialog);
-    assert.equal(f.dialog.hasAttribute('data-modal-depth-blur'), false);
-    f.dialog.close();
-    assert.equal(f.dialog.hasAttribute('data-modal-depth-blur'), false);
-
-    parent.setAttribute('open', '');
-    const overlay = f.document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML = '<div class="nimrod-modal"></div>';
-    f.document.body.append(overlay);
-    showModalOverlay(overlay);
-    assert.equal(overlay.hasAttribute('data-modal-depth-blur'), true);
-    closeModalOverlay(overlay);
-    assert.equal(overlay.hasAttribute('data-modal-depth-blur'), false);
-  } finally { f.dispose(); }
+test('every ordinary modal backdrop consumes the shared effective depth blur', () => {
+  const css = readFileSync('src/modal.css', 'utf8');
+  assert.match(css, /:root\[data-translucency=window\] dialog\.nimrod-modal::backdrop/);
+  assert.match(css, /:root\[data-translucency=window\] \.modal-overlay::before/);
+  assert.match(css, /backdrop-filter:blur\(var\(--nimrod-depth-blur-radius, 0px\)\)/);
+  assert.doesNotMatch(css, /data-modal-depth-blur/);
 });
 
 test('overlay, hidden/disposed windows, None and completion never settle or reopen real dialogs', async () => {
