@@ -57,7 +57,7 @@ This section describes **Pi's tree deletion**. Built-in SDK Copilot uses the sam
 1. Open deletion review.
 2. Inspect the selected session and its descendants, including any in other projects.
 3. Choose **Delete N sessions** to stop affected agents and permanently remove the tree, or Cancel/Escape to retain everything without stopping work.
-4. The review stays open, showing **Stopping sessions…** and then **Deleting sessions…**. Its actions are disabled after confirmation. It closes when deletion and reconciliation finish.
+4. The review stays open at the same size, showing **Stopping sessions…** and then **Deleting sessions…**. Its actions are disabled after confirmation, with the Delete label unchanged. It closes with the configured modal animation when deletion and reconciliation finish.
 
 Deletion is permanent, not a move to OS trash. No Pi deletion plugin is required. Working sessions can be deleted; temporary/unsaved sessions cannot. Nimrod stops affected owned Pi processes and waits for exit before removing files. Confirmation covers the current tree, including descendants created during review or shutdown, without a second review. Review locks only affected sessions. New sessions and unrelated Resume, Restart and Close actions remain available in other project windows, without stopping unrelated work.
 

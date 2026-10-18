@@ -38,6 +38,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Session deletion review no longer shrinks or recenters when confirmation switches to stopping/deleting progress; the disabled Delete label and reviewed description's layout footprint stay stable until the shared animated close.
+
 - Appearance sliders show their theme-accent filled track immediately on opening Settings and after external value/theme changes, rather than waiting for the first adjustment. Duration, background opacity and background blur share the same track presentation; keyboard and save/preview behavior are unchanged.
 
 - macOS background opacity and blur are independent: a 0–40 blur slider replaces the tinted frosted-material toggle, preserving sharp transparency at zero blur. Both sliders preview across windows; older frosting settings remain compatible. Blur-only changes no longer reapply the native theme/title tint, and a practically transparent backing keeps the normal macOS shadow path instead of the fully clear backing implicated in square-backdrop artifacts. A native zero-to-nonzero blur flash remains a known issue; compositor update batching does not eliminate it on the tested macOS build. Linux blur remains compositor-controlled.
