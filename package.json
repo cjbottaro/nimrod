@@ -2,6 +2,7 @@
   "name": "nimrod",
   "version": "0.1.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
     "prepare:copilot": "node scripts/prepare-copilot.mjs",
