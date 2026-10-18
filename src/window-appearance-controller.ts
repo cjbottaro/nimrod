@@ -45,7 +45,7 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
     const secondaryPair = primaryButtonSurfaces(color('button-secondaryForeground'), color('button-secondaryBackground'), color('button-secondaryHoverBackground'));
     secondary = secondaryPair.normal; secondaryHover = secondaryPair.hover;
     danger = buttonSurface(background, color('errorForeground'));
-    const roles = { button: primary, 'button-hover': hover, secondary, 'secondary-hover': secondaryHover, danger };
+    const roles = { button: primary, 'button-hover': hover, 'ethereal-button': primary, 'ethereal-button-hover': hover, secondary, 'secondary-hover': secondaryHover, danger };
     credits = Object.fromEntries([['sidebar', color('editorWidget-background')], ['project-bar', background], ['modal', color('editorWidget-background')]].map(([context, underlay]) =>
       [context, Object.fromEntries(Object.entries(roles).map(([role, surface]) => [role, buttonUnderlayCredit(surface, underlay)]))]));
     for (const [role, surface] of [['primary', primary], ['primary-hover', hover], ['secondary', secondary], ['secondary-hover', secondaryHover], ['danger', danger]] as const) {
@@ -65,6 +65,9 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
       root.dataset.translucency = enabled ? value.area : 'off';
       root.style.setProperty('--nimrod-background-opacity', `${value.opacity}%`);
       const surfaces = windowSurfaceOpacities(value.opacity);
+      // Decorative strength goes to zero at the opaque endpoint. No foreground
+      // interpolation, layout measurement or new native effect work on slider ticks.
+      root.style.setProperty('--nimrod-button-lightness', String(enabled ? 1 - surfaces.endpoint : 0));
       const properties = {
         '--nimrod-control-overlay-opacity': surfaces.control,
         '--nimrod-secondary-opacity': buttonDensity(secondary?.minimum ?? 0, surfaces.endpoint, .10),
@@ -74,13 +77,16 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
         '--nimrod-modal-backdrop-opacity': surfaces.modalBackdrop,
         '--nimrod-button-opacity': buttonDensity(primary?.minimum ?? 0, surfaces.endpoint, .35),
         '--nimrod-button-hover-opacity': buttonDensity(Math.max(primary?.minimum ?? 0, hover?.minimum ?? 0), surfaces.endpoint, .45),
+        '--nimrod-ethereal-button-opacity': buttonDensity(primary?.minimum ?? 0, surfaces.endpoint, .18),
+        '--nimrod-ethereal-button-hover-opacity': buttonDensity(Math.max(primary?.minimum ?? 0, hover?.minimum ?? 0), surfaces.endpoint, .32),
         '--nimrod-state-opacity': surfaces.state,
         '--nimrod-selection-opacity': surfaces.selection,
         '--nimrod-danger-opacity': buttonDensity(danger?.minimum ?? 0, surfaces.endpoint, .45),
         '--nimrod-notice-opacity': surfaces.notice,
       };
       const densities = [
-        ['button', .35], ['button-hover', .45], ['secondary', .10], ['secondary-hover', .30], ['danger', .45],
+        ['button', .35], ['button-hover', .45], ['ethereal-button', .18], ['ethereal-button-hover', .32],
+        ['secondary', .10], ['secondary-hover', .30], ['danger', .45],
       ] as const;
       for (const [context, roles] of Object.entries(credits)) {
         const parentOpacity = context === 'modal' ? surfaces.modal : value.opacity / 100;
@@ -90,6 +96,7 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
           contextual[role] = tintedButtonDensity(density, parentOpacity, roles[role], minimum, surfaces.endpoint);
         }
         contextual['button-hover'] = Math.max(contextual.button, contextual['button-hover']);
+        contextual['ethereal-button-hover'] = Math.max(contextual['ethereal-button'], contextual['ethereal-button-hover']);
         contextual['secondary-hover'] = Math.max(contextual.secondary, contextual['secondary-hover']);
         for (const [role, alpha] of Object.entries(contextual)) root.style.setProperty(`--nimrod-${context}-${role}-opacity`, `${Number((alpha * 100).toFixed(4))}%`);
       }

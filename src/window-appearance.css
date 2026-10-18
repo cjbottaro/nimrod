@@ -89,6 +89,31 @@
   --nimrod-secondary-hover-opacity:var(--nimrod-modal-secondary-hover-opacity);
   --nimrod-danger-opacity:var(--nimrod-modal-danger-opacity);
 }
+/* First-pass lighter primary actions only. At 100%/unsupported/native reduced
+   transparency the root is `off`, so none of these selectors match. Keep the
+   CSS accessibility guard as well, before native capability refresh completes. */
+@media not (prefers-reduced-transparency: reduce) {
+  :root[data-translucency=window] :is(#sidebar-new, #send, [data-pi-id="send"]),
+  :root[data-translucency=chrome] #sidebar-new {
+    --ethereal-tint:var(--nimrod-primary-background, var(--vscode-button-background));
+    --ethereal-density:var(--nimrod-ethereal-button-opacity);
+    background-color:color-mix(in srgb, var(--ethereal-tint) var(--ethereal-density), transparent);
+    background-image:linear-gradient(to bottom, color-mix(in srgb, var(--ethereal-tint) calc(8% * var(--nimrod-button-lightness)), transparent), transparent 70%);
+    border-color:color-mix(in srgb, var(--ethereal-tint) calc(22% * var(--nimrod-button-lightness)), transparent);
+    border-radius:calc(3px + 4px * var(--nimrod-button-lightness));
+    box-shadow:inset 0 1px 0 rgb(255 255 255 / calc(.10 * var(--nimrod-button-lightness)));
+  }
+  :root[data-translucency=window] :is(#sidebar-new, #send, [data-pi-id="send"]):hover,
+  :root[data-translucency=chrome] #sidebar-new:hover {
+    --ethereal-tint:var(--nimrod-primary-hover-background, var(--vscode-button-hoverBackground));
+    --ethereal-density:var(--nimrod-ethereal-button-hover-opacity);
+    border-color:color-mix(in srgb, var(--ethereal-tint) calc(36% * var(--nimrod-button-lightness)), transparent);
+  }
+  :root:is([data-translucency=window], [data-translucency=chrome]) #sidebar-new {
+    --nimrod-ethereal-button-opacity:var(--nimrod-sidebar-ethereal-button-opacity);
+    --nimrod-ethereal-button-hover-opacity:var(--nimrod-sidebar-ethereal-button-hover-opacity);
+  }
+}
 /* Keep code and suggestions opaque.
    Settings is a full-window surface: reveal the desktop, not the conversation
    beneath the modal. Visibility retains underlying layout/scroll/mounted nodes. */
