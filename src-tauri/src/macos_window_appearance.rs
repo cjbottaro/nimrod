@@ -79,11 +79,7 @@ pub fn apply(
     let native = unsafe { &*pointer.cast::<NSWindow>() };
     // Initialize backing once; changing blur must not reset the native frame,
     // rebuild its shadow or reapply an unchanged theme on every slider tick.
-    if native.isOpaque()
-        || native
-            .backgroundColor()
-            .is_none_or(|color| color.alphaComponent() == 0.0)
-    {
+    if native.isOpaque() || native.backgroundColor().alphaComponent() == 0.0 {
         native.setOpaque(false);
         native.setBackgroundColor(Some(&NSColor::colorWithSRGBRed_green_blue_alpha(
             0.0,
