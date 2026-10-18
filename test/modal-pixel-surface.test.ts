@@ -16,6 +16,16 @@ test('soft tiles filter live content and fade it with a bounded alpha mask, with
     const cleanup = installPixelSurface(layer, shell, grid, { blur: 6, fade: true }, 1, { left: 20, top: 40 },
       (element, frames) => { records.push({ element, frames }); });
     assert.equal(layer.querySelectorAll('rect').length, grid.tiles.length);
+    const mask = layer.querySelector('mask')!;
+    assert.equal(mask.getAttribute('maskUnits'), 'objectBoundingBox');
+    assert.equal(mask.getAttribute('maskContentUnits'), 'objectBoundingBox');
+    assert.equal(mask.getAttribute('width'), '1'); assert.equal(mask.getAttribute('height'), '1');
+    const rectangles = [...layer.querySelectorAll('rect')].map(rect => ({ x: Number(rect.getAttribute('x')), y: Number(rect.getAttribute('y')), w: Number(rect.getAttribute('width')), h: Number(rect.getAttribute('height')) }));
+    assert.ok(Math.min(...rectangles.map(rect => rect.x)) <= 0);
+    assert.ok(Math.min(...rectangles.map(rect => rect.y)) <= 0);
+    assert.ok(Math.max(...rectangles.map(rect => rect.x + rect.w)) >= 1);
+    assert.ok(Math.max(...rectangles.map(rect => rect.y + rect.h)) >= 1);
+    assert.ok(rectangles.every(rect => rect.w > 0 && rect.w <= 1.01 && rect.h > 0 && rect.h <= 1.01));
     assert.equal(layer.querySelectorAll('[data-modal-pixel-blur-tile]').length, grid.tiles.length);
     assert.equal(layer.querySelectorAll('input, textarea, form').length, 0);
     assert.equal(layer.querySelectorAll('feGaussianBlur').length, 0); // Content blur, not feathered mask edges.

@@ -37,15 +37,18 @@ export function installPixelSurface(layer: HTMLElement, shell: HTMLElement, grid
       svg.setAttribute('width', '0'); svg.setAttribute('height', '0'); svg.setAttribute('aria-hidden', 'true');
       svg.style.cssText = 'position:absolute;pointer-events:none;forced-color-adjust:none;'; svg.dataset.modalPixelMask = '';
       const defs = document.createElementNS(ns, 'defs'), mask = document.createElementNS(ns, 'mask');
-      mask.id = maskId; mask.setAttribute('maskUnits', 'userSpaceOnUse'); mask.setAttribute('maskContentUnits', 'userSpaceOnUse');
-      mask.setAttribute('x', '0'); mask.setAttribute('y', '0'); mask.setAttribute('width', String(grid.width)); mask.setAttribute('height', String(grid.height));
+      // HTML/CSS zoom and SVG user-space lengths need not share a scale in
+      // WebKit. A unit-square mask follows the actual target border box, so
+      // removing it cannot suddenly expose a larger strip of the modal.
+      mask.id = maskId; mask.setAttribute('maskUnits', 'objectBoundingBox'); mask.setAttribute('maskContentUnits', 'objectBoundingBox');
+      mask.setAttribute('x', '0'); mask.setAttribute('y', '0'); mask.setAttribute('width', '1'); mask.setAttribute('height', '1');
       mask.style.maskType = 'alpha'; defs.append(mask); svg.append(defs); layer.append(svg); owned.push(svg);
       for (const tile of grid.tiles) {
         const rect = document.createElementNS(ns, 'rect');
         // Overlap mask cells slightly to avoid antialiased seams at full alpha;
         // the separate hard clipping path still defines the tile's exact edge.
-        rect.setAttribute('x', String(tile.x - .5)); rect.setAttribute('y', String(tile.y - .5));
-        rect.setAttribute('width', String(tile.width + 1)); rect.setAttribute('height', String(tile.height + 1));
+        rect.setAttribute('x', String((tile.x - .5) / grid.width)); rect.setAttribute('y', String((tile.y - .5) / grid.height));
+        rect.setAttribute('width', String((tile.width + 1) / grid.width)); rect.setAttribute('height', String((tile.height + 1) / grid.height));
         rect.setAttribute('fill', 'white'); mask.append(rect);
         animate(rect, frames(tile, t => ({ opacity: t })));
       }
