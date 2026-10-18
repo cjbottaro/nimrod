@@ -417,6 +417,39 @@ test('native row menu pins its background target without selection, connection, 
   } finally { f.win.close(); }
 });
 
+test('pinning prefers top or minimally reveals a deep pin; unpinning preserves the reading anchor', async () => {
+  for (const existingPins of [0, 5]) {
+    const entries = Array.from({ length: 8 }, (_, index) => ({ path: `/sessions/pin-${index}`, sessionId: 'fixture-id', name: `Pin ${index}`, lastUsed: 100 - index, pinned: index < existingPins }));
+    const f = await fixture(undefined, { windowWorkspace: '/project', appState: {
+      'nimrod.tabs.v1:/project': { tabs: entries, active: entries[0].path },
+    } });
+    try {
+      await f.tick(); await f.tick();
+      const panel = f.element('sidebar-session-panel'), rows = f.rows(), target = rows[7];
+      const rect = (top: number) => ({ top, bottom: top + 40, height: 40 } as DOMRect);
+      Object.defineProperty(panel, 'offsetHeight', { value: 100 });
+      panel.getBoundingClientRect = () => ({ top: 0, bottom: 100, height: 100 } as DOMRect);
+      for (const row of rows) row.parentElement!.getBoundingClientRect = () => rect([...f.element('open-sessions').children].indexOf(row.parentElement!) * 40 - panel.scrollTop);
+      const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Retain draft'; prompt.focus();
+      panel.scrollTop = 180;
+      const before = f.calls.length, timestamp = target.querySelector('time')!.getAttribute('datetime');
+      (await f.rowMenu(target)).pin.click(); await f.tick(); await f.tick();
+      assert.equal(panel.scrollTop, existingPins ? 140 : 0);
+      assert.equal(target.parentElement!.getBoundingClientRect().bottom, existingPins ? 100 : 40);
+      assert.equal(rows[0].getAttribute('aria-current'), 'true');
+      assert.equal(f.win.document.activeElement, prompt); assert.equal(prompt.value, 'Retain draft');
+      assert.equal(target.querySelector('time')!.getAttribute('datetime'), timestamp);
+      assert.equal(f.calls.slice(before).some(call => ['start_pi', 'write_pi', 'stop_pi'].includes(call.command)), false);
+      panel.scrollTop = 160;
+      const anchor = [...f.element('open-sessions').children][4] as HTMLElement;
+      const offset = anchor.getBoundingClientRect().top;
+      target.parentElement!.querySelector<HTMLButtonElement>('.session-pin')!.click(); await f.tick();
+      assert.equal(anchor.getBoundingClientRect().top, offset, 'unpin retains normal anchoring instead of requesting list top');
+      assert.ok(panel.scrollTop > 0);
+    } finally { f.win.close(); }
+  }
+});
+
 test('saved Pi and Copilot pins restore without loading background sessions and palette pin is bindable', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project', appState: {
     'nimrod.tabs.v1:/project': { tabs: [
@@ -1728,13 +1761,15 @@ test('legacy unknown recency seeds before insertion from read-only metadata, not
   } finally { f.win.close(); }
 });
 
-test('startup reveals only the presented restored row once, without focus, filter or recency changes', async () => {
+test('startup prefers list top or minimum reveal from top once, without focus, filter or recency changes', async () => {
   for (const scenario of [
-    { view: 'all', selected: 7, collapsed: false, scroll: 220 },
-    { view: 'all', selected: 1, collapsed: false, scroll: 0 },
-    { view: 'unread', selected: 7, collapsed: false, scroll: 0 },
-    { view: 'working', selected: 7, collapsed: false, scroll: 0 },
-    { view: 'all', selected: 7, collapsed: true, scroll: 0 },
+    { view: 'all', selected: 7, collapsed: false, initial: 0, scroll: 220 },
+    { view: 'all', selected: 1, collapsed: false, initial: 120, scroll: 0 },
+    { view: 'all', selected: 4, collapsed: false, initial: 160, scroll: 100 },
+    { view: 'all', selected: 7, collapsed: false, initial: 240, scroll: 220 },
+    { view: 'unread', selected: 7, collapsed: false, initial: 80, scroll: 80 },
+    { view: 'working', selected: 7, collapsed: false, initial: 80, scroll: 80 },
+    { view: 'all', selected: 7, collapsed: true, initial: 80, scroll: 80 },
   ]) {
     let restore!: () => void;
     const windowWorkspaceGate = new Promise<void>(resolve => { restore = resolve; });
@@ -1753,6 +1788,7 @@ test('startup reveals only the presented restored row once, without focus, filte
       Object.defineProperty(panel, 'offsetHeight', { get: () => f.element('session-sidebar').hidden ? 0 : 100 });
       const rect = (top: number, height: number) => ({ top, bottom: top + height, left: 0, right: 200, width: 200, height, x: 0, y: top, toJSON() {} });
       panel.getBoundingClientRect = () => rect(0, 100);
+      panel.scrollTop = scenario.initial;
       const originalRect = f.win.HTMLElement.prototype.getBoundingClientRect;
       f.win.HTMLElement.prototype.getBoundingClientRect = function () {
         if (!this.classList.contains('open-session')) return originalRect.call(this);

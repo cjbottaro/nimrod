@@ -64,9 +64,14 @@ export function captureSidebarScroll(container: HTMLElement, rows: readonly HTML
     else container.scrollTop = top;
   };
 }
-/** Reveal for navigation/startup intents; never scroll other ancestors/transcripts. */
-export function revealSidebarRow(container: HTMLElement, row: HTMLElement): void {
+/** Explicit sidebar scroll intent only; never scroll other ancestors/transcripts.
+ * Pin/startup prefer the top of the list, then reveal the row minimally from there.
+ * Other navigation reveals relative to the current viewport. Hidden/collapsed
+ * targets do nothing, including no reset and no deferred reveal on expansion.
+ */
+export function revealSidebarRow(container: HTMLElement, row: HTMLElement, intent: 'nearest' | 'prefer-top' = 'nearest'): void {
   if (!container.offsetHeight || row.hidden) return;
+  if (intent === 'prefer-top') container.scrollTop = 0;
   const bounds = container.getBoundingClientRect(), rect = row.getBoundingClientRect(), zoom = scale(container);
   if (rect.top < bounds.top) container.scrollTop += (rect.top - bounds.top) / zoom;
   else if (rect.bottom > bounds.bottom) container.scrollTop += (rect.bottom - bounds.bottom) / zoom;

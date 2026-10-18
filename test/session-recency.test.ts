@@ -21,6 +21,33 @@ test('list timestamp sorting shares sidebar recency rules and keeps unknown time
   assert.deepEqual(entries, original);
 });
 
+test('prefer-top reveals from list origin, not the current viewport, with zoom and hidden guards', () => {
+  const dom = new JSDOM('<aside><div></div></aside>');
+  try {
+    const container = dom.window.document.querySelector('aside')!, row = container.firstElementChild as HTMLElement;
+    let height = 100, rowTop = 40;
+    Object.defineProperty(container, 'offsetHeight', { get: () => height });
+    container.getBoundingClientRect = () => ({ top: 50, bottom: 250, height: 200 } as DOMRect);
+    row.getBoundingClientRect = () => ({ top: 50 + (rowTop - container.scrollTop) * 2, bottom: 50 + (rowTop + 40 - container.scrollTop) * 2 } as DOMRect);
+    container.scrollTop = 120;
+    revealSidebarRow(container, row, 'prefer-top');
+    assert.equal(container.scrollTop, 0, 'a fully visible row at list origin leaves the list at the top');
+    rowTop = 200; container.scrollTop = 180;
+    revealSidebarRow(container, row, 'prefer-top');
+    assert.equal(container.scrollTop, 140, 'minimum reveal is computed from zero, even when the row was already visible');
+    assert.equal(row.getBoundingClientRect().bottom, container.getBoundingClientRect().bottom, 'row is bottom-aligned, not centered');
+    container.scrollTop = 180;
+    revealSidebarRow(container, row);
+    assert.equal(container.scrollTop, 180, 'ordinary navigation retains its nearest-edge behavior');
+    row.hidden = true; container.scrollTop = 80;
+    revealSidebarRow(container, row, 'prefer-top');
+    assert.equal(container.scrollTop, 80, 'filtered rows do not reset scroll');
+    row.hidden = false; height = 0;
+    revealSidebarRow(container, row, 'prefer-top');
+    assert.equal(container.scrollTop, 80, 'a collapsed sidebar does not reset scroll or schedule work');
+  } finally { dom.window.close(); }
+});
+
 test('scroll anchoring excludes the moved row, accounts for zoom and reveals only on request', () => {
   const dom = new JSDOM('<aside><div>A</div><div>B</div><div>C</div><div>D</div></aside>');
   try {

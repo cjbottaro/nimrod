@@ -385,7 +385,9 @@ async function runSessionRowAction(tab: Tab, action: 'pin' | 'close' | 'delete',
     if (!canPin(tab) || tab.pinned === pinned) return;
     tab.pinned = pinned;
     // Presentation-only: no activation, connection, transcript reset or recency change.
-    updateTab(tab); persistTabs();
+    updateTab(tab);
+    if (pinned) revealSidebarRow(required('sidebar-session-panel'), tab.rowNode, 'prefer-top');
+    persistTabs();
   } else if (action === 'close') {
     if (canClose(tab)) await closeTab(tab);
   } else await deleteSession(tab);
@@ -988,7 +990,7 @@ function activate(tab: Tab, intent: SelectionIntent = 'explicit'): void {
   // Effects live at this one boundary; the model never touches Pi or drafts.
   for (const item of tabs) updateTab(item);
   persistTabs(); controls(); syncPopouts();
-  if (plan.reveal && presented === tab) revealSidebarRow(required('sidebar-session-panel'), tab.rowNode);
+  if (plan.reveal && presented === tab) revealSidebarRow(required('sidebar-session-panel'), tab.rowNode, intent === 'startup' ? 'prefer-top' : 'nearest');
   if (plan.focus && presented === tab && !document.querySelector('dialog[open]')) (tab.focus?.isConnected ? tab.focus : tab.root.querySelector<HTMLElement>('[data-pi-id="prompt"]'))?.focus({ preventScroll: true });
   selectedConnection.request();
 }
