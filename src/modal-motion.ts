@@ -1,36 +1,22 @@
-import { DEFAULT_MODAL_DURATIONS, modalExitDuration, type ModalAnimationStyle } from './modal-animation-defaults';
+import { DEFAULT_MODAL_DURATIONS, DEFAULT_SCAN_SPEEDS, isScanStyle, modalExitDuration, normalizeScanSpeed, type ModalAnimationStyle, type ScanStyle } from './modal-animation-defaults';
+import { initialScanEdges, planScan, sampleScan, scanOffsets, scanClip, edgesFromClip, type ScanPlan } from './modal-scan';
 
-interface Motion { style: ModalAnimationStyle; duration: number }
+interface Motion { style: ModalAnimationStyle; duration: number; scanSpeed: number }
 interface Snapshot { shell: HTMLElement; rect: DOMRect; zoom: number; backdrop: string; motion: Motion; opacity: string; clip: string; restoreScroll(): void }
-interface Layer { source: HTMLElement; node: HTMLElement; animations: Animation[]; frame?: number; observer?: ResizeObserver }
+interface Layer { source: HTMLElement; node: HTMLElement; animations: Animation[]; revision: number; frame?: number; observer?: ResizeObserver }
 interface NativeDismissal { event: Event; generation?: number; epoch: number; snapshot?: Snapshot }
 const owners = new WeakMap<Document, ReturnType<typeof createModalMotion>>();
 const styles = new WeakMap<CSSStyleSheet, { count: number; text: string }>();
-// Shared beam sequence: CRT dismissal plays exactly this entrance backwards.
-const CRT_BEAM: Keyframe[] = [{ opacity: 1 }, { opacity: 1, offset: .18 }, { opacity: 0, offset: .3 }, { opacity: 0 }];
-
-function hologramBeam(height: number): Keyframe[] {
-  return [
-    { transform: 'translateY(-50%)', opacity: 1 },
-    { transform: `translateY(${height}px) translateY(-50%)`, opacity: 1 },
-  ];
-}
-
-function visibleScanHeight(clip: string, height: number): number {
-  const insets = clip.match(/^inset\(([^)]+)\)$/)?.[1].trim().split(/\s+/);
-  if (!insets) return height;
-  const bottom = insets[2] ?? insets[0], amount = parseFloat(bottom);
-  if (!Number.isFinite(amount)) return height;
-  return Math.max(0, Math.min(height, height - (bottom.endsWith('%') ? height * amount / 100 : amount)));
-}
-
 function motion(document: Document, exit = false): Motion {
   const root = document.documentElement, view = document.defaultView!;
   const style = root.dataset.modalAnimation as ModalAnimationStyle || 'subtle';
   const reduced = document.visibilityState === 'hidden' || view.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const duration = parseFloat(view.getComputedStyle(root).getPropertyValue(exit ? '--modal-exit-duration' : '--modal-enter-duration'));
   const fallback = DEFAULT_MODAL_DURATIONS[style] ?? DEFAULT_MODAL_DURATIONS.subtle;
-  return { style, duration: reduced || style === 'none' ? 0 : Number.isFinite(duration) ? duration : exit ? modalExitDuration(style, fallback) : fallback };
+  const rawSpeed = Number(view.getComputedStyle(root).getPropertyValue('--modal-scan-speed'));
+  const scanSpeed = normalizeScanSpeed(rawSpeed || (isScanStyle(style) ? DEFAULT_SCAN_SPEEDS[style] : 1000));
+  return { style, duration: reduced || style === 'none' ? 0 : Number.isFinite(duration) ? duration : exit ? modalExitDuration(style, fallback) : fallback,
+    scanSpeed: reduced || style === 'none' ? 0 : scanSpeed * (exit ? 1.25 : 1) };
 }
 
 /** Preserve ID-based styling without duplicating live DOM IDs, even across shadow queries. */
@@ -60,6 +46,7 @@ function createModalMotion(document: Document) {
   const view = document.defaultView!;
   const layers = new Set<Layer>();
   const generations = new WeakMap<HTMLElement, number>();
+  const preparing = new WeakSet<HTMLElement>();
   let pending = new WeakMap<HTMLElement, NativeDismissal>();
   const pendingCleanup = new Set<number>();
   let disposed = false, epoch = 0;
@@ -94,41 +81,44 @@ function createModalMotion(document: Document) {
       const dialogs = [...document.querySelectorAll<HTMLDialogElement>('dialog[open]')];
       (dialogs.at(-1) ?? document.body).append(node);
     }
-    const layer: Layer = { source, node, animations: [] };
+    const layer: Layer = { source, node, animations: [], revision: 0 };
     layers.add(layer); return layer;
   }
   function animate(layer: ReturnType<typeof mount>, element: HTMLElement, frames: Keyframe[], duration: number, easing = 'linear', direction: PlaybackDirection = 'normal') {
     const animation = element.animate(frames, { duration, easing, direction, fill: 'both' });
     layer.animations.push(animation); return animation;
   }
-  function startTogether(layer: Layer) {
-    // Freeze frame zero while geometry/styles are prepared. Both CSS and WAAPI
-    // effects then start on the same rendered frame, even after a busy task.
+  function startTogether(layer: Layer, defer = true) {
+    // Freeze frame zero while geometry/styles are prepared. All segment effects
+    // then start on the same rendered frame, even after a busy task.
     layer.animations.forEach(animation => { animation.pause(); animation.currentTime = 0; });
-    layer.frame = view.requestAnimationFrame(timestamp => {
+    const start = (timestamp: number) => {
       layer.frame = undefined;
       if (!layers.has(layer)) return;
       try {
-        const start = document.timeline?.currentTime ?? timestamp;
-        layer.animations.forEach(animation => { animation.play(); animation.startTime = start; });
+        const time = document.timeline?.currentTime ?? timestamp;
+        layer.animations.forEach(animation => { animation.play(); animation.startTime = time; });
       } catch { remove(layer); }
-    });
+    };
+    if (defer) layer.frame = view.requestAnimationFrame(start); else start(view.performance.now());
   }
   function finish(layer: Layer) {
     // Never cut a running effect short with a wall-clock deadline: rendering
     // may start late or be throttled. Hidden windows and disposal clear it.
-    void Promise.all(layer.animations.map(animation => animation.finished)).then(() => remove(layer), () => remove(layer));
+    const revision = layer.revision;
+    const done = () => { if (layer.revision === revision) remove(layer); };
+    void Promise.all(layer.animations.map(animation => animation.finished)).then(done, done);
   }
   function geometry(shell: HTMLElement) {
     const rect = shell.getBoundingClientRect(), root = document.documentElement;
     const zoom = root.offsetWidth ? root.getBoundingClientRect().width / root.offsetWidth : 1;
     return { rect, zoom: zoom || 1 };
   }
-  function line(layer: ReturnType<typeof mount>, rect: DOMRect, zoom: number, style: 'crt' | 'hologram' = 'crt') {
+  function line(layer: ReturnType<typeof mount>, rect: DOMRect, zoom: number, style: ScanStyle = 'crt') {
     const node = document.createElement('div');
     if (style === 'hologram') node.dataset.modalHologramLine = ''; else node.dataset.modalCrtLine = '';
     const accent = view.getComputedStyle(document.documentElement).getPropertyValue('--modal-beam-accent').trim() || 'currentColor';
-    const top = rect.top + (style === 'crt' ? rect.height / 2 : 0);
+    const top = rect.top;
     node.style.cssText = `position:absolute;left:${rect.left / zoom}px;top:${top / zoom}px;width:${rect.width / zoom}px;height:2px;transform:translateY(-50%);pointer-events:none;`;
     node.style.background = accent; node.style.boxShadow = `0 0 12px ${accent}`;
     if (style === 'hologram') {
@@ -139,10 +129,50 @@ function createModalMotion(document: Document) {
     }
     layer.node.append(node); return node;
   }
+  function scan(layer: Layer, shell: HTMLElement, style: ScanStyle, speed: number, closing = false, clip = 'none', backdrop?: HTMLElement, fixed?: { rect: DOMRect; zoom: number }) {
+    const initial = fixed ?? geometry(shell);
+    const beams = style === 'crt' ? [line(layer, initial.rect, initial.zoom, style), line(layer, initial.rect, initial.zoom, style)] : [line(layer, initial.rect, initial.zoom, style)];
+    let plan: ScanPlan | undefined, clock: Animation | undefined, signature = '';
+    const retarget = () => {
+      if (!layers.has(layer)) return;
+      const box = fixed ?? geometry(shell), nextSignature = JSON.stringify([box.rect.top, box.rect.left, box.rect.width, box.rect.height, box.zoom]);
+      if (nextSignature === signature) return;
+      signature = nextSignature;
+      const bounds = { top: box.rect.top / box.zoom, bottom: (box.rect.top + box.rect.height) / box.zoom };
+      const elapsed = typeof clock?.currentTime === 'number' ? clock.currentTime : 0;
+      const from = plan && layer.frame === undefined ? sampleScan(plan, elapsed) : closing ? edgesFromClip(style, bounds, clip) : initialScanEdges(style, bounds);
+      const defer = !plan || layer.frame !== undefined;
+      // Retiring one segment must not let its rejected finished Promise remove
+      // the successor. Preserve edge positions, not normalized time/height.
+      layer.revision++;
+      if (layer.frame !== undefined) { view.cancelAnimationFrame(layer.frame); layer.frame = undefined; }
+      layer.animations.forEach(animation => animation.cancel()); layer.animations = [];
+      plan = planScan(style, bounds, from, speed, closing);
+      if (plan.duration < .01) { remove(layer); return; }
+      const segment = plan, offsets = scanOffsets(segment);
+      clock = animate(layer, shell, offsets.map(offset => ({ offset, clipPath: scanClip(bounds, sampleScan(segment, offset * segment.duration)) })), segment.duration);
+      beams.forEach((beam, index) => {
+        beam.style.left = `${box.rect.left / box.zoom}px`; beam.style.top = `${bounds.top}px`; beam.style.width = `${box.rect.width / box.zoom}px`;
+        const edge = style === 'crt' && index === 0 ? 'top' : 'bottom';
+        beam.dataset.modalScanEdge = edge;
+        animate(layer, beam, offsets.map(offset => {
+          const y = sampleScan(segment, offset * segment.duration)[edge];
+          return { offset, transform: `translateY(${y - bounds.top}px) translateY(-50%)`, opacity: y < bounds.top || y > bounds.bottom ? 0 : 1 };
+        }), segment.duration);
+      });
+      if (backdrop) animate(layer, backdrop, [{ opacity: 1 }, { opacity: 0 }], Math.min(150, segment.duration), 'ease-in');
+      startTogether(layer, defer); finish(layer);
+    };
+    retarget();
+    if (!closing && layers.has(layer) && typeof view.ResizeObserver === 'function') {
+      layer.observer = new view.ResizeObserver(() => { try { retarget(); } catch { remove(layer); } });
+      layer.observer.observe(shell);
+    }
+  }
   function capture(source: HTMLElement): Snapshot | undefined {
     const shell = source.matches('.nimrod-modal') ? source : source.querySelector<HTMLElement>('.nimrod-modal');
     const settings = motion(document, true);
-    if (disposed || !shell || !settings.duration || typeof shell.animate !== 'function') return;
+    if (disposed || !shell || !settings.duration || typeof shell.animate !== 'function' || (isScanStyle(settings.style) && preparing.has(source))) return;
     const { rect, zoom } = geometry(shell);
     if (!rect.width || !rect.height) return;
     const computed = view.getComputedStyle(shell);
@@ -202,61 +232,31 @@ function createModalMotion(document: Document) {
     const layer = mount(source, 'exit'), { duration, style } = snapshot.motion;
     layer.node.append(snapshot.shell);
     snapshot.restoreScroll();
-    if (style === 'crt' || style === 'hologram') {
-      // Reverse the live reveal instead of fading its contents. Only the
-      // independent backdrop fades; both scan styles keep the panel opaque.
+    if (isScanStyle(style)) {
       const backdrop = document.createElement('div'); backdrop.dataset.modalMotionBackdrop = '';
       backdrop.style.cssText = 'position:absolute;inset:0;pointer-events:none;';
       backdrop.style.background = snapshot.backdrop; layer.node.prepend(backdrop);
-      animate(layer, backdrop, [{ opacity: 0 }, { opacity: 1 }], duration, 'ease-out', 'reverse');
-      const endClip = snapshot.clip === 'none' ? 'inset(0)' : snapshot.clip;
-      const frames: Keyframe[] = style === 'crt' ? [
-        { clipPath: 'inset(50% 0)', offset: 0, easing: 'cubic-bezier(.2,.8,.2,1)' },
-        { clipPath: 'inset(50% 0)', offset: .18, easing: 'cubic-bezier(.2,.8,.2,1)' },
-        { clipPath: endClip, offset: 1 },
-      ] : [{ clipPath: 'inset(0 0 100% 0)' }, { clipPath: endClip }];
-      animate(layer, snapshot.shell, frames, duration, 'linear', 'reverse');
-      const beam = line(layer, snapshot.rect, snapshot.zoom, style);
-      animate(layer, beam, style === 'crt' ? CRT_BEAM : hologramBeam(visibleScanHeight(snapshot.clip, snapshot.rect.height / snapshot.zoom)), duration, 'linear', 'reverse');
+      scan(layer, snapshot.shell, style, snapshot.motion.scanSpeed, true, snapshot.clip, backdrop, { rect: snapshot.rect, zoom: snapshot.zoom });
+      return;
     } else {
       layer.node.style.background = snapshot.backdrop;
       animate(layer, layer.node, [{ opacity: 1 }, { opacity: 0 }], duration);
       animate(layer, snapshot.shell, [{ opacity: snapshot.opacity, transform: 'none' }, { opacity: 0, transform: 'translateY(4px) scale(.98)' }], duration, 'ease-in');
     }
-    if (style === 'hologram') startTogether(layer);
     finish(layer);
   }
   function opening(source: HTMLElement) {
-    clear(); const generation = bump(source), openingEpoch = epoch;
+    clear(); preparing.add(source); const generation = bump(source), openingEpoch = epoch;
     queueMicrotask(() => {
+      preparing.delete(source);
       try {
         if (disposed || epoch !== openingEpoch || generations.get(source) !== generation || !source.isConnected) return;
         const settings = motion(document);
         const shell = source.matches('.nimrod-modal') ? source : source.querySelector<HTMLElement>('.nimrod-modal');
-        if ((settings.style !== 'crt' && settings.style !== 'hologram') || !settings.duration || !shell || typeof shell.animate !== 'function') return;
+        if (!isScanStyle(settings.style) || !settings.scanSpeed || !shell || typeof shell.animate !== 'function') return;
         if (source.localName === 'dialog' ? !(source as HTMLDialogElement).open : !source.classList.contains('open')) return;
-        const { rect, zoom } = geometry(shell); if (!rect.width || !rect.height) return;
-        const layer = mount(source, 'enter'), beam = line(layer, rect, zoom, settings.style);
-        const scan = animate(layer, beam, settings.style === 'crt' ? CRT_BEAM : hologramBeam(rect.height / zoom), settings.duration);
-        if (settings.style === 'hologram') {
-          const live = source.getAnimations?.({ subtree: true }).filter(animation =>
-            'animationName' in animation && ['modal-hologram-enter', 'modal-backdrop-enter'].includes(String(animation.animationName))) ?? [];
-          if (live.some(animation => String((animation as CSSAnimation).animationName) === 'modal-hologram-enter')) layer.animations.push(...live);
-          else animate(layer, shell, [{ clipPath: 'inset(0 0 100% 0)' }, { clipPath: 'inset(0)' }], settings.duration);
-          startTogether(layer);
-          if (typeof view.ResizeObserver === 'function') {
-            layer.observer = new view.ResizeObserver(() => {
-              if (!layers.has(layer)) return;
-              const current = geometry(shell);
-              beam.style.left = `${current.rect.left / current.zoom}px`;
-              beam.style.top = `${current.rect.top / current.zoom}px`;
-              beam.style.width = `${current.rect.width / current.zoom}px`;
-              (scan.effect as KeyframeEffect | null)?.setKeyframes(hologramBeam(current.rect.height / current.zoom));
-            });
-            layer.observer.observe(shell);
-          }
-        }
-        finish(layer);
+        const { rect } = geometry(shell); if (!rect.width || !rect.height) return;
+        scan(mount(source, 'enter'), shell, settings.style, settings.scanSpeed);
       } catch { for (const layer of [...layers]) if (layer.source === source) remove(layer); }
     });
   }

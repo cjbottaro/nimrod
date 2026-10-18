@@ -214,6 +214,17 @@ pub(crate) fn validate(text: &str) -> Result<(), String> {
             return Err("appearance.modalAnimation must be none, subtle, crt or hologram".into());
         }
     }
+    if let Some(speed) = object.get("appearance.modalScanSpeed") {
+        if !speed
+            .as_f64()
+            .is_some_and(|value| value.fract() == 0.0 && (100.0..=1500.0).contains(&value))
+        {
+            return Err(
+                "appearance.modalScanSpeed must be an integer from 100 to 1500 pixels per second"
+                    .into(),
+            );
+        }
+    }
     if let Some(duration) = object.get("appearance.modalAnimationDuration") {
         if !duration
             .as_f64()
@@ -681,6 +692,12 @@ mod tests {
         }
         for style in ["null", "true", "1", r#""unknown""#] {
             assert!(validate(&format!(r#"{{"appearance.modalAnimation":{style}}}"#)).is_err());
+        }
+        for speed in ["100", "500", "1000", "1500", "500.0"] {
+            validate(&format!(r#"{{"appearance.modalScanSpeed":{speed}}}"#)).unwrap();
+        }
+        for speed in ["0", "99", "1501", "500.5", "null", "true", r#""500""#] {
+            assert!(validate(&format!(r#"{{"appearance.modalScanSpeed":{speed}}}"#)).is_err());
         }
         for duration in ["0", "160", "2000", "160.0"] {
             validate(&format!(

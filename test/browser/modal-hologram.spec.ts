@@ -1,79 +1,70 @@
 import { expect, test } from '@playwright/test';
-import { demoFixture } from './demo-fixture';
+import { demoFixture, visible } from './demo-fixture';
 
-test('Hologram preview scans down with the reveal and reverses upward on dismissal', async ({ page }) => {
+test('Hologram preserves pixel position and velocity when a visible modal grows or shrinks', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {
-    await fixture.editPreferences('{"appearance.modalAnimation":"hologram"}');
-    const settings = await fixture.settingsWindow();
-    await settings.emulateMedia({ reducedMotion: 'no-preference' });
-    await expect(settings.locator('#modal-animation-style')).toHaveValue('hologram');
-    await expect(settings.locator('#modal-animation-duration')).toHaveValue('300');
-    const opening = await settings.evaluate(async () => {
-      document.documentElement.style.setProperty('--vscode-focusBorder', 'rgb(123, 45, 67)');
+    await fixture.editPreferences('{"appearance.modalAnimation":"hologram","appearance.modalScanSpeed":1000}');
+    const settings = await fixture.settingsWindow(); await settings.setViewportSize({ width: 1000, height: 900 }); await settings.emulateMedia({ reducedMotion: 'no-preference' });
+    await expect(settings.locator('#modal-animation-duration')).toHaveValue('1000');
+    const result = await settings.evaluate(async () => {
+      const dialog = document.querySelector<HTMLDialogElement>('#modal-animation-preview-dialog')!; dialog.style.height = '300px';
       document.getElementById('modal-animation-preview')!.click(); await Promise.resolve();
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-      const dialog = document.querySelector<HTMLDialogElement>('#modal-animation-preview-dialog')!;
-      const panel = dialog.getAnimations().find(animation => animation instanceof CSSAnimation && animation.animationName === 'modal-hologram-enter')!;
-      const beam = document.querySelector<HTMLElement>('[data-modal-motion=enter] [data-modal-hologram-line]')!;
-      const scan = beam.getAnimations()[0], synchronized = panel.startTime === scan.startTime;
-      panel.pause(); scan.pause();
-      const sample = (fraction: number) => {
-        panel.currentTime = scan.currentTime = 300 * fraction;
-        const rect = dialog.getBoundingClientRect(), edge = beam.getBoundingClientRect(), style = getComputedStyle(dialog);
-        return { progress: (edge.top + edge.height / 2 - rect.top) / rect.height, clip: style.clipPath, opacity: style.opacity, transform: style.transform, background: style.backgroundColor };
-      };
-      const start = sample(0), early = sample(.25), late = sample(.75), end = sample(.999);
-      dialog.style.height = '300px';
-      panel.currentTime = scan.currentTime = 150;
+      const panelAnimation = () => dialog.getAnimations().find(animation => (animation.effect as KeyframeEffect).getKeyframes().some(frame => 'clipPath' in frame))!;
+      const beam = () => document.querySelector<HTMLElement>('[data-modal-motion=enter] [data-modal-hologram-line]')!;
+      const pause = (time: number) => { [panelAnimation(), ...beam().getAnimations()].forEach(animation => { animation.pause(); animation.currentTime = time; }); };
+      const y = () => { const rect = beam().getBoundingClientRect(); return rect.top + rect.height / 2; };
+      const panel = panelAnimation(), line = beam().getAnimations()[0];
+      const synchronized = panel.startTime === line.startTime;
+      const duration = Number(panel.effect!.getTiming().duration);
+      pause(75); const before = y();
+      dialog.style.height = '400px';
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-      const resized = sample(.5);
-      panel.currentTime = scan.currentTime = 300;
-      return { start, early, late, end, resized, synchronized, color: getComputedStyle(beam).backgroundColor, height: getComputedStyle(beam).height, trail: !!beam.querySelector('[data-modal-hologram-trail]'), iterations: scan.effect!.getTiming().iterations, focused: dialog.contains(document.activeElement) };
+      const newDuration = Number(panelAnimation().effect!.getTiming().duration);
+      pause(0); const after = y(); pause(50); const moved = y();
+      const root = document.documentElement, zoom = root.getBoundingClientRect().width / root.offsetWidth;
+      dialog.style.height = '100px'; // Current edge has passed the new bottom.
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      return { duration, newDuration, before, after, delta: (moved - after) / zoom, synchronized, open: dialog.open,
+        clip: getComputedStyle(dialog).clipPath, layers: document.querySelectorAll('[data-modal-motion=enter]').length, focused: dialog.contains(document.activeElement) };
     });
-    expect(opening.synchronized).toBe(true);
-    expect(opening.start.progress).toBeCloseTo(0, 2); expect(opening.end.progress).toBeCloseTo(.999, 2);
-    expect(opening.early.progress).toBeCloseTo(.25, 2); expect(opening.late.progress).toBeCloseTo(.75, 2);
-    expect(opening.resized.progress).toBeCloseTo(.5, 2);
-    expect(opening.early.clip).toContain('75%'); expect(opening.late.clip).toContain('25%');
-    expect(opening.early.opacity).toBe('1'); expect(opening.late.opacity).toBe('1');
-    expect(opening.early.transform).toBe('none'); expect(opening.early.background).not.toBe(opening.color);
-    expect(opening.color).toBe('rgb(123, 45, 67)'); expect(opening.height).toBe('2px');
-    expect(opening.trail).toBe(true); expect(opening.iterations).toBe(1); expect(opening.focused).toBe(true);
-    const closing = await settings.evaluate(async () => {
+    expect(result.duration).toBeCloseTo(300, 1); expect(result.newDuration).toBeCloseTo(325, 1);
+    expect(result.before).toBeCloseTo(result.after, 0); expect(result.delta).toBeCloseTo(50, 1);
+    expect(result.synchronized).toBe(true); expect(result.open).toBe(true); expect(result.focused).toBe(true);
+    expect(result.layers).toBe(0); expect(result.clip).toBe('none');
+    // Closing uses the frozen 100px copy: 100 / (1000 * 1.25) seconds.
+    const exit = await settings.evaluate(async () => {
       const dialog = document.querySelector<HTMLDialogElement>('#modal-animation-preview-dialog')!;
-      dialog.querySelector<HTMLButtonElement>('button')!.click(); await Promise.resolve();
-      // Native close events are queued; this listener is registered before
-      // this task returns, and runs after the document motion capture handler.
+      dialog.querySelector<HTMLButtonElement>('button')!.click();
       if (!document.querySelector('[data-modal-motion=exit]')) await new Promise<void>(resolve => dialog.addEventListener('close', () => resolve(), { once: true }));
       const layer = document.querySelector<HTMLElement>('[data-modal-motion=exit]')!;
-      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
       const panel = [...layer.children].find(node => node.shadowRoot)!;
-      const beam = layer.querySelector<HTMLElement>('[data-modal-hologram-line]')!;
-      const animations = layer.getAnimations({ subtree: true });
-      const synchronized = animations.every(animation => animation.startTime === animations[0].startTime);
-      const rect = panel.getBoundingClientRect();
-      const sample = (fraction: number) => {
-        animations.forEach(animation => { animation.pause(); animation.currentTime = 240 * fraction; });
-        const edge = beam.getBoundingClientRect();
-        return { progress: (edge.top + edge.height / 2 - rect.top) / rect.height, opacity: getComputedStyle(panel).opacity };
-      };
-      return { start: sample(0), early: sample(.25), late: sample(.75), end: sample(.999), synchronized, reverse: animations.every(animation => animation.effect!.getTiming().direction === 'reverse'), durations: animations.map(animation => animation.effect!.getTiming().duration), layerOpacity: getComputedStyle(layer).opacity, open: dialog.open, focused: document.activeElement?.id };
+      const duration = Number(panel.getAnimations()[0].effect!.getTiming().duration);
+      return { duration, open: dialog.open, focused: document.activeElement?.id, opacity: getComputedStyle(panel).opacity };
     });
-    expect(closing.open).toBe(false); expect(closing.focused).toBe('modal-animation-preview');
-    expect(closing.synchronized).toBe(true);
-    expect(closing.start.progress).toBeCloseTo(1, 2); expect(closing.end.progress).toBeCloseTo(.001, 2);
-    expect(closing.early.progress).toBeCloseTo(.75, 2); expect(closing.late.progress).toBeCloseTo(.25, 2);
-    expect(closing.reverse).toBe(true); expect(closing.durations.every(duration => duration === 240)).toBe(true);
-    expect(closing.early.opacity).toBe('1'); expect(closing.late.opacity).toBe('1'); expect(closing.layerOpacity).toBe('1');
-    await settings.emulateMedia({ reducedMotion: 'reduce' });
-    await expect(settings.locator('[data-modal-motion]')).toHaveCount(0);
-    await settings.locator('#modal-animation-preview').click();
-    await expect(settings.locator('[data-modal-motion]')).toHaveCount(0);
-    await settings.keyboard.press('Escape');
-    await expect(settings.locator('#modal-animation-preview-dialog')).not.toHaveAttribute('open');
-    await expect(settings.locator('[data-modal-motion]')).toHaveCount(0);
+    expect(exit.duration).toBeCloseTo(80, 1); expect(exit.open).toBe(false); expect(exit.focused).toBe('modal-animation-preview'); expect(exit.opacity).toBe('1');
+    expect(fixture.errors).toEqual([]);
+  } finally { await fixture.close(); }
+});
+
+test('typing can filter a picker during a slow scan without waiting or changing its draft', async ({ page }) => {
+  const fixture = await demoFixture(page);
+  try {
+    await fixture.editPreferences('{"appearance.modalAnimation":"hologram","appearance.modalScanSpeed":100}');
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    const prompt = page.locator(visible('prompt')); await prompt.fill('Keep my unsent draft');
+    const primary = await page.evaluate(() => /Mac|iPhone|iPad/i.test(navigator.platform)) ? 'Meta' : 'Control';
+    await page.keyboard.press(primary + '+Shift+P');
+    await expect(page.locator('#palette-input')).toBeFocused();
+    await page.keyboard.type('runtime');
+    await expect(page.locator('#palette-input')).toHaveValue('runtime');
+    await expect(page.locator('#command-palette')).toHaveAttribute('open', '');
+    await page.keyboard.press('Escape');
+    await expect(prompt).toHaveValue('Keep my unsent draft'); await expect(prompt).toBeFocused();
+    expect(fixture.calls.some(call => (call.args.message as { type?: string })?.type === 'prompt')).toBe(false);
     expect(fixture.errors).toEqual([]);
   } finally { await fixture.close(); }
 });
