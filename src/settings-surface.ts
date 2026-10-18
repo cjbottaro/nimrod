@@ -14,7 +14,8 @@ import { installZoom } from './zoom';
 import { installModalMotion, showModal, closeModal } from './modal-motion';
 import { applyModalAnimation, type ModalAnimationStyle } from './modal-animation';
 import { updateRangeFill } from './range-input';
-import { DEFAULT_MODAL_DURATIONS, DEFAULT_SCAN_SPEEDS, isScanStyle } from './modal-animation-defaults';
+import { pixelCapabilities } from './modal-pixel-surface';
+import { DEFAULT_MODAL_DURATIONS, DEFAULT_PIXEL_OPTIONS, DEFAULT_SCAN_SPEEDS, isScanStyle } from './modal-animation-defaults';
 import { installNativeWindowAppearance } from './native-window-appearance';
 import { installPerformanceDiagnostics } from './performance-diagnostics';
 import { createTranscriptLog } from './transcript-logs';
@@ -214,6 +215,17 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   let savingAnimation = 0, durationRevision = 0, durationEditing = false;
   let pendingStyle: ModalAnimationStyle | undefined;
   let valueKind: 'duration' | 'scanSpeed' = 'duration';
+  const pixelInputs = { pixelSize: required<HTMLInputElement>('modal-pixel-size'), pixelBlur: required<HTMLInputElement>('modal-pixel-blur') };
+  const pixelEditing = new Set<keyof typeof pixelInputs>();
+  const pixelFade = required<HTMLInputElement>('modal-pixel-fade');
+  const pixelSupport = pixelCapabilities(window.CSS);
+  function showPixelValues(): void {
+    updateRangeFill(pixelInputs.pixelSize); updateRangeFill(pixelInputs.pixelBlur);
+    required<HTMLOutputElement>('modal-pixel-size-value').value = `${pixelInputs.pixelSize.value} px target`;
+    required<HTMLOutputElement>('modal-pixel-blur-value').value = Number(pixelInputs.pixelBlur.value) === 0 ? 'Off' : `${pixelInputs.pixelBlur.value} px`;
+    pixelInputs.pixelSize.setAttribute('aria-valuetext', `${pixelInputs.pixelSize.value} pixels target`);
+    pixelInputs.pixelBlur.setAttribute('aria-valuetext', `${pixelInputs.pixelBlur.value} pixels content blur`);
+  }
   function showAnimationDuration(): void {
     updateRangeFill(animationDuration);
     const scan = valueKind === 'scanSpeed';
@@ -231,6 +243,16 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     if (kindChanged || force || (!durationEditing && !savingAnimation)) animationDuration.value = String(scan ? animation.scanSpeed : animation.duration);
     showAnimationDuration();
     required('modal-animation-options').hidden = animation.style === 'none';
+    required('modal-pixel-options').hidden = animation.style !== 'pixel';
+    for (const key of ['pixelSize', 'pixelBlur'] as const) {
+      if (!pixelEditing.has(key) && (force || !savingAnimation)) pixelInputs[key].value = String(animation[key] ?? DEFAULT_PIXEL_OPTIONS[key]);
+    }
+    if (!savingAnimation) pixelFade.checked = animation.pixelFade ?? DEFAULT_PIXEL_OPTIONS.pixelFade;
+    pixelInputs.pixelBlur.disabled = !pixelSupport.blur; pixelFade.disabled = !pixelSupport.fade;
+    showPixelValues();
+    required('modal-pixel-hint').textContent = 'Text and content inside each hard-edged tile sharpen and fade in. Larger panels may coarsen the grid to keep at most 96 tiles.'
+      + (!pixelSupport.blur ? ' Content blur is unavailable in this renderer.' : '')
+      + (!pixelSupport.fade ? ' Per-tile fading is unavailable in this renderer.' : '');
     required('modal-animation-hint').textContent = (animation.style === 'crt'
       ? 'A theme-accent horizontal line expands up and down like a CRT powering on.'
       : animation.style === 'hologram' ? 'A glowing scan line reveals the panel from top to bottom, with a soft trailing glow and no flicker.'
@@ -245,13 +267,14 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   }
   async function saveModalAnimation(values: Parameters<typeof preferences.saveModalAnimation>[0]): Promise<void> {
     const revision = durationRevision;
+    const noticeId = 'modal-animation-settings:' + Object.keys(values).sort().join('+');
     savingAnimation++;
     animationStyle.disabled = true;
     try {
       await preferences.saveModalAnimation(values);
-      notices.resolve('modal-animation-settings');
+      notices.resolve(noticeId);
     } catch (error) {
-      notices.report({ id: 'modal-animation-settings', operation: 'Save modal animation', message: String(error) });
+      notices.report({ id: noticeId, operation: 'Save modal animation', message: String(error) });
     } finally {
       savingAnimation--;
       if (!unloading) {
@@ -276,6 +299,19 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   animationStyle.addEventListener('change', changeAnimationStyle);
   animationDuration.addEventListener('input', inputAnimationDuration);
   animationDuration.addEventListener('change', changeAnimationDuration);
+  const pixelBindings = (['pixelSize', 'pixelBlur'] as const).map(key => {
+    const input = pixelInputs[key];
+    const edit = () => { pixelEditing.add(key); showPixelValues(); };
+    const commit = () => {
+      pixelEditing.delete(key);
+      const values: Parameters<typeof preferences.saveModalAnimation>[0] = {}; values[key] = input.valueAsNumber;
+      void saveModalAnimation(values);
+    };
+    input.addEventListener('input', edit); input.addEventListener('change', commit);
+    return () => { input.removeEventListener('input', edit); input.removeEventListener('change', commit); };
+  });
+  const changePixelFade = () => { void saveModalAnimation({ pixelFade: pixelFade.checked }); };
+  pixelFade.addEventListener('change', changePixelFade);
   const previewAnimation = () => { if (!animationPreview.open) showModal(animationPreview); };
   required('modal-animation-preview').addEventListener('click', previewAnimation);
   reloadModalAnimation();
@@ -421,6 +457,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
       animationStyle.removeEventListener('change', changeAnimationStyle);
       animationDuration.removeEventListener('input', inputAnimationDuration);
       animationDuration.removeEventListener('change', changeAnimationDuration);
+      pixelBindings.forEach(dispose => dispose()); pixelFade.removeEventListener('change', changePixelFade);
       if (animationPreview.open) closeModal(animationPreview);
       performanceDiagnostics.dispose(); transcriptLog.dispose();
       keybindingEditor?.dispose(); settingsNavigation.dispose(); settingsSidebarResize.dispose();

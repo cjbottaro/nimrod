@@ -5,7 +5,7 @@ import { applyModalAnimation, readModalAnimation } from '../src/modal-animation'
 
 test('scan speeds have independent style defaults and never reinterpret a duration as px/s', () => {
   assert.deepEqual(readModalAnimation({}), { style: 'subtle', duration: 500 });
-  assert.deepEqual(readModalAnimation({ 'appearance.modalAnimation': 'pixel' }), { style: 'pixel', duration: 500 });
+  assert.deepEqual(readModalAnimation({ 'appearance.modalAnimation': 'pixel' }), { style: 'pixel', duration: 500, pixelSize: 48, pixelBlur: 6, pixelFade: true });
   assert.equal(readModalAnimation({ 'appearance.modalAnimation': 'pixel', 'appearance.modalAnimationDuration': 1200 }).duration, 1200);
   assert.equal(readModalAnimation({ 'appearance.modalAnimation': 'crt', 'appearance.modalAnimationDuration': 1200 }).scanSpeed, 500);
   assert.equal(readModalAnimation({ 'appearance.modalAnimation': 'hologram', 'appearance.modalAnimationDuration': 1200 }).scanSpeed, 1000);
@@ -15,6 +15,16 @@ test('scan speeds have independent style defaults and never reinterpret a durati
   assert.equal(readModalAnimation({ 'appearance.modalScanSpeed': 101 }).scanSpeed, 100);
   assert.equal(readModalAnimation({ 'appearance.modalScanSpeed': 1425 }).scanSpeed, 1450);
   for (const value of [null, true, '500', 99, 1501, 500.5]) assert.throws(() => readModalAnimation({ 'appearance.modalScanSpeed': value }));
+});
+
+test('pixel options validate separately and preserve an explicit sharp mode', () => {
+  const value = readModalAnimation({ 'appearance.modalAnimation': 'pixel', 'appearance.modalPixelSize': 72, 'appearance.modalPixelBlur': 0, 'appearance.modalPixelFade': false });
+  assert.equal(value.pixelSize, 72); assert.equal(value.pixelBlur, 0); assert.equal(value.pixelFade, false);
+  for (const [key, invalids] of [
+    ['appearance.modalPixelSize', [null, true, 23, 121, 48.5]],
+    ['appearance.modalPixelBlur', [null, true, -1, 13, 1.5]],
+    ['appearance.modalPixelFade', [null, 'true', 1]],
+  ] as const) for (const invalid of invalids) assert.throws(() => readModalAnimation({ [key]: invalid }));
 });
 
 test('legacy duration normalization remains available for Subtle without changing files', () => {

@@ -14,6 +14,14 @@ test('pixel grids cover the box with bounded deterministic shuffled cells', () =
   }
 });
 
+test('size controls coarseness and soft materialization keeps a bounded, longer tile phase', () => {
+  const fine = pixelGrid(620, 240, { size: 24 }), chunky = pixelGrid(620, 240, { size: 96 });
+  assert.ok(fine.tiles.length > chunky.tiles.length);
+  const soft = pixelGrid(620, 240, { size: 48, soft: true });
+  assert.equal(soft.tileDuration, .5); assert.equal(Math.max(...soft.tiles.map(tile => tile.delay)), .5);
+  assert.ok(soft.tiles.length <= MAX_PIXEL_TILES);
+});
+
 test('all keyframes preserve path topology for native interpolation and partial reversal', () => {
   const grid = pixelGrid(620, 240), frames = pixelFrames(grid);
   assert.equal(frames.length, 13);

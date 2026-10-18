@@ -1,8 +1,9 @@
-import { DEFAULT_MODAL_DURATIONS, DEFAULT_SCAN_SPEEDS, isScanStyle, modalExitDuration, normalizeScanSpeed, type ModalAnimationStyle, type ScanStyle } from './modal-animation-defaults';
+import { DEFAULT_MODAL_DURATIONS, DEFAULT_PIXEL_OPTIONS, DEFAULT_SCAN_SPEEDS, isScanStyle, modalExitDuration, normalizeScanSpeed, type ModalAnimationStyle, type ScanStyle } from './modal-animation-defaults';
 import { initialScanEdges, planScan, sampleScan, scanOffsets, scanClip, edgesFromClip, type ScanPlan } from './modal-scan';
 import { pixelGrid, pixelFrames } from './modal-pixels';
+import { installPixelSurface, pixelCapabilities } from './modal-pixel-surface';
 
-interface Motion { style: ModalAnimationStyle; duration: number; scanSpeed: number }
+interface Motion { style: ModalAnimationStyle; duration: number; scanSpeed: number; pixelSize: number; pixelBlur: number; pixelFade: boolean }
 interface Snapshot { shell: HTMLElement; rect: DOMRect; zoom: number; backdrop: string; backdropFilter: string; motion: Motion; opacity: string; clip: string; pixelProgress?: number; restoreScroll(): void }
 interface Layer { source: HTMLElement; node: HTMLElement; animations: Animation[]; revision: number; frame?: number; observer?: ResizeObserver; release?(): void }
 interface NativeDismissal { event: Event; generation?: number; epoch: number; snapshot?: Snapshot }
@@ -17,12 +18,16 @@ function motion(document: Document, exit = false): Motion {
   const root = document.documentElement, view = document.defaultView!;
   const style = root.dataset.modalAnimation as ModalAnimationStyle || 'subtle';
   const reduced = document.visibilityState === 'hidden' || view.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  const duration = parseFloat(view.getComputedStyle(root).getPropertyValue(exit ? '--modal-exit-duration' : '--modal-enter-duration'));
+  const tokens = view.getComputedStyle(root);
+  const duration = parseFloat(tokens.getPropertyValue(exit ? '--modal-exit-duration' : '--modal-enter-duration'));
   const fallback = DEFAULT_MODAL_DURATIONS[style] ?? DEFAULT_MODAL_DURATIONS.subtle;
-  const rawSpeed = Number(view.getComputedStyle(root).getPropertyValue('--modal-scan-speed'));
+  const rawSpeed = Number(tokens.getPropertyValue('--modal-scan-speed'));
   const scanSpeed = normalizeScanSpeed(rawSpeed || (isScanStyle(style) ? DEFAULT_SCAN_SPEEDS[style] : 1000));
   return { style, duration: reduced || style === 'none' ? 0 : Number.isFinite(duration) ? duration : exit ? modalExitDuration(style, fallback) : fallback,
-    scanSpeed: reduced || style === 'none' ? 0 : scanSpeed * (exit ? 1.25 : 1) };
+    scanSpeed: reduced || style === 'none' ? 0 : scanSpeed * (exit ? 1.25 : 1),
+    pixelSize: Number(tokens.getPropertyValue('--modal-pixel-size')) || DEFAULT_PIXEL_OPTIONS.pixelSize,
+    pixelBlur: tokens.getPropertyValue('--modal-pixel-blur').trim() === '' ? DEFAULT_PIXEL_OPTIONS.pixelBlur : Number(tokens.getPropertyValue('--modal-pixel-blur')),
+    pixelFade: tokens.getPropertyValue('--modal-pixel-fade').trim() === '' ? DEFAULT_PIXEL_OPTIONS.pixelFade : tokens.getPropertyValue('--modal-pixel-fade').trim() === 'true' };
 }
 
 /** Preserve ID-based styling without duplicating live DOM IDs, even across shadow queries. */
@@ -91,7 +96,7 @@ function createModalMotion(document: Document) {
     const layer: Layer = { source, node, animations: [], revision: 0 };
     layers.add(layer); return layer;
   }
-  function animate(layer: ReturnType<typeof mount>, element: HTMLElement, frames: Keyframe[], duration: number, easing = 'linear', direction: PlaybackDirection = 'normal') {
+  function animate(layer: ReturnType<typeof mount>, element: Element, frames: Keyframe[], duration: number, easing = 'linear', direction: PlaybackDirection = 'normal') {
     const animation = element.animate(frames, { duration, easing, direction, fill: 'both' });
     layer.animations.push(animation); return animation;
   }
@@ -177,7 +182,14 @@ function createModalMotion(document: Document) {
     }
   }
   function pixel(layer: Layer, shell: HTMLElement, duration: number, closing = false, progress = 1, clip = 'none', backdrop?: HTMLElement, fixed?: { rect: DOMRect; zoom: number }) {
-    let signature = '';
+    let signature = '', clock: Animation | undefined;
+    let releaseSurface: (() => void) | undefined;
+    layer.release = () => {
+      pixels.delete(shell);
+      releaseSurface?.(); releaseSurface = undefined;
+    };
+    const options = motion(document), capabilities = pixelCapabilities(view.CSS);
+    const softness = { blur: capabilities.blur ? options.pixelBlur : 0, fade: capabilities.fade && options.pixelFade };
     const prepare = () => {
       if (!layers.has(layer)) return;
       const box = fixed ?? geometry(shell), next = JSON.stringify([box.rect.left, box.rect.top, box.rect.width, box.rect.height, box.zoom]);
@@ -188,15 +200,18 @@ function createModalMotion(document: Document) {
       signature = next; layer.revision++;
       if (layer.frame !== undefined) { view.cancelAnimationFrame(layer.frame); layer.frame = undefined; }
       layer.animations.forEach(animation => animation.cancel()); layer.animations = [];
-      const grid = pixelGrid(box.rect.width / box.zoom, box.rect.height / box.zoom);
+      releaseSurface?.(); releaseSurface = undefined;
+      const grid = pixelGrid(box.rect.width / box.zoom, box.rect.height / box.zoom, { size: options.pixelSize, soft: softness.blur > 0 || softness.fade });
       if (!grid.tiles.length || progress <= 0 || (typeof view.CSS?.supports !== 'function' || !view.CSS.supports('clip-path', 'path("M0 0H1V1H0Z")'))) { remove(layer); return; }
       const frames = pixelFrames(grid, closing ? progress : 1);
       if (closing && clip.startsWith('path(')) frames[frames.length - 1].clipPath = clip;
       const time = duration * (closing ? progress : 1);
-      const clock = animate(layer, shell, frames, time, 'linear', closing ? 'reverse' : 'normal');
+      clock = animate(layer, shell, frames, time, 'linear', closing ? 'reverse' : 'normal');
+      releaseSurface = installPixelSurface(layer.node, shell, grid, softness, closing ? progress : 1,
+        { left: box.rect.left / box.zoom, top: box.rect.top / box.zoom },
+        (element, effect) => { animate(layer, element, effect, time, 'linear', closing ? 'reverse' : 'normal'); });
       if (!closing) {
         pixels.set(shell, { clock, duration, width: grid.width, height: grid.height });
-        layer.release = () => { if (pixels.get(shell)?.clock === clock) pixels.delete(shell); };
       }
       layer.node.dataset.modalPixelTiles = String(grid.tiles.length);
       if (backdrop) animate(layer, backdrop, [{ opacity: 1 }, { opacity: 0 }], Math.min(150, time), 'ease-in');
@@ -251,7 +266,7 @@ function createModalMotion(document: Document) {
     for (const node of [clone, ...clone.querySelectorAll<HTMLElement>('[id]')]) {
       if (node.id) { node.dataset.modalSnapshotId = node.id; node.removeAttribute('id'); }
     }
-    clone.style.cssText += `;position:absolute!important;inset:0 auto auto 0!important;margin:0!important;width:${rect.width / zoom}px!important;height:${rect.height / zoom}px!important;max-width:none!important;max-height:none!important;transform:none!important;opacity:1!important;clip-path:none!important;`;
+    clone.style.cssText += `;position:absolute!important;inset:0 auto auto 0!important;margin:0!important;width:${rect.width / zoom}px!important;height:${rect.height / zoom}px!important;max-width:none!important;max-height:none!important;transform:none!important;opacity:1!important;clip-path:none!important;mask-image:none!important;-webkit-mask-image:none!important;`;
     // Freeze inherited per-window theme tokens and typography, not live notices.
     for (const property of Array.from(computed)) if (property.startsWith('--')) clone.style.setProperty(property, computed.getPropertyValue(property));
     for (const property of ['font', 'color', 'line-height']) clone.style.setProperty(property, computed.getPropertyValue(property));

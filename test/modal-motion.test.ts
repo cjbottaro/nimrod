@@ -22,7 +22,7 @@ function fixture(style: 'crt' | 'subtle' | 'hologram' | 'pixel' = 'crt') {
     observe() { observers.add(this.callback); } disconnect() { observers.delete(this.callback); }
   } });
   const records: { node: HTMLElement; frames: Keyframe[]; options: KeyframeAnimationOptions; cancelled: boolean; paused: boolean; startTime: number | null; currentTime: number | null; finish(): void }[] = [];
-  dom.window.HTMLElement.prototype.animate = function (frames, options) {
+  dom.window.Element.prototype.animate = function (frames, options) {
     let resolve!: () => void, reject!: (error: Error) => void;
     const finished = new Promise<void>((done, fail) => { resolve = done; reject = fail; });
     const record = { node: this as HTMLElement, frames: frames as Keyframe[], options: options as KeyframeAnimationOptions, cancelled: false, paused: false, startTime: null as number | null, currentTime: null as number | null, finish: () => resolve() };
@@ -97,6 +97,9 @@ test('Pixel partial close preserves the current mask/progress and resize complet
     f.opener.focus(); showModal(f.dialog); await Promise.resolve(); f.tick(1000);
     const entrance = f.records.find(record => record.node === f.dialog && !record.cancelled)!;
     assert.equal(entrance.options.duration, 500); assert.equal(entrance.frames.length, 13);
+    assert.ok(f.document.querySelector('[data-modal-pixel-mask]'));
+    assert.ok(f.document.querySelector('[data-modal-pixel-blur-tile]'));
+    assert.ok(f.dialog.style.getPropertyValue('mask-image').includes('nimrod-pixel-mask-'));
     entrance.currentTime = 250;
     closeModal(f.dialog);
     assert.equal(f.dialog.open, false); assert.equal(f.document.activeElement, f.opener);
@@ -108,6 +111,8 @@ test('Pixel partial close preserves the current mask/progress and resize complet
     showModal(f.dialog); await Promise.resolve(); f.tick(2000);
     f.resize(100); await Promise.resolve(); await Promise.resolve();
     assert.equal(f.dialog.open, true); assert.equal(f.document.querySelectorAll('[data-modal-motion]').length, 0);
+    assert.equal(f.dialog.style.getPropertyValue('mask-image'), '');
+    assert.equal(f.document.querySelectorAll('[data-modal-pixel-mask], [data-modal-pixel-blur-tile]').length, 0);
     // No source effect remains to confuse a later complete close.
     closeModal(f.dialog);
     const complete = f.document.querySelector<HTMLElement>('[data-modal-motion=exit]')!;

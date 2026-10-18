@@ -144,7 +144,8 @@ test('modal animation defaults, global saves, JSONC preservation and external va
 test('Pixel dissolve uses the existing global duration without touching scan speed', async () => {
   const f = fixture(), p = await f.install();
   try {
-    await p.saveModalAnimation({ style: 'pixel', duration: 700, scanSpeed: 750 });
+    await p.saveModalAnimation({ style: 'pixel', duration: 700, scanSpeed: 750, pixelSize: 72, pixelBlur: 4, pixelFade: false });
+    assert.equal(p.modalAnimation().pixelSize, 72); assert.equal(p.modalAnimation().pixelBlur, 4); assert.equal(p.modalAnimation().pixelFade, false);
     assert.equal(p.modalAnimation().style, 'pixel');
     assert.equal(p.modalAnimation().duration, 700); assert.equal(p.modalAnimation().scanSpeed, 750);
     await p.saveModalAnimation({ style: 'subtle' }); assert.equal(p.modalAnimation().duration, 700);

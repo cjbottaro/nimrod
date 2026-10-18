@@ -15,14 +15,15 @@ test('Pixel dissolve previews a bounded mosaic and reverses a partial opening wi
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
       const layer = document.querySelector<HTMLElement>('[data-modal-motion=enter]')!;
       const animation = dialog.getAnimations().find(item => (item.effect as KeyframeEffect).getKeyframes().some(frame => 'clipPath' in frame))!;
-      animation.pause(); animation.currentTime = 0; const start = getComputedStyle(dialog).clipPath;
-      animation.currentTime = 250; const middle = getComputedStyle(dialog).clipPath;
-      return { start, middle, tiles: Number(layer.dataset.modalPixelTiles), nodes: layer.querySelectorAll('*').length,
+      const effects = [animation, ...layer.getAnimations({ subtree: true })];
+      effects.forEach(effect => { effect.pause(); effect.currentTime = 0; }); const start = getComputedStyle(dialog).clipPath;
+      effects.forEach(effect => { effect.currentTime = 250; }); const middle = getComputedStyle(dialog).clipPath;
+      return { start, middle, tiles: Number(layer.dataset.modalPixelTiles), copies: layer.querySelectorAll('form, input, textarea, dialog').length,
         frames: (animation.effect as KeyframeEffect).getKeyframes().length, duration: animation.effect!.getTiming().duration,
         opacity: getComputedStyle(dialog).opacity, focused: dialog.contains(document.activeElement) };
     });
     expect(opening.start).toContain('path('); expect(opening.middle).toContain('path('); expect(opening.start).not.toBe(opening.middle);
-    expect(opening.tiles).toBeGreaterThan(1); expect(opening.tiles).toBeLessThanOrEqual(96); expect(opening.nodes).toBe(0);
+    expect(opening.tiles).toBeGreaterThan(1); expect(opening.tiles).toBeLessThanOrEqual(96); expect(opening.copies).toBe(0);
     expect(opening.frames).toBe(13); expect(opening.duration).toBe(500); expect(opening.opacity).toBe('1'); expect(opening.focused).toBe(true);
     const closing = await settings.evaluate(async () => {
       const dialog = document.querySelector<HTMLDialogElement>('#modal-animation-preview-dialog')!;

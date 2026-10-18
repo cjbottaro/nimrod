@@ -107,6 +107,14 @@ console.log(greeting); // 0123456789</code></pre>
             <label id="modal-animation-value-label" for="modal-animation-duration">Duration (milliseconds)</label>
             <div class="appearance-duration"><input id="modal-animation-duration" type="range" min="100" max="1500" step="10" value="500" aria-describedby="modal-animation-hint"><output id="modal-animation-duration-value" for="modal-animation-duration">500 ms</output></div>
           </div>
+          <div id="modal-pixel-options" hidden>
+            <label for="modal-pixel-size">Pixel size</label>
+            <div class="appearance-duration"><input id="modal-pixel-size" type="range" min="24" max="120" step="8" value="48" aria-describedby="modal-pixel-hint"><output id="modal-pixel-size-value" for="modal-pixel-size">48 px target</output></div>
+            <label for="modal-pixel-blur">Content blur</label>
+            <div class="appearance-duration"><input id="modal-pixel-blur" type="range" min="0" max="12" step="1" value="6" aria-describedby="modal-pixel-hint"><output id="modal-pixel-blur-value" for="modal-pixel-blur">6 px</output></div>
+            <label class="appearance-toggle" for="modal-pixel-fade"><input id="modal-pixel-fade" type="checkbox" checked> Fade tiles in</label>
+            <p id="modal-pixel-hint" class="settings-hint">Text and content inside each hard-edged tile sharpen and fade in. Larger panels may coarsen the grid to keep at most 96 tiles.</p>
+          </div>
           <p id="modal-animation-hint" class="settings-hint">A short fade, lift and gentle scale. Default: 500 ms; dismissal is 25% faster. Reduced motion disables animations.</p>
           <button id="modal-animation-preview" type="button" class="secondary">Preview animation</button>
         </div>

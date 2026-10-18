@@ -247,6 +247,25 @@ pub(crate) fn validate(text: &str) -> Result<(), String> {
             return Err("appearance.modalAnimation must be none, subtle, crt, hologram or pixel".into());
         }
     }
+    for (key, min, max) in [
+        ("appearance.modalPixelSize", 24.0, 120.0),
+        ("appearance.modalPixelBlur", 0.0, 12.0),
+    ] {
+        if let Some(value) = object.get(key) {
+            if !value
+                .as_f64()
+                .is_some_and(|v| v.fract() == 0.0 && (min..=max).contains(&v))
+            {
+                return Err(format!("{key} must be an integer from {min} to {max}"));
+            }
+        }
+    }
+    if object
+        .get("appearance.modalPixelFade")
+        .is_some_and(|value| !value.is_boolean())
+    {
+        return Err("appearance.modalPixelFade must be a boolean".into());
+    }
     if let Some(speed) = object.get("appearance.modalScanSpeed") {
         if !speed
             .as_f64()
@@ -753,6 +772,16 @@ mod tests {
         }
         for style in ["null", "true", "1", r#""unknown""#] {
             assert!(validate(&format!(r#"{{"appearance.modalAnimation":{style}}}"#)).is_err());
+        }
+        validate(r#"{"appearance.modalPixelSize":48,"appearance.modalPixelBlur":6,"appearance.modalPixelFade":true}"#).unwrap();
+        validate(r#"{"appearance.modalPixelSize":120,"appearance.modalPixelBlur":0,"appearance.modalPixelFade":false}"#).unwrap();
+        for invalid in [
+            r#"{"appearance.modalPixelSize":23}"#,
+            r#"{"appearance.modalPixelSize":121}"#,
+            r#"{"appearance.modalPixelBlur":13}"#,
+            r#"{"appearance.modalPixelFade":null}"#,
+        ] {
+            assert!(validate(invalid).is_err());
         }
         for speed in ["100", "500", "1000", "1500", "500.0"] {
             validate(&format!(r#"{{"appearance.modalScanSpeed":{speed}}}"#)).unwrap();
