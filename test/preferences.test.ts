@@ -31,7 +31,12 @@ test('tool capture defaults off, saves globally and retains last valid settings'
 test('modal animation defaults, global saves, JSONC preservation and external validation', async () => {
   const f = fixture(), p = await f.install();
   try {
-    assert.deepEqual(p.modalAnimation(), { style: 'subtle', duration: 160 });
+    assert.deepEqual(p.modalAnimation(), { style: 'subtle', duration: 500 });
+    await p.saveModalAnimation({ style: 'crt' });
+    assert.deepEqual(p.modalAnimation(), { style: 'crt', duration: 300 });
+    assert.equal(parseSettings(f.host.value.text)['appearance.modalAnimationDuration'], undefined);
+    await p.saveModalAnimation({ style: 'subtle' });
+    assert.deepEqual(p.modalAnimation(), { style: 'subtle', duration: 500 });
     f.host.external('// keep animation comment\n{"custom":true}');
     f.host.value.projectPath = '/project/.nimrod/settings.json';
     f.host.externalProject('{"appearance.theme":"dracula"}');
@@ -62,10 +67,10 @@ test('modal animation defaults, global saves, JSONC preservation and external va
     f.host.external('{"appearance.modalAnimationDuration":0}');
     assert.equal(p.modalAnimation().duration, 0);
     f.host.external('{}');
-    assert.deepEqual(p.modalAnimation(), { style: 'subtle', duration: 160 });
+    assert.deepEqual(p.modalAnimation(), { style: 'subtle', duration: 500 });
     f.host.externalProject('{"appearance.modalAnimation":"none"}');
     assert.match(f.errors.at(-1) ?? '', /global-only/);
-    assert.deepEqual(p.modalAnimation(), { style: 'subtle', duration: 160 });
+    assert.deepEqual(p.modalAnimation(), { style: 'subtle', duration: 500 });
   } finally { p.dispose(); f.dom.window.close(); }
 });
 

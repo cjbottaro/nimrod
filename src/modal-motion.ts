@@ -1,4 +1,4 @@
-import type { ModalAnimationStyle } from './modal-animation';
+import { DEFAULT_MODAL_DURATIONS, modalExitDuration, type ModalAnimationStyle } from './modal-animation-defaults';
 
 interface Motion { style: ModalAnimationStyle; duration: number }
 interface Snapshot { shell: HTMLElement; rect: DOMRect; zoom: number; backdrop: string; motion: Motion; opacity: string; clip: string; restoreScroll(): void }
@@ -14,7 +14,8 @@ function motion(document: Document, exit = false): Motion {
   const style = root.dataset.modalAnimation as ModalAnimationStyle || 'subtle';
   const reduced = view.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const duration = parseFloat(view.getComputedStyle(root).getPropertyValue(exit ? '--modal-exit-duration' : '--modal-enter-duration'));
-  return { style, duration: reduced || style === 'none' ? 0 : Number.isFinite(duration) ? duration : exit ? style === 'crt' ? 128 : 120 : 160 };
+  const fallback = DEFAULT_MODAL_DURATIONS[style] ?? DEFAULT_MODAL_DURATIONS.subtle;
+  return { style, duration: reduced || style === 'none' ? 0 : Number.isFinite(duration) ? duration : exit ? modalExitDuration(style, fallback) : fallback };
 }
 
 /** Preserve ID-based styling without duplicating live DOM IDs, even across shadow queries. */

@@ -10,7 +10,15 @@ test('modal style options, duration retention, preview and cross-window synchron
     const style = settings.locator('#modal-animation-style');
     const duration = settings.locator('#modal-animation-duration');
     await expect(style).toHaveValue('subtle');
-    await expect(duration).toHaveValue('160');
+    await expect(duration).toHaveValue('500');
+    await expect(settings.locator('#modal-animation-hint')).toContainText('Default duration: 500 ms');
+    await style.selectOption('crt');
+    await expect(duration).toHaveValue('300');
+    await expect(settings.locator('#modal-animation-hint')).toContainText('Default duration: 300 ms');
+    await expect(page.locator('html')).toHaveCSS('--modal-enter-duration', '300ms');
+    await expect(page.locator('html')).toHaveCSS('--modal-exit-duration', '240ms');
+    await style.selectOption('subtle');
+    await expect(duration).toHaveValue('500');
     await duration.fill('1200'); await duration.press('Tab');
     await expect(page.locator('html')).toHaveCSS('--modal-enter-duration', '1200ms');
     await expect(page.locator('html')).toHaveCSS('--modal-exit-duration', '900ms');

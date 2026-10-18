@@ -1,6 +1,7 @@
 import { clearModalMotion } from './modal-motion';
+import { DEFAULT_MODAL_DURATIONS, modalExitDuration, type ModalAnimationStyle } from './modal-animation-defaults';
 
-export type ModalAnimationStyle = 'none' | 'subtle' | 'crt';
+export type { ModalAnimationStyle } from './modal-animation-defaults';
 export interface ModalAnimation { style: ModalAnimationStyle; duration: number }
 export const MODAL_ANIMATION_KEYS = {
   style: 'appearance.modalAnimation',
@@ -9,8 +10,8 @@ export const MODAL_ANIMATION_KEYS = {
 
 export function readModalAnimation(settings: Record<string, unknown>): ModalAnimation {
   const style = settings[MODAL_ANIMATION_KEYS.style] === undefined ? 'subtle' : settings[MODAL_ANIMATION_KEYS.style];
-  const duration = settings[MODAL_ANIMATION_KEYS.duration] === undefined ? 160 : settings[MODAL_ANIMATION_KEYS.duration];
   if (style !== 'none' && style !== 'subtle' && style !== 'crt') throw new Error('appearance.modalAnimation must be none, subtle or crt.');
+  const duration = settings[MODAL_ANIMATION_KEYS.duration] === undefined ? DEFAULT_MODAL_DURATIONS[style] : settings[MODAL_ANIMATION_KEYS.duration];
   if (typeof duration !== 'number' || !Number.isInteger(duration) || duration < 0 || duration > 2000) {
     throw new Error('appearance.modalAnimationDuration must be an integer from 0 to 2000 milliseconds.');
   }
@@ -22,5 +23,5 @@ export function applyModalAnimation(root: HTMLElement, animation: ModalAnimation
   if (root.dataset.modalAnimation !== animation.style || root.style.getPropertyValue('--modal-enter-duration') !== `${animation.style === 'none' ? 0 : animation.duration}ms`) clearModalMotion(root.ownerDocument);
   root.dataset.modalAnimation = animation.style;
   root.style.setProperty('--modal-enter-duration', `${animation.style === 'none' ? 0 : animation.duration}ms`);
-  root.style.setProperty('--modal-exit-duration', `${animation.style === 'none' ? 0 : Math.round(animation.duration * (animation.style === 'crt' ? .8 : .75))}ms`);
+  root.style.setProperty('--modal-exit-duration', `${modalExitDuration(animation.style, animation.duration)}ms`);
 }

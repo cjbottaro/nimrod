@@ -13,6 +13,7 @@ import { installThemes } from './themes/picker';
 import { installZoom } from './zoom';
 import { installModalMotion, showModal, closeModal } from './modal-motion';
 import { applyModalAnimation, type ModalAnimationStyle } from './modal-animation';
+import { DEFAULT_MODAL_DURATIONS } from './modal-animation-defaults';
 import { installNativeWindowAppearance } from './native-window-appearance';
 import { installPerformanceDiagnostics } from './performance-diagnostics';
 import { createToolCapture } from './tool-capture';
@@ -209,7 +210,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
       + (animation.style === 'crt'
         ? ' Closing reverses the motion without fading the panel and takes 20% less time.'
         : animation.style === 'subtle' ? ' Dismissal is 25% faster.' : '')
-      + ' Default duration: 160 ms. Reduced motion disables animations.';
+      + ` Default duration: ${DEFAULT_MODAL_DURATIONS[animation.style]} ms. Reduced motion disables animations.`;
   }
   async function saveModalAnimation(values: Parameters<typeof preferences.saveModalAnimation>[0]): Promise<void> {
     if (savingAnimation) return;
