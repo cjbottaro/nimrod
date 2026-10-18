@@ -4,6 +4,23 @@ The **transcript** contains user and assistant turns. An assistant turn can incl
 
 Empty assistant text/reasoning entries do not display blank turn markers or gaps. This includes Copilot assistant messages with tool requests but no prose; their tool cards remain visible. If text arrives later, that assistant entry appears in its original position.
 
+## Operation cards
+
+Operation cards show an operation's title and content. **CONFIGURATION CHANGE**, **STEERING** and **QUEUED** keep the same uppercase title throughout their lifetime.
+
+- **Pending:** the title shimmers and the card stays in the shared bottom-pinned stack, including while you read older output.
+- **Succeeded:** shimmering stops and the same card joins normal transcript flow. Later entries follow it; no extra success label is needed.
+- **Failed:** a red accent and **Failed** outcome, with **Error details** when available.
+- **Outcome unknown / Not applied:** a muted grey accent, explicit outcome text and **Details** when available. Unknown means the operation might have taken effect; Not applied means it did not.
+
+**Cancel** appears only when the operation can actually be withdrawn. Confirmed user cancellation removes the card; hiding potentially delivered work is never treated as cancellation. Pi steering/queued messages do not offer individual cancellation because Pi does not supply targeted queue withdrawal. Whole-queue recovery remains separate.
+
+Configuration changes and delivery errors already represented by a card do not also produce duplicate error banners. Independent session problems still use session notices. Details start collapsed and preserve their open state. Reduced motion makes the pending title static without removing its accessible state.
+
+Pi's matching user event—not its enqueue acknowledgement—settles a steering/queued card at Pi's authoritative position. Its title stays on the adopted user turn for this connection; Nimrod does not write that title into Pi history. Ordinary idle sends remain ordinary user turns.
+
+This pattern's migration is in progress; native visual acceptance remains pending.
+
 ## Tool and reasoning cards
 
 Click a disclosure arrow or summary to expand a card.

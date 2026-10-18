@@ -79,7 +79,8 @@ Mounted IDs are unique per session; anchors above are semantic template names wi
 - **Parallel-tools overview** — temporary summary of overlapping invocations, not replacement tool cards.
 - **Skill disclosure** — collapsed skill body inside a user turn; user arguments remain outside.
 - **Pending user turn** — local user-turn preview awaiting acknowledgement/authoritative user event; includes ordinary sends and **pending steering turns**.
-- **Configuration change** — Nimrod-owned local transcript entry for an accepted session-setting change, distinct from a user/assistant turn or saved harness history. [Model/thinking](../features/references/model-thinking.md) owns its behavior.
+- **Operation card** — a transcript entry representing an operation from pending intent through its outcome, with a stable **title**, **content**, optional **outcome text**, **details disclosure** and supported **Cancel** control. [Operation cards](../features/references/operation-cards.md) owns the pattern; configuration changes and steering/queued previews use it.
+- **Configuration change** — Nimrod-owned operation card for a session-setting change, distinct from a user/assistant turn or saved harness history. [Model/thinking](../features/references/model-thinking.md) owns its behavior.
 - **Queue entries / recovered messages** — authoritative pending work versus text retained for explicit Restore.
 
 A **card** needn't have a visible rectangle. A **disclosure** expands/collapses; it is not a dialog. [Cards](../features/references/transcript-cards.md), [composer](../features/references/composer.md) and [pop-outs](../features/references/pop-outs.md) own behavior.

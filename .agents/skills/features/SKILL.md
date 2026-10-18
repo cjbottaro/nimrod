@@ -63,6 +63,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Native per-session drafts, debounced saves and submission durability | [Native drafts](references/native-drafts.md) | [Drafts](../../../docs/drafts.md) |
 | Send/steer/queue, pending turns and recovery | [Composer](references/composer.md) | [Writing messages](../../../docs/writing-messages.md) |
 | Image paste, draft bytes and send outcomes | [Image paste](references/image-paste.md) | [Paste images](../../../docs/image-paste.md) |
+| Operation-card title/content, pending stack, settlement, error details and optional cancellation | [Operation cards](references/operation-cards.md) | [Reading conversations](../../../docs/reading-conversations.md#operation-cards) |
 | Tool/reasoning identity, lifecycle and disclosures | [Transcript cards](references/transcript-cards.md) | [Reading conversations](../../../docs/reading-conversations.md) |
 | Transcript layout, scroll intent, focus and zoom | [Transcript interaction](references/transcript-interaction.md) | [Reading](../../../docs/reading-conversations.md), [Settings](../../../docs/settings.md) |
 | Explicit labels and user-code inference | [Syntax highlighting](references/syntax-highlighting.md) | [Syntax highlighting](../../../docs/syntax-highlighting.md) |
