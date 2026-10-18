@@ -12,7 +12,7 @@ Project settings shows effective values, not a second independent configuration.
 
 Overrides stay explicit even if they match the global value. Global edits update inheriting projects, but never replace explicit project values. The Appearance pane in global Settings links to open projects with overrides.
 
-Project overrides cover **theme and Pi/Node runtime paths** only. **Translucency, zoom, modal animations and auto-follow after sending are global-only**, along with notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration. Project settings contains only the theme picker under Appearance and runtime paths under Runtime. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
+Project overrides cover **theme and runtime paths** only. **Typography, translucency, zoom, modal animations and auto-follow after sending are global-only**, along with notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration. Project settings contains only the theme picker under Appearance and runtime paths under Runtime. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
 
 This layering applies only to Nimrod preferences. Pi retains its own configuration and precedence.
 
@@ -31,6 +31,7 @@ Escape during a drag cancels resizing; the next Escape closes Settings.
 Sliders show the current value with an accent-colored filled track as soon as Settings opens, without needing a first adjustment. The fill follows theme changes and settings reloaded from disk.
 
 - **Theme:** global changes update inheriting windows; project changes apply only to that project. See [Themes](themes.md) for live previews, bundled themes and imports.
+- **Typography (global only):** independent conversation and monospace fonts/sizes, with searchable installed-font pickers and a live preview. See [Typography](#typography).
 - **Translucency (global only):** whole-window background opacity (default **100% / Opaque**) and a macOS-only **Background blur** slider (0–40, default **20**) independent of opacity. Linux blur is configured in the desktop compositor. See [Translucency](translucency.md) for preview, accessibility and platform limitations.
 - **Zoom (global only):** scales every project, Settings and reference window, default **125%**, range **75–200%**. Use the picker in global Settings or **⌘/Ctrl + / −** in a project window; shortcuts change the same global value. **⌘/Ctrl+0** resets to 100%. Zoom is remembered and doesn't change drafts.
 - **Modal animation (global only):** choose **Subtle** (default), **CRT power-on**, **Hologram** or **None**, then use **Preview animation** to try it.
@@ -41,6 +42,26 @@ Sliders show the current value with an accent-colored filled track as soon as Se
   - Sliders show a live value and save on commit/release, not every drag frame. Close/Escape in Preview use the same effect as ordinary dialogs. Input, focus and actions never wait for animation: closing animates only a non-interactive visual copy, and a new dialog clears stale motion. Reduced motion or **None** disables effects. Full-window Settings, native windows and transcript disclosures are unaffected; picker page changes stay in their mounted shell.
 - **Auto-follow after sending (global only):** **When idle** (default) jumps to the bottom and follows new output for idle sends, but preserves your position for steering and queued follow-ups. **Always** does this for every message submission; **Never** preserves current scroll intent, including auto-follow if already active. Scrolling upward always pauses following. Changes synchronize across all projects. Changes affect subsequent sends without moving your current view. See [Reading conversations](reading-conversations.md#auto-follow-and-reading-older-output).
 - Theme/import/zoom errors use the shared [notice strip](error-messages.md). Non-error progress and import details stay alongside the controls.
+
+### Typography
+
+Use **Global Settings → Appearance → Typography** to adjust reading comfort independently of interface scaling:
+
+| Setting | Applies to |
+| --- | --- |
+| **Conversation font + size** | User/assistant prose, reasoning, formatted web prose, question/answer text and composer |
+| **Monospace font + size** | Code blocks, inline code, raw tool inputs, code-like previews and literal tool output |
+| **Zoom** | Everything, including sidebar, controls and spacing |
+
+Both font choices start at **System default**, with **14px** sizes. Sizes range from **10–32 logical pixels**, in one-pixel steps. Zoom still applies: at the default 125% zoom, 14px text is displayed at a larger scale. Changing a font or size never changes zoom. Navigation, Settings, labels and other interface controls keep their system UI font.
+
+Click a font button to search installed font families. Each family name is shown in its own font; **System default** stays first, and the Monospace picker puts fixed-pitch families before other fonts. Use Up/Down or Home/End to move, then Enter or click to choose. Escape or Close cancels without changing your font and returns to Settings. **Refresh** re-reads the installed fonts if you have added one. The app does not download fonts.
+
+The preview contains prose, code and a composer sample. Selections apply immediately to the preview; saved changes synchronize to project and pop-out windows without restarting agents or replacing conversations. Typing a valid size previews it locally; leaving the field or using its step buttons saves it. Drafts, focus, disclosure choices and follow-versus-reading intent are retained while text reflows.
+
+**Reset typography** restores both system fonts and 14px sizes, leaving theme and zoom alone. If a saved font is missing on another machine, the system fallback is used without erasing your choice. Font-list or save failures use the [application notice strip](error-messages.md).
+
+Installed-font discovery and visual behavior still need native acceptance on macOS; Linux remains unverified.
 
 ## Notifications
 
@@ -89,6 +110,10 @@ The global `settings.json` accepts comments and trailing commas:
 {
   "appearance.theme": "nimrod",
   "appearance.zoom": 125,
+  "appearance.conversationFont": "",
+  "appearance.conversationFontSize": 14,
+  "appearance.monospaceFont": "",
+  "appearance.monospaceFontSize": 14,
   "appearance.backgroundOpacity": 100,
   "appearance.backgroundBlur": 20,
   "appearance.autoFollowAfterSending": "whenIdle",

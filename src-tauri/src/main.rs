@@ -5,6 +5,7 @@ mod cli;
 mod command_usage;
 mod copilot;
 mod drafts;
+mod fonts;
 mod keybindings;
 mod links;
 #[cfg(target_os = "macos")]
@@ -529,6 +530,7 @@ fn main() {
             drafts::drafts_flush,
             drafts::drafts_references,
             runtime_defaults,
+            fonts::installed_fonts,
             window_appearance::window_appearance_capabilities,
             window_appearance::apply_window_appearance,
             window_appearance::tint_window_titlebar,

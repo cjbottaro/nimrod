@@ -1,0 +1,53 @@
+:root {
+  --nimrod-conversation-font:var(--vscode-font-family);
+  --nimrod-conversation-size:14px;
+  --nimrod-monospace-size:14px;
+}
+.message > .markdown, .skill-invocation .markdown, .reasoning-body, .configuration-text, .operation-outcome,
+.card-question-answer, .tool-output-web-markdown, .popout-document.popout-markdown,
+.typography-prose, .reasoning-body .tool-output {
+  font-family:var(--nimrod-conversation-font);
+  font-size:var(--nimrod-conversation-size);
+}
+:is(#prompt, [data-pi-id="prompt"]), .typography-composer {
+  font-family:var(--nimrod-conversation-font);
+  font-size:var(--nimrod-conversation-size);
+  line-height:1.428571;
+}
+pre, code, .tool-output:not(.tool-output-web-markdown), .tool-card-preview,
+.tool-input-summary, .edit-card-diff, .typography-code {
+  font-family:var(--vscode-editor-font-family, monospace);
+  font-size:var(--nimrod-monospace-size);
+}
+pre > code { font-size:inherit; }
+.tool-card-title, .label, .tool-label, .reasoning-card > summary,
+.tool-raw-inputs > summary, .code-block-header {
+  font-family:var(--vscode-font-family);
+}
+.tool-card-preview code { font:inherit; }
+.reasoning-preview, .card-question-answer > .tool-card-title {
+  font-family:var(--nimrod-conversation-font);
+  font-size:var(--nimrod-conversation-size);
+}
+.operation-outcome { font-size:calc(var(--nimrod-conversation-size) * .85); }
+[data-output-kind="web-sources"] .tool-output-web-markdown,
+:is([data-output-kind="fetch-source"], [data-output-kind="fetch-redirect"]) .tool-output-web-markdown {
+  font-size:calc(var(--nimrod-conversation-size) * .92);
+}
+.typography-row { display:flex; align-items:end; flex-wrap:wrap; gap:12px; }
+.typography-family { flex:1 1 220px; min-width:0; }
+.typography-family button { width:100%; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.typography-size { flex:0 0 auto; }
+.typography-stepper { display:flex; align-items:center; gap:4px; }
+.typography-stepper input { width:72px; text-align:center; padding:6px; }
+.typography-stepper button { width:32px; padding:6px; }
+.typography-preview { margin:16px 0; padding:12px; border:1px solid var(--vscode-panel-border); border-radius:6px; overflow:hidden; }
+.typography-preview pre { margin:12px 0; }
+.typography-prose, .typography-preview pre { line-height:1.48; }
+.typography-composer { box-sizing:border-box; width:100%; padding:9px 10px; resize:none; border:1px solid var(--vscode-panel-border); border-radius:4px; background:transparent; color:var(--vscode-input-foreground); }
+.font-picker-list { max-height:40vh; }
+.font-picker-option { display:flex; align-items:center; gap:12px; padding:8px 10px; cursor:pointer; }
+.font-picker-option > span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.font-picker-option > small { font:11px var(--vscode-font-family); color:var(--vscode-descriptionForeground); }
+.font-picker-option[aria-selected=true] { background:var(--nimrod-quick-selection-background, var(--vscode-list-focusBackground)); color:var(--vscode-list-focusForeground); outline:1px solid var(--vscode-focusBorder); outline-offset:-1px; }
+.font-picker-option[aria-selected=true] > small { color:inherit; }

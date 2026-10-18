@@ -14,6 +14,7 @@ import { installKeybindingDispatch, readKeyOverrides } from './keybindings';
 import { codeBlockSource, createSafeMarkdownRenderer } from './pi/safe-markdown';
 import { setCodeIcon, showCopyResult } from './pi/code-actions';
 import { isMarkdownLanguage, popoutTitle } from './popout-presentation';
+import { applyTypography, readTypography } from './typography';
 import './popout.css';
 
 interface CodeSnapshot { session: string; title: string; text: string; language: string; }
@@ -47,6 +48,7 @@ export async function mountPopout(): Promise<void> {
     if (snapshot.revision < revision || (snapshot.projectRevision ?? 0) < projectRevision) return;
     try {
       const global = parseSettings(snapshot.text); globalSettings = global;
+      applyTypography(document.documentElement, readTypography(global));
       appearance.reload(); // Global appearance still updates if the project's theme is invalid.
       const scale = (global['appearance.zoom'] as number | undefined ?? DEFAULT_ZOOM) / 100;
       zoomTask = zoomTask.then(() => getCurrentWebview().setZoom(scale)).catch(report);

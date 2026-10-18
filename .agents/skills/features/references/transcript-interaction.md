@@ -50,6 +50,8 @@ Coverage added in preferences/native validation, shell Settings synchronization/
 
 ## Focus, reset and zoom
 
+Global [typography](typography.md) changes content fonts/sizes independently of zoom. Changed-only root notifications bracket reflow: active mounted views capture existing follow/output inspection before CSS changes and restore through existing composer/scroll owners afterward; hidden views skip measurements and reuse activation restoration. No synthetic input events, draft writes, focus changes, harness work or disclosure recreation.
+
 Routine state/history refresh never focuses the composer. Explicit launch focuses once only when its session is still selected and no modal owns focus. Mounted view switching uses unique IDs and stable `data-pi-id` hooks; never reuse one renderer across sessions.
 
 Explicit resume/restart resets session-local disclosure/composer presentation through the established boundary, without resetting siblings or replaying prompts. Settings uses HTML modality over unchanged underlying layout and restores prior focus; startup cannot focus through it.

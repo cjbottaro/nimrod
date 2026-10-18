@@ -6,6 +6,7 @@ import { createSafeMarkdownRenderer } from '../src/pi/safe-markdown';
 import { initialConversationState, reduceRpcEvent } from '../src/pi/reducer';
 import { TranscriptUpdates } from '../src/pi/transcript-updates';
 import { projectToolTimeline } from '../src/pi/tool-progress';
+import { applyTypography, DEFAULT_TYPOGRAPHY } from '../src/typography';
 
 function fixture(options: { messageInput?: import('../src/session-message-input').SessionMessageInput; sendAutoFollow?: import('../src/pi/view-host').ViewHost['sendAutoFollow']; performance?: import('../src/pi/view-host').ViewHost['performance']; reportNotice?: import('../src/pi/view-host').ViewHost['reportNotice']; resolveNotice?: import('../src/pi/view-host').ViewHost['resolveNotice']; images?: boolean; clipboard?: boolean; missing?: boolean; imageGate?: Promise<void>; releaseOnClear?: boolean; cardRenderer?: import('../src/pi/view-host').ViewHost['cardRenderer']; cardActions?: import('../src/pi/view-host').ViewHost['cardActions'] } = {}) {
   const dom = new JSDOM(webviewHtml(), { runScripts: 'outside-only', pretendToBeVisual: true });
@@ -55,6 +56,34 @@ function scrollFixture(f: ReturnType<typeof fixture>) {
   const readHistory = () => { pane.scrollTop = 200; pane.dispatchEvent(new f.win.WheelEvent('wheel', { deltaY: -50 })); };
   return { pane, readHistory, grow: () => { height += 500; } };
 }
+
+for (const follow of [false, true]) test(`typography reflow preserves mounted content, draft/selection and scroll intent (follow: ${follow})`, () => {
+  const f = fixture();
+  try {
+    const s = scrollFixture(f);
+    f.snapshot({ messages: [{ key: 'a', role: 'assistant', content: 'Retained prose' }] });
+    const article = f.win.document.querySelector('.message')!;
+    f.draft('Draft with selection'); f.prompt.focus(); f.prompt.setSelectionRange(3, 9);
+    if (follow) { f.view.scrollToBottom(); f.flush(); } else s.readHistory();
+    const before = f.sent.length;
+    const draftState = f.state();
+    f.win.document.addEventListener('nimrod-typography-will-change', () => s.grow(), { once: true });
+    applyTypography(f.win.document.documentElement, { ...DEFAULT_TYPOGRAPHY, conversationSize: 22 });
+    f.flush();
+    assert.equal(s.pane.scrollTop, follow ? 2100 : 200);
+    assert.equal(f.win.document.querySelector('.message'), article);
+    assert.equal(f.prompt.value, 'Draft with selection');
+    assert.equal(f.prompt.selectionStart, 3); assert.equal(f.prompt.selectionEnd, 9);
+    assert.equal(f.win.document.activeElement, f.prompt);
+    assert.equal(f.sent.length, before, 'typography cannot send harness messages or save drafts');
+    assert.equal(f.state(), draftState, 'resizing does not persist a draft');
+    f.view.setActive(false);
+    assert.doesNotThrow(() => applyTypography(f.win.document.documentElement, { ...DEFAULT_TYPOGRAPHY, conversationSize: 24 }));
+    assert.equal(f.frames.size, 0, 'hidden views do not schedule typography work');
+    f.view.setActive(true); f.flush();
+    assert.equal(f.prompt.value, 'Draft with selection');
+  } finally { f.dom.window.close(); }
+});
 
 for (const mode of [undefined, 'always', 'whenIdle', 'never'] as const) {
   for (const delivery of ['idle', 'steer', 'followUp', 'idleAlt'] as const) {

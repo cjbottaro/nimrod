@@ -56,7 +56,7 @@ Without installation, use `./bin/nimrod .`. The launcher opens or focuses a proj
 - [Command palette](docs/command-palette.md) and [Keybindings](docs/keybindings.md) — searchable commands and customizable shortcuts.
 - [Performance reports](docs/performance-diagnostics.md) — opt-in local timing captures for sluggish typing/scrolling.
 - [Transcript debug logs](docs/tool-capture.md) — opt-in full-content native conversation, history, tool and request/result traces for developing/debugging Nimrod.
-- [Settings](docs/settings.md) — global defaults, project overrides, appearance, zoom and runtime paths.
+- [Settings](docs/settings.md) — global defaults, project overrides, appearance, [conversation/code fonts and sizes](docs/settings.md#typography), zoom and runtime paths.
 - [Themes](docs/themes.md) and [Syntax highlighting](docs/syntax-highlighting.md) — bundled palettes, local imports and labeled code.
 - [Translucency](docs/translucency.md) — whole-window background opacity and independently adjustable macOS blur; Linux blur is compositor-owned.
 

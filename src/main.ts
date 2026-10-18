@@ -70,6 +70,7 @@ import './pi/transcript.css';
 import './acp/session.css';
 import './copilot/permission-interaction.css';
 import './theme.css';
+import './typography.css';
 import './range-input.css';
 import './workspace.css';
 import './keybindings.css';

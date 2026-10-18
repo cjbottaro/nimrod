@@ -19,6 +19,8 @@ import { installNativeWindowAppearance } from './native-window-appearance';
 import { installPerformanceDiagnostics } from './performance-diagnostics';
 import { createToolCapture } from './tool-capture';
 import type { NotificationDispatch } from './notifications';
+import { installTypography } from './typography-controls';
+import type { InstalledFont } from './font-picker';
 
 export function installSettingsSurface(preferences: Awaited<ReturnType<typeof installPreferences>>, notices: ReturnType<typeof installApplicationNotices>, global = false) {
   const required = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -42,10 +44,18 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     for (const category of ['notifications', 'diagnostics', 'keybindings']) required('settings-category-' + category).hidden = true;
     required('settings-translucency').hidden = true;
     required('settings-zoom').hidden = true;
+    required('settings-typography').hidden = true;
     required('settings-send-auto-follow').hidden = true;
     required('settings-modal-animation').hidden = true;
   }
   const settingsNavigation = installSettingsNavigation(required<HTMLDialogElement>('settings-page'));
+  const typography = installTypography(document.documentElement, {
+    read: () => preferences.typography(),
+    save: values => preferences.saveTypography(values),
+    reset: () => preferences.resetTypography(),
+    fonts: () => invoke<InstalledFont[]>('installed_fonts'),
+    report: (cause, message) => feedback('typography:' + cause, 'Typography')(message),
+  }, global);
   const settingsSidebarWidthKey = 'nimrod.settings.sidebar.width';
   let settingsSidebarWidth = preferences.readState(settingsSidebarWidthKey);
   const settingsSidebarResize = installSidebarResize(window, {
@@ -388,7 +398,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   const unsubscribe = preferences.subscribe(() => {
     const width = preferences.readState(settingsSidebarWidthKey);
     if (!Object.is(width, settingsSidebarWidth)) { settingsSidebarWidth = width; settingsSidebarResize.reload(); }
-    runtime.reload(); themes.reload(); appearance.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadToolCapture(); reloadSendAutoFollow(); reloadModalAnimation(); keybindingEditor?.reload(); reloadSources();
+    runtime.reload(); themes.reload(); typography.reload(); appearance.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadToolCapture(); reloadSendAutoFollow(); reloadModalAnimation(); keybindingEditor?.reload(); reloadSources();
   });
   reloadSources();
   return {
@@ -404,6 +414,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     openKeybindings() { settings.open(); if (settings.isOpen && settingsNavigation.select('keybindings')) keybindingEditor?.focus(); },
     dispose() {
       unloading = true; unsubscribe();
+      typography.dispose();
       required('modal-animation-preview').removeEventListener('click', previewAnimation);
       animationStyle.removeEventListener('change', changeAnimationStyle);
       animationDuration.removeEventListener('input', inputAnimationDuration);

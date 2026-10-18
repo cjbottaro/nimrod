@@ -80,6 +80,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Session configuration interface, model/effort choices, deferred changes and local transcript progress | [Model/thinking](references/model-thinking.md) | [Model/thinking](../../../docs/model-thinking.md) |
 | Global defaults, project JSONC overrides, migration and window state | [Preferences](references/preferences.md) | [Settings](../../../docs/settings.md) |
 | Global Settings window, Project settings page, categories and independent width | [Settings layout](references/settings-layout.md) | [Settings](../../../docs/settings.md) |
+| Global conversation/code font families and sizes, installed-font pickers, previews and content-only reflow | [Typography](references/typography.md) | [Typography settings](../../../docs/settings.md#typography) |
 | Bindable actions, recorder and conflicts | [Keybindings](references/keybindings.md) | [Keybindings](../../../docs/keybindings.md) |
 | Read-only built-in Pi MCP status inspection | [MCP inspector](references/mcp-inspector.md) | [MCP inspector](../../../docs/mcp.md) |
 | Palette page lifecycle and cancellation | [Command interactions](references/command-interactions.md) | [Command palette](../../../docs/command-palette.md) |

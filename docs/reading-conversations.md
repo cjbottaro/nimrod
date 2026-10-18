@@ -4,6 +4,8 @@ The **transcript** contains user and assistant turns. An assistant turn can incl
 
 Empty assistant text/reasoning entries do not display blank turn markers or gaps. This includes Copilot assistant messages with tool requests but no prose; their tool cards remain visible. If text arrives later, that assistant entry appears in its original position.
 
+[Typography settings](settings.md#typography) let you choose conversation/composer and code/tool-output fonts and sizes independently. Interface typography stays unchanged; zoom still scales the whole window.
+
 ## Operation cards
 
 Operation cards show an operation's title and content. **CONFIGURATION CHANGE**, **STEERING** and **QUEUED** keep the same uppercase title throughout their lifetime.

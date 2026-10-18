@@ -14,6 +14,8 @@ Settings categories remain mounted with independent reading/dirty-control state.
 
 ## Range inputs
 
+[Typography](typography.md) owns the global-only `#settings-typography` group: conversation/monospace family and size controls, shared-shell installed-font picker, live sample and reset. It is hidden completely in Project settings. Both window boot paths apply typography before first presentation without waiting for font enumeration.
+
 - `src/range-input.css`, imported by `src/main.ts`, owns Settings slider tracks/thumbs. Explicit themed tracks avoid depending on the native widget's first-interaction accent paint. WebKit/Blink use an authored track gradient; Gecko uses its progress pseudo-element. The actual `<input type=range>` remains in place with native min/max/step, keyboard, labels and focus semantics. Disabled controls are muted; forced-colors uses system colors, and RTL reverses the fill direction. No native-window/material work is introduced.
 - `src/range-input.ts::updateRangeFill(input)` publishes `--range-fill` from the input's current bounds/value. Call it after **initial/programmatic `.value` assignment**, reload/rollback, and live input. It only paints: no input/change dispatch, preference write, native preview, focus change, observer or DOM replacement. Do not initialize by manufacturing a drag event.
 - Opacity and blur call it in `window-appearance-controller.ts::paint`; duration calls it alongside its readout in `settings-surface.ts`. Theme colors remain CSS variables, so changing palettes recolors a filled track without touching the value or interacting. Include the shared CSS in standalone/offline fixtures that discard CSS imports.

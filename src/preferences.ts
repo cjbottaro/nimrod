@@ -7,6 +7,7 @@ import { readLibrary, THEME_STORAGE_KEY, MAX_IMPORTED_THEMES, type ColorTheme, t
 import { DEFAULT_ZOOM, ZOOM_LEVELS, ZOOM_STORAGE_KEY } from './zoom';
 import { readWindowAppearance, APPEARANCE_KEYS, type WindowAppearance } from './window-appearance';
 import { KEYBINDINGS_SETTING, readKeyOverrides, changeBinding, bindingsFor, type ActionId } from './keybindings';
+import { readTypography, TYPOGRAPHY_KEYS, type Typography } from './typography';
 
 export interface PreferencesSnapshot {
   text: string;
@@ -53,6 +54,7 @@ export function parseSettings(text: string): Record<string, unknown> {
   if (settings['diagnostics.toolCapture'] !== undefined && typeof settings['diagnostics.toolCapture'] !== 'boolean') throw new Error('diagnostics.toolCapture must be a boolean.');
   readWindowAppearance(settings);
   readModalAnimation(settings);
+  readTypography(settings);
   readKeyOverrides(settings[KEYBINDINGS_SETTING]);
   readPluginSettings(settings);
   const sendAutoFollow = settings['appearance.autoFollowAfterSending'];
@@ -276,6 +278,11 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
       return patch(Object.fromEntries(Object.entries(values).map(([key, value]) => [APPEARANCE_KEYS[key as keyof WindowAppearance], value])), false);
     },
     zoom() { return globalSettings['appearance.zoom'] ?? DEFAULT_ZOOM; },
+    typography() { return readTypography(globalSettings); },
+    saveTypography(values: Partial<Typography>) {
+      return patch(Object.fromEntries(Object.entries(values).map(([key, value]) => [TYPOGRAPHY_KEYS[key as keyof Typography], value])), false);
+    },
+    resetTypography() { return patch(Object.fromEntries(Object.values(TYPOGRAPHY_KEYS).map(key => [key, undefined])), false); },
     saveZoom(percent: number) { return patch({ 'appearance.zoom': percent }, false); },
     recordCommandUsage(id: string) {
       return enqueue(async () => { receive(await host.commandUsage(id)); });

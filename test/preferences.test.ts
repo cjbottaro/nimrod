@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom';
 import { editSettings, installPreferences, legacyPreferences, parseSettings } from '../src/preferences';
 import { importTheme } from '../src/themes/theme';
 import { MemoryPreferences } from './preferences-fixture';
+import { DEFAULT_TYPOGRAPHY, TYPOGRAPHY_KEYS } from '../src/typography';
 
 function fixture() {
   const dom = new JSDOM('', { url: 'https://nimrod.test/' });
@@ -11,6 +12,33 @@ function fixture() {
   const errors: (string | undefined)[] = [];
   return { dom, host, errors, install: () => installPreferences(host, dom.window.localStorage, error => errors.push(error)) };
 }
+
+test('typography saves globally, preserves JSONC/project settings, rejects malformed files and resets by deletion', async () => {
+  const f = fixture(), p = await f.install();
+  try {
+    assert.deepEqual(p.typography(), DEFAULT_TYPOGRAPHY);
+    f.host.external('// typography comment\n{"custom":true}');
+    f.host.value.projectPath = '/project/.nimrod/settings.json';
+    f.host.externalProject('{"appearance.theme":"dracula"}');
+    await p.saveTypography({ conversationFont: 'Readable', conversationSize: 18, monospaceFont: 'Code Font', monospaceSize: 16 });
+    assert.deepEqual(p.typography(), { conversationFont: 'Readable', conversationSize: 18, monospaceFont: 'Code Font', monospaceSize: 16 });
+    assert.match(f.host.value.text, /typography comment/);
+    assert.equal(f.host.value.projectText, '{"appearance.theme":"dracula"}');
+    f.host.external('{"appearance.conversationFontSize":99}');
+    assert.equal(p.typography().conversationSize, 18);
+    await assert.rejects(p.saveTypography({ conversationSize: 20 }));
+    f.host.external('// restored\n{"custom":true,"appearance.monospaceFontSize":16}');
+    await p.resetTypography();
+    assert.deepEqual(p.typography(), DEFAULT_TYPOGRAPHY);
+    for (const key of Object.values(TYPOGRAPHY_KEYS)) assert.equal(parseSettings(f.host.value.text)[key], undefined);
+    assert.match(f.host.value.text, /restored/);
+    assert.equal(parseSettings(f.host.value.text).custom, true);
+    for (const key of Object.values(TYPOGRAPHY_KEYS)) {
+      f.host.externalProject(JSON.stringify({ [key]: key.endsWith('Size') ? 18 : 'Readable' }));
+      assert.match(f.errors.at(-1) ?? '', /global-only/);
+    }
+  } finally { p.dispose(); f.dom.window.close(); }
+});
 
 test('tool capture defaults off, saves globally and retains last valid settings', async () => {
   const f = fixture(), p = await f.install();

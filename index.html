@@ -75,6 +75,25 @@
           <div id="settings-background-blur" hidden><label for="background-blur">Background blur</label><div class="appearance-opacity"><input id="background-blur" type="range" min="0" max="40" step="1" value="20" aria-describedby="translucency-hint" disabled><output id="background-blur-value" for="background-blur">20</output></div></div>
           <p id="translucency-hint" class="settings-hint">Reading window appearance support…</p>
         </div>
+        <section id="settings-typography" aria-labelledby="typography-title">
+          <h3 id="typography-title">Typography</h3>
+          <div class="typography-row">
+            <div class="typography-family"><label id="conversation-font-label" for="conversation-font">Conversation font</label><button id="conversation-font" type="button" class="secondary" aria-haspopup="dialog">System default ▾</button></div>
+            <div class="typography-size"><label for="conversation-font-size">Size (px)</label><div class="typography-stepper"><button id="conversation-font-smaller" type="button" class="secondary" aria-label="Decrease conversation font size">−</button><input id="conversation-font-size" type="number" min="10" max="32" step="1" value="14"><button id="conversation-font-larger" type="button" class="secondary" aria-label="Increase conversation font size">+</button></div></div>
+          </div>
+          <div class="typography-row">
+            <div class="typography-family"><label id="monospace-font-label" for="monospace-font">Monospace font</label><button id="monospace-font" type="button" class="secondary" aria-haspopup="dialog">System default ▾</button></div>
+            <div class="typography-size"><label for="monospace-font-size">Size (px)</label><div class="typography-stepper"><button id="monospace-font-smaller" type="button" class="secondary" aria-label="Decrease monospace font size">−</button><input id="monospace-font-size" type="number" min="10" max="32" step="1" value="14"><button id="monospace-font-larger" type="button" class="secondary" aria-label="Increase monospace font size">+</button></div></div>
+          </div>
+          <p class="settings-hint">Conversation text and composer; code and tool output. Interface fonts stay unchanged. Sizes are logical pixels; Zoom scales these too. Missing fonts use the system fallback.</p>
+          <div class="typography-preview" role="region" aria-label="Typography preview">
+            <p class="typography-prose">A comfortable place to think, read and build. The agent found <code>three changes</code> worth reviewing.</p>
+            <pre class="typography-code"><code>const greeting = "Hello, Nimrod!";
+console.log(greeting); // 0123456789</code></pre>
+            <textarea class="typography-composer" rows="2" readonly aria-label="Composer font preview" tabindex="-1">Explain the changes and suggest a next step.</textarea>
+          </div>
+          <button id="typography-reset" type="button" class="secondary">Reset typography</button>
+        </section>
         <div id="settings-zoom">
         <label for="zoom-level">Zoom</label>
         <select id="zoom-level" aria-label="App zoom" title="App zoom · ⌘/Ctrl +, −, 0" disabled><option>100%</option></select>

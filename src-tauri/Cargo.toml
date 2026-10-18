@@ -27,6 +27,7 @@ which = "8"
 tempfile = "3"
 sha2 = "0.10"
 uuid = { version = "1", features = ["v4"] }
+font-kit = "0.14"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
@@ -41,4 +42,3 @@ notify-rust = { version = "4.17", default-features = false, features = ["z-with-
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.30", features = ["signal", "process", "fs", "poll"] }
-

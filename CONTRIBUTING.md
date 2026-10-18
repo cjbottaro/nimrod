@@ -13,6 +13,8 @@ mise run dev
 
 macOS needs Xcode Command Line Tools. See [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for Linux or possible Windows development. Keep the JS/Rust Tauri packages on compatible major/minor versions and update both lockfiles deliberately.
 
+Installed-font discovery uses `font-kit` (Core Text on macOS; Fontconfig/FreeType on Linux). Linux development also needs Fontconfig and FreeType development packages, such as `libfontconfig1-dev libfreetype6-dev` on Debian/Ubuntu. The app uses installed fonts, not bundled font files or a network font service.
+
 ### Copilot SDK runtime
 
 Built-in Copilot pins `@github/copilot-sdk@1.0.22`, whose released metadata names

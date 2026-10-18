@@ -6,6 +6,7 @@ icon, to the left of **Copy**. Copy briefly becomes a checkmark after success.
 ## What you get
 
 - A separate window containing the captured content. Later agent output does not update it.
+- Global [typography preferences](settings.md#typography) update existing reference windows: conversation fonts for Markdown prose and monospace fonts for code. The captured source stays unchanged.
 - [Syntax highlighting](syntax-highlighting.md) for labeled code, including Elixir, and languages detected from user code; formatted rendering for Markdown. Pop-outs preserve their captured language rather than guessing again.
 - **Copy** copies the original source. Markdown has a small upper-right Copy source
   icon; nested code blocks have their own Copy buttons.

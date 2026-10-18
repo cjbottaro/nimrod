@@ -204,6 +204,34 @@ pub(crate) fn validate(text: &str) -> Result<(), String> {
     {
         return Err("appearance.frostedBackground must be a boolean".into());
     }
+    for key in ["appearance.conversationFont", "appearance.monospaceFont"] {
+        if let Some(value) = object.get(key) {
+            let text = value
+                .as_str()
+                .ok_or_else(|| format!("{key} must be a string"))?;
+            if text.chars().count() > 200
+                || text.trim() != text
+                || text.chars().any(char::is_control)
+            {
+                return Err(format!(
+                    "{key} must be a single font family (at most 200 characters), or empty for System default"
+                ));
+            }
+        }
+    }
+    for key in [
+        "appearance.conversationFontSize",
+        "appearance.monospaceFontSize",
+    ] {
+        if let Some(value) = object.get(key) {
+            if !value
+                .as_f64()
+                .is_some_and(|size| size.fract() == 0.0 && (10.0..=32.0).contains(&size))
+            {
+                return Err(format!("{key} must be an integer from 10 to 32 pixels"));
+            }
+        }
+    }
     if let Some(style) = object.get("appearance.modalAnimation") {
         if !matches!(style.as_str(), Some("none" | "subtle" | "crt" | "hologram")) {
             return Err("appearance.modalAnimation must be none, subtle, crt or hologram".into());
@@ -612,6 +640,35 @@ pub fn watch(app: &tauri::AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn typography_settings_are_bounded_and_typed() {
+        for key in [
+            "appearance.conversationFontSize",
+            "appearance.monospaceFontSize",
+        ] {
+            for size in ["10", "14", "14.0", "32"] {
+                validate(&format!(r#"{{"{key}":{size}}}"#)).unwrap();
+            }
+            for size in ["9", "33", "14.5", "null", "true", r#""14""#] {
+                assert!(validate(&format!(r#"{{"{key}":{size}}}"#)).is_err());
+            }
+        }
+        for key in ["appearance.conversationFont", "appearance.monospaceFont"] {
+            for family in ["", "Font With Spaces", &"字".repeat(200), &"🦊".repeat(200)] {
+                validate(&serde_json::json!({ key: family }).to_string()).unwrap();
+            }
+            for family in [" padded", "padded ", "A\nB", "A\u{0085}B", &"a".repeat(201)] {
+                assert!(validate(&serde_json::json!({ key: family }).to_string()).is_err());
+            }
+            for value in [
+                serde_json::Value::Null,
+                serde_json::json!(true),
+                serde_json::json!([]),
+            ] {
+                assert!(validate(&serde_json::json!({ key: value }).to_string()).is_err());
+            }
+        }
+    }
     #[test]
     fn validates_card_plugin_filenames_and_renderer_overrides() {
         assert!(validate(r#"{"cards.plugins":["example.json"],"cards.renderers":{"read":"example.read","edit":"nimrod.raw"}}"#).is_ok());

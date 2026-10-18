@@ -112,6 +112,34 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   }) : undefined;
   transcriptResizeObserver?.observe(transcriptViewport);
   window.addEventListener("resize", resizeTranscript, { passive: true, signal: listeners.signal });
+  let typographyFollow = false;
+  const typographyOutputs = new Map<HTMLElement, { top: number; left: number; follow: boolean }>();
+  document.addEventListener('nimrod-typography-will-change', () => {
+    if (!active || disposed) return;
+    typographyFollow = transcriptScroll.capture();
+    typographyOutputs.clear();
+    for (const output of messages.querySelectorAll<HTMLElement>('.tool-output')) {
+      typographyOutputs.set(output, {
+        top: output.scrollTop, left: output.scrollLeft,
+        follow: output.clientHeight > 0 && output.classList.contains('tool-output-streaming') && output.scrollTop + output.clientHeight >= output.scrollHeight - 2,
+      });
+    }
+  }, { signal: listeners.signal });
+  document.addEventListener('nimrod-typography-changed', () => {
+    if (!active || disposed) return;
+    resizePrompt();
+    for (const [output, position] of typographyOutputs) if (output.isConnected) {
+      output.scrollTop = position.follow ? output.scrollHeight : position.top;
+      output.scrollLeft = position.left;
+    }
+    typographyOutputs.clear();
+    transcriptScroll.request(typographyFollow);
+    transcriptScroll.resize();
+  }, { signal: listeners.signal });
+  document.fonts?.addEventListener('loadingdone', () => {
+    if (!active || disposed) return;
+    resizePrompt(); transcriptScroll.resize();
+  }, { signal: listeners.signal });
   function cancelPresentationFrames(): void {
     presentationEpoch++;
     if (renderFrame !== undefined) window.cancelAnimationFrame(renderFrame);
@@ -125,6 +153,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     cancelPresentationFrames();
     pendingState = undefined; pendingRows.clear();
     suspendedOutputPositions = undefined;
+    typographyOutputs.clear();
     if (composerResizeFrame !== undefined) window.cancelAnimationFrame(composerResizeFrame);
     composerGeneration++;
     for (const url of attachmentUrls.values()) URL.revokeObjectURL(url);
