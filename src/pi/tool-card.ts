@@ -61,6 +61,8 @@ export function updateToolCard(document: Document, details: HTMLDetailsElement, 
     inputs.set(details, block.arguments); updateInputs(document, details, block.arguments);
   }
   renderers.get(details)?.update(block, { streaming: toolCardIsBusy(block) });
+  const description = summary.querySelector('.card-plugin-summary')?.getAttribute('aria-label');
+  if (description) summary.setAttribute('aria-label', `${description} (${status})`);
   const raw = Array.from(details.querySelectorAll<HTMLElement>('.tool-section')).filter(section => ['execution', 'result'].includes(section.dataset.outputKind || ''));
   associateOutputViewport(details, raw.find(section => section.querySelector('.tool-output-streaming'))?.querySelector<HTMLElement>('.tool-output') || raw[0]?.querySelector<HTMLElement>('.tool-output') || details.querySelector<HTMLElement>('.tool-output') || undefined);
 }

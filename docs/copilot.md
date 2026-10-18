@@ -82,6 +82,8 @@ acceptance after a requested build.
 
 ### Answer agent questions
 
+After Copilot reports your answer, a compact [question/answer card](reading-conversations.md#copilot-questionanswer-cards) records the exchange in the transcript. It is read-only; answering still happens in the picker and nested input below.
+
 Agent questions use the **Question picker**, not an inline form above the
 composer. Choose an answer with arrows/Enter, filtering or a click. If Copilot
 allows a custom answer, choose **Enter your own answer…** to open a separate input

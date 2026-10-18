@@ -27,6 +27,10 @@ One mounted card per invocation survives placement/lifecycle updates, preserving
 
 Each Pi built-in selects its own metadata-matched mounted plugin; [card plugins](card-plugins.md#built-in-tool-dogfooding) owns the IDs, matching and implementation map. Read summaries can show requested line ranges, and write bodies show literal input-backed **Requested content** alongside Pi output, not a claim of successful execution. File/search/list output remains literal. The shared generic fallback/override remains available for unknown/custom tools.
 
+## Completed Copilot questions
+
+[Question/answer cards](card-plugins.md#copilot-questionanswer-cards) specialize successful, recognized `ask_user` results inside the existing mounted SDK adapter. The closed summary shows an outline speech-bubble icon, question and inset literal answer with a theme-accent line; options/raw recovery stay behind the ordinary disclosure. This read-only historical card is separate from the SDK Question picker/modal. Pending/error/cancelled/interrupted/unknown results remain generic. The shared public question/reply presentation preserves mounted shell/indicator/disclosure/output identity and core scroll/focus ownership; fixture/native evidence is tracked in the linked specification.
+
 ## Empty assistant envelopes
 
 `src/pi/transcript-presentation.ts::isEmptyAssistantMessage` identifies assistant rows containing only absent/empty/whitespace text or reasoning. The shared mounted renderer keeps their keyed articles but sets `hidden` on creation and every patch; `.message[hidden]` removes their accent line, padding and margins from layout. This handles Copilot tool-only assistant envelopes without deleting harness messages, losing final-event identity or interfering with separately keyed tool cards. Later nonempty content reveals the same article; authoritative empty content hides it again. Tool/image/raw/unknown blocks, error messages and non-assistant roles remain visible. No global spacing, tool grouping, reasoning summary formatting or SDK event semantics change.

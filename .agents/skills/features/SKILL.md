@@ -69,6 +69,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Send/steer/queue, pending turns and recovery | [Composer](references/composer.md) | [Writing messages](../../../docs/writing-messages.md) |
 | Shared message-input interface, Pi/Copilot image paste, draft bytes and send outcomes | [Image paste](references/image-paste.md) | [Paste images](../../../docs/image-paste.md) |
 | Operation-card title/content, pending stack, settlement, error details and optional cancellation | [Operation cards](references/operation-cards.md) | [Reading conversations](../../../docs/reading-conversations.md#operation-cards) |
+| Completed Copilot question/answer transcript cards, separate from the Question picker | [Question/answer cards](references/card-plugins.md#copilot-questionanswer-cards) | [Reading questions and answers](../../../docs/reading-conversations.md#copilot-questionanswer-cards) |
 | Tool/reasoning identity, lifecycle and disclosures | [Transcript cards](references/transcript-cards.md) | [Reading conversations](../../../docs/reading-conversations.md) |
 | Transcript layout, scroll intent, focus and zoom | [Transcript interaction](references/transcript-interaction.md) | [Reading](../../../docs/reading-conversations.md), [Settings](../../../docs/settings.md) |
 | Explicit labels and user-code inference | [Syntax highlighting](references/syntax-highlighting.md) | [Syntax highlighting](../../../docs/syntax-highlighting.md) |

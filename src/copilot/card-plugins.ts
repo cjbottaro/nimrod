@@ -1,6 +1,6 @@
 import type { CardPlugin, CardPresentation, CardSection, CardPluginContext, ToolCardData } from '../card-plugin-api';
 import { copilotToolResult } from './tool-result';
-import { definePresentationPlugin, rawToolPresentation, shellPresentation, fileReadPresentation, searchPresentation, argumentRecord, firstString, webUrl, displayWebUrl, markdownWebLink, webSearchPresentation, webFetchPresentation, type WebSource, namedToolPresentation, codeSearchText, type CodeSearchFile } from '../card-plugin-ui';
+import { definePresentationPlugin, rawToolPresentation, shellPresentation, fileReadPresentation, searchPresentation, argumentRecord, firstString, webUrl, displayWebUrl, markdownWebLink, questionAnswerPresentation, webSearchPresentation, webFetchPresentation, type WebSource, namedToolPresentation, codeSearchText, type CodeSearchFile } from '../card-plugin-ui';
 
 function isCopilot(data: Readonly<ToolCardData>): boolean {
   return data.source?.backend === 'copilot-sdk' && ['copilot', 'copilot-cli'].includes((data.source?.agent || '').toLowerCase());
@@ -148,12 +148,47 @@ function repositoryResult(output: Record<string, unknown>): string | undefined {
     notice: typeof output.content === 'string' && output.content.startsWith('Output too large to read at once (') && output.content.includes('Saved to:') ? 'Agent text preview was clipped; showing structured results.' : undefined });
   repositoryResults.set(output, text); return text;
 }
+/** Completed questions are a read-only transcript exchange, never a second decision surface. */
+function questionPresentation(data: Readonly<ToolCardData>, input: Record<string, unknown> | undefined): CardPresentation | undefined {
+  if (data.name !== 'ask_user' || data.isError || data.uiPhase || !['finished', 'result'].includes(data.toolStatus || '')) return;
+  const complete = object(object(data.native)?.['tool.execution_complete']);
+  if (complete?.success !== true) return;
+  const question = firstString(input, ['question', 'message']);
+  const native = nativeResult(data);
+  if (!question?.trim() || !native?.text) return;
+  const properties = object(object(input?.requestedSchema)?.properties);
+  const detail = properties && typeof native.output.detailedContent === 'string' ? native.output.detailedContent : undefined;
+  const text = detail?.startsWith('User responded:\n') ? detail : native.text;
+  const prefix = /^User (?:selected|responded):(?: |\r?\n)/.exec(text);
+  if (!prefix) return; // Cancellation, unavailable input and unknown schemas stay literal.
+  const answer = text.slice(prefix[0].length);
+  if (!answer.trim()) return;
+  const options: string[] = [];
+  if (Array.isArray(input?.choices)) {
+    for (const choice of input.choices) if (typeof choice === 'string') options.push(choice);
+  } else if (properties) {
+    for (const [key, value] of Object.entries(properties)) {
+      const field = object(value);
+      if (!field) continue;
+      const choices = Array.isArray(field.enum) ? field.enum.filter((choice): choice is string => typeof choice === 'string')
+        : Array.isArray(field.oneOf) ? field.oneOf.flatMap(value => {
+          const option = object(value);
+          return typeof option?.title === 'string' ? [option.title] : typeof option?.const === 'string' ? [option.const] : [];
+        }) : [];
+      if (choices.length) options.push(`${typeof field.title === 'string' ? field.title : key}:\n${choices.map(choice => `  • ${choice}`).join('\n')}`);
+    }
+  }
+  return questionAnswerPresentation({ question, answer, sections: options.length ? [{ key: 'question-options', label: 'Available options', text: options.join('\n') }] : [] });
+}
 /** Late names/categories/SDK metadata update content inside the same mounted adapter. */
 function copilotPresentation(data: Readonly<ToolCardData>, context: CardPluginContext): CardPresentation {
   const raw = rawToolPresentation(data);
   if (!isCopilot(data)) return raw;
   const input = argumentRecord(data.arguments), start = object(object(data.native)?.['tool.execution_start']);
   const sections = data.isError ? copilotSections(data) : raw.sections;
+  // Native MCP operations with a coincidentally matching name are not built-in questions.
+  const question = !start?.mcpServerName ? questionPresentation(data, input) : undefined;
+  if (question) return question;
   if (typeof start?.mcpServerName === 'string' && typeof start.mcpToolName === 'string') {
     // The built-in web search is delivered through GitHub MCP, not only as a
     // bare search-category tool. Match its concrete identity before MCP fallback.

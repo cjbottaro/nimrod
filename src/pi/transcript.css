@@ -73,6 +73,15 @@ details { margin:8px 0; border:0; border-radius:0; padding:0; }
 :is(.tool-card, .tool-raw-inputs)[open]::after { content:""; position:absolute; left:3px; top:calc(1.5em + 8px); bottom:4px; width:1px; pointer-events:none; background:var(--vscode-editorIndentGuide-background1, color-mix(in srgb, var(--vscode-descriptionForeground) 35%, transparent)); }
 .tool-card .tool-raw-inputs > pre { margin-left:14px; }
 .card-plugin-summary { display:contents; }
+/* Read-only exchange summary; the retained shell still owns disclosure/status. */
+.tool-card > summary:has(.card-question-answer) { align-items:flex-start; font-weight:normal; }
+.tool-card > summary:has(.card-question-answer)::before { margin-top:.5em; }
+.tool-card-summary:has(> .card-question-answer) { align-items:flex-start; }
+.tool-card-summary:has(> .card-question-answer) > .tool-card-succeeded { display:none; }
+.card-plugin-summary.card-question-answer { display:grid; grid-template-columns:14px minmax(0, 1fr); column-gap:7px; row-gap:5px; flex:1; min-width:0; }
+.card-question-icon { grid-column:1; grid-row:1; width:14px; height:14px; margin-top:.25em; fill:none; stroke:currentColor; stroke-width:1.2; stroke-linejoin:round; }
+.card-question-answer > .tool-card-title { grid-column:2; grid-row:1; min-width:0; font:inherit; white-space:pre-wrap; overflow-wrap:anywhere; }
+.card-question-reply { grid-column:2; padding-left:10px; border-left:2px solid var(--vscode-progressBar-background, var(--vscode-textLink-foreground)); color:var(--vscode-foreground); white-space:pre-wrap; overflow-wrap:anywhere; }
 .tool-output-web-markdown { font-family:var(--vscode-font-family, sans-serif); white-space:normal; background:transparent; padding:0; }
 .tool-output-web-markdown > .markdown { white-space:normal; overflow-wrap:anywhere; }
 .tool-output-web-markdown .markdown :is(h1, h2) { font-size:1.12em; line-height:1.4; }

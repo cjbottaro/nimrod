@@ -51,6 +51,10 @@ export function searchPresentation(value: { title?: string; query: string; scope
   return { title: value.title || 'Search', preview: [value.query || '""', scope ? `in ${scope}` : undefined, value.glob ? `files ${value.glob}` : undefined].filter(Boolean).join(' · '),
     rawInputsPlacement: 'after', sections: value.sections };
 }
+/** Read-only exchange with a speech-bubble icon and inset reply; details remain disclosed. */
+export function questionAnswerPresentation(value: { question: string; answer: string; sections: CardPresentation['sections'] }): CardPresentation {
+  return { title: value.question, questionAnswer: { answer: value.answer }, rawInputsPlacement: 'after', sections: value.sections };
+}
 /** Shared command/output component through the public keyed presentation runtime. */
 export function shellPresentation(value: { title: string; command?: string; sections: CardPresentation['sections'] }): CardPresentation {
   return { title: value.title, preview: value.command, sections: value.sections.map(section => ({ ...section, format: 'console' as const })) };

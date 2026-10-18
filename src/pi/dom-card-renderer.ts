@@ -205,8 +205,26 @@ export class DomCardController<Data> {
     let title = this.summary.querySelector<HTMLElement>('.tool-card-title');
     if (!title) { title = doc.createElement('span'); title.className = 'tool-card-title'; this.summary.append(title); }
     if (title.textContent !== value.title) title.textContent = value.title;
+    this.summary.classList.toggle('card-question-answer', value.questionAnswer !== undefined);
+    let icon = this.summary.querySelector('.card-question-icon');
+    let reply = this.summary.querySelector<HTMLElement>('.card-question-reply');
+    if (value.questionAnswer) {
+      this.summary.setAttribute('aria-label', `Question: ${value.title}. Answer: ${value.questionAnswer.answer}`);
+      if (!icon) {
+        icon = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        icon.setAttribute('class', 'card-question-icon'); icon.setAttribute('viewBox', '0 0 16 16');
+        icon.setAttribute('aria-hidden', 'true'); icon.setAttribute('focusable', 'false');
+        const path = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', 'M3 2.5h10a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7l-4 3v-3a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1Z');
+        icon.append(path); this.summary.prepend(icon);
+      }
+      if (!reply) { reply = doc.createElement('span'); reply.className = 'card-question-reply'; this.summary.append(reply); }
+      if (reply.textContent !== value.questionAnswer.answer) reply.textContent = value.questionAnswer.answer;
+    } else {
+      this.summary.removeAttribute('aria-label'); icon?.remove(); reply?.remove();
+    }
     let preview = this.summary.querySelector<HTMLElement>('.tool-card-preview');
-    if (value.preview !== undefined) {
+    if (value.preview !== undefined && !value.questionAnswer) {
       if (!preview) { preview = doc.createElement('span'); preview.className = 'tool-card-preview'; this.summary.append(preview); }
       if (preview.textContent !== value.preview) preview.textContent = value.preview;
     } else preview?.remove();

@@ -24,6 +24,8 @@ export interface CardSection {
 export interface CardPresentation {
   title: string;
   preview?: string;
+  /** Read-only question/reply summary; title is the question. No decision controls. */
+  questionAnswer?: { answer: string };
   /** Core-owned raw inputs default before the body; renderers may request them below it. */
   rawInputsPlacement?: 'before' | 'after';
   sections: readonly CardSection[];

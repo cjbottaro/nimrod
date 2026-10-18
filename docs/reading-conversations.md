@@ -38,6 +38,12 @@ A tool may keep its activity indicator after execution finishes while Pi process
 
 Each Pi built-in has a dedicated [card plugin](card-plugins.md#matching-and-overrides). Read summaries include the requested path and line range when supplied. Write cards show the destination and literal **Requested content**, separately scrollable from Pi's output; this previews the input, not a successful write. Grep/find show the pattern and path, and ls shows the directory. Edit cards retain requested diffs with Wrap/Copy. Unknown tools use a generic card, and personal plugins can override built-in presentation.
 
+### Copilot question/answer cards
+
+After Copilot reports an answer, its question card shows just the question with a small speech-bubble icon and your answer inset beneath it, marked by a short theme-accent line. There is no extra title, badge or enclosing box. Long questions and answers wrap; multiline replies stay literal.
+
+Expand the disclosure to see the offered options, **Raw inputs** and the original **Raw output**. Older schema-based questions retain their labelled answers. Pending, cancelled, interrupted, failed or unrecognized results retain the ordinary tool presentation rather than inventing an answer. This read-only transcript card is separate from the [Question picker](copilot.md#answer-agent-questions) and never submits a decision.
+
 ### Copilot web cards
 
 Copilot web searches—including its built-in GitHub MCP web search—show the full query in the summary and a formatted **Answer** when expanded. Numbered citations link to source pages; a deduplicated **Sources** list shows their titles and domains. The answer is Copilot's generated summary, not independently verified by Nimrod.
