@@ -267,7 +267,7 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
     saveNotifications(enabled: boolean) { return patch({ 'notifications.enabled': enabled }, false); },
     sendAutoFollow(): SendAutoFollow { return globalSettings['appearance.autoFollowAfterSending'] as SendAutoFollow ?? DEFAULT_SEND_AUTO_FOLLOW; },
     saveSendAutoFollow(mode: SendAutoFollow) { return patch({ 'appearance.autoFollowAfterSending': mode }, false); },
-    modalAnimation(style?: ModalAnimation['style']) { return readModalAnimation(style ? { ...globalSettings, [MODAL_ANIMATION_KEYS.style]: style } : globalSettings); }
+    modalAnimation(style?: ModalAnimation['style']) { return readModalAnimation(style ? { ...globalSettings, [MODAL_ANIMATION_KEYS.style]: style } : globalSettings); },
     saveModalAnimation(values: Partial<ModalAnimation>) {
       return patch(Object.fromEntries(Object.entries(values).map(([key, value]) => [MODAL_ANIMATION_KEYS[key as keyof ModalAnimation], value])), false);
     },
