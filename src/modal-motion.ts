@@ -8,16 +8,6 @@ interface Layer { source: HTMLElement; node: HTMLElement; animations: Animation[
 interface NativeDismissal { event: Event; generation?: number; epoch: number; snapshot?: Snapshot }
 const owners = new WeakMap<Document, ReturnType<typeof createModalMotion>>();
 const styles = new WeakMap<CSSStyleSheet, { count: number; text: string }>();
-const depthBlurAttribute = 'data-modal-depth-blur';
-function hasPresentedModal(document: Document, source: HTMLElement): boolean {
-  return [...document.querySelectorAll<HTMLElement>('dialog[open], .modal-overlay.open')].some(candidate => candidate !== source);
-}
-function prepareModalDepth(source: HTMLElement): void {
-  source.toggleAttribute(depthBlurAttribute, hasPresentedModal(source.ownerDocument, source));
-}
-function clearModalDepth(source: HTMLElement): void {
-  source.removeAttribute(depthBlurAttribute);
-}
 function applyBackdropFilter(element: HTMLElement, value: string): void {
   if (!value || value === 'none') return;
   element.style.setProperty('backdrop-filter', value);
@@ -345,7 +335,6 @@ function createModalMotion(document: Document) {
     const dialog = event.target;
     if (!(dialog instanceof view.HTMLDialogElement)) return;
     const record = pending.get(dialog); pending.delete(dialog);
-    clearModalDepth(dialog);
     if (record && !record.event.defaultPrevented && !dialog.open && epoch === record.epoch && generations.get(dialog) === record.generation) {
       bump(dialog); present(dialog, record.snapshot);
     }
@@ -375,18 +364,16 @@ export function installModalMotion(document: Document) {
 }
 export function clearModalMotion(document: Document): void { owners.get(document)?.clear(); }
 export function showModal(dialog: HTMLDialogElement): void {
-  prepareModalDepth(dialog);
-  try { dialog.showModal(); } catch (error) { clearModalDepth(dialog); throw error; }
-  installModalMotion(dialog.ownerDocument).opening(dialog);
+  dialog.showModal(); installModalMotion(dialog.ownerDocument).opening(dialog);
 }
 export function closeModal(dialog: HTMLDialogElement, result?: string): void {
   if (!dialog.open) return;
   installModalMotion(dialog.ownerDocument).closing(dialog, () => { if (result === undefined) dialog.close(); else dialog.close(result); });
 }
 export function showModalOverlay(overlay: HTMLElement): void {
-  prepareModalDepth(overlay); overlay.classList.add('open'); installModalMotion(overlay.ownerDocument).opening(overlay);
+  overlay.classList.add('open'); installModalMotion(overlay.ownerDocument).opening(overlay);
 }
 export function closeModalOverlay(overlay: HTMLElement): void {
   if (!overlay.classList.contains('open')) return;
-  installModalMotion(overlay.ownerDocument).closing(overlay, () => { overlay.classList.remove('open'); clearModalDepth(overlay); });
+  installModalMotion(overlay.ownerDocument).closing(overlay, () => overlay.classList.remove('open'));
 }

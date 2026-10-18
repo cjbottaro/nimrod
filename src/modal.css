@@ -47,8 +47,8 @@
 }
 .nimrod-modal :is(input, textarea, select) { background:var(--modal-field-surface); color:var(--vscode-input-foreground); }
 .nimrod-modal::backdrop, .modal-overlay::before { background:var(--nimrod-modal-backdrop, var(--modal-backdrop)); }
-:root[data-translucency=window] dialog.nimrod-modal[data-modal-depth-blur]::backdrop,
-:root[data-translucency=window] .modal-overlay[data-modal-depth-blur]::before {
+:root[data-translucency=window] dialog.nimrod-modal::backdrop,
+:root[data-translucency=window] .modal-overlay::before {
   -webkit-backdrop-filter:blur(var(--nimrod-depth-blur-radius, 0px));
   backdrop-filter:blur(var(--nimrod-depth-blur-radius, 0px));
 }
