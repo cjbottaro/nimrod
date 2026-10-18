@@ -9,6 +9,8 @@ Read repository `AGENTS.md`, [architecture](references/architecture.md) and the 
 
 When adding or changing error paths, notices, banners, flash messages or operational notifications, load the [error presentation policy](references/error-presentation.md). It owns ownership-based placement (session conversation notices versus the application notice strip), shared routing, wording, deduplication and lifecycle. Do not invent additional error surfaces.
 
+When adding or changing a modal, dialog, picker or preview, load the [modal implementation checklist](references/modal-layout.md#implementation-checklist). Ordinary modals **must** use the shared shell and `src/modal-motion.ts` lifecycle helpers (or an existing component that uses them), not raw dialog methods or custom open/close animations. Full-window Settings and native OS choosers are explicit exceptions documented there. Shared styling alone does not wire all motion paths.
+
 ## Interaction policy
 
 Apply the [optimistic interaction policy](references/architecture.md#optimistic-interaction-policy) to all UI work: local user actions drive immediate feedback; RPC success is not a general UI gate. Late errors annotate the affected operation, and authoritative harness events reconcile data without replay, draft restoration or repeat navigation. Any result-gated exception must have a concrete authoritative-state or destructive-operation requirement documented in its feature reference.

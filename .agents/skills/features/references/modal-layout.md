@@ -17,6 +17,19 @@ Ordinary dialogs share a shell, not identical content. Confirmation labels remai
 - Override the native dialog UA `max-width` cap in the shared shell; otherwise native dialogs and overlay cards differ by a few pixels at zoom/narrow widths.
 - Scrollable bodies shrink within stack/form height limits; footer actions stay outside content scrolling. Shell overflow remains available for unusually long non-body content.
 
+## Implementation checklist
+
+Apply this to every new or modified ordinary modal, including previews and dynamically created dialogs:
+
+1. **Reuse the existing interaction first.** Host input/select/confirmation dialogs use `Dialogs`; command-palette pickers use its existing page lifecycle rather than a new dialog. Their shared presentation already uses the helpers below.
+2. **Use the shared shell.** Apply `.nimrod-modal` and the appropriate `.modal-*` structure from `src/modal.css`. Do not duplicate shell geometry, theme surfaces, animation styles, duration calculations or reduced-motion handling in feature code.
+3. **Use the lifecycle helpers, not raw DOM mutations.** Import `showModal(dialog)` and `closeModal(dialog, result?)` from `src/modal-motion.ts` for every programmatic open/close path. The retained Pi editor overlay uses `showModalOverlay(overlay)` / `closeModalOverlay(overlay)` instead of manually adding/removing its `open` class. Do not call native `.showModal()` / `.close()` directly in ordinary modal feature code, including cancel, error and teardown paths. The CSS class alone is insufficient: helpers supply the CRT beam, pre-close capture and stale-motion cleanup.
+4. **Keep native defaults centralized.** Native `method=dialog` forms and Escape/cancel are supported by the shared controller; do not add per-modal animation listeners or duplicate request settlement. `showModal` installs the document controller lazily; a new standalone window/entry point must ensure that controller exists before native dismissal and dispose it with its window owner. Project/global Settings already own this installation. The [motion contract](#modal-motion) owns default-action timing and deduplication.
+5. **Never gate semantics on animation.** Preserve the feature's validation, return values, request correlation and focus restoration. Do not await an animation or add a close delay before settling an action. Decorative snapshots must remain inert and cannot become a second interaction owner.
+6. **Extend the relevant fixtures.** Cover controlled/programmatic close plus native form/Escape paths used by the feature, focus/parent-modal preservation, reopening during exit, and None/reduced motion. For browser default-action regressions, use trusted Playwright clicks/keys—not only `element.click()` inside `page.evaluate`, which can mask microtask/default-action ordering. Follow repository authorization rules before running validation.
+
+**Exceptions:** full-window Project settings uses `installSettings` in `src/settings.ts`, not ordinary modal animation; it clears decorative remnants on navigation. Global Settings is a native window containing that page. Native OS file/directory choosers keep their platform lifecycle. These exceptions are not precedent for bypassing helpers in new ordinary dialogs.
+
 ## Modal motion
 
 - `src/modal-animation.ts` owns typed global preferences and root-local presentation tokens; `src/modal.css` owns live-shell entrances. `src/modal-motion.ts` owns the dedicated CRT beam and decorative exits for native `dialog.nimrod-modal` shells and Pi's existing `.modal-overlay` editor. Full-window Settings, native windows/file choosers and transcript disclosures are not animated by this feature.
