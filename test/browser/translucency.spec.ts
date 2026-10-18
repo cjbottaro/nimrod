@@ -47,9 +47,10 @@ test('buttons, Status area and notices use translucent overlays rather than stac
       // The notice's error outline/icon and foreground opacity remain untouched.
       expect(await notices.evaluate(node => getComputedStyle(node).opacity)).toBe('1');
       await fixture.editPreferences(JSON.stringify({ 'appearance.theme': theme, 'appearance.backgroundOpacity': 65, 'appearance.translucencyArea': 'chrome', 'appearance.frostedBackground': false }));
-      await expect(page.locator('html')).toHaveAttribute('data-translucency', 'chrome');
-      expect(alpha(await send.evaluate(node => getComputedStyle(node).backgroundColor))).toBe(1);
-      expect(alpha(await notices.evaluate(node => getComputedStyle(node).backgroundColor))).toBe(1);
+      // Existing sidebar-only preferences no longer restrict any surface.
+      await expect(page.locator('html')).toHaveAttribute('data-translucency', 'window');
+      expect(alpha(await send.evaluate(node => getComputedStyle(node).backgroundColor))).toBeLessThan(1);
+      expect(alpha(await notices.evaluate(node => getComputedStyle(node).backgroundColor))).toBeLessThan(1);
       const primaryDensity = await page.locator('html').evaluate(root => parseFloat(getComputedStyle(root).getPropertyValue('--nimrod-sidebar-ethereal-button-opacity')) / 100);
       expect(alpha(await page.locator('#sidebar-new').evaluate(node => getComputedStyle(node).backgroundColor))).toBeCloseTo(primaryDensity, 3);
     }
@@ -138,9 +139,9 @@ test('normal and hovered primary base fills do not exceed the pre-glass recipe a
     for (const scheme of ['dark', 'light'] as const) {
       await page.emulateMedia({ colorScheme: scheme });
       for (const theme of ['nimrod', 'dracula', 'catalog-atom-one-light-vscode-atom-one-light']) {
-        for (const area of ['window', 'chrome']) {
+        for (const legacyArea of [undefined, 'chrome']) {
           for (const opacity of [0, 25, 50, 65, 85, 90, 95, 99, 100]) {
-            await fixture.editPreferences(JSON.stringify({ 'appearance.theme': theme, 'appearance.backgroundOpacity': opacity, 'appearance.translucencyArea': area }));
+            await fixture.editPreferences(JSON.stringify({ 'appearance.theme': theme, 'appearance.backgroundOpacity': opacity, 'appearance.translucencyArea': legacyArea }));
             for (const hovered of [false, true]) {
               if (hovered) await page.locator('#sidebar-new').hover(); else await page.mouse.move(799, 1);
               const palette = await page.locator('html').evaluate(root => {
@@ -164,7 +165,7 @@ test('normal and hovered primary base fills do not exceed the pre-glass recipe a
                 button.style.background = saved;
                 return { current, previous };
               }, { hovered, previousDensity });
-              expect(alpha(comparison.current), `${scheme}/${theme}/${area}/${opacity}/${hovered}`).toBeLessThanOrEqual(alpha(comparison.previous) + .000001);
+              expect(alpha(comparison.current), `${scheme}/${theme}/${legacyArea ?? 'default'}/${opacity}/${hovered}`).toBeLessThanOrEqual(alpha(comparison.previous) + .000001);
             }
           }
         }
@@ -174,7 +175,7 @@ test('normal and hovered primary base fills do not exceed the pre-glass recipe a
   } finally { await fixture.close(); }
 });
 
-test('lighter primary actions restore exact opaque styling and respect sidebar-only scope', async ({ page }) => {
+test('lighter primary actions restore exact opaque styling and ignore legacy area preferences', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {
     await page.locator(visible('prompt')).fill('Unsent fixture draft');
@@ -218,8 +219,8 @@ test('lighter primary actions restore exact opaque styling and respect sidebar-o
       expect(light[i].rest.height).toBe(opaque[i].rest.height);
     }
     await fixture.editPreferences(JSON.stringify({ 'appearance.theme': 'nimrod', 'appearance.backgroundOpacity': 65, 'appearance.translucencyArea': 'chrome' }));
-    await expect(page.locator('html')).toHaveAttribute('data-translucency', 'chrome');
-    expect((await snapshot())[1]).toEqual(opaque[1]);
+    await expect(page.locator('html')).toHaveAttribute('data-translucency', 'window');
+    expect(await snapshot()).toEqual(light);
     await fixture.editPreferences(JSON.stringify({ 'appearance.theme': 'nimrod', 'appearance.backgroundOpacity': 100 }));
     await expect(page.locator('html')).toHaveAttribute('data-translucency', 'off');
     expect(await snapshot()).toEqual(opaque);
@@ -252,7 +253,7 @@ test('an uncommitted drag updates project windows and native Settings close rest
   } finally { await fixture.close(); }
 });
 
-test('whole-window and chrome-only tint synchronize without rebuilding the conversation', async ({ page }) => {
+test('whole-window tint synchronizes without an area selector or rebuilding the conversation', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {
     const prompt = page.locator(visible('prompt')); await prompt.fill('Keep this draft');
@@ -274,13 +275,10 @@ test('whole-window and chrome-only tint synchronize without rebuilding the conve
     expect(fixture.settingsText()).toBe(before); expect(writes()).toBe(beforeWrites);
     await settings.locator('#background-opacity').evaluate(input => input.dispatchEvent(new Event('change', { bubbles: true })));
     await expect(page.locator('html')).toHaveAttribute('data-translucency', 'window');
-    const wholeBackground = await page.locator('#workspace-content').evaluate(element => getComputedStyle(element).backgroundColor);
-    await settings.locator('#translucency-area').selectOption('chrome');
-    await expect(page.locator('html')).toHaveAttribute('data-translucency', 'chrome');
-    const chromeBackground = await page.locator('#workspace-content').evaluate(element => getComputedStyle(element).backgroundColor);
-    expect(chromeBackground).not.toEqual(wholeBackground);
-    const sidebarBackground = await page.locator('#session-sidebar').evaluate(element => getComputedStyle(element).backgroundColor);
-    expect(sidebarBackground).not.toEqual(chromeBackground);
+    await expect(settings.locator('#translucency-area')).toHaveCount(0);
+    for (const selector of ['#workspace-content', '#session-sidebar']) {
+      expect(alpha(await page.locator(selector).evaluate(element => getComputedStyle(element).backgroundColor))).toBeCloseTo(.65, 3);
+    }
     // Settings reveals the desktop backing, never the conversation under its modal.
     await page.locator('#open-settings').click();
     await expect(page.locator('#workspace-layout')).toHaveCSS('visibility', 'hidden');

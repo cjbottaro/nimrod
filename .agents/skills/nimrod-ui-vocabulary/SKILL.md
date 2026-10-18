@@ -112,7 +112,7 @@ A **card** needn't have a visible rectangle. A **disclosure** expands/collapses;
 
 ## Theme, layout and scrolling
 
-- **Background opacity** — theme-background tint strength, not whole-app/text opacity. **Frosted background** adds native desktop blur on supported platforms. **Whole window / Sidebar and Project bar** names the translucent surface selection; avoid “chrome” in user-facing controls. [Translucency](../features/references/translucency.md) owns behavior.
+- **Background opacity** — theme-background tint strength, not whole-app/text opacity. **Background blur** independently softens the desktop behind the window on supported platforms. Translucency always applies to the whole window; there is no surface-area selector. [Translucency](../features/references/translucency.md) owns behavior.
 - **Theme picker / imported theme** — palette selection surface versus a saved standalone color-theme copy, not a VS Code extension.
 - **Nimrod scheme** — Nimrod's custom dark/light blue-gray, mint/teal and warm-gold palette in `src/theme.css`; not a third-party VS Code theme. **Dracula** is a distinct adaptation.
 - **Sidebar resize handle** — draggable/focusable right edge; a vertical separator.

@@ -4119,7 +4119,8 @@ test('global Appearance exposes native-supported controls and applies immediatel
     slider.dispatchEvent(new f.win.Event('change', { bubbles: true })); await f.tick(); await f.tick();
     assert.equal(parseSettings(f.preferences.value.text)['appearance.backgroundOpacity'], 60);
     f.preferences.external('{"appearance.backgroundOpacity":70,"appearance.translucencyArea":"chrome"}'); await f.tick();
-    assert.equal(f.win.document.documentElement.dataset.translucency, 'chrome');
+    assert.equal(f.win.document.documentElement.dataset.translucency, 'window');
+    assert.equal(f.win.document.querySelector('#translucency-area'), null);
     assert.equal(slider.value, '70');
     assert.equal(f.calls.some(call => ['start_pi', 'stop_pi', 'write_pi'].includes(call.command)), false);
   } finally { f.win.close(); }

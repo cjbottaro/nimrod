@@ -10,7 +10,7 @@ const mac: AppearanceCapabilities = { platform: 'macos', transparency: true, fro
 const linux: AppearanceCapabilities = { platform: 'linux', transparency: true, frost: false, reducedTransparency: false };
 const tick = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 function fixture(support = mac, initial: Partial<WindowAppearance> = {}, tintTitlebar?: (color: TitlebarTint) => Promise<void>) {
-  const dom = new JSDOM('<input id="opacity" type="range" min="0" max="100"><output></output><select><option value="window">Whole window</option><option value="chrome">Sidebar and Project bar</option></select><div id="blur"><input type="range" min="0" max="40"><output id="blur-value"></output></div><p></p><textarea>draft</textarea><details open>Retained card</details>', { pretendToBeVisual: true });
+  const dom = new JSDOM('<input id="opacity" type="range" min="0" max="100"><output></output><div id="blur"><input type="range" min="0" max="40"><output id="blur-value"></output></div><p></p><textarea>draft</textarea><details open>Retained card</details>', { pretendToBeVisual: true });
   const window = dom.window as unknown as Window;
   const root = dom.window.document.documentElement;
   const setTheme = (mode: 'dark' | 'light' | null, background = mode === 'light' ? '#f7f9f8' : '#151c20') => {
@@ -25,7 +25,7 @@ function fixture(support = mac, initial: Partial<WindowAppearance> = {}, tintTit
   const reports: { message?: string; cause?: string }[] = [];
   const controls = {
     opacity: root.querySelector<HTMLInputElement>('#opacity')!, value: root.querySelector<HTMLOutputElement>('output')!,
-    area: root.querySelector<HTMLSelectElement>('select')!, blur: root.querySelector<HTMLInputElement>('#blur input')!, blurValue: root.querySelector<HTMLOutputElement>('#blur-value')!,
+    blur: root.querySelector<HTMLInputElement>('#blur input')!, blurValue: root.querySelector<HTMLOutputElement>('#blur-value')!,
     blurGroup: root.querySelector<HTMLElement>('#blur')!, hint: root.querySelector<HTMLElement>('p')!,
   };
   let save = async (patch: Partial<WindowAppearance>) => { value = { ...value, ...patch }; };
@@ -131,12 +131,12 @@ test('opacity input publishes a paint-only preview and only its matching save cl
 
 test('performance context is read-only and includes native reduced-transparency policy', async () => {
   for (const support of [mac, { ...mac, reducedTransparency: true }, linux]) {
-    const f = fixture(support, { opacity: 65, area: 'chrome' });
+    const f = fixture(support, { opacity: 65 });
     try {
       await f.controller.ready;
       const html = f.root.outerHTML, effects = f.effects.length;
       for (let i = 0; i < 200; i++) assert.deepEqual(f.controller.diagnostics(), {
-        effectiveArea: support.reducedTransparency ? 'off' : 'chrome',
+        effectiveArea: support.reducedTransparency ? 'off' : 'window',
         effectiveBackgroundOpacity: support.reducedTransparency ? 100 : 65,
         reducedTransparency: support.reducedTransparency, frostSupported: support.frost,
       });
@@ -152,9 +152,15 @@ test('appearance schema uses opaque defaults and rejects invalid values includin
     'appearance.backgroundOpacity': [-1, 101, 50.5, '80', true, null],
     'appearance.frostedBackground': [1, 'false', null],
     'appearance.backgroundBlur': [-1, 41, 1.5, '20', true, null],
-    'appearance.translucencyArea': ['whole', 'sidebar', true, null],
   })) for (const value of values) assert.throws(() => readWindowAppearance({ [key]: value }));
   assert.equal(readWindowAppearance({ 'appearance.backgroundOpacity': 0 }).opacity, 0);
+});
+
+test('removed translucency area values are ignored without affecting opacity or blur', () => {
+  for (const legacy of ['chrome', 'window', 'sidebar', null, true, {}]) {
+    assert.deepEqual(readWindowAppearance({ 'appearance.backgroundOpacity': 65, 'appearance.backgroundBlur': 7,
+      'appearance.translucencyArea': legacy }), { opacity: 65, blur: 7 });
+  }
 });
 
 test('legacy frosting maps to blur without overriding an explicit numeric value', () => {
@@ -291,7 +297,7 @@ test('surface density is continuous, role-ordered and converges exactly to the o
   assert.ok(middle.control < .15); assert.ok(middle.panel > .25 && middle.panel < .30);
 });
 
-test('Linux exposes opacity and area without frosting or any native effect work; input previews before saving', async () => {
+test('Linux exposes whole-window opacity without frosting or any native effect work; input previews before saving', async () => {
   const f = fixture(linux);
   try {
     await tick(); assert.equal(f.root.dataset.translucency, 'off'); assert.equal(f.controls.blurGroup.hidden, true);
@@ -301,8 +307,6 @@ test('Linux exposes opacity and area without frosting or any native effect work;
     assert.equal(f.saves.length, 0);
     f.event(f.controls.opacity, 'change'); await tick();
     assert.deepEqual(f.saves, [{ opacity: 65 }]);
-    f.controls.area.value = 'chrome'; f.event(f.controls.area, 'change');
-    assert.equal(f.root.dataset.translucency, 'chrome'); await tick();
     f.controller.reload(); f.controller.reload(); await tick(); assert.equal(f.effects.length, 0);
   } finally { f.close(); }
 });

@@ -204,11 +204,6 @@ pub(crate) fn validate(text: &str) -> Result<(), String> {
     {
         return Err("appearance.frostedBackground must be a boolean".into());
     }
-    if let Some(area) = object.get("appearance.translucencyArea") {
-        if !matches!(area.as_str(), Some("chrome" | "window")) {
-            return Err("appearance.translucencyArea must be chrome or window".into());
-        }
-    }
     if let Some(style) = object.get("appearance.modalAnimation") {
         if !matches!(style.as_str(), Some("none" | "subtle" | "crt" | "hologram")) {
             return Err("appearance.modalAnimation must be none, subtle, crt or hologram".into());
@@ -671,11 +666,7 @@ mod tests {
         for opacity in ["-1", "101", "50.5", "null", "true", r#""50""#] {
             assert!(validate(&format!(r#"{{"appearance.backgroundOpacity":{opacity}}}"#)).is_err());
         }
-        validate(
-            r#"{"appearance.frostedBackground":false,"appearance.translucencyArea":"chrome"}"#,
-        )
-        .unwrap();
-        validate(r#"{"appearance.translucencyArea":"window"}"#).unwrap();
+        validate(r#"{"appearance.frostedBackground":false}"#).unwrap();
         assert!(validate(r#"{"appearance.frostedBackground":null}"#).is_err());
         for blur in ["0", "20", "40"] {
             validate(&format!(r#"{{"appearance.backgroundBlur":{blur}}}"#)).unwrap();
@@ -683,7 +674,10 @@ mod tests {
         for blur in ["-1", "41", "1.5", "true", "null", r#""20""#] {
             assert!(validate(&format!(r#"{{"appearance.backgroundBlur":{blur}}}"#)).is_err());
         }
-        assert!(validate(r#"{"appearance.translucencyArea":"sidebar"}"#).is_err());
+        // Removed settings are preserved as unknown JSONC fields, never applied.
+        for area in [r#""chrome""#, r#""window""#, r#""sidebar""#, "null", "true"] {
+            validate(&format!(r#"{{"appearance.translucencyArea":{area}}}"#)).unwrap();
+        }
     }
     #[test]
     fn modal_animation_settings_are_bounded_and_typed() {

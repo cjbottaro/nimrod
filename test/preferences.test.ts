@@ -120,16 +120,17 @@ test('JSONC edits preserve comments, unknown fields, and unrelated settings', ()
 test('window appearance is global-only, preserves JSONC and retains last valid external settings', async () => {
   const f = fixture(), p = await f.install();
   try {
-    assert.deepEqual(p.windowAppearance(), { opacity: 100, blur: 20, area: 'window' });
-    f.host.external('// keep appearance comment\n{"custom":true}');
+    assert.deepEqual(p.windowAppearance(), { opacity: 100, blur: 20 });
+    f.host.external('// keep appearance comment\n{"custom":true,"appearance.translucencyArea":"chrome"}');
     f.host.value.projectPath = '/project/.nimrod/settings.json';
     f.host.externalProject('{"appearance.theme":"dracula"}');
-    await p.saveWindowAppearance({ opacity: 65, blur: 0, area: 'chrome' });
-    assert.deepEqual(p.windowAppearance(), { opacity: 65, blur: 0, area: 'chrome' });
+    await p.saveWindowAppearance({ opacity: 65, blur: 0 });
+    assert.deepEqual(p.windowAppearance(), { opacity: 65, blur: 0 });
     assert.match(f.host.value.text, /keep appearance comment/);
+    assert.equal(parseSettings(f.host.value.text)['appearance.translucencyArea'], 'chrome'); // Retained, never applied.
     assert.equal(parseSettings(f.host.value.text).custom, true);
     assert.equal(f.host.value.projectText, '{"appearance.theme":"dracula"}');
-    for (const [key, value] of [['appearance.backgroundOpacity', 101], ['appearance.frostedBackground', null], ['appearance.translucencyArea', 'sidebar']]) {
+    for (const [key, value] of [['appearance.backgroundOpacity', 101], ['appearance.frostedBackground', null]]) {
       const text = JSON.stringify({ [key as string]: value });
       assert.throws(() => parseSettings(text)); f.host.external(text);
       assert.equal(p.windowAppearance().opacity, 65);
