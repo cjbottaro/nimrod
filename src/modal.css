@@ -10,6 +10,20 @@
   --modal-gap:10px;
   --modal-radius:10px;
   --modal-backdrop:#0005;
+  --modal-enter-duration:160ms;
+  --modal-exit-duration:120ms;
+  --modal-enter-animation:modal-subtle-enter;
+  --modal-enter-easing:cubic-bezier(.16,1,.3,1);
+  --modal-closed-transform:translateY(4px) scale(.98);
+  --modal-transform-origin:center top;
+  --modal-shadow:0 12px 48px var(--vscode-widget-shadow);
+}
+:root[data-modal-animation="crt"] {
+  --modal-enter-animation:modal-crt-enter;
+  --modal-enter-easing:cubic-bezier(.2,.8,.2,1);
+  --modal-closed-transform:scaleY(.005);
+  --modal-transform-origin:center;
+  --modal-crt-accent:var(--vscode-focusBorder, var(--vscode-progressBar-background, currentColor));
 }
 .nimrod-modal {
   box-sizing:border-box;
@@ -26,7 +40,7 @@
   --modal-field-surface:var(--nimrod-surface-modal-field, var(--vscode-input-background));
   --modal-inset-surface:var(--nimrod-surface-modal-inset, var(--vscode-editor-background));
   color:var(--vscode-foreground);
-  box-shadow:0 12px 48px var(--vscode-widget-shadow);
+  box-shadow:var(--modal-shadow);
   overflow:auto;
 }
 .nimrod-modal :is(input, textarea, select) { background:var(--modal-field-surface); color:var(--vscode-input-foreground); }
@@ -42,3 +56,78 @@ dialog.modal-stack:not([open]) { display:none; }
 .modal-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:8px; margin:0; padding-top:var(--modal-gap); border-top:1px solid var(--vscode-panel-border); }
 .modal-overlay { position:fixed; inset:0; display:none; z-index:4; }
 .modal-overlay.open { display:block; }
+
+/* Animate presentation, not lifecycle. Closing still settles requests and restores
+ * focus synchronously. Discrete transitions retain only the visual exit where
+ * the webview supports them; older engines dismiss immediately.
+ */
+dialog.nimrod-modal, .modal-overlay > .nimrod-modal {
+  opacity:0;
+  transform:var(--modal-closed-transform);
+  transform-origin:var(--modal-transform-origin);
+}
+dialog.nimrod-modal[open], .modal-overlay.open > .nimrod-modal {
+  opacity:1;
+  transform:none;
+  animation:var(--modal-enter-animation) var(--modal-enter-duration) var(--modal-enter-easing);
+}
+dialog.nimrod-modal:not([open]), dialog.nimrod-modal:not([open])::backdrop,
+.modal-overlay:not(.open) { pointer-events:none; }
+dialog.nimrod-modal::backdrop, .modal-overlay { opacity:0; }
+dialog.nimrod-modal[open]::backdrop, .modal-overlay.open {
+  opacity:1;
+  animation:modal-backdrop-enter var(--modal-enter-duration) ease-out;
+}
+@supports (transition-behavior:allow-discrete) {
+  .modal-overlay > .nimrod-modal {
+    transition:opacity var(--modal-exit-duration) ease-in, transform var(--modal-exit-duration) ease-in;
+  }
+  .modal-overlay {
+    transition:opacity var(--modal-exit-duration) ease-in, display var(--modal-exit-duration) allow-discrete;
+  }
+  .modal-overlay.open, .modal-overlay.open > .nimrod-modal { transition:none; }
+}
+/* Without overlay retention a closed native dialog could fade behind its former
+ * parent instead of in the top layer. Prefer immediate dismissal in that case.
+ */
+@supports (transition-behavior:allow-discrete) and (overlay:auto) {
+  dialog.nimrod-modal {
+    transition:opacity var(--modal-exit-duration) ease-in,
+      transform var(--modal-exit-duration) ease-in,
+      display var(--modal-exit-duration) allow-discrete,
+      overlay var(--modal-exit-duration) allow-discrete;
+  }
+  dialog.nimrod-modal::backdrop {
+    transition:opacity var(--modal-exit-duration) ease-in,
+      display var(--modal-exit-duration) allow-discrete,
+      overlay var(--modal-exit-duration) allow-discrete;
+  }
+  /* A newly opened dialog must not also transition from its hidden state. */
+  dialog.nimrod-modal[open], dialog.nimrod-modal[open]::backdrop { transition:none; }
+}
+@keyframes modal-subtle-enter {
+  from { opacity:0; transform:translateY(4px) scale(.98); }
+  to { opacity:1; transform:none; }
+}
+/* The accent-filled inset is only present while the panel is a thin line.
+ * It clears before vertical expansion, so there is no full-panel flash.
+ * Keep the real shell mounted and focused throughout the presentation.
+ */
+@keyframes modal-crt-enter {
+  0%, 18% {
+    opacity:1;
+    transform:scaleY(.005);
+    box-shadow:0 0 16px var(--modal-crt-accent), inset 0 0 0 100vmax var(--modal-crt-accent);
+  }
+  25% {
+    opacity:1;
+    transform:scaleY(.005);
+    box-shadow:var(--modal-shadow);
+  }
+  100% { opacity:1; transform:none; box-shadow:var(--modal-shadow); }
+}
+@keyframes modal-backdrop-enter { from { opacity:0; } to { opacity:1; } }
+@media (prefers-reduced-motion:reduce) {
+  /* Override inline preference tokens without changing the saved configuration. */
+  :root { --modal-enter-duration:0ms !important; --modal-exit-duration:0ms !important; }
+}

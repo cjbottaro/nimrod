@@ -84,6 +84,16 @@
         <p id="zoom-shortcut-hint" class="settings-hint">⌘/Ctrl + / − anywhere in the app. ⌘/Ctrl 0 resets to 100%.</p>
         <p id="zoom-error" role="status" hidden></p>
         </div>
+        <div id="settings-modal-animation">
+          <label for="modal-animation-style">Modal animation</label>
+          <select id="modal-animation-style" aria-describedby="modal-animation-hint"><option value="none">None</option><option value="subtle" selected>Subtle (default)</option><option value="crt">CRT power-on</option></select>
+          <div id="modal-animation-options">
+            <label for="modal-animation-duration">Duration (milliseconds)</label>
+            <input id="modal-animation-duration" type="number" required min="0" max="2000" step="1" value="160" aria-describedby="modal-animation-hint">
+          </div>
+          <p id="modal-animation-hint" class="settings-hint">A short fade, lift and gentle scale. Default: 160 ms; dismissal is 25% faster. Reduced motion disables animations.</p>
+          <button id="modal-animation-preview" type="button" class="secondary">Preview animation</button>
+        </div>
         <div id="settings-send-auto-follow">
         <label for="send-auto-follow">Auto-follow after sending</label>
         <select id="send-auto-follow" aria-describedby="send-auto-follow-hint"><option value="always">Always</option><option value="whenIdle" selected>When idle (default)</option><option value="never">Never</option></select>
@@ -130,6 +140,7 @@
     </div>
   </dialog>
 
+  <dialog id="modal-animation-preview-dialog" class="nimrod-modal" aria-labelledby="modal-animation-preview-title"><form method="dialog" class="modal-stack"><h2 id="modal-animation-preview-title" class="modal-title">Modal animation preview</h2><p class="modal-description">The command palette and ordinary dialogs use this motion. Keyboard input and focus never wait for it.</p><div class="modal-actions"><button value="close">Close</button></div></form></dialog>
   <dialog id="deletion-review" class="nimrod-modal" aria-labelledby="deletion-title" aria-describedby="deletion-description">
     <form method="dialog" class="modal-stack">
       <h2 id="deletion-title" class="modal-title">Delete session tree</h2>

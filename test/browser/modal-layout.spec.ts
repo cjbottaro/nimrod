@@ -48,6 +48,8 @@ test('command rows have a secondary description and right-aligned title-line sho
 });
 
 test('whole-window glass is shared by every modal and restores opaque fallbacks', async ({ page }) => {
+  // Measure final surfaces, not a partially faded entrance frame.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   // Playwright cannot emulate this media feature; mock only its controller
   // signal, not OS settings. Real shell colours are still rendered by WebKit.
   await page.addInitScript(() => {

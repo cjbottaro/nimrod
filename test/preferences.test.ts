@@ -28,6 +28,47 @@ test('tool capture defaults off, saves globally and retains last valid settings'
   } finally { p.dispose(); f.dom.window.close(); }
 });
 
+test('modal animation defaults, global saves, JSONC preservation and external validation', async () => {
+  const f = fixture(), p = await f.install();
+  try {
+    assert.deepEqual(p.modalAnimation(), { style: 'subtle', duration: 160 });
+    f.host.external('// keep animation comment\n{"custom":true}');
+    f.host.value.projectPath = '/project/.nimrod/settings.json';
+    f.host.externalProject('{"appearance.theme":"dracula"}');
+    await p.saveModalAnimation({ duration: 1200 });
+    await p.saveModalAnimation({ style: 'none' });
+    assert.deepEqual(p.modalAnimation(), { style: 'none', duration: 1200 });
+    await p.saveModalAnimation({ style: 'crt' });
+    assert.deepEqual(p.modalAnimation(), { style: 'crt', duration: 1200 });
+    await p.saveModalAnimation({ style: 'subtle', duration: 1200 });
+    assert.deepEqual(p.modalAnimation(), { style: 'subtle', duration: 1200 });
+    assert.match(f.host.value.text, /keep animation comment/);
+    assert.equal(parseSettings(f.host.value.text).custom, true);
+    assert.equal(f.host.value.projectText, '{"appearance.theme":"dracula"}');
+    f.host.external('{"appearance.modalAnimation":"crt","appearance.modalAnimationDuration":800}');
+    assert.deepEqual(p.modalAnimation(), { style: 'crt', duration: 800 });
+    await p.saveModalAnimation({ style: 'subtle', duration: 1200 });
+    for (const [key, values] of [
+      ['appearance.modalAnimation', [null, true, 1, 'unknown', ['subtle']]],
+      ['appearance.modalAnimationDuration', [null, true, -1, 2001, .5, '160']],
+    ] as const) {
+      for (const value of values) {
+        const text = JSON.stringify({ [key]: value });
+        assert.throws(() => parseSettings(text));
+        f.host.external(text);
+        assert.deepEqual(p.modalAnimation(), { style: 'subtle', duration: 1200 });
+      }
+    }
+    f.host.external('{"appearance.modalAnimationDuration":0}');
+    assert.equal(p.modalAnimation().duration, 0);
+    f.host.external('{}');
+    assert.deepEqual(p.modalAnimation(), { style: 'subtle', duration: 160 });
+    f.host.externalProject('{"appearance.modalAnimation":"none"}');
+    assert.match(f.errors.at(-1) ?? '', /global-only/);
+    assert.deepEqual(p.modalAnimation(), { style: 'subtle', duration: 160 });
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
 test('JSONC edits preserve comments, unknown fields, and unrelated settings', () => {
   const text = '// Header\n{\n  // Keep this comment\n  "appearance.zoom": 125,\n  "future.option": { "url": "https://test/*text*/", },\n}\n';
   const changed = editSettings(text, { 'appearance.theme': 'dracula', 'runtime.piPath': '/bin/pi' });

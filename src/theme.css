@@ -86,7 +86,8 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
   #mode-badge { display:none; }
   #project-name { font-size:14px; }
 }
-#zoom-level { display:block; width:140px; max-width:100%; }
+#zoom-level, #modal-animation-duration { display:block; width:140px; max-width:100%; }
+#modal-animation-style { display:block; width:220px; max-width:100%; }
 #zoom-error { padding:10px; color:var(--vscode-errorForeground); background:var(--vscode-editorWidget-background); border:1px solid var(--vscode-panel-border); border-radius:6px; }
 #welcome { box-sizing:border-box; width:min(650px,100%); padding:52px 32px 24px; margin:auto; max-height:100%; overflow:auto; }
 .eyebrow { color:var(--vscode-progressBar-background); font-size:12px; }

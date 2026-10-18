@@ -41,6 +41,8 @@ History-save failures are reported without blocking or retrying the action.
 
 The palette, session pickers and confirmation dialogs share a denser glass panel when **Whole window** [translucency](translucency.md#glass-dialogs) is enabled. Opaque mode, sidebar-only mode and Reduce Transparency keep solid dialogs. This changes their appearance, not keyboard behavior or focus restoration.
 
+Ordinary dialogs and the palette use a restrained **Subtle** entrance by default. In global **Settings → Appearance → Modal animation**, choose None, Subtle or **CRT power-on**, then adjust the animated style's duration and preview it. Reduced motion disables animation; focus and keyboard handling stay immediate. See [Appearance](settings.md#appearance).
+
 Confirmation buttons use plain action labels. The enabled confirmation action normally has focus. Use **Left/Up** or **Right/Down** to move between Cancel and the action button, wrapping and skipping disabled buttons. **Enter** activates the focused button; **Escape** cancels. Arrow navigation also works when a footer button has focus in input/select dialogs, keybinding dialogs and Pi editor dialogs; text fields, pickers and shortcut recording keep their normal arrow-key behavior.
 
 Deletion loading initially focuses Cancel while Delete is disabled. If that loading dialog is already visible when the tree arrives, focus stays where you left it; use an arrow key or Tab to focus Delete, then Enter to proceed, or click Delete.

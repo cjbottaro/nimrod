@@ -12,7 +12,7 @@ Project settings shows effective values, not a second independent configuration.
 
 Overrides stay explicit even if they match the global value. Global edits update inheriting projects, but never replace explicit project values. The Appearance pane in global Settings links to open projects with overrides.
 
-Project overrides cover **theme and Pi/Node runtime paths** only. **Translucency, zoom and auto-follow after sending are global-only**, along with notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration. Project settings contains only the theme picker under Appearance and runtime paths under Runtime. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
+Project overrides cover **theme and Pi/Node runtime paths** only. **Translucency, zoom, modal animations and auto-follow after sending are global-only**, along with notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration. Project settings contains only the theme picker under Appearance and runtime paths under Runtime. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
 
 This layering applies only to Nimrod preferences. Pi retains its own configuration and precedence.
 
@@ -31,6 +31,7 @@ Escape during a drag cancels resizing; the next Escape closes Settings.
 - **Theme:** global changes update inheriting windows; project changes apply only to that project. See [Themes](themes.md) for live previews, bundled themes and imports.
 - **Translucency (global only):** background opacity (default **100% / Opaque**), **Whole window / Sidebar and Project bar**, and a macOS-only **Frosted background** toggle. Linux blur is configured in the desktop compositor. See [Translucency](translucency.md) for preview, accessibility and platform limitations.
 - **Zoom (global only):** scales every project, Settings and reference window, default **125%**, range **75–200%**. Use the picker in global Settings or **⌘/Ctrl + / −** in a project window; shortcuts change the same global value. **⌘/Ctrl+0** resets to 100%. Zoom is remembered and doesn't change drafts.
+- **Modal animation (global only):** **Subtle** (default) gives the command palette and ordinary dialogs a short fade, tiny upward movement and gentle scale. **CRT power-on** starts as a glowing, theme-accent horizontal line that expands up and down from the center; supported exits collapse vertically. Select either animated style to show **Duration (milliseconds)**: default **160**, range **0–2000**. Dismissal is 25% faster where the webview supports animated exits; otherwise it is immediate. **None** hides the options and disables motion without forgetting your duration. **Preview animation** opens a sample dialog; Close or Escape returns to Settings. System reduced-motion preferences disable motion regardless of the saved style. Input and focus do not wait for animations. Full-window Settings, native windows and transcript disclosures are unaffected; changing picker pages does not reopen/animate the shell. Duration is shared across styles and remembered when switching. Try **350–500 ms** for a more visible CRT effect.
 - **Auto-follow after sending (global only):** **When idle** (default) jumps to the bottom and follows new output for idle sends, but preserves your position for steering and queued follow-ups. **Always** does this for every message submission; **Never** preserves current scroll intent, including auto-follow if already active. Scrolling upward always pauses following. Changes synchronize across all projects. Changes affect subsequent sends without moving your current view. See [Reading conversations](reading-conversations.md#auto-follow-and-reading-older-output).
 - Theme/import/zoom errors use the shared [notice strip](error-messages.md). Non-error progress and import details stay alongside the controls.
 
@@ -85,6 +86,8 @@ The global `settings.json` accepts comments and trailing commas:
   "appearance.frostedBackground": true,
   "appearance.translucencyArea": "window",
   "appearance.autoFollowAfterSending": "whenIdle",
+  "appearance.modalAnimation": "subtle",
+  "appearance.modalAnimationDuration": 160,
   "notifications.enabled": true,
   "runtime.piPath": "/path/to/pi",
   "runtime.nodePath": "/path/to/node",
