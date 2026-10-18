@@ -64,7 +64,7 @@ for (const readingHistory of [false, true]) test(`idle image Send adopts Pi-norm
           const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
           canvas.getContext('2d')!.drawImage(image, 0, 0);
           const data = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-          return invoke(command, { ...args, message: { ...request, message: `${request.message}\n\nPi fixture normalized the attachment.`, images: [{ type: 'image', mimeType: 'image/jpeg', data }] } });
+          return invoke(command, { ...args, message: { ...request, message: `${request.message}\n\nPi fixture normalized the attachment.\n[Image: original 3200x1800, displayed at 1600x900. Multiply coordinates by 2.00 to map to original image.]`, images: [{ type: 'image', mimeType: 'image/jpeg', data }] } });
         }
         return invoke(command, args);
       };
@@ -82,6 +82,7 @@ for (const readingHistory of [false, true]) test(`idle image Send adopts Pi-norm
     await prompt.fill('Newer draft');
     await page.evaluate(() => (window as unknown as { __releaseNormalizedImage: () => void }).__releaseNormalizedImage());
     await expect(turn).toContainText('Pi fixture normalized the attachment.');
+    await expect(turn).not.toContainText('Multiply coordinates');
     await expect(turn).toHaveCount(1);
     await expect(turn).toHaveAttribute('data-test-identity', 'image-preview');
     await expect(turn.locator('img')).toHaveJSProperty('naturalWidth', 1);
@@ -93,6 +94,57 @@ for (const readingHistory of [false, true]) test(`idle image Send adopts Pi-norm
     await expect(messages.locator('.queued-turns .message')).toHaveCount(0);
     await expect(prompt).toHaveValue('Newer draft'); await expect(prompt).toBeFocused();
     await expect.poll(async () => (await fixture.metrics()).gap).toBeLessThanOrEqual(2);
+    expect(fixture.errors).toEqual([]);
+  } finally { await fixture.close(); }
+});
+
+for (const readingHistory of [false, true]) test(`late image decoding preserves ${readingHistory ? 'reader' : 'bottom-follow'} intent`, async ({ page }) => {
+  const fixture = await demoFixture(page);
+  try {
+    await fixture.turn(1); await fixture.turn(2);
+    // Hold the harness reply so streaming cannot mask lost image-load following.
+    await page.evaluate(() => {
+      const state = window as unknown as { __TAURI_INTERNALS__: { invoke(command: string, args?: Record<string, unknown>): Promise<unknown> }; __releaseImageSend: () => void; __releaseImageDecode: () => Promise<void> };
+      const source = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src')!;
+      Object.defineProperty(HTMLImageElement.prototype, 'src', {
+        ...source,
+        set(this: HTMLImageElement, value: string) {
+          if (this.alt !== 'Attached image') { source.set!.call(this, value); return; }
+          Object.defineProperty(HTMLImageElement.prototype, 'src', source);
+          state.__releaseImageDecode = async () => {
+            const canvas = document.createElement('canvas'); canvas.width = 800; canvas.height = 800;
+            canvas.getContext('2d')!.fillRect(0, 0, 800, 800);
+            source.set!.call(this, canvas.toDataURL('image/png'));
+            await this.decode();
+          };
+        },
+      });
+      const invoke = state.__TAURI_INTERNALS__.invoke;
+      const gate = new Promise<void>(resolve => { state.__releaseImageSend = resolve; });
+      state.__TAURI_INTERNALS__.invoke = async (command, args) => {
+        if (command === 'write_pi' && (args?.message as { type?: string })?.type === 'prompt') await gate;
+        return invoke(command, args);
+      };
+    });
+    const prompt = page.locator(visible('prompt'));
+    await prompt.focus(); await paste(page); await prompt.press('Enter');
+    const image = page.locator(`${visible('messages')} .transcript-image img`);
+    await expect(image).toHaveCount(1);
+    await expect(image).toHaveJSProperty('naturalWidth', 0);
+    await expect.poll(async () => (await fixture.metrics()).gap).toBeLessThanOrEqual(2);
+    if (readingHistory) {
+      await page.locator(visible('transcript-viewport')).hover({ position: { x: 20, y: 30 } });
+      await page.mouse.wheel(0, -180);
+      await expect.poll(async () => (await fixture.metrics()).gap).toBeGreaterThan(100);
+    }
+    // First decode happens after initial follow frames, before any harness reply.
+    await page.evaluate(() => (window as unknown as { __releaseImageDecode: () => Promise<void> }).__releaseImageDecode());
+    await expect(image).toHaveJSProperty('naturalWidth', 800);
+    if (readingHistory) await expect.poll(async () => (await fixture.metrics()).gap).toBeGreaterThan(100);
+    else await expect.poll(async () => (await fixture.metrics()).gap).toBeLessThanOrEqual(2);
+    await expect(prompt).toBeFocused();
+    await page.evaluate(() => (window as unknown as { __releaseImageSend: () => void }).__releaseImageSend());
+    await page.waitForFunction(() => (window as unknown as { __fixtureSettled: number }).__fixtureSettled >= 3);
     expect(fixture.errors).toEqual([]);
   } finally { await fixture.close(); }
 });

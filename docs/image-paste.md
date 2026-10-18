@@ -14,8 +14,11 @@ be combined with slash commands; nothing is sent and the draft remains intact.
 
 Images appear in a local user turn after their bytes are prepared. When Pi starts
 that prompt, its actual user turn replaces the preview in place—even if Pi resizes
-or re-encodes the image or adds an image-processing note. Assistant output follows
-that single turn; ordinary idle sends are never pinned. Explicit queued follow-ups
+or re-encodes the image. Pi's coordinate-scaling note is hidden in the transcript;
+other image-processing notes remain visible. Assistant output follows
+that single turn; ordinary idle sends are never pinned. Images that finish loading
+later retain auto-follow, unless you have scrolled up to read earlier messages.
+Sending images uses the same **Auto-follow after sending** preference as text. Explicit queued follow-ups
 retain their [usual sticky behavior](writing-messages.md#queued-messages) until consumed.
 
 This uses Pi's prompt-preflight metadata. Older Pi versions without that metadata,

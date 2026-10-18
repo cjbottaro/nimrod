@@ -27,7 +27,15 @@ export const piInteraction: ConversationInteraction = {
     if (compact) return { kind: 'request', message: { type: 'compact', customInstructions: compact[1]?.trim() || undefined }, preview: false, navigate: false };
     return { kind: 'request', message: { type: 'prompt' }, preview: !text.startsWith('/'), navigate: !/^\/name(?:\s|$)/.test(text) };
   },
-  userText: (document, text, key, expanded, markdown, previous) => renderSkillInvocation(document, text, key, expanded, markdown, previous),
+  userText(document, text, key, expanded, markdown, previous) {
+    // Pi appends model-facing coordinate hints during image normalization.
+    // Hide only that exact standalone format; never alter prompt/history data.
+    const visible = text.replace(/(^|\r?\n)\[Image: original \d+x\d+, displayed at \d+x\d+\. Multiply coordinates by \d+\.\d{2} to map to original image\.\](?=\r?\n|$)/g, '');
+    const content = visible === text ? text : visible.trimEnd();
+    const node = renderSkillInvocation(document, content, key, expanded, markdown, previous) ?? markdown(content);
+    node.hidden = !content.trim();
+    return node;
+  },
 };
 
 /** A projection, not a reducer. Preserve lazy transcript access and stable UI dependencies. */
