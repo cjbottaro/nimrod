@@ -1,3 +1,4 @@
+import { readModalAnimation, MODAL_ANIMATION_KEYS, type ModalAnimation } from './modal-animation';
 import { DEFAULT_SEND_AUTO_FOLLOW, type SendAutoFollow } from './pi/transcript-scroll';
 import { readPluginSettings } from './pi/card-plugins/declarative';
 import { applyEdits, modify, parse, type ParseError } from 'jsonc-parser';
@@ -51,6 +52,7 @@ export function parseSettings(text: string): Record<string, unknown> {
   if (settings['diagnostics.performance'] !== undefined && typeof settings['diagnostics.performance'] !== 'boolean') throw new Error('diagnostics.performance must be a boolean.');
   if (settings['diagnostics.toolCapture'] !== undefined && typeof settings['diagnostics.toolCapture'] !== 'boolean') throw new Error('diagnostics.toolCapture must be a boolean.');
   readWindowAppearance(settings);
+  readModalAnimation(settings);
   readKeyOverrides(settings[KEYBINDINGS_SETTING]);
   readPluginSettings(settings);
   const sendAutoFollow = settings['appearance.autoFollowAfterSending'];
@@ -265,6 +267,10 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
     saveNotifications(enabled: boolean) { return patch({ 'notifications.enabled': enabled }, false); },
     sendAutoFollow(): SendAutoFollow { return globalSettings['appearance.autoFollowAfterSending'] as SendAutoFollow ?? DEFAULT_SEND_AUTO_FOLLOW; },
     saveSendAutoFollow(mode: SendAutoFollow) { return patch({ 'appearance.autoFollowAfterSending': mode }, false); },
+    modalAnimation() { return readModalAnimation(globalSettings); },
+    saveModalAnimation(values: Partial<ModalAnimation>) {
+      return patch(Object.fromEntries(Object.entries(values).map(([key, value]) => [MODAL_ANIMATION_KEYS[key as keyof ModalAnimation], value])), false);
+    },
     windowAppearance() { return readWindowAppearance(globalSettings); },
     saveWindowAppearance(values: Partial<WindowAppearance>) {
       return patch(Object.fromEntries(Object.entries(values).map(([key, value]) => [APPEARANCE_KEYS[key as keyof WindowAppearance], value])), false);

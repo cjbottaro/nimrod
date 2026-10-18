@@ -201,6 +201,22 @@ pub(crate) fn validate(text: &str) -> Result<(), String> {
             return Err("appearance.translucencyArea must be chrome or window".into());
         }
     }
+    if let Some(style) = object.get("appearance.modalAnimation") {
+        if !matches!(style.as_str(), Some("none" | "subtle")) {
+            return Err("appearance.modalAnimation must be none or subtle".into());
+        }
+    }
+    if let Some(duration) = object.get("appearance.modalAnimationDuration") {
+        if !duration
+            .as_f64()
+            .is_some_and(|value| value.fract() == 0.0 && (0.0..=2000.0).contains(&value))
+        {
+            return Err(
+                "appearance.modalAnimationDuration must be an integer from 0 to 2000 milliseconds"
+                    .into(),
+            );
+        }
+    }
     if let Some(mode) = object.get("appearance.autoFollowAfterSending") {
         if !matches!(mode.as_str(), Some("always" | "whenIdle" | "never")) {
             return Err(
@@ -644,6 +660,24 @@ mod tests {
         assert!(validate(r#"{"appearance.frostedBackground":null}"#).is_err());
         assert!(validate(r#"{"appearance.translucencyArea":"sidebar"}"#).is_err());
     }
+    #[test]
+    fn modal_animation_settings_are_bounded_and_typed() {
+        for style in ["none", "subtle"] {
+            validate(&format!(r#"{{"appearance.modalAnimation":"{style}"}}"#)).unwrap();
+        }
+        for style in ["null", "true", "1", r#""crt""#] {
+            assert!(validate(&format!(r#"{{"appearance.modalAnimation":{style}}}"#)).is_err());
+        }
+        for duration in ["0", "160", "2000", "160.0"] {
+            validate(&format!(r#"{{"appearance.modalAnimationDuration":{duration}}}"#)).unwrap();
+        }
+        for duration in ["-1", "2001", "0.5", "null", "true", r#""160""#] {
+            assert!(
+                validate(&format!(r#"{{"appearance.modalAnimationDuration":{duration}}}"#)).is_err()
+            );
+        }
+    }
+
     #[test]
     fn jsonc_strings_comments_and_trailing_commas() {
         validate("{ // comment\n \"runtime.piPath\": \"https://host/*text*/\", /* note */ \"appearance.zoom\":125, }").unwrap();

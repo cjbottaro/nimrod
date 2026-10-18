@@ -11,6 +11,7 @@ import { installKeybindingEditor } from './keybinding-editor';
 import { isMac } from './keybindings';
 import { installThemes } from './themes/picker';
 import { installZoom } from './zoom';
+import { applyModalAnimation, type ModalAnimationStyle } from './modal-animation';
 import { installNativeWindowAppearance } from './native-window-appearance';
 import { installPerformanceDiagnostics } from './performance-diagnostics';
 import { createToolCapture } from './tool-capture';
@@ -39,6 +40,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     required('settings-translucency').hidden = true;
     required('settings-zoom').hidden = true;
     required('settings-send-auto-follow').hidden = true;
+    required('settings-modal-animation').hidden = true;
   }
   const settingsNavigation = installSettingsNavigation(required<HTMLDialogElement>('settings-page'));
   const settingsSidebarWidthKey = 'nimrod.settings.sidebar.width';
@@ -189,6 +191,41 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     }).finally(() => { reloadPerformance(); performancePicker.disabled = false; });
   });
   reloadPerformance();
+  const animationStyle = required<HTMLSelectElement>('modal-animation-style');
+  const animationDuration = required<HTMLInputElement>('modal-animation-duration');
+  const animationPreview = required<HTMLDialogElement>('modal-animation-preview-dialog');
+  let savingAnimation = false;
+  function reloadModalAnimation(force = false): void {
+    const animation = preferences.modalAnimation();
+    applyModalAnimation(document.documentElement, animation);
+    animationStyle.value = animation.style;
+    if (force || document.activeElement !== animationDuration) animationDuration.value = String(animation.duration);
+    required('modal-animation-options').hidden = animation.style === 'none';
+  }
+  async function saveModalAnimation(values: Parameters<typeof preferences.saveModalAnimation>[0]): Promise<void> {
+    if (savingAnimation) return;
+    savingAnimation = true;
+    animationStyle.disabled = animationDuration.disabled = true;
+    try {
+      await preferences.saveModalAnimation(values);
+      notices.resolve('modal-animation-settings');
+    } catch (error) {
+      notices.report({ id: 'modal-animation-settings', operation: 'Save modal animation', message: String(error) });
+    } finally {
+      savingAnimation = false;
+      if (!unloading) { reloadModalAnimation(true); animationStyle.disabled = animationDuration.disabled = false; }
+    }
+  }
+  const changeAnimationStyle = () => { void saveModalAnimation({ style: animationStyle.value as ModalAnimationStyle }); };
+  const changeAnimationDuration = () => {
+    if (!animationDuration.reportValidity()) return;
+    void saveModalAnimation({ duration: animationDuration.valueAsNumber });
+  };
+  animationStyle.addEventListener('change', changeAnimationStyle);
+  animationDuration.addEventListener('change', changeAnimationDuration);
+  const previewAnimation = () => { if (!animationPreview.open) animationPreview.showModal(); };
+  required('modal-animation-preview').addEventListener('click', previewAnimation);
+  reloadModalAnimation();
   const sendAutoFollowPicker = required<HTMLSelectElement>('send-auto-follow');
   const reloadSendAutoFollow = () => { sendAutoFollowPicker.value = preferences.sendAutoFollow(); };
   sendAutoFollowPicker.addEventListener('change', () => {
@@ -310,7 +347,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   const unsubscribe = preferences.subscribe(() => {
     const width = preferences.readState(settingsSidebarWidthKey);
     if (!Object.is(width, settingsSidebarWidth)) { settingsSidebarWidth = width; settingsSidebarResize.reload(); }
-    runtime.reload(); themes.reload(); appearance.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadToolCapture(); reloadSendAutoFollow(); keybindingEditor?.reload(); reloadSources();
+    runtime.reload(); themes.reload(); appearance.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadToolCapture(); reloadSendAutoFollow(); reloadModalAnimation(); keybindingEditor?.reload(); reloadSources();
   });
   reloadSources();
   return {
@@ -325,7 +362,12 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     get performancePath() { return performancePath; },
     openKeybindings() { settings.open(); if (settings.isOpen && settingsNavigation.select('keybindings')) keybindingEditor?.focus(); },
     dispose() {
-      unloading = true; unsubscribe(); performanceDiagnostics.dispose(); toolCapture.dispose();
+      unloading = true; unsubscribe();
+      required('modal-animation-preview').removeEventListener('click', previewAnimation);
+      animationStyle.removeEventListener('change', changeAnimationStyle);
+      animationDuration.removeEventListener('change', changeAnimationDuration);
+      if (animationPreview.open) animationPreview.close();
+      performanceDiagnostics.dispose(); toolCapture.dispose();
       keybindingEditor?.dispose(); settingsNavigation.dispose(); settingsSidebarResize.dispose();
       appearance.dispose(); zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose();
     },

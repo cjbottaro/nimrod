@@ -77,7 +77,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Read-only built-in Pi MCP status inspection | [MCP inspector](references/mcp-inspector.md) | [MCP inspector](../../../docs/mcp.md) |
 | Palette page lifecycle and cancellation | [Command interactions](references/command-interactions.md) | [Command palette](../../../docs/command-palette.md) |
 | Palette command ranking and usage storage | [Command ranking](references/command-ranking.md) | [Ordering](../../../docs/command-palette.md#ordering) |
-| Shared modal shell and action focus | [Modal layout](references/modal-layout.md) | [Confirmations](../../../docs/command-palette.md#confirmation-dialogs) |
+| Shared modal shell, configurable motion and action focus | [Modal layout](references/modal-layout.md) | [Confirmations](../../../docs/command-palette.md#confirmation-dialogs) |
 | Opt-in full-content Pi/Copilot SDK/ACP transcript debug logs, native/history/request/UI events, lossless large-event chunks and size/age-bounded JSONL storage | [Transcript debug logging](references/tool-capture.md) | [Transcript debug logs](../../../docs/tool-capture.md) |
 | Opt-in timing history, explicit local capture and bounded report storage | [Performance diagnostics](references/performance-diagnostics.md) | [Performance reports](../../../docs/performance-diagnostics.md) |
 | Completed performance work, rationale/results and potential future optimizations (catalogue, not replacement feature contracts) | [Performance optimizations skill](../performance-optimizations/SKILL.md) | Agent-facing only |
