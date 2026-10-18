@@ -87,8 +87,9 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     report: (message, cause = 'native') => feedback('window-appearance:' + cause, 'Window appearance')(message),
   }, global ? {
     opacity: required<HTMLInputElement>('background-opacity'), value: required<HTMLOutputElement>('background-opacity-value'),
-    area: required<HTMLSelectElement>('translucency-area'), frosted: required<HTMLInputElement>('frosted-background'),
-    frostGroup: required('settings-frosted-background'), hint: required('translucency-hint'),
+    area: required<HTMLSelectElement>('translucency-area'), blur: required<HTMLInputElement>('background-blur'),
+    blurValue: required<HTMLOutputElement>('background-blur-value'),
+    blurGroup: required('settings-background-blur'), hint: required('translucency-hint'),
   } : undefined);
   const zoom = installZoom(window, required<HTMLSelectElement>('zoom-level'), required('zoom-error'), {
     read: () => preferences.zoom(), save: percent => preferences.saveZoom(percent),
@@ -131,7 +132,8 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     zoom: Number(preferences.zoom()), devicePixelRatio: window.devicePixelRatio, hardwareConcurrency: navigator.hardwareConcurrency || 0,
     appearance: {
       backgroundOpacity: preferences.windowAppearance().opacity,
-      frostedBackground: preferences.windowAppearance().frosted,
+      frostedBackground: preferences.windowAppearance().blur > 0,
+      backgroundBlur: preferences.windowAppearance().blur,
       area: preferences.windowAppearance().area,
       ...appearance.diagnostics(),
     },

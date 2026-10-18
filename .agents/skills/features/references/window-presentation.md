@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | Surface density, role hierarchy, settings schema and native RGBA conversion | `src/window-appearance.ts`, `src/window-appearance.css` | Pure presentation policy; no IPC or lifecycle |
 | Filled-button colour pairing/contrast, density floors and known-parent tint credit | `src/button-surfaces.ts` | Pure palette-independent policy, consumed by the appearance controller and semantic CSS; no per-theme overrides |
-| Live global opacity preview | `src-tauri/src/settings_window.rs`, `src/native-window-appearance.ts` | Generation-authorized ephemeral state, revisioned subscription/snapshot, latest-value publishing and native-close clearing; not preference persistence |
+| Live global opacity/blur preview | `src-tauri/src/settings_window.rs`, `src/native-window-appearance.ts` | Generation-authorized ephemeral state, revisioned subscription/snapshot, latest-value publishing and native-close clearing; not preference persistence |
 | Apply/preview/restore a theme | `src/themes/theme.ts::applyTheme` | Apply all managed CSS, then publish one completed window-local presentation snapshot |
 | Theme presentation notification | `src/themes/applied-theme.ts` | WeakMap per root, explicit mode/background/palette-signature snapshot; not DOM mutation inference or global broadcast |
 | Appearance controls/media/preferences | `src/window-appearance-controller.ts` | Optimistic field versions, unchanged-paint signature, theme subscription, capability readiness |
@@ -19,7 +19,7 @@
 | Native explicit focus | `window_presentation::{focus, focus_existing, focus_reference}` | Standard focus sequence centralized; cold Settings eligibility preserved; reference focus does not add app activation |
 | Native delayed-reveal token | `window_presentation::PreparationGate` | One current generation/readiness state under one mutex; feature owner holds its own gate |
 | Portable native appearance command dispatch | `src-tauri/src/window_appearance.rs` | Common main-thread dispatch and capabilities; no AppKit view walking |
-| macOS material/title implementation | `src-tauri/src/macos_window_appearance.rs` | Cocoa/Quartz-only native operations, clear backing and bounded title-view tint |
+| macOS material/title implementation | `src-tauri/src/macos_window_appearance.rs` | Cocoa/WindowServer-only native operations, runtime-resolved blur without material tint, clear backing and bounded title-view tint |
 | Global Settings identity/categories/readiness authorization | `src-tauri/src/settings_window.rs`, `src/global-settings.ts` | Concrete singleton ownership and required prepared page; not another appearance engine |
 | Automatic reference-window presentation | `src-tauri/src/popout_windows.rs` | Separate passive, eligibility-checked `orderFront` path; never route automatic restore through generic explicit focus |
 
@@ -31,7 +31,7 @@
 - The effect pipeline snapshots typed inputs, serializes material and tint (no overlapping independent native queues), coalesces intermediate targets and caches no-ops. A material change invalidates title tint. Native refresh can repaint successful tint but cannot replay an identical failed stage. Stage success resolves only its matching application notice cause. Disposal suppresses remaining native stages/callbacks.
 - `ready`/`settled` track the current capability request and native pipeline rather than assuming the first capability response wins. Cold Settings calls `presentWhenPrepared(surface.settled)`; readiness remains the narrow [initial presentation exception](settings-layout.md#first-native-presentation), not a gate for ordinary edits/Send/navigation.
 - The frontend lifetime owner registers cleanup as resources are acquired, including before later boot awaits. A late-acquired listener/resource after unload is disposed immediately. Reveal is latched before its native call; preparation failure can show the error fallback, but native presentation is never automatically replayed. Errors stay in the existing notice strip.
-- Native title rendering remains the existing bounded public-NSView-ancestry implementation, now isolated. A structural refactor is not evidence that every AppKit/full-screen hierarchy accepts it. Do not replace this with unverified private backdrop APIs or custom HTML title bars under an architectural-cleanup task.
+- Native title rendering remains the existing bounded public-NSView-ancestry implementation, now isolated. The separate [independent-blur change](translucency.md#native-boundary-and-platform-scope) deliberately replaces only the native material with runtime-resolved compositor blur. A structural refactor is not evidence that every AppKit/full-screen hierarchy accepts it. Do not replace this with unverified private backdrop APIs or custom HTML title bars under an architectural-cleanup task.
 
 ## Audit scope and verification
 

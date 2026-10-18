@@ -1,11 +1,11 @@
 import type { AppearanceCapabilities, TitlebarTint } from './window-appearance';
 
 export interface NativeAppearance {
-  material?: { frosted: boolean; dark: boolean | null };
+  material?: { blur: number; dark: boolean | null };
   tint?: TitlebarTint;
 }
 export interface NativeAppearanceHost {
-  apply(frosted: boolean, dark: boolean | null): Promise<AppearanceCapabilities>;
+  apply(blur: number, dark: boolean | null): Promise<AppearanceCapabilities>;
   tintTitlebar?(color: TitlebarTint): Promise<void>;
   report(message?: string, cause?: string): void;
 }
@@ -35,7 +35,7 @@ export function installAppearanceEffects(host: NativeAppearanceHost, receiveCapa
       const material = materialKey(target);
       if (material !== undefined && material !== appliedMaterial && material !== failedMaterial) {
         try {
-          const next = await host.apply(target.material!.frosted, target.material!.dark);
+          const next = await host.apply(target.material!.blur, target.material!.dark);
           if (disposed) return;
           appliedMaterial = material; failedMaterial = undefined; appliedTint = undefined;
           host.report(undefined, 'native'); receiveCapabilities(next);

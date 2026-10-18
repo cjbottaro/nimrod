@@ -58,7 +58,7 @@ Without installation, use `./bin/nimrod .`. The launcher opens or focuses a proj
 - [Transcript debug logs](docs/tool-capture.md) — opt-in full-content native conversation, history, tool and request/result traces for developing/debugging Nimrod.
 - [Settings](docs/settings.md) — global defaults, project overrides, appearance, zoom and runtime paths.
 - [Themes](docs/themes.md) and [Syntax highlighting](docs/syntax-highlighting.md) — bundled palettes, local imports and labeled code.
-- [Translucency](docs/translucency.md) — background opacity, whole-window/sidebar-only surfaces and macOS frosting; Linux blur is compositor-owned.
+- [Translucency](docs/translucency.md) — background opacity, whole-window/sidebar-only surfaces and independently adjustable macOS blur; Linux blur is compositor-owned.
 
 See the [user-guide index](docs/README.md). [Card plugins](docs/card-plugins.md) power bundled cards, requested-edit previews and automatically loaded/cached personal TypeScript tool customization (with compiled-JS compatibility). See [plugin authoring](docs/card-plugin-api.md) for the mounted DOM API, or try the optional [Pi Web Access cards](docs/pi-web-access-plugin.md).
 

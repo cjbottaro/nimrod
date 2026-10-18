@@ -9,19 +9,19 @@ test('one native pipeline orders material before tint, serializes stages and coa
   let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
   const calls: string[] = []; let active = 0, maximum = 0;
   const effects = installAppearanceEffects({
-    apply: async (_frosted, dark) => { maximum = Math.max(maximum, ++active); calls.push('material:' + dark); --active; return capabilities; },
+    apply: async (_blur, dark) => { maximum = Math.max(maximum, ++active); calls.push('material:' + dark); --active; return capabilities; },
     tintTitlebar: async color => { maximum = Math.max(maximum, ++active); calls.push('tint:' + color[0]); if (calls.length === 2) await gate; --active; },
     report: () => {},
   }, () => {});
   try {
-    effects.request({ material: { frosted: true, dark: true }, tint: [10, 20, 30, 128] });
+    effects.request({ material: { blur: 20, dark: true }, tint: [10, 20, 30, 128] });
     await tick(); assert.deepEqual(calls, ['material:true', 'tint:10']);
-    effects.request({ material: { frosted: true, dark: false }, tint: [20, 20, 30, 128] });
-    effects.request({ material: { frosted: false, dark: false }, tint: [30, 20, 30, 128] });
+    effects.request({ material: { blur: 20, dark: false }, tint: [20, 20, 30, 128] });
+    effects.request({ material: { blur: 0, dark: false }, tint: [30, 20, 30, 128] });
     await tick(); assert.equal(calls.length, 2); release(); await effects.settled();
     assert.deepEqual(calls, ['material:true', 'tint:10', 'material:false', 'tint:30']);
     assert.equal(maximum, 1);
-    for (let i = 0; i < 200; i++) effects.request({ material: { frosted: false, dark: false }, tint: [30, 20, 30, 128] });
+    for (let i = 0; i < 200; i++) effects.request({ material: { blur: 0, dark: false }, tint: [30, 20, 30, 128] });
     await effects.settled(); assert.equal(calls.length, 4);
   } finally { release(); effects.dispose(); }
 });
@@ -51,6 +51,6 @@ test('capture requested values and suppress remaining native stages after dispos
     tintTitlebar: async color => { calls.push(color[0]); }, report: () => {},
   }, () => {});
   const tint: [number, number, number, number] = [10, 0, 0, 255];
-  effects.request({ material: { frosted: true, dark: true }, tint }); tint[0] = 99;
+  effects.request({ material: { blur: 20, dark: true }, tint }); tint[0] = 99;
   await tick(); effects.dispose(); release(); await effects.settled(); assert.deepEqual(calls, []);
 });

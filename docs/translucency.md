@@ -6,7 +6,7 @@ Open **global Settings → Appearance** (⌘/Ctrl+,) to customize the window bac
 
 - **Background opacity:** 0–100%, default **100% (Opaque)**. Lower values reveal more of the desktop behind the app. Text, icons and syntax colors remain crisp and fully opaque. Dragging previews Settings immediately and updates project windows and pop-outs live. Releasing saves the value once; closing Settings during an uncommitted drag restores the saved opacity.
 - **Apply translucency to:** **Whole window** (default) includes the conversation background. **Sidebar and Project bar** keeps the conversation opaque. Settings uses the same distinction for its category sidebar/header versus content pane. Pop-outs stay opaque in sidebar-only mode because they have no such sidebar or Project bar.
-- **Frosted background (macOS only):** on by default, but has no effect at 100% opacity. Turn it on to blur the desktop behind translucent backgrounds, or off for plain transparency. macOS chooses the native blur strength; there is no blur-radius slider. Even at 0% theme-background opacity, the native frosted material can retain its own tint.
+- **Background blur (supported macOS systems only):** 0–40, default **20**. This independently controls how soft the desktop behind the window looks, without adding another tint. At **0**, underlying text stays sharp; increasing the value blurs it more. At **50% opacity / 0 blur**, the desktop stays sharp under a half-strength theme tint. At **0% opacity / 0 blur**, the base background is clear. Blur has no visible effect at 100% opacity, but its strength is remembered. Like opacity, dragging previews all windows immediately; releasing saves once, and closing Settings during an uncommitted drag restores the saved value. The scale is blur intensity, not a guaranteed pixel measurement.
 
 **The same visual hierarchy is preserved throughout the slider's range.** In **Whole window** mode, the Status area and session notices remain denser, distinguishable panels over the conversation; lowering opacity makes them progressively more transparent without flattening them into the surrounding background. There is no abrupt switch in their treatment between 100% and 99%. Buttons—including New session, Send/Stop, sidebar controls and their hover/selected states—also change density progressively while preserving their emphasis. Labels, icons, focus rings and error outlines remain crisp. Filled buttons keep a stable readable text colour; their minimum fill density is calculated from the palette, so some buttons remain denser at low opacity. This is shared across built-in, catalog and imported themes—not a special case for Nimrod. At 0%, the main background is clear, but panels and controls retain a light tint to preserve this hierarchy. In **Sidebar and Project bar** mode, only controls in those areas become translucent; the conversation stays opaque. Code blocks and suggestions still have solid backing surfaces; a translucent button on one of those surfaces blends with that backing, not directly with the desktop. Translucency never fades the whole app or changes your draft, conversation, focus or reading position. At 100%, readable opaque button pairs preserve their palette colours; poorly contrasted or alpha button pairs are adapted for readability without changing the theme's underlying palette.
 
@@ -22,15 +22,15 @@ Filled buttons on known tinted surfaces are glassier: their parent tint contribu
 
 **macOS:** The native title bar follows the window's theme colour and opacity while keeping its title and traffic lights. It remains separate from the Project bar; no custom replacement title bar is used. Native title-bar details, including full-screen and activation, still need visual confirmation.
 
-Nimrod requests native frosted glass using a standard popover material rather than the denser sidebar material. It follows that window's theme dark/light appearance, including local theme-picker previews, without changing other windows' native appearance. Native frosting adds its own tint, so it is not pure blur and may still look denser than plain transparency. System **Reduce Transparency** keeps windows opaque without changing your saved preferences. Native accessibility changes are refreshed when a Nimrod window receives focus.
+Nimrod requests compositor-level background blur rather than a tinted native material. Opacity controls the theme tint, while blur controls background sharpness; Nimrod's own text stays crisp. Each window still follows its own theme, including local theme-picker previews. This uses a private macOS API, so availability and appearance may change with macOS updates. If the API is unavailable, the blur control is hidden and plain transparency remains available; native failures appear in the application notice strip rather than switching to a dense frosted material. System **Reduce Transparency** keeps windows opaque without changing saved preferences. Native accessibility changes are refreshed when a Nimrod window receives focus.
 
-**Linux:** Nimrod exposes opacity and surface selection, not a frosting control. Configure blur in your desktop compositor. Transparency and blur depend on your desktop/compositor setup; Nimrod does not configure it or promise blur on every Linux desktop.
+**Linux:** Nimrod exposes opacity and surface selection, not a blur-strength control. Configure blur in your desktop compositor. Transparency and blur depend on your desktop/compositor setup; Nimrod does not configure it or promise blur on every Linux desktop.
 
 **Windows:** translucency is not enabled in this implementation. Windows remains a possible future target.
 
 Save/native failures appear in the shared [application notice strip](error-messages.md). Correct the settings or change the control explicitly; settings writes are not automatically retried.
 
-Native trials exposed opaque controls and then a loss of panel distinction below 100%. The user reported the continuous surface-density treatment as much better. The next polish prepares cold Settings before showing it and themes the macOS title bar; those native changes still need a visual check. Blur-toggle removal, accessibility, resizing/full-screen behavior and performance have not yet been accepted. Linux native behavior remains unverified.
+The independent macOS blur implementation still needs native visual acceptance, including sharp transparency at zero blur, adjustable strength, removal, accessibility, resizing/full-screen behavior and performance. Earlier native feedback accepted improvements to surface hierarchy, not this new blur implementation. Linux native behavior remains unverified.
 
 ## Configuration
 
@@ -39,9 +39,9 @@ The global [settings file](settings.md#configuration-files) accepts:
 ```jsonc
 {
   "appearance.backgroundOpacity": 85,
-  "appearance.frostedBackground": true,
+  "appearance.backgroundBlur": 20,
   "appearance.translucencyArea": "window" // "chrome" for Sidebar and Project bar
 }
 ```
 
-Omitted keys use the defaults above. The same configuration is portable: the frosting preference is retained but unused on Linux.
+Omitted keys use the defaults above. The older `appearance.frostedBackground` boolean is still accepted: if `appearance.backgroundBlur` is absent, false means blur 0 and true means blur 20. An explicit numeric blur value wins; settings files are not automatically rewritten. The blur preference is retained but unused on Linux.

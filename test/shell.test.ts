@@ -143,8 +143,8 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       }
       if (command === 'tint_window_titlebar') { await options.titlebarGate; return; }
       if (command === 'settings_window_ready') return;
-      if (command === 'window_opacity_preview_snapshot') return { revision: 0, opacity: null };
-      if (command === 'preview_window_opacity') return { revision: calls.length, opacity: args.opacity };
+      if (command === 'window_appearance_preview_snapshot') return { revision: 0, opacity: null, blur: null };
+      if (command === 'preview_window_appearance') return { revision: calls.length, opacity: args.opacity, blur: args.blur };
       if (command === 'drafts_load') return [...nativeDrafts.values()];
       if (command === 'drafts_stage') { const record = args.record as { key: string; value: unknown; revision: number }; nativeDrafts.set(record.key, record); return; }
       if (command === 'drafts_flush') { await options.draftFlushGate; if (options.draftFlushError) throw new Error(options.draftFlushError); return; }
@@ -3972,7 +3972,7 @@ test('global Appearance exposes native-supported controls and applies immediatel
   try {
     await f.tick();
     assert.equal(f.element('settings-translucency').hidden, false);
-    assert.equal(f.element('settings-frosted-background').hidden, false);
+    assert.equal(f.element('settings-background-blur').hidden, false);
     const slider = f.element<HTMLInputElement>('background-opacity');
     const writes = f.calls.filter(call => call.command === 'preferences_settings').length;
     slider.value = '60'; slider.dispatchEvent(new f.win.Event('input', { bubbles: true }));
@@ -3990,7 +3990,7 @@ test('global Appearance exposes native-supported controls and applies immediatel
 test('Linux Appearance hides frosting and performs no native blur operations', async () => {
   const f = await fixture(undefined, { globalSettings: true, appearanceCapabilities: { platform: 'linux', transparency: true, frost: false, reducedTransparency: false } });
   try {
-    await f.tick(); assert.equal(f.element('settings-frosted-background').hidden, true);
+    await f.tick(); assert.equal(f.element('settings-background-blur').hidden, true);
     assert.match(f.element('translucency-hint').textContent!, /compositor/);
     f.preferences.external('{"appearance.backgroundOpacity":50}'); await f.tick();
     assert.equal(f.win.document.documentElement.dataset.translucency, 'window');
