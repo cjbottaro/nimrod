@@ -70,12 +70,26 @@ test('modal animation defaults, global saves, JSONC preservation and external va
       }
     }
     f.host.external('{"appearance.modalAnimationDuration":0}');
-    assert.equal(p.modalAnimation().duration, 0);
+    assert.equal(p.modalAnimation().duration, 100);
     f.host.external('{}');
     assert.deepEqual(p.modalAnimation(), { style: 'subtle', duration: 500 });
     f.host.externalProject('{"appearance.modalAnimation":"none"}');
     assert.match(f.errors.at(-1) ?? '', /global-only/);
     assert.deepEqual(p.modalAnimation(), { style: 'subtle', duration: 500 });
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
+test('legacy modal duration is normalized without a file write until slider commit', async () => {
+  const f = fixture(), p = await f.install();
+  try {
+    const original = '// keep me\n{"appearance.modalAnimationDuration":2000,"custom":true}';
+    f.host.external(original);
+    assert.equal(p.modalAnimation().duration, 1500);
+    assert.equal(f.host.value.text, original);
+    await p.saveModalAnimation({ duration: 1500 });
+    assert.equal(parseSettings(f.host.value.text)['appearance.modalAnimationDuration'], 1500);
+    assert.match(f.host.value.text, /keep me/);
+    assert.equal(parseSettings(f.host.value.text).custom, true);
   } finally { p.dispose(); f.dom.window.close(); }
 });
 

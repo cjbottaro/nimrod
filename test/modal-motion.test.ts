@@ -182,7 +182,7 @@ test('editor overlays settle synchronously and visual failure never prevents clo
   } finally { f.dispose(); }
 });
 
-test('none/zero duration, preference changes, disposal and finished animations clean up without touching live dialogs', async () => {
+test('None, bounded legacy duration, preferences, disposal and finished animations preserve live dialogs', async () => {
   const f = fixture();
   try {
     showModal(f.dialog); await Promise.resolve(); closeModal(f.dialog);
@@ -195,8 +195,9 @@ test('none/zero duration, preference changes, disposal and finished animations c
     showModal(f.dialog); await Promise.resolve(); closeModal(f.dialog);
     assert.equal(f.document.querySelectorAll('[data-modal-motion]').length, 0);
     applyModalAnimation(f.document.documentElement, { style: 'crt', duration: 0 });
+    assert.equal(f.document.documentElement.style.getPropertyValue('--modal-enter-duration'), '100ms');
     showModal(f.dialog); await Promise.resolve(); closeModal(f.dialog);
-    assert.equal(f.document.querySelectorAll('[data-modal-motion]').length, 0);
+    assert.equal(f.document.querySelectorAll('[data-modal-motion=exit]').length, 1);
     applyModalAnimation(f.document.documentElement, { style: 'crt', duration: 500 });
     showModal(f.dialog); await Promise.resolve(); f.owner.dispose();
     assert.equal(f.dialog.open, true);

@@ -203,7 +203,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   let savingAnimation = 0, durationRevision = 0, durationEditing = false;
   function showAnimationDuration(): void {
     animationDurationValue.value = `${animationDuration.value} ms`;
-    animationDuration.setAttribute('aria-valuetext', Number(animationDuration.value) === 0 ? 'Instant' : `${animationDuration.value} milliseconds`);
+    animationDuration.setAttribute('aria-valuetext', `${animationDuration.value} milliseconds`);
   }
   function reloadModalAnimation(force = false): void {
     const animation = preferences.modalAnimation();
