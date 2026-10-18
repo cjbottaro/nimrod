@@ -98,7 +98,7 @@ for (const readingHistory of [false, true]) test(`idle image Send adopts Pi-norm
   } finally { await fixture.close(); }
 });
 
-for (const readingHistory of [false, true]) test(`late image decoding preserves ${readingHistory ? 'reader' : 'bottom-follow'} intent`, async ({ page }) => {
+for (const readingHistory of [false, true]) test(`late scroll before image load preserves ${readingHistory ? 'reader' : 'bottom-follow'} intent`, async ({ page }) => {
   const fixture = await demoFixture(page);
   try {
     await fixture.turn(1); await fixture.turn(2);
@@ -111,6 +111,11 @@ for (const readingHistory of [false, true]) test(`late image decoding preserves 
         set(this: HTMLImageElement, value: string) {
           if (this.alt !== 'Attached image') { source.set!.call(this, value); return; }
           Object.defineProperty(HTMLImageElement.prototype, 'src', source);
+          // Register before the production load listener. Reproduce delivery of
+          // an old bottom-scroll event AFTER decode growth but BEFORE resize recovery.
+          this.addEventListener('load', () => {
+            this.closest('.session-view')!.querySelector('[data-pi-id="transcript-viewport"]')!.dispatchEvent(new Event('scroll'));
+          }, { once: true });
           state.__releaseImageDecode = async () => {
             const canvas = document.createElement('canvas'); canvas.width = 800; canvas.height = 800;
             canvas.getContext('2d')!.fillRect(0, 0, 800, 800);

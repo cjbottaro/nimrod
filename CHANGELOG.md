@@ -41,7 +41,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
-- Image messages retain transcript auto-follow when image decoding expands the turn after sending, without overriding later upward scrolling. Pi's image coordinate-scaling notes are hidden in user turns; prompts and saved history are unchanged.
+- Image messages retain transcript auto-follow when decoding expands the turn after sending, including delayed old-bottom scroll events arriving after Send's follow frames, without overriding later upward scrolling. Pi's image coordinate-scaling notes are hidden in user turns; prompts and saved history are unchanged.
 
 - Session deletion review no longer shrinks or recenters when confirmation switches to stopping/deleting progress; the disabled Delete label and reviewed description's layout footprint stay stable until the shared animated close.
 

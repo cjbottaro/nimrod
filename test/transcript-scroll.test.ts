@@ -104,6 +104,45 @@ for (const interrupted of [false, true]) test(`decoded image growth retains sett
   } finally { f.dispose(); }
 });
 
+for (const adjustment of [0, 0.4, 1, 2]) test(`late settled-bottom scroll before image resize preserves follow (${adjustment}px)`, () => {
+  const f = fixture();
+  try {
+    f.scroll.scrollToBottom(); f.frame();
+    assert.equal(f.frames.size, 0, 'Send follow has already settled before the image decodes');
+    f.height(1600);
+    f.move(400 - adjustment); // Deferred native event for the old bottom, not reader input.
+    assert.equal(f.scroll.capture(), true, 'the delayed event must not erase pre-image follow intent');
+    assert.equal(f.frames.size, 1, 'layout growth schedules the existing follow owner');
+    f.move(400 - adjustment); // Duplicate delivery cannot replace the settled baseline.
+    f.scroll.resize(); f.frame();
+    assert.equal(f.viewport.scrollTop, 1000);
+    assert.equal(f.scroll.capture(), true);
+  } finally { f.dispose(); }
+});
+
+test("late scroll growth follows without depending on a later load/resize callback", () => {
+  const f = fixture();
+  try {
+    f.scroll.scrollToBottom(); f.frame();
+    f.height(1600); f.move(400); f.frame();
+    assert.equal(f.viewport.scrollTop, 1000);
+  } finally { f.dispose(); }
+});
+
+for (const interrupt of ['wheel', 'key', 'touch', 'scrollbar'] as const) test(`reader ${interrupt} still wins over late image scroll events`, () => {
+  const f = fixture();
+  try {
+    f.scroll.scrollToBottom(); f.frame(); f.height(1600);
+    if (interrupt === 'wheel') f.viewport.dispatchEvent(new f.win.WheelEvent('wheel', { deltaY: -1 }));
+    else if (interrupt === 'key') f.viewport.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'PageUp' }));
+    else if (interrupt === 'touch') { f.touch('touchstart', 0, 0); f.touch('touchmove', 0, 10); }
+    else f.move(397);
+    f.move(399); f.scroll.resize(); f.frame();
+    assert.equal(f.viewport.scrollTop, 399);
+    assert.equal(f.scroll.capture(), false);
+  } finally { f.dispose(); }
+});
+
 test("image growth does not pull an older-history reader to bottom", () => {
   const f = fixture();
   try {
