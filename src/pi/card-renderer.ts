@@ -16,6 +16,7 @@ export interface CardRenderer<Data> {
 /** Validate even bundled output: a failed renderer must not break sibling cards. */
 export function validatePresentation(value: CardPresentation): CardPresentation {
   if (!value || typeof value.title !== 'string' || (value.preview !== undefined && typeof value.preview !== 'string')
+    || (value.questionAnswer !== undefined && (!value.questionAnswer || typeof value.questionAnswer.answer !== 'string'))
     || (value.rawInputsPlacement !== undefined && !['before', 'after'].includes(value.rawInputsPlacement))
     || !Array.isArray(value.sections)) throw new Error('Invalid card presentation');
   const keys = new Set<string>();
