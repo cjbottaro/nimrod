@@ -1,3 +1,4 @@
+import { showModal, closeModal } from '../modal-motion';
 import { SessionRow, visibleSessionRows } from "./session-picker";
 
 export function createResumeModal(post: (type: string, data?: Record<string, unknown>) => void, onClose: (accepted: boolean) => void) {
@@ -21,7 +22,7 @@ export function createResumeModal(post: (type: string, data?: Record<string, unk
   let loaded: { rows?: SessionRow[]; error?: string } | undefined;
   let rows: SessionRow[] = [], shown: SessionRow[] = [], selected = "", pending = false;
   const collapsed = new Set<string>();
-  const close = (accepted = false) => { if (pending && action === "delete" && !accepted) return; clearTimeout(loadingTimer); loading = false; loaded = undefined; dialog.close(); onClose(accepted); };
+  const close = (accepted = false) => { if (pending && action === "delete" && !accepted) return; clearTimeout(loadingTimer); loading = false; loaded = undefined; closeModal(dialog); onClose(accepted); };
   cancel.onclick = () => close();
   dialog.addEventListener("cancel", event => { event.preventDefault(); close(); });
   const children = (row: SessionRow) => { const index = rows.indexOf(row); return (rows[index + 1]?.depth ?? 0) > row.depth; };
@@ -102,7 +103,7 @@ export function createResumeModal(post: (type: string, data?: Record<string, unk
         const skeleton = document.createElement("div"); skeleton.className = "resume-skeleton"; skeleton.setAttribute("aria-hidden", "true");
         skeleton.append(document.createElement("span"), document.createElement("span")); tree.append(skeleton);
       }
-      status.textContent = "Loading sessions…"; dialog.showModal(); search.focus();
+      status.textContent = "Loading sessions…"; showModal(dialog); search.focus();
       const current = generation;
       loadingTimer = setTimeout(() => { if (current !== generation) return; minimumElapsed = true; finishLoading(); }, 500);
       post(`${action}List`, { id: String(generation) });

@@ -1,3 +1,5 @@
+import { clearModalMotion } from './modal-motion';
+
 export const RUNTIME_STORAGE_KEY = 'nimrod.runtime.v1';
 export interface RuntimePaths { pi: string; node: string; copilot?: string; }
 export type RuntimeField = 'pi' | 'node' | 'copilot';
@@ -14,11 +16,13 @@ export function installSettings(window: Window, page: HTMLDialogElement, openBut
   const open = () => {
     if (page.open || anotherDialog()) return;
     if (options.canOpen && !options.canOpen()) { options.unavailable?.(); return; }
+    clearModalMotion(document);
     page.showModal();
     backButton.focus({ preventScroll: true });
   };
   const close = () => {
     if (!page.open || anotherDialog()) return;
+    clearModalMotion(document);
     if (options.closeWindow) { options.closeWindow(); return; }
     // Native dialog.close() restores the preceding focus target without touching workspace DOM.
     page.close();

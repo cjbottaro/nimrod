@@ -1,3 +1,5 @@
+import { clearModalMotion } from './modal-motion';
+
 export type ModalAnimationStyle = 'none' | 'subtle' | 'crt';
 export interface ModalAnimation { style: ModalAnimationStyle; duration: number }
 export const MODAL_ANIMATION_KEYS = {
@@ -17,6 +19,7 @@ export function readModalAnimation(settings: Record<string, unknown>): ModalAnim
 
 /** Presentation only: never delay dialog.close(), focus, input or request settlement. */
 export function applyModalAnimation(root: HTMLElement, animation: ModalAnimation): void {
+  if (root.dataset.modalAnimation !== animation.style || root.style.getPropertyValue('--modal-enter-duration') !== `${animation.style === 'none' ? 0 : animation.duration}ms`) clearModalMotion(root.ownerDocument);
   root.dataset.modalAnimation = animation.style;
   root.style.setProperty('--modal-enter-duration', `${animation.style === 'none' ? 0 : animation.duration}ms`);
   root.style.setProperty('--modal-exit-duration', `${animation.style === 'none' ? 0 : Math.round(animation.duration * .75)}ms`);

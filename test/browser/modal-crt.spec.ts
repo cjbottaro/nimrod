@@ -1,64 +1,80 @@
 import { expect, test } from '@playwright/test';
-import { demoFixture, visible } from './demo-fixture';
+import { demoFixture } from './demo-fixture';
 
-test('CRT expands a theme-accent line vertically from the center in native and editor shells', async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'no-preference' });
+for (const duration of [160, 500]) {
+  test(`CRT uses a separate two-pixel beam without tinting the panel at ${duration} ms`, async ({ page }) => {
+    const fixture = await demoFixture(page);
+    try {
+      await fixture.editPreferences(JSON.stringify({ 'appearance.modalAnimation': 'crt', 'appearance.modalAnimationDuration': duration }));
+      const settings = await fixture.settingsWindow();
+      await settings.emulateMedia({ reducedMotion: 'no-preference' });
+      const sample = await settings.evaluate(async duration => {
+        document.documentElement.style.setProperty('--vscode-focusBorder', 'rgb(123, 45, 67)');
+        document.getElementById('modal-animation-preview')!.click(); await Promise.resolve();
+        const dialog = document.querySelector<HTMLDialogElement>('#modal-animation-preview-dialog')!;
+        const animation = dialog.getAnimations().find(item => item instanceof CSSAnimation && item.animationName === 'modal-crt-enter')!;
+        animation.pause(); animation.currentTime = duration * .1;
+        const beam = document.querySelector<HTMLElement>('[data-modal-motion=enter] [data-modal-crt-line]')!;
+        beam.getAnimations().forEach(item => { item.pause(); item.currentTime = duration * .1; });
+        const style = getComputedStyle(dialog), line = getComputedStyle(beam);
+        const start = { clip: style.clipPath, shadow: style.boxShadow, background: style.backgroundColor, transform: style.transform };
+        animation.currentTime = duration * .6;
+        const middle = getComputedStyle(dialog).clipPath;
+        animation.currentTime = duration;
+        return { start, middle, final: getComputedStyle(dialog).clipPath, lineHeight: line.height, lineColor: line.backgroundColor, lineGlow: line.boxShadow, focused: dialog.contains(document.activeElement), duration: animation.effect!.getTiming().duration };
+      }, duration);
+      expect(sample.duration).toBe(duration);
+      expect(sample.start.clip).toContain('50%'); expect(sample.start.transform).toBe('none');
+      expect(sample.middle).not.toBe(sample.start.clip); expect(sample.final).toBe('none');
+      expect(sample.lineHeight).toBe('2px'); expect(sample.lineColor).toBe('rgb(123, 45, 67)');
+      expect(sample.lineGlow).toContain('rgb(123, 45, 67)');
+      expect(sample.start.background).not.toBe(sample.lineColor);
+      expect(sample.start.shadow).not.toContain('inset'); expect(sample.focused).toBe(true);
+      // Native method=dialog closure is immediate; only an inert visual copy remains.
+      const exit = await settings.evaluate(async () => {
+        const dialog = document.querySelector<HTMLDialogElement>('#modal-animation-preview-dialog')!;
+        dialog.querySelector<HTMLButtonElement>('button')!.click(); await Promise.resolve();
+        const layer = document.querySelector<HTMLElement>('[data-modal-motion=exit]')!;
+        const animations = layer.getAnimations({ subtree: true });
+        animations.forEach(animation => { animation.pause(); animation.currentTime = 0; });
+        return { open: dialog.open, focused: document.activeElement?.id, inert: layer.inert, pointerEvents: getComputedStyle(layer).pointerEvents, durations: animations.map(animation => animation.effect!.getTiming().duration), duplicateIds: document.querySelectorAll('#modal-animation-preview-dialog').length };
+      });
+      expect(exit.open).toBe(false); expect(exit.focused).toBe('modal-animation-preview');
+      expect(exit.inert).toBe(true); expect(exit.pointerEvents).toBe('none');
+      expect(exit.durations.length).toBeGreaterThanOrEqual(2);
+      expect(exit.durations.every(value => value === Math.round(duration * .75))).toBe(true);
+      expect(exit.duplicateIds).toBe(1);
+      // A new interaction retires the old exit; it never waits for animation completion.
+      await settings.locator('#modal-animation-preview').click();
+      await expect(settings.locator('[data-modal-motion=exit]')).toHaveCount(0);
+      await expect(settings.locator('#modal-animation-preview-dialog')).toHaveAttribute('open', '');
+      await settings.emulateMedia({ reducedMotion: 'reduce' });
+      await expect(settings.locator('[data-modal-motion]')).toHaveCount(0);
+      await settings.keyboard.press('Escape');
+      await expect(settings.locator('#modal-animation-preview-dialog')).not.toHaveAttribute('open');
+      await expect(settings.locator('[data-modal-motion]')).toHaveCount(0);
+      expect(fixture.errors).toEqual([]);
+    } finally { await fixture.close(); }
+  });
+}
+
+test('visual exit still works without popovers or CSS overlay retention, above its parent Settings dialog', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {
-    await fixture.editPreferences('{"appearance.modalAnimation":"crt","appearance.modalAnimationDuration":1000}');
-    const prompt = page.locator(visible('prompt'));
-    await prompt.fill('Keep my draft'); await prompt.focus();
-    const samples = await page.evaluate(() => {
-      document.documentElement.style.setProperty('--vscode-focusBorder', 'rgb(123, 45, 67)');
-      const sample = (shell: HTMLElement) => {
-        const animation = shell.getAnimations().find(item => item instanceof CSSAnimation && item.animationName === 'modal-crt-enter')!;
-        animation.pause(); animation.currentTime = 100;
-        const style = getComputedStyle(shell);
-        const line = new DOMMatrixReadOnly(style.transform);
-        const glow = style.boxShadow;
-        const origin = style.transformOrigin.split(' ').map(parseFloat);
-        const center = { x: shell.offsetWidth / 2, y: shell.offsetHeight / 2 };
-        animation.currentTime = 600;
-        const expanding = new DOMMatrixReadOnly(getComputedStyle(shell).transform);
-        animation.currentTime = 1000;
-        const finished = getComputedStyle(shell).transform;
-        return { lineX: line.a, lineY: line.d, expandingY: expanding.d, glow, origin, center, finished, duration: animation.effect!.getTiming().duration };
-      };
-      const dialog = document.querySelector<HTMLDialogElement>('#host-dialog')!;
-      dialog.showModal();
-      const native = sample(dialog);
-      const field = dialog.querySelector('textarea')!; field.hidden = false; field.focus();
-      const focused = document.activeElement === field;
-      dialog.close();
-      const restored = document.activeElement?.getAttribute('data-pi-id');
-      const overlay = document.querySelector<HTMLElement>('[data-pi-id="dialog"]')!;
-      overlay.classList.add('open');
-      const editor = sample(overlay.querySelector<HTMLElement>('.nimrod-modal')!);
-      overlay.classList.remove('open');
-      return { native, editor, focused, restored };
+    await fixture.editPreferences('{"appearance.modalAnimation":"subtle","appearance.modalAnimationDuration":500}');
+    const settings = await fixture.settingsWindow();
+    await settings.emulateMedia({ reducedMotion: 'no-preference' });
+    await settings.evaluate(() => Object.defineProperty(HTMLElement.prototype, 'showPopover', { configurable: true, value: undefined }));
+    await settings.locator('#modal-animation-preview').click();
+    const result = await settings.evaluate(async () => {
+      const dialog = document.querySelector<HTMLDialogElement>('#modal-animation-preview-dialog')!;
+      dialog.getAnimations().forEach(animation => animation.finish());
+      dialog.querySelector<HTMLButtonElement>('button')!.click(); await Promise.resolve();
+      const layer = document.querySelector<HTMLElement>('[data-modal-motion=exit]')!;
+      layer.getAnimations({ subtree: true }).forEach(animation => animation.pause());
+      return { open: dialog.open, parent: layer.parentElement?.id, focused: document.activeElement?.id, parentOpen: document.querySelector<HTMLDialogElement>('#settings-page')!.open };
     });
-    for (const sample of [samples.native, samples.editor]) {
-      expect(sample.duration).toBe(1000);
-      expect(sample.lineX).toBeCloseTo(1);
-      expect(sample.lineY).toBeCloseTo(.005, 3);
-      expect(sample.expandingY).toBeGreaterThan(sample.lineY);
-      expect(sample.expandingY).toBeLessThan(1);
-      expect(sample.glow).toContain('rgb(123, 45, 67)');
-      expect(sample.origin[0]).toBeCloseTo(sample.center.x, 0);
-      expect(sample.origin[1]).toBeCloseTo(sample.center.y, 0);
-      expect(sample.finished).toBe('none');
-    }
-    expect(samples.focused).toBe(true); expect(samples.restored).toBe('prompt');
-    await expect(prompt).toHaveValue('Keep my draft');
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    const reduced = await page.locator('#host-dialog').evaluate((dialog: HTMLDialogElement) => {
-      dialog.showModal();
-      const style = getComputedStyle(dialog);
-      const result = { duration: style.animationDuration, transform: style.transform, shadow: style.boxShadow };
-      dialog.close(); return result;
-    });
-    expect(reduced.duration).toBe('0s'); expect(reduced.transform).toBe('none');
-    expect(reduced.shadow).not.toContain('rgb(123, 45, 67)');
+    expect(result).toEqual({ open: false, parent: 'settings-page', focused: 'modal-animation-preview', parentOpen: true });
     expect(fixture.errors).toEqual([]);
   } finally { await fixture.close(); }
 });

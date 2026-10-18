@@ -1,3 +1,4 @@
+import { showModalOverlay, closeModalOverlay } from "./modal-motion";
 import { navigateDialogActions } from "./dialog-actions";
 import { ConfigurationTranscript } from './configuration-transcript';
 import { createMainActivityDom, createSubagentActivityDom, renderMainActivity, renderSubagentActivity } from "./pi/activity-dom";
@@ -997,12 +998,12 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   required("dialog-save").addEventListener("click", () => {
     if (editorRequest) post("uiResponse", { id: editorRequest, value: dialogText.value });
     editorRequest = undefined;
-    dialog.classList.remove("open");
+    closeModalOverlay(dialog);
   });
   required("dialog-cancel").addEventListener("click", () => {
     if (editorRequest) post("uiResponse", { id: editorRequest, cancelled: true });
     editorRequest = undefined;
-    dialog.classList.remove("open");
+    closeModalOverlay(dialog);
   });
   host.onMessage((data: ConversationViewMessage) => {
     if (disposed) return;
@@ -1088,7 +1089,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       editorRequest = data.id;
       dialogTitle.textContent = safeText(data.title) || "Edit text";
       dialogText.value = safeText(data.prefill);
-      dialog.classList.add("open");
+      showModalOverlay(dialog);
       if (active && !document.querySelector('dialog[open]')) dialogText.focus();
     }
   });

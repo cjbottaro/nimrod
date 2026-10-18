@@ -11,6 +11,7 @@ import { installKeybindingEditor } from './keybinding-editor';
 import { isMac } from './keybindings';
 import { installThemes } from './themes/picker';
 import { installZoom } from './zoom';
+import { installModalMotion, showModal, closeModal } from './modal-motion';
 import { applyModalAnimation, type ModalAnimationStyle } from './modal-animation';
 import { installNativeWindowAppearance } from './native-window-appearance';
 import { installPerformanceDiagnostics } from './performance-diagnostics';
@@ -191,6 +192,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     }).finally(() => { reloadPerformance(); performancePicker.disabled = false; });
   });
   reloadPerformance();
+  const modalMotion = installModalMotion(document);
   const animationStyle = required<HTMLSelectElement>('modal-animation-style');
   const animationDuration = required<HTMLInputElement>('modal-animation-duration');
   const animationPreview = required<HTMLDialogElement>('modal-animation-preview-dialog');
@@ -204,7 +206,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     required('modal-animation-hint').textContent = (animation.style === 'crt'
       ? 'A theme-accent horizontal line expands up and down like a CRT powering on.'
       : animation.style === 'subtle' ? 'A short fade, lift and gentle scale.' : 'Dialogs appear and disappear instantly; your duration is remembered.')
-      + ' Default duration: 160 ms; dismissal is 25% faster where supported. Reduced motion disables animations.';
+      + ' Default duration: 160 ms; dismissal is 25% faster. Reduced motion disables animations.';
   }
   async function saveModalAnimation(values: Parameters<typeof preferences.saveModalAnimation>[0]): Promise<void> {
     if (savingAnimation) return;
@@ -227,7 +229,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   };
   animationStyle.addEventListener('change', changeAnimationStyle);
   animationDuration.addEventListener('change', changeAnimationDuration);
-  const previewAnimation = () => { if (!animationPreview.open) animationPreview.showModal(); };
+  const previewAnimation = () => { if (!animationPreview.open) showModal(animationPreview); };
   required('modal-animation-preview').addEventListener('click', previewAnimation);
   reloadModalAnimation();
   const sendAutoFollowPicker = required<HTMLSelectElement>('send-auto-follow');
@@ -370,10 +372,10 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
       required('modal-animation-preview').removeEventListener('click', previewAnimation);
       animationStyle.removeEventListener('change', changeAnimationStyle);
       animationDuration.removeEventListener('change', changeAnimationDuration);
-      if (animationPreview.open) animationPreview.close();
+      if (animationPreview.open) closeModal(animationPreview);
       performanceDiagnostics.dispose(); toolCapture.dispose();
       keybindingEditor?.dispose(); settingsNavigation.dispose(); settingsSidebarResize.dispose();
-      appearance.dispose(); zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose();
+      appearance.dispose(); zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose(); modalMotion.dispose();
     },
   };
 }
