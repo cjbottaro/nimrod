@@ -19,7 +19,8 @@ import { renderReasoningCard, updateReasoningCard, disposeReasoningCard } from "
 import { isEmptyAssistantMessage, transcriptRolePresentation } from "./pi/transcript-presentation";
 import { SteeringTranscript } from "./pi/steering-transcript";
 import { renderOperationCard } from './operation-card';
-import { clipboardImages, imageContent, validImageContent, validateAttachments } from './pi/image-attachments';
+import { clipboardImages, imageContent, validImageContent, validateAttachments } from './image-attachments';
+import { validateImageSelection, validateMessageImages } from './session-message-input';
 import { renderParallelToolCard } from "./pi/tool-progress";
 
 import type { ConversationViewHost, ConversationView, ConversationViewState as State, RenderMessage as DisplayMessage, RenderBlock as ContentBlock, ConversationViewMessage } from './conversation-view-host';
@@ -847,6 +848,8 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     if (deletionLocked || preparing) return;
     const text = composer.draft.trim();
     if (composer.attachments?.length && text.startsWith('/')) { updateComposer({ ...composer, lastError: 'Send images with a message, not a slash command. Your draft was kept.' }); return; }
+    try { validateImageSelection(composer.attachments ?? [], host.messageInput.capabilities()); }
+    catch (error) { updateComposer({ ...composer, lastError: String(error) }); return; }
     const submission = host.interaction.prepare(text, displayedState);
     if (submission.kind === 'reject') { updateComposer({ ...composer, lastError: submission.error }); return; }
     if (displayedState.sessionUnavailable || displayedState.inputLocked || (!text && !composer.attachments?.length)) return;
@@ -882,12 +885,14 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
           if (disposed || generation !== composerGeneration) return;
           const state = pendingState || displayedState;
           if (deletionLocked || state.inputLocked || state.sessionUnavailable) throw new Error('Session became unavailable while preparing images. Nothing was sent.');
+          validateMessageImages(images, host.messageInput.capabilities());
           steeringTranscript.begin(id, submittedText, 'sending', images, mode); queueRender(state);
-          post('prompt', { id, text: submittedText, mode, images });
+          void host.messageInput.submit({ id, text: submittedText, mode, images });
         } catch (error) { if (!disposed && generation === composerGeneration) updateComposer({ ...composer, lastError: String(error) }); }
         finally { if (!disposed && generation === composerGeneration) { preparing--; renderComposer(); } }
       })();
-    } else host.postMessage({ id, text: submittedText, mode, ...submission.message });
+    } else if (submission.message.type === 'prompt') void host.messageInput.submit({ id, text: submittedText, mode });
+    else host.postMessage({ id, text: submittedText, mode, ...submission.message });
   }
 
   const updateTopScrollEdge = (): void => {
@@ -915,14 +920,15 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     if (!active || disposed || prompt.readOnly || document.querySelector('dialog[open]')) return;
     const files = clipboardImages(event.clipboardData);
     const text = event.clipboardData?.getData('text/plain') ?? '';
-    if (host.interaction.unsupportedImages && files.length) {
+    const capabilities = host.messageInput.capabilities();
+    if (!capabilities.images && files.length) {
       event.preventDefault();
       if (text) { prompt.setRangeText(text, prompt.selectionStart, prompt.selectionEnd, 'end'); updateComposer(updateDraft(composer, prompt.value)); }
-      updateComposer({ ...composer, lastError: host.interaction.unsupportedImages });
+      updateComposer({ ...composer, lastError: capabilities.imageUnavailableReason || 'Images are not supported by this session. No image was attached.' });
       return;
     }
     if (!files.length && (text || event.clipboardData?.types.includes('text/html') || event.clipboardData?.files.length)) return;
-    if (!files.length && !host.attachments?.readClipboard) return;
+    if (!capabilities.images || !files.length && !host.attachments?.readClipboard) return;
     if (files.length) {
       event.preventDefault();
       if (text) { prompt.setRangeText(text, prompt.selectionStart, prompt.selectionEnd, 'end'); updateComposer(updateDraft(composer, prompt.value)); }
@@ -936,9 +942,11 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
         if (!blobs.length) { const blob = await host.attachments.readClipboard?.(); if (blob) blobs.push({ blob, name: 'Pasted image' }); }
         for (const { blob, name } of blobs) {
           if (disposed || generation !== composerGeneration || deletionLocked || prompt.readOnly) return;
+          validateImageSelection([...(composer.attachments ?? []), { mimeType: blob.type, size: blob.size }], host.messageInput.capabilities());
           const image = await host.attachments.put(blob, name);
           if (disposed || generation !== composerGeneration || deletionLocked || prompt.readOnly) return;
           const attachments = [...(composer.attachments ?? []), image]; validateAttachments(attachments);
+          validateImageSelection(attachments, host.messageInput.capabilities());
           updateComposer({ ...composer, attachments, lastError: undefined });
         }
       } catch (error) { if (!disposed && generation === composerGeneration) updateComposer({ ...composer, lastError: String(error) }); }

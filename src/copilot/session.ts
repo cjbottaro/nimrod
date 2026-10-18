@@ -1,3 +1,6 @@
+import { validateMessageImages, type SessionMessageInput } from '../session-message-input';
+import type { ImageContent } from '../image-attachments';
+import { copilotImageCapabilities, copilotUserContent, type CopilotImageModel } from './image-input';
 import { CopilotConnection, CopilotResponseError, record, type BridgeRequest } from './connection';
 import { immutableSnapshot } from '../pi/immutable-snapshot';
 import type { DisplayMessage } from '../conversation-model';
@@ -14,11 +17,11 @@ import { ConfigurationDeferred, ConfigurationSuperseded, ConfigurationUncertain,
 import { pickConfiguration } from '../configuration-picker';
 import { commandChoices, copilotCommands, findCopilotCommand, parseCopilotCommand, type CommandChoice, type CopilotCommand } from './commands';
 
-interface Model {
+interface Model extends CopilotImageModel {
   id: string;
   name: string;
   supportedReasoningEfforts?: string[];
-  capabilities?: { supports?: { reasoningEffort?: boolean }; limits?: { max_context_window_tokens?: number } };
+  capabilities?: { supports?: { reasoningEffort?: boolean; vision?: boolean }; limits?: { max_context_window_tokens?: number; vision?: { supported_media_types?: string[]; max_prompt_images?: number; max_prompt_image_size?: number } } };
   policy?: { state: string };
 }
 const usageWorkEvents = new Set(['user.message', 'assistant.turn_start', 'assistant.turn_end', 'assistant.message_delta', 'assistant.message',
@@ -145,6 +148,11 @@ export class CopilotSession {
     await this.connection.request('connect', sessionId === undefined ? {} : { sessionId });
     if (this.state.sessionUnavailable) throw new Error('Copilot did not publish a connected session');
   }
+  readonly messageInput: SessionMessageInput = {
+    capabilities: () => copilotImageCapabilities(this.models.find(model => model.id === this.model)),
+    submit: message => this.handle({ ...message, type: 'prompt' }),
+  };
+
   async handle(message: Record<string, unknown>): Promise<void> {
     this.capture('ui.action', message);
     if (message.type === 'renderError') { this.ui.notice(String(message.error)); return; }
@@ -155,16 +163,20 @@ export class CopilotSession {
     }
     if (message.type !== 'prompt' && message.type !== 'command') return;
     const id = String(message.id ?? ''), text = typeof message.text === 'string' ? message.text : '';
-    const invalid = this.validatePrompt(text);
-    if (invalid || !text.trim() || message.images !== undefined) {
-      this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', error: invalid || 'Copilot sessions currently accept non-empty text only.' }); return;
+    const invalid = !this.canSubmit && !isPermissionChange(this.commands, text)
+      ? 'Copilot is not idle or is still connecting. Nothing was sent.' : this.validatePrompt(text);
+    let images: ImageContent[];
+    try { images = validateMessageImages(message.images, this.messageInput.capabilities()); }
+    catch (error) { this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', error: String(error) }); return; }
+    if (invalid || !id || text.length > 1_000_000 || !text.trim() && !images.length || images.length && text.trimStart().startsWith('/')) {
+      this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', error: invalid || 'Invalid Copilot message. Images require a message, not a slash command.' }); return;
     }
     if (isPermissionChange(this.commands, text)) { await this.acceptPermissionIntent(id); return; }
     if (text.trimStart().startsWith('/')) { await this.runCommand(id, text); return; }
     if (message.type === 'command') {
       this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', error: 'Invalid Copilot slash command. Nothing was invoked.' }); return;
     }
-    await this.sendPrompt(id, text);
+    await this.sendPrompt(id, text, text, images);
   }
   private async acceptPermissionIntent(id: string): Promise<void> {
     try {
@@ -176,16 +188,16 @@ export class CopilotSession {
       this.ui.publish({ type: 'submissionReceipt', id, outcome: 'accepted' });
     } catch (error) { this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', error: String(error) }); }
   }
-  private async sendPrompt(id: string, text: string, display = text): Promise<void> {
+  private async sendPrompt(id: string, text: string, display = text, images: ImageContent[] = []): Promise<void> {
     const key = `copilot:user:pending:${id}`;
     this.echo = { key };
     this.ui.publish({ type: 'submissionMessage', id, key });
     this.failed = false; this.stopped = false;
     this.state = { ...this.state, busy: true, status: 'Working…' };
-    this.replace(key, { key, role: 'user', content: display });
+    this.replace(key, { key, role: 'user', content: images.length ? [{ type: 'text', text: display }, ...images] : display });
     this.usage.workStarted();
     try {
-      await this.connection.request('prompt', { text });
+      await this.connection.request('prompt', { text, ...(images.length ? { images } : {}) });
       this.ui.publish({ type: 'submissionReceipt', id, outcome: 'accepted' });
     } catch (error) {
       // An SDK error after dispatch is not proof the runtime rejected delivery.
@@ -442,9 +454,7 @@ export class CopilotSession {
     } else if (type === 'user.message') {
       const content = string('content'), echo = this.echo;
       const key = echo && !raw.agentId ? echo.key : `copilot:user:${raw.id}`;
-      this.replace(key, { key, role: 'user', originLabel, content: Array.isArray(data.attachments) && data.attachments.length ? [
-        { type: 'text', text: content }, { type: 'raw', text: JSON.stringify({ attachments: data.attachments }, null, 2) },
-      ] : content });
+      this.replace(key, { key, role: 'user', originLabel, content: copilotUserContent(content, data.attachments) });
       if (echo?.key === key) this.echo = undefined;
     } else if (['assistant.message_delta', 'assistant.message', 'assistant.reasoning_delta', 'assistant.reasoning'].includes(type)) {
       const thinking = type.startsWith('assistant.reasoning'), delta = type.endsWith('_delta');

@@ -2,7 +2,8 @@ export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 export const MAX_PROMPT_IMAGE_BYTES = 8 * 1024 * 1024;
 export const MAX_IMAGES = 8;
 export const MAX_IMAGE_PIXELS = 32 * 1024 * 1024;
-const MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+export const IMAGE_MIME_TYPES = Object.freeze(['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const);
+const MIME_TYPES: ReadonlySet<string> = new Set(IMAGE_MIME_TYPES);
 
 /** Drafts contain references only. Encoded image bytes live in the attachment store. */
 export interface ImageAttachment { id: string; name: string; mimeType: string; size: number; }
@@ -38,7 +39,8 @@ export function validImageContent(value: unknown): value is ImageContent {
   const image = value as ImageContent;
   return image.type === 'image' && MIME_TYPES.has(image.mimeType) && typeof image.data === 'string'
     && image.data.length > 0 && image.data.length <= Math.ceil(MAX_IMAGE_BYTES / 3) * 4
-    && image.data.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(image.data);
+    && image.data.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(image.data)
+    && image.data.length / 4 * 3 - (image.data.endsWith('==') ? 2 : image.data.endsWith('=') ? 1 : 0) <= MAX_IMAGE_BYTES;
 }
 export function validateImageContents(value: unknown): ImageContent[] {
   if (value === undefined) return [];

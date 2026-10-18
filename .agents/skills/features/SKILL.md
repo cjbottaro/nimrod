@@ -66,7 +66,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Retained internal ACP protocol/adapters and historical POC boundaries | [ACP harnesses](references/acp-harnesses.md) | [ACP sessions (POC)](../../../docs/acp.md) |
 | Native per-session drafts, debounced saves and submission durability | [Native drafts](references/native-drafts.md) | [Drafts](../../../docs/drafts.md) |
 | Send/steer/queue, pending turns and recovery | [Composer](references/composer.md) | [Writing messages](../../../docs/writing-messages.md) |
-| Image paste, draft bytes and send outcomes | [Image paste](references/image-paste.md) | [Paste images](../../../docs/image-paste.md) |
+| Shared message-input interface, Pi/Copilot image paste, draft bytes and send outcomes | [Image paste](references/image-paste.md) | [Paste images](../../../docs/image-paste.md) |
 | Operation-card title/content, pending stack, settlement, error details and optional cancellation | [Operation cards](references/operation-cards.md) | [Reading conversations](../../../docs/reading-conversations.md#operation-cards) |
 | Tool/reasoning identity, lifecycle and disclosures | [Transcript cards](references/transcript-cards.md) | [Reading conversations](../../../docs/reading-conversations.md) |
 | Transcript layout, scroll intent, focus and zoom | [Transcript interaction](references/transcript-interaction.md) | [Reading](../../../docs/reading-conversations.md), [Settings](../../../docs/settings.md) |

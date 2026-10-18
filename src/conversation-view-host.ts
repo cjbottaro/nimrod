@@ -24,7 +24,6 @@ export type PreparedSubmission =
   | { kind: 'request'; message: Record<string, unknown>; preview: boolean; navigate: boolean };
 export interface ConversationInteraction {
   readonly label: string;
-  readonly unsupportedImages?: string;
   commands(raw: unknown): SlashCommand[];
   keyboardMode(event: ComposerKeyboardEvent, busy: boolean): KeyboardSubmissionMode | undefined;
   prepare(text: string, state: ConversationViewState): PreparedSubmission;
@@ -42,10 +41,11 @@ export interface ConversationViewHost {
   /** Stable owning-project display context, independent of harness-reported tool paths. */
   projectDirectory?: string;
   interaction: ConversationInteraction;
+  messageInput: import('./session-message-input').SessionMessageInput;
   performance?: import('./performance-diagnostics').PerformanceProbe;
   cardRenderer?: (data: Readonly<import('./card-plugin-api').ToolCardData>) => import('./pi/tool-card').ToolCardRenderer;
   cardActions?: Pick<CardPluginContext, 'copy' | 'openLink'> & { popOutCode(text: string, language: string): Promise<void> };
-  attachments?: import('./pi/image-attachments').AttachmentHost;
+  attachments?: import('./image-attachments').AttachmentHost;
   reportNotice?(notice: import('./application-notices').ApplicationNotice): void;
   resolveNotice?(id: string): void;
   resolveNoticeCause?(cause: string): void;

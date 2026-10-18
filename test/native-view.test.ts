@@ -7,7 +7,7 @@ import { initialConversationState, reduceRpcEvent } from '../src/pi/reducer';
 import { TranscriptUpdates } from '../src/pi/transcript-updates';
 import { projectToolTimeline } from '../src/pi/tool-progress';
 
-function fixture(options: { sendAutoFollow?: import('../src/pi/view-host').ViewHost['sendAutoFollow']; performance?: import('../src/pi/view-host').ViewHost['performance']; reportNotice?: import('../src/pi/view-host').ViewHost['reportNotice']; resolveNotice?: import('../src/pi/view-host').ViewHost['resolveNotice']; images?: boolean; clipboard?: boolean; missing?: boolean; imageGate?: Promise<void>; releaseOnClear?: boolean; cardRenderer?: import('../src/pi/view-host').ViewHost['cardRenderer']; cardActions?: import('../src/pi/view-host').ViewHost['cardActions'] } = {}) {
+function fixture(options: { messageInput?: import('../src/session-message-input').SessionMessageInput; sendAutoFollow?: import('../src/pi/view-host').ViewHost['sendAutoFollow']; performance?: import('../src/pi/view-host').ViewHost['performance']; reportNotice?: import('../src/pi/view-host').ViewHost['reportNotice']; resolveNotice?: import('../src/pi/view-host').ViewHost['resolveNotice']; images?: boolean; clipboard?: boolean; missing?: boolean; imageGate?: Promise<void>; releaseOnClear?: boolean; cardRenderer?: import('../src/pi/view-host').ViewHost['cardRenderer']; cardActions?: import('../src/pi/view-host').ViewHost['cardActions'] } = {}) {
   const dom = new JSDOM(webviewHtml(), { runScripts: 'outside-only', pretendToBeVisual: true });
   const win = dom.window;
   let persisted: unknown;
@@ -27,7 +27,7 @@ function fixture(options: { sendAutoFollow?: import('../src/pi/view-host').ViewH
   win.cancelAnimationFrame = id => { frames.delete(id); };
   const sent: Record<string, unknown>[] = [];
   let receive: (message: unknown) => void = () => {};
-  Object.assign(win, { testHost: { sendAutoFollow: options.sendAutoFollow, performance: options.performance, reportNotice: options.reportNotice, resolveNotice: options.resolveNotice, promptSubmitted: () => { submittedPrompts++; }, attachments, cardRenderer: options.cardRenderer, cardActions: options.cardActions, getState: () => undefined, setState: (state: unknown) => { persisted = state; if (options.releaseOnClear) { const images = (state as { attachments?: { id: string }[] }).attachments ?? []; for (const id of blobs.keys()) if (!images.some(image => image.id === id)) blobs.delete(id); } }, postMessage: (message: Record<string, unknown>) => sent.push(message), onMessage: (listener: typeof receive) => { receive = listener; } } });
+  Object.assign(win, { testHost: { messageInput: options.messageInput, sendAutoFollow: options.sendAutoFollow, performance: options.performance, reportNotice: options.reportNotice, resolveNotice: options.resolveNotice, promptSubmitted: () => { submittedPrompts++; }, attachments, cardRenderer: options.cardRenderer, cardActions: options.cardActions, getState: () => undefined, setState: (state: unknown) => { persisted = state; if (options.releaseOnClear) { const images = (state as { attachments?: { id: string }[] }).attachments ?? []; for (const id of blobs.keys()) if (!images.some(image => image.id === id)) blobs.delete(id); } }, postMessage: (message: Record<string, unknown>) => sent.push(message), onMessage: (listener: typeof receive) => { receive = listener; } } });
   win.eval(rendererBundle() + '\nwindow.testView = PiView.mountPiView(window.testHost);');
   const flush = () => { while (frames.size) { const [id, frame] = frames.entries().next().value!; frames.delete(id); frame(0); } };
   const view = (win as unknown as { testView: import('../src/pi/webview-client').PiView }).testView;
@@ -1020,6 +1020,32 @@ test('Pi coordinate-scaling hints are hidden in user turns without changing hist
     assert.match(user.textContent!, /Updated caption/);
     assert.doesNotMatch(user.textContent!, /Multiply coordinates/);
   } finally { f.dom.window.close(); }
+});
+
+test('composer routes prepared images through the input port and revalidates changed capabilities', async () => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let supportsImages = true;
+  const submitted: import('../src/session-message-input').OutgoingMessage[] = [];
+  const { DEFAULT_IMAGE_INPUT } = await import('../src/session-message-input');
+  const f = fixture({ images: true, imageGate: gate, messageInput: {
+    capabilities: () => supportsImages ? { images: DEFAULT_IMAGE_INPUT } : { imageUnavailableReason: 'Image input no longer available' },
+    submit: async message => { submitted.push(message); },
+  } });
+  try {
+    f.snapshot({ sessionUnavailable: false, messages: [] });
+    f.paste(); await tickImages(); f.send();
+    assert.equal(f.prompt.value, '');
+    supportsImages = false; release(); await tickImages(); f.flush();
+    assert.equal(submitted.length, 0, 'capability loss during byte preparation cannot silently send text');
+    assert.equal(f.sent.filter(message => message.type === 'prompt').length, 0);
+    supportsImages = true; f.paste(); await tickImages(); f.send();
+    const deadline = Date.now() + 2000;
+    while (!submitted.length && Date.now() < deadline) await tickImages();
+    assert.equal(submitted.length, 1);
+    assert.equal(submitted[0].images?.[0].type, 'image');
+    assert.equal(f.sent.filter(message => message.type === 'prompt').length, 0, 'prepared prompts do not use the untyped control-message path');
+  } finally { release(); f.dom.window.close(); }
 });
 
 test('paste uses event images once, preserves newer attachments on ack, and never persists base64', async () => {

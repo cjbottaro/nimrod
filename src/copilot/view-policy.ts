@@ -14,7 +14,6 @@ export function copilotSessionActions(session?: CopilotSession): readonly Sessio
 export function copilotInteraction(validate: (text: string) => string | undefined): ConversationInteraction {
   return {
     label: 'Copilot',
-    unsupportedImages: 'Copilot sessions currently accept text only. No image was attached.',
     commands: copilotSlashCommands,
     keyboardMode: event => keyboardSubmissionMode(event, false),
     composer: state => ({ hint: state.busy ? 'Stop to cancel · Shift+Enter for newline' : 'Enter to send · Shift+Enter for newline', stopLabel: 'Stop Copilot' }),

@@ -56,7 +56,7 @@ import { PiTransport, type Packet } from './pi/transport';
 import { PiSession } from './pi/session';
 import { SessionDrafts, type LastSession } from './pi/session-drafts';
 import { NativeDrafts } from './native-drafts';
-import { referencedAttachments } from './pi/image-attachments';
+import { referencedAttachments } from './image-attachments';
 import { restoreComposerState } from './pi/webview-state';
 import { Dialogs } from './dialogs';
 import { COMMAND_USAGE_KEY, readCommandUsage } from './command-ranking';
@@ -884,6 +884,19 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
     interaction: sdk ? copilotInteraction(text => tab.starting || !copilotSession(tab)
       ? 'Copilot is still connecting. Your draft was kept.' : copilotSession(tab)!.validatePrompt(text)) : acpProfile ? acpInteraction(acpProfile.name, text => tab.starting || !acpSession(tab)
       ? 'ACP is still connecting. Your draft was kept.' : acpSession(tab)!.validatePrompt(text)) : piInteraction,
+    messageInput: {
+      capabilities: () => tab.backend.session?.messageInput.capabilities() ?? { imageUnavailableReason: 'Connect this session before attaching images.' },
+      submit: async message => {
+        const session = tab.backend.session;
+        if (!session || unloading || tab.closing || tab.restarting || tab.deleting || !tabs.includes(tab)) {
+          tab.receive?.({ type: 'submissionReceipt', id: message.id, outcome: 'rejected', error: 'Session is no longer available. Nothing was sent.' });
+          return;
+        }
+        try { const submitted = session.messageInput.submit(message); updateTab(tab); await submitted; }
+        catch (error) { tab.receive?.({ type: 'submissionReceipt', id: message.id, outcome: 'unknown', error: `Delivery was not confirmed: ${String(error)}. Nothing was replayed.` }); }
+        finally { if (tabs.includes(tab) && tab.backend.session === session) updateTab(tab); }
+      },
+    },
     sendAutoFollow: () => preferences.sendAutoFollow(),
     performance: settingsSurface.performanceProbe,
     reportNotice: notice => {
@@ -904,11 +917,11 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
         await popouts.settled();
       },
     },
-    attachments: acpProfile || sdk ? undefined : {
+    attachments: {
       readClipboard: readClipboardImage,
       put: async (blob, name) => {
         if (mode !== 'temporary') return attachmentStore.put(blob, name);
-        const { validateImageDimensions } = await import('./pi/image-attachments');
+        const { validateImageDimensions } = await import('./image-attachments');
         await validateImageDimensions(blob);
         if (imagesDisposed) throw new Error('Temporary session closed while preparing image.');
         const image = { id: crypto.randomUUID(), name: name.slice(0, 200), mimeType: blob.type, size: blob.size };

@@ -5,14 +5,21 @@ The composer shows a thumbnail with a Remove button. Paste again to attach more
 images; add an optional message, then press Enter. Image-only messages work too.
 Text paste retains normal selection/insertion behavior.
 
-Images use the existing delivery controls: Enter sends/steers, and Option-Enter
-(Alt-Enter on Linux) queues a follow-up while Pi is working. Attached images
-appear in user turns, including history restored from Pi. Image attachments cannot
-be combined with slash commands; nothing is sent and the draft remains intact.
+Images work in **Pi and Copilot** sessions. In Pi, Enter sends/steers, and
+Option-Enter (Alt-Enter on Linux) queues a follow-up while Pi is working. Copilot
+sends images while idle; busy Send keeps the draft, without steering or queueing.
+Image-only messages work in both integrations. Image attachments cannot be
+combined with slash commands; nothing is sent and the draft remains intact.
+
+Attachments appear in user turns, including restored history when the harness
+supplies image bytes. Copilot sends inline image blobs—no temporary files or
+file-path references. Unsupported or unavailable saved attachments show their
+reported metadata instead of being fetched from a path or URL.
 
 ## Transcript feedback
 
-Images appear in a local user turn after their bytes are prepared. When Pi starts
+Images appear in a local user turn after their bytes are prepared. Copilot's
+user echo updates that same turn rather than duplicating it. When Pi starts
 that prompt, its actual user turn replaces the preview in place—even if Pi resizes
 or re-encodes the image. Pi's coordinate-scaling note is hidden in the transcript;
 other image-processing notes remain visible. Assistant output follows
@@ -38,10 +45,10 @@ reloads/quits. If an image cannot be read when Send is attempted, nothing is sen
 the attempted message is discarded and the error is shown.
 
 There is no separate image-send recovery section or Restore images action. Images
-in accepted user turns belong to Pi's conversation history. A later model/provider
+in accepted user turns belong to their harness's conversation history. A later model/provider
 failure does not turn an accepted message into a failed send.
 
-Stop's existing queue restoration returns text only. It does not reconstruct image
+Pi Stop's existing queue restoration returns text only. It does not reconstruct image
 attachments; paste an image again if you decide to send it in a new message. Empty
 image-only queue text does not create a blank Restore row.
 
@@ -52,9 +59,15 @@ image-only queue text does not create a blank Restore row.
 - Local image draft storage is bounded to 128 MiB. Unreferenced persistent images
   older than 24 hours are cleaned when another image is saved; temporary storage
   is released when its session closes.
-- Pi remains responsible for model/provider image support and image normalization.
+- The harness remains responsible for model/provider image support and normalization.
+  Copilot's advertised model formats/count/size limits can narrow these bounds;
+  explicitly non-vision models cannot send images. Missing model metadata leaves
+  final acceptance to Copilot. A model change never silently drops draft images.
 - Paste events are the shared path. A native clipboard fallback reads screenshots
   and other OS image representations when the paste event exposes no image/text.
   Finder/file-manager copied files and HTML-only clipboard images are not imported.
+- Copilot SDK delivery and restored image-byte handling have offline fixtures,
+  but those new fixtures have not been run. Installed-CLI/model acceptance and
+  actual-app behavior remain unverified.
 - Native macOS screenshot/image paste and Linux desktop/Wayland clipboard acceptance
   still require manual verification. Native clipboard support varies by desktop. No file picker or drag-and-drop is included yet.

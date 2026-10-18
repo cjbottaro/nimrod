@@ -79,6 +79,19 @@ async function membership(id) {
   if (!sessions.some(item => item.sessionId === id && !item.isRemote && item.context?.workingDirectory === cwd))
     throw new Error('This exact saved session is not listed in this project. Nothing was loaded or deleted.');
 }
+function promptImages(value) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 8) throw new Error('Invalid image attachments');
+  let total = 0;
+  return value.map(image => {
+    if (!image || image.type !== 'image' || !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(image.mimeType)
+      || typeof image.data !== 'string' || !image.data.length || image.data.length > Math.ceil(4 * 1024 * 1024 / 3) * 4
+      || image.data.length % 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(image.data)) throw new Error('Invalid image attachment');
+    const bytes = image.data.length / 4 * 3 - (image.data.endsWith('==') ? 2 : image.data.endsWith('=') ? 1 : 0);
+    if (bytes > 4 * 1024 * 1024 || (total += bytes) > 8 * 1024 * 1024) throw new Error('Image attachments exceed the size limit');
+    return { type: 'blob', data: image.data, mimeType: image.mimeType };
+  });
+}
 async function dispatch(message) {
   if (!message || typeof message !== 'object' || typeof message.id !== 'string') throw new Error('Invalid bridge request');
   if (message.method === 'decision') {
@@ -201,11 +214,14 @@ async function dispatch(message) {
         return result;
       } finally { commandExecuting = false; }
     }
-    case 'prompt':
+    case 'prompt': {
       if (!session) throw new Error('No connected Copilot session');
-      if (typeof message.text !== 'string' || message.text.trimStart().startsWith('/')) throw new Error('Slash commands must use the command invocation API');
+      if (typeof message.text !== 'string' || message.text.length > 1_000_000 || message.text.trimStart().startsWith('/')) throw new Error('Invalid prompt; slash commands must use the command invocation API');
+      const attachments = promptImages(message.images);
+      if (!message.text.trim() && !attachments.length) throw new Error('A message or image is required');
       working = true;
-      return await session.send({ prompt: message.text, mode: 'immediate' });
+      return await session.send({ prompt: message.text, ...(attachments.length ? { attachments } : {}), mode: 'immediate' });
+    }
     case 'cancel':
       if (!session) throw new Error('No connected Copilot session');
       cancelDecisions();

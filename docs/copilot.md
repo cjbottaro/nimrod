@@ -152,7 +152,24 @@ Copilot skills. Full original output remains available; links open only through
 an explicit action. These follow-up card/permission changes still need native
 acceptance after a requested build.
 
-Current limits: text-only input; no Restart, steering, queue, Pi MCP inspector
+### Images
+
+Paste a screenshot or image into the prompt field, add an optional caption, then
+send while Copilot is idle. [Image paste](image-paste.md) shares the same
+thumbnails, per-session draft storage, immediate clearing and auto-follow as Pi.
+Image-only messages are supported. Copilot receives inline image blobs; no
+temporary files are created. Live echoes update the preview in place, and restored
+inline image attachments render in history. Missing/omitted image bytes show an
+explicit unavailable fallback instead of fetching private files or URLs.
+
+The selected model's reported vision support and image limits are respected.
+When model metadata is missing, Copilot decides actual model acceptance. Busy
+Send keeps the draft; it does not steer or enqueue. Images cannot accompany slash
+commands. Failed/uncertain sends do not restore or replay images or alter a newer
+draft. New offline image fixtures are authored but unrun; installed-CLI/model and
+native clipboard/history acceptance remain pending.
+
+Current limits: no Restart, steering, queue, Pi MCP inspector
 or in-place harness switching. Slash commands use the SDK's supported interface,
 not full terminal-UI emulation; see below.
 Interactive, Plan and Autopilot sessions are supported through the SDK. Generic

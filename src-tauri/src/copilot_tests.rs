@@ -50,6 +50,26 @@ fn bridge_records_are_not_acp_or_pi_packets() {
 }
 
 #[test]
+fn image_prompts_accept_inline_bytes_and_reject_invalid_or_oversized_inputs() {
+    let image = json!({"type":"image","mimeType":"image/png","data":"YWJj"});
+    for text in ["", "Image caption"] {
+        assert!(validate_message(&json!({"id":"image","method":"prompt","text":text,"images":[image.clone()]})).is_ok());
+    }
+    for images in [
+        json!(null), json!({}), json!(vec![image.clone(); 9]),
+        json!([{"type":"image","mimeType":"image/svg+xml","data":"YWJj"}]),
+        json!([{"type":"image","mimeType":"image/png","data":"javascript:evil"}]),
+        json!([{"type":"image","mimeType":"image/png","data":"===="}]),
+        json!([{"type":"image","mimeType":"image/png","data":"AAAA".repeat(1_400_000)}]),
+        json!(vec![json!({"type":"image","mimeType":"image/png","data":"AAAA".repeat(1_000_000)}); 3]),
+    ] {
+        assert!(validate_message(&json!({"id":"image","method":"prompt","text":"caption","images":images})).is_err());
+    }
+    assert!(validate_message(&json!({"id":"image","method":"prompt","text":"/command","images":[image]})).is_err());
+    assert!(validate_message(&json!({"id":"image","method":"prompt","text":"","images":[]})).is_err());
+}
+
+#[test]
 fn configuration_records_accept_current_setting_value_contract() {
     for (setting, value) in [
         ("model", "large"),

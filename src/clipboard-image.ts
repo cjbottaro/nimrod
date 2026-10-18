@@ -1,5 +1,5 @@
 import { readImage } from '@tauri-apps/plugin-clipboard-manager';
-import { MAX_IMAGE_PIXELS } from './pi/image-attachments';
+import { MAX_IMAGE_PIXELS } from './image-attachments';
 
 /** User-triggered fallback for native screenshot/TIFF clipboard representations. */
 export async function readClipboardImage(): Promise<Blob | undefined> {

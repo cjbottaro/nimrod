@@ -1,3 +1,4 @@
+import type { SessionMessageInput } from '../session-message-input';
 import type { ToolCaptureSink } from '../tool-capture';
 import { AcpClient, type AcpPermissionRequest, type AcpSessionUpdate } from './client';
 import { AcpConnectionError, isRecord, type AcpPacket, type AcpRecord } from './connection';
@@ -139,6 +140,11 @@ export class AcpSession {
     }, 20_000); });
     try { return await Promise.race([task, timeout]); } finally { clearTimeout(timer); }
   }
+  readonly messageInput: SessionMessageInput = {
+    capabilities: () => ({ imageUnavailableReason: 'This ACP proof of concept accepts text only. No image was attached.' }),
+    submit: ({ images, ...message }) => this.handle({ ...message, ...(images?.length ? { images } : {}), type: 'prompt' }),
+  };
+
   async handle(message: AcpRecord): Promise<void> {
     this.capture('ui.action', message, this.client.sessionId || '', '');
     if (message.type === 'stop') { this.client.cancel(); return; }

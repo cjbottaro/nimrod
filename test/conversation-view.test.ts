@@ -72,6 +72,7 @@ function fixture() {
   const sent: Record<string, unknown>[] = [];
   const host: ConversationViewHost = {
     interaction: acpInteraction('Fixture', () => undefined),
+    messageInput: { capabilities: () => ({}), submit: async message => { sent.push({ ...message, type: 'prompt' }); } },
     getState: () => undefined, setState() {}, postMessage: message => sent.push(message),
     onMessage: listener => { receive = listener; },
   };
