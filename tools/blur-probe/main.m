@@ -9,6 +9,7 @@
 #import <stdatomic.h>
 
 static int (*connectionID)(void);
+static int (*threadConnectionID)(void);
 static int (*setRadius)(int, uint32_t, uint32_t);
 static int (*setRadiusStyle)(int, uint32_t, uint32_t, bool);
 static int (*setRadiusHint)(int, uint32_t, uint32_t, float);
@@ -38,8 +39,57 @@ static int resultCode = 1;
         [[NSColor colorWithSRGBRed:.08 green:.1 blue:.14 alpha:.5] setFill];
         NSRectFillUsingOperation(self.bounds, NSCompositingOperationSourceOver);
     }
+    if (self.backdrop && [options[@"landmarks"] boolValue]) {
+        [[NSColor colorWithSRGBRed:.95 green:.2 blue:.1 alpha:1] setFill];
+        NSRectFill(NSMakeRect(0,300,self.bounds.size.width,110));
+        [[NSColor colorWithSRGBRed:.1 green:.8 blue:.55 alpha:1] setFill];
+        NSRectFill(NSMakeRect(0,130,self.bounds.size.width,110));
+    }
     NSDictionary *attrs = @{NSFontAttributeName:[NSFont monospacedSystemFontOfSize:20 weight:NSFontWeightBold], NSForegroundColorAttributeName:NSColor.whiteColor};
     for (int i=0;i<8;i++) [@"STATIC FIXTURE 012345" drawAtPoint:NSMakePoint(16,20+i*42) withAttributes:attrs];
+}
+@end
+
+// Independently implemented probe of Zed's material policy: clear layer fills,
+// hide desktop-tint layers, and remove saturation filters after AppKit updates.
+// Pinned source and scope are documented in upstream-comparison.md.
+static NSInteger stripMaterialTint(CALayer *layer, NSNumber *radius) {
+    NSInteger adjusted=0;
+    layer.backgroundColor = nil;
+    if ([NSStringFromClass(layer.class) isEqualToString:@"CAChameleonLayer"]) {
+        layer.hidden = YES;
+        return 0;
+    }
+    NSMutableArray *filters = [NSMutableArray new];
+    for (id filter in layer.filters) {
+        if ([[filter description] containsString:@"Saturat"]) continue;
+        if (radius && [[filter description] containsString:@"gaussianBlur"]) {
+            // Replace, rather than mutate the object already installed in the
+            // layer: equal filter-array identities can suppress a CA update.
+            id replacement=[filter copy];
+            [replacement setValue:radius forKey:@"inputRadius"];
+            [filters addObject:replacement];
+            ++adjusted;
+            continue;
+        }
+        [filters addObject:filter];
+    }
+    if (adjusted || filters.count != layer.filters.count) layer.filters = filters;
+    for (CALayer *child in layer.sublayers) adjusted+=stripMaterialTint(child,radius);
+    return adjusted;
+}
+@interface ZedProbeEffect : NSVisualEffectView
+@property NSNumber *probeRadius;
+@property NSNumber *loggedRadius;
+@end
+@implementation ZedProbeEffect
+- (void)updateLayer {
+    [super updateLayer];
+    NSInteger adjusted=self.layer ? stripMaterialTint(self.layer,self.probeRadius) : 0;
+    if (self.probeRadius && ![self.probeRadius isEqual:self.loggedRadius]) {
+        NSLog(@"material requested radius=%@ configured gaussian filters=%ld",self.probeRadius,adjusted);
+        self.loggedRadius=self.probeRadius;
+    }
 }
 @end
 
@@ -50,6 +100,7 @@ static int resultCode = 1;
 @property FILE *metrics;
 @property int frameNumber;
 @property NSRect backdropFrame;
+@property NSMutableDictionary<NSNumber *, NSVisualEffectView *> *effectViews;
 @end
 @implementation Probe
 - (NSWindow *)windowAt:(NSRect)rect title:(NSString *)title web:(BOOL)web backdrop:(BOOL)backdrop {
@@ -66,7 +117,9 @@ static int resultCode = 1;
     w.titlebarAppearsTransparent = YES;
     w.opaque = backdrop;
     double alpha = options[@"backingAlpha"] ? [options[@"backingAlpha"] doubleValue] : .0001;
-    w.backgroundColor = [NSColor colorWithSRGBRed:0 green:0 blue:0 alpha:backdrop ? 1 : alpha];
+    w.backgroundColor = !backdrop && [options[@"whiteBacking"] boolValue]
+        ? [NSColor.whiteColor colorWithAlphaComponent:alpha]
+        : [NSColor colorWithSRGBRed:0 green:0 blue:0 alpha:backdrop ? 1 : alpha];
     w.hasShadow = !backdrop && !(options[@"noShadow"] && [options[@"noShadow"] boolValue]);
     w.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
     if (web) {
@@ -82,6 +135,13 @@ static int resultCode = 1;
         scene.backdrop = backdrop;
         scene.wantsLayer = !backdrop && ![options[@"unlayered"] boolValue];
         w.contentView = scene;
+    }
+    if (!backdrop && options[@"material"]) {
+        NSView *front = w.contentView;
+        NSView *container = [[NSView alloc] initWithFrame:front.bounds];
+        front.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+        w.contentView = container;
+        [container addSubview:front];
     }
     if (!backdrop && [options[@"noFlatten"] boolValue]) [w setValue:@NO forKey:@"shouldAutoFlattenLayerTree"];
     if (!backdrop && [options[@"rehost"] boolValue]) {
@@ -101,6 +161,7 @@ static int resultCode = 1;
         [NSApp terminate:nil]; return;
     }
     self.windows = [NSMutableArray new];
+    self.effectViews = [NSMutableDictionary new];
     NSRect visible = NSScreen.mainScreen.visibleFrame;
     self.backdropFrame = NSMakeRect(visible.origin.x+40,visible.origin.y+40,1080,560);
     if (!NSContainsRect(visible,self.backdropFrame)) { NSLog(@"Screen is too small for the complete fixture; aborting"); [NSApp terminate:nil]; return; }
@@ -173,11 +234,44 @@ static int resultCode = 1;
         return;
     }
     atomic_store(&phaseIndex,phase);
-    int cid=connectionID();
+    int cid=[options[@"threadConnection"] boolValue] ? threadConnectionID() : connectionID();
+    if (phase==0) NSLog(@"main connection=%d selected connection=%d threadDefault=%d",connectionID(),cid,[options[@"threadConnection"] boolValue]);
     CFTimeInterval before=CACurrentMediaTime();
     int begin=batched ? disableUpdates(cid) : 0;
     if (begin==0) {
         for (int i=1;i<=2;i++) if (targets[phase]&i) {
+            if (options[@"material"]) {
+                NSVisualEffectView *effect=self.effectViews[@(i)];
+                if (radii[phase]==0) {
+                    [effect removeFromSuperview];
+                    [self.effectViews removeObjectForKey:@(i)];
+                } else if (!effect) {
+                    NSView *container=self.windows[i].contentView;
+                    Class effectClass=[options[@"material"] isEqual:@"zed"] ? ZedProbeEffect.class : NSVisualEffectView.class;
+                    effect=[[effectClass alloc] initWithFrame:container.bounds];
+                    effect.material=NSVisualEffectMaterialUnderWindowBackground;
+                    effect.blendingMode=NSVisualEffectBlendingModeBehindWindow;
+                    effect.state=NSVisualEffectStateActive;
+                    effect.autoresizingMask=NSViewWidthSizable | NSViewHeightSizable;
+                    [container addSubview:effect positioned:NSWindowBelow relativeTo:nil];
+                    self.effectViews[@(i)]=effect;
+                }
+                if ([options[@"materialRadius"] boolValue] && [effect isKindOfClass:ZedProbeEffect.class] && radii[phase]!=0) {
+                    ((ZedProbeEffect *)effect).probeRadius=@(radii[phase]);
+                    effect.needsDisplay=YES;
+                }
+                NSLog(@"phase=%d time=%.6f target=%d material=%@ enabled=%d radiusOverride=%d",phase,before-started,i,options[@"material"],radii[phase]!=0,[options[@"materialRadius"] boolValue]);
+                continue;
+            }
+            if ([options[@"ghosttySync"] boolValue]) {
+                // Mirror TerminalWindow.syncAppearance's numeric-blur path,
+                // not its separate glass materials or renderer implementation.
+                NSWindow *w=self.windows[i];
+                w.appearance=[NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
+                w.hasShadow=YES;
+                w.opaque=NO;
+                w.backgroundColor=[NSColor.whiteColor colorWithAlphaComponent:.001];
+            }
             int status=options[@"opacityHint"] && setRadiusHint
                 ? setRadiusHint(cid,(uint32_t)self.windows[i].windowNumber,radii[phase],[options[@"opacityHint"] floatValue])
                 : alternateStyle ? setRadiusStyle(cid,(uint32_t)self.windows[i].windowNumber,radii[phase],false) : setRadius(cid,(uint32_t)self.windows[i].windowNumber,radii[phase]);
@@ -236,10 +330,11 @@ int main(int argc,const char **argv) {
         }
         void *handle=dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight",RTLD_LAZY);
         connectionID=dlsym(handle,"CGSMainConnectionID"); setRadius=dlsym(handle,"CGSSetWindowBackgroundBlurRadius");
+        threadConnectionID=dlsym(handle,"CGSDefaultConnectionForThread");
         setRadiusStyle=dlsym(handle,"SLSSetWindowBackgroundBlurRadiusStyle");
         setRadiusHint=dlsym(handle,"SLSSetWindowBackgroundBlurRadiusWithOpacityHint");
         disableUpdates=dlsym(handle,"SLSDisableUpdate"); reenableUpdates=dlsym(handle,"SLSReenableUpdate");
-        if(!connectionID || !setRadius || (batched && (!disableUpdates || !reenableUpdates)) || (alternateStyle && !setRadiusStyle) || (options[@"opacityHint"] && !setRadiusHint)) return 2;
+        if(!connectionID || !setRadius || (options[@"threadConnection"] && !threadConnectionID) || (batched && (!disableUpdates || !reenableUpdates)) || (alternateStyle && !setRadiusStyle) || (options[@"opacityHint"] && !setRadiusHint)) return 2;
         [NSApplication sharedApplication];
         [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
         Probe *delegate=[Probe new]; NSApp.delegate=delegate;

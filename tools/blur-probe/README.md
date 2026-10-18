@@ -73,6 +73,12 @@ directory's optional `options.json` supports:
 | `noFlatten` | Disable AppKit's private automatic layer flattening |
 | `rehost` | Toggle the private layer-hosting property once during setup |
 | `unlayered` | Disable requested layer backing on the plain AppKit view (not yet run) |
+| `threadConnection` | Use `CGSDefaultConnectionForThread` instead of `CGSMainConnectionID`, logging both IDs |
+| `whiteBacking` | Use Ghostty's white backing instead of black (combine with `backingAlpha: 0.001`) |
+| `ghosttySync` | Reassert Ghostty-like appearance/shadow/white backing before each numeric setter |
+| `material` | `zed`: cleaned NSVisualEffectView; `system`: stock material. Replaces the numeric setter with fixed-strength live insertion/removal |
+| `materialRadius` | With `material: "zed"`, experimentally copy/replace the Gaussian filter to adjust strength; not upstream Zed behavior |
+| `landmarks` | Add large red/green bands so real backdrop sampling can be distinguished from a flat-grey fill |
 
 These are **experiments, not production recommendations**. The redraw/flush cases
 deliberately test work excluded from Nimrod's synchronous batch contract. No sleep
@@ -133,10 +139,11 @@ shows one window's setter flashing an unchanged peer. Existing batching is not a
 effective fix on this host. This experiment does not identify the precise internal
 WindowServer allocation/rendering bug or prove behavior on other OS releases.
 
-No production workaround is landed. Further work should evaluate a different,
-persistent native backdrop implementation while preserving independent tint, truly
-sharp zero blur, system-owned corners, accessibility and resize/full-screen
-behavior. A hidden nonzero minimum, screenshots covering the transition, changing
+No production workaround is landed. The [upstream comparison and follow-up](upstream-comparison.md)
+found a promising Zed-style material-backed candidate, including a separately tested
+adjustable-radius extension. It did not require a persistent warm effect at zero.
+This remains fixture evidence, with independent tint, truly sharp zero, native title
+bar/corners, accessibility and resize/full-screen integration still requiring validation. A hidden nonzero minimum, screenshots covering the transition, changing
 window geometry, disabling shadows or a new tinted material would change the
 contract rather than establish a correct fix.
 
