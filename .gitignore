@@ -12,6 +12,7 @@ target/
 /.theme-source-cache/
 
 # Test artifacts
+/tmp/blur-probe/
 /test-results/
 /playwright-report/
 /coverage/
