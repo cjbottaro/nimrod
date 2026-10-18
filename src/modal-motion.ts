@@ -13,7 +13,7 @@ function motion(document: Document, exit = false): Motion {
   const style = root.dataset.modalAnimation as ModalAnimationStyle || 'subtle';
   const reduced = view.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const duration = parseFloat(view.getComputedStyle(root).getPropertyValue(exit ? '--modal-exit-duration' : '--modal-enter-duration'));
-  return { style, duration: reduced || style === 'none' ? 0 : Number.isFinite(duration) ? duration : exit ? style === 'crt' ? 200 : 120 : 160 };
+  return { style, duration: reduced || style === 'none' ? 0 : Number.isFinite(duration) ? duration : exit ? style === 'crt' ? 128 : 120 : 160 };
 }
 
 /** Preserve ID-based styling without duplicating live DOM IDs, even across shadow queries. */

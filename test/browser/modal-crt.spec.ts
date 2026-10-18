@@ -47,7 +47,7 @@ for (const duration of [160, 500]) {
       expect(exit.open).toBe(false); expect(exit.focused).toBe('modal-animation-preview');
       expect(exit.inert).toBe(true); expect(exit.pointerEvents).toBe('none');
       expect(exit.durations.length).toBeGreaterThanOrEqual(2);
-      expect(exit.durations.every(value => value === Math.round(duration * 1.25))).toBe(true);
+      expect(exit.durations.every(value => value === Math.round(duration * .8))).toBe(true);
       expect(exit.reverse).toBe(true);
       expect(exit.layerOpacity).toBe('1'); expect(exit.panelOpacity).toBe('1');
       expect(Number(exit.backdropOpacity)).toBeLessThan(1);

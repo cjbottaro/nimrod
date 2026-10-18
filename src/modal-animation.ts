@@ -22,5 +22,5 @@ export function applyModalAnimation(root: HTMLElement, animation: ModalAnimation
   if (root.dataset.modalAnimation !== animation.style || root.style.getPropertyValue('--modal-enter-duration') !== `${animation.style === 'none' ? 0 : animation.duration}ms`) clearModalMotion(root.ownerDocument);
   root.dataset.modalAnimation = animation.style;
   root.style.setProperty('--modal-enter-duration', `${animation.style === 'none' ? 0 : animation.duration}ms`);
-  root.style.setProperty('--modal-exit-duration', `${animation.style === 'none' ? 0 : Math.round(animation.duration * (animation.style === 'crt' ? 1.25 : .75))}ms`);
+  root.style.setProperty('--modal-exit-duration', `${animation.style === 'none' ? 0 : Math.round(animation.duration * (animation.style === 'crt' ? .8 : .75))}ms`);
 }

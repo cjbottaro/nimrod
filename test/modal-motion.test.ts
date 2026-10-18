@@ -45,7 +45,7 @@ test('closing is immediate, exit copies are inert and isolated, and new opens re
     assert.equal(snapshot.querySelectorAll('[id]').length, 0);
     assert.equal(f.document.querySelectorAll('#sample').length, 1);
     const exits = f.records.filter(record => layer.contains(record.node));
-    assert.ok(exits.every(record => record.options.duration === 625 && record.options.direction === 'reverse'));
+    assert.ok(exits.every(record => record.options.duration === 400 && record.options.direction === 'reverse'));
     assert.equal(exits.some(record => record.node === layer), false); // No whole-layer opacity fade.
     const panel = exits.find(record => record.node.shadowRoot)!;
     assert.ok(panel.frames.every(frame => !('opacity' in frame)));

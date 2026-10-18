@@ -207,7 +207,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
       ? 'A theme-accent horizontal line expands up and down like a CRT powering on.'
       : animation.style === 'subtle' ? 'A short fade, lift and gentle scale.' : 'Dialogs appear and disappear instantly; your duration is remembered.')
       + (animation.style === 'crt'
-        ? ' Closing reverses the motion without fading the panel and takes 25% longer.'
+        ? ' Closing reverses the motion without fading the panel and takes 20% less time.'
         : animation.style === 'subtle' ? ' Dismissal is 25% faster.' : '')
       + ' Default duration: 160 ms. Reduced motion disables animations.';
   }

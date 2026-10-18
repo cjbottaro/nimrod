@@ -18,7 +18,7 @@
   --modal-shadow:0 12px 48px var(--vscode-widget-shadow);
 }
 :root[data-modal-animation="crt"] {
-  --modal-exit-duration:200ms;
+  --modal-exit-duration:128ms;
   --modal-enter-animation:modal-crt-enter;
   --modal-enter-easing:cubic-bezier(.2,.8,.2,1);
   --modal-transform-origin:center;
