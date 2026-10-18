@@ -23,15 +23,21 @@ export class TranscriptScroll {
     // Completion collapse can clamp the viewport upward to a new document
     // bottom. That is layout, not a reader choosing to leave live-follow.
     const clampedToBottom = max < this.lastMaxScroll && y >= max - 1;
-    // At fractional zoom WebKit can settle a programmatic scroll a pixel above
-    // the value read immediately after assignment. A new turn may already have
-    // grown the transcript while its follow frame is pending, so the deferred
-    // event still denotes the OLD bottom. Comparing only with the new bottom
-    // mistakes that rounding for upward navigation and cancels follow permanently.
+    // A programmatic bottom scroll can arrive after its follow frame has flushed
+    // AND an image has grown the transcript. Compare rounding with the settled
+    // old bottom even without a pending frame; the new extent is not reader intent.
     // Wheel/touch/key intent cancels separately, before this tolerance applies.
-    const roundingBottom = this.pending ? Math.min(max, this.lastMaxScroll) : max;
+    const roundingBottom = Math.min(max, this.lastMaxScroll);
     const roundedAtBottom = Math.abs(y - this.lastScrollY) <= 2
       && y >= roundingBottom - 2 && this.lastScrollY >= this.lastMaxScroll - 2;
+    if (max > this.lastMaxScroll && !this.interrupted && this.lastScrollY >= this.lastMaxScroll - 80
+      && (y >= this.lastScrollY || roundedAtBottom)) {
+      this.request(true);
+      // An unchanged/rounded old offset must not overwrite settled follow geometry
+      // with the new extent before image-load/resize or the next follow frame.
+      // Keep that same baseline across repeated delayed events (no rounding drift).
+      if (y <= this.lastScrollY) return;
+    }
     if (y < this.lastScrollY && !clampedToBottom && !roundedAtBottom) this.cancel();
     else if (y > this.lastScrollY && this.isNearBottom()) this.interrupted = false;
     this.lastScrollY = y;

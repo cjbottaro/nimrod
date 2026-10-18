@@ -976,7 +976,7 @@ test('idle image Send follows before preparation and does not override later upw
   } finally { release(); f.dom.window.close(); }
 });
 
-for (const readAfterSend of [false, true]) test(`decoded image follows after Send frames settle (reader: ${readAfterSend})`, async () => {
+for (const readAfterSend of [false, true]) test(`decoded image follows despite a late scroll event after Send settles (reader: ${readAfterSend})`, async () => {
   const f = fixture({ images: true });
   try {
     const s = scrollFixture(f);
@@ -987,10 +987,13 @@ for (const readAfterSend of [false, true]) test(`decoded image follows after Sen
     assert.ok(f.sent.some(message => message.type === 'prompt'));
     f.flush();
     assert.equal(s.pane.scrollTop, 1600);
+    f.win.dispatchEvent(new f.win.Event('resize')); // Settle the real pane dimensions before the raced event.
     if (readAfterSend) s.readHistory();
     const image = f.win.document.querySelector<HTMLImageElement>('#messages .transcript-image img')!;
     assert.ok(image);
-    s.grow(); image.dispatchEvent(new f.win.Event('load')); f.flush();
+    s.grow();
+    s.pane.dispatchEvent(new f.win.Event('scroll')); // Previous programmatic scroll arrives after image growth.
+    image.dispatchEvent(new f.win.Event('load')); f.flush();
     assert.equal(s.pane.scrollTop, readAfterSend ? 200 : 2100);
   } finally { f.dom.window.close(); }
 });

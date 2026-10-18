@@ -24,7 +24,8 @@ that prompt, its actual user turn replaces the preview in place—even if Pi res
 or re-encodes the image. Pi's coordinate-scaling note is hidden in the transcript;
 other image-processing notes remain visible. Assistant output follows
 that single turn; ordinary idle sends are never pinned. Images that finish loading
-later retain auto-follow, unless you have scrolled up to read earlier messages.
+later retain auto-follow through the image and subsequent output, unless you
+have scrolled up to read earlier messages.
 Sending images uses the same **Auto-follow after sending** preference as text. Explicit queued follow-ups
 retain their [usual sticky behavior](writing-messages.md#queued-messages) until consumed.
 
