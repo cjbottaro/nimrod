@@ -68,6 +68,11 @@ test('native form/default cancel coverage does not change defaults, duplicate co
     const form = f.dialog.querySelector('form')!;
     const submit = new f.dom.window.Event('submit', { bubbles: true, cancelable: true });
     assert.equal(form.dispatchEvent(submit), true);
+    // Trusted input can checkpoint here, before the browser's default action.
+    // A microtask must not throw away the pre-close visual capture.
+    await Promise.resolve();
+    assert.equal(f.dialog.open, true);
+    assert.equal(f.document.querySelectorAll('[data-modal-motion=exit]').length, 0);
     f.dialog.close('ok'); // Simulate the native method=dialog default.
     await Promise.resolve();
     assert.equal(f.document.querySelectorAll('[data-modal-motion=exit]').length, 1);
@@ -81,6 +86,11 @@ test('native form/default cancel coverage does not change defaults, duplicate co
     f.dialog.addEventListener('cancel', event => { event.preventDefault(); closeModal(f.dialog); }, { once: true });
     f.dialog.dispatchEvent(new f.dom.window.Event('cancel', { cancelable: true })); await Promise.resolve();
     assert.equal(f.dialog.open, false);
+    assert.equal(f.document.querySelectorAll('[data-modal-motion=exit]').length, 1);
+    showModal(f.dialog);
+    f.dialog.dispatchEvent(new f.dom.window.Event('cancel', { cancelable: true }));
+    await Promise.resolve(); // Same pre-default checkpoint for native Escape.
+    f.dialog.close();
     assert.equal(f.document.querySelectorAll('[data-modal-motion=exit]').length, 1);
   } finally { f.dispose(); }
 });

@@ -3,6 +3,7 @@ import type { ModalAnimationStyle } from './modal-animation';
 interface Motion { style: ModalAnimationStyle; duration: number }
 interface Snapshot { shell: HTMLElement; rect: DOMRect; zoom: number; backdrop: string; motion: Motion; opacity: string; clip: string; restoreScroll(): void }
 interface Layer { source: HTMLElement; node: HTMLElement; animations: Animation[]; timer?: number }
+interface NativeDismissal { event: Event; generation?: number; epoch: number; snapshot?: Snapshot }
 const owners = new WeakMap<Document, ReturnType<typeof createModalMotion>>();
 const styles = new WeakMap<CSSStyleSheet, { count: number; text: string }>();
 // Shared beam sequence: CRT dismissal plays exactly this entrance backwards.
@@ -43,7 +44,8 @@ function createModalMotion(document: Document) {
   const view = document.defaultView!;
   const layers = new Set<Layer>();
   const generations = new WeakMap<HTMLElement, number>();
-  const pending = new WeakMap<HTMLElement, Snapshot | undefined>();
+  let pending = new WeakMap<HTMLElement, NativeDismissal>();
+  const pendingCleanup = new Set<number>();
   let disposed = false, epoch = 0;
   const bump = (source: HTMLElement) => { const next = (generations.get(source) ?? 0) + 1; generations.set(source, next); return next; };
   function remove(layer: Layer) {
@@ -51,7 +53,12 @@ function createModalMotion(document: Document) {
     if (layer.timer !== undefined) view.clearTimeout(layer.timer);
     layer.node.remove();
   }
-  const clear = () => { epoch++; for (const layer of [...layers]) remove(layer); };
+  const clear = () => {
+    epoch++; for (const layer of [...layers]) remove(layer);
+    pending = new WeakMap();
+    for (const timer of pendingCleanup) view.clearTimeout(timer);
+    pendingCleanup.clear();
+  };
   function mount(source: HTMLElement, kind: 'enter' | 'exit') {
     const node = document.createElement('div');
     node.dataset.modalMotion = kind; node.setAttribute('aria-hidden', 'true'); node.inert = true;
@@ -194,7 +201,7 @@ function createModalMotion(document: Document) {
     });
   }
   function closing(source: HTMLElement, close: () => void) {
-    const snapshot = pending.has(source) ? pending.get(source) : safeCapture(source);
+    const snapshot = pending.has(source) ? pending.get(source)!.snapshot : safeCapture(source);
     pending.delete(source); bump(source);
     close(); present(source, snapshot);
   }
@@ -202,21 +209,35 @@ function createModalMotion(document: Document) {
     const target = event.target;
     const dialog = target instanceof view.HTMLDialogElement ? target : target instanceof view.HTMLFormElement && target.method === 'dialog' ? target.closest('dialog') : null;
     if (!dialog?.matches('.nimrod-modal') || !dialog.open) return;
-    const generation = generations.get(dialog), closingEpoch = epoch, snapshot = safeCapture(dialog);
-    pending.set(dialog, snapshot);
-    queueMicrotask(() => {
-      pending.delete(dialog);
-      if (!event.defaultPrevented && !dialog.open && epoch === closingEpoch && generations.get(dialog) === generation) { bump(dialog); present(dialog, snapshot); }
-    });
+    const record: NativeDismissal = { event, generation: generations.get(dialog), epoch, snapshot: safeCapture(dialog) };
+    pending.set(dialog, record);
+    // Trusted input can checkpoint microtasks between event listeners, before
+    // the form/cancel default closes the dialog. Keep the capture for the real
+    // close event instead of assuming a microtask runs after that default.
+    const timer = view.setTimeout(() => {
+      pendingCleanup.delete(timer);
+      if (pending.get(dialog) === record && (event.defaultPrevented || dialog.open)) pending.delete(dialog);
+    }, 0);
+    pendingCleanup.add(timer);
+  };
+  const nativeClosed = (event: Event) => {
+    const dialog = event.target;
+    if (!(dialog instanceof view.HTMLDialogElement)) return;
+    const record = pending.get(dialog); pending.delete(dialog);
+    if (record && !record.event.defaultPrevented && !dialog.open && epoch === record.epoch && generations.get(dialog) === record.generation) {
+      bump(dialog); present(dialog, record.snapshot);
+    }
   };
   document.addEventListener('cancel', nativeDismissal, true);
   document.addEventListener('submit', nativeDismissal, true);
+  document.addEventListener('close', nativeClosed, true);
   const reduced = view.matchMedia?.('(prefers-reduced-motion: reduce)');
   reduced?.addEventListener('change', clear);
   view.addEventListener('resize', clear); view.addEventListener('pagehide', clear);
   return { opening, closing, clear, dispose() {
     disposed = true; clear(); owners.delete(document);
     document.removeEventListener('cancel', nativeDismissal, true); document.removeEventListener('submit', nativeDismissal, true);
+    document.removeEventListener('close', nativeClosed, true);
     reduced?.removeEventListener('change', clear);
     view.removeEventListener('resize', clear); view.removeEventListener('pagehide', clear);
   } };
