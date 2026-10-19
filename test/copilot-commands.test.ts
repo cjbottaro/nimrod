@@ -197,7 +197,7 @@ test('finalized harness model effects reconcile configuration without invoking N
   try {
     const handling = f.session.handle({ type: 'command', id: 'model', text: '/model large' });
     f.reply({ kind: 'set-model', model: 'large', reasoningEffort: 'high', effectFinalized: true,
-      model: { modelId: 'large', reasoningEffort: 'high' }, warning: 'Preview model' });
+      configuration: { modelId: 'large', reasoningEffort: 'high' }, warning: 'Preview model' });
     await handling;
     assert.equal(f.session.configuration.get('model'), 'large');
     assert.equal(f.session.configuration.get('effort'), 'high');

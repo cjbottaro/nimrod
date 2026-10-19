@@ -296,8 +296,8 @@ export class CopilotSession {
           await this.sendPrompt(id, result.prompt, result.displayPrompt);
           return;
         } else if (result.kind === 'set-model') {
-          if (result.effectFinalized !== true || !record(result.model)) throw new Error('Copilot returned an incomplete finalized model effect.');
-          this.applyConfigurationSnapshot(result.model);
+          if (result.effectFinalized !== true || !record(result.configuration)) throw new Error('Copilot returned an incomplete finalized model effect.');
+          this.applyConfigurationSnapshot(result.configuration);
           if (typeof result.warning === 'string' && result.warning) this.ui.notice(result.warning);
         } else if (result.kind === 'set-plan-model') {
           if (result.effectFinalized !== true || typeof result.message !== 'string') throw new Error('Copilot returned an incomplete finalized plan-model effect.');
