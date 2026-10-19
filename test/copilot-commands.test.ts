@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
+import readOnlyCommands from './fixtures/copilot-read-only-commands.json' with { type: 'json' };
 import { copilotCommands, copilotSlashCommands, isCopilotModelCommand, parseCopilotCommand } from '../src/copilot/commands';
 import { CopilotSession, type CopilotSessionUi } from '../src/copilot/session';
 import type { BridgeRequest } from '../src/copilot/connection';
@@ -87,6 +88,23 @@ test('text commands invoke the SDK once, render labelled output, and never becom
     assert.equal(f.sent.some(request => request.method === 'prompt'), false);
     assert.equal(f.session.canSubmit, true);
     assert.equal(f.published.some(message => message.type === 'submissionMessage'), false);
+    assert.deepEqual(f.completions, []);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+for (const captured of readOnlyCommands) test(`captured read-only /${captured.name} uses generic command output`, async () => {
+  const f = await fixture(undefined, [captured.command]);
+  try {
+    const text = `/${captured.command.name}${captured.input === undefined ? '' : ` ${captured.input}`}`;
+    const handling = f.session.handle({ type: 'command', id: captured.name, text });
+    assert.equal(f.sent.at(-1)?.method, 'command');
+    assert.equal(f.sent.at(-1)?.name, captured.command.name);
+    assert.equal(f.sent.at(-1)?.input, captured.input);
+    f.reply(captured.result); await handling;
+    const output = f.session.state.messages.at(-1)!;
+    assert.equal(output.role, 'command');
+    assert.equal(output.originLabel, `Copilot command · /${captured.command.name}`);
+    assert.equal(f.sent.some(request => request.method === 'prompt' || request.method === 'configure'), false);
     assert.deepEqual(f.completions, []);
   } finally { f.session.disconnect('fixture complete'); }
 });
