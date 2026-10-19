@@ -14,7 +14,7 @@
   font-size:var(--nimrod-conversation-size);
   line-height:1.428571;
 }
-pre, code, .tool-output:not(.tool-output-web-markdown), .tool-card-preview,
+pre, code, .tool-output:not(.tool-output-web-markdown), .tool-card-preview, .tool-card-diff-stats,
 .tool-input-summary, .edit-card-diff, .typography-code {
   font-family:var(--vscode-editor-font-family, monospace);
   font-size:var(--nimrod-monospace-size);

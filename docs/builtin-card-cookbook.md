@@ -81,9 +81,13 @@ apply_patch call to change it to "after". Do not use shell redirection or anothe
 editing tool. Leave the file for inspection.
 ```
 
-Expect **Apply patch** with the first affected path (project-relative when inside
-this project), plus a path count for multi-file/move requests. Expanding a complete
-request shows a colored **Requested patch**. A recognized successful native result
+Expect **Apply patch** with the affected path for one file (project-relative when
+inside this project), or simply **N files** for multiple files. The preview also
+shows green **+N** and red **−N** line counts when available: requested counts
+while running, then counts from the successful reported diff. A move counts as
+one file; delete requests have no old contents, so their line totals appear only
+after a recognized reported diff. Expanding a complete request shows a colored
+**Requested patch**. A recognized successful native result
 replaces it with **Applied patch**, showing Copilot's reported Git diff and a short
 file-change result. Failed/interrupted calls never label the request as applied.
 **Raw inputs** and **Raw output** retain the exact original patch and result details.

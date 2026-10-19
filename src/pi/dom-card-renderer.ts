@@ -228,6 +228,24 @@ export class DomCardController<Data> {
       if (!preview) { preview = doc.createElement('span'); preview.className = 'tool-card-preview'; this.summary.append(preview); }
       if (preview.textContent !== value.preview) preview.textContent = value.preview;
     } else preview?.remove();
+    let stats = this.summary.querySelector<HTMLElement>('.tool-card-diff-stats');
+    if (value.diffStats && !value.questionAnswer) {
+      if (!stats) {
+        stats = doc.createElement('span'); stats.className = 'tool-card-diff-stats';
+        const added = doc.createElement('span'); added.className = 'hljs-addition';
+        const removed = doc.createElement('span'); removed.className = 'hljs-deletion';
+        stats.append(added, doc.createTextNode(' '), removed); this.summary.append(stats);
+      }
+      const added = stats.querySelector('.hljs-addition')!, removed = stats.querySelector('.hljs-deletion')!;
+      const plus = `+${value.diffStats.added}`, minus = `−${value.diffStats.removed}`;
+      if (added.textContent !== plus) added.textContent = plus;
+      if (removed.textContent !== minus) removed.textContent = minus;
+      const description = `${value.diffStats.added} ${value.diffStats.added === 1 ? 'line' : 'lines'} added, ${value.diffStats.removed} ${value.diffStats.removed === 1 ? 'line' : 'lines'} removed`;
+      stats.setAttribute('aria-label', description);
+      this.summary.setAttribute('aria-label', [value.title, value.preview, description].filter(Boolean).join('. '));
+      // A preview may arrive after counts during streaming; keep counts after it.
+      if (this.summary.lastElementChild !== stats) this.summary.append(stats);
+    } else stats?.remove();
     const sections = () => Array.from(this.body.children).filter((node): node is HTMLElement => node instanceof doc.defaultView!.HTMLElement && node.classList.contains('tool-section'));
     const old = new Map(sections().map(section => [section.dataset.outputKind!, section]));
     value.sections.forEach((part, index) => {
