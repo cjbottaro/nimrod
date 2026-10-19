@@ -4,7 +4,7 @@
 
 ## Consumer boundary
 
-Permission policy is an optional `SessionConfiguration` capability with setting ID `permissions`, opaque values, advertised choices, a confirmed getter and concrete readiness/mutation semantics. The shared `Select permissions…` action (`permissions`, no default keybinding) is contributed whenever that setting exists, regardless of backend. `SessionAction.configurationSetting` routes it through the generic picker; no Copilot branch exists in the palette/renderer.
+Permission policy is an optional `SessionConfiguration` capability with setting ID `permissions`, opaque values, advertised choices, a confirmed getter and concrete readiness/mutation semantics. The shared `Set permissions…` action (`permissions`, no default keybinding) is contributed whenever that setting exists, regardless of backend. `SessionAction.configurationSetting` routes it through the generic picker; no Copilot branch exists in the palette/renderer.
 
 `src/session-configuration-set.ts::ConfigurationOwner` adds only `update()` and `dispose(reason?)` to the existing consumer port. `SessionConfigurationSet` composes independent owners behind that same port. Each owner retains its own serialized latest-wins intents, dependencies, cancellation and failure handling. The integration chooses domains: there is no global busy gate, cross-domain dependency scheduler, automatic retry or universal harness protocol.
 
@@ -20,7 +20,7 @@ A future integration that implements the `permissions` setting gets the picker, 
 
 Existing local debug captures from CLI **1.0.98** report builtin `permissions` with `default | allow-all | show` and `allowDuringAgentExecution:true`. The user's screenshot showed `/permissions allow-all` incorrectly hitting the ordinary idle-only gate. The first implementation and its invented fixture both used the wrong `allow-any` spelling. `test/fixtures/copilot-permission-command.json` now retains only the actual command descriptor from those captures, without session/user data. This confirms advertisement, not successful active-turn invocation of the corrected code.
 
-The **Select permissions… → Allow all** action executes the exact native
+The **Set permissions… → Allow all** action executes the exact native
 `/permissions allow-all` command through its configuration owner. It is not
 approximated with `setApproveAll`, `setMode`, URL/path flags or a Nimrod
 host-side auto-approval rule. Copilot remains authoritative for scope and
@@ -33,7 +33,7 @@ adapter.
 - The Nimrod action revalidates builtin `/permissions allow-all` metadata before
   mutation. Slash-command names, aliases and raw arguments remain owned by the
   generic command workflow.
-- The shared **Select permissions… → Allow all** picker uses this configuration
+- The shared **Set permissions… → Allow all** picker uses this configuration
   owner. Choosing `allow-all` from the `/permissions` argument picker instead
   uses the generic Command-card queue; both invoke Copilot's command but do not
   converge on one local owner.

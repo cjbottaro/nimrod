@@ -73,7 +73,7 @@ Expose operation state accessibly, independent of colour/animation. Reduced moti
   rejection, agent-prompt transition or uncertainty. Command results do not
   become a separate response row unless the harness reports an independent
   conversation operation.
-- [Live permissions](live-permissions.md): Nimrod's **Select permissions…**
+- [Live permissions](live-permissions.md): Nimrod's **Set permissions…**
   action uses **PERMISSION CHANGE** with an independent configuration owner.
   Harness `/permissions` submissions remain Command cards and use generic
   advertised readiness. Both leave old approvals pending; no provider checks

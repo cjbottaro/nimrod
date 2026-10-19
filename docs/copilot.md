@@ -105,7 +105,7 @@ Native focus/stacking and visual acceptance remain pending after a requested bui
 
 If you started a task before allowing its tools, you can submit
 `/permissions allow-all` while Copilot is working, or choose
-**Select permissions… → Allow all** in the command palette. These remain
+**Set permissions… → Allow all** in the command palette. These remain
 separate entry points: the slash command uses the generic Command-card queue,
 while the Nimrod action uses its permission configuration owner. Each appears
 only when the runtime advertises the operation. Advertised command-name aliases

@@ -29,7 +29,7 @@ You can choose configuration while the agent is working. Nimrod applies it as so
 - **Copilot** applies model/thinking/mode/context configuration while idle. Model, thinking level, mode and context-window changes apply in the existing session without reconnecting or sending another message. You can choose while it is working or handling another configuration/command operation; the change waits for the supported idle boundary without stopping the agent.
 
 Copilot's [permission-policy changes](copilot.md#change-permissions-during-work)
-use an independent configuration operation for Nimrod's **Select permissions…
+use an independent configuration operation for Nimrod's **Set permissions…
 → Allow all** action, with stable title **PERMISSION CHANGE**. Copilot
 `/permissions allow-all` is a separate generic Command card; advertised
 live-use metadata lets the command queue invoke it during work without
