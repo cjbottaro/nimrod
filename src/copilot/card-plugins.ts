@@ -1,5 +1,6 @@
 import type { CardPlugin, CardPresentation, CardSection, CardPluginContext, ToolCardData } from '../card-plugin-api';
 import { copilotToolResult } from './tool-result';
+import { createPatchPresentation } from './patch-card';
 import { definePresentationPlugin, rawToolPresentation, shellPresentation, fileReadPresentation, searchPresentation, argumentRecord, firstString, webUrl, displayWebUrl, markdownWebLink, questionAnswerPresentation, webSearchPresentation, webFetchPresentation, type WebSource, namedToolPresentation, codeSearchText, type CodeSearchFile } from '../card-plugin-ui';
 
 function isCopilot(data: Readonly<ToolCardData>): boolean {
@@ -200,10 +201,12 @@ function questionPresentation(data: Readonly<ToolCardData>, input: Record<string
   return questionAnswerPresentation({ question, answer, sections: options.length ? [{ key: 'question-options', label: 'Available options', text: list, format: 'markdown' }] : [] });
 }
 /** Late names/categories/SDK metadata update content inside the same mounted adapter. */
-function copilotPresentation(data: Readonly<ToolCardData>, context: CardPluginContext): CardPresentation {
+function copilotPresentation(data: Readonly<ToolCardData>, context: CardPluginContext, patch: ReturnType<typeof createPatchPresentation>): CardPresentation {
   const raw = rawToolPresentation(data);
   if (!isCopilot(data)) return raw;
-  const input = argumentRecord(data.arguments), start = object(object(data.native)?.['tool.execution_start']);
+  const start = object(object(data.native)?.['tool.execution_start']);
+  // Native apply_patch arguments are literal patch strings, not JSON records.
+  const input = data.name === 'apply_patch' && start?.mcpServerName === undefined && start?.mcpToolName === undefined ? undefined : argumentRecord(data.arguments);
   const sections = data.isError ? copilotSections(data) : raw.sections;
   // Native MCP operations with a coincidentally matching name are not built-in questions.
   const question = !start?.mcpServerName ? questionPresentation(data, input) : undefined;
@@ -223,6 +226,19 @@ function copilotPresentation(data: Readonly<ToolCardData>, context: CardPluginCo
       return namedToolPresentation({ title: 'GitHub contents', preview: `${input.owner}/${input.repo}/${input.path}`, sections: data.isError ? sections : copilotSections(data) });
     }
     return namedToolPresentation({ title: raw.title, preview: `${start.mcpServerName} · ${start.mcpToolName}`, sections });
+  }
+  if (data.name === 'apply_patch' && start?.mcpServerName === undefined && start?.mcpToolName === undefined) {
+    const complete = object(object(data.native)?.['tool.execution_complete']);
+    const native = !data.isError && !data.uiPhase && ['finished', 'result'].includes(data.toolStatus || '') && complete?.success === true ? nativeResult(data) : undefined;
+    const detail = native?.output.detailedContent;
+    const diff = typeof detail === 'string' && /^\s*diff --git /u.test(detail) ? detail : undefined;
+    // The short native summary is useful beside the diff; exact rich output stays in Raw output.
+    const output = diff !== undefined && native ? raw.sections.flatMap(section => {
+      if (section.key !== 'result' || section.text !== native.source) return [section];
+      const summary = native.output.content;
+      return typeof summary === 'string' && summary.trim() ? [{ ...section, text: summary }] : [];
+    }) : sections;
+    return patch(data, context.projectDirectory, output, diff);
   }
   const sql = sqlPresentation(data, input);
   if (sql) return sql;
@@ -246,11 +262,14 @@ function copilotPresentation(data: Readonly<ToolCardData>, context: CardPluginCo
 }
 function adapter(id: string, generic = false): CardPlugin {
   return definePresentationPlugin<ToolCardData>({ id, supports: data => generic ? data.source?.backend === 'copilot-sdk' : isCopilot(data),
-    mount: context => ({ update(data) {
-      const presentation = copilotPresentation(data, context);
-      // Keep the retained Raw inputs node in one place through generation, execution and errors.
-      return isCopilot(data) ? { ...presentation, rawInputsPlacement: 'after' as const } : presentation;
-    }, dispose() {} }) });
+    mount: context => {
+      const patch = createPatchPresentation();
+      return { update(data) {
+        const presentation = copilotPresentation(data, context, patch);
+        // Keep the retained Raw inputs node in one place through generation, execution and errors.
+        return isCopilot(data) ? { ...presentation, rawInputsPlacement: 'after' as const } : presentation;
+      }, dispose() {} };
+    } });
 }
 export const copilotToolPlugin = adapter('nimrod.copilot.tool', true);
 export const copilotShellPlugin = adapter('nimrod.copilot.shell');

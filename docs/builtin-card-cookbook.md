@@ -71,6 +71,24 @@ an existing card without replacing it.
 | Local content search | `Use rg with pattern TODO, paths src, output_mode content and glob *.ts. Do not use bash or web search.` | **Search**, full pattern, scope and file filter. No matches is still a valid result. |
 | Skill | `Use the skill tool to load the installed skill named <installed-skill-name>. Do not install anything or perform its workflow; just load it.` | **Use skill** plus its real name and native outcome. Replace the placeholder with a skill available to that Copilot session. Missing skills can show errors; the card does not install them. |
 
+## Copilot patches
+
+In a disposable project/worktree, ask:
+
+```text
+Use apply_patch to add card-patch-demo.txt containing "before", then use a second
+apply_patch call to change it to "after". Do not use shell redirection or another
+editing tool. Leave the file for inspection.
+```
+
+Expect **Apply patch** with the first affected path (project-relative when inside
+this project), plus a path count for multi-file/move requests. Expanding a complete
+request shows a colored **Requested patch**. A recognized successful native result
+replaces it with **Applied patch**, showing Copilot's reported Git diff and a short
+file-change result. Failed/interrupted calls never label the request as applied.
+**Raw inputs** and **Raw output** retain the exact original patch and result details.
+The card does not independently verify disk contents or provide an Apply button.
+
 ## Copilot SQL
 
 This is Copilot's built-in `sql` tool—not a shell command or an MCP database tool.

@@ -6,6 +6,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Added
 
+- Copilot **Applying patch** calls now use a dedicated **Apply patch** presentation with affected-file previews, colored requested patches and successful native Git diffs. Original inputs/results remain in raw disclosures; failed or interrupted calls never present the requested patch as applied.
+
 - Copilot `/skills info` now completes the CLI's omitted skill-name interaction with a searchable harness-owned skill picker sourced from Copilot's public session catalog, then invokes the original slash command. `/skills list` and other read-only report commands continue through generic command output. Native acceptance is pending.
 - Copilot `/session rename` now completes the CLI's omitted free-form name interaction with a Copilot-labelled input modal, then invokes the original slash command and relies on Copilot's authoritative title event. It does not dispatch a Nimrod rename action. Native acceptance is pending.
 
