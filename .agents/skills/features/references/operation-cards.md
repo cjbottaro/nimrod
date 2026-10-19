@@ -65,6 +65,12 @@ Expose operation state accessibly, independent of colour/animation. Reduced moti
 
 ## Concrete consumers
 
+- [Slash commands](../../slash-commands/SKILL.md#command-cards): **Command
+  cards** are specialized operation-card consumers. They retain one invocation
+  card while pending, then adapt the same card to report output, confirmed state
+  change, concise rejection, agent-prompt transition or uncertainty. Command
+  results do not become a separate response row unless the harness reports an
+  independent conversation operation.
 - [Live permissions](live-permissions.md): **PERMISSION CHANGE** uses the same operation renderer, while its independent configuration owner preserves the native command's readiness/scope and leaves old approvals pending. The generic picker/action is capability-based; no provider checks belong in the renderer.
 - [Configuration](model-thinking.md): stable **CONFIGURATION CHANGE**, literal setting/value content, runtime-only local marker. Offer Cancel only when all work represented by that card can still be withdrawn; do not remove evidence of already-applied changes. Rejection/uncertainty details belong in the card. Unavailable selections rejected before intent remain notices.
 - [Pi steering and queued messages](composer.md): stable **STEERING** / **QUEUED** while pending and after authoritative adoption. Both are pinned while pending. RPC acknowledgement and queue removal do not settle them; only the matching authoritative user event does. Keep occurrence-based FIFO, image correlation and harness position. No per-entry Cancel: Pi's available `clear_queue` is whole-queue recovery, not targeted withdrawal; do not emulate it by clearing/replaying other entries. Explicit whole-queue recovery retains its existing Restore workflow. Ordinary idle previews remain ordinary user turns, without a pending operation title.

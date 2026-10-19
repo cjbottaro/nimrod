@@ -110,6 +110,41 @@ raw values and harness labels; do not infer executable actions from prose.
 Unknown/malformed results remain unsupported until their contract is
 implemented.
 
+## Command cards
+
+Every accepted slash command starts with an operation lifecycle, but its settled
+presentation is a specialized **Command card**, not a requirement that every
+result resemble a configuration-change card.
+
+The Command card owns one invocation from accepted intent through terminal
+outcome:
+
+- Create it immediately after local validation accepts the command.
+- Retain one stable card/key while queued, collecting interaction, invoking and
+  settling.
+- Shimmer only its command title while pending.
+- Put typed command results into that same card rather than appending a separate
+  request card and response row.
+- Preserve the command text, ordering, reader intent, focus and newer drafts.
+- Keep command output connection-local; never manufacture harness history.
+
+Settled presentation adapts to the semantic result:
+
+| Result | Command-card presentation |
+| --- | --- |
+| Text/Markdown report | Result body inside the retained card |
+| Confirmed state change | Compact command plus harness confirmation when useful; authoritative UI projections update separately |
+| Known rejection | Concise wrapping harness error inline |
+| Output-free completion | Minimal settled command card |
+| Agent prompt | Card records the command transition; actual user/assistant turns remain separate harness conversation history |
+| Unknown/not applied | Explicit operation outcome and diagnostic Details |
+
+This specialization reuses operation-card identity, pending placement,
+cancellation, settlement, failure/uncertainty semantics and accessibility. It
+does not force reports, state changes and agent prompts into identical terminal
+layouts. A slash command is one operation, so separate request/response cards
+are inappropriate unless the harness actually reports independent operations.
+
 ## UI effects and authoritative reconciliation
 
 Some commands only render output; others affect Nimrod projections. Never parse
