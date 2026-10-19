@@ -40,6 +40,13 @@ and left the Status area on `gpt-5.6-sol`. This is protocol-shape evidence for
 the narrow catalog-picker/live-switch adapter, not acceptance of the adapter
 itself; its offline fixtures and native focus/effect behavior are unrun.
 
+An isolated provider-free command audit used CLI 1.0.98 with a disposable custom
+session filesystem, fail-closed permissions, no prompts and no external/model
+work. `/usage`, `/env`, `/list-dirs`, `/permissions show`, `/session info`,
+`/session files`, `/session plan` and `/mcp list` returned typed text and emitted
+no state events. Sanitized result-shape fixtures are authored and unrun. This is
+SDK/CLI protocol evidence, not native rendering/focus/busy acceptance.
+
 - TypeScript/jsdom shell tests use mocked native IPC.
 - Rust fixture tests use actual pipes, owned subprocesses and generated disposable session files; deletion tests unlink only those fixtures.
 - Automated Playwright WebKit exercises real browser layout/events with an offline child fixture and mock Tauri operations. Its CSS zoom is not native WKWebView zoom.
