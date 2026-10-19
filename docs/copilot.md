@@ -341,7 +341,11 @@ autonomous modes remain unsupported.
 Copilot CLI 1.0.98 does not expose its bare `/model` terminal picker through the
 generic command result. For bare `/model` or its `/models` alias, Nimrod therefore
 shows Copilot's enabled model catalog and invokes the original harness command
-with your selection. Supplying an explicit model argument bypasses that picker.
+with your selection. The CLI also returns completion without switching the live
+session for an exact catalog argument, so Nimrod completes that narrow harness
+adapter through Copilot's SDK and reconciles the confirmed model. Supplying an
+explicit model argument bypasses the picker; richer model-command syntax is
+passed through without interpretation.
 
 Command discovery, argument suggestions and modal/output fixtures are authored
 but unrun. This is not a claim of complete Copilot TUI command parity.
