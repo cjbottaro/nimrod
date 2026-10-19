@@ -74,7 +74,7 @@ was touched.
 
 ## Copilot patch cards
 
-`test/copilot-patch-cards.test.ts` is authored but unrun. Payload inspection used existing local October 19 CLI 1.0.98 transcript logs only; no tools/providers were invoked and no user sessions/logs were changed. Native macOS/Linux visual/scroll acceptance remains pending; no app build or launch was performed. The mandatory post-merge `mise run check` is compilation evidence only, not fixture/native acceptance.
+`test/copilot-patch-cards.test.ts`, including the multi-file-summary/colored-line-count follow-up, is authored but unrun. Payload inspection used existing local October 19 CLI 1.0.98 transcript logs only; no tools/providers were invoked and no user sessions/logs were changed. Native macOS/Linux visual/scroll acceptance remains pending; no app build or launch was performed. The mandatory post-merge `mise run check` is compilation evidence only, not fixture/native acceptance.
 
 ## Copilot SQL cards
 

@@ -1,7 +1,7 @@
 import type { CardPresentation } from './card-plugin-api';
 
 /** Small shared summaries; adapters retain ownership of native tool schemas. */
-export function namedToolPresentation(value: { title: string; preview?: string; sections: CardPresentation['sections'] }): CardPresentation {
+export function namedToolPresentation(value: { title: string; preview?: string; diffStats?: CardPresentation['diffStats']; sections: CardPresentation['sections'] }): CardPresentation {
   return { ...value, rawInputsPlacement: 'after' };
 }
 export interface CodeSearchFile { path: string; fragments: readonly string[]; }

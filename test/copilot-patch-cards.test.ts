@@ -4,6 +4,8 @@ import { JSDOM } from 'jsdom';
 import type { ToolCardData } from '../src/card-plugin-api';
 import { createPatchPresentation } from '../src/copilot/patch-card';
 import { copilotToolResult } from '../src/copilot/tool-result';
+import { validatePresentation } from '../src/pi/card-renderer';
+import { namedToolPresentation } from '../src/card-plugin-ui';
 import { CardPluginCatalog } from '../src/pi/card-plugins/catalog';
 import { renderToolCard, updateToolCard, disposeToolCard } from '../src/pi/tool-card';
 
@@ -33,6 +35,9 @@ test('native apply_patch shows project-relative summary, reported diff and conci
     assert.equal(new CardPluginCatalog().select(data).id, 'nimrod.copilot.tool');
     assert.equal(f.card.querySelector('.tool-card-title')?.textContent, 'Apply patch');
     assert.equal(f.card.querySelector('.tool-card-preview')?.textContent, 'src/example.ts');
+    assert.equal(f.card.querySelector('.tool-card-diff-stats .hljs-addition')?.textContent, '+1');
+    assert.equal(f.card.querySelector('.tool-card-diff-stats .hljs-deletion')?.textContent, '−1');
+    assert.match(f.card.querySelector('summary')!.getAttribute('aria-label')!, /1 line added, 1 line removed/);
     assert.match(body(f.card).textContent!, /Applied patch/);
     assert.equal(output(f.card)?.textContent, diff + '\n');
     assert.equal(body(f.card).querySelector('[data-output-kind="result"] .tool-output')?.textContent, result.content);
@@ -50,11 +55,12 @@ test('requested → reported patch retains shell, viewport, focus and raw disclo
     f.card.open = true; raw.open = true;
     const running: ToolCardData = { ...data, toolStatus: 'running', resultOutput: undefined, native: { 'tool.execution_start': { arguments: patch } } };
     updateToolCard(f.doc, f.card, running);
-    const viewport = output(f.card)!;
+    const viewport = output(f.card)!, stats = f.card.querySelector('.tool-card-diff-stats')!;
     assert.equal(viewport.textContent, patch + '\n'); assert.match(body(f.card).textContent!, /Requested patch/);
     viewport.focus(); viewport.scrollTop = 12;
     updateToolCard(f.doc, f.card, data);
     assert.equal(body(f.card), retainedBody); assert.equal(output(f.card), viewport);
+    assert.equal(f.card.querySelector('.tool-card-diff-stats'), stats);
     assert.equal(f.doc.activeElement, viewport); assert.equal(viewport.textContent, diff + '\n');
     assert.equal(f.card.querySelector('.tool-raw-inputs'), raw); assert.equal(raw.open, true); assert.equal(f.card.open, true);
     const rawOutput = f.card.querySelector<HTMLDetailsElement>('.tool-raw-output')!; rawOutput.open = true;
@@ -92,7 +98,8 @@ test('add/delete/move and multiple-file summaries stay literal; incomplete/unkno
   const present = createPatchPresentation();
   const request = '*** Begin Patch\n*** Add File: /fixture/new.txt\n+<script>literal</script>\n*** Delete File: /outside/old.txt\n*** Update File: /fixture/before.txt\n*** Move to: /fixture/after.txt\n@@\n-a\n+b\n*** End Patch\n';
   const value = present({ arguments: request }, '/fixture', []);
-  assert.equal(value.preview, 'new.txt · 4 paths');
+  assert.equal(value.preview, '3 files');
+  assert.equal(value.diffStats, undefined, 'delete requests do not include the removed contents');
   assert.equal(value.sections[0].text, request); assert.equal(value.sections[0].format, 'diff');
   for (const arguments_ of ['*** Begin Patch\n*** Add File: /fixture/new.txt\n+partial', {}, { patch }, 'not a patch', '*** Begin Patch\n*** Unknown: file\n*** End Patch', '*** Begin Patch\n*** End Patch']) {
     assert.deepEqual(present({ arguments: arguments_ }, '/fixture', []).sections, []);
@@ -124,6 +131,46 @@ test('reported diffs preserve independent live output and do not duplicate detai
   } finally { f.close(); }
   const other = createPatchPresentation();
   assert.deepEqual(other({}, '/fixture', []).sections, [], 'new mounts do not inherit another request');
+});
+
+test('multi-file requests show only a file count, with separate colored line stats', () => {
+  const request = '*** Begin Patch\n' + Array.from({ length: 6 }, (_, index) => `*** Update File: /fixture/file${index}.ts\n@@\n-old\n+new\n`).join('') + '*** End Patch\n';
+  const f = fixture({ ...completed(), arguments: request, toolStatus: 'running', native: undefined, resultOutput: undefined });
+  try {
+    assert.equal(f.card.querySelector('.tool-card-preview')?.textContent, '6 files');
+    assert.equal(f.card.querySelector('.tool-card-diff-stats .hljs-addition')?.textContent, '+6');
+    assert.equal(f.card.querySelector('.tool-card-diff-stats .hljs-deletion')?.textContent, '−6');
+    assert.doesNotMatch(f.card.querySelector('.card-plugin-summary')!.textContent!, /file0|paths/);
+    const stats = f.card.querySelector('.tool-card-diff-stats')!;
+    updateToolCard(f.doc, f.card, { ...completed(), arguments: request, toolStatus: 'running', native: undefined, resultOutput: undefined });
+    assert.equal(f.card.querySelector('.tool-card-diff-stats'), stats);
+    updateToolCard(f.doc, f.card, { ...completed(), name: 'unknown', native: undefined });
+    assert.equal(f.card.querySelector('.tool-card-diff-stats'), null);
+  } finally { f.close(); }
+});
+
+test('line counts distinguish requested edits from reported hunks, excluding headers/context/newline markers', () => {
+  const present = createPatchPresentation();
+  assert.deepEqual(present({ arguments: patch }, '/fixture', []).diffStats, { added: 1, removed: 1 });
+  const detailed = 'diff --git a/old b/new\n--- a/old\n+++ b/new\n@@ -1,2 +1,3 @@\n context\n-old\n+++new\n+another\n\\ No newline at end of file\n';
+  assert.deepEqual(present({ arguments: patch }, '/fixture', [], detailed).diffStats, { added: 2, removed: 1 });
+  const deletion = '*** Begin Patch\n*** Delete File: /fixture/old.txt\n*** End Patch\n';
+  assert.equal(present({ arguments: deletion }, '/fixture', []).diffStats, undefined);
+  assert.deepEqual(present({ arguments: deletion }, '/fixture', [], 'diff --git a/old b/old\n--- a/old\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-old\n-another\n').diffStats, { added: 0, removed: 2 });
+  const moved = '*** Begin Patch\n*** Update File: /fixture/before.ts\n*** Move to: /fixture/after.ts\n@@\n-old\n+new\n*** End Patch\n';
+  assert.equal(present({ arguments: moved }, '/fixture', []).preview, 'after.ts');
+  assert.equal(present({ arguments: patch }, '/fixture', [], detailed.replace('+another\n', '')).diffStats, undefined, 'incomplete hunks do not fall back to requested counts');
+  assert.equal(present({ arguments: patch }, '/fixture', [], 'diff --git a/old b/old\nBinary files a/old and b/old differ\n').diffStats, undefined);
+  const binary = fixture({ ...completed(), resultOutput: 'unknown', native: undefined, arguments: deletion });
+  try { assert.equal(binary.card.querySelector('.tool-card-diff-stats'), null); }
+  finally { binary.close(); }
+});
+
+test('public line stats validate safe counts, including zero, and reject malformed values', () => {
+  assert.deepEqual(validatePresentation(namedToolPresentation({ title: 'Edit', diffStats: { added: 0, removed: 2 }, sections: [] })).diffStats, { added: 0, removed: 2 });
+  for (const diffStats of [null, {}, { added: -1, removed: 0 }, { added: 1.5, removed: 0 }, { added: '1', removed: 0 }, { added: 0, removed: Infinity }, { added: 0, removed: Number.MAX_SAFE_INTEGER + 1 }]) {
+    assert.throws(() => validatePresentation({ title: 'Edit', diffStats, sections: [] } as never), /Invalid card presentation/);
+  }
 });
 
 test('SDK-only exact tool recognition excludes MCP names and unknown agents', () => {
