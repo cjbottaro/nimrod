@@ -50,6 +50,8 @@ function decision(kind, request) {
 }
 const config = () => ({
   workingDirectory: cwd, streaming: true, clientName: 'Nimrod',
+  // Let Copilot discover its own configuration on both creation and Resume.
+  enableConfigDiscovery: true,
   onEvent: event,
   onPermissionRequest: request => decision('permission', request),
   onUserInputRequest: request => decision('input', request),

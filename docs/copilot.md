@@ -25,6 +25,14 @@ working, Enter keeps your draft; there is no steering/queue. **Stop** cancels th
 turn, not the saved conversation. A failed connection retains its row and draft;
 fix the executable/authentication issue, then reconnect explicitly.
 
+## Configuration discovery
+
+New and resumed sessions explicitly enable Copilot's native configuration
+discovery, including skills. Copilot decides which configuration sources are
+supported and how they are combined; Nimrod does not maintain a separate skill
+search path. Use `/skills list` to inspect the connected session's catalog.
+Discovery parity with the interactive CLI still needs native verification.
+
 ## Permissions and questions
 
 Permission requests use a command-palette-style modal, one request at a time.

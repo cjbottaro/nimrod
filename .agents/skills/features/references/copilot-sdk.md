@@ -34,6 +34,23 @@ in-process execution, an existing user's server or a user-installed SDK.
 The SDK launches the selected CLI with `--headless --no-auto-update --stdio`.
 Nimrod leaves authentication to the installed CLI; no tokens enter settings.
 
+## Harness-owned configuration discovery
+
+The shared `copilot/bridge.mjs` session config explicitly supplies
+`enableConfigDiscovery: true` to both `createSession` and exact-ID `resumeSession`.
+Copilot owns discovery, supported sources, precedence and policy for its native
+configuration, including skills; Nimrod does not scan for skills, inject discovery
+roots or copy skill bodies into prompts. This opts into the runtime's broader
+supported configuration discovery, not a skills-only loader. File-hook execution
+and other independently controlled features retain Copilot's own defaults and
+policy; discovery is not a blanket permission grant. Resume still disables
+transcript recovery and pending-work continuation.
+
+`test/fixtures/copilot-sdk.mjs` asserts the option and absence of host-injected
+roots for both paths. `test/copilot-bridge.test.ts` covers new/Resume connection
+and catalog reads without prompts. These fixtures are authored but unrun;
+installed-CLI discovery parity remains pending user acceptance.
+
 ## Distribution and native ownership
 
 - `copilot/bridge.mjs` imports the bundled official SDK, its concrete
