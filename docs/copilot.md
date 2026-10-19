@@ -126,7 +126,7 @@ operation waits for terminal idle instead. Failures/unknown outcomes stay on the
 card with details and are never automatically retried.
 
 This initial picker exposes **Allow all** only. Other native permission commands
-retain their existing idle-only slash-command workflow. The implementation and
+use the [queued slash-command workflow](#slash-commands), executing when idle. The implementation and
 offline fixtures are present, but tests and real active-turn/native acceptance
 remain pending; retroactive resolution of older permission requests is not promised.
 
@@ -307,15 +307,23 @@ returned report as labelled **Copilot command** output in the transcript, withou
 an assistant/model request. The installed CLI's post-fix behavior still needs
 native verification.
 
-Generic commands run while idle and consume the submitted draft immediately, without a
-literal user-turn preview or forced transcript navigation. The advertised
-`/permissions allow-all` mutation is the [live configuration exception](#change-permissions-during-work), including when selected from the argument picker.
-You can edit a newer
-draft while waiting, but another submission waits until the command interaction
-settles. Switching sessions, Stop or disconnect cancels pending choices; late
-results never open a picker in another conversation or overwrite your draft.
-Already executed effects are not rolled back. Command-output rows stay within
-the current connection and are not restored on Close/Resume.
+You can submit advertised slash commands while Copilot is working. They clear the
+submitted draft immediately and appear as pending **Copilot command** operation
+cards, without a literal user-turn preview or forced transcript navigation.
+Commands execute one at a time, in submission order, after the current agent turn
+reaches terminal idle; intermediate Autopilot pauses do not release them. For
+example, an advertised `/allow-all` queues like any other command—it is not
+rewritten into a different permission command. The advertised
+`/permissions allow-all` mutation retains its [live configuration path](#change-permissions-during-work), including when selected from the argument picker.
+
+You can edit a newer draft or queue more advertised commands while waiting;
+ordinary message submission still requires idle. Argument/returned-choice pickers
+open only when their queued workflow starts. Switching sessions or Stop withdraws
+undispatched commands and cancels pending choices. Disconnect discards the queue;
+it is not restored or replayed on reconnect. Already-dispatched effects are not
+rolled back; unconfirmed effects show **Outcome unknown**. Late results never open
+a picker in another conversation or overwrite your draft. Command cards/output
+stay within the current connection and are not restored on Close/Resume.
 
 New commands work automatically when they use the supported SDK metadata and
 result types: text/timeline output, completion, subcommand choices or an explicit

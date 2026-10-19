@@ -204,6 +204,7 @@ async function dispatch(message) {
         const command = commands.find(item => item.name.toLowerCase() === message.name.toLowerCase())
           ?? commands.find(item => item.aliases?.some(alias => alias.toLowerCase() === message.name.toLowerCase()));
         if (!command) throw new Error('This command is not advertised by Copilot. Nothing was invoked.');
+        if (working) throw new Error('Copilot started working before command dispatch. Nothing was invoked.');
         const permissions = command.kind === 'builtin' && command.name.toLowerCase() === 'permissions';
         if (permissions) permissionRevision++;
         const result = await session.rpc.commands.invoke({ name: command.name, ...(message.input !== undefined ? { input: message.input } : {}) });

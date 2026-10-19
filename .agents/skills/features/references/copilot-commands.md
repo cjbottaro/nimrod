@@ -20,7 +20,7 @@ This feature applies to **Copilot SDK sessions**. Pi's existing `/name`,
 separate Pi contract change. Generic ACP keeps advertised-only passthrough; the Copilot ACP integration has been removed.
 
 New commands using implemented metadata/result shapes work without command-name
-handlers. This is not universal CLI/TUI parity. Generic command workflows remain idle-only. The deliberate exception is advertised builtin `/permissions allow-all`: the [live permission configuration adapter](live-permissions.md) accepts it during work, honours `allowDuringAgentExecution`, and executes the exact native command through its own configuration owner. It neither sends a steering prompt nor invents a host permission policy.
+handlers. This is not universal CLI/TUI parity. Generic command execution remains idle-only, but advertised command intent is accepted during work and queued locally. The deliberate exception is advertised builtin `/permissions allow-all`: the [live permission configuration adapter](live-permissions.md) accepts it during work, honours `allowDuringAgentExecution`, and executes the exact native command through its own configuration owner. It neither sends a steering prompt nor invents a host permission policy.
 
 ## Discovery and autocomplete
 
@@ -49,7 +49,7 @@ handlers. This is not universal CLI/TUI parity. Generic command workflows remain
   Required finite-choice input can also be supplied this way. Explicit arguments
   bypass this picker; commands without choices keep their SDK default behavior.
   Escape dismisses suggestions; IME/modifier and mid-draft editing are unchanged.
-- Local validation precedes draft clearing for unavailable/busy sessions (except the supported live permission intent),
+- Local validation precedes draft clearing for unavailable sessions,
   unadvertised commands, required input and attachments. No optimistic literal
   slash user turn, Send-recency bump or forced transcript navigation. Clear the
   submitted command immediately; later output/errors never replace a newer draft.
@@ -77,13 +77,18 @@ SDK session files to persist local output.
 
 ## Choice lifecycle and concurrency
 
+`CopilotCommandQueue` owns a connection-local FIFO of validated command intents. Accepting an advertised command clears the composer immediately, even during agent work or another command workflow. Unknown commands, required free-text input and attachments still fail before clearing. Ordinary text/image prompts retain their busy rejection; this is not SDK prompt steering/queueing.
+
+Each intent immediately publishes a **COPILOT COMMAND** operation card containing the exact submitted text. Its immutable progress records reuse the existing local operation projector/renderer through `configurationOperations`; they are not configuration mutations or persisted harness rows. Unchanged streaming publications preserve the combined array identity. The queue owns execution/settlement separately from configuration owners; no per-card cancellation capability is advertised. Failures/uncertainty belong to this card, without duplicate submission-error notices. Local acceptance receipts are not invocation completion.
+
+Drain one workflow at a time when connected, root-terminal-idle and free of configuration/permission mutation. Child idle and non-aborted Autopilot intermediate idle never release the queue. Commands queued before idle take priority over deferred model changes; the independent live permission owner remains able to apply during work. Revalidate the catalog before starting each workflow; the bridge revalidates again and rejects an idle-to-busy race before invoking. A rejected/ambiguous dispatch is never retried. The exact advertised name/alias and raw arguments stay intact: `/allow-all` is not rewritten into `/permissions allow-all` or a Nimrod action.
+
 Each command workflow owns an AbortController and serializes its own invocations.
 Advertised argument choices are available before invocation and must not require
 executing a bare command to discover its default behavior. Separately, waiting
 for a returned `select-subcommand` choice is result-gated because those choices
 are unavailable before invocation. Neither path gates clearing the composer on RPC.
-Other ordinary submissions/model configuration remain locally unavailable until this workflow
-settles; live permission intent may be accepted while it waits for that command owner to finish; the draft stays editable. Ordinary agent turns retain SDK `session.idle`
+Ordinary message submissions and model mutation remain locally unavailable until queued command workflows settle; further advertised commands can queue. Live permission intent may be accepted while it waits for the active command owner to finish; the draft stays editable. Ordinary agent turns retain SDK `session.idle`
 semantics, separate from local command completion.
 
 Returned choices open only for their still-presented, connected owner with no
@@ -93,8 +98,7 @@ close-time focus restoration, filtering, Escape and stale-page suppression.
 Acceptance runs after native dialog close restoration; there is no nested picker
 stack, new dialog key handler, or palette command usage entry.
 
-Switching away, Stop, disconnect/reconnect or Close aborts the workflow and its
-open picker. Late results/choices cannot reopen a modal, invoke another command,
+Switching away, Stop or Close withdraws all undispatched command intents and aborts the active workflow/open picker. Disconnect/reconnect disposes the queue: undispatched cards become Not applied, dispatched unfinished cards become Outcome unknown. Nothing is replayed on a new connection. User cancellation removes safely undispatched cards; already-dispatched work retains uncertainty when its outcome is not known. Late results/choices cannot reopen a modal, invoke another command,
 write a draft or act on the newly selected session. An already-dispatched command
 may have executed; cancellation only suppresses follow-on effects and never
 claims rollback. No timer covers human think-time; only actual bridge requests
@@ -106,6 +110,7 @@ use the existing bounded request timeout/unknown-outcome disconnect contract.
   root change refresh, ordinary-prompt slash rejection, interactive-mode guard.
 - `src-tauri/src/copilot.rs`: narrow private command/list bridge-record admission.
 - `src/copilot/commands.ts`: validated metadata, aliases, raw parsing and choices.
+- `src/copilot/command-queue.ts`: connection-local FIFO, readiness-driven drain, immutable operation progress, cancellation and disconnect outcome fencing.
 - `src/copilot/{session,view-policy}.ts`: command intent, operation ownership,
   result interpretation, labelled output and submission receipts.
 - `src/pi/slash-completion.ts`: optional presentation-only argument hints/choices;
@@ -115,7 +120,8 @@ use the existing bounded request timeout/unknown-outcome disconnect contract.
   The shell's `session` initializer is explicitly typed `CopilotSession`: its
   command-choice ownership callback references that same session, so inference
   alone creates a circular initializer/return-type dependency (TS7022/TS7023).
-- `test/copilot-commands.test.ts`: metadata, argument insertion/Enter/IME/caret,
+- `test/copilot-command-queue.test.ts`: authored, unrun FIFO/active-work serialization, cancelled picker removal, failure without retry and dispatched/undispatched disconnect outcomes.
+- `test/copilot-commands.test.ts`: authored, unrun busy `/allow-all`/alias FIFO, terminal-root-idle gating, queued choices/cancellation, catalog revocation and unchanged draft effects, plus metadata, argument insertion/Enter/IME/caret,
   raw argument preservation, selection/cancellation/late results, discovery
   updates, explicit agent prompts and no fallback for unsupported effects.
 - `test/copilot-bridge.test.ts`, `test/fixtures/copilot-sdk.mjs`: production bridge
