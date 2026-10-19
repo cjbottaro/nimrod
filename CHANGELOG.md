@@ -57,6 +57,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Linux GTK title-bar buttons now receive clicks instead of having them intercepted by the title-bar wrapper, restoring native Close, Minimize and Maximize actions, including in Settings.
+
 - Linux's menu bar and GTK-drawn native title bar now follow each window's Nimrod theme and background opacity, including live previews, instead of staying clear or desktop grey. Native window controls are retained; window-manager-drawn title bars remain desktop-controlled.
 
 - Local Linux builds now select an executable build instead of macOS app packaging and stage the compiler helper and runtime resources alongside it.

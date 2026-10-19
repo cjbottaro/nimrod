@@ -14,6 +14,28 @@ thread_local! {
     static CHROME: RefCell<HashMap<usize, Chrome>> = RefCell::new(HashMap::new());
 }
 
+/// Tao 0.35's Wayland titlebar puts an input EventBox above its HeaderBar,
+/// intercepting clicks intended for the native window controls. Keep the wrapper
+/// and native drag/resize handling, but let child widgets receive events first.
+/// Called during capabilities preparation, independently of theme/tint success.
+pub fn prepare(window: &tauri::WebviewWindow) -> Result<(), String> {
+    let native = window.gtk_window().map_err(|error| error.to_string())?;
+    if let Some(titlebar) = native.titlebar() {
+        restore_titlebar_input(&titlebar);
+    }
+    Ok(())
+}
+
+fn restore_titlebar_input(titlebar: &gtk::Widget) {
+    if let Some(wrapper) = titlebar.downcast_ref::<gtk::EventBox>()
+        && wrapper
+            .child()
+            .is_some_and(|child| child.is::<gtk::HeaderBar>())
+    {
+        wrapper.set_above_child(false);
+    }
+}
+
 fn stylesheet(class: &str, background: [u8; 4], foreground: [u8; 4]) -> String {
     let [r, g, b, a] = background;
     let [fr, fg, fb, _] = foreground;
@@ -67,6 +89,34 @@ pub fn tint(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "requires an isolated GTK display; does not launch Nimrod"]
+    fn tao_titlebar_routes_input_to_its_original_children() {
+        gtk::init().expect("GTK display is required");
+        let header = gtk::HeaderBar::new();
+        header.set_show_close_button(true);
+        let wrapper = gtk::EventBox::new();
+        wrapper.set_above_child(true);
+        wrapper.add(&header);
+        restore_titlebar_input(wrapper.upcast_ref());
+        assert!(!wrapper.is_above_child());
+        assert_eq!(
+            wrapper.child().unwrap(),
+            header.clone().upcast::<gtk::Widget>()
+        );
+        assert!(header.shows_close_button());
+        restore_titlebar_input(wrapper.upcast_ref());
+        assert!(!wrapper.is_above_child());
+
+        // Do not change arbitrary wrappers or replace an unwrapped HeaderBar.
+        let unrelated = gtk::EventBox::new();
+        unrelated.set_above_child(true);
+        unrelated.add(&gtk::Button::new());
+        restore_titlebar_input(unrelated.upcast_ref());
+        assert!(unrelated.is_above_child());
+        restore_titlebar_input(header.upcast_ref());
+    }
 
     #[test]
     fn css_is_window_scoped_and_preserves_foreground_at_every_opacity() {

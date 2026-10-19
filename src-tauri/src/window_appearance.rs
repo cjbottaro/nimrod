@@ -57,7 +57,15 @@ async fn on_main_thread<T: Send + 'static>(
 pub async fn window_appearance_capabilities(
     window: tauri::WebviewWindow,
 ) -> Result<Capabilities, String> {
-    on_main_thread(&window, || Ok(capabilities())).await
+    let target = window.clone();
+    on_main_thread(&window, move || {
+        #[cfg(target_os = "linux")]
+        crate::linux_window_appearance::prepare(&target)?;
+        #[cfg(not(target_os = "linux"))]
+        let _ = target;
+        Ok(capabilities())
+    })
+    .await
 }
 
 #[tauri::command]
