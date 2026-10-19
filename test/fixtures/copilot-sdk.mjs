@@ -128,6 +128,9 @@ class Session {
     },
   };
   constructor(config, saved) {
+    assert.equal(config.enableConfigDiscovery, true, 'creation and Resume explicitly enable Copilot-owned discovery');
+    for (const key of ['skillDirectories', 'agentDirectories', 'hookDirectories', 'pluginDirectories', 'instructionDirectories'])
+      assert.equal(Object.hasOwn(config, key), false, `leave ${key} discovery to Copilot`);
     this.config = config; this.saved = saved; this.listeners = [config.onEvent];
     if (saved) { this.model = 'large'; this.effort = undefined; this.totalNanoAiu = 12_300_000_000; }
     else { this.model = config.model; this.effort = config.reasoningEffort; this.contextTier = config.contextTier; }

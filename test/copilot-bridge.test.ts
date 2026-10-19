@@ -59,6 +59,22 @@ for (const text of ['', 'Image caption']) test(`SDK bridge maps inline images to
   } finally { await f.close(); }
 });
 
+for (const sessionId of [undefined, 'fixture-sdk']) {
+  test(`SDK bridge delegates configuration discovery to Copilot on ${sessionId ? 'Resume' : 'creation'}`, { timeout: 5000 }, async () => {
+    const f = bridge();
+    try {
+      await f.request('initialize');
+      // The SDK fixture asserts discovery is enabled without host-supplied roots.
+      await f.request('connect', sessionId ? { sessionId } : {});
+      assert.deepEqual(await f.request('command-skills'), { skills: [
+        { name: 'fixture-skill', description: 'Fixture skill details', enabled: true },
+        { name: 'disabled-skill', description: 'Disabled fixture skill', enabled: false },
+      ] });
+      assert.equal(f.packets.some(packet => ['event', 'permission', 'input'].includes(packet.kind)), false, 'discovery does not send prompts or resume pending work');
+    } finally { await f.close(); }
+  });
+}
+
 test('SDK bridge rejects malformed and oversized images before invoking send', { timeout: 5000 }, async () => {
   const f = bridge();
   try {

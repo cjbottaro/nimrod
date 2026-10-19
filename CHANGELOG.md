@@ -65,6 +65,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Copilot sessions now explicitly enable the harness's native configuration discovery on creation and Resume, addressing project skills missing from the session catalog without adding Nimrod-owned skill scanning or search paths. Installed-CLI verification is pending.
+
 - Advertised Copilot slash commands queue while the agent is working instead of rejecting the submitted draft. The FIFO head executes during work when fresh metadata advertises `allowDuringAgentExecution`; otherwise it waits for terminal idle. Switching sessions, Stop or disconnect withdraws undispatched commands without replay. New offline fixtures are authored but unrun; native acceptance remains pending.
 
 - Keep Pixel dissolve's fade mask aligned with the full modal at different zoom levels, avoiding an undersized reveal that pops to the final size when the effect ends. Decorative animation layers fill their viewport without oversizing it.
