@@ -70,6 +70,10 @@ class Session {
   ];
   rpc = {
     permissions: { getMode: async () => ({ mode: this.permissionMode }) },
+    skills: { list: async () => ({ skills: [
+      { name: 'fixture-skill', description: 'Fixture skill details', enabled: true },
+      { name: 'disabled-skill', description: 'Disabled fixture skill', enabled: false },
+    ] }) },
     metadata: { contextInfo: async parameters => {
       assert.deepEqual(parameters, { promptTokenLimit: 0, outputTokenLimit: 0 }, 'the runtime resolves the current model/tier');
       const state = process.env.NIMROD_FIXTURE_COPILOT_CONTEXT_STATE;

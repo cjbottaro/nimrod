@@ -434,6 +434,10 @@ test('SDK commands use discovery/invocation, retain arguments and choices, and n
     assert.equal(menu.kind, 'text'); assert.equal(menu.text, 'Fixture permission report: show');
     const report = await f.request('command', { name: 'perms', input: 'show  literal\nrest' });
     assert.equal(report.kind, 'text'); assert.equal(report.text, 'Fixture permission report: show  literal\nrest');
+    assert.deepEqual(await f.request('command-skills'), { skills: [
+      { name: 'fixture-skill', description: 'Fixture skill details', enabled: true },
+      { name: 'disabled-skill', description: 'Disabled fixture skill', enabled: false },
+    ] });
     await assert.rejects(f.request('command', { name: 'missing' }), /not advertised/);
     await assert.rejects(f.request('prompt', { text: '/permissions show' }), /invocation API/);
     await f.request('command', { name: 'discover-fixture' });

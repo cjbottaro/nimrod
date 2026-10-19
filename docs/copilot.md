@@ -347,6 +347,11 @@ adapter through Copilot's SDK and reconciles the confirmed model. Supplying an
 explicit model argument bypasses the picker; richer model-command syntax is
 passed through without interpretation.
 
+For `/skills info`, Copilot's command metadata omits the required skill name.
+Nimrod therefore shows Copilot's current skill catalog after you choose
+**info**, then invokes the original slash command with that selection.
+`/skills list` and ordinary command output remain on the generic path.
+
 Command discovery, argument suggestions and modal/output fixtures are authored
 but unrun. This is not a claim of complete Copilot TUI command parity.
 

@@ -50,6 +50,9 @@ export function findCopilotCommand(commands: readonly CopilotCommand[], name: st
 export function isCopilotModelCommand(command: CopilotCommand): boolean {
   return command.kind === 'builtin' && command.name.toLowerCase() === 'model';
 }
+export function isCopilotSkillsInfo(command: CopilotCommand, input: string | undefined): boolean {
+  return command.kind === 'builtin' && command.name.toLowerCase() === 'skills' && input?.trim().toLowerCase() === 'info';
+}
 export interface CommandChoice { id: string; label: string; detail?: string; }
 
 /** Validate result-owned choices; never turn arbitrary result text into an executable choice. */
@@ -60,5 +63,16 @@ export function commandChoices(value: unknown): CommandChoice[] {
     if (!record(option) || typeof option.name !== 'string' || !option.name || /[\r\n\u0000]/.test(option.name) || seen.has(option.name)) throw new Error('Copilot returned invalid command choices.');
     seen.add(option.name);
     return { id: option.name, label: option.name, detail: [typeof option.group === 'string' ? option.group : '', typeof option.description === 'string' ? option.description : ''].filter(Boolean).join(' · ') };
+  });
+}
+
+export function copilotSkillChoices(value: unknown): CommandChoice[] {
+  if (!record(value) || !Array.isArray(value.skills)) throw new Error('Copilot returned an invalid skill catalog.');
+  const seen = new Set<string>();
+  return value.skills.map(skill => {
+    if (!record(skill) || typeof skill.name !== 'string' || !skill.name || /[\r\n\u0000]/.test(skill.name) || seen.has(skill.name)
+      || typeof skill.description !== 'string' || typeof skill.enabled !== 'boolean') throw new Error('Copilot returned an invalid skill catalog.');
+    seen.add(skill.name);
+    return { id: skill.name, label: skill.name, detail: `${skill.enabled ? '' : 'Disabled · '}${skill.description}` };
   });
 }

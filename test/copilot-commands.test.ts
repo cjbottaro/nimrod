@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import readOnlyCommands from './fixtures/copilot-read-only-commands.json' with { type: 'json' };
-import { copilotCommands, copilotSlashCommands, isCopilotModelCommand, parseCopilotCommand } from '../src/copilot/commands';
+import { copilotCommands, copilotSkillChoices, copilotSlashCommands, isCopilotModelCommand, isCopilotSkillsInfo, parseCopilotCommand } from '../src/copilot/commands';
 import { CopilotSession, type CopilotSessionUi } from '../src/copilot/session';
 import type { BridgeRequest } from '../src/copilot/connection';
 import type { ConversationViewMessage } from '../src/conversation-view-host';
@@ -41,6 +41,10 @@ test('SDK command metadata retains aliases, hints and choices, without synthetic
   assert.deepEqual(parseCopilotCommand('/permissions'), { name: 'permissions' });
   assert.equal(isCopilotModelCommand(copilotCommands([{ name: 'model', kind: 'builtin' }])[0]), true);
   assert.equal(isCopilotModelCommand(copilotCommands([{ name: 'model', kind: 'client' }])[0]), false);
+  const skills = copilotCommands([{ name: 'skills', kind: 'builtin' }])[0];
+  assert.equal(isCopilotSkillsInfo(skills, ' info '), true);
+  assert.deepEqual(copilotSkillChoices({ skills: [{ name: 'a', description: 'Skill A', enabled: true }] }),
+    [{ id: 'a', label: 'a', detail: 'Skill A' }]);
   const interaction = copilotInteraction(() => undefined);
   assert.deepEqual(interaction.prepare('/permissions', {}), { kind: 'request', message: { type: 'command' }, preview: false, navigate: false });
   assert.equal(interaction.prepare('Hello', {}).kind, 'request');
@@ -106,6 +110,50 @@ for (const captured of readOnlyCommands) test(`captured read-only /${captured.na
     assert.equal(output.originLabel, `Copilot command · /${captured.command.name}`);
     assert.equal(f.sent.some(request => request.method === 'prompt' || request.method === 'configure'), false);
     assert.deepEqual(f.completions, []);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('Copilot /skills info fills the omitted skill argument from the public harness catalog', async () => {
+  let choose!: (value: string | undefined) => void;
+  const commands = [{ name: 'skills', description: 'Manage skills', kind: 'builtin',
+    input: { hint: '', choices: [{ name: 'list', description: 'List skills' }, { name: 'info', description: 'Show skill details' }] } }];
+  const f = await fixture(async (title, choices) => {
+    assert.equal(title, 'Copilot /skills info');
+    assert.deepEqual(choices, [
+      { id: 'fixture-skill', label: 'fixture-skill', detail: 'Fixture details' },
+      { id: 'disabled-skill', label: 'disabled-skill', detail: 'Disabled · Disabled details' },
+    ]);
+    return new Promise(resolve => { choose = resolve; });
+  }, commands);
+  try {
+    const handling = f.session.handle({ type: 'command', id: 'skill-info', text: '/skills info' });
+    assert.equal(f.sent.at(-1)?.method, 'command-skills');
+    f.reply({ skills: [
+      { name: 'fixture-skill', description: 'Fixture details', enabled: true },
+      { name: 'disabled-skill', description: 'Disabled details', enabled: false },
+    ] }, 'command-skills');
+    await flush(); choose('fixture-skill'); await flush();
+    assert.equal(f.sent.at(-1)?.method, 'command-skills', 'revalidate the selected skill before invocation');
+    f.reply({ skills: [{ name: 'fixture-skill', description: 'Fixture details', enabled: true }] }, 'command-skills');
+    await flush();
+    assert.deepEqual(f.sent.at(-1) && { method: f.sent.at(-1)!.method, name: f.sent.at(-1)!.name, input: f.sent.at(-1)!.input },
+      { method: 'command', name: 'skills', input: 'info fixture-skill' });
+    f.reply({ kind: 'text', text: 'Fixture skill details' }); await handling;
+    assert.equal(f.sent.filter(request => request.method === 'command').length, 1);
+    assert.equal(f.sent.some(request => request.method === 'prompt'), false);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('cancelling Copilot /skills info picker invokes no command', async () => {
+  const commands = [{ name: 'skills', description: 'Manage skills', kind: 'builtin',
+    input: { hint: '', choices: [{ name: 'info', description: 'Show skill details' }] } }];
+  const f = await fixture(async () => undefined, commands);
+  try {
+    const handling = f.session.handle({ type: 'command', id: 'skill-info-cancel', text: '/skills info' });
+    f.reply({ skills: [{ name: 'fixture-skill', description: 'Fixture details', enabled: true }] }, 'command-skills');
+    await handling;
+    assert.equal(f.sent.some(request => request.method === 'command'), false);
+    assert.equal(f.session.state.configurationOperations?.some(operation => operation.text === '/skills info'), false);
   } finally { f.session.disconnect('fixture complete'); }
 });
 

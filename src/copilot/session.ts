@@ -17,7 +17,7 @@ import { createCopilotPermissionConfiguration, isPermissionChange, permissionCom
 import { SessionConfigurationSet } from '../session-configuration-set';
 import { ConfigurationDeferred, ConfigurationSuperseded, ConfigurationUncertain, type SessionConfigurationController } from '../session-configuration';
 import { pickConfiguration } from '../configuration-picker';
-import { commandChoices, copilotCommands, findCopilotCommand, isCopilotModelCommand, parseCopilotCommand, type CommandChoice, type CopilotCommand } from './commands';
+import { commandChoices, copilotCommands, copilotSkillChoices, findCopilotCommand, isCopilotModelCommand, isCopilotSkillsInfo, parseCopilotCommand, type CommandChoice, type CopilotCommand } from './commands';
 
 interface Model extends CopilotImageModel {
   id: string;
@@ -262,6 +262,19 @@ export class CopilotSession {
         const current = findCopilotCommand(this.commands, name);
         if (!current || current.name !== command.name || !current.input?.choices?.some(choice => choice.name === selected)) throw new Error('Copilot command choices changed. Open the picker again.');
         input = selected;
+      }
+      // CLI 1.0.98 advertises `info` as a finite /skills choice, but omits the
+      // required second skill-name argument. Complete that harness interaction
+      // from the public session skill catalog before invoking the original command.
+      if (isCopilotSkillsInfo(command, input)) {
+        if (!this.ui.commandChoice) throw new Error('This Copilot command requires a skill picker that is unavailable.');
+        const choices = copilotSkillChoices(await this.connection.request('command-skills', {}, 'reject'));
+        if (!choices.length) throw new Error('Copilot did not advertise skills for this command.');
+        const selected = await this.ui.commandChoice('Copilot /skills info', choices, operation.signal);
+        if (operation.signal.aborted || this.ended || selected === undefined) return false;
+        const refreshed = copilotSkillChoices(await this.connection.request('command-skills', {}, 'reject'));
+        if (!refreshed.some(choice => choice.id === selected)) throw new Error('Copilot skill choices changed. Open the picker again.');
+        input = `info ${selected}`;
       }
       // Each iteration requires a fresh user choice; never retry an invocation.
       while (!operation.signal.aborted && !this.ended) {

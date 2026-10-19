@@ -187,6 +187,17 @@ async function dispatch(message) {
     case 'commands':
       if (!session) throw new Error('No connected Copilot session');
       return await refreshCommands();
+    case 'command-skills': {
+      if (!session) throw new Error('No connected Copilot session');
+      const result = await session.rpc.skills.list();
+      if (!result || !Array.isArray(result.skills)) throw new Error('Copilot returned an invalid skill catalog');
+      return { skills: result.skills.map(skill => {
+        if (!skill || typeof skill.name !== 'string' || !skill.name
+          || typeof skill.description !== 'string' || typeof skill.enabled !== 'boolean')
+          throw new Error('Copilot returned an invalid skill catalog');
+        return { name: skill.name, description: skill.description, enabled: skill.enabled };
+      }) };
+    }
     case 'permission-change': {
       if (!session) throw new Error('No connected Copilot session');
       if (commandExecuting) throw new Error('A Copilot command is already executing. Nothing was invoked.');

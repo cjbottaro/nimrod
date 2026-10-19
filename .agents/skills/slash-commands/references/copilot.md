@@ -34,23 +34,23 @@ Canonical protocol/lifecycle: [Copilot commands](../../features/references/copil
 | `/fleet` | — | Agent orchestration/activity | Unaudited; model-backed |
 | `/init` | — | Repository instructions/files/settings | Unaudited; stateful/destructive potential |
 | `/list-dirs` | — | Transcript permission/path report | **Generic observed**: text output; no state events or adapter |
-| `/mcp` | — | MCP configuration/status | **Partial/generic observed**: `list` returns text with no state events; show/enable/disable/reload remain unaudited |
-| `/memory` | — | Cross-session memory setting/status | Unaudited; persisted setting and UI reconciliation not characterized |
+| `/mcp` | — | MCP configuration/status | **Partial/generic observed**: `list` and no-server `show` return text with no state events; configured-server show and enable/disable/reload remain unaudited |
+| `/memory` | — | Cross-session memory setting/status | **Partial/generic observed**: `show` returns Markdown text with no state events; on/off mutation remains unaudited |
 | `/model` | `/models` | Model, effort, defaults/Plan model | **Source implemented narrow adapter**: bare picker and exact enabled live-model completion compensate for CLI `completed` gaps; richer syntax passes through; latest native acceptance pending |
 | `/permissions` | — | Permission policy | **Partial/generic observed**: `show` returns text with no state events; `allow-all` uses dedicated live effect/reconciliation; `default` and native mutation acceptance pending |
 | `/plan` | — | Mode, plan lifecycle, agent work | Unaudited; overlaps implemented mode lifecycle but must remain harness-command-owned |
-| `/plugin` | — | Plugin catalog/configuration | Unaudited; only `list` advertised in this snapshot |
-| `/remote` | — | External remote-control state | Unaudited; external/stateful |
+| `/plugin` | — | Plugin catalog/configuration | **Partial/generic observed**: `list` returns text with no state events; mutation grammar remains unaudited |
+| `/remote` | — | External remote-control state | **Partial/generic observed**: `show` returns text with no state events; on/off remain unaudited and external/stateful |
 | `/rename` | — | Session title/history/sidebar | Unaudited; requires authoritative title reconciliation |
 | `/research` | — | Model-backed GitHub/web work | Unaudited; external/model request requires authorization |
 | `/reset-allowed-tools` | — | Permission/tool approvals | Unaudited; stateful |
 | `/review` | — | Model-backed code review | Unaudited; provider work requires authorization |
 | `/rubber-duck` | — | Model-backed critique/subagent | Unaudited; provider work requires authorization |
-| `/sandbox` | — | Sandbox paths/network/CA/settings | Unaudited; security-sensitive and potentially destructive |
+| `/sandbox` | — | Sandbox paths/network/CA/settings | **Partial/generic observed**: `status` and `policy` return text with no state events; config/enable/disable/CA remain unaudited and security-sensitive |
 | `/security-review` | — | Model-backed security review | Unaudited; provider work requires authorization |
-| `/session` | `/sessions` | Session metadata/checkpoints/files/title | **Partial/generic observed**: `info`, `files` and `plan` return text with no state events; checkpoints/rename remain unaudited |
+| `/session` | `/sessions` | Session metadata/checkpoints/files/title | **Partial/generic observed**: `info`, `checkpoints`, `files` and `plan` return text with no state events; rename remains unaudited |
 | `/share` | — | External sharing/publication state | Unaudited; external side effect, never probe automatically |
-| `/skills` | — | Skill catalog/reload | Unaudited; list/info likely output, reload stateful |
+| `/skills` | — | Skill catalog/reload | **Partial/source implemented**: `list` is generic text; `info` needs a public skill-catalog picker adapter; reload remains unaudited/stateful |
 | `/subconscious` | — | Memory consolidation/model work | Unaudited; stateful/model-backed |
 | `/usage` | — | Transcript usage report | **Generic observed**: text output; no state events or adapter |
 
@@ -60,12 +60,12 @@ Canonical protocol/lifecycle: [Copilot commands](../../features/references/copil
 | --- | --- | --- | --- |
 | `/model` | Bare and exact catalog invocation returned `completed`; no picker/effect/model event, and live model remained unchanged | For bare canonical builtin command, show enabled Copilot catalog; after original invocation, apply only exact enabled catalog IDs with `session.setModel()` and reconcile `model.getCurrent()` | Remove or narrow when the pinned SDK/CLI exposes picker metadata plus a confirmed live-switch effect/event |
 | `/permissions allow-all` | Active-turn permission change needs independent readiness and authoritative policy reconciliation | Dedicated Copilot permission configuration owner invokes exact native command and confirms policy | Remove when generic command effects fully expose the same active-turn lifecycle |
+| `/skills info` | Metadata advertises `info`, but omits the required second `<skill-name>` argument; direct invocation returns a usage error | Read `session.skills.list()`, present a harness-owned skill picker, revalidate the choice, then invoke exact `/skills info <name>` | Remove when command metadata/results expose the nested skill choice |
 
 ## Next audit order
 
-1. Remaining provider-free/read-only: `/session checkpoints`, `/mcp show`
-   against an isolated configured fixture, `/skills list/info`, `/plugin list`,
-   `/memory show`, `/remote show`, `/sandbox status/policy`.
+1. Remaining provider-free/read-only: configured-server `/mcp show`, valid
+   `/skills info` native acceptance, and any newly advertised report commands.
 2. Local state: `/rename`, `/memory on/off`, `/skills reload`, `/plugin`, `/init`,
    `/reset-allowed-tools`.
 3. Lifecycle/configuration: `/autopilot`, `/plan`, `/compact`, richer `/model`,
@@ -81,10 +81,14 @@ whether a narrow adapter remains necessary.
 
 An isolated no-prompt SDK session with a disposable custom session filesystem
 executed `/usage`, `/env`, `/list-dirs`, `/permissions show`, `/session info`,
-`/session files`, `/session plan` and `/mcp list`. Every invocation returned
-typed `text` (Markdown only for `/env`), emitted no session state events, made no
-model request and needed no adapter. Permission callbacks were fail-closed and
-unexpected user input aborted the probe. Sanitized shapes are retained in
+`/session files`, `/session plan`, `/session checkpoints`, `/mcp list`, no-server
+`/mcp show`, `/skills list`, `/plugin list`, `/memory show`, `/remote show`, and
+`/sandbox status/policy`. Every successful invocation returned typed `text`
+(Markdown for `/env` and `/memory show`), emitted no command-caused state events,
+made no model request and needed no output adapter. `/skills info` instead
+reported its missing required skill name, establishing the nested-picker gap.
+Permission callbacks were fail-closed and unexpected user input aborted the
+probe. Sanitized successful shapes are retained in
 `test/fixtures/copilot-read-only-commands.json`; their offline fixtures are
 authored but unrun. This evidence does not cover busy/native UI behavior or
 unlisted subcommands.
