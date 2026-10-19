@@ -9,6 +9,8 @@ Read repository `AGENTS.md`, [architecture](references/architecture.md) and the 
 
 When adding or changing error paths, notices, banners, flash messages or operational notifications, load the [error presentation policy](references/error-presentation.md). It owns ownership-based placement (session conversation notices versus the application notice strip), shared routing, wording, deduplication and lifecycle. Do not invent additional error surfaces.
 
+When designing or reviewing pending agent decisions (including permission requests and agent questions), follow the [dismiss-and-resume workflow](references/dismiss-and-resume.md): modal dismissal is separate from request settlement; use a persistent session-local pending-action banner to reopen supported pending interactions.
+
 When adding or changing a modal, dialog, picker or preview, load the [modal implementation checklist](references/modal-layout.md#implementation-checklist). Ordinary modals **must** use the shared shell and `src/modal-motion.ts` lifecycle helpers (or an existing component that uses them), not raw dialog methods or custom open/close animations. Full-window Settings and native OS choosers are explicit exceptions documented there. Shared styling alone does not wire all motion paths.
 
 When adding or changing Settings sliders, follow [shared range inputs](references/settings-layout.md#range-inputs): use the shared track styling and initialize/update fill after programmatic value changes, not only after user input. Never dispatch fake input/change events to force initial paint.
@@ -84,6 +86,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Global conversation/code font families and sizes, installed-font pickers, previews and content-only reflow | [Typography](references/typography.md) | [Typography settings](../../../docs/settings.md#typography) |
 | Bindable actions, recorder and conflicts | [Keybindings](references/keybindings.md) | [Keybindings](../../../docs/keybindings.md) |
 | Read-only built-in Pi MCP status inspection | [MCP inspector](references/mcp-inspector.md) | [MCP inspector](../../../docs/mcp.md) |
+| Dismiss-and-resume: pending agent decisions, picker dismissal and banner reopening | [Dismiss-and-resume workflow](references/dismiss-and-resume.md) | [Copilot permissions and questions](../../../docs/copilot.md#permissions-and-questions) |
 | Palette page lifecycle and cancellation | [Command interactions](references/command-interactions.md) | [Command palette](../../../docs/command-palette.md) |
 | Palette command ranking and usage storage | [Command ranking](references/command-ranking.md) | [Ordering](../../../docs/command-palette.md#ordering) |
 | Shared modal shell, configurable motion and action focus | [Modal layout](references/modal-layout.md) | [Confirmations](../../../docs/command-palette.md#confirmation-dialogs) |

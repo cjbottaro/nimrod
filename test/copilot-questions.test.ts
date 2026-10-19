@@ -20,6 +20,7 @@ function fixture() {
   });
   let selected = true, pending = 0, bannerCount = 0, opens = 0, closes = 0;
   const errors: string[] = [];
+  let reviewBanner: (() => void) | undefined;
   const show = dialog.showModal.bind(dialog), close = dialog.close.bind(dialog);
   dialog.showModal = () => { opens++; show(); }; dialog.close = value => { closes++; close(value); };
   const interaction = new CopilotQuestionInteraction({
@@ -31,7 +32,7 @@ function fixture() {
       child.showModal(); answer.focus();
     }),
     cancelInput: () => { if (child.open) child.close('cancel'); },
-    changed: delta => { pending += delta; }, banner: count => { bannerCount = count; }, error: message => { errors.push(message); },
+    changed: delta => { pending += delta; }, banner: (count, review) => { bannerCount = count; reviewBanner = count ? review : undefined; }, error: message => { errors.push(message); },
   });
   return { document, dialog, child, input, answer, draft, interaction, errors,
     counts: () => ({ pending, bannerCount, opens, closes }),
@@ -42,6 +43,8 @@ function fixture() {
     },
     query(value: string) { input.value = value; input.dispatchEvent(new win.Event('input')); },
     escape() { input.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); },
+    nativeCancel() { dialog.dispatchEvent(new win.Event('cancel', { cancelable: true })); },
+    reviewBanner() { assert.ok(reviewBanner, 'pending banner has a reopen action'); reviewBanner(); },
     setSelected(value: boolean) { selected = value; interaction.setActive(value); },
     dispose() { interaction.dispose(); palette.dispose(); win.close(); },
   };
@@ -66,6 +69,44 @@ test('question choices retain exact answers, advance in one picker and Escape ne
     f.interaction.review(); f.click('freeform'); assert.deepEqual(await two, { answer: 'freeform', wasFreeform: false });
     owner.abort(); assert.equal(await three, undefined);
     assert.equal(f.draft.value, 'keep draft'); assert.equal(f.document.activeElement, f.draft);
+  } finally { owner.abort(); f.dispose(); }
+});
+
+test('native dismissal retains unanswered questions and banner reopening across navigation', async () => {
+  const f = fixture(), owner = new AbortController();
+  try {
+    let answers = 0;
+    const one = f.interaction.request({ question: 'Read the transcript first?', choices: ['Ready'] }, owner.signal);
+    void one.then(() => { answers++; });
+    f.nativeCancel(); await tick();
+    assert.equal(f.dialog.open, false);
+    assert.equal(f.document.activeElement, f.draft);
+    assert.equal(answers, 0, 'dismissal must not resolve the SDK callback');
+    assert.equal(f.counts().bannerCount, 1);
+
+    f.setSelected(false); f.setSelected(true);
+    assert.equal(f.dialog.open, false, 'navigation preserves explicit dismissal');
+    const two = f.interaction.request({ question: 'Next question?', choices: ['Done'] }, owner.signal);
+    void two.then(() => { answers++; });
+    await tick();
+    assert.equal(f.dialog.open, false, 'arrivals only update the pending banner');
+    assert.equal(f.counts().bannerCount, 2);
+    assert.equal(answers, 0);
+
+    f.reviewBanner();
+    assert.equal(f.dialog.open, true);
+    assert.equal(f.document.querySelector('#palette-context')!.textContent, 'Read the transcript first?');
+    assert.equal(answers, 0, 'reopening is presentation only');
+    f.click('Ready'); assert.deepEqual(await one, { answer: 'Ready', wasFreeform: false });
+    assert.equal(f.dialog.open, true);
+    assert.equal(f.counts().bannerCount, 1);
+    f.click('Done'); assert.deepEqual(await two, { answer: 'Done', wasFreeform: false });
+    await tick();
+    assert.equal(answers, 2);
+    assert.equal(f.dialog.open, false);
+    assert.equal(f.counts().bannerCount, 0);
+    assert.equal(f.document.activeElement, f.draft);
+    assert.equal(f.draft.value, 'keep draft');
   } finally { owner.abort(); f.dispose(); }
 });
 
