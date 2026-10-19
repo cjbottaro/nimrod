@@ -17,6 +17,7 @@ Explicitly requested builds use checkout-local targets and publish verified whol
 
 ## Code map and invariants
 
+- `scripts/build-app.mjs`: selects macOS app packaging/signature verification or a Linux native `--no-bundle` build, then stages the configured resource mappings and native esbuild helper beside the Linux executable. Linux local builds produce no installer.
 - `mise.toml`: pins `aqua:mozilla/sccache` at 0.18.0 alongside Rust/Node;
   project-scoped `RUSTC_WRAPPER=sccache`, `CARGO_INCREMENTAL=0` apply to dev,
   check, test, build and `mise exec` Cargo commands.
@@ -54,8 +55,7 @@ Explicitly requested builds use checkout-local targets and publish verified whol
   macOS: copy the complete `Nimrod.app` from the worktree's
   `src-tauri/target/release/bundle/macos/` into the same relative location in main,
   preserving bundle metadata/resources (for example with `ditto` into staging).
-  Linux: publish the executable to main's `src-tauri/target/release/nimrod`, preserving
-  executable permissions. Honor an explicit alternate artifact destination instead.
+  Linux: publish the executable, adjacent `esbuild`, `resources/`, `bin/` and license/notice files to main’s `src-tauri/target/release/`, preserving executable permissions. These resources belong to the same build. Honor an explicit alternate artifact destination instead.
 - Verify the published artifact matches the build; on macOS run
   `npm run verify:bundle -- /absolute/path/to/main/src-tauri/target/release/bundle/macos/Nimrod.app`.
   Report the source branch and published path. Never claim a worktree-only package
@@ -64,7 +64,7 @@ Explicitly requested builds use checkout-local targets and publish verified whol
   merge; the user accepts that requested builds can overwrite each other's output.
   No extra publication approval is needed. It does not authorize launching, quitting
   or restarting the app. An older running process keeps its old code until the user
-  restarts it. Linux publication is intended behavior, not locally verified acceptance;
+  restarts it. Linux build/publication evidence is recorded in [verification](verification.md); native execution remains unverified;
   Windows remains a possible future target with no current CLI wrapper.
 
 ## Performance-report build identity
@@ -79,7 +79,7 @@ Explicitly requested builds use checkout-local targets and publish verified whol
 
 `src-tauri/build.rs` stages a target-matching native esbuild executable and license from already-installed npm dependencies. It is a Tauri `externalBin` sidecar, not a Node backend. Cargo check/test may prepare this ignored asset; that is dependency staging, not app packaging. No runtime downloads or package installation. Cross compilation requires the matching target esbuild dependency installed locally; wrong-target helpers fail staging.
 
-Requested app bundles include/sign the sidecar. The macOS bundle verifier checks `Contents/MacOS/esbuild` before the whole app. Linux publication now requires both `nimrod` and its adjacent `esbuild` companion from the same build (and applicable notices); copying only the main executable is incomplete. Linux/possible Windows packaging and helper execution remain unverified. The separate runtime bundle cache is owned by [card plugins](card-plugins.md#native-compilercache-stage-e), not sccache.
+Requested app bundles include/sign the sidecar. The macOS bundle verifier checks `Contents/MacOS/esbuild` before the whole app. Linux publication now requires both `nimrod` and its adjacent `esbuild` companion from the same build (and applicable notices); copying only the main executable is incomplete. Linux local executable/resource staging is implemented; installer packaging, helper execution and possible Windows packaging remain unverified. The separate runtime bundle cache is owned by [card plugins](card-plugins.md#native-compilercache-stage-e), not sccache.
 
 ## Cache boundaries / pitfalls
 
