@@ -31,6 +31,37 @@ Share UI mechanics, not harness semantics. [Consumer-oriented interfaces](consum
 
 The initial POC aliased `mountPiView` and introduced `ViewHost.acp` branches. It also made ACP construct empty Pi queues/extensions and Pi model controls. That proved reuse, but would make each new integration another set of conditions in the shared renderer. The review extracts only boundaries exercised by Pi and ACP rather than inventing a generic controller or public app-extension framework.
 
+### Harness command ownership
+
+Harness commands and Nimrod actions are separate user entry points, even when
+they overlap in visible purpose. A harness slash command remains owned by that
+harness: discover, validate and execute it through the harness's command
+interface, and preserve its arguments, persistence, effects, warnings and
+lifecycle. Never intercept a harness command and substitute a Nimrod action such
+as **Select model…**, nor implement a Nimrod action by submitting slash text.
+
+Prefer generic, metadata-driven command plumbing for every integration:
+advertised commands, aliases, argument metadata, invocation, standardized
+results/effects, cancellation and explicit unknown-result failure. Shared
+pickers/modals may present a harness-owned interaction, but presentation reuse
+does not change command ownership or dispatch an application action.
+
+When a supported harness interface cannot express a command's required
+interaction or host effect, add the narrowest concrete harness adapter that
+completes the original command semantics. Key adapters by stable harness
+semantics or typed effects where possible; a command-name-specific adapter is a
+last resort justified by an observed interface gap. It must still invoke or
+finalize the harness command rather than redirecting to a similar Nimrod action.
+Unknown or ambiguous operations fail explicitly without prompt fallback,
+automatic replay or invented parity.
+
+This policy applies equally to Pi, Copilot, curated future integrations and
+generic ACP agents. It does not require every harness to expose slash commands
+or identical command capabilities. Concrete references own documented
+exceptions and verification evidence; for example, [Copilot slash
+commands](copilot-commands.md) records the pinned CLI's missing bare `/model`
+picker projection and its narrow adapter.
+
 ### Two different extension surfaces
 
 | Surface | Owner and supported scope |
