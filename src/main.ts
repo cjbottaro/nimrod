@@ -64,7 +64,7 @@ import { Dialogs } from './dialogs';
 import { COMMAND_USAGE_KEY, readCommandUsage } from './command-ranking';
 import { abbreviateHome, projectPathParts } from './project-path';
 import { installCommandPalette, type PalettePage } from './command-palette';
-import { applicationCommands, isApplicationAction, runApplicationAction } from './application-actions';
+import { applicationCommands, isApplicationAction, runApplicationAction, type ApplicationActionId } from './application-actions';
 import { ACTIONS, actionContextAvailable, actionDefinition, bindingsFor, installKeybindingDispatch, isMac, shortcutLabel, type ActionId } from './keybindings';
 import { installSessionPopouts } from './session-popouts';
 import transcript from './pi/transcript.html?raw';
@@ -1815,7 +1815,7 @@ function refreshShortcutHints(): void {
   if (zoomHint) zoomHint.textContent = `Zoom in: ${shortcutHint('zoom-in') || 'unbound'} · Zoom out: ${shortcutHint('zoom-out') || 'unbound'} · Reset to 100%: ${shortcutHint('zoom-reset') || 'unbound'}. Shortcuts pause in other dialogs.`;
 }
 function openKeybindings(): Promise<void> { return invoke('open_global_settings', { category: 'keybindings' }); }
-async function runApplication(id: ActionId): Promise<void> {
+async function runApplication(id: ApplicationActionId): Promise<void> {
   const cause = 'application-action:' + id;
   try { await runApplicationAction(id); notices.resolve(cause); }
   catch (error) { notices.report({ id: cause, operation: actionDefinition(id).label, message: String(error) }); }

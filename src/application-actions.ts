@@ -1,18 +1,21 @@
 import { invoke } from '@tauri-apps/api/core';
-import { actionsForWindow, type ActionId } from './keybindings';
+import { actionsForWindow, type ACTIONS, type ActionId } from './keybindings';
+
+type ApplicationAction = Extract<typeof ACTIONS[number], { platform: 'linux' }>;
+export type ApplicationActionId = ApplicationAction['id'];
 
 /** Linux's menuless app actions. macOS keeps its native menu/accelerators. */
 export function applicationActions(window: Window) {
-  return actionsForWindow(window).filter(action => 'platform' in action && action.platform === 'linux');
+  return actionsForWindow(window).filter((action): action is ApplicationAction => 'platform' in action && action.platform === 'linux');
 }
-export function isApplicationAction(window: Window, id: ActionId): boolean {
+export function isApplicationAction(window: Window, id: ActionId): id is ApplicationActionId {
   return applicationActions(window).some(action => action.id === id);
 }
-export function runApplicationAction(id: ActionId): Promise<void> {
+export function runApplicationAction(id: ApplicationActionId): Promise<void> {
   return invoke('application_action', { action: id });
 }
-export function applicationCommands(window: Window, run: (id: ActionId) => Promise<void> = runApplicationAction) {
-  const details: Partial<Record<ActionId, string>> = {
+export function applicationCommands(window: Window, run: (id: ApplicationActionId) => Promise<void> = runApplicationAction) {
+  const details: Record<ApplicationActionId, string> = {
     'open-project': 'Choose a directory to open in its own project window',
     quit: 'Quit all Nimrod windows after saving drafts and stopping owned agents',
     'minimize-window': 'Minimize this window',
