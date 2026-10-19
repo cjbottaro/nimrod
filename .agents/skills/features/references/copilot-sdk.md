@@ -193,8 +193,11 @@ slash aliases to Nimrod actions, ACP mode selectors, Restart,
 MCP inspector or other unsupported controls. [Copilot slash commands](copilot-commands.md)
 use the released SDK's public experimental command discovery/invocation APIs,
 argument metadata and typed results; authored fixtures are unrun. Returned choices
-reuse the shared modal lifecycle, not app-action dispatch. Model invocation-effect
-finalization and richer dialog/scoped-setting effects remain unsupported.
+reuse the shared modal lifecycle, not app-action dispatch. Model and Plan-model
+effects use the public experimental finalizer after their typed host work;
+mutation or finalization uncertainty disconnects for authoritative recovery.
+Scoped model-picker metadata is returned to the originating command, while model
+enabling and non-model dialog kinds remain unsupported.
 The bridge reads and changes the pinned SDK session mode through
 `session.rpc.mode.get/set`, supporting **Interactive**, **Plan** and
 **Autopilot** without replacing the session or sending a prompt. Plan exit

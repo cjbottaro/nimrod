@@ -261,8 +261,12 @@ export class CopilotSession {
           continue;
         }
         if (result.kind === 'show-dialog') {
-          if (!record(result.dialog) || result.dialog.kind !== 'model-picker' || result.dialog.scope !== undefined || result.dialog.target !== undefined || result.dialog.modelToEnable !== undefined || !this.ui.commandChoice)
-            throw new Error('This Copilot command requires a dialog or settings scope not supported by Nimrod.');
+          if (!record(result.dialog) || result.dialog.kind !== 'model-picker'
+            || result.dialog.scope !== undefined && typeof result.dialog.scope !== 'string'
+            || result.dialog.target !== undefined && typeof result.dialog.target !== 'string'
+            || result.dialog.modelToEnable !== undefined
+            || !this.ui.commandChoice)
+            throw new Error('This Copilot command requires an invalid or unsupported dialog.');
           const choices = this.models.map(model => ({ id: model.id, label: model.name, detail: model.id }));
           if (!choices.length) throw new Error('Copilot did not advertise models for this command dialog.');
           const selected = await this.ui.commandChoice('Copilot model', choices, operation.signal);
@@ -291,10 +295,19 @@ export class CopilotSession {
           if (this.state.busy) throw new Error('Copilot started working before the command prompt could be submitted. Nothing was replayed.');
           await this.sendPrompt(id, result.prompt, result.displayPrompt);
           return;
-        } else if (result.kind === 'set-model' || result.kind === 'set-plan-model') {
-          // The pinned release exposes these effects, but their finalization is
-          // internal SDK API. Do not approximate rollback/settings semantics.
-          throw new Error(`Copilot returned a ${result.kind} effect that this SDK integration cannot safely finalize. Use Nimrod’s model action for session model changes.`);
+        } else if (result.kind === 'set-model') {
+          if (result.effectFinalized !== true || !record(result.model)) throw new Error('Copilot returned an incomplete finalized model effect.');
+          this.applyConfigurationSnapshot(result.model);
+          if (typeof result.warning === 'string' && result.warning) this.ui.notice(result.warning);
+        } else if (result.kind === 'set-plan-model') {
+          if (result.effectFinalized !== true || typeof result.message !== 'string') throw new Error('Copilot returned an incomplete finalized plan-model effect.');
+          if (result.message) this.commandOutput(result.message, name);
+        } else if (result.kind === 'command-effect-failed') {
+          const error = typeof result.error === 'string' && result.error ? result.error : 'Copilot did not complete its command effect.';
+          this.ui.publish({ type: 'submissionReceipt', id, outcome: result.outcome === 'cancelled' ? 'rejected' : 'unknown',
+            operation: 'Run Copilot command', error });
+          if (result.outcome !== 'cancelled') this.disconnect(`${error} Reconnect explicitly to read Copilot’s authoritative configuration.`);
+          return;
         } else throw new Error(`Unsupported Copilot command result "${result.kind}". No fallback prompt was sent.`);
         this.ui.publish({ type: 'submissionReceipt', id, outcome: 'accepted' });
         return;

@@ -317,15 +317,18 @@ results never open a picker in another conversation or overwrite your draft.
 Already executed effects are not rolled back. Command-output rows stay within
 the current connection and are not restored on Close/Resume.
 
-New commands work automatically when they use the supported SDK metadata and
-result types: text/timeline output, completion, subcommand choices or an explicit
-interactive agent-prompt result. Unknown commands are rejected with the draft
-kept. Unsupported results report an error—never an ordinary prompt fallback or
-automatic retry. Some model commands return host-side model/settings effects
-that this SDK release does not publicly expose how to finalize; these remain
-unsupported. Use **Select model…** in the command palette or the Status-area
-model control for Nimrod's independent model picker. Scoped/model-enabling
-requests, arbitrary new dialog kinds and autonomous modes are not supported.
+New commands work automatically when they use supported SDK metadata and
+result/effect types: text/timeline output, completion, subcommand choices,
+model pickers and effects, or an explicit interactive agent-prompt result.
+Unknown commands are rejected with the draft kept. Unsupported results report
+an error—never an ordinary prompt fallback or automatic retry.
+
+Harness commands remain independent from overlapping Nimrod actions. Copilot
+`/model` uses Copilot's picker/effect/persistence transaction; **Select model…**
+uses Nimrod's session configuration action. Both can select the live model, but
+neither redirects to the other. Scoped model pickers are returned to Copilot for
+interpretation. Model-enabling requests, arbitrary new dialog kinds and
+autonomous modes remain unsupported.
 
 Command discovery, argument suggestions and modal/output fixtures are authored
 but unrun. This is not a claim of complete Copilot TUI command parity.

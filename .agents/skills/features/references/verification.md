@@ -27,8 +27,9 @@ fixtures. The user reports bare `/permissions` produces the same report as
 uses advertised argument choices before invocation; revised fixtures model a text
 default and cover zero-invocation cancellation. Those fixtures are unrun, and
 post-fix installed catalog/command behavior, modal focus and macOS/Linux acceptance
-remain unverified. Host-side model effect
-finalization is explicitly unsupported, not inferred from SDK type presence.
+remain unverified. Host-side model and Plan-model effect application/finalization
+is source-implemented against the pinned SDK's public experimental transaction;
+its new offline fixtures are unrun, and installed-CLI behavior remains unverified.
 
 - TypeScript/jsdom shell tests use mocked native IPC.
 - Rust fixture tests use actual pipes, owned subprocesses and generated disposable session files; deletion tests unlink only those fixtures.

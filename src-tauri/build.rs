@@ -156,6 +156,7 @@ fn main() {
     for path in [
         "copilot/bridge.mjs",
         "copilot/configuration.mjs",
+        "copilot/command-effects.mjs",
         "copilot/permissions.mjs",
         "copilot/permission-configuration.mjs",
         "scripts/prepare-copilot.mjs",
