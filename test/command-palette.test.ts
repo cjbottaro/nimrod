@@ -336,7 +336,7 @@ test('late project discovery is discarded and empty picker directs users to nati
     const pending = f.palette.projects(); f.palette.close(); await tick();
     resolveLoad({ items: [] }); await pending; assert.equal(f.dialog.open, false);
     const next = f.palette.projects(); resolveLoad({ items: [] }); await next;
-    assert.match(f.status()!, /No recent projects.*File → Open project/);
+    assert.match(f.status()!, /No recent projects.*Open project/);
     assert.equal(f.win.document.querySelector('#palette-browse'), null);
   } finally { f.dispose(); }
 });

@@ -18,6 +18,7 @@ import { copilotSdkScope } from '../src/copilot/session-lifecycle';
 
 // Real shell/renderer/controller bundle, mocked native boundary—not native WebKit acceptance.
 interface ShellOptions {
+  platform?: string;
   menuError?: string;
   menuGate?: Promise<void>;
   sdkCommands?: JsonRecord[];
@@ -92,6 +93,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   });
   const dom = new JSDOM(readFileSync('index.html', 'utf8'), { url: options.popout ? 'http://tauri.localhost/?popout' : options.globalSettings ? 'http://tauri.localhost/?settings=appearance' : 'http://tauri.localhost', runScripts: 'outside-only', pretendToBeVisual: true });
   const win = dom.window;
+  if (options.platform) Object.defineProperty(win.navigator, 'platform', { value: options.platform });
   stubDialogs(win);
   if (options.clock) win.Date.now = options.clock;
   if (options.timeRefresh) {
@@ -144,6 +146,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     transformCallback: (callback: (event: unknown) => void) => { const id = callbacks.size + 1; callbacks.set(id, callback); return id; }, unregisterCallback: () => {},
     invoke: async (command: string, args: JsonRecord = {}) => {
       calls.push({ command, args });
+      if (command === 'application_action') return;
       if (command === 'popup_session_menu') {
         await options.menuGate;
         if (options.menuError) throw new Error(options.menuError);
@@ -4237,6 +4240,37 @@ test('global Appearance exposes native-supported controls and applies immediatel
     assert.equal(slider.value, '70');
     assert.equal(f.calls.some(call => ['start_pi', 'stop_pi', 'write_pi'].includes(call.command)), false);
   } finally { f.win.close(); }
+});
+
+test('Linux exposes menu replacements in the welcome palette and dispatches Open/Quit without agent work', async () => {
+  const f = await fixture(undefined, { platform: 'Linux x86_64' });
+  const key = (name: string, extra: KeyboardEventInit = {}) => f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: name, ctrlKey: true, bubbles: true, cancelable: true, ...extra }));
+  try {
+    key('p', { shiftKey: true });
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
+    for (const label of ['Open project…', 'Quit Nimrod', 'Minimize window', 'Maximize / Restore window', 'Close window', 'About Nimrod']) assert.match(f.element('palette-list').textContent!, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    const input = f.element<HTMLInputElement>('palette-input'); input.value = 'About Nimrod'; input.dispatchEvent(new f.win.Event('input'));
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
+    key('o'); key('q'); await f.tick();
+    assert.deepEqual(f.calls.filter(call => call.command === 'application_action').map(call => call.args.action), ['about', 'open-project', 'quit']);
+    assert.equal(f.calls.some(call => ['start_pi', 'write_pi'].includes(call.command)), false);
+    f.preferences.external('{"keybindings":{"quit":[],"open-project":[]}}'); await f.tick();
+    key('q'); key('o'); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'application_action').length, 3);
+  } finally { f.win.close(); }
+});
+
+test('Linux Quit is available in global Settings and reference windows without session teardown in JS', async () => {
+  for (const options of [{ globalSettings: true }, { popout: { session: 'source', title: 'Source', text: 'reference', language: 'text' } }]) {
+    const f = await fixture(undefined, { ...options, platform: 'Linux x86_64' });
+    try {
+      await f.tick();
+      const before = f.calls.length;
+      f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'q', ctrlKey: true, bubbles: true, cancelable: true })); await f.tick();
+      assert.deepEqual(f.calls.slice(before).filter(call => call.command === 'application_action').map(call => call.args.action), ['quit']);
+      assert.equal(f.calls.slice(before).some(call => ['stop_pi', 'stop_copilot', 'stop_acp'].includes(call.command)), false);
+    } finally { f.win.close(); }
+  }
 });
 
 test('Linux Appearance hides frosting and performs no native blur operations', async () => {

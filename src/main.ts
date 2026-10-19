@@ -64,6 +64,7 @@ import { Dialogs } from './dialogs';
 import { COMMAND_USAGE_KEY, readCommandUsage } from './command-ranking';
 import { abbreviateHome, projectPathParts } from './project-path';
 import { installCommandPalette, type PalettePage } from './command-palette';
+import { applicationCommands, isApplicationAction, runApplicationAction } from './application-actions';
 import { ACTIONS, actionContextAvailable, actionDefinition, bindingsFor, installKeybindingDispatch, isMac, shortcutLabel, type ActionId } from './keybindings';
 import { installSessionPopouts } from './session-popouts';
 import transcript from './pi/transcript.html?raw';
@@ -751,6 +752,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
   commands: () => {
     const active = presented;
     return [
+    ...applicationCommands(window, runApplication),
     { id: 'open-recent-project', label: 'Open recent project…', detail: 'Open or focus a previously opened project', next: true, run: () => palette.projects() },
     { id: 'capture-performance', label: 'Capture performance report', detail: settingsSurface.performancePath ? `Last report: ${settingsSurface.performancePath}` : 'Save recent timing data and copy its path; enable in global Settings → Diagnostics first.', run: () => capturePerformance(true) },
     { id: 'reload-card-plugins', label: 'Reload card plugins', detail: 'Rescan personal sources and refresh renderers for new cards; no Pi restart', run: () => reloadCardPlugins(true) },
@@ -1813,6 +1815,11 @@ function refreshShortcutHints(): void {
   if (zoomHint) zoomHint.textContent = `Zoom in: ${shortcutHint('zoom-in') || 'unbound'} · Zoom out: ${shortcutHint('zoom-out') || 'unbound'} · Reset to 100%: ${shortcutHint('zoom-reset') || 'unbound'}. Shortcuts pause in other dialogs.`;
 }
 function openKeybindings(): Promise<void> { return invoke('open_global_settings', { category: 'keybindings' }); }
+async function runApplication(id: ActionId): Promise<void> {
+  const cause = 'application-action:' + id;
+  try { await runApplicationAction(id); notices.resolve(cause); }
+  catch (error) { notices.report({ id: cause, operation: actionDefinition(id).label, message: String(error) }); }
+}
 async function takeProjectSettingsRequest() {
   const requested = await invoke<boolean>('take_project_settings_request');
   if (requested && workspace) settings.open();
@@ -1839,6 +1846,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
     return true;
   },
   run: (id: ActionId) => {
+    if (isApplicationAction(window, id)) return runApplication(id);
     switch (id) {
       case 'open-recent-project': return palette.projects();
       case 'new': return newSession();

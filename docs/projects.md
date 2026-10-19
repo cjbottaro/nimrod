@@ -6,7 +6,7 @@ The **Project bar** shows the directory name and parent path. Home is abbreviate
 
 ## Open a project
 
-1. Use **File → Open project…** (**⌘/Ctrl+O**) or the welcome screen's directory chooser.
+1. Use **Open project…** (**Ctrl+O**) from the command palette on Linux, **File → Open project…** (**⌘O**) on macOS, or the welcome screen's directory chooser.
 2. Choose a directory.
 3. Choose **New session** or **Resume session…** when ready to open a conversation.
 
@@ -14,7 +14,7 @@ Opening a project never starts Pi. Opening an already-open directory brings its 
 
 ## Open a recent project
 
-Use **Open recent project…** from the command palette or File menu, or **⌘/Ctrl+Shift+O**.
+Use **Open recent project…** from the command palette (also in the File menu on macOS), or **⌘/Ctrl+Shift+O**.
 
 Type a directory name or path, then press Enter or click a row. A **•** means the project already has a window; it does not mean it has saved sessions. Escape cancels. To browse a new directory, use **Open project…** instead.
 

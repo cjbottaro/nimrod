@@ -22,9 +22,9 @@ test('action contexts retain project commands without a selected session and gat
   assert.deepEqual(bindingsFor('permissions', { permissions: ['primary+shift+y'] }), ['primary+shift+y']);
   assert.deepEqual(bindingsFor('permissions', { permissions: [] }), []);
 });
-function fixture() {
+function fixture(platform = 'MacIntel') {
   const dom = new JSDOM('<button id="origin">Settings</button><dialog id="settings-page"><div class="settings-content"></div></dialog><dialog id="pi-dialog"></dialog>', { pretendToBeVisual: true });
-  Object.defineProperty(dom.window.navigator, 'platform', { value: 'MacIntel' });
+  Object.defineProperty(dom.window.navigator, 'platform', { value: platform });
   stubDialogs(dom.window);
   const win = dom.window as unknown as Window, doc = dom.window.document;
   const get = <T extends HTMLElement>(id: string) => doc.getElementById(id) as T;
@@ -70,7 +70,7 @@ test('defaults distinguish creation, named creation, open-session switching and 
   assert.deepEqual(readKeyOverrides({ demo: ['primary+d'], file: ['primary+f'] }), { demo: ['primary+d'], file: ['primary+f'] }, 'removed action overrides are retained but inert');
   assert.deepEqual(bindingsFor('open-recent-project', {}), ['primary+shift+o']);
   assert.equal(validateBinding('primary+shift+o'), 'primary+shift+o');
-  for (const binding of ['primary+o', 'cmd+o', 'ctrl+o']) assert.throws(() => validateBinding(binding));
+  for (const binding of ['primary+o', 'cmd+o', 'primary+q', 'cmd+q']) assert.throws(() => validateBinding(binding));
   assert.deepEqual(bindingsFor('new', { new: ['primary+t'] }), ['primary+t'], 'explicit overrides are not migrated');
   for (const action of ACTIONS) assert.deepEqual(changeBinding({}, action.id, undefined, false, true), { [action.id]: undefined }, 'defaults are conflict-free');
   assert.deepEqual(bindingsFor('new', { new: [] }), []);
@@ -79,6 +79,40 @@ test('defaults distinguish creation, named creation, open-session switching and 
   for (const action of ACTIONS) for (const binding of action.defaults) assert.equal(validateBinding(binding), binding);
   assert.deepEqual(readKeyOverrides({ 'future-action': ['primary+j'] }), { 'future-action': ['primary+j'] });
   for (const value of [null, [], { new: 'primary+n' }, { new: ['primary+n', 'primary+n'] }, { new: ['n'] }, { new: ['primary+v'] }, { new: ['primary+='] }, { new: ['primary+shift+plus'] }, { new: ['primary+cmd+n'] }, { new: ['primary+\u0000'] }]) assert.throws(() => readKeyOverrides(value));
+});
+
+test('Linux app shortcuts rebind/unbind, preserve editing and obey modal/repeat/IME guards', () => {
+  const f = fixture('Linux x86_64'), ran: ActionId[] = [];
+  let overrides: KeyOverrides = {};
+  const dispatch = installKeybindingDispatch(f.win, { read: () => overrides, enabled: () => true, run: id => { ran.push(id); }, error: error => { throw error; } });
+  const key = (name: string, extra: KeyboardEventInit = {}) => {
+    const event = f.event(name, { ctrlKey: true, ...extra }); f.win.dispatchEvent(event); return event;
+  };
+  try {
+    assert.equal(validateBinding('ctrl+o'), 'ctrl+o'); assert.equal(validateBinding('ctrl+q'), 'ctrl+q');
+    assert.equal(recordBinding(f.event('o', { ctrlKey: true }), false), 'ctrl+o');
+    assert.equal(recordBinding(f.event('q', { ctrlKey: true }), false), 'ctrl+q');
+    assert.equal(key('q').defaultPrevented, true); key('o');
+    assert.deepEqual([...ran], ['quit', 'open-project']);
+    for (const name of ['a', 'c', 'v', 'x', 'z']) assert.equal(key(name).defaultPrevented, false);
+    assert.equal(key('z', { shiftKey: true }).defaultPrevented, false);
+    for (const extra of [{ repeat: true }, { isComposing: true }, { keyCode: 229 }]) key('q', extra);
+    assert.equal(ran.length, 2);
+    f.get<HTMLDialogElement>('settings-page').showModal(); key('q'); assert.equal(ran.length, 3);
+    f.get<HTMLDialogElement>('pi-dialog').showModal(); key('q'); assert.equal(ran.length, 3);
+    f.get<HTMLDialogElement>('pi-dialog').close(); f.get<HTMLDialogElement>('settings-page').close();
+    overrides = { quit: ['primary+shift+j'], 'open-project': [] };
+    assert.equal(key('q').defaultPrevented, false); assert.equal(key('o').defaultPrevented, false);
+    key('j', { shiftKey: true }); assert.equal(ran.at(-1), 'quit');
+    assert.equal(ran.length, 4);
+  } finally { dispatch.dispose(); f.dom.window.close(); }
+  const mac = fixture();
+  const native = installKeybindingDispatch(mac.win, { read: () => ({}), enabled: () => true, run: () => { throw new Error('macOS must keep native menu actions'); }, error: error => { throw error; } });
+  try {
+    for (const name of ['q', 'o']) {
+      const event = mac.event(name, { metaKey: true }); mac.win.dispatchEvent(event); assert.equal(event.defaultPrevented, false);
+    }
+  } finally { native.dispose(); mac.dom.window.close(); }
 });
 
 test('recording and matching normalize platform modifiers, Shift and zoom punctuation', () => {

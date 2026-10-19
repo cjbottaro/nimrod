@@ -1,5 +1,11 @@
 export const KEYBINDINGS_SETTING = 'keybindings';
 export const ACTIONS = [
+  { id: 'open-project', label: 'Open project…', scope: 'app', context: 'application', platform: 'linux', defaults: ['ctrl+o'] },
+  { id: 'quit', label: 'Quit Nimrod', scope: 'app', context: 'application', platform: 'linux', defaults: ['ctrl+q'] },
+  { id: 'minimize-window', label: 'Minimize window', scope: 'app', context: 'application', platform: 'linux', defaults: [] },
+  { id: 'toggle-maximize-window', label: 'Maximize / Restore window', scope: 'app', context: 'application', platform: 'linux', defaults: [] },
+  { id: 'close-window', label: 'Close window', scope: 'app', context: 'application', platform: 'linux', defaults: [] },
+  { id: 'about', label: 'About Nimrod', scope: 'app', context: 'application', platform: 'linux', defaults: [] },
   { id: 'open-recent-project', label: 'Open recent project…', scope: 'project', context: 'project', defaults: ['primary+shift+o'] },
   { id: 'new', label: 'New session', scope: 'project', context: 'project', defaults: ['primary+n'] },
   { id: 'new-copilot', label: 'New Copilot session', scope: 'project', context: 'project', defaults: [] },
@@ -16,7 +22,7 @@ export const ACTIONS = [
   { id: 'permissions', label: 'Select permissions…', scope: 'project', context: 'session', defaults: [] },
   { id: 'cancel-configuration', label: 'Cancel pending configuration change', scope: 'project', context: 'session', defaults: [] },
   { id: 'context-window', label: 'Select context window…', keywords: 'limit tier long context', scope: 'project', context: 'session', defaults: [] },
-  { id: 'palette', label: 'Command palette', scope: 'project', context: 'project', defaults: ['primary+shift+p'] },
+  { id: 'palette', label: 'Command palette', scope: 'project', context: 'application', defaults: ['primary+shift+p'] },
   { id: 'pin', label: 'Pin / Unpin session', scope: 'project', context: 'session', defaults: [] },
   { id: 'close', label: 'Close session', scope: 'project', context: 'session', defaults: ['primary+w'] },
   { id: 'sidebar', label: 'Toggle session sidebar', scope: 'project', context: 'project', defaults: ['primary+b'] },
@@ -35,6 +41,9 @@ export const ACTIONS = [
 ] as const;
 export type ActionId = typeof ACTIONS[number]['id'];
 export type ActionContext = typeof ACTIONS[number]['context'];
+export function actionsForWindow(window: Window) {
+  return ACTIONS.filter(action => !('platform' in action) || /Linux/i.test(window.navigator.platform));
+}
 export function actionDefinition(id: ActionId) { return ACTIONS.find(action => action.id === id)!; }
 export function actionContextAvailable(id: ActionId, context: { project: boolean; sessionActions?: ReadonlySet<string> }): boolean {
   const required = actionDefinition(id).context;
@@ -55,7 +64,7 @@ export function validateBinding(binding: unknown): string {
   if (parts.includes('primary') && (parts.includes('cmd') || parts.includes('ctrl'))) throw new Error('Use primary or explicit cmd/ctrl, not both.');
   if (!parts.some(part => ['primary', 'cmd', 'ctrl'].includes(part)) && !/^f\d+$/.test(key)) throw new Error('Use Cmd/Ctrl for application shortcuts; plain typing and Option/Alt text entry are reserved.');
   if (key === '=' || key === 'plus' && parts.includes('shift')) throw new Error('Use plus without Shift for the + / = key.');
-  if (reserved.has(key) || key === 'o' && !parts.includes('shift')) throw new Error('This key is reserved for native menus or text editing.');
+  if (!['ctrl+o', 'ctrl+q'].includes(binding) && (reserved.has(key) || key === 'o' && !parts.includes('shift'))) throw new Error('This key is reserved for native menus or text editing.');
   return binding;
 }
 export function readKeyOverrides(value: unknown): KeyOverrides {
@@ -113,14 +122,16 @@ export function recordBinding(event: KeyboardEvent, mac: boolean): string | unde
   if (event.altKey) parts.push('alt');
   if (event.shiftKey && eventKey(event, mac) !== 'plus') parts.push('shift');
   parts.push(eventKey(event, mac));
-  return validateBinding(parts.join('+'));
+  const binding = parts.join('+');
+  // Persist the explicit Linux exceptions, not the reserved native macOS aliases.
+  return validateBinding(!mac && ['primary+o', 'primary+q'].includes(binding) ? binding.replace('primary', 'ctrl') : binding);
 }
 function equivalent(a: string, b: string, mac: boolean): boolean {
   const normalize = (value: string) => value.replace('primary', mac ? 'cmd' : 'ctrl');
   return normalize(a) === normalize(b);
 }
 export function bindingConflicts(id: ActionId, bindings: readonly string[], overrides: KeyOverrides, mac: boolean): { id: ActionId; binding: string }[] {
-  return ACTIONS.filter(action => action.id !== id).flatMap(action => bindingsFor(action.id, overrides).filter(binding => bindings.some(candidate => equivalent(candidate, binding, mac))).map(binding => ({ id: action.id, binding })));
+  return ACTIONS.filter(action => action.id !== id && (!mac || !('platform' in action))).flatMap(action => bindingsFor(action.id, overrides).filter(binding => bindings.some(candidate => equivalent(candidate, binding, mac))).map(binding => ({ id: action.id, binding })));
 }
 export function changeBinding(overrides: KeyOverrides, id: ActionId, bindings: readonly string[] | undefined, reassign: boolean, mac: boolean): KeyChanges {
   const next = bindings ?? ACTIONS.find(action => action.id === id)!.defaults;
@@ -145,7 +156,7 @@ export function installKeybindingDispatch(window: Window, host: {
     if (!event.metaKey && !event.ctrlKey && !/^f\d+$/i.test(event.key)) return;
     const overrides = host.read();
     const dialogs = [...window.document.querySelectorAll('dialog[open], #dialog.open')];
-    const candidates = ACTIONS.filter(action => (!host.actions || host.actions.includes(action.id)) && (!dialogs.length || (action.scope === 'app' || host.settingsWindow && action.id === 'close') && dialogs.every(dialog => dialog.id === 'settings-page')) && bindingsFor(action.id, overrides).some(binding => matchesBinding(event, binding, mac)));
+    const candidates = actionsForWindow(window).filter(action => (!host.actions || host.actions.includes(action.id)) && (!dialogs.length || (action.scope === 'app' || host.settingsWindow && action.id === 'close') && dialogs.every(dialog => dialog.id === 'settings-page')) && bindingsFor(action.id, overrides).some(binding => matchesBinding(event, binding, mac)));
     if (!candidates.length) return;
     // Consume a configured shortcut even when unavailable/repeated; never fall
     // through to a destructive native editing default such as Cmd-Backspace.

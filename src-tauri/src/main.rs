@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod acp;
+mod application_actions;
 mod card_plugins;
 mod cli;
 mod command_usage;
@@ -537,6 +538,7 @@ fn main() {
             window_appearance::window_appearance_capabilities,
             window_appearance::apply_window_appearance,
             window_appearance::tint_window_titlebar,
+            application_actions::application_action,
             card_plugins::read_card_plugin,
             card_plugins::read_card_plugin_module,
             card_plugins::load_personal_card_plugins,

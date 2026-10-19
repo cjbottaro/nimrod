@@ -16,6 +16,9 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 
 | Action | Shortcut |
 | --- | --- |
+| Open project… | Ctrl+O on Linux; native Cmd+O on macOS |
+| Quit Nimrod | Ctrl+Q on Linux; native Cmd+Q on macOS |
+| Minimize / Maximize or Restore / Close window; About Nimrod | Linux palette actions, unbound by default |
 | Open recent project… | Cmd/Ctrl+Shift+O |
 | New session (Pi default) | Cmd/Ctrl+N |
 | New Copilot session | Unbound by default |
@@ -43,7 +46,7 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 
 **Switch session** searches only open sessions, including temporary sessions and sessions hidden by the sidebar view. **Resume session** searches saved project history, including closed sessions; choosing an already-open entry focuses it. **New named session** opens the name field first; type a name and press Enter to create it. Cmd/Ctrl+P has no Nimrod default binding.
 
-**Open recent project…** searches recently opened directories and is configurable like other palette commands. **Open project…** / Cmd/Ctrl+O remains the native directory-only chooser, outside this editor.
+**Open recent project…** searches recently opened directories and is configurable like other palette commands. **Open project…** opens the native directory-only chooser. On Linux its Ctrl+O binding and **Quit Nimrod**'s Ctrl+Q are configurable here; on macOS those remain native menu shortcuts.
 
 Every current command-palette command can be rebound or unbound. Application and
 project actions can execute without a selected session; session actions execute
@@ -61,7 +64,7 @@ affected action to adopt its new defaults.
 
 **Delete opens the existing session-tree review; it does not immediately delete a session.** Its normal saved-session/idle eligibility rules still apply. Closing a saved session is not deletion. Temporary sessions use their existing Close/disposal flow.
 
-Project actions pause while Settings, the command palette, a key recorder, or an extension dialog is open. Settings and zoom shortcuts remain available on the Settings page, but not through another dialog. Repeated keydowns and IME composition never execute these actions. Shortcuts target the visible session, not a session hidden by Unread or Working.
+Project actions pause while Settings, the command palette, a key recorder, or an extension dialog is open. Settings, zoom and Linux application shortcuts (including Quit and Open project) remain available on the Settings page, but not through another dialog. Repeated keydowns and IME composition never execute these actions. Shortcuts target the visible session, not a session hidden by Unread or Working.
 
 ## Configuration file
 
@@ -86,8 +89,8 @@ Valid external edits apply automatically. Conflicting file-authored shortcuts ex
 
 ## Boundaries
 
-This editor covers Nimrod’s project-shell actions and zoom, not Pi’s internal keymap, composer Send/Queue/Newline behavior, native text editing, or pop-out window shortcuts. Multi-step chords, macros, arbitrary context expressions, and per-project overrides are not included.
+This editor covers Nimrod’s project-shell actions and zoom, not Pi’s internal keymap, composer Send/Queue/Newline behavior, native text editing, or pop-out Close. Linux app shortcuts and global Settings also work in pop-outs. Multi-step chords, macros, arbitrary context expressions, and per-project overrides are not included.
 
-Unshifted Cmd/Ctrl+O remains reserved for the native directory chooser; Shift+O is configurable. Other native menu/text-editing keys such as Q, H, A, C, V, X, Z and Tab combinations are reserved. On macOS, **Cmd+M minimizes the focused project window** through the native Window menu, including while a picker or Settings is open. Cmd/Ctrl+E has no Nimrod default action. Existing Cmd+M overrides are retained in settings, but the native accelerator can intercept them; reset or rebind those actions to use another shortcut. **Close Window** remains available in the native menu without Cmd/Ctrl+W, which belongs to Close session in project windows and closes the global Settings window when focused. OS-reserved shortcuts can still be intercepted before Nimrod receives them.
+Linux has no File/Edit/Window/Help menu bar: use the command palette, shortcuts and native title-bar controls. **Quit Nimrod** quits all windows after flushing drafts and stopping owned agents; **Close window** uses that window's normal close behavior. Linux-only app actions are hidden on macOS. Ctrl+O and Ctrl+Q are explicit configurable exceptions to the reserved native shortcuts; Cmd/primary O/Q forms and other native editing/menu keys such as H, A, C, V, X, Z and Tab remain reserved. Normal Linux Ctrl+A/C/V/X/Z and Ctrl+Shift+Z editing belongs to the webview, not Nimrod's dispatcher. On macOS, **Cmd+M minimizes the focused project window** through the native Window menu, including while a picker or Settings is open. Cmd/Ctrl+E has no Nimrod default action. Existing Cmd+M overrides are retained in settings, but the native accelerator can intercept them; reset or rebind those actions to use another shortcut. **Close window** remains available in the Linux palette or macOS native menu without a default shortcut, which belongs to Close session in project windows and closes the global Settings window when focused. OS-reserved shortcuts can still be intercepted before Nimrod receives them.
 
 Native menu delivery and alternate keyboard layouts remain incompletely verified on macOS. Linux behavior is intended but not platform-verified; Windows remains a possible future target.

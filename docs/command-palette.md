@@ -6,6 +6,10 @@
 
 Open with **⌘/Ctrl+Shift+P**, type an action or description, then press Enter or click a result. Commands show a short description and their effective shortcut; unbound actions leave the shortcut space empty. Every palette command is bindable; actions such as **Select theme…**, **Select mode…** and **Select context window…** have no default shortcut.
 
+## Linux application actions
+
+Linux uses the command palette instead of a File/Edit/Window/Help menu bar. **Open project…**, **Quit Nimrod**, **Minimize window**, **Maximize / Restore window**, **Close window** and **About Nimrod** are available here, including from the welcome window. Ctrl+O opens a project and Ctrl+Q quits; both can be rebound or unbound in [Keybindings](keybindings.md). Quit shuts down the whole app; Close window affects only that window. Native title-bar controls and session-row context menus remain. macOS keeps its normal native menu bar.
+
 ## Harness-aware commands
 
 **New session** stays Pi-default. **New Copilot session** creates [Copilot](copilot.md), with the hint **Start a Copilot session**. This action is unbound by default. ACP creation/options actions are not exposed. Switch includes open sessions; Resume combines independent Pi/Copilot history sources. Delete uses Pi tree review or Copilot permanent deletion; unsupported history is omitted. Model/thinking/mode/context-window and Pi MCP commands reflect the selected

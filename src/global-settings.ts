@@ -4,6 +4,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { installApplicationNotices } from './application-notices';
 import { installNativePreferences } from './native-preferences';
 import { installSettingsSurface } from './settings-surface';
+import { isApplicationAction, runApplicationAction } from './application-actions';
 import { installKeybindingDispatch } from './keybindings';
 import { installWindowPresentation } from './window-presentation';
 
@@ -75,8 +76,9 @@ export async function mountGlobalSettings() {
     if (presentation.disposed) return;
     const dispatch = installKeybindingDispatch(window, {
       read: () => preferences.keybindings(), settingsWindow: true,
-      enabled: id => ['settings', 'keybindings', 'close', 'zoom-in', 'zoom-out', 'zoom-reset'].includes(id),
+      enabled: id => isApplicationAction(window, id) || ['settings', 'keybindings', 'close', 'zoom-in', 'zoom-out', 'zoom-reset'].includes(id),
       run: id => {
+        if (isApplicationAction(window, id)) return runApplicationAction(id);
         if (id === 'keybindings') surface.openKeybindings();
         if (id === 'close') return getCurrentWindow().close();
         if (id === 'zoom-in') surface.zoom.run('in');

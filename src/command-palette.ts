@@ -211,7 +211,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   }
   function updateStatus(): void {
     const noun = mode === 'commands' ? 'commands' : mode === 'sessions' ? 'sessions' : mode === 'projects' ? 'projects' : mode === 'inspection' ? 'servers' : 'options';
-    status.textContent = loading ? `Loading ${noun}…` : notice || (matches.length ? `${matches.length} ${noun}` : items.length || mode === 'commands' ? `No matching ${noun}.` : mode === 'sessions' ? 'No sessions yet.' : mode === 'projects' ? 'No recent projects. Use File → Open project… to open a folder.' : 'No options available.');
+    status.textContent = loading ? `Loading ${noun}…` : notice || (matches.length ? `${matches.length} ${noun}` : items.length || mode === 'commands' ? `No matching ${noun}.` : mode === 'sessions' ? 'No sessions yet.' : mode === 'projects' ? 'No recent projects. Use Open project… (Cmd/Ctrl+O by default) to open a folder.' : 'No options available.');
     input.setAttribute('aria-busy', String(loading));
   }
   function selection(): void {

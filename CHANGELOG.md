@@ -36,6 +36,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- Linux no longer shows a File/Edit/Window/Help menu bar. Open project, Quit, window actions and About are available in the command palette; Ctrl+O and Ctrl+Q are configurable, including in Settings and pop-outs. Quit uses the existing whole-app shutdown path. Native title-bar controls, context menus and macOS menus are unchanged.
+
 - Completed Copilot slash-command cards now remain immediately before the output they produced instead of settling below that result. Pending placement, reader position, focus and command execution are unchanged.
 
 - Nimrod is now licensed under GNU AGPLv3 only instead of MIT. Third-party licenses and previously granted MIT permissions are unchanged; see [License](README.md#license).
@@ -59,7 +61,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 - Linux GTK title-bar buttons now receive clicks instead of having them intercepted by the title-bar wrapper, restoring native Close, Minimize and Maximize actions, including in Settings.
 
-- Linux's menu bar and GTK-drawn native title bar now follow each window's Nimrod theme and background opacity, including live previews, instead of staying clear or desktop grey. Native window controls are retained; window-manager-drawn title bars remain desktop-controlled.
+- Linux's GTK-drawn native title bar now follows each window's Nimrod theme and background opacity, including live previews, instead of staying desktop grey. Native window controls are retained; window-manager-drawn title bars remain desktop-controlled.
 
 - Local Linux builds now select an executable build instead of macOS app packaging and stage the compiler helper and runtime resources alongside it.
 
