@@ -17,7 +17,7 @@ import { createCopilotPermissionConfiguration, isPermissionChange, permissionCom
 import { SessionConfigurationSet } from '../session-configuration-set';
 import { ConfigurationDeferred, ConfigurationSuperseded, ConfigurationUncertain, type SessionConfigurationController } from '../session-configuration';
 import { pickConfiguration } from '../configuration-picker';
-import { commandChoices, copilotCommands, copilotSkillChoices, findCopilotCommand, isCopilotModelCommand, isCopilotSkillsInfo, parseCopilotCommand, type CommandChoice, type CopilotCommand } from './commands';
+import { commandChoices, copilotCommands, copilotSkillChoices, findCopilotCommand, isCopilotModelCommand, isCopilotSessionRename, isCopilotSkillsInfo, parseCopilotCommand, type CommandChoice, type CopilotCommand } from './commands';
 
 interface Model extends CopilotImageModel {
   id: string;
@@ -41,6 +41,7 @@ export interface CopilotSessionUi {
   notice(message: string): void;
   decision(kind: 'permission' | 'input' | 'plan', request: Record<string, unknown>, signal: AbortSignal): Promise<CopilotDecision | undefined>;
   commandChoice?(title: string, choices: readonly CommandChoice[], signal: AbortSignal): Promise<string | undefined>;
+  commandInput?(title: string, signal: AbortSignal): Promise<string | undefined>;
   transcriptLog?: TranscriptLogSink;
 }
 /** SDK semantic events project directly to shared presentation, never Pi/ACP events. */
@@ -275,6 +276,14 @@ export class CopilotSession {
         const refreshed = copilotSkillChoices(await this.connection.request('command-skills', {}, 'reject'));
         if (!refreshed.some(choice => choice.id === selected)) throw new Error('Copilot skill choices changed. Open the picker again.');
         input = `info ${selected}`;
+      }
+      if (isCopilotSessionRename(command, input)) {
+        if (!this.ui.commandInput) throw new Error('This Copilot command requires a name input that is unavailable.');
+        const value = await this.ui.commandInput('Copilot /session rename', operation.signal);
+        if (operation.signal.aborted || this.ended || !value?.trim()) return false;
+        const current = findCopilotCommand(this.commands, command.name);
+        if (!current || !isCopilotSessionRename(current, 'rename')) throw new Error('Copilot session command changed. Open the command again.');
+        input = `rename ${value.trim()}`;
       }
       // Each iteration requires a fresh user choice; never retry an invocation.
       while (!operation.signal.aborted && !this.ended) {

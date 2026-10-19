@@ -55,6 +55,16 @@ requiring `<skill-name>` despite metadata exposing only the `info` choice. The
 public `session.skills.list()` adapter and sanitized fixtures are source-authored
 and unrun; native nested-picker acceptance remains pending.
 
+An explicitly authorized isolated local-state audit used disposable Copilot
+home, project and SessionFS storage. `/rename`, `/memory on/off`, `/skills
+reload`, `/permissions default`, `/allow-all on/off`, `/reset-allowed-tools`,
+`/sandbox enable/disable` and `/init suppress` used generic results plus
+authoritative events/settings where applicable. Bare `/init` returned
+`agent-prompt` and was not submitted. `/session rename` exposed a missing
+free-form-name interaction; its shared-input adapter and sanitized fixtures are
+source-authored and unrun. No user settings/project/session or provider request
+was touched.
+
 - TypeScript/jsdom shell tests use mocked native IPC.
 - Rust fixture tests use actual pipes, owned subprocesses and generated disposable session files; deletion tests unlink only those fixtures.
 - Automated Playwright WebKit exercises real browser layout/events with an offline child fixture and mock Tauri operations. Its CSS zoom is not native WKWebView zoom.

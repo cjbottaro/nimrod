@@ -352,6 +352,11 @@ Nimrod therefore shows Copilot's current skill catalog after you choose
 **info**, then invokes the original slash command with that selection.
 `/skills list` and ordinary command output remain on the generic path.
 
+For `/session rename`, Copilot similarly omits the required free-form name.
+Nimrod asks for the name in a Copilot-labelled input modal, then invokes the
+original command. Copilot's title event updates the Session sidebar; no Nimrod
+rename action is substituted.
+
 Command discovery, argument suggestions and modal/output fixtures are authored
 but unrun. This is not a claim of complete Copilot TUI command parity.
 

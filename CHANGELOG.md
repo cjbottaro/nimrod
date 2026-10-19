@@ -7,6 +7,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 ### Added
 
 - Copilot `/skills info` now completes the CLI's omitted skill-name interaction with a searchable harness-owned skill picker sourced from Copilot's public session catalog, then invokes the original slash command. `/skills list` and other read-only report commands continue through generic command output. Native acceptance is pending.
+- Copilot `/session rename` now completes the CLI's omitted free-form name interaction with a Copilot-labelled input modal, then invokes the original slash command and relies on Copilot's authoritative title event. It does not dispatch a Nimrod rename action. Native acceptance is pending.
 
 - Copilot SQL cards show the agent's description, concise literal results and optional reported statement/row counts, with original SQL and metadata retained in raw disclosures. They do not parse SQL into a task checklist. A [built-in card cookbook](docs/builtin-card-cookbook.md) documents Pi/Copilot presentations with real-session prompts, prerequisites and expected outcomes. New capture-backed fixtures are authored but unrun; native visual acceptance remains pending.
 
