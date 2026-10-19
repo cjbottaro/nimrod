@@ -84,7 +84,7 @@ details { margin:8px 0; border:0; border-radius:0; padding:0; }
 .codemode-progress::-moz-progress-bar { background:var(--vscode-progressBar-background); }
 .codemode-children { margin-left:14px; }
 .codemode-children > .message { margin:0; padding:0; border:0; }
-.codemode-children > .message > .tool-card { margin:2px 0; }
+.codemode-children > .message > .tool-card, .codemode-children > .tool-card { margin:2px 0; }
 .codemode-incomplete { margin:6px 0; color:var(--vscode-descriptionForeground); font-size:.85em; }
 .card-plugin-body > .card-output-disclosure { margin-left:14px; }
 .card-output-disclosure > .tool-section { margin-left:14px; }

@@ -46,7 +46,7 @@ Codemode scripts appear as one grouped tool card. While running, **n/m calls** a
 
 Expand the group to inspect each child tool independently. **Script** reveals the JavaScript; **Output** reveals what the script printed, separately from child results. Expanding or reading one output preserves the others' disclosures and reading positions. Calls with no available parent stay visible as ordinary tool cards.
 
-When resuming history, Pi may retain child names, inputs and statuses without their output. Those entries explicitly say when output or inputs were not retained. A **+** after the count and an incomplete-record note mean Pi's saved record is incomplete; omitted calls/results cannot be recovered by Nimrod.
+When resuming history, Pi may retain child names, inputs and statuses without their output. Saved children use the same tool cards and personal plugins as live calls, with themed success/failure dots and whatever input previews or errors Pi retained. Missing inputs or output are simply omitted, without placeholder messages. A **+** after the count and an incomplete-record note mean Pi's saved record is incomplete; omitted calls/results cannot be recovered by Nimrod.
 
 ### Copilot question/answer cards
 

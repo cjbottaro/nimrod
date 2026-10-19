@@ -31,7 +31,10 @@ test('Pi relationships and saved nested calls survive result/adoption and increm
 
 test('group composition retains shells and independent parent/child outputs; history is explicitly bounded', () => {
   const dom = new JSDOM('<body></body>', { pretendToBeVisual: true });
-  const doc = dom.window.document, groups = new CodemodeGroups();
+  const doc = dom.window.document;
+  const groups = new CodemodeGroups(block => {
+    const card = renderToolCard(doc, block, doc.createElement('details')); card.classList.add('codemode-recorded-call'); return card;
+  });
   const parent: ContentBlock = { type: 'toolCall', id: 'p', name: 'codemode', arguments: { code: 'text("hello");' }, toolStatus: 'running', executionOutput: 'parent' };
   const child: ContentBlock = { type: 'toolCall', id: 'c', parentToolCallId: 'p', name: 'read', arguments: { path: 'a' }, toolStatus: 'running', executionOutput: 'child' };
   const parentCard = renderToolCard(doc, parent, doc.createElement('details'));
@@ -69,7 +72,11 @@ test('group composition retains shells and independent parent/child outputs; his
     const card = renderToolCard(doc, block, doc.createElement('details')); doc.body.append(card); groups.update(block, card);
     groups.placements(projectToolTimeline(restored), new Map());
     assert.equal(card.querySelector('.codemode-count')!.textContent, '1+ calls · 1 failed');
-    assert.match(card.querySelector('.codemode-recorded-call')!.textContent!, /Output not retained by Pi/);
+    const recorded = card.querySelector('.codemode-recorded-call')!;
+    assert.ok(recorded.classList.contains('tool-card'));
+    assert.ok(recorded.querySelector('.tool-card-failed'));
+    assert.equal(recorded.querySelector('.tool-card-preview')!.textContent, '<literal>');
+    assert.doesNotMatch(recorded.textContent!, /not retained|read · error/);
     assert.match(card.textContent!, /<unsafe>/); assert.equal(card.querySelector('unsafe'), null);
     assert.equal(card.querySelector<HTMLElement>('.codemode-incomplete')!.hidden, false);
   } finally { groups.clear(); dom.window.close(); }

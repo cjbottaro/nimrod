@@ -6,7 +6,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Added
 
-- Pi codemode activity now appears in one grouped tool card, with independently expandable child calls, a live completed/discovered call count and subtle progress bar, failure totals, and **Script** / **Output** disclosures. Resumed history shows Pi's retained child-call records and identifies unavailable output or incomplete records.
+- Pi codemode activity now appears in one grouped tool card, with independently expandable child calls, a live completed/discovered call count and subtle progress bar, failure totals, and **Script** / **Output** disclosures. Saved children reuse the normal tool cards and personal overrides, with themed status dots and any retained input previews or errors; missing data adds no placeholder prose. Incomplete saved records remain marked in the group count.
 
 - Copilot **Applying patch** calls now use a dedicated **Apply patch** presentation with a single-file path or concise multi-file count, green/red added/removed-line totals, colored requested patches and successful native Git diffs. Original inputs/results remain in raw disclosures; failed or interrupted calls never present the requested patch as applied.
 
