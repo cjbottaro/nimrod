@@ -56,7 +56,7 @@ export async function completeCommandEffect(session, effect) {
     }
     try {
       await finalize(session, effect, 'applied');
-      return { ...effect, effectFinalized: true, model };
+      return { ...effect, effectFinalized: true, configuration: model };
     } catch (error) {
       return { kind: 'command-effect-failed', effectKind: effect.kind, outcome: 'unknown', error: message(error) };
     }

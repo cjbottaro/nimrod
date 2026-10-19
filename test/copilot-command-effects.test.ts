@@ -26,7 +26,7 @@ test('model command effects apply live state and finalize the unchanged effect',
   assert.deepEqual(f.switches, [{ model: 'large', settings: { reasoningEffort: 'high' } }]);
   assert.deepEqual(f.finalizations, [{ effect, outcome: 'applied' }]);
   assert.equal(result.effectFinalized, true);
-  assert.deepEqual(result.model, { modelId: 'large', reasoningEffort: 'high' });
+  assert.deepEqual(result.configuration, { modelId: 'large', reasoningEffort: 'high' });
 });
 
 test('invalid effects cancel provisional settings without attempting a model mutation', async () => {
