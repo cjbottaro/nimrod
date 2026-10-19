@@ -17,15 +17,11 @@ failure/ambiguous delivery. Palette/keybindings/Status-area controls retain
 Nimrod-owned dispatch. Reusing the palette's modal mechanics for a returned
 selection is presentation reuse, not application action dispatch/ranking.
 
-Harness commands remain harness-owned when they overlap a Nimrod action. For
-example, **Select model…** uses Nimrod's session-configuration port, while
-Copilot `/model` is invoked and completed through Copilot's command protocol.
-Neither entry point redirects to or impersonates the other. Implement command
-support by advertised metadata and SDK result/effect kind, not command name:
-new commands composed from supported kinds work without handlers. Add
-command-specific integration only when the harness exposes semantics that its
-generic command contract cannot represent, and preserve those harness semantics
-rather than substituting a superficially similar Nimrod action.
+The shared [harness command ownership
+policy](harness-presentation.md#harness-command-ownership) applies. Concretely,
+**Select model…** uses Nimrod's session-configuration port, while Copilot
+`/model` is invoked and completed through Copilot's command protocol. Neither
+entry point redirects to or impersonates the other.
 
 The pinned CLI's builtin `model` command is one such narrow exception. CLI 1.0.98
 advertises canonical `/model` with alias `/models` and a free-form `model` hint,

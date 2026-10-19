@@ -48,6 +48,10 @@ Pi remains authoritative for history, queue consumption, configuration, identity
 - Routine updates preserve mounted nodes, disclosures, focus and scroll intent. Explicit resume/restart is a distinct reset boundary.
 - Nimrod-generated errors without an owning [operation card](operation-cards.md) share one notice store/renderer, with ownership-based placement: session notices stay in their conversation area; window/application notices use the shell strip, including Settings/dialogs. Background-session errors are not displayed or announced elsewhere. Placement, wording, deduplication and lifecycle follow the [error presentation policy](error-presentation.md); remaining producer metadata cleanup is not precedent for new surfaces.
 - Preferences and bookkeeping are separate from Pi history and scoped draft storage.
+- Harness commands remain harness-owned even when a Nimrod action overlaps:
+  use generic advertised command plumbing first, then the narrowest concrete
+  adapter for interface gaps; never substitute an application action for slash
+  command execution. See [harness command ownership](harness-presentation.md#harness-command-ownership).
 - RPC results and background delivery/completion never navigate themselves. Explicit user navigation can connect a saved session without sending a prompt.
 - Platform direction is macOS first, Linux next, Windows possibly later. Narrow native integrations must not turn macOS conventions into portable product requirements. See [verification](verification.md) for actual acceptance.
 
