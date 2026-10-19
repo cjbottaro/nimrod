@@ -43,6 +43,33 @@ test('terminal anchors capture the ordered snapshot once, excluding sticky queue
     ['native', operation.key, 'configuration:effort', 'future', 'queued']);
 });
 
+test('an explicit pre-result boundary keeps an operation before its own output', () => {
+  const transcript = new ConfigurationTranscript();
+  const before = message('before'), output = message('command-output');
+  const command = { ...operation, key: 'command', title: 'Copilot command', settlementAnchor: before.key };
+  transcript.sync([command], noHistory);
+  transcript.sync([{ ...command, phase: 'completed' }], () => assert.fail('explicit settlement anchors must not read current history'));
+  assert.deepEqual(transcript.project([before, output]).map(row => row.key), [before.key, command.key, output.key]);
+});
+
+test('an explicit empty boundary keeps an operation before its first output', () => {
+  const transcript = new ConfigurationTranscript();
+  const output = message('command-output');
+  const command = { ...operation, key: 'command', title: 'Copilot command', settlementAnchor: null };
+  transcript.sync([command], noHistory);
+  transcript.sync([{ ...command, phase: 'completed' }], () => assert.fail('explicit settlement anchors must not read current history'));
+  assert.deepEqual(transcript.project([output]).map(row => row.key), [command.key, output.key]);
+});
+
+test('a removed explicit boundary falls back before output rather than after it', () => {
+  const transcript = new ConfigurationTranscript();
+  const output = message('command-output');
+  const command = { ...operation, key: 'command', title: 'Copilot command', settlementAnchor: 'removed' };
+  transcript.sync([command], noHistory);
+  transcript.sync([{ ...command, phase: 'completed' }], () => assert.fail('explicit settlement anchors must not read current history'));
+  assert.deepEqual(transcript.project([output]).map(row => row.key), [command.key, output.key]);
+});
+
 for (const remaining of [[], [message('replacement')]]) {
   test(`removed anchors settle at ${remaining.length ? 'remaining tail' : 'empty start'} rather than following future output`, () => {
     const transcript = new ConfigurationTranscript();

@@ -12,8 +12,9 @@ test('queue holds later work until an active workflow settles, including an expl
     calls.push(text); dispatched();
     await new Promise<void>(resolve => { finish = resolve; });
   }, () => {});
-  const first = queue.enqueue('one', '/one'), second = queue.enqueue('two', '/two');
+  const first = queue.enqueue('one', '/one', 'before'), second = queue.enqueue('two', '/two', 'before');
   const queued = queue.operations;
+  assert.ok(queue.operations.every(operation => operation.settlementAnchor === 'before'));
   queue.update(); assert.equal(queue.operations, queued);
   ready = true; queue.update(); queue.update();
   assert.deepEqual(calls, ['/one']);
@@ -30,7 +31,7 @@ test('disconnect distinguishes dispatched uncertainty from undelivered intent an
   const queue = new CopilotCommandQueue(() => true, async (_id, _text, _signal, dispatched) => {
     dispatched(); await new Promise<void>(resolve => { finish = resolve; });
   }, () => {});
-  const first = queue.enqueue('one', '/one'), second = queue.enqueue('two', '/two');
+  const first = queue.enqueue('one', '/one', null), second = queue.enqueue('two', '/two', null);
   queue.cancel('Disconnected');
   assert.deepEqual(queue.operations.map(operation => operation.phase), ['unknown', 'not-applied']);
   assert.ok(queue.operations.every(operation => operation.cause === 'connection'));
@@ -45,9 +46,9 @@ test('picker cancellation removes only its command card; failure settles once wi
     if (++runs === 1) return false;
     throw new Error('Known unsupported result');
   }, () => {});
-  await queue.enqueue('one', '/one');
+  await queue.enqueue('one', '/one', null);
   assert.equal(queue.operations.length, 0);
-  await queue.enqueue('two', '/two');
+  await queue.enqueue('two', '/two', null);
   assert.equal(queue.operations[0].phase, 'failed');
   assert.match(queue.operations[0].details!, /Known unsupported/);
   queue.update(); await flush();

@@ -6,6 +6,7 @@ interface CommandIntent {
   text: string;
   signal: AbortController;
   dispatched: boolean;
+  settlementAnchor: string | null;
   resolve(): void;
 }
 /** Connection-local command intents, not a prompt queue or a retry mechanism. */
@@ -18,11 +19,12 @@ export class CopilotCommandQueue {
     private run: (id: string, text: string, signal: AbortSignal, dispatched: () => void) => Promise<void | boolean>,
     private changed: () => void) {}
   get occupied(): boolean { return !!this.active || this.pending.length > 0; }
-  enqueue(id: string, text: string): Promise<void> {
+  enqueue(id: string, text: string, settlementAnchor: string | null): Promise<void> {
     return new Promise(resolve => {
-      const intent: CommandIntent = { id, key: `copilot:command-intent:${crypto.randomUUID()}`, text, signal: new AbortController(), dispatched: false, resolve };
+      const intent: CommandIntent = { id, key: `copilot:command-intent:${crypto.randomUUID()}`, text,
+        signal: new AbortController(), dispatched: false, settlementAnchor, resolve };
       this.pending.push(intent);
-      this.operations = [...this.operations, { key: intent.key, phase: 'queued', title: 'Copilot command', text }];
+      this.operations = [...this.operations, { key: intent.key, phase: 'queued', title: 'Copilot command', text, settlementAnchor }];
       this.changed(); this.update();
     });
   }

@@ -91,6 +91,9 @@ Supported permission mutation uses one **PERMISSION CHANGE** operation card inst
 
 Command-output rows are **connection-local presentation**, not invented persisted
 Copilot events. They survive switching within that connection, not Close/Resume.
+The command operation captures the non-sticky transcript boundary when intent is
+accepted, so its settled card remains immediately before result rows produced by
+that command rather than anchoring after them.
 The normal transcript renderer owns escaping, Markdown, stable keys, reading
 intent and hidden-view catch-up. Do not synthesize assistant history or write
 SDK session files to persist local output.
