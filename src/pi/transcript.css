@@ -46,6 +46,7 @@ button { color:var(--nimrod-button-foreground, var(--vscode-button-foreground));
 .message.operation-card[data-operation-state="failed"] { border-left-color:var(--vscode-errorForeground); }
 .message.operation-card:is([data-operation-state="unknown"], [data-operation-state="not-applied"]) { border-left-color:var(--vscode-descriptionForeground); }
 .operation-outcome { margin-top:6px; font-size:.85em; color:var(--vscode-descriptionForeground); }
+.operation-inline-error { margin-top:6px; color:var(--vscode-foreground); white-space:pre-wrap; overflow-wrap:anywhere; min-width:0; }
 .operation-details > summary { cursor:pointer; font-size:.85em; }
 .operation-diagnostics { white-space:pre-wrap; overflow-wrap:anywhere; }
 @supports (background-clip: text) or (-webkit-background-clip: text) {

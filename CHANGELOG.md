@@ -39,6 +39,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- Failed Copilot slash-command cards now show only the concise harness error inline with wrapping text, removing redundant Failed/disclosure UI and transport/retry boilerplate. Unknown outcomes retain their explicit status and diagnostic details.
 - Completed Copilot slash-command cards now remain immediately before the output they produced instead of settling below that result. Pending placement, reader position, focus and command execution are unchanged.
 
 - Nimrod is now licensed under GNU AGPLv3 only instead of MIT. Third-party licenses and previously granted MIT permissions are unchanged; see [License](README.md#license).

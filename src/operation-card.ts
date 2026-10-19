@@ -3,6 +3,7 @@ export interface OperationCard {
   readonly title: string;
   readonly state: 'pending' | 'succeeded' | 'failed' | 'unknown' | 'not-applied';
   readonly details?: string;
+  readonly inlineError?: string;
   /** Opaque, owner-bound cancellation capability; absence means unsupported. */
   readonly cancelId?: string;
 }
@@ -45,14 +46,20 @@ export function renderOperationCard(node: HTMLElement, operation: OperationCard 
     if (cancel === document.activeElement) restoreFocus();
     cancel?.remove();
   }
-  const outcome = operation.state === 'pending' || operation.state === 'succeeded' ? '' : outcomes[operation.state];
-  if (!outcome && !operation.details) { footer?.remove(); return; }
+  const compactError = operation.state === 'failed' ? operation.inlineError : undefined;
+  const outcome = operation.state === 'pending' || operation.state === 'succeeded' || compactError ? '' : outcomes[operation.state];
+  if (!outcome && !operation.details && !compactError) { footer?.remove(); return; }
   if (!footer) { footer = create('div', 'operation-footer'); node.append(footer); }
   let label = footer.querySelector<HTMLElement>('.operation-outcome');
   if (outcome) {
     if (!label) { label = create('div', 'operation-outcome'); footer.prepend(label); }
     setText(label, outcome);
   } else label?.remove();
+  let inlineError = footer.querySelector<HTMLElement>('.operation-inline-error');
+  if (compactError) {
+    if (!inlineError) { inlineError = create('div', 'operation-inline-error'); footer.append(inlineError); }
+    setText(inlineError, compactError);
+  } else inlineError?.remove();
   let details = footer.querySelector<HTMLDetailsElement>('.operation-details');
   if (operation.details) {
     if (!details) {

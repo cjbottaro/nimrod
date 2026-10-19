@@ -17,7 +17,7 @@ An **Operation card** represents a Nimrod-initiated operation from pending inten
 | --- | --- | --- | --- | --- |
 | Pending | Shared bottom-pinned stack | Yes | Normal | Cancel only if supported |
 | Succeeded | Normal transcript flow | No | Normal | No redundant success label |
-| Failed | Normal transcript flow | No | Error red | **Failed**, **Error details** disclosure when available |
+| Failed | Normal transcript flow | No | Error red | **Failed**, **Error details** disclosure when available; known Copilot slash-command failures use only a concise wrapping inline error |
 | Outcome unknown | Normal transcript flow | No | Muted grey | **Outcome unknown**, **Details** when available |
 | Not applied | Normal transcript flow | No | Muted grey | **Not applied**, **Details** when available |
 | Confirmed user cancellation | Removed | — | — | No retained cancellation receipt |
@@ -53,6 +53,13 @@ Cancellation is an optional capability, not a promise attached to every pending 
 ## Errors and accessibility
 
 Disclosures start collapsed, appear only when diagnostics exist, preserve full diagnostic text and retain their open state across updates. The operation card owns its operation-specific failure; do not duplicate that failure in a session banner. Independent session-wide problems remain session notices. Errors before an operation card exists retain notice routing. [Error presentation](error-presentation.md) owns those boundaries.
+
+Copilot slash-command failures with a known rejected outcome are the compact
+exception: show the actionable harness error inline in conversation typography,
+with the red accent but no separate **Failed** label or disclosure. Strip
+transport and Nimrod retry/fallback boilerplate; do not discard the actual
+harness message. Unknown/not-applied command outcomes retain their explicit
+outcome labels and diagnostic disclosures.
 
 Expose operation state accessibly, independent of colour/animation. Reduced motion uses readable static titles; inactive/hidden views pause animation and defer painting, not semantic state processing. Preserve keyed nodes, disclosures, reader/follow intent and the existing single scroll owner. Cancellation and uncertainty never trigger automatic retries.
 

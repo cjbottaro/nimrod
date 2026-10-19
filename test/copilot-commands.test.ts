@@ -333,7 +333,8 @@ test('new catalog commands work mechanically; unknown, malformed and unsupported
       f.reply(result); await handling;
       const operation = f.session.state.configurationOperations!.at(-1)!;
       assert.equal(operation.phase, 'failed');
-      assert.match(operation.details!, /No.*fallback|Nothing was retried/);
+      assert.match(operation.inlineError!, /Unsupported|invalid/);
+      assert.equal(operation.details, undefined);
       assert.equal(f.published.some(message => message.type === 'submissionReceipt' && message.outcome === 'rejected'), false, 'the operation card owns the error');
     }
     assert.equal(f.sent.some(request => ['prompt', 'configure'].includes(request.method)), false);
@@ -368,7 +369,7 @@ test('finalization failure belongs to the queued command card without a duplicat
       await handling;
       const operation = f.session.state.configurationOperations!.at(-1)!;
       assert.equal(operation.phase, outcome === 'cancelled' ? 'failed' : 'unknown');
-      assert.match(operation.details!, /Native finalization/);
+      assert.match((outcome === 'cancelled' ? operation.inlineError : operation.details)!, /Native finalization/);
       assert.equal(f.published.some(message => message.type === 'submissionReceipt' && message.outcome !== 'accepted'), false);
       assert.equal(f.sent.filter(request => request.method === 'command').length, 1);
       assert.equal(f.sent.some(request => request.method === 'prompt'), false);
@@ -450,6 +451,21 @@ test('queued commands revalidate revoked advertisement without invoking or repla
     await handling;
     assert.equal(f.sent.some(request => ['command', 'prompt'].includes(request.method)), false);
     assert.equal(f.session.state.configurationOperations![0].phase, 'failed');
-    assert.match(f.session.state.configurationOperations![0].details!, /not advertised/);
+    assert.match(f.session.state.configurationOperations![0].inlineError!, /not advertised/);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('known SDK command failures keep only the actionable harness message', async () => {
+  const f = await fixture(undefined, [{ name: 'rename', description: 'Rename session', kind: 'builtin' }]);
+  try {
+    const handling = f.session.handle({ type: 'command', id: 'rename-error', text: '/rename' });
+    const request = f.sent.at(-1)!;
+    f.session.receive({ kind: 'result', id: request.id,
+      error: 'Request session.commands.invoke failed with message: Usage: /rename <name>' });
+    await handling;
+    const operation = f.session.state.configurationOperations!.at(-1)!;
+    assert.equal(operation.phase, 'failed');
+    assert.equal(operation.inlineError, 'Usage: /rename <name>');
+    assert.equal(operation.details, undefined);
   } finally { f.session.disconnect('fixture complete'); }
 });

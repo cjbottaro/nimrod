@@ -50,7 +50,8 @@ test('picker cancellation removes only its command card; failure settles once wi
   assert.equal(queue.operations.length, 0);
   await queue.enqueue('two', '/two', null);
   assert.equal(queue.operations[0].phase, 'failed');
-  assert.match(queue.operations[0].details!, /Known unsupported/);
+  assert.equal(queue.operations[0].inlineError, 'Known unsupported result');
+  assert.equal(queue.operations[0].details, undefined);
   queue.update(); await flush();
   assert.equal(runs, 2);
 });
