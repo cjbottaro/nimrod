@@ -82,7 +82,11 @@ Mounted IDs are unique per session; anchors above are semantic template names wi
 - **Pending user turn** — local user-turn preview awaiting acknowledgement/authoritative user event; includes ordinary sends and **pending steering turns**.
 - **Operation card** — a transcript entry representing an operation from pending intent through its outcome, with a stable **title**, **content**, optional **outcome text**, **details disclosure** and supported **Cancel** control. [Operation cards](../features/references/operation-cards.md) owns the pattern; configuration changes and steering/queued previews use it.
 - **Command card** — specialized operation card for one harness slash-command invocation. It appears at accepted intent, stays pinned/shimmering through interaction, queued readiness and invocation, then unpins into normal flow and adapts its settled body to command output, confirmed effects, concise errors or uncertainty instead of creating separate request/response rows. [Slash commands](../slash-commands/SKILL.md#command-cards) owns the cross-harness pattern.
-- **Permission change** — operation card for a supported session permission-policy change; **Set permissions…** opens its configuration picker, distinct from answering individual requests in the **Permission picker**. [Live permissions](../features/references/live-permissions.md) owns behaviour.
+- **Set permissions…** — harness-contributed Nimrod action that starts the
+  integration's advertised permission command and produces a **Command card**;
+  distinct from answering individual requests in the **Permission picker**.
+  [Permission command shortcut](../features/references/live-permissions.md) owns
+  behavior.
 - **Configuration change** — Nimrod-owned operation card for a session-setting change, distinct from a user/assistant turn or saved harness history. [Model/thinking](../features/references/model-thinking.md) owns its behavior.
 - **Queue entries / recovered messages** — authoritative pending work versus text retained for explicit Restore.
 

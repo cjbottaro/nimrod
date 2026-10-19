@@ -129,14 +129,13 @@ test(`live ${commandText} uses the generic command path without answering old ap
     const request = f.last('command');
     assert.equal(request.name, commandText.startsWith('/perms ') ? 'perms' : 'permissions');
     assert.equal(request.input, 'allow-all');
-    assert.equal(f.sent.some(request => ['configure', 'permission-change', 'prompt', 'decision', 'cancel'].includes(request.method)), false);
+    assert.equal(f.sent.some(request => ['configure', 'prompt', 'decision', 'cancel'].includes(request.method)), false);
     f.event('session.permissions_changed', { mode: 'allow-all' });
     f.reply('command', { kind: 'text', text: 'Permission policy: Allow All for this session.' });
     await handling; await flush();
     assert.equal(f.session.configuration.operations[0].phase, 'queued');
     assert.equal(f.session.state.configurationOperations?.at(-1)?.title, 'Copilot command');
     assert.equal(f.session.state.configurationOperations?.at(-1)?.phase, 'completed');
-    assert.equal(f.session.configuration.get('permissions'), 'allow-all');
     assert.equal(f.session.state.busy, true);
     assert.equal(f.published.at(-1)?.state?.status, 'Waiting for permission…');
     assert.deepEqual(f.completed, []);

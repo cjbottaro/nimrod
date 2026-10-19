@@ -62,9 +62,8 @@ accepted during work and represented by a pinned Command card. The generic
 command queue dispatches the head command during work when its freshly
 advertised `allowDuringAgentExecution` is true; otherwise it waits for terminal
 idle. Permission commands use this same path and reconcile through native
-permission events. Nimrod's [live permission configuration
-adapter](live-permissions.md) belongs only to the separate **Select
-permissions…** action.
+permission events. Nimrod's [Set permissions command
+shortcut](live-permissions.md) starts that same advertised command owner.
 
 ## Discovery and autocomplete
 
@@ -114,11 +113,10 @@ permissions…** action.
 | `set-plan-model` | The command's provisional future Plan-model preference is finalized through the same SDK effect transaction and its confirmation is displayed. It does not change the active model or dispatch a Nimrod action. |
 | Unknown/malformed result or unknown mode | Session-owned error; no speculative prompt/action or automatic replay. Supported Interactive, Plan and Autopilot changes reconcile through the session mode configuration; unknown values disconnect before follow-on work. |
 
-Slash-command permission mutations are ordinary retained Command cards and use
-the generic command invocation plus authoritative native events. Nimrod's
-**Set permissions…** action separately uses a **PERMISSION CHANGE** card and
-the concrete configuration owner specified in [Live
-permissions](live-permissions.md).
+Slash-command permission mutations and Nimrod's **Set permissions…** shortcut
+both enter the same generic command owner, produce Command cards and use
+authoritative native events. The action simply starts bare advertised
+`/permissions`; see [Permission command shortcut](live-permissions.md).
 
 Command-output rows are **connection-local presentation**, not invented persisted
 Copilot events. They survive switching within that connection, not Close/Resume.
@@ -147,7 +145,7 @@ Advertised argument choices are available before invocation and must not require
 executing a bare command to discover its default behavior. Separately, waiting
 for a returned `select-subcommand` choice is result-gated because those choices
 are unavailable before invocation. Neither path gates clearing the composer on RPC.
-Ordinary message submissions and model mutation remain locally unavailable until queued command workflows settle; further advertised commands can queue. The separate native **Set permissions…** action may be accepted when its configuration owner is ready; the draft stays editable. Ordinary agent turns retain SDK `session.idle`
+Ordinary message submissions and model mutation remain locally unavailable until queued command workflows settle; further advertised commands and contributed command shortcuts can queue. The draft stays editable. Ordinary agent turns retain SDK `session.idle`
 semantics, separate from local command completion.
 
 Returned choices open only for their still-presented, connected owner with no

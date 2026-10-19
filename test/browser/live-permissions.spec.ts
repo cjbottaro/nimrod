@@ -24,7 +24,7 @@ for (const entry of ['composer', 'palette']) test(`live permission change via ${
       const invoke = host.__TAURI_INTERNALS__.invoke;
       const gate = new Promise<void>(resolve => { host.__releasePermissionChange = resolve; });
       host.__TAURI_INTERNALS__.invoke = async (command, args) => {
-        if (command === 'write_copilot' && ['permission-change', 'command'].includes(String((args?.message as { method?: string })?.method))) await gate;
+        if (command === 'write_copilot' && (args?.message as { method?: string })?.method === 'command') await gate;
         return invoke(command, args);
       };
     });
@@ -38,9 +38,8 @@ for (const entry of ['composer', 'palette']) test(`live permission change via ${
       await page.locator('#palette-input').fill('Set permissions'); await page.locator('#palette-input').press('Enter');
       await picker.getByRole('option').filter({ hasText: 'Allow all' }).click();
     }
-    const title = entry === 'composer' ? 'Copilot command' : 'Permission change';
-    const row = page.locator(visible('messages')).locator('.message.configuration').filter({ hasText: title });
-    await expect(row.locator('.delivery-status-shimmer')).toHaveText(title);
+    const row = page.locator(visible('messages')).locator('.message.configuration').filter({ hasText: 'Copilot command' });
+    await expect(row.locator('.delivery-status-shimmer')).toHaveText('Copilot command');
     await expect(row).toHaveClass(/sticky-turn/);
     await row.evaluate(node => { node.setAttribute('data-fixture-identity', 'permission-policy'); });
     await page.evaluate(() => (window as unknown as { __releasePermissionChange: () => void }).__releasePermissionChange());
@@ -59,8 +58,7 @@ for (const entry of ['composer', 'palette']) test(`live permission change via ${
     await expect(page.locator(visible('messages'))).toContainText('Continued after live permission change');
     await expect(picker).toBeHidden(); await expect(banner).toBeHidden();
     await expect(prompt).toHaveValue('Keep newer draft');
-    const expectedMethod = entry === 'composer' ? 'command' : 'permission-change';
-    expect(demo.calls.filter(call => call.command === 'write_copilot' && (call.args.message as { method?: string }).method === expectedMethod)).toHaveLength(1);
+    expect(demo.calls.filter(call => call.command === 'write_copilot' && (call.args.message as { method?: string }).method === 'command')).toHaveLength(1);
     expect(demo.errors).toEqual([]);
   } finally { await demo.close(); }
 });

@@ -5,8 +5,8 @@ import { SessionConfigurationSet } from '../src/session-configuration-set';
 import { sessionActions } from '../src/session-backend';
 
 const flush = async () => { for (let i = 0; i < 16; i++) await Promise.resolve(); };
-for (const active of [false, true]) test(`independent permission configuration bypasses ${active ? 'in-flight' : 'idle-only queued'} model work`, async () => {
-  let configuration: SessionConfigurationSet, model = 'old', permission = 'manual', finishModel!: () => void;
+for (const active of [false, true]) test(`independent configuration owner bypasses ${active ? 'in-flight' : 'idle-only queued'} model work`, async () => {
+  let configuration: SessionConfigurationSet, model = 'old', profile = 'default', finishModel!: () => void;
   const calls: string[] = [];
   const modelOwner = new SessionConfigurationController({
     capabilities: () => [{ id: 'model', label: 'Model', availability: active ? 'ready' : 'deferred' }], get: () => model,
@@ -15,37 +15,35 @@ for (const active of [false, true]) test(`independent permission configuration b
       dispatched(); calls.push('model'); await new Promise<void>(resolve => { finishModel = resolve; }); model = 'new';
     },
   }, () => { void configuration.operations; });
-  const permissions = new SessionConfigurationController({
-    operationTitle: 'Permission change',
-    capabilities: () => [{ id: 'permissions', label: 'Permissions', availability: 'ready' }], get: () => permission,
+  const secondary = new SessionConfigurationController({
+    operationTitle: 'Profile change',
+    capabilities: () => [{ id: 'profile', label: 'Profile', availability: 'ready' }], get: () => profile,
     choices: async () => [{ value: 'open', label: 'Harness-defined open policy' }],
-    apply: async (_setting, value, _current, dispatched) => { dispatched(); calls.push('permissions'); permission = value; },
+    apply: async (_setting, value, _current, dispatched) => { dispatched(); calls.push('profile'); profile = value; },
   }, () => { void configuration.operations; });
-  configuration = new SessionConfigurationSet([modelOwner, permissions]);
+  configuration = new SessionConfigurationSet([modelOwner, secondary]);
   configuration.set('model', (await configuration.choices('model'))[0]); await flush();
-  configuration.set('permissions', (await configuration.choices('permissions'))[0]); await flush();
-  assert.deepEqual(calls, active ? ['model', 'permissions'] : ['permissions']);
+  configuration.set('profile', (await configuration.choices('profile'))[0]); await flush();
+  assert.deepEqual(calls, active ? ['model', 'profile'] : ['profile']);
   assert.equal(configuration.operations[0].phase, active ? 'applying' : 'queued');
   assert.equal(configuration.operations[1].phase, 'completed');
-  assert.equal(configuration.operations[1].title, 'Permission change');
-  assert.equal(configuration.get('permissions'), 'open');
+  assert.equal(configuration.operations[1].title, 'Profile change');
+  assert.equal(configuration.get('profile'), 'open');
   const operations = configuration.operations;
   configuration.update(); await flush();
   assert.equal(configuration.operations, operations, 'unchanged domains retain publication identity');
   if (active) { finishModel(); await flush(); }
   else assert.equal(configuration.cancel(configuration.operations[0].key), true);
-  assert.equal(configuration.operations.at(-1)?.title, 'Permission change');
+  assert.equal(configuration.operations.at(-1)?.title, 'Profile change');
   configuration.dispose();
 });
 
-test('permission actions depend on the consumer capability, not a Copilot branch', () => {
+test('configuration capability does not manufacture a harness-command action', () => {
   const configuration = new SessionConfigurationSet([new SessionConfigurationController({
     capabilities: () => [{ id: 'permissions', label: 'Permissions', availability: 'ready' }],
     get: () => undefined, choices: async () => [], apply: async () => {},
   }, () => {})]);
-  // A minimal session stand-in exercises the existing Pi composition branch:
-  // the shared permission contribution must not require a CopilotSession.
   const session = { configuration } as unknown as import('../src/pi/session').PiSession;
   const action = sessionActions({ backend: { kind: 'pi', session } }).find(action => action.id === 'permissions');
-  assert.equal(action?.configurationSetting, 'permissions');
+  assert.equal(action, undefined);
 });

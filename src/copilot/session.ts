@@ -13,9 +13,8 @@ import { CopilotCommandQueue } from './command-queue';
 import type { ConfigurationOperation } from '../session-configuration';
 import { initialCopilotUsage, type CopilotUsageSeed } from './usage-seed';
 import { createCopilotConfiguration } from './session-configuration';
-import { createCopilotPermissionConfiguration, permissionCommand, permissionArgument } from './permission-configuration';
 import { SessionConfigurationSet } from '../session-configuration-set';
-import { ConfigurationDeferred, ConfigurationSuperseded, ConfigurationUncertain, type SessionConfigurationController } from '../session-configuration';
+import { ConfigurationDeferred, ConfigurationSuperseded, type SessionConfigurationController } from '../session-configuration';
 import { pickConfiguration } from '../configuration-picker';
 import { commandChoices, copilotCommands, copilotSkillChoices, findCopilotCommand, isCopilotModelCommand, isCopilotSessionRename, isCopilotSkillsInfo, parseCopilotCommand, type CommandChoice, type CopilotCommand } from './commands';
 
@@ -55,10 +54,6 @@ export class CopilotSession {
   readonly connection: CopilotConnection;
   readonly configuration: SessionConfigurationSet;
   private readonly modelConfiguration: SessionConfigurationController;
-  private readonly permissionConfiguration: SessionConfigurationController;
-  private permissionMode?: string;
-  private permissionVersion = 0;
-  private permissionChanging = false;
   state: Omit<ConversationViewState, 'messages'> & { messages: DisplayMessage[]; sessionName?: string } = {
     messages: [], sessionUnavailable: true, busy: false, status: 'Connecting Copilot…',
   };
@@ -115,17 +110,11 @@ export class CopilotSession {
       apply: (setting, value, current, dispatched) => this.applyPreference(setting, value, current, dispatched), changed: () => this.publish([]),
       error: message => this.ui.notice(`Configuration change failed: ${message}`),
     });
-    this.permissionConfiguration = createCopilotPermissionConfiguration({
-      commands: () => this.commands, mode: () => this.permissionMode,
-      availability: command => this.ended || this.state.sessionUnavailable ? 'unavailable'
-        : this.permissionChanging || this.commandOperation || this.state.busy && !command.allowDuringAgentExecution ? 'deferred' : 'ready',
-      apply: (value, current, dispatched) => this.applyPermissions(value, current, dispatched), changed: () => this.publish([]),
-    });
-    this.configuration = new SessionConfigurationSet([this.modelConfiguration, this.permissionConfiguration]);
+    this.configuration = new SessionConfigurationSet([this.modelConfiguration]);
     this.commandQueue = new CopilotCommandQueue(
       text => {
         const invocation = parseCopilotCommand(text), command = invocation && findCopilotCommand(this.commands, invocation.name);
-        return !this.ended && !this.state.sessionUnavailable && !this.configuring && !this.permissionChanging && !this.commandOperation
+        return !this.ended && !this.state.sessionUnavailable && !this.configuring && !this.commandOperation
           && (!this.state.busy || command?.allowDuringAgentExecution === true);
       },
       (id, text, signal, dispatched) => this.runCommand(id, text, { signal }, dispatched), () => this.publish([]));
@@ -133,7 +122,7 @@ export class CopilotSession {
       () => this.configuring ? Promise.resolve(null) : this.connection.request('context', {}, 'reject'));
     this.updateStatusArea();
   }
-  get canSubmit(): boolean { return !this.ended && !this.state.sessionUnavailable && !this.state.busy && !this.configuring && !this.permissionChanging && !this.commandOperation && !this.commandQueue?.occupied; }
+  get canSubmit(): boolean { return !this.ended && !this.state.sessionUnavailable && !this.state.busy && !this.configuring && !this.commandOperation && !this.commandQueue?.occupied; }
   supports(kind: 'model' | 'thinking' | 'mode' | 'context'): boolean {
     const model = this.models.find(model => model.id === this.model);
     return kind === 'model' ? this.models.length > 0 : kind === 'thinking'
@@ -169,6 +158,11 @@ export class CopilotSession {
     capabilities: () => copilotImageCapabilities(this.models.find(model => model.id === this.model)),
     submit: message => this.handle({ ...message, type: 'prompt' }),
   };
+  invokeCommand(text: string): Promise<void> {
+    const error = this.validatePrompt(text);
+    if (error || !text.trimStart().startsWith('/')) return Promise.reject(new Error(error || 'A harness slash command is required.'));
+    return this.handle({ type: 'command', id: crypto.randomUUID(), text });
+  }
 
   async handle(message: Record<string, unknown>): Promise<void> {
     this.capture('ui.action', message);
@@ -391,24 +385,6 @@ export class CopilotSession {
       this.invalidateContext(); this.publish([]);
     }
   }
-  private async applyPermissions(value: string, current: () => boolean, dispatched: () => void): Promise<void> {
-    const command = permissionCommand(this.commands);
-    if (this.ended || this.state.sessionUnavailable || !command) throw new Error('Copilot permission configuration is unavailable.');
-    if (this.commandOperation || this.permissionChanging || this.state.busy && !command.allowDuringAgentExecution) throw new ConfigurationDeferred();
-    if (!current()) throw new ConfigurationSuperseded();
-    this.permissionChanging = true; this.publish([]);
-    try {
-      const version = this.permissionVersion;
-      dispatched();
-      const result = await this.connection.request('permission-change', { value });
-      if (!record(result)) throw new ConfigurationUncertain('Copilot returned an invalid permission result. Nothing was retried.');
-      if (result.outcome === 'deferred') throw new ConfigurationDeferred();
-      if (version === this.permissionVersion && ['manual', 'assisted', 'allow-all'].includes(String(result.mode))) this.permissionMode = String(result.mode);
-      if (result.outcome !== 'applied' || result.mode !== 'allow-all') throw new ConfigurationUncertain(typeof result.details === 'string' ? result.details : 'Copilot did not confirm the permission change. Nothing was retried.');
-      // Existing permission callbacks belong to the user/runtime. Do not answer,
-      // cancel or hide them here, and do not refresh usage or alter agent activity.
-    } finally { this.permissionChanging = false; this.publish([]); }
-  }
   private applyConfigurationSnapshot(value: unknown): void {
     if (!record(value)) throw new Error('Invalid Copilot configuration snapshot');
     if (value.mode !== undefined && !['interactive', 'plan', 'autopilot'].includes(String(value.mode)))
@@ -450,10 +426,6 @@ export class CopilotSession {
       this.usage.seed(this.initialUsage);
       this.state = { ...this.state, sessionUnavailable: false, busy: false, status: 'Idle' }; this.publish();
       this.usage.refresh(); this.usage.refreshContext();
-    } else if (packet.kind === 'permission-mode') {
-      if (!['manual', 'assisted', 'allow-all'].includes(String(packet.mode))) throw new Error('Invalid Copilot permission mode');
-      // The bridge fences its optional read against native events and mutations.
-      this.permissionMode = String(packet.mode); this.publish([]);
     } else if (packet.kind === 'commands') {
       if (!Array.isArray(packet.commands)) throw new Error('Invalid Copilot command catalog');
       this.commands = copilotCommands(packet.commands); this.publish([]);
@@ -550,11 +522,7 @@ export class CopilotSession {
         ...(complete ? { isError: data.success === false, resultOutput: result ? copilotToolResult(result) : JSON.stringify(error ?? data, null, 2) } : {}),
       });
     } else if (type === 'session.permissions_changed' && !raw.agentId) {
-      if (data.mode !== undefined) {
-        this.permissionVersion++;
-        this.permissionMode = ['manual', 'assisted', 'allow-all'].includes(String(data.mode)) ? String(data.mode) : undefined;
-        this.publish([]);
-      }
+      this.publish([]);
     } else if (type === 'session.model_change' && !raw.agentId) {
       this.configurationVersion++;
       const model = string('newModel') || undefined;
