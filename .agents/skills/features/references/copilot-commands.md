@@ -15,6 +15,16 @@ failure/ambiguous delivery. Palette/keybindings/Status-area controls retain
 Nimrod-owned dispatch. Reusing the palette's modal mechanics for a returned
 selection is presentation reuse, not application action dispatch/ranking.
 
+Harness commands remain harness-owned when they overlap a Nimrod action. For
+example, **Select model…** uses Nimrod's session-configuration port, while
+Copilot `/model` is invoked and completed through Copilot's command protocol.
+Neither entry point redirects to or impersonates the other. Implement command
+support by advertised metadata and SDK result/effect kind, not command name:
+new commands composed from supported kinds work without handlers. Add
+command-specific integration only when the harness exposes semantics that its
+generic command contract cannot represent, and preserve those harness semantics
+rather than substituting a superficially similar Nimrod action.
+
 This feature applies to **Copilot SDK sessions**. Pi's existing `/name`,
 `/compact` and bare `/mcp` interception remains unchanged; removing it requires a
 separate Pi contract change. Generic ACP keeps advertised-only passthrough; the Copilot ACP integration has been removed.
@@ -63,8 +73,9 @@ handlers. This is not universal CLI/TUI parity. Generic command workflows remain
 | `completed` | Finish; display optional message as command output. No fabricated model response or completion notification. |
 | `select-subcommand` | Validate supplied title/parent/options; open a standalone shared selection modal. Display descriptions/group labels, arrows/Enter select, Escape cancels. Invoke only the exact offered argument against the same session. |
 | `agent-prompt` | Only an interactive/unspecified-mode result may submit its actual returned prompt. Display its supplied display prompt and optional notice. Never treat command invocation failure as this result or send twice. |
-| `show-dialog` | Basic unscoped model-picker requests can present the reported model catalog and return the selection to the originating command. Model enabling, settings scopes and other dialog kinds are unsupported. |
-| `set-model`, `set-plan-model` | Explicit unsupported notice, no approximation or fallback setter. The pinned release's invocation-effect finalizer is internal, not a public SDK consumer API. Existing Nimrod model controls still work independently. |
+| `show-dialog` | Model-picker requests can present the reported enabled-model catalog and return the selection to the originating command, including settings scope/target metadata interpreted by that command. Model enabling and other dialog kinds remain unsupported. |
+| `set-model` | The bridge applies the command-selected live model/effort/Auto tier, reads authoritative state, then calls the SDK's public experimental invocation-effect finalizer with the original effect unchanged. Invalid effects finalize as cancelled; mutation/finalization uncertainty disconnects for explicit reconciliation. This does not dispatch Nimrod's **Select model…** action. |
+| `set-plan-model` | The command's provisional future Plan-model preference is finalized through the same SDK effect transaction and its confirmation is displayed. It does not change the active model or dispatch a Nimrod action. |
 | Unknown/malformed result or unknown mode | Session-owned error; no speculative prompt/action or automatic replay. Supported Interactive, Plan and Autopilot changes reconcile through the session mode configuration; unknown values disconnect before follow-on work. |
 
 Supported permission mutation uses one **PERMISSION CHANGE** operation card instead of a duplicate command-output row. Choosing `allow-all` in the existing argument/result-choice workflow converges on that same owner. Native policy confirmation, pending-callback retention and failure/uncertainty semantics are specified in [Live permissions](live-permissions.md).
@@ -105,6 +116,8 @@ use the existing bounded request timeout/unknown-outcome disconnect contract.
 - `copilot/bridge.mjs`: public SDK discovery/invocation, fresh command validation,
   root change refresh, ordinary-prompt slash rejection, interactive-mode guard.
 - `src-tauri/src/copilot.rs`: narrow private command/list bridge-record admission.
+- `copilot/command-effects.mjs`: command-name-independent SDK effect application,
+  authoritative model reconciliation and applied/cancelled finalization.
 - `src/copilot/commands.ts`: validated metadata, aliases, raw parsing and choices.
 - `src/copilot/{session,view-policy}.ts`: command intent, operation ownership,
   result interpretation, labelled output and submission receipts.
@@ -117,7 +130,10 @@ use the existing bounded request timeout/unknown-outcome disconnect contract.
   alone creates a circular initializer/return-type dependency (TS7022/TS7023).
 - `test/copilot-commands.test.ts`: metadata, argument insertion/Enter/IME/caret,
   raw argument preservation, selection/cancellation/late results, discovery
-  updates, explicit agent prompts and no fallback for unsupported effects.
+  updates, finalized model reconciliation, explicit agent prompts and no fallback
+  for unsupported effects.
+- `test/copilot-command-effects.test.ts`: applied/cancelled model and Plan-model
+  transactions, authoritative mismatch and finalization uncertainty.
 - `test/copilot-bridge.test.ts`, `test/fixtures/copilot-sdk.mjs`: production bridge
   with offline SDK fixture, alias/fresh-list invocation and newly advertised
   commands, no prompts for command output.

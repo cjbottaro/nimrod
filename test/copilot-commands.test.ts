@@ -178,7 +178,7 @@ test('new catalog commands work mechanically; unknown, malformed and unsupported
     assert.match(f.session.validatePrompt('/future')!, /not advertised/);
     f.session.receive({ kind: 'commands', commands: [{ name: 'future', description: 'New runtime command', kind: 'builtin' }] });
     assert.equal(f.session.validatePrompt('/future'), undefined);
-    for (const result of [{ kind: 'future-host-effect' }, { kind: 'set-model', model: 'other' }, { kind: 'select-subcommand', command: 'future', title: 'Bad', options: [{}] }]) {
+    for (const result of [{ kind: 'future-host-effect' }, { kind: 'select-subcommand', command: 'future', title: 'Bad', options: [{}] }]) {
       const handling = f.session.handle({ type: 'command', id: 'future', text: '/future' });
       f.reply(result); await handling;
       assert.match(String(f.published.filter(message => message.type === 'submissionReceipt' && message.id === 'future').at(-1)?.error), /No.*fallback|Nothing was retried/);
@@ -189,6 +189,20 @@ test('new catalog commands work mechanically; unknown, malformed and unsupported
     assert.equal(f.session.state.messages.at(-1)?.role, 'command');
     f.session.receive({ kind: 'command-error', error: 'Discovery unavailable' });
     assert.deepEqual(f.session.commands, []); assert.equal(f.session.canSubmit, true);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('finalized harness model effects reconcile configuration without invoking Nimrod actions', async () => {
+  const f = await fixture(undefined, [{ name: 'model', description: 'Select model', kind: 'builtin' }]);
+  try {
+    const handling = f.session.handle({ type: 'command', id: 'model', text: '/model large' });
+    f.reply({ kind: 'set-model', model: 'large', reasoningEffort: 'high', effectFinalized: true,
+      model: { modelId: 'large', reasoningEffort: 'high' }, warning: 'Preview model' });
+    await handling;
+    assert.equal(f.session.configuration.get('model'), 'large');
+    assert.equal(f.session.configuration.get('effort'), 'high');
+    assert.deepEqual(f.notices, ['Preview model']);
+    assert.equal(f.sent.some(request => request.method === 'configure'), false);
   } finally { f.session.disconnect('fixture complete'); }
 });
 

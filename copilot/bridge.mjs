@@ -1,6 +1,7 @@
 import { createInterface } from 'node:readline';
 import { isAbsolute } from 'node:path';
 import { createCopilotConfiguration } from './configuration.mjs';
+import { completeCommandEffect } from './command-effects.mjs';
 import { permissionMode, applyPermissionChange } from './permission-configuration.mjs';
 import { validPermissionDecision } from './permissions.mjs';
 
@@ -206,7 +207,8 @@ async function dispatch(message) {
         if (!command) throw new Error('This command is not advertised by Copilot. Nothing was invoked.');
         const permissions = command.kind === 'builtin' && command.name.toLowerCase() === 'permissions';
         if (permissions) permissionRevision++;
-        const result = await session.rpc.commands.invoke({ name: command.name, ...(message.input !== undefined ? { input: message.input } : {}) });
+        const invoked = await session.rpc.commands.invoke({ name: command.name, ...(message.input !== undefined ? { input: message.input } : {}) });
+        const result = await completeCommandEffect(session, invoked);
         if (permissions) void refreshPermissionMode(session);
         // Refresh metadata without re-invoking the command or changing its result.
         try { await refreshCommands(); }
