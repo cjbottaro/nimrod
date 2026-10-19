@@ -178,7 +178,7 @@ authoritative readiness transition.
 queue reads the advertised live-use metadata and dispatches through the ordinary
 harness command interface as soon as that metadata permits; authoritative
 permission events reconcile UI state. It needs no permission-specific slash
-executor. Nimrod's **Select permissions…** action is a separate entry point and
+executor. Nimrod's **Set permissions…** action is a separate entry point and
 may use a Permission-change operation card plus its own configuration executor.
 Shared native effects do not merge their presentation or dispatch identities.
 

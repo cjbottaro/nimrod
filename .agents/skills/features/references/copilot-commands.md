@@ -116,7 +116,7 @@ permissions…** action.
 
 Slash-command permission mutations are ordinary retained Command cards and use
 the generic command invocation plus authoritative native events. Nimrod's
-**Select permissions…** action separately uses a **PERMISSION CHANGE** card and
+**Set permissions…** action separately uses a **PERMISSION CHANGE** card and
 the concrete configuration owner specified in [Live
 permissions](live-permissions.md).
 
@@ -147,7 +147,7 @@ Advertised argument choices are available before invocation and must not require
 executing a bare command to discover its default behavior. Separately, waiting
 for a returned `select-subcommand` choice is result-gated because those choices
 are unavailable before invocation. Neither path gates clearing the composer on RPC.
-Ordinary message submissions and model mutation remain locally unavailable until queued command workflows settle; further advertised commands can queue. The separate native **Select permissions…** action may be accepted when its configuration owner is ready; the draft stays editable. Ordinary agent turns retain SDK `session.idle`
+Ordinary message submissions and model mutation remain locally unavailable until queued command workflows settle; further advertised commands can queue. The separate native **Set permissions…** action may be accepted when its configuration owner is ready; the draft stays editable. Ordinary agent turns retain SDK `session.idle`
 semantics, separate from local command completion.
 
 Returned choices open only for their still-presented, connected owner with no

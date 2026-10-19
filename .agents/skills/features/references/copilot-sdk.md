@@ -305,7 +305,7 @@ selection approves:
   scopes retain literal details and one-time approval/rejection.
 
 The separate [live permission configuration](live-permissions.md) backs
-Nimrod's **Select permissions…** action by invoking the exact advertised
+Nimrod's **Set permissions…** action by invoking the exact advertised
 `/permissions allow-all` command through SDK command RPC and confirming native
 mode. Composer slash commands use the generic command queue and its advertised
 live-use metadata instead. Neither path is a host decision or substitute

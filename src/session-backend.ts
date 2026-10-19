@@ -30,7 +30,7 @@ export function sessionActions(owner: Owner): readonly SessionAction[] {
   const actions = owner.backend.kind === 'pi' ? piSessionActions : owner.backend.kind === 'copilot-sdk' ? copilotSessionActions(owner.backend.session) : acpSessionActions(owner.backend.session);
   const configuration = sessionConfiguration(owner);
   const contributed: readonly SessionAction[] = configuration?.capabilities.some(setting => setting.id === 'permissions')
-    ? [...actions, { id: 'permissions', label: 'Select permissions…', detail: 'Change the permission policy for this session', configurationSetting: 'permissions' }] : actions;
+    ? [...actions, { id: 'permissions', label: 'Set permissions…', detail: 'Change the permission policy for this session', configurationSetting: 'permissions' }] : actions;
   return configuration?.cancel && configuration.operations.some(operation => operation.cancellable)
     ? [...contributed, { id: 'cancel-configuration', label: 'Cancel pending configuration change', detail: 'Withdraw configuration that has not been dispatched' }] : contributed;
 }

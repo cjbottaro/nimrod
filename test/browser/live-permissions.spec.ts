@@ -35,7 +35,7 @@ for (const entry of ['composer', 'palette']) test(`live permission change via ${
     } else {
       await prompt.fill('Keep newer draft');
       await page.keyboard.press('Meta+Shift+P');
-      await page.locator('#palette-input').fill('Select permissions'); await page.locator('#palette-input').press('Enter');
+      await page.locator('#palette-input').fill('Set permissions'); await page.locator('#palette-input').press('Enter');
       await picker.getByRole('option').filter({ hasText: 'Allow all' }).click();
     }
     const title = entry === 'composer' ? 'Copilot command' : 'Permission change';
