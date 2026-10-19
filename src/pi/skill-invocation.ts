@@ -1,3 +1,5 @@
+import { createCardSummary } from './card-shell';
+
 export interface SkillInvocation {
   name: string;
   location: string;
@@ -32,7 +34,7 @@ export function renderSkillInvocation(
   details.className = "tool-card skill-card";
   details.dataset.detailKey = key;
   details.open = previous?.querySelector<HTMLDetailsElement>(".skill-card")?.open ?? expanded.get(key) ?? false;
-  const summary = document.createElement("summary");
+  const summary = createCardSummary(document);
   const label = document.createElement("span");
   label.className = "tool-card-preview skill-name";
   label.textContent = `/skill:${skill.name}`;
