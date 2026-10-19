@@ -210,6 +210,23 @@ test('finalized harness model effects reconcile configuration without invoking N
   } finally { f.session.disconnect('fixture complete'); }
 });
 
+test('finalization failure belongs to the queued command card without a duplicate submission error', async () => {
+  for (const outcome of ['cancelled', 'unknown']) {
+    const f = await fixture(undefined, [{ name: 'model', kind: 'builtin' }]);
+    try {
+      const handling = f.session.handle({ type: 'command', id: outcome, text: '/model large' });
+      f.reply({ kind: 'command-effect-failed', outcome, error: 'Native finalization did not finish' });
+      await handling;
+      const operation = f.session.state.configurationOperations!.at(-1)!;
+      assert.equal(operation.phase, outcome === 'cancelled' ? 'failed' : 'unknown');
+      assert.match(operation.details!, /Native finalization/);
+      assert.equal(f.published.some(message => message.type === 'submissionReceipt' && message.outcome !== 'accepted'), false);
+      assert.equal(f.sent.filter(request => request.method === 'command').length, 1);
+      assert.equal(f.sent.some(request => request.method === 'prompt'), false);
+    } finally { f.session.disconnect('fixture complete'); }
+  }
+});
+
 test('only an explicit interactive agent-prompt result sends model work', async () => {
   const f = await fixture(undefined, resultOnlyCatalog);
   try {

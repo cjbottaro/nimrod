@@ -309,9 +309,10 @@ export class CopilotSession {
           if (result.message) this.commandOutput(result.message, name);
         } else if (result.kind === 'command-effect-failed') {
           const error = typeof result.error === 'string' && result.error ? result.error : 'Copilot did not complete its command effect.';
-          this.ui.publish({ type: 'submissionReceipt', id, outcome: result.outcome === 'cancelled' ? 'rejected' : 'unknown',
-            operation: 'Run Copilot command', error });
-          if (result.outcome !== 'cancelled') this.disconnect(`${error} Reconnect explicitly to read Copilot’s authoritative configuration.`);
+          if (result.outcome === 'cancelled') throw new Error(error);
+          // The queue's existing operation card owns this outcome, including
+          // connection uncertainty; do not also emit a submission-error notice.
+          this.disconnect(`${error} Reconnect explicitly to read Copilot’s authoritative configuration.`);
           return;
         } else throw new Error(`Unsupported Copilot command result "${result.kind}". No fallback prompt was sent.`);
         this.ui.publish({ type: 'submissionReceipt', id, outcome: 'accepted' });
