@@ -231,6 +231,8 @@ retain the shared mounted decision surface and their existing native choices/can
 
 ### Questions and custom answers
 
+Agent questions implement the shared [dismiss-and-resume workflow](dismiss-and-resume.md), with SDK user-input semantics retained below.
+
 `src/copilot/question-interaction.ts` owns a session/connection-bound FIFO of SDK
 user-input callbacks. The **Question picker** uses `startRetainedSelection`, the
 same shared palette lifecycle as permissions, not an inline form above the
@@ -263,6 +265,8 @@ priority, navigation, abort/disposal and stale input. These fixtures are authore
 but unrun; native macOS/Linux stacking, focus and visual acceptance remain pending.
 
 ### Permission choices and interaction
+
+Permission requests implement the shared [dismiss-and-resume workflow](dismiss-and-resume.md), with Copilot approval/denial semantics retained below.
 
 `copilot/permissions.mjs` owns the exact options and bridge validation for the
 concrete `CopilotDecision` permission union (declared in `permissions.d.mts`).
