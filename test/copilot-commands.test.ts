@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
-import { copilotCommands, copilotSlashCommands, parseCopilotCommand } from '../src/copilot/commands';
+import { copilotCommands, copilotSlashCommands, isCopilotModelCommand, parseCopilotCommand } from '../src/copilot/commands';
 import { CopilotSession, type CopilotSessionUi } from '../src/copilot/session';
 import type { BridgeRequest } from '../src/copilot/connection';
 import type { ConversationViewMessage } from '../src/conversation-view-host';
@@ -12,7 +12,7 @@ const catalog = [{ name: 'permissions', aliases: ['perms'], description: 'Manage
   input: { hint: 'Choose a permission operation', choices: [{ name: 'show', description: 'Show permissions' }, { name: 'reset', description: 'Clear approvals' }] } }];
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 const resultOnlyCatalog = catalog.map(({ input: _input, ...command }) => command);
-async function fixture(commandChoice?: CopilotSessionUi['commandChoice'], commands: unknown[] = catalog) {
+async function fixture(commandChoice?: CopilotSessionUi['commandChoice'], commands: unknown[] = catalog, models: unknown[] = []) {
   const sent: BridgeRequest[] = [], published: ConversationViewMessage[] = [], notices: string[] = [], completions: boolean[] = [];
   const session: CopilotSession = new CopilotSession(async request => {
     sent.push(request);
@@ -26,7 +26,7 @@ async function fixture(commandChoice?: CopilotSessionUi['commandChoice'], comman
     assert.ok(request); session.receive({ kind: 'result', id: request.id, result });
   };
   const ready = session.initialize(); reply(null, 'initialize'); await flush();
-  session.receive({ kind: 'connected', sessionId: 'fixture', events: [], models: [], model: {} });
+  session.receive({ kind: 'connected', sessionId: 'fixture', events: [], models, model: {} });
   session.receive({ kind: 'commands', commands }); reply(null, 'connect'); await ready; await flush();
   return { session, sent, published, notices, completions, reply };
 }
@@ -38,6 +38,8 @@ test('SDK command metadata retains aliases, hints and choices, without synthetic
   assert.deepEqual(copilotCommands(undefined), []);
   assert.deepEqual(parseCopilotCommand('/perms show  literal\nmore '), { name: 'perms', input: 'show  literal\nmore ' });
   assert.deepEqual(parseCopilotCommand('/permissions'), { name: 'permissions' });
+  assert.equal(isCopilotModelCommand(copilotCommands([{ name: 'model', kind: 'builtin' }])[0]), true);
+  assert.equal(isCopilotModelCommand(copilotCommands([{ name: 'model', kind: 'client' }])[0]), false);
   const interaction = copilotInteraction(() => undefined);
   assert.deepEqual(interaction.prepare('/permissions', {}), { kind: 'request', message: { type: 'command' }, preview: false, navigate: false });
   assert.equal(interaction.prepare('Hello', {}).kind, 'request');
@@ -132,6 +134,38 @@ test('commands without advertised choices retain their bare SDK invocation', asy
     const handling = f.session.handle({ type: 'command', id: 'bare-text', text: '/permissions' });
     assert.equal(f.sent.at(-1)!.method, 'command'); assert.equal(f.sent.at(-1)!.input, undefined);
     f.reply({ kind: 'text', text: 'Default report' }); await handling;
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+for (const slash of ['/model', '/models']) test(`${slash} supplies Copilot's missing bare-command picker before harness invocation`, async () => {
+  let choose!: (value: string | undefined) => void;
+  const commands = [{ name: 'model', aliases: ['models'], description: 'Select model', kind: 'builtin', input: { hint: 'model' } }];
+  const models = [{ id: 'small', name: 'Small' }, { id: 'large', name: 'Large' }];
+  const f = await fixture(async (title, choices) => {
+    assert.equal(title, 'Copilot /model');
+    assert.deepEqual(choices, [{ id: 'small', label: 'Small', detail: 'small' }, { id: 'large', label: 'Large', detail: 'large' }]);
+    return new Promise(resolve => { choose = resolve; });
+  }, commands, models);
+  try {
+    const handling = f.session.handle({ type: 'command', id: slash, text: slash });
+    assert.equal(f.sent.some(request => request.method === 'command'), false);
+    choose('large'); await flush();
+    assert.deepEqual(f.sent.at(-1) && { method: f.sent.at(-1)!.method, name: f.sent.at(-1)!.name, input: f.sent.at(-1)!.input },
+      { method: 'command', name: slash.slice(1), input: 'large' });
+    f.reply({ kind: 'set-model', model: 'large', effectFinalized: true, configuration: { modelId: 'large' } });
+    await handling;
+    assert.equal(f.session.configuration.get('model'), 'large');
+    assert.equal(f.sent.some(request => request.method === 'configure'), false);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('cancelling Copilot model command picker invokes nothing', async () => {
+  const commands = [{ name: 'model', aliases: ['models'], description: 'Select model', kind: 'builtin', input: { hint: 'model' } }];
+  const f = await fixture(async () => undefined, commands, [{ id: 'small', name: 'Small' }]);
+  try {
+    await f.session.handle({ type: 'command', id: 'model-cancel', text: '/model' });
+    assert.equal(f.sent.some(request => request.method === 'command'), false);
+    assert.equal(f.session.state.configurationOperations?.length, 0);
   } finally { f.session.disconnect('fixture complete'); }
 });
 

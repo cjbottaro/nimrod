@@ -47,6 +47,9 @@ export function findCopilotCommand(commands: readonly CopilotCommand[], name: st
   return commands.find(command => command.name.toLowerCase() === lower)
     ?? commands.find(command => command.aliases.some(alias => alias.toLowerCase() === lower));
 }
+export function isCopilotModelCommand(command: CopilotCommand): boolean {
+  return command.kind === 'builtin' && command.name.toLowerCase() === 'model';
+}
 export interface CommandChoice { id: string; label: string; detail?: string; }
 
 /** Validate result-owned choices; never turn arbitrary result text into an executable choice. */

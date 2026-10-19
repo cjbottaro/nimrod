@@ -29,7 +29,14 @@ default and cover zero-invocation cancellation. Those fixtures are unrun, and
 post-fix installed catalog/command behavior, modal focus and macOS/Linux acceptance
 remain unverified. Host-side model and Plan-model effect application/finalization
 is source-implemented against the pinned SDK's public experimental transaction;
-its new offline fixtures are unrun, and installed-CLI behavior remains unverified.
+its new offline fixtures are unrun, and installed-CLI effect completion remains
+unverified.
+
+A user-observed CLI 1.0.98 trace established that builtin canonical `/model`
+(alias `/models`) advertises only a free-form `model` hint and that both bare
+invocations return `completed` without choices/dialog/effect. This is protocol
+shape evidence for the narrow catalog-picker adapter, not acceptance of the
+adapter itself; its offline fixtures and native focus/effect behavior are unrun.
 
 - TypeScript/jsdom shell tests use mocked native IPC.
 - Rust fixture tests use actual pipes, owned subprocesses and generated disposable session files; deletion tests unlink only those fixtures.
