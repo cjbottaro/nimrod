@@ -25,14 +25,32 @@ async function failed(session, effect, error, mutationAttempted) {
  * Completes SDK-defined command effects without knowing the originating command.
  * Commands composed from existing result kinds therefore work without name handlers.
  */
-export async function completeCommandEffect(session, effect) {
-  if (!record(effect) || !['set-model', 'set-plan-model'].includes(effect.kind)) return effect;
+export async function completeCommandEffect(session, effect, context = {}) {
+  if (!record(effect)) return effect;
+  if (effect.kind === 'completed' && context.command?.kind === 'builtin'
+    && context.command.name?.toLowerCase() === 'model' && typeof context.input === 'string') {
+    const model = context.input.trim();
+    const catalog = typeof context.models === 'function' ? await context.models() : [];
+    const advertised = Array.isArray(catalog) && catalog.some(item => record(item) && item.id === model
+      && (!record(item.policy) || item.policy.state === 'enabled'));
+    if (!advertised) return effect;
+    try {
+      await session.setModel(model);
+      const configuration = await session.rpc.model.getCurrent();
+      if (!record(configuration) || configuration.modelId !== model)
+        throw new Error('Copilot did not confirm the model selected by its command.');
+      return { kind: 'set-model', model, commandApplied: true, configuration };
+    } catch (error) {
+      return { kind: 'command-effect-failed', effectKind: 'set-model', outcome: 'unknown', error: message(error) };
+    }
+  }
+  if (!['set-model', 'set-plan-model'].includes(effect.kind)) return effect;
   if (effect.kind === 'set-plan-model') {
     if (effect.planModel !== undefined && (typeof effect.planModel !== 'string' || !effect.planModel)
       || typeof effect.message !== 'string') return failed(session, effect, new Error('Copilot returned an invalid plan-model effect.'), false);
     try {
       await finalize(session, effect, 'applied');
-      return { ...effect, effectFinalized: true };
+      return { ...effect, effectFinalized: true, commandApplied: true };
     } catch (error) {
       return { kind: 'command-effect-failed', effectKind: effect.kind, outcome: 'unknown', error: message(error) };
     }
@@ -56,7 +74,7 @@ export async function completeCommandEffect(session, effect) {
     }
     try {
       await finalize(session, effect, 'applied');
-      return { ...effect, effectFinalized: true, configuration: model };
+      return { ...effect, effectFinalized: true, commandApplied: true, configuration: model };
     } catch (error) {
       return { kind: 'command-effect-failed', effectKind: effect.kind, outcome: 'unknown', error: message(error) };
     }

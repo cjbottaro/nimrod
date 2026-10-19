@@ -209,7 +209,9 @@ async function dispatch(message) {
         const permissions = command.kind === 'builtin' && command.name.toLowerCase() === 'permissions';
         if (permissions) permissionRevision++;
         const invoked = await session.rpc.commands.invoke({ name: command.name, ...(message.input !== undefined ? { input: message.input } : {}) });
-        const result = await completeCommandEffect(session, invoked);
+        const result = await completeCommandEffect(session, invoked, {
+          command, input: message.input, models: () => client.listModels(),
+        });
         if (permissions) void refreshPermissionMode(session);
         // Refresh metadata without re-invoking the command or changing its result.
         try { await refreshCommands(); }

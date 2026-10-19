@@ -1,5 +1,5 @@
 export interface CommandEffectSession {
-  setModel(model: string, options: { reasoningEffort?: string; autoTier?: string }): Promise<void>;
+  setModel(model: string, options?: { reasoningEffort?: string; autoTier?: string }): Promise<void>;
   rpc: {
     model: { getCurrent(): Promise<unknown> };
     commands: {
@@ -11,4 +11,9 @@ export interface CommandEffectSession {
 export function completeCommandEffect(
   session: CommandEffectSession,
   effect: unknown,
+  context?: {
+    command?: { kind?: string; name?: string };
+    input?: string;
+    models?: () => Promise<unknown>;
+  },
 ): Promise<Record<string, unknown>>;

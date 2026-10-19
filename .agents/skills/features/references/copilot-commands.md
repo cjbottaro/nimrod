@@ -25,12 +25,15 @@ entry point redirects to or impersonates the other.
 
 The pinned CLI's builtin `model` command is one such narrow exception. CLI 1.0.98
 advertises canonical `/model` with alias `/models` and a free-form `model` hint,
-but a bare SDK invocation returns only `completed`; the terminal UI's catalog
-picker is not projected through command metadata or results. For a bare
-advertised builtin model command, Nimrod presents Copilot's enabled model catalog
-and then invokes that same harness command with the selected model ID. Explicit
-arguments still pass through untouched. This is not Nimrod's **Select model…**
-action: Copilot still parses the argument and owns its settings/effect transaction.
+but its SDK invocation returns only `completed` for both bare and exact catalog
+model input; the terminal UI's picker and live switch are not projected through
+command metadata or results. For a bare advertised builtin model command, Nimrod
+presents Copilot's enabled model catalog and invokes that same harness command
+with the selected model ID. If that invocation completes without an effect,
+the bridge applies only an exact enabled catalog ID through Copilot
+`session.setModel()` and reconciles `model.getCurrent()`. Richer explicit syntax
+passes through without guessing. This is not Nimrod's **Select model…** action:
+the adapter stays entirely inside Copilot's command/SDK integration.
 
 This feature applies to **Copilot SDK sessions**. Pi's existing `/name`,
 `/compact` and bare `/mcp` interception remains unchanged; removing it requires a

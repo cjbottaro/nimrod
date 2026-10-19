@@ -153,7 +153,7 @@ for (const slash of ['/model', '/models']) test(`${slash} supplies Copilot's mis
     choose('large'); await flush();
     assert.deepEqual(f.sent.at(-1) && { method: f.sent.at(-1)!.method, name: f.sent.at(-1)!.name, input: f.sent.at(-1)!.input },
       { method: 'command', name: slash.slice(1), input: 'large' });
-    f.reply({ kind: 'set-model', model: 'large', effectFinalized: true, configuration: { modelId: 'large' } });
+    f.reply({ kind: 'set-model', model: 'large', commandApplied: true, configuration: { modelId: 'large' } });
     await handling;
     assert.equal(f.session.configuration.get('model'), 'large');
     assert.equal(f.sent.some(request => request.method === 'configure'), false);
@@ -235,7 +235,7 @@ test('finalized harness model effects reconcile configuration without invoking N
   const f = await fixture(undefined, [{ name: 'model', description: 'Select model', kind: 'builtin' }]);
   try {
     const handling = f.session.handle({ type: 'command', id: 'model', text: '/model large' });
-    f.reply({ kind: 'set-model', model: 'large', reasoningEffort: 'high', effectFinalized: true,
+    f.reply({ kind: 'set-model', model: 'large', reasoningEffort: 'high', effectFinalized: true, commandApplied: true,
       configuration: { modelId: 'large', reasoningEffort: 'high' }, warning: 'Preview model' });
     await handling;
     assert.equal(f.session.configuration.get('model'), 'large');

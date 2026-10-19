@@ -5,7 +5,7 @@ import { completeCommandEffect } from '../copilot/command-effects.mjs';
 function fixture(options: { setError?: Error; current?: Record<string, unknown>; finalize?: { success: boolean; error?: string } } = {}) {
   const switches: unknown[] = [], finalizations: unknown[] = [];
   const session = {
-    async setModel(model: string, settings: unknown) {
+    async setModel(model: string, settings?: unknown) {
       switches.push({ model, settings });
       if (options.setError) throw options.setError;
     },
@@ -26,7 +26,36 @@ test('model command effects apply live state and finalize the unchanged effect',
   assert.deepEqual(f.switches, [{ model: 'large', settings: { reasoningEffort: 'high' } }]);
   assert.deepEqual(f.finalizations, [{ effect, outcome: 'applied' }]);
   assert.equal(result.effectFinalized, true);
+  assert.equal(result.commandApplied, true);
   assert.deepEqual(result.configuration, { modelId: 'large', reasoningEffort: 'high' });
+});
+
+test('builtin model completed fallback applies an exact enabled catalog model and reconciles it', async () => {
+  const f = fixture({ current: { modelId: 'large' } });
+  const result = await completeCommandEffect(f.session, { kind: 'completed' }, {
+    command: { kind: 'builtin', name: 'model' }, input: 'large',
+    models: async () => [{ id: 'small', policy: { state: 'disabled' } }, { id: 'large', policy: { state: 'enabled' } }],
+  });
+  assert.deepEqual(f.switches, [{ model: 'large', settings: undefined }]);
+  assert.deepEqual(f.finalizations, []);
+  assert.equal(result.kind, 'set-model');
+  assert.equal(result.commandApplied, true);
+  assert.deepEqual(result.configuration, { modelId: 'large' });
+});
+
+test('model completion fallback does not guess unsupported syntax or unadvertised models', async () => {
+  for (const context of [
+    { command: { kind: 'client', name: 'model' }, input: 'large' },
+    { command: { kind: 'builtin', name: 'model' }, input: '--repo large' },
+    { command: { kind: 'builtin', name: 'model' }, input: 'disabled' },
+  ]) {
+    const f = fixture();
+    const result = await completeCommandEffect(f.session, { kind: 'completed' }, {
+      ...context, models: async () => [{ id: 'large' }, { id: 'disabled', policy: { state: 'disabled' } }],
+    });
+    assert.deepEqual(result, { kind: 'completed' });
+    assert.deepEqual(f.switches, []);
+  }
 });
 
 test('invalid effects cancel provisional settings without attempting a model mutation', async () => {
