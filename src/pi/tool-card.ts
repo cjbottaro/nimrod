@@ -16,7 +16,7 @@ export type { ToolCardData as ToolCardBlock } from '../card-plugin-api';
 export type ToolCardRenderer = DomCardRenderer<ToolCardBlock> | CardRenderer<ToolCardBlock>;
 const renderers = new WeakMap<HTMLDetailsElement, DomCardController<ToolCardBlock>>();
 const retained = new WeakMap<HTMLDetailsElement, ToolCardBlock>();
-const inputs = new WeakMap<HTMLDetailsElement, unknown>();
+const inputs = new WeakMap<HTMLDetailsElement, { value: unknown; label?: string; field?: string }>();
 
 export function disposeToolCard(details: HTMLDetailsElement): void {
   renderers.get(details)?.dispose(); renderers.delete(details); retained.delete(details); inputs.delete(details); associateOutputViewport(details);
@@ -57,25 +57,36 @@ export function updateToolCard(document: Document, details: HTMLDetailsElement, 
     phase.textContent = 'Execution was interrupted before completion was reported.';
   } else phase?.remove();
   retained.set(details, block);
-  if (!inputs.has(details) || inputs.get(details) !== block.arguments) {
-    inputs.set(details, block.arguments); updateInputs(document, details, block.arguments);
-  }
+  updateInputs(document, details, block.arguments);
   renderers.get(details)?.update(block, { streaming: toolCardIsBusy(block) });
   const description = summary.querySelector('.card-plugin-summary')?.getAttribute('aria-label');
   if (description) summary.setAttribute('aria-label', `${description} (${status})`);
-  const raw = Array.from(details.querySelectorAll<HTMLElement>('.tool-section')).filter(section => ['execution', 'result'].includes(section.dataset.outputKind || ''));
-  associateOutputViewport(details, raw.find(section => section.querySelector('.tool-output-streaming'))?.querySelector<HTMLElement>('.tool-output') || raw[0]?.querySelector<HTMLElement>('.tool-output') || details.querySelector<HTMLElement>('.tool-output') || undefined);
+  const body = directChild<HTMLElement>(details, '.card-plugin-body');
+  const recovery = directChild<HTMLElement>(details, '.tool-raw-output');
+  const raw = [...Array.from(body?.querySelectorAll<HTMLElement>('.tool-section') ?? []), ...Array.from(recovery?.querySelectorAll<HTMLElement>('.tool-section') ?? [])].filter(section => ['execution', 'result'].includes(section.dataset.outputKind || ''));
+  associateOutputViewport(details, raw.find(section => section.querySelector('.tool-output-streaming'))?.querySelector<HTMLElement>('.tool-output') || raw[0]?.querySelector<HTMLElement>('.tool-output') || body?.querySelector<HTMLElement>('.tool-output') || undefined);
 }
 function updateInputs(document: Document, root: HTMLDetailsElement, value: unknown): void {
+  const body = directChild<HTMLElement>(root, '.card-plugin-body');
+  const field = body?.dataset.inputField, requestedLabel = body?.dataset.inputLabel;
+  const previous = inputs.get(root);
+  if (previous && previous.value === value && previous.field === field && previous.label === requestedLabel) return;
+  inputs.set(root, { value, field, label: requestedLabel });
   const existing = directChild<HTMLDetailsElement>(root, 'details.tool-raw-inputs:not(.tool-raw-output)');
   if (value === undefined || value === '') { existing?.remove(); return; }
-  if (existing) { const pre = existing.querySelector('pre'); if (pre) pre.textContent = stringify(value); return; }
-  root.insertBefore(rawInputs(document, value), directChild(root, '.card-plugin-body') || null);
+  const record = value && typeof value === 'object' ? value as Record<string, unknown> : undefined;
+  const source = field && record && Object.keys(record).length === 1 && Object.hasOwn(record, field) && typeof record[field] === 'string' ? record[field] as string : undefined;
+  const label = source !== undefined ? requestedLabel || 'Raw inputs' : 'Raw inputs';
+  const text = source ?? stringify(value);
+  if (existing) { existing.querySelector('summary')!.textContent = label; const pre = existing.querySelector('pre'); if (pre && pre.textContent !== text) pre.textContent = text; return; }
+  const input = rawInputs(document, text); input.querySelector('summary')!.textContent = label;
+  root.insertBefore(input, directChild(root, '.card-plugin-body') || null);
 }
 
 function syncRawRecovery(document: Document, details: HTMLDetailsElement, block: ToolCardBlock): void {
+  updateInputs(document, details, block.arguments);
   const expected = rawToolPresentation(block).sections;
-  const body = details.querySelector<HTMLElement>('.card-plugin-body')!;
+  const body = directChild<HTMLElement>(details, '.card-plugin-body')!;
   const inputs = directChild<HTMLDetailsElement>(details, 'details.tool-raw-inputs:not(.tool-raw-output)');
   if (inputs) {
     if (body.dataset.rawInputsPlacement === 'after') { if (body.nextElementSibling !== inputs) body.after(inputs); }

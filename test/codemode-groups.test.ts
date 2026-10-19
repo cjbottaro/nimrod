@@ -1,0 +1,76 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { JSDOM } from 'jsdom';
+import { CodemodeGroups, rowTool } from '../src/pi/codemode-groups';
+import { initialConversationState, messagesToDisplay, reduceRpcEvent } from '../src/pi/reducer';
+import { projectToolTimeline } from '../src/pi/tool-progress';
+import { TranscriptUpdates } from '../src/pi/transcript-updates';
+import { renderToolCard, updateToolCard, captureStreamingOutput } from '../src/pi/tool-card';
+import type { ContentBlock } from '../src/pi/types';
+
+test('Pi relationships and saved nested calls survive result/adoption and incremental projection', () => {
+  let state = initialConversationState();
+  const updates = new TranscriptUpdates();
+  state = reduceRpcEvent(state, { type: 'tool_execution_start', toolCallId: 'p', toolName: 'codemode', args: { code: 'return await tools.read({path:"a"});' } });
+  state = reduceRpcEvent(state, { type: 'tool_execution_start', toolCallId: 'child', parentToolCallId: 'p', toolName: 'read', args: { path: 'a' } });
+  assert.equal(state.toolProgress?.parallel, undefined, 'nested calls do not create a peer parallel overview');
+  updates.snapshot(state);
+  state = reduceRpcEvent(state, { type: 'tool_execution_update', toolCallId: 'child', parentToolCallId: 'p', partialResult: { content: [{ type: 'text', text: 'live' }] } });
+  const patch = updates.snapshot(state);
+  assert.deepEqual(patch.transcript.rows?.map(row => row.key), ['tool:child']);
+  assert.equal(rowTool(patch.transcript.rows![0])?.parentToolCallId, 'p');
+  state = reduceRpcEvent(state, { type: 'message_start', message: { role: 'assistant', timestamp: 1, content: [{ type: 'toolCall', id: 'child', name: 'read', arguments: { path: 'a' } }] } });
+  assert.equal(rowTool(projectToolTimeline(state.messages, state.toolProgress).find(row => row.key === 'tool:child')!)?.parentToolCallId, 'p');
+  const nestedCalls = { complete: true, calls: [{ id: 'child', name: 'read', arguments: { path: 'a' }, status: 'ok' }] };
+  state = reduceRpcEvent(state, { type: 'message_end', message: { role: 'toolResult', toolCallId: 'p', toolName: 'codemode', nestedCalls, content: [{ type: 'text', text: 'printed' }] } });
+  const parent = rowTool(projectToolTimeline(state.messages).find(row => row.key === 'tool:p')!)!;
+  assert.deepEqual(parent.nestedCalls, nestedCalls);
+  state = reduceRpcEvent(state, { type: 'tool_execution_start', toolCallId: 'p', toolName: 'codemode' });
+  assert.equal(rowTool(projectToolTimeline(state.messages).find(row => row.key === 'tool:p')!)!.toolStatus, 'result');
+});
+
+test('group composition retains shells and independent parent/child outputs; history is explicitly bounded', () => {
+  const dom = new JSDOM('<body></body>', { pretendToBeVisual: true });
+  const doc = dom.window.document, groups = new CodemodeGroups();
+  const parent: ContentBlock = { type: 'toolCall', id: 'p', name: 'codemode', arguments: { code: 'text("hello");' }, toolStatus: 'running', executionOutput: 'parent' };
+  const child: ContentBlock = { type: 'toolCall', id: 'c', parentToolCallId: 'p', name: 'read', arguments: { path: 'a' }, toolStatus: 'running', executionOutput: 'child' };
+  const parentCard = renderToolCard(doc, parent, doc.createElement('details'));
+  const childCard = renderToolCard(doc, child, doc.createElement('details'));
+  const p = doc.createElement('article'), c = doc.createElement('article'); p.append(parentCard); c.append(childCard); doc.body.append(p, c);
+  try {
+    groups.update(parent, parentCard); groups.update(child, childCard);
+    const rows = [{ key: 'p', role: 'assistant', content: [parent] }, { key: 'c', role: 'assistant', content: [child] }];
+    const placements = groups.placements(rows, new Map([['p', { node: p }], ['c', { node: c }]]));
+    placements.get('c')!.prepend(c);
+    assert.equal(parentCard.querySelector('.codemode-count')!.textContent, '0/1 calls');
+    const input = parentCard.querySelector<HTMLDetailsElement>(':scope > .tool-raw-inputs')!;
+    assert.equal(input.querySelector('summary')!.textContent, 'Script'); assert.equal(input.querySelector('pre')!.textContent, 'text("hello");');
+    const outputDisclosure = parentCard.querySelector<HTMLDetailsElement>(':scope > .card-plugin-body > details')!;
+    assert.equal(outputDisclosure.querySelector('summary')!.textContent, 'Output');
+    outputDisclosure.open = true; childCard.open = true;
+    const parentOutput = outputDisclosure.querySelector<HTMLElement>('.tool-output')!;
+    const childOutput = childCard.querySelector<HTMLElement>('.tool-output')!;
+    Object.defineProperties(parentOutput, { scrollTop: { value: 31, writable: true }, clientHeight: { value: 50 }, scrollHeight: { value: 500 } });
+    Object.defineProperties(childOutput, { scrollTop: { value: 79, writable: true }, clientHeight: { value: 50 }, scrollHeight: { value: 500 } });
+    updateToolCard(doc, parentCard, { ...parent, executionOutput: 'parent more' });
+    groups.update({ ...parent, executionOutput: 'parent more' }, parentCard);
+    assert.equal(parentCard.querySelector(':scope > .card-plugin-body > details'), outputDisclosure);
+    assert.equal(outputDisclosure.open, true); assert.equal(childCard.open, true);
+    assert.equal(parentOutput.textContent, 'parent more'); assert.equal(childOutput.textContent, 'child');
+    assert.equal(captureStreamingOutput(parentCard)?.top, 31); assert.equal(captureStreamingOutput(childCard)?.top, 79);
+    groups.update({ ...child, toolStatus: 'finished', isError: true }, childCard);
+    assert.equal(parentCard.querySelector('.codemode-count')!.textContent, '1/1 calls · 1 failed');
+    groups.update({ ...parent, toolStatus: 'finished' }, parentCard);
+    assert.equal(parentCard.querySelector('.codemode-count')!.textContent, '1 call · 1 failed');
+    assert.equal(parentCard.querySelector<HTMLProgressElement>('.codemode-progress')!.hidden, true);
+    groups.clear();
+    const restored = messagesToDisplay([{ role: 'toolResult', toolCallId: 'saved', toolName: 'codemode', content: [], nestedCalls: { complete: false, calls: [{ id: 'saved-c', name: 'read', status: 'error', error: '<unsafe>', arguments: { path: '<literal>' } }] } }]);
+    const block = rowTool(projectToolTimeline(restored)[0])!;
+    const card = renderToolCard(doc, block, doc.createElement('details')); doc.body.append(card); groups.update(block, card);
+    groups.placements(projectToolTimeline(restored), new Map());
+    assert.equal(card.querySelector('.codemode-count')!.textContent, '1+ calls · 1 failed');
+    assert.match(card.querySelector('.codemode-recorded-call')!.textContent!, /Output not retained by Pi/);
+    assert.match(card.textContent!, /<unsafe>/); assert.equal(card.querySelector('unsafe'), null);
+    assert.equal(card.querySelector<HTMLElement>('.codemode-incomplete')!.hidden, false);
+  } finally { groups.clear(); dom.window.close(); }
+});

@@ -1276,6 +1276,55 @@ test('incremental parallel streams coalesce dirty rows without materializing his
   } finally { f.dom.window.close(); }
 });
 
+for (const delivery of ['each', 'coalesced', 'hidden', 'gap'] as const) test(`codemode grouping preserves nested tool identity and progress with ${delivery} delivery`, () => {
+  const f = fixture(), updates = new TranscriptUpdates();
+  let state = initialConversationState();
+  const event = (value: Record<string, unknown>, drop = false) => {
+    state = reduceRpcEvent(state, value);
+    const snapshot = updates.snapshot(state);
+    if (!drop) f.receive({ type: 'snapshot', ...snapshot });
+    if (delivery === 'each') f.flush();
+  };
+  const start = (id: string) => event({ type: 'tool_execution_start', toolCallId: id, parentToolCallId: 'parent', toolName: 'read', args: { path: id } });
+  try {
+    event({ type: 'tool_execution_start', toolCallId: 'parent', toolName: 'codemode', args: { code: 'await Promise.all([]);' } });
+    start('one'); start('two'); f.flush();
+    const card = f.win.document.querySelector<HTMLDetailsElement>('[data-detail-key="tool:parent"]')!;
+    const child = f.win.document.querySelector<HTMLDetailsElement>('[data-detail-key="tool:one"]')!;
+    assert.equal(child.closest('.codemode-children')?.parentElement, card);
+    assert.equal(f.win.document.querySelectorAll('#messages > article').length, 1);
+    assert.equal(f.win.document.querySelector('.parallel-tool-card'), null);
+    assert.equal(card.querySelector('.codemode-count')!.textContent, '0/2 calls');
+    card.open = true; child.open = true; f.prompt.focus();
+    const spinner = child.querySelector('.tool-card-spinner');
+    if (delivery === 'hidden') f.view.setActive(false);
+    event({ type: 'tool_execution_update', toolCallId: 'one', parentToolCallId: 'parent', partialResult: { content: [{ type: 'text', text: 'one output' }] } }, delivery === 'gap');
+    event({ type: 'tool_execution_update', toolCallId: 'two', parentToolCallId: 'parent', partialResult: { content: [{ type: 'text', text: 'two output' }] } });
+    if (delivery === 'hidden') f.view.setActive(true);
+    f.flush();
+    assert.equal(card.querySelector('[data-detail-key="tool:one"]'), child);
+    assert.equal(child.querySelector('.tool-card-spinner'), spinner);
+    assert.equal(child.querySelector('.tool-output')!.textContent, 'one output');
+    assert.equal(child.open, true); assert.equal(card.open, true);
+    assert.equal(f.win.document.activeElement, f.prompt);
+    event({ type: 'tool_execution_end', toolCallId: 'one', parentToolCallId: 'parent', isError: true, result: { content: [{ type: 'text', text: 'child failure' }] } });
+    event({ type: 'tool_execution_end', toolCallId: 'two', parentToolCallId: 'parent', result: { content: [{ type: 'text', text: 'done' }] } });
+    f.flush();
+    assert.equal(card.querySelector('.codemode-count')!.textContent, '2/2 calls · 1 failed');
+    assert.equal(card.querySelector<HTMLProgressElement>('.codemode-progress')!.hidden, false, 'all known children done is not script completion');
+    event({ type: 'tool_execution_end', toolCallId: 'parent', toolName: 'codemode', result: { content: [{ type: 'text', text: 'printed summary' }] } });
+    event({ type: 'agent_settled' }); f.flush();
+    assert.equal(card.querySelector('.codemode-count')!.textContent, '2 calls · 1 failed');
+    assert.equal(card.querySelector<HTMLProgressElement>('.codemode-progress')!.hidden, true);
+    assert.equal(card.querySelector(':scope > .card-plugin-body .tool-output')!.textContent, 'printed summary');
+    assert.equal(child.querySelector('.tool-output')!.textContent, 'child failure');
+    assert.equal(f.sent.some(message => message.type === 'renderError'), false);
+    f.receive({ type: 'sessionReset' });
+    f.snapshot({ messages: [] });
+    assert.equal(f.win.document.querySelector('.codemode-group'), null);
+  } finally { f.dom.window.close(); }
+});
+
 for (const placement of ['standalone', 'embedded'] as const) for (const delivery of ['each', 'coalesced', 'hidden', 'gap'] as const) {
   test(`${placement} tool lifecycle matches full rendering with ${delivery} delivery`, () => {
     const f = fixture(), reference = fixture();

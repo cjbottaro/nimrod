@@ -5,6 +5,7 @@ export interface ParallelTool {
   id: string;
   name: string;
   arguments?: unknown;
+  parentToolCallId?: string;
   status: "running" | "done" | "failed" | "stopped";
 }
 
@@ -73,19 +74,20 @@ export function updateToolProgress(previous: ConversationState, next: Conversati
   const id = typeof event.toolCallId === "string" ? event.toolCallId : undefined;
   if (event.type === "tool_execution_start" && id) {
     if (progress.active.some(tool => tool.id === id)) return previous.toolProgress;
-    const tool: ParallelTool = { id, name: typeof event.toolName === "string" ? event.toolName : "tool", arguments: event.args, status: "running" };
+    const tool: ParallelTool = { id, name: typeof event.toolName === "string" ? event.toolName : "tool", arguments: event.args, ...(typeof event.parentToolCallId === "string" && event.parentToolCallId ? { parentToolCallId: event.parentToolCallId } : {}), status: "running" };
     const active = [...progress.active, tool];
-    const parallel = progress.parallel
+    const roots = active.filter(tool => !tool.parentToolCallId);
+    const parallel = tool.parentToolCallId ? progress.parallel : progress.parallel
       ? { ...progress.parallel, tools: [...progress.parallel.tools, tool] }
-      : active.length > 1 ? { id: `parallel:${id}`, tools: active } : undefined;
+      : roots.length > 1 ? { id: `parallel:${id}`, tools: roots } : undefined;
     return { ...progress, active, parallel, processingToolId: undefined, interrupted: progress.interrupted.filter(value => value !== id) };
   }
   if (event.type === "tool_execution_end" && id) {
     const active = progress.active.filter(tool => tool.id !== id);
-    const parallel = progress.parallel && active.length
+    const parallel = progress.parallel && active.some(tool => !tool.parentToolCallId)
       ? { ...progress.parallel, tools: progress.parallel.tools.map(tool => tool.id === id ? { ...tool, status: event.isError === true ? "failed" as const : "done" as const } : tool) }
       : undefined;
-    return { ...progress, active, parallel, processingToolId: active.length === 0 && event.isError !== true && next.busy ? id : undefined };
+    return { ...progress, active, parallel, processingToolId: !event.parentToolCallId && active.length === 0 && event.isError !== true && next.busy ? id : undefined };
   }
   if (event.type === "agent_settled" || event.type === "process_error") {
     if (!previous.toolProgress) return undefined;

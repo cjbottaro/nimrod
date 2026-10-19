@@ -30,6 +30,10 @@ export interface CardPresentation {
   questionAnswer?: { answer: string };
   /** Core-owned raw inputs default before the body; renderers may request them below it. */
   rawInputsPlacement?: 'before' | 'after';
+  /** Compact display of a sole string input field; other shapes retain Raw inputs. */
+  inputDisclosure?: { label: string; field: string };
+  /** Optional retained disclosure around output sections. */
+  outputDisclosure?: string;
   sections: readonly CardSection[];
   members?: readonly { key: string; title: string; preview?: string }[];
 }

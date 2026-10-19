@@ -6,6 +6,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Added
 
+- Pi codemode activity now appears in one grouped tool card, with independently expandable child calls, a live completed/discovered call count and subtle progress bar, failure totals, and **Script** / **Output** disclosures. Resumed history shows Pi's retained child-call records and identifies unavailable output or incomplete records.
+
 - Copilot **Applying patch** calls now use a dedicated **Apply patch** presentation with a single-file path or concise multi-file count, green/red added/removed-line totals, colored requested patches and successful native Git diffs. Original inputs/results remain in raw disclosures; failed or interrupted calls never present the requested patch as applied.
 
 - Copilot `/skills info` now completes the CLI's omitted skill-name interaction with a searchable harness-owned skill picker sourced from Copilot's public session catalog, then invokes the original slash command. `/skills list` and other read-only report commands continue through generic command output. Native acceptance is pending.

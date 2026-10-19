@@ -74,6 +74,20 @@ details { margin:8px 0; border:0; border-radius:0; padding:0; }
 :is(.tool-card, .tool-raw-inputs)[open]::after { content:""; position:absolute; left:3px; top:calc(1.5em + 8px); bottom:4px; width:1px; pointer-events:none; background:var(--vscode-editorIndentGuide-background1, color-mix(in srgb, var(--vscode-descriptionForeground) 35%, transparent)); }
 .tool-card .tool-raw-inputs > pre { margin-left:14px; }
 .card-plugin-summary { display:contents; }
+.codemode-count { min-width:0; font-weight:normal; color:var(--vscode-descriptionForeground); }
+.codemode-count.codemode-failures { color:var(--vscode-errorForeground); }
+.codemode-count::before { content:'·'; margin-right:7px; }
+.codemode-progress { appearance:none; -webkit-appearance:none; flex:0 1 64px; width:64px; height:3px; border:0; border-radius:2px; overflow:hidden; color:var(--vscode-progressBar-background); background:var(--vscode-panel-border); }
+.codemode-progress[hidden] { display:none; }
+.codemode-progress::-webkit-progress-bar { background:var(--vscode-panel-border); }
+.codemode-progress::-webkit-progress-value { background:var(--vscode-progressBar-background); }
+.codemode-progress::-moz-progress-bar { background:var(--vscode-progressBar-background); }
+.codemode-children { margin-left:14px; }
+.codemode-children > .message { margin:0; padding:0; border:0; }
+.codemode-children > .message > .tool-card { margin:2px 0; }
+.codemode-incomplete { margin:6px 0; color:var(--vscode-descriptionForeground); font-size:.85em; }
+.card-plugin-body > .card-output-disclosure { margin-left:14px; }
+.card-output-disclosure > .tool-section { margin-left:14px; }
 /* Read-only exchange summary; the retained shell still owns disclosure/status. */
 .tool-card > summary:has(.card-question-answer) { align-items:flex-start; font-weight:normal; }
 .tool-card > summary:has(.card-question-answer)::before { margin-top:.5em; }

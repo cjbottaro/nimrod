@@ -202,6 +202,8 @@ export class DomCardController<Data> {
   private renderPresentation(value: CardPresentation): void {
     const doc = this.body.ownerDocument;
     this.body.dataset.rawInputsPlacement = value.rawInputsPlacement ?? 'before';
+    if (value.inputDisclosure) { this.body.dataset.inputLabel = value.inputDisclosure.label; this.body.dataset.inputField = value.inputDisclosure.field; }
+    else { delete this.body.dataset.inputLabel; delete this.body.dataset.inputField; }
     let title = this.summary.querySelector<HTMLElement>('.tool-card-title');
     if (!title) { title = doc.createElement('span'); title.className = 'tool-card-title'; this.summary.append(title); }
     if (title.textContent !== value.title) title.textContent = value.title;
@@ -246,7 +248,20 @@ export class DomCardController<Data> {
       // A preview may arrive after counts during streaming; keep counts after it.
       if (this.summary.lastElementChild !== stats) this.summary.append(stats);
     } else stats?.remove();
-    const sections = () => Array.from(this.body.children).filter((node): node is HTMLElement => node instanceof doc.defaultView!.HTMLElement && node.classList.contains('tool-section'));
+    let disclosure = Array.from(this.body.children).find(node => node.classList.contains('card-output-disclosure')) as HTMLDetailsElement | undefined;
+    if (value.outputDisclosure !== undefined) {
+      if (!disclosure) {
+        disclosure = doc.createElement('details'); disclosure.className = 'tool-raw-inputs card-output-disclosure';
+        disclosure.append(doc.createElement('summary')); this.body.prepend(disclosure);
+        for (const section of Array.from(this.body.children).filter(node => node.classList.contains('tool-section'))) disclosure.append(section);
+      }
+      disclosure.querySelector('summary')!.textContent = value.outputDisclosure;
+    } else if (disclosure) {
+      for (const section of Array.from(disclosure.children).filter(node => node.classList.contains('tool-section'))) this.body.insertBefore(section, disclosure);
+      disclosure.remove(); disclosure = undefined;
+    }
+    const sectionRoot = disclosure ?? this.body;
+    const sections = () => Array.from(sectionRoot.children).filter((node): node is HTMLElement => node instanceof doc.defaultView!.HTMLElement && node.classList.contains('tool-section'));
     const old = new Map(sections().map(section => [section.dataset.outputKind!, section]));
     value.sections.forEach((part, index) => {
       let section = old.get(part.key);
@@ -282,7 +297,7 @@ export class DomCardController<Data> {
         } else renderLiteralOutput(output, part.text, source);
       }
       this.applyOutputPolicy(output); this.outputs.set(part.key, output);
-      const at = sections()[index]; if (at !== section) this.body.insertBefore(section, at || null);
+      const at = sections()[index]; if (at !== section) sectionRoot.insertBefore(section, at || null);
       old.delete(part.key);
     });
     for (const [key, section] of old) { section.remove(); this.outputs.delete(key); }
