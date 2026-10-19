@@ -27,6 +27,18 @@ One mounted card per invocation survives placement/lifecycle updates, preserving
 
 Each Pi built-in selects its own metadata-matched mounted plugin; [card plugins](card-plugins.md#built-in-tool-dogfooding) owns the IDs, matching and implementation map. Read summaries can show requested line ranges, and write bodies show literal input-backed **Requested content** alongside Pi output, not a claim of successful execution. File/search/list output remains literal. The shared generic fallback/override remains available for unknown/custom tools.
 
+## Pi codemode groups
+
+Pi's explicit `parentToolCallId` survives execution updates, standalone/assistant adoption and full/dirty projection. `CodemodeGroups` in `src/pi/codemode-groups.ts` composes child articles beneath a root Pi codemode shell without rewriting canonical history or inventing a shared harness protocol. Unavailable parents leave children in normal flow; tool IDs retain the same mounted shells, disclosure owners and output viewports. Nested execution events stay in progress/interruption tracking but are excluded from peer parallel-tools overviews and result-processing overlays.
+
+The summary shows completed/discovered `n/m calls` plus a native progress element while the parent executes, then a settled call count. The denominator is dynamic, not a prediction; n/n does not settle the parent. Child failures remain visible even when the script succeeds. Parent processing indicators remain harness-owned, independently of the execution-only progress bar. Existing disclosure timing/manual precedence is unchanged.
+
+Full/structural paints alone reconcile child placement, recorded-call fallback and pruning. Output-only paints update the affected child and its own parent's small metadata aggregate, not historical rows or sibling renderers/viewports. `tool-card.ts` and `card-shell.ts` scope output selection to the owning shell, never nested children. Reset/disposal clears composition maps. Hidden/coalesced/revision-gap updates use existing delivery and full-recovery paths.
+
+Pi `nestedCalls` on saved tool results is retained immutably. It is a bounded record of names, inputs, status and optional error, **not child output**. Missing live children are shown as read-only recorded disclosures with explicit unavailable-input/output text, never synthetic successful result bodies. Incomplete records show a lower-bound `+` count and a note. Real live children win over matching saved entries. No ID-prefix parsing or script-source inference.
+
+The `nimrod.codemode` plugin uses shared public `inputDisclosure` and `outputDisclosure` presentation fields for **Script** / **Output**; unknown/extra input fields retain the full Raw inputs shape. External overrides retain normal raw recovery and core-owned grouping. The [plugin contract](card-plugins.md) owns component details; [verification](verification.md#pi-codemode-groups) owns evidence.
+
 ## Completed Copilot questions
 
 [Question/answer cards](card-plugins.md#copilot-questionanswer-cards) specialize successful, recognized `ask_user` results inside the existing mounted SDK adapter. The closed summary shows an outline speech-bubble icon, question and inset literal answer with a theme-accent line; options/raw recovery stay behind the ordinary disclosure. This read-only historical card is separate from the SDK Question picker/modal. Pending/error/cancelled/interrupted/unknown results remain generic. The shared public question/reply presentation preserves mounted shell/indicator/disclosure/output identity and core scroll/focus ownership; fixture/native evidence is tracked in the linked specification.

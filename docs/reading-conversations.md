@@ -40,6 +40,14 @@ A tool may keep its activity indicator after execution finishes while Pi process
 
 Each Pi built-in has a dedicated [card plugin](card-plugins.md#matching-and-overrides). Read summaries include the requested path and line range when supplied. Write cards show the destination and literal **Requested content**, separately scrollable from Pi's output; this previews the input, not a successful write. Grep/find show the pattern and path, and ls shows the directory. Edit cards retain requested diffs with Wrap/Copy. Unknown tools use a generic card, and personal plugins can override built-in presentation.
 
+### Pi codemode groups
+
+Codemode scripts appear as one grouped tool card. While running, **n/m calls** and a small progress bar show completed calls out of calls discovered so far. More calls can start as the script runs, so the denominator can increase; reaching n/n does not mean the script has finished. Once it finishes, the summary shows the call count, with failures called out even if the script handled them successfully.
+
+Expand the group to inspect each child tool independently. **Script** reveals the JavaScript; **Output** reveals what the script printed, separately from child results. Expanding or reading one output preserves the others' disclosures and reading positions. Calls with no available parent stay visible as ordinary tool cards.
+
+When resuming history, Pi may retain child names, inputs and statuses without their output. Those entries explicitly say when output or inputs were not retained. A **+** after the count and an incomplete-record note mean Pi's saved record is incomplete; omitted calls/results cannot be recovered by Nimrod.
+
 ### Copilot question/answer cards
 
 After Copilot reports an answer, its question card shows just the question with a small speech-bubble icon and your answer inset beneath it, marked by a short theme-accent line. The reply line begins beneath the speech-bubble icon, using the same 2px line and 12px inner spacing as nested quotes rather than adding another question-text indent. There is no extra title, badge or enclosing box. Long questions and answers wrap; multiline replies stay literal.

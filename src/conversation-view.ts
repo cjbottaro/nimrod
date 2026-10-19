@@ -14,6 +14,7 @@ import { persistWebviewState, restoreComposerState } from "./pi/webview-state";
 import { captureStreamingOutput, createToolDetails, renderToolCard as renderToolCardDom, restoreStreamingOutput, updateToolCard, toolCardIsBusy, disposeToolCard } from "./pi/tool-card";
 import { ToolDisclosureController } from "./pi/tool-disclosure";
 import { toolMessageBlock } from "./pi/tool-call";
+import { CodemodeGroups } from "./pi/codemode-groups";
 import { DEFAULT_SEND_AUTO_FOLLOW, TranscriptScroll } from "./pi/transcript-scroll";
 import { disposeParallelCard } from './pi/parallel-card';
 import { renderReasoningCard, updateReasoningCard, disposeReasoningCard } from "./pi/reasoning-card";
@@ -93,6 +94,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   let configurationTranscript = new ConfigurationTranscript();
   const expanded = new Map<string, boolean>();
   const toolCards = new Map<string, HTMLDetailsElement>();
+  const codemodeGroups = new CodemodeGroups();
   const transcriptScroll = new TranscriptScroll(window, transcriptViewport);
   const updateMotion = () => messages.classList.toggle('transcript-motion-paused', !active || document.hidden);
   document.addEventListener('visibilitychange', updateMotion, { signal: listeners.signal });
@@ -162,7 +164,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     toolDisclosure.dispose();
     for (const entry of rendered.values()) disposeMessageCards(entry.node);
     for (const card of toolCards.values()) disposeToolCard(card);
-    toolCards.clear();
+    toolCards.clear(); codemodeGroups.clear();
     transcriptScroll.dispose();
     transcriptResizeObserver?.disconnect();
   }
@@ -347,6 +349,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       toolCards.set(key, details);
     }
     applyToolDetailsLifecycle(details, block);
+    codemodeGroups.update(block, details);
     return details;
   }
 
@@ -493,6 +496,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       const block = toolMessageBlock(message);
       updateToolCard(document, tool, block);
       applyToolDetailsLifecycle(tool, block);
+      codemodeGroups.update(block, tool);
       return true;
     }
     if (!Array.isArray(message.content)) {
@@ -513,7 +517,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       const key = contentBlockKey(block, index);
       const previous = existing.get(key);
       const blockNode = safeText(block.type) === "toolCall" && previous instanceof HTMLDetailsElement
-        ? (updateToolCard(document, previous, block), applyToolDetailsLifecycle(previous, block), previous)
+        ? (updateToolCard(document, previous, block), applyToolDetailsLifecycle(previous, block), codemodeGroups.update(block, previous), previous)
         : safeText(block.type) === "thinking" && previous instanceof HTMLDetailsElement && typeof block.thinking === "string" && block.thinking.trim()
           ? (updateReasoningCard(previous, block.thinking, renderMarkdown, block.thinkingComplete === false), previous)
           : renderBlock(block, safeText(message.key), index, safeText(message.role), previous);
@@ -759,8 +763,26 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
           rendered.set(key, { node: fallback, signature: JSON.stringify(message) });
         }
       }
+      placeTranscriptRows(display);
       queuedTurns.hidden = queuedTurns.childElementCount === 0;
     }
+  }
+
+  function placeTranscriptRows(display: readonly DisplayMessage[]): void {
+    const placements = codemodeGroups.placements(display, rendered);
+    const positions = new Map<HTMLElement, number>();
+    display.forEach((message, rowIndex) => {
+      const key = safeText(message.key) || `message-${rowIndex}`;
+      const entry = rendered.get(key)!;
+      const parent = placements.get(key) ?? (message.sticky ? queuedTurns : messages);
+      const at = positions.get(parent) ?? 0; positions.set(parent, at + 1);
+      const current = parent.children.item(at);
+      if (current !== entry.node) {
+        const focused = entry.node.contains(document.activeElement) ? document.activeElement as HTMLElement : undefined;
+        parent.insertBefore(entry.node, current || (parent === messages && queuedTurns.parentElement === messages ? queuedTurns : null));
+        if (focused?.isConnected && document.activeElement !== focused && active && !disposed) focused.focus({ preventScroll: true });
+      }
+    });
   }
 
   function render(state: State, rows?: readonly DisplayMessage[]): void {
@@ -813,16 +835,8 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       }
     }
     if (full) {
-      const nextKeys = new Set<string>();
-      let normalIndex = 0, stickyIndex = 0;
-      display.forEach((message, index) => {
-        const key = safeText(message.key) || `message-${index}`;
-        nextKeys.add(key);
-        const entry = rendered.get(key)!;
-        const parent = message.sticky ? queuedTurns : messages;
-        const currentAtIndex = parent.children.item(message.sticky ? stickyIndex++ : normalIndex++);
-        if (currentAtIndex !== entry.node) parent.insertBefore(entry.node, currentAtIndex || (parent === messages && queuedTurns.parentElement === messages ? queuedTurns : null));
-      });
+      const nextKeys = new Set(display.map((message, index) => safeText(message.key) || `message-${index}`));
+      placeTranscriptRows(display);
       for (const [key, entry] of rendered) if (!nextKeys.has(key)) {
         if (entry.node.querySelector('.operation-cancel') === document.activeElement) restoreOperationFocus();
         disposeMessageCards(entry.node); entry.node.remove(); rendered.delete(key);
@@ -1056,7 +1070,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       // An explicit launch boundary only; ordinary snapshots retain all live UI state.
       toolDisclosure.dispose();
       for (const card of toolCards.values()) disposeToolCard(card);
-      toolCards.clear();
+      toolCards.clear(); codemodeGroups.clear();
       expanded.clear();
       for (const entry of rendered.values()) disposeMessageCards(entry.node);
       rendered.clear();

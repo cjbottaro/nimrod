@@ -7,12 +7,13 @@ import writePlugin from './write';
 import grepPlugin from './grep';
 import findPlugin from './find';
 import lsPlugin from './ls';
+import codemodePlugin from './codemode';
 import { editDomRenderer } from './edit';
 import { normalizedToolName } from './tool-input';
 
 /** Metadata-driven matching, just like external plugins; each call mounts its own instance. */
 export const bundledToolPlugins: readonly DomCardRenderer<ToolCardBlock>[] = [
-  readPlugin, bashPlugin, editDomRenderer, writePlugin, grepPlugin, findPlugin, lsPlugin,
+  readPlugin, bashPlugin, editDomRenderer, writePlugin, grepPlugin, findPlugin, lsPlugin, codemodePlugin,
 ];
 const genericPlugin = presentationPlugin(defaultToolRenderer);
 

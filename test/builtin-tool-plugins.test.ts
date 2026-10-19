@@ -21,8 +21,9 @@ const cases = [
 ];
 
 test('each built-in selects its own API-v2 plugin by normalized metadata, not argument completeness', () => {
-  assert.equal(bundledToolPlugins.length, 7);
-  assert.equal(new Set(bundledToolPlugins.map(plugin => plugin.id)).size, 7);
+  assert.equal(bundledToolPlugins.length, 8);
+  assert.equal(new Set(bundledToolPlugins.map(plugin => plugin.id)).size, 8);
+  assert.equal(bundledToolRenderer({ name: 'functions.codemode' }).id, 'nimrod.codemode');
   for (const fixture of cases) {
     const plugin = bundledToolRenderer({ name: fixture.name });
     assert.equal(plugin.id, fixture.id);

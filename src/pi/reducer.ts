@@ -131,6 +131,7 @@ function reduceConversationEvent(state: ConversationState, event: JsonRecord): C
       id,
       name,
       arguments: event.args,
+      parentToolCallId: string(event.parentToolCallId) || undefined,
       toolStatus: "running",
     });
   }
@@ -144,6 +145,7 @@ function reduceConversationEvent(state: ConversationState, event: JsonRecord): C
       id,
       name,
       executionOutput,
+      parentToolCallId: string(event.parentToolCallId) || undefined,
       ...(type === "tool_execution_update" && executionOutput.trim() ? { hasStreamingOutput: true } : {}),
       ...(type === "tool_execution_end" ? { isError: event.isError === true } : {}),
       toolStatus: type === "tool_execution_end" ? "finished" : "running",
@@ -184,6 +186,8 @@ function applyToolResult(state: ConversationState, message: AgentMessage): Conve
     id,
     name: message.toolName || undefined,
     resultOutput: toolOutput(message),
+    parentToolCallId: string(message.parentToolCallId) || undefined,
+    nestedCalls: message.nestedCalls,
     isError: message.isError === true,
     toolStatus: "result",
   });
@@ -198,6 +202,13 @@ function applyToolUpdate(state: ConversationState, update: ToolUpdate): Conversa
   if (!targets?.length) return { ...state, messages: [...state.messages, mergeOrphanTool({
     key: `tool-${update.id}`, role: 'tool', toolCallId: update.id,
   }, update)] };
+  // A late relationship or saved nested-call snapshot changes composition, not just output.
+  const nestingChanged = targets.some(location => {
+    const message = state.messages[location.message];
+    const block = location.block === undefined ? toolMessageBlock(message) : (message.content as ContentBlock[])[location.block];
+    return !!update.parentToolCallId && update.parentToolCallId !== block.parentToolCallId
+      || update.nestedCalls !== undefined && update.nestedCalls !== block.nestedCalls;
+  });
   let messages = state.messages;
   const dirty = new Set<number>();
   for (const location of targets) {
@@ -218,7 +229,7 @@ function applyToolUpdate(state: ConversationState, update: ToolUpdate): Conversa
     }
     dirty.add(location.message);
   }
-  return messages === state.messages ? state : { ...state, messages: trackMessageChanges(messages, state.messages, [...dirty], true, [update.id]) };
+  return messages === state.messages ? state : { ...state, messages: nestingChanged ? messages : trackMessageChanges(messages, state.messages, [...dirty], true, [update.id]) };
 }
 
 function mergeOrphanTool(message: DisplayMessage, update: ToolUpdate): DisplayMessage {
@@ -227,6 +238,8 @@ function mergeOrphanTool(message: DisplayMessage, update: ToolUpdate): DisplayMe
     ...message,
     toolName: block.name,
     toolArguments: block.arguments,
+    ...(block.parentToolCallId ? { parentToolCallId: block.parentToolCallId } : {}),
+    ...(block.nestedCalls !== undefined ? { toolNestedCalls: block.nestedCalls } : {}),
     content: update.arguments === undefined && message.content !== undefined ? message.content : block.arguments === undefined ? undefined : safeJson(block.arguments),
     output: block.executionOutput,
     hasStreamingOutput: block.hasStreamingOutput,
@@ -274,6 +287,8 @@ function preserveToolCards(previous: DisplayMessage, next: DisplayMessage): Disp
       const old = previousTools.get(block.id);
       return old ? mergeToolBlock(block, {
         id: block.id,
+        parentToolCallId: old.parentToolCallId,
+        nestedCalls: old.nestedCalls,
         executionOutput: old.executionOutput,
         hasStreamingOutput: old.hasStreamingOutput,
         resultOutput: old.resultOutput,

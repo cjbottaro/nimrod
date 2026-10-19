@@ -8,7 +8,7 @@ export function associateOutputViewport(root: ParentNode, viewport?: HTMLElement
 function liveViewport(root: ParentNode): HTMLElement | null {
   const associated = outputViewports.get(root);
   if (associated) return associated.classList.contains('tool-output-streaming') ? associated : null;
-  return root.querySelector<HTMLElement>('.tool-output-streaming');
+  return Array.from(root.querySelectorAll<HTMLElement>('.tool-output-streaming')).find(output => output.closest('.tool-card') === root) ?? null;
 }
 
 /**

@@ -14,6 +14,9 @@ export interface ContentBlock {
   id?: string;
   name?: string;
   arguments?: unknown;
+  /** Pi-reported nesting; never inferred from invocation IDs. */
+  parentToolCallId?: string;
+  nestedCalls?: unknown;
   executionOutput?: string;
   hasStreamingOutput?: boolean;
   resultOutput?: string;
@@ -28,6 +31,8 @@ export interface DisplayMessage {
   parallelCluster?: import("./pi/tool-progress").ParallelToolCluster;
   /** Parsed, core-owned immutable inputs for standalone tool envelopes. */
   toolArguments?: unknown;
+  parentToolCallId?: string;
+  toolNestedCalls?: unknown;
   uiPhase?: "thinking" | "stopped";
   content?: string | ContentBlock[];
   toolCallId?: string;

@@ -34,7 +34,7 @@ acceptance. [Transcript debug logs](transcript-logs.md) can capture actual input
 results and metadata for a reproducible fixture; do not paste unrelated log content
 or credentials into reports.
 
-## Pi: seven built-in tools
+## Pi: built-in tools
 
 These require a **Pi session** with the named tools enabled. Use the tools directly,
 not a shell substitute. Recipes that create files use `nimrod-card-demo.txt` only;
@@ -49,6 +49,7 @@ choose another filename if it already exists. Do not overwrite existing work.
 | `grep` | `Use grep to search README.md for Nimrod. Do not use bash.` | Pattern/path preview; literal matches. |
 | `find` | `Use find with pattern **/*.md and path docs. Do not use bash.` | Glob/path preview and literal filenames. |
 | `ls` | `Use ls to list docs. Do not use bash.` | Directory preview and literal listing. |
+| `codemode` | `Use codemode to read README.md and package.json concurrently, then print only their character counts. Do not modify files.` | Requires Pi codemode enabled. One group with two independent child cards, dynamic n/m progress while running, then a settled count; Script and Output disclosures. Resume may retain child inputs/status but not outputs. |
 
 For a multiple-substitution edit, ask for `alpha → ALPHA` and `gamma → GAMMA` in
 one edit invocation using that tool's supported input. If the harness makes two

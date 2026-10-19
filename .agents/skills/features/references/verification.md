@@ -168,6 +168,10 @@ Source report basenames (local files, not checked into this repository; retentio
 
 Incremental streaming now adds indexed tool updates, dirty-row presentation, append-only text/ANSI rendering and affected-output scroll batching. Its new unit/DOM/shell/offline-browser fixtures, including the review-fix differential lifecycle and mixed-helper/custom-DOM raw-recovery cases, have not been run; there is no native before/after responsiveness claim. Existing reports do not establish its effect. Remaining cumulative Pi-JSON/rendered-prefix costs, immutable array pointer copies and fallback/Markdown work are detailed in the [incremental rendering reference](../../performance-optimizations/references/incremental-transcript.md).
 
+## Pi codemode groups
+
+Grouped Pi codemode cards are source-implemented. Authored fixtures in `test/codemode-groups.test.ts`, `test/native-view.test.ts`, `test/builtin-tool-plugins.test.ts`, `test/tool-card.test.ts` and `test/browser/codemode-groups.spec.ts` cover explicit relationships, adoption/history, bounded/missing records, independent parent/child output, child failures, dynamic progress, coalesced/hidden/gapped delivery, reset and retained DOM/disclosures/focus. These fixtures have **not been run** for this change. Native visual/disclosure/scroll acceptance on macOS/Linux remains pending; no platform acceptance follows from authored jsdom/browser fixtures.
+
 ## Transcript logging
 
 Expanded full-content native/history/request/UI logging, rotation and retention fixtures are authored but unrun. The bounded native MPSC writer/backpressure change replaces overflow-stop/chunk generation; new fixtures for waiting producer ordering, whole large events, delayed native acknowledgements and the one-second warning/recovery/cancellation are authored but unrun. The naming cleanup and new/legacy setting precedence/migration fixtures are also unrun; compile checks are not behavioral or platform acceptance. Earlier tool-only offline evidence is preserved in [history](history/transcript-logging.md), not evidence for the expanded logger.

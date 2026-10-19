@@ -19,6 +19,8 @@ export function validatePresentation(value: CardPresentation): CardPresentation 
     || (value.diffStats !== undefined && (!value.diffStats || !Number.isSafeInteger(value.diffStats.added) || value.diffStats.added < 0 || !Number.isSafeInteger(value.diffStats.removed) || value.diffStats.removed < 0))
     || (value.questionAnswer !== undefined && (!value.questionAnswer || typeof value.questionAnswer.answer !== 'string'))
     || (value.rawInputsPlacement !== undefined && !['before', 'after'].includes(value.rawInputsPlacement))
+    || (value.inputDisclosure !== undefined && (!value.inputDisclosure || typeof value.inputDisclosure.label !== 'string' || typeof value.inputDisclosure.field !== 'string'))
+    || (value.outputDisclosure !== undefined && typeof value.outputDisclosure !== 'string')
     || !Array.isArray(value.sections)) throw new Error('Invalid card presentation');
   const keys = new Set<string>();
   for (const section of value.sections) {

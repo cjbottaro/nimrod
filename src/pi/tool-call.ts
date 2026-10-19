@@ -5,6 +5,8 @@ export interface ToolCallUpdate {
   id: string;
   name?: string;
   arguments?: unknown;
+  parentToolCallId?: string;
+  nestedCalls?: unknown;
   executionOutput?: string;
   hasStreamingOutput?: boolean;
   resultOutput?: string;
@@ -13,7 +15,7 @@ export interface ToolCallUpdate {
 }
 
 /** Standalone placement is only an envelope; cards always consume the same model. */
-export function toolMessageBlock(message: Pick<DisplayMessage, "toolCallId" | "toolName" | "output" | "hasStreamingOutput" | "resultOutput" | "isError" | "toolStatus" | "uiPhase"> & { content?: unknown; toolArguments?: unknown; toolSource?: import('../card-plugin-api').CardPluginTarget; toolTitle?: string; toolKind?: string; toolNative?: unknown }): ContentBlock {
+export function toolMessageBlock(message: Pick<DisplayMessage, "toolCallId" | "toolName" | "output" | "hasStreamingOutput" | "resultOutput" | "isError" | "toolStatus" | "uiPhase"> & { content?: unknown; toolArguments?: unknown; toolSource?: import('../card-plugin-api').CardPluginTarget; toolTitle?: string; toolKind?: string; toolNative?: unknown; parentToolCallId?: string; toolNestedCalls?: unknown }): ContentBlock {
   let args: unknown = message.toolArguments !== undefined ? message.toolArguments : message.content;
   if (message.toolArguments === undefined && typeof args === "string") {
     try { args = JSON.parse(args); } catch { /* Keep non-JSON inputs intact. */ }
@@ -21,6 +23,8 @@ export function toolMessageBlock(message: Pick<DisplayMessage, "toolCallId" | "t
   return {
     type: "toolCall", id: message.toolCallId, name: message.toolName, arguments: args,
     ...(message.toolSource ? { source: message.toolSource, title: message.toolTitle, kind: message.toolKind, native: message.toolNative } : {}),
+    ...(message.parentToolCallId ? { parentToolCallId: message.parentToolCallId } : {}),
+    ...(message.toolNestedCalls !== undefined ? { nestedCalls: message.toolNestedCalls } : {}),
     executionOutput: message.output, hasStreamingOutput: message.hasStreamingOutput,
     resultOutput: message.resultOutput, isError: message.isError,
     toolStatus: message.toolStatus, uiPhase: message.uiPhase,
@@ -35,6 +39,8 @@ export function mergeToolCall(block: ContentBlock, update: ToolCallUpdate): Cont
     ...block, type: "toolCall", id: update.id,
     name: update.name && update.name !== "tool" ? update.name : block.name || update.name || "tool",
     ...(update.arguments !== undefined ? { arguments: immutableSnapshot(update.arguments) } : {}),
+    ...(update.parentToolCallId ? { parentToolCallId: update.parentToolCallId } : {}),
+    ...(update.nestedCalls !== undefined ? { nestedCalls: immutableSnapshot(update.nestedCalls) } : {}),
     ...(!stale && update.executionOutput !== undefined ? { executionOutput: update.executionOutput } : {}),
     ...(update.hasStreamingOutput ? { hasStreamingOutput: true } : {}),
     ...(update.resultOutput !== undefined ? { resultOutput: update.resultOutput } : {}),
