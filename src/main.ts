@@ -1382,6 +1382,17 @@ async function launchCopilot(tab: Tab, acceptedAction = false): Promise<void> {
         return current() ? selected : undefined;
       } finally { signal.removeEventListener('abort', cancel); request.finish(); }
     },
+    commandInput: async (title, signal) => {
+      const owner = `${tab.id}:copilot-command-input`;
+      const current = () => valid() && copilotSession(tab) === session && presented === tab && !settings.isOpen && !tab.closing && !tab.deleting && !signal.aborted;
+      if (!current() || document.querySelector('dialog[open]')) return;
+      const cancel = () => dialogs.cancel(owner);
+      signal.addEventListener('abort', cancel, { once: true });
+      try {
+        const value = await dialogs.input(title, undefined, owner, 'Run command');
+        return current() ? value : undefined;
+      } finally { signal.removeEventListener('abort', cancel); }
+    },
     disconnected: message => {
       if (!valid()) return;
       tab.ended = true; tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' });

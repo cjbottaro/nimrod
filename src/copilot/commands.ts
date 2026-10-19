@@ -53,6 +53,9 @@ export function isCopilotModelCommand(command: CopilotCommand): boolean {
 export function isCopilotSkillsInfo(command: CopilotCommand, input: string | undefined): boolean {
   return command.kind === 'builtin' && command.name.toLowerCase() === 'skills' && input?.trim().toLowerCase() === 'info';
 }
+export function isCopilotSessionRename(command: CopilotCommand, input: string | undefined): boolean {
+  return command.kind === 'builtin' && command.name.toLowerCase() === 'session' && input?.trim().toLowerCase() === 'rename';
+}
 export interface CommandChoice { id: string; label: string; detail?: string; }
 
 /** Validate result-owned choices; never turn arbitrary result text into an executable choice. */

@@ -46,6 +46,12 @@ a second harness-owned picker, revalidates the selected skill and invokes the
 original command as `info <name>`. It never reads skill files or substitutes a
 Nimrod action.
 
+Likewise, `/session rename` omits its required free-form name. Nimrod presents
+the shared host input modal as a Copilot-owned interaction, revalidates the
+advertised command, and invokes exact `/session rename <name>`. The resulting
+native title event remains authoritative; this does not dispatch a Nimrod
+rename action.
+
 This feature applies to **Copilot SDK sessions**. Pi's existing `/name`,
 `/compact` and bare `/mcp` interception remains unchanged; removing it requires a
 separate Pi contract change. Generic ACP keeps advertised-only passthrough; the Copilot ACP integration has been removed.

@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
+import localStateCommands from './fixtures/copilot-local-state-commands.json' with { type: 'json' };
 import readOnlyCommands from './fixtures/copilot-read-only-commands.json' with { type: 'json' };
-import { copilotCommands, copilotSkillChoices, copilotSlashCommands, isCopilotModelCommand, isCopilotSkillsInfo, parseCopilotCommand } from '../src/copilot/commands';
+import { copilotCommands, copilotSkillChoices, copilotSlashCommands, isCopilotModelCommand, isCopilotSessionRename, isCopilotSkillsInfo, parseCopilotCommand } from '../src/copilot/commands';
 import { CopilotSession, type CopilotSessionUi } from '../src/copilot/session';
 import type { BridgeRequest } from '../src/copilot/connection';
 import type { ConversationViewMessage } from '../src/conversation-view-host';
@@ -13,14 +14,15 @@ const catalog = [{ name: 'permissions', aliases: ['perms'], description: 'Manage
   input: { hint: 'Choose a permission operation', choices: [{ name: 'show', description: 'Show permissions' }, { name: 'reset', description: 'Clear approvals' }] } }];
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 const resultOnlyCatalog = catalog.map(({ input: _input, ...command }) => command);
-async function fixture(commandChoice?: CopilotSessionUi['commandChoice'], commands: unknown[] = catalog, models: unknown[] = []) {
+async function fixture(commandChoice?: CopilotSessionUi['commandChoice'], commands: unknown[] = catalog, models: unknown[] = [],
+  commandInput?: CopilotSessionUi['commandInput']) {
   const sent: BridgeRequest[] = [], published: ConversationViewMessage[] = [], notices: string[] = [], completions: boolean[] = [];
   const session: CopilotSession = new CopilotSession(async request => {
     sent.push(request);
     if (['usage', 'context'].includes(request.method)) queueMicrotask(() => session.receive({ kind: 'result', id: request.id, result: request.method === 'usage' ? {} : null }));
   }, {
     publish: message => published.push(message), changed() {}, identified() {}, disconnected() {}, completed(failed) { completions.push(failed); },
-    notice: message => notices.push(message), decision: async () => undefined, commandChoice,
+    notice: message => notices.push(message), decision: async () => undefined, commandChoice, commandInput,
   });
   const reply = (result: unknown, method = 'command') => {
     const request = [...sent].reverse().find(request => request.method === method)!;
@@ -43,6 +45,7 @@ test('SDK command metadata retains aliases, hints and choices, without synthetic
   assert.equal(isCopilotModelCommand(copilotCommands([{ name: 'model', kind: 'client' }])[0]), false);
   const skills = copilotCommands([{ name: 'skills', kind: 'builtin' }])[0];
   assert.equal(isCopilotSkillsInfo(skills, ' info '), true);
+  assert.equal(isCopilotSessionRename(copilotCommands([{ name: 'session', kind: 'builtin' }])[0], ' rename '), true);
   assert.deepEqual(copilotSkillChoices({ skills: [{ name: 'a', description: 'Skill A', enabled: true }] }),
     [{ id: 'a', label: 'a', detail: 'Skill A' }]);
   const interaction = copilotInteraction(() => undefined);
@@ -113,6 +116,21 @@ for (const captured of readOnlyCommands) test(`captured read-only /${captured.na
   } finally { f.session.disconnect('fixture complete'); }
 });
 
+for (const captured of localStateCommands) test(`captured local-state /${captured.name} uses generic output and authoritative events`, async () => {
+  const f = await fixture(undefined, [captured.command]);
+  try {
+    const text = `/${captured.command.name}${captured.input === undefined ? '' : ` ${captured.input}`}`;
+    const handling = f.session.handle({ type: 'command', id: captured.name, text });
+    if (captured.event) f.session.receive({ kind: 'event', event: { id: `event-${captured.name}`, ...captured.event } });
+    f.reply(captured.result); await handling;
+    assert.equal(f.session.state.messages.at(-1)?.role, 'command');
+    assert.equal(f.sent.some(request => request.method === 'prompt' || request.method === 'configure'), false);
+    if (captured.event?.type === 'session.title_changed') assert.equal(f.session.state.sessionName, 'Renamed fixture');
+    if (captured.event?.type === 'session.permissions_changed')
+      assert.equal(f.session.configuration.get('permissions'), captured.event.data.mode);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
 test('Copilot /skills info fills the omitted skill argument from the public harness catalog', async () => {
   let choose!: (value: string | undefined) => void;
   const commands = [{ name: 'skills', description: 'Manage skills', kind: 'builtin',
@@ -155,6 +173,36 @@ test('cancelling Copilot /skills info picker invokes no command', async () => {
     assert.equal(f.sent.some(request => request.method === 'command'), false);
     assert.equal(f.session.state.configurationOperations?.some(operation => operation.text === '/skills info'), false);
   } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('Copilot /session rename fills the omitted free-form name through a harness-owned input', async () => {
+  const commands = [{ name: 'session', aliases: ['sessions'], description: 'Manage sessions', kind: 'builtin',
+    input: { hint: '', choices: [{ name: 'rename', description: 'Rename this session' }] } }];
+  let requested = '';
+  const f = await fixture(undefined, commands, [], async title => { requested = title; return 'Renamed fixture'; });
+  try {
+    const handling = f.session.handle({ type: 'command', id: 'session-rename', text: '/sessions rename' });
+    await flush();
+    assert.equal(requested, 'Copilot /session rename');
+    assert.deepEqual(f.sent.at(-1) && { method: f.sent.at(-1)!.method, name: f.sent.at(-1)!.name, input: f.sent.at(-1)!.input },
+      { method: 'command', name: 'sessions', input: 'rename Renamed fixture' });
+    f.reply({ kind: 'text', text: 'Session renamed to: Renamed fixture' }); await handling;
+    assert.equal(f.sent.filter(request => request.method === 'command').length, 1);
+    assert.equal(f.sent.some(request => request.method === 'prompt'), false);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('blank or cancelled Copilot /session rename input invokes no command', async () => {
+  const commands = [{ name: 'session', description: 'Manage sessions', kind: 'builtin',
+    input: { hint: '', choices: [{ name: 'rename', description: 'Rename this session' }] } }];
+  for (const value of [undefined, '   ']) {
+    const f = await fixture(undefined, commands, [], async () => value);
+    try {
+      await f.session.handle({ type: 'command', id: `rename-${String(value)}`, text: '/session rename' });
+      assert.equal(f.sent.some(request => request.method === 'command'), false);
+      assert.equal(f.session.state.configurationOperations?.some(operation => operation.text === '/session rename'), false);
+    } finally { f.session.disconnect('fixture complete'); }
+  }
 });
 
 test('bare commands with advertised arguments open a picker before invoking, even when the SDK would return text', async () => {
