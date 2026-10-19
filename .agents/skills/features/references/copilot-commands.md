@@ -1,9 +1,11 @@
 # Copilot SDK slash commands
 
-**Status: source implemented; authored offline fixtures unrun.** No app launches,
-installed-CLI invocations or model requests were performed for the argument-picker
-follow-up. The released `@github/copilot-sdk@1.0.22` declarations/implementation are the API
-evidence, not repository-main documentation or real-agent acceptance.
+**Status: source implemented; authored offline fixtures unrun.** No app launches
+or model requests were performed for the argument-picker follow-up. A sanitized
+user-observed installed-CLI trace supplies the bare `/model` result evidence
+described below; the released `@github/copilot-sdk@1.0.22`
+declarations/implementation remain the API evidence, not repository-main
+documentation or native acceptance.
 
 ## Ownership and scope
 
@@ -24,6 +26,15 @@ new commands composed from supported kinds work without handlers. Add
 command-specific integration only when the harness exposes semantics that its
 generic command contract cannot represent, and preserve those harness semantics
 rather than substituting a superficially similar Nimrod action.
+
+The pinned CLI's builtin `model` command is one such narrow exception. CLI 1.0.98
+advertises canonical `/model` with alias `/models` and a free-form `model` hint,
+but a bare SDK invocation returns only `completed`; the terminal UI's catalog
+picker is not projected through command metadata or results. For a bare
+advertised builtin model command, Nimrod presents Copilot's enabled model catalog
+and then invokes that same harness command with the selected model ID. Explicit
+arguments still pass through untouched. This is not Nimrod's **Select model…**
+action: Copilot still parses the argument and owns its settings/effect transaction.
 
 This feature applies to **Copilot SDK sessions**. Pi's existing `/name`,
 `/compact` and bare `/mcp` interception remains unchanged; removing it requires a
@@ -58,6 +69,8 @@ handlers. This is not universal CLI/TUI parity. Generic command execution remain
   This applies to all advertised choices, not a `/permissions` name special case.
   Required finite-choice input can also be supplied this way. Explicit arguments
   bypass this picker; commands without choices keep their SDK default behavior.
+  The documented builtin `/model` exception supplies Copilot's catalog because
+  its bare SDK invocation otherwise completes without exposing the CLI picker.
   Escape dismisses suggestions; IME/modifier and mid-draft editing are unchanged.
 - Local validation precedes draft clearing for unavailable sessions,
   unadvertised commands, required input and attachments. No optimistic literal

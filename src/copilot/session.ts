@@ -17,7 +17,7 @@ import { createCopilotPermissionConfiguration, isPermissionChange, permissionCom
 import { SessionConfigurationSet } from '../session-configuration-set';
 import { ConfigurationDeferred, ConfigurationSuperseded, ConfigurationUncertain, type SessionConfigurationController } from '../session-configuration';
 import { pickConfiguration } from '../configuration-picker';
-import { commandChoices, copilotCommands, findCopilotCommand, parseCopilotCommand, type CommandChoice, type CopilotCommand } from './commands';
+import { commandChoices, copilotCommands, findCopilotCommand, isCopilotModelCommand, parseCopilotCommand, type CommandChoice, type CopilotCommand } from './commands';
 
 interface Model extends CopilotImageModel {
   id: string;
@@ -235,6 +235,21 @@ export class CopilotSession {
       if (!command) throw new Error('This command is not advertised by Copilot anymore. Nothing was invoked.');
       if (command.input?.required && !command.input.choices?.length && !input?.trim())
         throw new Error(`/${command.name} now requires input: ${command.input.hint}. Nothing was invoked.`);
+      // CLI 1.0.98 advertises builtin /model (alias /models) with only a
+      // free-form hint, and invoking it bare returns completed without the
+      // terminal UI's picker. Supply that harness interaction, then invoke the
+      // original command with the exact catalog ID; do not dispatch a Nimrod action.
+      if (!input?.trim() && !command.input?.choices?.length && isCopilotModelCommand(command)) {
+        if (!this.ui.commandChoice) throw new Error('This Copilot command requires a model picker that is unavailable.');
+        const choices = this.models.map(model => ({ id: model.id, label: model.name, detail: model.id }));
+        if (!choices.length) throw new Error('Copilot did not advertise models for this command.');
+        const selected = await this.ui.commandChoice('Copilot /model', choices, operation.signal);
+        if (operation.signal.aborted || this.ended || selected === undefined) return false;
+        const current = findCopilotCommand(this.commands, command.name);
+        if (!current || !isCopilotModelCommand(current) || !this.models.some(model => model.id === selected))
+          throw new Error('Copilot model choices changed. Open the picker again.');
+        input = selected;
+      }
       // Some SDK commands default to text output when invoked bare, even though
       // their TUI presents argument choices. Use advertised metadata before any
       // invocation; do not execute a default action just to discover its menu.
