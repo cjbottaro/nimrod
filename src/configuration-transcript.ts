@@ -28,7 +28,7 @@ export class ConfigurationTranscript {
       const row: RenderMessage = { key: operation.key, role: 'configuration', configurationOperation: operation, sticky,
         operation: { title: operation.title, state: sticky ? 'pending' : operation.phase === 'completed' ? 'succeeded'
           : operation.phase === 'failed' ? 'failed' : operation.phase === 'unknown' ? 'unknown' : 'not-applied',
-          details: operation.details, cancelId: operation.cancellable ? operation.key : undefined } };
+          details: operation.details, inlineError: operation.inlineError, cancelId: operation.cancellable ? operation.key : undefined } };
       let anchor = before?.anchor;
       const fixedAnchor = before?.fixedAnchor ?? operation.settlementAnchor !== undefined;
       if (!sticky && (!before || before.row.sticky)) {

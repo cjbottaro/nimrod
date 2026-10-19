@@ -29,6 +29,12 @@ interface Model extends CopilotImageModel {
 const usageWorkEvents = new Set(['user.message', 'assistant.turn_start', 'assistant.turn_end', 'assistant.message_delta', 'assistant.message',
   'assistant.reasoning_delta', 'assistant.reasoning', 'assistant.tool_call_delta', 'assistant.usage', 'tool.execution_start',
   'tool.execution_partial_result', 'tool.execution_progress', 'tool.execution_complete', 'tool.shell_output', 'session.error']);
+function commandErrorMessage(error: unknown): string {
+  let message = error instanceof Error ? error.message : String(error);
+  while (message.startsWith('Error: ')) message = message.slice('Error: '.length);
+  message = message.replace(/^Request session\.commands\.invoke failed with message:\s*/, '');
+  return message.trim() || 'Copilot command failed.';
+}
 /** Supported host decisions, distinct from the SDK's reported PermissionResult outcomes. */
 export type CopilotDecision = import('../../copilot/permissions.mjs').PermissionDecision
   | { answer: string; wasFreeform: boolean } | { approved: boolean; selectedAction?: string; feedback?: string };
@@ -356,7 +362,7 @@ export class CopilotSession {
         return;
       }
     } catch (error) {
-      if (!this.ended && !operation.signal.aborted) throw new Error(`Copilot command did not finish: ${String(error)} Nothing was retried or sent as a fallback prompt.`);
+      if (!this.ended && !operation.signal.aborted) throw new Error(commandErrorMessage(error));
     } finally {
       if (this.commandOperation === operation.signal) this.commandOperation = undefined;
       if (!this.ended && !this.state.busy) this.state = { ...this.state, status: 'Idle' };

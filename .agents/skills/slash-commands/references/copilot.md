@@ -63,6 +63,15 @@ Canonical protocol/lifecycle: [Copilot commands](../../features/references/copil
 | `/skills info` | Metadata advertises `info`, but omits the required second `<skill-name>` argument; direct invocation returns a usage error | Read `session.skills.list()`, present a harness-owned skill picker, revalidate the choice, then invoke exact `/skills info <name>` | Remove when command metadata/results expose the nested skill choice |
 | `/session rename` | Metadata advertises `rename`, but omits the required second free-form `<name>` argument; direct invocation returns a usage error | Present the shared input modal as a Copilot-owned interaction, revalidate the command, then invoke exact `/session rename <name>` | Remove when command metadata/results expose the nested free-form input |
 
+## Presentation compatibility
+
+Known rejected commands use a compact red-accent operation card with the
+actionable harness error inline and wrapping. SDK transport prefixes and
+Nimrod retry/fallback boilerplate are removed, with no redundant **Failed**
+label or disclosure. Unknown/not-applied outcomes retain explicit status and
+full diagnostic Details. Source fixtures are authored and unrun; native visual
+acceptance remains pending.
+
 ## Next audit order
 
 1. Remaining provider-free/read-only: configured-server `/mcp show`, valid

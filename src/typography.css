@@ -3,7 +3,7 @@
   --nimrod-conversation-size:14px;
   --nimrod-monospace-size:14px;
 }
-.message > .markdown, .skill-invocation .markdown, .reasoning-body, .configuration-text, .operation-outcome,
+.message > .markdown, .skill-invocation .markdown, .reasoning-body, .configuration-text, .operation-outcome, .operation-inline-error,
 .card-question-answer, .tool-output-web-markdown, .popout-document.popout-markdown,
 .typography-prose {
   font-family:var(--nimrod-conversation-font);

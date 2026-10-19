@@ -39,7 +39,7 @@ export class CopilotCommandQueue {
         else this.progress(intent, 'completed');
       }
     }, error => {
-      if (!intent.signal.signal.aborted) this.progress(intent, 'failed', String(error));
+      if (!intent.signal.signal.aborted) this.progress(intent, 'failed', error instanceof Error ? error.message : String(error));
     }).finally(() => {
       this.active = undefined; intent.resolve(); this.changed(); this.update();
     });
@@ -66,7 +66,8 @@ export class CopilotCommandQueue {
   }
   private progress(intent: CommandIntent, phase: ConfigurationOperation['phase'], details?: string, connection = false): void {
     this.operations = this.operations.map(operation => operation.key === intent.key
-      ? { ...operation, phase, details, ...(connection ? { cause: 'connection' as const } : {}) } : operation);
+      ? { ...operation, phase, details: phase === 'failed' ? undefined : details,
+        inlineError: phase === 'failed' ? details : undefined, ...(connection ? { cause: 'connection' as const } : {}) } : operation);
     this.changed();
   }
 }

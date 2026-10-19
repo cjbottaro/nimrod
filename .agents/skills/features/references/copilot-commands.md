@@ -118,6 +118,11 @@ The normal transcript renderer owns escaping, Markdown, stable keys, reading
 intent and hidden-view catch-up. Do not synthesize assistant history or write
 SDK session files to persist local output.
 
+Known command rejection cards show only the actionable harness error inline,
+wrapping in conversation typography. They omit transport/Nimrod wrapper text,
+the redundant **Failed** label and diagnostic disclosure. Ambiguous delivery or
+connection outcomes keep explicit uncertainty labels and full Details.
+
 ## Choice lifecycle and concurrency
 
 `CopilotCommandQueue` owns a connection-local FIFO of validated command intents. Accepting an advertised command clears the composer immediately, even during agent work or another command workflow. Unknown commands, required free-text input and attachments still fail before clearing. Ordinary text/image prompts retain their busy rejection; this is not SDK prompt steering/queueing.

@@ -331,6 +331,10 @@ model pickers and effects, or an explicit interactive agent-prompt result.
 Unknown commands are rejected with the draft kept. Unsupported results report
 an error—never an ordinary prompt fallback or automatic retry.
 
+Known slash-command errors appear directly on the command card as concise,
+wrapping text. Transport boilerplate and redundant failure disclosures are
+omitted; uncertain outcomes still retain explicit details.
+
 Harness commands remain independent from overlapping Nimrod actions. Copilot
 `/model` uses Copilot's picker/effect/persistence transaction; **Select model…**
 uses Nimrod's session configuration action. Both can select the live model, but
