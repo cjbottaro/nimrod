@@ -25,6 +25,8 @@ entry point redirects to or impersonates the other.
 Use the dedicated [slash commands skill](../../slash-commands/SKILL.md) for
 implementation, audits and adapter decisions; this reference owns only
 Copilot-specific protocol shapes and lifecycle.
+The current command-by-command status lives in the skill's [Copilot
+compatibility matrix](../../slash-commands/references/copilot.md).
 
 The pinned CLI's builtin `model` command is one such narrow exception. CLI 1.0.98
 advertises canonical `/model` with alias `/models` and a free-form `model` hint,

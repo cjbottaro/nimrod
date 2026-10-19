@@ -30,6 +30,24 @@ behind Pi's native RPC/view policy and feature-specific references such as the
 [MCP inspector](../features/references/mcp-inspector.md). Generic ACP uses only
 agent-advertised commands.
 
+## Harness compatibility matrices
+
+Every product-supported harness with slash commands must have a matrix reference
+here before command support is considered characterized. The matrix records
+catalog provenance, generic coverage, UI/state impacts, adapters, evidence and
+remaining gaps. Dynamic catalogs still need a matrix for their command classes
+and known built-ins; do not pretend a snapshot is exhaustive forever.
+
+| Integration | Compatibility matrix | Product status |
+| --- | --- | --- |
+| Pi | [Pi slash commands](references/pi.md) | Current flagship integration |
+| Copilot | [Copilot slash commands](references/copilot.md) | Current built-in SDK integration |
+| Generic ACP | [Generic ACP command baseline](references/generic-acp.md) | Retained internal baseline; no current product entry point |
+
+When adding another supported harness, create `references/<harness>.md` and add
+it to this table. Concrete feature references continue to own protocol details;
+the matrix links them rather than duplicating full lifecycle specifications.
+
 ## Non-negotiable ownership
 
 Harness slash commands and Nimrod actions are separate entry points even when
@@ -214,6 +232,8 @@ During implementation:
 
 Before completion:
 
+- Update the owning harness compatibility-matrix row with implementation and
+  evidence status; never leave a newly discovered gap only in task prose.
 - Cover canonical name and aliases.
 - Cover bare, explicit, invalid and stale input.
 - Cover picker cancellation and late result suppression.
