@@ -57,7 +57,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
-- Linux's native menu bar now has an opaque desktop-theme background instead of showing through to the desktop; content translucency is unchanged.
+- Linux's menu bar and GTK-drawn native title bar now follow each window's Nimrod theme and background opacity, including live previews, instead of staying clear or desktop grey. Native window controls are retained; window-manager-drawn title bars remain desktop-controlled.
 
 - Local Linux builds now select an executable build instead of macOS app packaging and stage the compiler helper and runtime resources alongside it.
 

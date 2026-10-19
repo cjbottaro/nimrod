@@ -27,7 +27,7 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
   const dark = window.matchMedia?.('(prefers-color-scheme: dark)');
   const reduced = window.matchMedia?.('(prefers-reduced-transparency: reduce)');
   let theme = appliedTheme(root);
-  let background = '';
+  let background = '', foreground = '';
   let primary: ReturnType<typeof buttonSurface>, hover: ReturnType<typeof buttonSurface>, danger: ReturnType<typeof buttonSurface>;
   let secondary: ReturnType<typeof buttonSurface>, secondaryHover: ReturnType<typeof buttonSurface>;
   let credits: Record<string, Record<string, number>> = {};
@@ -40,6 +40,7 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
     const style = window.getComputedStyle(root);
     const color = (key: string) => style.getPropertyValue('--vscode-' + key).trim();
     background = theme.background ?? (color('editor-background') || fallback);
+    foreground = color('foreground') || (fallback === '#f7f9f8' ? '#182126' : '#d8e0e3');
     const pair = primaryButtonSurfaces(color('button-foreground'), color('button-background'), color('button-hoverBackground'));
     primary = pair.normal; hover = pair.hover;
     const secondaryPair = primaryButtonSurfaces(color('button-secondaryForeground'), color('button-secondaryBackground'), color('button-secondaryHoverBackground'));
@@ -113,8 +114,10 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
           : 'Opacity controls the theme tint. Adjustable background blur is unavailable on this macOS version; plain transparency is still available.';
       }
     }
-    const tint = capabilities?.platform === 'macos' && host.tintTitlebar ? titlebarTint(background, enabled ? value.opacity : 100) : undefined;
-    effects.request({ material: capabilities?.platform === 'macos' ? { blur, dark: theme.mode === null ? null : theme.mode === 'dark' } : undefined, tint });
+    const nativeChrome = capabilities?.platform === 'macos' || capabilities?.platform === 'linux';
+    const tint = nativeChrome && host.tintTitlebar ? titlebarTint(background, enabled ? value.opacity : 100) : undefined;
+    effects.request({ material: capabilities?.platform === 'macos' ? { blur, dark: theme.mode === null ? null : theme.mode === 'dark' } : undefined,
+      tint, foreground: capabilities?.platform === 'linux' ? titlebarTint(foreground, 100) : undefined });
   }
   function refreshCapabilities(): Promise<void> {
     const generation = ++capabilityGeneration;

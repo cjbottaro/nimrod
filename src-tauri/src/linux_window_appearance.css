@@ -1,0 +1,46 @@
+/* GTK's existing client-side decoration and menu bar, scoped to one window.
+ * Paint the tint once: the titlebar host owns it, nested HeaderBars are clear.
+ * Server-side decorations and popup menus remain native desktop surfaces. */
+window.$scope {
+    background-color: transparent;
+    background-image: none;
+}
+window.$scope headerbar {
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
+    color: $foreground;
+}
+window.$scope > .titlebar,
+window.$scope menubar {
+    background-color: $background;
+    background-image: none;
+    color: $foreground;
+    box-shadow: none;
+}
+window.$scope headerbar label,
+window.$scope headerbar button,
+window.$scope menubar > menuitem,
+window.$scope menubar > menuitem > label {
+    color: $foreground;
+}
+window.$scope headerbar button,
+window.$scope menubar > menuitem {
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
+}
+window.$scope headerbar button:hover,
+window.$scope menubar > menuitem:hover {
+    background-color: $hover;
+}
+window.$scope headerbar button:active,
+window.$scope menubar > menuitem:active {
+    background-color: $active;
+}
+window.$scope headerbar button:disabled,
+window.$scope headerbar button:disabled label,
+window.$scope menubar > menuitem:disabled,
+window.$scope menubar > menuitem:disabled > label {
+    color: $disabled;
+}

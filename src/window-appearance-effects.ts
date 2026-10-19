@@ -3,10 +3,12 @@ import type { AppearanceCapabilities, TitlebarTint } from './window-appearance';
 export interface NativeAppearance {
   material?: { blur: number; dark: boolean | null };
   tint?: TitlebarTint;
+  /** Linux GTK chrome text/icons; independent of the background alpha. */
+  foreground?: TitlebarTint;
 }
 export interface NativeAppearanceHost {
   apply(blur: number, dark: boolean | null, updateTheme: boolean): Promise<AppearanceCapabilities>;
-  tintTitlebar?(color: TitlebarTint): Promise<void>;
+  tintTitlebar?(color: TitlebarTint, foreground?: TitlebarTint): Promise<void>;
   report(message?: string, cause?: string): void;
 }
 
@@ -23,7 +25,7 @@ export function installAppearanceEffects(host: NativeAppearanceHost, receiveCapa
   let tintRevision = 0;
   let running: Promise<void> | undefined;
   const materialKey = (value: NativeAppearance) => value.material ? JSON.stringify(value.material) : undefined;
-  const tintKey = (value: NativeAppearance) => value.tint ? JSON.stringify([value.tint, value.material?.dark, tintRevision]) : undefined;
+  const tintKey = (value: NativeAppearance) => value.tint ? JSON.stringify([value.tint, value.foreground, value.material?.dark, tintRevision]) : undefined;
   const needed = (value: NativeAppearance | undefined) => {
     if (!value || disposed) return false;
     const material = materialKey(value), tint = tintKey(value);
@@ -57,7 +59,7 @@ export function installAppearanceEffects(host: NativeAppearanceHost, receiveCapa
       const tint = tintKey(target);
       if (host.tintTitlebar && tint !== undefined && tint !== appliedTint && tint !== failedTint) {
         try {
-          await host.tintTitlebar(target.tint!);
+          await host.tintTitlebar(target.tint!, target.foreground);
           if (disposed) return;
           appliedTint = tint; failedTint = undefined; host.report(undefined, 'titlebar');
         } catch (error) {
@@ -78,7 +80,7 @@ export function installAppearanceEffects(host: NativeAppearanceHost, receiveCapa
       const key = JSON.stringify(next);
       if (key !== desiredKey) {
         desiredKey = key;
-        desired = { material: next.material ? { ...next.material } : undefined, tint: next.tint ? [next.tint[0], next.tint[1], next.tint[2], next.tint[3]] : undefined };
+        desired = { material: next.material ? { ...next.material } : undefined, tint: next.tint ? [...next.tint] : undefined, foreground: next.foreground ? [...next.foreground] : undefined };
       }
       start();
     },

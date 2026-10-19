@@ -8,6 +8,8 @@ mod drafts;
 mod fonts;
 mod keybindings;
 mod links;
+#[cfg(target_os = "linux")]
+mod linux_window_appearance;
 #[cfg(target_os = "macos")]
 mod macos_window_appearance;
 mod native_menu;

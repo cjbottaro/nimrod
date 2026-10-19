@@ -139,30 +139,7 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
         )));
     }
     let _ = settings_inserted;
-    #[cfg(target_os = "linux")]
-    install_linux_menu_background()?;
     app.set_menu(menu)?;
-    Ok(())
-}
-
-/// GTK themes can leave menubars transparent, expecting an opaque parent window.
-/// Our backing must stay transparent for webview opacity, so paint only the bar.
-/// A process-local screen provider also covers menus in subsequently opened windows.
-#[cfg(target_os = "linux")]
-fn install_linux_menu_background() -> tauri::Result<()> {
-    use gtk::prelude::*;
-
-    let screen = gtk::gdk::Screen::default()
-        .ok_or_else(|| tauri::Error::Io(std::io::Error::other("GTK screen is unavailable")))?;
-    let provider = gtk::CssProvider::new();
-    provider
-        .load_from_data(include_bytes!("linux_menu.css"))
-        .map_err(|error| tauri::Error::Io(std::io::Error::other(error.to_string())))?;
-    gtk::StyleContext::add_provider_for_screen(
-        &screen,
-        &provider,
-        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
-    );
     Ok(())
 }
 

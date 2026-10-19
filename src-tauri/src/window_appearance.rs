@@ -97,12 +97,21 @@ pub async fn apply_window_appearance(
 pub async fn tint_window_titlebar(
     window: tauri::WebviewWindow,
     color: [u8; 4],
+    foreground: Option<[u8; 4]>,
 ) -> Result<(), String> {
     let target = window.clone();
     on_main_thread(&window, move || {
         #[cfg(target_os = "macos")]
         crate::macos_window_appearance::tint_titlebar(&target, color)?;
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(target_os = "linux")]
+        crate::linux_window_appearance::tint(
+            &target,
+            color,
+            foreground.ok_or("Window chrome foreground is unavailable")?,
+        )?;
+        #[cfg(not(target_os = "linux"))]
+        let _ = foreground;
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
         let _ = (target, color);
         Ok(())
     })

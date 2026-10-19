@@ -19,6 +19,7 @@
 | Native explicit focus | `window_presentation::{focus, focus_existing, focus_reference}` | Standard focus sequence centralized; cold Settings eligibility preserved; reference focus does not add app activation |
 | Native delayed-reveal token | `window_presentation::PreparationGate` | One current generation/readiness state under one mutex; feature owner holds its own gate |
 | Portable native appearance command dispatch | `src-tauri/src/window_appearance.rs` | Common main-thread dispatch and capabilities; no AppKit view walking |
+| Linux menu/client-side title-bar tint | `src-tauri/src/linux_window_appearance.rs`, `linux_window_appearance.css` | Reuse GTK widgets; window-scoped provider, theme/opacity/opaque foreground, native-destroy cleanup; no DE/compositor policy |
 | macOS material/title implementation | `src-tauri/src/macos_window_appearance.rs` | Window-local theme/backing/title tint and material-helper bridge; `macos_blur.m` owns the full-frame NSVisualEffectView, radius copies, exception boundary and lifecycle |
 | Global Settings identity/categories/readiness authorization | `src-tauri/src/settings_window.rs`, `src/global-settings.ts` | Concrete singleton ownership and required prepared page; not another appearance engine |
 | Automatic reference-window presentation | `src-tauri/src/popout_windows.rs` | Separate passive, eligibility-checked `orderFront` path; never route automatic restore through generic explicit focus |

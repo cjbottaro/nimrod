@@ -4244,8 +4244,12 @@ test('Linux Appearance hides frosting and performs no native blur operations', a
   try {
     await f.tick(); assert.equal(f.element('settings-background-blur').hidden, true);
     assert.match(f.element('translucency-hint').textContent!, /compositor/);
-    f.preferences.external('{"appearance.backgroundOpacity":50}'); await f.tick();
+    f.preferences.external('{"appearance.backgroundOpacity":50,"appearance.theme":"dracula"}'); await f.tick(); await f.tick();
     assert.equal(f.win.document.documentElement.dataset.translucency, 'window');
+    const tint = f.calls.filter(call => call.command === 'tint_window_titlebar').at(-1)!;
+    assert.deepEqual(Array.from(tint.args.color as number[]), [40, 42, 54, 128]);
+    assert.equal((tint.args.foreground as number[]).length, 4);
+    assert.equal((tint.args.foreground as number[])[3], 255);
     assert.equal(f.calls.some(call => call.command === 'apply_window_appearance'), false);
   } finally { f.win.close(); }
 });

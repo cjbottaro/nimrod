@@ -1,5 +1,0 @@
-/* Native menus use the desktop GTK palette, not the webview's theme/opacity.
- * Do not style the window, webview, menu items or their interaction states. */
-menubar {
-    background-color: alpha(@theme_bg_color, 1);
-}
