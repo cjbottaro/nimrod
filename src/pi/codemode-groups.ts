@@ -38,6 +38,8 @@ export class CodemodeGroups {
   private members = new Map<string, Map<string, ContentBlock>>();
   private groups = new Map<string, Group>();
 
+  constructor(private readonly renderRecorded: (block: ContentBlock) => HTMLDetailsElement) {}
+
   update(block: ContentBlock, card: HTMLDetailsElement): void {
     if (typeof block.id !== 'string' || !block.id || block.source && block.source.backend !== 'pi') return;
     if (!block.parentToolCallId && !isPiCodemode(block) && !this.blocks.has(block.id)) return;
@@ -91,15 +93,25 @@ export class CodemodeGroups {
     for (const [id, group] of this.groups) {
       // Persisted nestedCalls contains bounded inputs/status, not child output.
       // A real live child always wins; never fabricate output or parse truncated previews.
-      for (const [callId, node] of group.fallback) if (!group.recorded.has(callId) || this.members.get(id)?.has(callId)) { node.remove(); group.fallback.delete(callId); group.fallbackSources.delete(callId); }
+      for (const [callId, node] of group.fallback) if (!group.recorded.has(callId) || this.members.get(id)?.has(callId)) {
+        // A live row may already have adopted this exact registry-owned shell.
+        if (node.parentElement === group.children) node.remove();
+        group.fallback.delete(callId); group.fallbackSources.delete(callId);
+      }
       for (const call of group.recorded.values()) {
         if (this.members.get(id)?.has(call.id)) continue;
-        let node = group.fallback.get(call.id);
-        if (!node) { node = group.card.ownerDocument.createElement('details'); node.className = 'tool-raw-inputs codemode-recorded-call'; node.append(group.card.ownerDocument.createElement('summary'), group.card.ownerDocument.createElement('pre')); group.fallback.set(call.id, node); group.children.append(node); }
         if (group.fallbackSources.get(call.id) === call) continue;
-        group.fallbackSources.set(call.id, call);
-        node.querySelector('summary')!.textContent = `${call.name} · ${call.status || 'unknown'}`;
-        node.querySelector('pre')!.textContent = [call.arguments === undefined ? 'Inputs not retained by Pi.' : typeof call.arguments === 'string' ? call.arguments : JSON.stringify(call.arguments, null, 2), call.error, 'Output not retained by Pi.'].filter(Boolean).join('\n');
+        const settled = call.status === 'ok' || call.status === 'error';
+        const node = this.renderRecorded({
+          type: 'toolCall', id: call.id, name: call.name, parentToolCallId: id,
+          arguments: call.arguments,
+          toolStatus: settled ? 'finished' : undefined,
+          isError: call.status === 'error', uiPhase: settled ? undefined : 'stopped',
+          // A retained error is actual data; missing result bodies stay absent.
+          resultOutput: typeof call.error === 'string' ? call.error : undefined,
+        });
+        group.fallbackSources.set(call.id, call); group.fallback.set(call.id, node);
+        if (node.parentElement !== group.children) group.children.append(node);
       }
       this.refresh(id);
     }

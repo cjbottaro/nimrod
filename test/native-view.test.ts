@@ -3,8 +3,9 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { webviewHtml, rendererBundle } from './view-fixture';
 import { createSafeMarkdownRenderer } from '../src/pi/safe-markdown';
-import { initialConversationState, reduceRpcEvent } from '../src/pi/reducer';
+import { initialConversationState, messagesToDisplay, reduceRpcEvent } from '../src/pi/reducer';
 import { TranscriptUpdates } from '../src/pi/transcript-updates';
+import { bundledToolRenderer } from '../src/pi/card-plugins/registry';
 import { projectToolTimeline } from '../src/pi/tool-progress';
 import { applyTypography, DEFAULT_TYPOGRAPHY } from '../src/typography';
 
@@ -1273,6 +1274,70 @@ test('incremental parallel streams coalesce dirty rows without materializing his
     deliver(); f.flush();
     assert.ok(materializations > count); assert.equal(cards[0].querySelector('.tool-output')!.textContent, 'replacement');
     assert.equal(mounts, 3);
+  } finally { f.dom.window.close(); }
+});
+
+test('saved codemode children use normal tool cards and silent missing data, then adopt live output in place', () => {
+  const f = fixture();
+  const nestedCalls = { complete: true, calls: [
+    { id: 'saved-read', name: 'read', arguments: { path: 'README.md', offset: 2, limit: 3 }, status: 'ok' },
+    { id: 'saved-failed', name: 'read', status: 'error' },
+  ] };
+  let state = { ...initialConversationState(), messages: messagesToDisplay([
+    { role: 'assistant', timestamp: 1, content: [{ type: 'toolCall', id: 'saved-parent', name: 'codemode', arguments: { code: 'await tools.read({path:"README.md"});' } }] },
+    { role: 'toolResult', toolCallId: 'saved-parent', toolName: 'codemode', nestedCalls, content: [] },
+  ]) };
+  const paint = () => f.snapshot({ ...state, messages: projectToolTimeline(state.messages, state.toolProgress) });
+  try {
+    paint();
+    const parent = f.win.document.querySelector<HTMLDetailsElement>('[data-detail-key="tool:saved-parent"]')!;
+    const child = parent.querySelector<HTMLDetailsElement>('[data-detail-key="tool:saved-read"]')!;
+    const failed = parent.querySelector<HTMLDetailsElement>('[data-detail-key="tool:saved-failed"]')!;
+    assert.equal(child.querySelector('.tool-card-preview')!.textContent, 'README.md · lines 2–4');
+    assert.ok(child.querySelector('.tool-card-succeeded'));
+    assert.ok(failed.querySelector('.tool-card-failed'));
+    assert.equal(failed.querySelector('.tool-raw-inputs'), null, 'status-only children do not invent input bodies');
+    assert.equal(child.querySelector('.tool-output'), null);
+    assert.equal(failed.querySelector('.tool-output'), null);
+    assert.doesNotMatch(parent.textContent!, /not retained|read · ok|read · error/);
+    parent.open = true; child.open = true;
+    const input = child.querySelector<HTMLDetailsElement>('.tool-raw-inputs')!; input.open = true;
+    paint();
+    assert.equal(parent.querySelector('[data-detail-key="tool:saved-read"]'), child);
+    assert.equal(child.open, true); assert.equal(input.open, true);
+    state = reduceRpcEvent(state, { type: 'tool_execution_start', toolCallId: 'saved-read', parentToolCallId: 'saved-parent', toolName: 'read', args: nestedCalls.calls[0].arguments });
+    paint();
+    assert.equal(parent.querySelector('[data-detail-key="tool:saved-read"]'), child, 'live adoption reuses the registry shell');
+    assert.equal(child.classList.contains('codemode-recorded-call'), false);
+    state = reduceRpcEvent(state, { type: 'tool_execution_end', toolCallId: 'saved-read', parentToolCallId: 'saved-parent', toolName: 'read', result: { content: [{ type: 'text', text: 'real output' }] } });
+    paint();
+    assert.equal(child.querySelector('.tool-output')!.textContent, 'real output');
+    assert.equal(child.open, true); assert.equal(input.open, true);
+    assert.equal(f.sent.some(message => message.type === 'renderError'), false);
+  } finally { f.dom.window.close(); }
+});
+
+test('saved codemode children honor personal renderers and dispose through the normal registry', () => {
+  let mounts = 0, updates = 0, disposals = 0;
+  const f = fixture({ cardRenderer: data => data.name === 'read' ? {
+    apiVersion: 2, id: 'fixture.saved-read', supports: () => true,
+    mount(context) {
+      mounts++;
+      return { update(data) { updates++; context.renderPresentation({ title: 'Personal read', preview: (data.arguments as { path: string }).path, sections: [] }); }, dispose() { disposals++; } };
+    },
+  } : bundledToolRenderer(data) });
+  const messages = messagesToDisplay([{ role: 'toolResult', toolCallId: 'p', toolName: 'codemode', content: [], nestedCalls: {
+    complete: true, calls: [{ id: 'r', name: 'read', arguments: { path: 'custom.txt' }, status: 'ok' }],
+  } }]);
+  try {
+    f.snapshot({ messages: projectToolTimeline(messages) });
+    const child = f.win.document.querySelector<HTMLDetailsElement>('[data-detail-key="tool:r"]')!;
+    assert.equal(child.querySelector('.tool-card-title')!.textContent, 'Personal read');
+    assert.equal(child.querySelector('.tool-card-preview')!.textContent, 'custom.txt');
+    f.snapshot({ messages: projectToolTimeline(messages) });
+    assert.equal(mounts, 1); assert.equal(updates, 1, 'unchanged recorded calls do not rerun historical renderers');
+    f.receive({ type: 'sessionReset' });
+    assert.equal(disposals, 1);
   } finally { f.dom.window.close(); }
 });
 

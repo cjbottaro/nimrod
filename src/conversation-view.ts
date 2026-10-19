@@ -94,7 +94,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   let configurationTranscript = new ConfigurationTranscript();
   const expanded = new Map<string, boolean>();
   const toolCards = new Map<string, HTMLDetailsElement>();
-  const codemodeGroups = new CodemodeGroups();
+  const codemodeGroups = new CodemodeGroups(block => renderToolCard(block, `tool:${safeText(block.id)}`, true));
   const transcriptScroll = new TranscriptScroll(window, transcriptViewport);
   const updateMotion = () => messages.classList.toggle('transcript-motion-paused', !active || document.hidden);
   document.addEventListener('visibilitychange', updateMotion, { signal: listeners.signal });
@@ -339,7 +339,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     };
   }
 
-  function renderToolCard(block: ContentBlock, detailKey: string): HTMLDetailsElement {
+  function renderToolCard(block: ContentBlock, detailKey: string, recorded = false): HTMLDetailsElement {
     // Identity belongs to the invocation, not its current message/placement.
     const key = safeText(block.id) ? `tool:${safeText(block.id)}` : detailKey;
     let details = toolCards.get(key);
@@ -348,8 +348,9 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       details = renderToolCardDom(document, block, toolDetail(key), host.cardRenderer?.(block), reportRenderError, cardDomHost());
       toolCards.set(key, details);
     }
+    details.classList.toggle('codemode-recorded-call', recorded);
     applyToolDetailsLifecycle(details, block);
-    codemodeGroups.update(block, details);
+    if (!recorded) codemodeGroups.update(block, details);
     return details;
   }
 
@@ -495,6 +496,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       node.setAttribute("aria-label", message.originLabel ? `${message.originLabel} · ${label}` : label);
       const block = toolMessageBlock(message);
       updateToolCard(document, tool, block);
+      tool.classList.remove('codemode-recorded-call');
       applyToolDetailsLifecycle(tool, block);
       codemodeGroups.update(block, tool);
       return true;
@@ -517,7 +519,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       const key = contentBlockKey(block, index);
       const previous = existing.get(key);
       const blockNode = safeText(block.type) === "toolCall" && previous instanceof HTMLDetailsElement
-        ? (updateToolCard(document, previous, block), applyToolDetailsLifecycle(previous, block), codemodeGroups.update(block, previous), previous)
+        ? (updateToolCard(document, previous, block), previous.classList.remove('codemode-recorded-call'), applyToolDetailsLifecycle(previous, block), codemodeGroups.update(block, previous), previous)
         : safeText(block.type) === "thinking" && previous instanceof HTMLDetailsElement && typeof block.thinking === "string" && block.thinking.trim()
           ? (updateReasoningCard(previous, block.thinking, renderMarkdown, block.thinkingComplete === false), previous)
           : renderBlock(block, safeText(message.key), index, safeText(message.role), previous);
