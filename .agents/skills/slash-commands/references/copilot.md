@@ -37,7 +37,7 @@ Canonical protocol/lifecycle: [Copilot commands](../../features/references/copil
 | `/mcp` | — | MCP configuration/status | **Partial/generic observed**: `list` and no-server `show` return text with no state events; configured-server show and enable/disable/reload remain unaudited |
 | `/memory` | — | Cross-session memory setting/status | **Generic observed**: show/on/off return Markdown; on/off change isolated user settings, with no Nimrod memory projection |
 | `/model` | `/models` | Model, effort, defaults/Plan model | **Source implemented narrow adapter**: bare picker and exact enabled live-model completion compensate for CLI `completed` gaps; richer syntax passes through; latest native acceptance pending |
-| `/permissions` | — | Permission policy | **Generic observed**: show/default/allow-all use ordinary command invocation; advertised live-use controls dispatch and native permission events reconcile state |
+| `/permissions` | — | Permission policy | **Generic observed**: show/default/allow-all and **Set permissions…** use one command owner; advertised live-use controls dispatch and native permission events reconcile state |
 | `/plan` | — | Mode, plan lifecycle, agent work | Unaudited; overlaps implemented mode lifecycle but must remain harness-command-owned |
 | `/plugin` | — | Plugin catalog/configuration | **Partial/generic observed**: `list` returns text with no state events; mutation grammar remains unaudited |
 | `/remote` | — | External remote-control state | **Partial/generic observed**: `show` returns text with no state events; on/off remain unaudited and external/stateful |

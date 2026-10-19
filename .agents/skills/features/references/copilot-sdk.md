@@ -36,7 +36,11 @@ Nimrod leaves authentication to the installed CLI; no tokens enter settings.
 
 ## Distribution and native ownership
 
-- `copilot/bridge.mjs` imports the bundled official SDK, its concrete `copilot/configuration.mjs` adapter and the shared UI/bridge decision-scope validator `copilot/permissions.mjs`. The live permission helper `copilot/permission-configuration.mjs` is staged with those modules; all are staged checkout-locally, watched by `build.rs` and required by the bundle verifier. The bridge's JSON-line
+- `copilot/bridge.mjs` imports the bundled official SDK, its concrete
+  `copilot/configuration.mjs` adapter and the shared UI/bridge decision-scope
+  validator `copilot/permissions.mjs`. Those modules are staged
+  checkout-locally, watched by `build.rs` and required by the bundle verifier.
+  The bridge's JSON-line
   records are private Nimrod IPC, **not another harness protocol**.
 - `scripts/prepare-copilot.mjs`, called by `src-tauri/build.rs`, stages the bridge,
   SDK dist/package metadata and required dependency packages into ignored
@@ -304,13 +308,11 @@ selection approves:
   rejection, retaining prominent policy/escalation notes. Unknown or incomplete
   scopes retain literal details and one-time approval/rejection.
 
-The separate [live permission configuration](live-permissions.md) backs
-Nimrod's **Set permissions…** action by invoking the exact advertised
-`/permissions allow-all` command through SDK command RPC and confirming native
-mode. Composer slash commands use the generic command queue and its advertised
-live-use metadata instead. Neither path is a host decision or substitute
-approval policy; existing callback promises remain independently owned. Generic
-model configuration remains idle-only.
+The [Set permissions command shortcut](live-permissions.md) and composer slash
+commands use the same generic command queue and advertised live-use metadata.
+Neither is a host decision or substitute approval policy; existing callback
+promises remain independently owned. Generic model configuration remains
+idle-only.
 
 Every decision is checked against the bridge's retained original request using
 the same option builder; unrelated domains, broader MCP scopes, mismatched

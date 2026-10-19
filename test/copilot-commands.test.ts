@@ -7,7 +7,7 @@ import { copilotCommands, copilotSkillChoices, copilotSlashCommands, isCopilotMo
 import { CopilotSession, type CopilotSessionUi } from '../src/copilot/session';
 import type { BridgeRequest } from '../src/copilot/connection';
 import type { ConversationViewMessage } from '../src/conversation-view-host';
-import { copilotInteraction } from '../src/copilot/view-policy';
+import { copilotInteraction, copilotSessionActions } from '../src/copilot/view-policy';
 import { installSlashCompletion } from '../src/pi/slash-completion';
 
 const catalog = [{ name: 'permissions', aliases: ['perms'], description: 'Manage permissions', kind: 'builtin', allowDuringAgentExecution: true,
@@ -126,8 +126,6 @@ for (const captured of localStateCommands) test(`captured local-state /${capture
     assert.equal(f.session.state.messages.at(-1)?.role, 'command');
     assert.equal(f.sent.some(request => request.method === 'prompt' || request.method === 'configure'), false);
     if (captured.event?.type === 'session.title_changed') assert.equal(f.session.state.sessionName, 'Renamed fixture');
-    if (captured.event?.type === 'session.permissions_changed')
-      assert.equal(f.session.configuration.get('permissions'), captured.event.data.mode);
   } finally { f.session.disconnect('fixture complete'); }
 });
 
@@ -222,6 +220,21 @@ test('bare commands with advertised arguments open a picker before invoking, eve
     const explicit = f.session.handle({ type: 'command', id: 'explicit', text: '/permissions show' });
     f.reply({ kind: 'text', text: 'Explicit report' }); await explicit;
     assert.equal(f.sent.filter(request => request.method === 'command').length, 2);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('Set permissions action invokes the advertised harness command through a Command card', async () => {
+  const f = await fixture(async (_title, choices) => choices.find(choice => choice.id === 'show')?.id);
+  try {
+    const action = copilotSessionActions(f.session).find(action => action.id === 'permissions');
+    assert.ok(action?.run);
+    const running = action.run(); await flush();
+    assert.equal(f.sent.at(-1)?.method, 'command');
+    assert.equal(f.sent.at(-1)?.name, 'permissions');
+    assert.equal(f.sent.at(-1)?.input, 'show');
+    assert.equal(f.session.state.configurationOperations?.at(-1)?.title, 'Copilot command');
+    f.reply({ kind: 'text', text: 'Permission policy: Manual Approval' }); await running;
+    assert.equal(f.sent.some(request => request.method === 'configure'), false);
   } finally { f.session.disconnect('fixture complete'); }
 });
 

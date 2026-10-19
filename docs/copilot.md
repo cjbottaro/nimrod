@@ -105,19 +105,17 @@ Native focus/stacking and visual acceptance remain pending after a requested bui
 
 If you started a task before allowing its tools, you can submit
 `/permissions allow-all` while Copilot is working, or choose
-**Set permissions… → Allow all** in the command palette. These remain
-separate entry points: the slash command uses the generic Command-card queue,
-while the Nimrod action uses its permission configuration owner. Each appears
-only when the runtime advertises the operation. Advertised command-name aliases
-work too.
+**Set permissions…** in the command palette. The action is a shortcut into the
+same advertised `/permissions` command and choice picker; both produce a
+Command card. The action appears only when the runtime advertises the builtin
+permission command. Advertised command-name aliases work too.
 
 If the permission picker is open, press Escape first. This hides it without
 answering its requests. Submit the policy change, then use **Review requests**
 to answer any older requests still waiting.
 
-A slash invocation appears as a pinned **COPILOT COMMAND** card; the Nimrod
-action appears as a pinned **PERMISSION CHANGE** card. Each stops shimmering and
-joins normal transcript flow when its owning path settles. The operation runs independently of queued model changes;
+Either entry appears as a pinned **COPILOT COMMAND** card, stops shimmering and
+joins normal transcript flow when the command settles. The operation runs independently of queued model changes;
 it does not stop or resend your task, replace a newer draft, or answer existing
 permission requests. Copilot's native policy governs subsequent requests.
 

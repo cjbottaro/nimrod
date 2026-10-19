@@ -56,7 +56,10 @@ they have the same visible purpose.
 - Execute slash commands through the owning harness command interface.
 - Never replace `/model`, `/permissions`, `/mcp` or another harness command with
   a Nimrod action.
-- Never implement a Nimrod action by submitting slash text.
+- A Nimrod action may be an explicit harness-command shortcut when the concrete
+  integration contributes it. It must enter the same command owner/lifecycle,
+  produce a Command card and invoke the harness command API—not submit slash
+  text as an ordinary prompt or impersonate a separate native mutation.
 - Shared Nimrod pickers and operation cards may present harness work; UI reuse
   does not change ownership.
 - Harnesses remain authoritative for command meaning, arguments, persistence,
@@ -178,9 +181,11 @@ authoritative readiness transition.
 queue reads the advertised live-use metadata and dispatches through the ordinary
 harness command interface as soon as that metadata permits; authoritative
 permission events reconcile UI state. It needs no permission-specific slash
-executor. Nimrod's **Set permissions…** action is a separate entry point and
-may use a Permission-change operation card plus its own configuration executor.
-Shared native effects do not merge their presentation or dispatch identities.
+executor. Copilot contributes **Set permissions…** as a shortcut that enqueues
+the same advertised `/permissions` command, opens its harness choices and
+produces the same Command card. A future harness can contribute an equivalent
+shortcut for its own permission command. No universal permission command name,
+configuration setting or mutation executor is inferred.
 
 ## UI effects and authoritative reconciliation
 

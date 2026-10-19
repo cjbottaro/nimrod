@@ -15,7 +15,12 @@ Human guide: [Model and thinking preferences](../../../../docs/model-thinking.md
 
 `SessionConfigurationController` owns only latest-wins intents, dependency ordering, validation and operation publication. `ConfigurationAdapter` retains concrete metadata/readiness, mutation and authoritative reconciliation. `ConfigurationDeferred` is exclusively a readiness result proven **before native mutation**: it must never be used when a mutation might have been delivered. A bridge's explicit pre-mutation deferral can arrive after private IPC dispatch; it restores only that attempt's prior dispatch flag and publishes fresh readiness before waiting. Adapters also receive a current-intent predicate and recheck it immediately before dispatch; `ConfigurationSuperseded` retires obsolete metadata preparation without sending its mutation. Ready unrelated settings can proceed without waiting behind a deferred independent setting; prerequisites still run first.
 
-`SessionConfigurationSet` composes independent configuration owners behind this same port. Each owner keeps its own ordering/dependencies/latest-wins queue; a ready live permission operation can bypass deferred or in-flight model work. Combined operation publications remain stable and ordered by first observation. Cross-owner dependencies are unsupported. [Live permissions](live-permissions.md) owns the concrete Copilot mapping and reusable consumer contract.
+`SessionConfigurationSet` composes independent configuration owners behind this
+same port. Each owner keeps its own ordering/dependencies/latest-wins queue.
+Combined operation publications remain stable and ordered by first observation.
+Cross-owner dependencies are unsupported. Permission slash commands and
+shortcuts belong to the separate [harness command owner](live-permissions.md),
+not this configuration port.
 
 The composition helper `sessionConfiguration` accesses the selected concrete owner's port. Session identity, transport, initialization, lifecycle, permissions and prompt/cancel semantics remain bespoke. Status projections read the same confirmed concrete configuration, behind their separate presentation interface.
 
@@ -31,7 +36,14 @@ The composition helper `sessionConfiguration` accesses the selected concrete own
 
 ## Local configuration transcript entries
 
-Configuration uses the shared [Operation card](operation-cards.md) specification: the adapter supplies a stable title, defaulting to **CONFIGURATION CHANGE** (**PERMISSION CHANGE** for the independent permission owner), with literal setting/value content in every state. Queued/applying shimmer and pin; confirmed success becomes a normal-flow marker without a redundant success label. Failed operations have a red accent/Failed/Error details. Connection loss before dispatch produces grey Not applied; potentially dispatched work without confirmation produces grey Outcome unknown. Details remain on the card rather than a duplicate banner.
+Configuration uses the shared [Operation card](operation-cards.md)
+specification: the adapter supplies a stable title, defaulting to
+**CONFIGURATION CHANGE**, with literal setting/value content in every state.
+Queued/applying shimmer and pin; confirmed success becomes a normal-flow marker
+without a redundant success label. Failed operations have a red accent/Failed/Error
+details. Connection loss before dispatch produces grey Not applied; potentially
+dispatched work without confirmation produces grey Outcome unknown. Details
+remain on the card rather than a duplicate banner.
 
 - `SessionConfiguration.cancel(key)` synchronously removes the exact operation only while all represented work is safely withdrawable. Cancel is unavailable during adapter application and after any represented mutation has dispatched, even if a later dependent setting is queued. Revalidate the key/capability at invocation; never erase already-applied evidence.
 - The card's Cancel and bindable **Cancel pending configuration change** palette action share the session-bound dispatcher. If multiple owners have cancellable entries, the palette asks which operation; each card is already key-bound. No default shortcut. Removing a focused Cancel restores the owning composer without scrolling or replacing its draft.
@@ -67,7 +79,9 @@ the tier name as the primary label and a reported/catalog token amount as
 secondary detail when available. Model changes do not carry an effort or context
 tier that may be invalid for the target model.
 
-[Live permission policy](live-permissions.md) uses an independent owner and honours the command's advertised live-use capability; it is not held behind model configuration or old permission callbacks.
+[Permission command shortcuts](live-permissions.md) use the harness command
+owner and advertised live-use capability; they are not session-configuration
+settings or old permission callbacks.
 
 Autopilot intermediate idle is not model/effort/mode/context configuration readiness. Accepted changes
 remain queued until a terminal root idle/abort/error boundary; no host-generated

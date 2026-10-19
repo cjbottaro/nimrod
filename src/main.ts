@@ -1101,6 +1101,7 @@ async function runSessionAction(tab: Tab, id: SessionAction['id']): Promise<void
   if (!tabs.includes(tab) || tab.closing || tab.restarting || tab.deleting || !ACTIONS.some(action => action.id === id) || !sessionActions(tab).some(action => action.id === id)) return;
   if (id === 'cancel-configuration') return pickConfigurationCancellation(tab);
   const action = sessionActions(tab).find(action => action.id === id);
+  if (action?.run) return action.run();
   if (action?.configurationSetting) return pickConfigurationSetting(tab, action.configurationSetting, action.label.replace(/…$/, ''));
   if (id === 'mcp') return inspectMcp(tab);
   if (id === 'acp-options') return pickAcpOption(tab);
