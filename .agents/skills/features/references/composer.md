@@ -10,8 +10,7 @@ model/thinking intent accepted while connected with idle-only application
 SDK abort, with no Pi queue/steer. [Copilot commands](copilot-commands.md) use SDK
 command invocation rather than ordinary prompts or Nimrod action aliases;
 metadata drives argument suggestions and returned choices use a session-bound
-modal. Commands clear immediately without literal previews, recency or forced
-navigation. Ordinary local submission effects still clear/preview immediately; ambiguous results disconnect
+modal. Advertised command intents queue locally during work and execute FIFO at terminal idle; they are not SDK prompt queues. Commands clear immediately with pending operation cards, without literal previews, recency or forced navigation. Ordinary local submission effects still clear/preview immediately; ambiguous results disconnect
 without replay/restoring sent text/images. The shared composer uses the [message-input port](image-paste.md#message-input-interface) for text/image messages; clipboard/draft storage is independent of transport support. [SDK events](copilot-sdk.md#send-events-controls-and-decisions)
 own echo reconciliation, cancellation and decisions. New fixtures are unrun.
 

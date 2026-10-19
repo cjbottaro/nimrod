@@ -9,6 +9,8 @@ import type { TranscriptLogSink } from '../transcript-logs';
 import { copilotToolResult } from './tool-result';
 import { createCopilotStatusArea } from './status-area';
 import { CopilotUsageController } from './usage';
+import { CopilotCommandQueue } from './command-queue';
+import type { ConfigurationOperation } from '../session-configuration';
 import { initialCopilotUsage, type CopilotUsageSeed } from './usage-seed';
 import { createCopilotConfiguration } from './session-configuration';
 import { createCopilotPermissionConfiguration, isPermissionChange, permissionCommand, permissionArgument } from './permission-configuration';
@@ -54,7 +56,10 @@ export class CopilotSession {
     messages: [], sessionUnavailable: true, busy: false, status: 'Connecting Copilot…',
   };
   commands: CopilotCommand[] = [];
-  private commandOperation?: AbortController;
+  private commandOperation?: AbortSignal;
+  private readonly commandQueue: CopilotCommandQueue;
+  private configurationSource?: readonly ConfigurationOperation[];
+  private commandSource?: readonly ConfigurationOperation[];
   private revision = 0;
   private indices = new Map<string, number>();
   private events = new Set<string>();
@@ -88,7 +93,7 @@ export class CopilotSession {
       return send(message);
     }, packet => this.packet(packet), reason => {
       this.capture('bridge.disconnected', { reason });
-      this.ended = true; this.cancelDecisions(); this.commandOperation?.abort(); this.configuration?.dispose(reason); this.usage?.dispose(); this.finish();
+      this.ended = true; this.cancelDecisions(); this.commandQueue?.cancel(reason); this.configuration?.dispose(reason); this.usage?.dispose(); this.finish();
       this.state = { ...this.state, sessionUnavailable: true, busy: false, status: 'Disconnected' };
       this.publish(); ui.disconnected(reason);
     });
@@ -110,11 +115,14 @@ export class CopilotSession {
       apply: (value, current, dispatched) => this.applyPermissions(value, current, dispatched), changed: () => this.publish([]),
     });
     this.configuration = new SessionConfigurationSet([this.modelConfiguration, this.permissionConfiguration]);
+    this.commandQueue = new CopilotCommandQueue(
+      () => !this.ended && !this.state.sessionUnavailable && !this.state.busy && !this.configuring && !this.permissionChanging && !this.commandOperation,
+      (id, text, signal, dispatched) => this.runCommand(id, text, { signal }, dispatched), () => this.publish([]));
     this.usage = new CopilotUsageController(() => this.connection.request('usage', {}, 'reject'), () => this.publish([]),
       () => this.configuring ? Promise.resolve(null) : this.connection.request('context', {}, 'reject'));
     this.updateStatusArea();
   }
-  get canSubmit(): boolean { return !this.ended && !this.state.sessionUnavailable && !this.state.busy && !this.configuring && !this.permissionChanging && !this.commandOperation; }
+  get canSubmit(): boolean { return !this.ended && !this.state.sessionUnavailable && !this.state.busy && !this.configuring && !this.permissionChanging && !this.commandOperation && !this.commandQueue?.occupied; }
   supports(kind: 'model' | 'thinking' | 'mode' | 'context'): boolean {
     const model = this.models.find(model => model.id === this.model);
     return kind === 'model' ? this.models.length > 0 : kind === 'thinking'
@@ -127,15 +135,17 @@ export class CopilotSession {
       if (!permissionCommand(this.commands)) return 'Copilot did not advertise /permissions allow-all. Nothing was invoked; your draft was kept.';
       return;
     }
-    if (!this.canSubmit) return 'Copilot is not idle or is still connecting. Your draft was kept.';
+    if (this.ended || this.state.sessionUnavailable) return 'Connect Copilot before sending. Your draft was kept.';
     if (text.trimStart().startsWith('/')) {
       const invocation = parseCopilotCommand(text);
       const command = invocation && findCopilotCommand(this.commands, invocation.name);
       if (!command) return 'This command is not advertised by Copilot. Nothing was invoked; your draft was kept.';
       if (command.input?.required && !command.input.choices?.length && !invocation?.input?.trim()) return `/${command.name} requires input: ${command.input.hint}. Your draft was kept.`;
+      return;
     }
+    if (!this.canSubmit) return 'Copilot is not idle or is still connecting. Your draft was kept.';
   }
-  cancelCommands(): void { this.commandOperation?.abort(); }
+  cancelCommands(): void { this.commandQueue.cancel(); }
   receive(packet: unknown): void {
     if (record(packet) && !['event', 'connected', 'permission', 'input', 'plan'].includes(String(packet.kind)))
       this.capture(`bridge.${String(packet.kind)}`, packet);
@@ -158,14 +168,13 @@ export class CopilotSession {
     this.capture('ui.action', message);
     if (message.type === 'renderError') { this.ui.notice(String(message.error)); return; }
     if (message.type === 'stop') {
-      this.commandOperation?.abort();
+      this.cancelCommands();
       if (this.state.busy) { this.stopped = true; this.cancelDecisions(); await this.connection.request('cancel'); }
       return;
     }
     if (message.type !== 'prompt' && message.type !== 'command') return;
     const id = String(message.id ?? ''), text = typeof message.text === 'string' ? message.text : '';
-    const invalid = !this.canSubmit && !isPermissionChange(this.commands, text)
-      ? 'Copilot is not idle or is still connecting. Nothing was sent.' : this.validatePrompt(text);
+    const invalid = this.validatePrompt(text);
     let images: ImageContent[];
     try { images = validateMessageImages(message.images, this.messageInput.capabilities()); }
     catch (error) { this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', error: String(error) }); return; }
@@ -173,7 +182,10 @@ export class CopilotSession {
       this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', error: invalid || 'Invalid Copilot message. Images require a message, not a slash command.' }); return;
     }
     if (isPermissionChange(this.commands, text)) { await this.acceptPermissionIntent(id); return; }
-    if (text.trimStart().startsWith('/')) { await this.runCommand(id, text); return; }
+    if (text.trimStart().startsWith('/')) {
+      this.ui.publish({ type: 'submissionReceipt', id, outcome: 'accepted' });
+      await this.commandQueue.enqueue(id, text); return;
+    }
     if (message.type === 'command') {
       this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', error: 'Invalid Copilot slash command. Nothing was invoked.' }); return;
     }
@@ -211,16 +223,18 @@ export class CopilotSession {
     this.replace(key, { key, role: 'command', originLabel: `Copilot command · /${command}`, isError: error,
       content: [{ type: markdown ? 'text' : 'raw', text }] });
   }
-  private async runCommand(id: string, text: string): Promise<void> {
+  private async runCommand(id: string, text: string, operation: { signal: AbortSignal }, dispatched: () => void): Promise<void | boolean> {
     const invocation = parseCopilotCommand(text)!;
-    const operation = new AbortController();
     let invoked = false;
-    this.commandOperation = operation;
+    this.commandOperation = operation.signal;
     this.state = { ...this.state, status: `Running /${invocation.name}…` };
     this.publish([]);
     try {
       let name = invocation.name, input = invocation.input;
       const command = findCopilotCommand(this.commands, name);
+      if (!command) throw new Error('This command is not advertised by Copilot anymore. Nothing was invoked.');
+      if (command.input?.required && !command.input.choices?.length && !input?.trim())
+        throw new Error(`/${command.name} now requires input: ${command.input.hint}. Nothing was invoked.`);
       // Some SDK commands default to text output when invoked bare, even though
       // their TUI presents argument choices. Use advertised metadata before any
       // invocation; do not execute a default action just to discover its menu.
@@ -228,10 +242,7 @@ export class CopilotSession {
         if (!this.ui.commandChoice) throw new Error('This Copilot command requires an argument picker that is unavailable.');
         const choices = commandChoices(command.input.choices);
         const selected = await this.ui.commandChoice(`Copilot /${command.name}`, choices, operation.signal);
-        if (operation.signal.aborted || this.ended || selected === undefined) {
-          if (!this.ended) this.ui.publish({ type: 'submissionReceipt', id, outcome: 'cancelled' });
-          return;
-        }
+        if (operation.signal.aborted || this.ended || selected === undefined) return false;
         if (!choices.some(choice => choice.id === selected)) throw new Error('The Copilot command argument is no longer valid.');
         const current = findCopilotCommand(this.commands, name);
         if (!current || current.name !== command.name || !current.input?.choices?.some(choice => choice.name === selected)) throw new Error('Copilot command choices changed. Open the picker again.');
@@ -239,9 +250,9 @@ export class CopilotSession {
       }
       // Each iteration requires a fresh user choice; never retry an invocation.
       while (!operation.signal.aborted && !this.ended) {
-        if (isPermissionChange(this.commands, `/${name} ${input ?? ''}`)) { await this.acceptPermissionIntent(id); return; }
+        if (isPermissionChange(this.commands, `/${name} ${input ?? ''}`)) { await this.acceptPermissionIntent(id); return false; }
         if (this.state.busy) throw new Error('Copilot started working before the command could be invoked. Nothing was invoked again.');
-        invoked = true; this.usage.workStarted();
+        invoked = true; dispatched(); this.usage.workStarted();
         const result = await this.connection.request('command', { name, ...(input !== undefined ? { input } : {}) });
         if (operation.signal.aborted || this.ended) return;
         if (!record(result) || typeof result.kind !== 'string') throw new Error('Copilot returned an invalid command result.');
@@ -252,10 +263,7 @@ export class CopilotSession {
           const choices = commandChoices(result.options);
           if (!choices.length || !this.ui.commandChoice) throw new Error('This Copilot command requires a selection that is unavailable.');
           const selected = await this.ui.commandChoice(result.title, choices, operation.signal);
-          if (operation.signal.aborted || this.ended || selected === undefined) {
-            if (!this.ended) this.ui.publish({ type: 'submissionReceipt', id, outcome: 'cancelled' });
-            return;
-          }
+          if (operation.signal.aborted || this.ended || selected === undefined) return false;
           if (!choices.some(choice => choice.id === selected)) throw new Error('The Copilot command choice is no longer valid.');
           name = result.command; input = selected;
           continue;
@@ -270,10 +278,7 @@ export class CopilotSession {
           const choices = this.models.map(model => ({ id: model.id, label: model.name, detail: model.id }));
           if (!choices.length) throw new Error('Copilot did not advertise models for this command dialog.');
           const selected = await this.ui.commandChoice('Copilot model', choices, operation.signal);
-          if (operation.signal.aborted || this.ended || selected === undefined) {
-            if (!this.ended) this.ui.publish({ type: 'submissionReceipt', id, outcome: 'cancelled' });
-            return;
-          }
+          if (operation.signal.aborted || this.ended || selected === undefined) return false;
           if (!choices.some(choice => choice.id === selected)) throw new Error('The Copilot model choice is no longer valid.');
           // Ask the command to interpret the selected argument; this is not the
           // Nimrod Select model action or a speculative prompt fallback.
@@ -313,11 +318,9 @@ export class CopilotSession {
         return;
       }
     } catch (error) {
-      if (!this.ended && !operation.signal.aborted) {
-        this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', operation: 'Run Copilot command', error: `Copilot command did not finish: ${String(error)} Nothing was retried or sent as a fallback prompt.` });
-      }
+      if (!this.ended && !operation.signal.aborted) throw new Error(`Copilot command did not finish: ${String(error)} Nothing was retried or sent as a fallback prompt.`);
     } finally {
-      if (this.commandOperation === operation) this.commandOperation = undefined;
+      if (this.commandOperation === operation.signal) this.commandOperation = undefined;
       if (!this.ended && !this.state.busy) this.state = { ...this.state, status: 'Idle' };
       this.publish([]);
       if (!this.ended && invoked) { this.usage.refresh(); this.usage.refreshContext(); }
@@ -620,14 +623,19 @@ export class CopilotSession {
   private publish(rows?: DisplayMessage[]): void {
     if (this.replaying) return;
     this.updateStatusArea();
-    if (this.configuration && this.state.configurationOperations !== this.configuration.operations) {
-      this.capture('ui.configuration', { operations: this.configuration.operations });
-      this.state = { ...this.state, configurationOperations: this.configuration.operations };
+    if (this.configuration && (this.configurationSource !== this.configuration.operations || this.commandSource !== this.commandQueue?.operations)) {
+      this.configurationSource = this.configuration.operations;
+      this.commandSource = this.commandQueue?.operations;
+      const operations = [...this.configurationSource, ...(this.commandSource || [])];
+      this.capture('ui.configuration', { operations });
+      // Reuse local operation presentation/placement, never harness history.
+      this.state = { ...this.state, configurationOperations: operations };
     }
     const base = this.revision++;
     const state = this.waitingStatus ? { ...this.state, status: this.waitingStatus } : this.state;
     this.ui.publish({ type: 'snapshot', state, commands: this.commands, transcript: { base, revision: this.revision, ...(rows ? { rows } : {}) } }); this.ui.changed();
     this.configuration?.update();
+    this.commandQueue?.update();
   }
 }
 function toolKind(name?: string): string {

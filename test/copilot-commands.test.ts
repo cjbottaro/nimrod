@@ -13,12 +13,12 @@ const catalog = [{ name: 'permissions', aliases: ['perms'], description: 'Manage
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 const resultOnlyCatalog = catalog.map(({ input: _input, ...command }) => command);
 async function fixture(commandChoice?: CopilotSessionUi['commandChoice'], commands: unknown[] = catalog) {
-  const sent: BridgeRequest[] = [], published: ConversationViewMessage[] = [], notices: string[] = [];
+  const sent: BridgeRequest[] = [], published: ConversationViewMessage[] = [], notices: string[] = [], completions: boolean[] = [];
   const session: CopilotSession = new CopilotSession(async request => {
     sent.push(request);
     if (['usage', 'context'].includes(request.method)) queueMicrotask(() => session.receive({ kind: 'result', id: request.id, result: request.method === 'usage' ? {} : null }));
   }, {
-    publish: message => published.push(message), changed() {}, identified() {}, disconnected() {}, completed() { throw new Error('Local command must not announce a completed agent turn'); },
+    publish: message => published.push(message), changed() {}, identified() {}, disconnected() {}, completed(failed) { completions.push(failed); },
     notice: message => notices.push(message), decision: async () => undefined, commandChoice,
   });
   const reply = (result: unknown, method = 'command') => {
@@ -28,7 +28,7 @@ async function fixture(commandChoice?: CopilotSessionUi['commandChoice'], comman
   const ready = session.initialize(); reply(null, 'initialize'); await flush();
   session.receive({ kind: 'connected', sessionId: 'fixture', events: [], models: [], model: {} });
   session.receive({ kind: 'commands', commands }); reply(null, 'connect'); await ready; await flush();
-  return { session, sent, published, notices, reply };
+  return { session, sent, published, notices, completions, reply };
 }
 
 test('SDK command metadata retains aliases, hints and choices, without synthetic GUI commands', () => {
@@ -84,6 +84,7 @@ test('text commands invoke the SDK once, render labelled output, and never becom
     assert.equal(f.sent.some(request => request.method === 'prompt'), false);
     assert.equal(f.session.canSubmit, true);
     assert.equal(f.published.some(message => message.type === 'submissionMessage'), false);
+    assert.deepEqual(f.completions, []);
   } finally { f.session.disconnect('fixture complete'); }
 });
 
@@ -181,7 +182,10 @@ test('new catalog commands work mechanically; unknown, malformed and unsupported
     for (const result of [{ kind: 'future-host-effect' }, { kind: 'select-subcommand', command: 'future', title: 'Bad', options: [{}] }]) {
       const handling = f.session.handle({ type: 'command', id: 'future', text: '/future' });
       f.reply(result); await handling;
-      assert.match(String(f.published.filter(message => message.type === 'submissionReceipt' && message.id === 'future').at(-1)?.error), /No.*fallback|Nothing was retried/);
+      const operation = f.session.state.configurationOperations!.at(-1)!;
+      assert.equal(operation.phase, 'failed');
+      assert.match(operation.details!, /No.*fallback|Nothing was retried/);
+      assert.equal(f.published.some(message => message.type === 'submissionReceipt' && message.outcome === 'rejected'), false, 'the operation card owns the error');
     }
     assert.equal(f.sent.some(request => ['prompt', 'configure'].includes(request.method)), false);
     const done = f.session.handle({ type: 'command', id: 'done', text: '/future' });
@@ -214,5 +218,72 @@ test('only an explicit interactive agent-prompt result sends model work', async 
     assert.equal(f.sent.at(-1)!.method, 'prompt'); assert.equal(f.sent.at(-1)!.text, 'Harness-expanded content');
     f.reply({ messageId: 'accepted' }, 'prompt'); await handling;
     assert.equal(f.session.state.messages[0].content, 'Visible command request');
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('busy /allow-all and subsequent commands queue FIFO until terminal root idle, without prompts or draft effects', async () => {
+  const f = await fixture(undefined, [{ name: 'allow-all', aliases: ['allow'], kind: 'builtin' }, ...catalog]);
+  try {
+    f.session.receive({ kind: 'event', event: { id: 'working', type: 'assistant.turn_start', data: {} } });
+    assert.equal(f.session.validatePrompt('/allow-all'), undefined);
+    assert.match(f.session.validatePrompt('newer ordinary draft')!, /not idle/);
+    assert.match(f.session.validatePrompt('/unknown')!, /not advertised/);
+    const first = f.session.handle({ type: 'command', id: 'first', text: '/allow' });
+    const second = f.session.handle({ type: 'command', id: 'second', text: '/permissions show  literal\nmore ' });
+    assert.equal(f.sent.some(request => request.method === 'command'), false);
+    const operations = f.session.state.configurationOperations!;
+    assert.deepEqual(operations.map(operation => operation.phase), ['queued', 'queued']);
+    f.session.receive({ kind: 'event', event: { id: 'child-idle', agentId: 'child', type: 'session.idle', data: {} } });
+    f.session.receive({ kind: 'event', event: { id: 'autopilot-idle', type: 'session.idle', data: { mode: 'autopilot' } } });
+    assert.equal(f.sent.some(request => request.method === 'command'), false);
+    assert.equal(f.session.state.configurationOperations, operations, 'streaming/idle observations retain progress identity');
+    f.session.receive({ kind: 'event', event: { id: 'terminal', type: 'session.idle', data: { mode: 'interactive' } } });
+    assert.equal(f.sent.filter(request => request.method === 'command').length, 1);
+    assert.equal(f.sent.filter(request => request.method === 'command').at(-1)!.name, 'allow');
+    f.reply({ kind: 'completed' }); await first; await flush();
+    assert.equal(f.sent.filter(request => request.method === 'command').length, 2);
+    assert.equal(f.sent.filter(request => request.method === 'command').at(-1)!.input, 'show  literal\nmore ');
+    f.reply({ kind: 'text', text: 'Report' }); await second;
+    assert.deepEqual(f.session.state.configurationOperations!.map(operation => operation.phase), ['completed', 'completed']);
+    assert.equal(f.sent.some(request => request.method === 'prompt'), false);
+    assert.equal(f.published.some(message => message.type === 'setEditorText' || message.type === 'submissionMessage'), false);
+    assert.deepEqual(f.completions, [false], 'only the actual agent turn announces completion');
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('queued command choices wait for idle, and switching away, Stop or disconnect prevents dispatch', async () => {
+  for (const cancel of ['hidden', 'stop', 'disconnect']) {
+    let shown = 0;
+    const f = await fixture(async () => { shown++; return 'show'; });
+    f.session.receive({ kind: 'event', event: { id: 'working', type: 'assistant.turn_start', data: {} } });
+    const handling = f.session.handle({ type: 'command', id: cancel, text: '/permissions' });
+    assert.equal(shown, 0);
+    if (cancel === 'disconnect') f.session.disconnect('fixture closed');
+    else if (cancel === 'hidden') f.session.cancelCommands();
+    else {
+      const stopping = f.session.handle({ type: 'stop' });
+      f.reply(null, 'cancel'); await stopping;
+    }
+    await handling;
+    if (cancel !== 'disconnect') f.session.receive({ kind: 'event', event: { id: 'terminal', type: 'session.idle', data: {} } });
+    assert.equal(shown, 0);
+    assert.equal(f.sent.some(request => request.method === 'command'), false);
+    assert.equal(f.session.state.configurationOperations?.length, cancel === 'disconnect' ? 1 : 0);
+    if (cancel === 'disconnect') assert.equal(f.session.state.configurationOperations![0].phase, 'not-applied');
+    f.session.disconnect('fixture complete');
+  }
+});
+
+test('queued commands revalidate revoked advertisement without invoking or replaying', async () => {
+  const f = await fixture();
+  try {
+    f.session.receive({ kind: 'event', event: { id: 'working', type: 'assistant.turn_start', data: {} } });
+    const handling = f.session.handle({ type: 'command', id: 'revoked', text: '/permissions show' });
+    f.session.receive({ kind: 'commands', commands: [] });
+    f.session.receive({ kind: 'event', event: { id: 'terminal', type: 'session.idle', data: {} } });
+    await handling;
+    assert.equal(f.sent.some(request => ['command', 'prompt'].includes(request.method)), false);
+    assert.equal(f.session.state.configurationOperations![0].phase, 'failed');
+    assert.match(f.session.state.configurationOperations![0].details!, /not advertised/);
   } finally { f.session.disconnect('fixture complete'); }
 });
