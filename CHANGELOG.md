@@ -57,6 +57,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Local Linux builds now select an executable build instead of macOS app packaging and stage the compiler helper and runtime resources alongside it.
+
 - Advertised Copilot slash commands, including `/allow-all`, now queue while the agent is working instead of rejecting the submitted draft. Commands execute once in FIFO order at terminal idle, with pending operation cards; switching sessions, Stop or disconnect withdraws undispatched commands without replay. The existing `/permissions allow-all` live-policy path remains independent. New offline fixtures are authored but unrun; native acceptance remains pending.
 
 - Keep Pixel dissolve's fade mask aligned with the full modal at different zoom levels, avoiding an undersized reveal that pops to the final size when the effect ends. Decorative animation layers fill their viewport without oversizing it.

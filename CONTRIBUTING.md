@@ -85,13 +85,26 @@ The standalone [macOS blur probe](tools/blur-probe/README.md) isolates AppKit ve
 
 ## App builds
 
+On an Atomic Linux host such as Bazzite, build inside your development distrobox rather than installing development libraries on the host. For the current `devbox` container:
+
+```sh
+distrobox enter devbox
+cd ~/Projects/nimrod
+mise trust
+mise install
+npm ci
+mise run build
+```
+
+A fresh Fedora container needs `gcc gcc-c++ make pkgconf-pkg-config webkit2gtk4.1-devel openssl-devel libappindicator-gtk3-devel librsvg2-devel libxdo-devel fontconfig-devel freetype-devel` installed with `sudo dnf install`. Install dependencies and run npm/Cargo in the same container. The executable depends on that environment’s native libraries; building it there does not establish that it can run directly on the host.
+
 Do not automatically build/package for validation, task completion or merge/cleanup. Run only on an explicit app-build request:
 
 ```sh
 mise run build
 ```
 
-This packages and verifies the current checkout. An agent-directed **build the app** request also includes staging and publishing the finished artifact to the primary checkout's CLI-visible default location. Before merge, build the task worktree's source with its own targets; after merge, build main when asked. Completed significant work is merged under the worktree workflow above, independently of builds. A build request does not authorize launching/quitting/restarting the user's app.
+On macOS this packages and verifies the current checkout’s `.app`. On Linux it builds a local executable with adjacent runtime resources and the esbuild helper; it does not produce an RPM, Debian package or AppImage. An agent-directed **build the app** request also includes staging and publishing the finished artifact to the primary checkout's CLI-visible default location. Before merge, build the task worktree's source with its own targets; after merge, build main when asked. Completed significant work is merged under the worktree workflow above, independently of builds. A build request does not authorize launching/quitting/restarting the user's app.
 
 - macOS: `src-tauri/target/release/bundle/macos/Nimrod.app`
 - Linux: `src-tauri/target/release/nimrod`, with the same-build `esbuild` sidecar beside it.
