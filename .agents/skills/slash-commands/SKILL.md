@@ -120,8 +120,10 @@ The Command card owns one invocation from accepted intent through terminal
 outcome:
 
 - Create it immediately after local validation accepts the command.
-- Retain one stable card/key while queued, collecting interaction, invoking and
-  settling.
+- Retain one stable card/key while queued, collecting interaction, waiting for
+  harness readiness, invoking and settling.
+- Keep it in the shared bottom-pinned stack while any accepted work remains
+  pending, including a human picker/input or a harness-required idle boundary.
 - Shimmer only its command title while pending.
 - Put typed command results into that same card rather than appending a separate
   request card and response row.
@@ -144,6 +146,41 @@ cancellation, settlement, failure/uncertainty semantics and accessibility. It
 does not force reports, state changes and agent prompts into identical terminal
 layouts. A slash command is one operation, so separate request/response cards
 are inappropriate unless the harness actually reports independent operations.
+
+### Deferred execution and readiness
+
+An accepted slash command should execute as soon as its concrete harness
+semantics permit; immediate dispatch is not required. Acceptance creates the
+Command card immediately, while the owning integration waits for an
+authoritative readiness transition.
+
+- Pending cards remain pinned and shimmering while queued, collecting required
+  user interaction, or waiting for the harness's supported dispatch boundary.
+- Dispatch at the earliest safe boundary reported by the concrete integration:
+  for example terminal idle, or an advertised live-use capability.
+- Do not poll, stop work, reconnect, submit a hidden prompt, replay the command
+  or treat a child/intermediate idle event as readiness unless the harness
+  contract explicitly does.
+- Preserve accepted FIFO ordering within one command owner unless that harness
+  defines independent semantic domains. An independent live-capable owner may
+  bypass an unrelated queue only when the concrete contract guarantees it.
+- A command accepted during work remains bound to its originating session and
+  exact advertised command/arguments. Revalidate catalog and choice provenance
+  immediately before dispatch.
+- Cancellation removes the pinned card only while the entire command can still
+  be withdrawn. After possible dispatch, retain the honest confirmed or unknown
+  outcome.
+- On terminal success/failure/known cancellation, unpin the retained card and
+  place it in normal transcript flow at its ordered settlement boundary. Later
+  output never drags it back to the bottom.
+
+`/permissions <setting>` is the reference specialized case. The slash command
+must remain a Command card even if a separate permission-policy executor handles
+readiness, mutation and authoritative reconciliation. If Copilot advertises
+live use, dispatch at that supported boundary; otherwise keep the card pending
+until terminal idle. Nimrod's **Select permissions…** action is a separate entry
+point and may use a Permission-change operation card. Shared execution code does
+not merge their presentation identities.
 
 ## UI effects and authoritative reconciliation
 
@@ -239,7 +276,8 @@ new version still needs it.
 - Background results and modal choices stay bound to the originating session;
   they never navigate or steal focus.
 - Busy behavior comes from the concrete harness. Queue accepted command intent
-  only when the integration documents that lifecycle.
+  and keep its Command card pinned only when the integration documents that
+  lifecycle/readiness.
 - Unknown effects do not become success-shaped output.
 - Operation-specific failures belong on the operation card, not duplicated in a
   session notice.
