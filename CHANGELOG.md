@@ -36,6 +36,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- Completed Copilot slash-command cards now remain immediately before the output they produced instead of settling below that result. Pending placement, reader position, focus and command execution are unchanged.
+
 - Nimrod is now licensed under GNU AGPLv3 only instead of MIT. Third-party licenses and previously granted MIT permissions are unchanged; see [License](README.md#license).
 
 - Copilot questions now use a sequential Question picker instead of an inline form above the composer. **Enter your own answer…** opens a nested input modal, like permission denial feedback. Escape dismisses without answering; a session-local **Answer question** banner reopens pending questions. Drafts stay untouched, and background questions never replace another dialog. Native acceptance remains pending.

@@ -184,7 +184,7 @@ export class CopilotSession {
     if (isPermissionChange(this.commands, text)) { await this.acceptPermissionIntent(id); return; }
     if (text.trimStart().startsWith('/')) {
       this.ui.publish({ type: 'submissionReceipt', id, outcome: 'accepted' });
-      await this.commandQueue.enqueue(id, text); return;
+      await this.commandQueue.enqueue(id, text, this.state.messages.at(-1)?.key ?? null); return;
     }
     if (message.type === 'command') {
       this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', error: 'Invalid Copilot slash command. Nothing was invoked.' }); return;

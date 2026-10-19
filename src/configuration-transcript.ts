@@ -2,7 +2,7 @@ import type { RenderMessage } from './conversation-view-host';
 import type { ConfigurationOperation } from './session-configuration';
 
 // An undefined terminal anchor means the transcript was empty: before future rows.
-interface Entry { operation: ConfigurationOperation; row: RenderMessage; anchor?: string; }
+interface Entry { operation: ConfigurationOperation; row: RenderMessage; anchor?: string; fixedAnchor: boolean; }
 function transcriptTail(messages: RenderMessage[]): string | undefined {
   for (let index = messages.length - 1; index >= 0; index--) if (!messages[index].sticky) return messages[index].key;
   return undefined;
@@ -30,13 +30,18 @@ export class ConfigurationTranscript {
           : operation.phase === 'failed' ? 'failed' : operation.phase === 'unknown' ? 'unknown' : 'not-applied',
           details: operation.details, cancelId: operation.cancellable ? operation.key : undefined } };
       let anchor = before?.anchor;
+      const fixedAnchor = before?.fixedAnchor ?? operation.settlementAnchor !== undefined;
       if (!sticky && (!before || before.row.sticky)) {
         // Observe the terminal boundary synchronously, not at the next (possibly
-        // hidden/coalesced) paint. Pending/content-only updates never read history.
-        if (!capturedTail) { tail = transcriptTail(messages()); capturedTail = true; }
-        anchor = tail;
+        // hidden/coalesced) paint. Some operations capture an earlier boundary
+        // so their own result rows cannot appear before the operation card.
+        if (operation.settlementAnchor !== undefined) anchor = operation.settlementAnchor ?? undefined;
+        else {
+          if (!capturedTail) { tail = transcriptTail(messages()); capturedTail = true; }
+          anchor = tail;
+        }
       }
-      this.entries.set(operation.key, { operation, row, anchor });
+      this.entries.set(operation.key, { operation, row, anchor, fixedAnchor });
       rows.push(row);
     }
     for (const key of this.entries.keys()) if (!keys.has(key)) { this.entries.delete(key); structural = true; }
@@ -50,7 +55,8 @@ export class ConfigurationTranscript {
       if (entry.row.sticky) { sticky.push(entry.row); continue; }
       // If history removed an anchor, settle once at the remaining tail (or
       // start for empty history), rather than following every future append.
-      if (entry.anchor !== undefined && !keys.has(entry.anchor)) entry.anchor = transcriptTail(messages);
+      if (entry.anchor !== undefined && !keys.has(entry.anchor))
+        entry.anchor = entry.fixedAnchor ? undefined : transcriptTail(messages);
       const rows = anchored.get(entry.anchor) || []; rows.push(entry.row); anchored.set(entry.anchor, rows);
     }
     const result: RenderMessage[] = [...(anchored.get(undefined) || [])];

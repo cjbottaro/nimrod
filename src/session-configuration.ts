@@ -20,6 +20,8 @@ export interface ConfigurationOperation {
   readonly details?: string;
   readonly cause?: 'connection';
   readonly cancellable?: boolean;
+  /** Pre-result transcript boundary for operations whose own output is appended before settlement. Null means before the first row. */
+  readonly settlementAnchor?: string | null;
 }
 /** Narrow, session-bound configuration port; no transport, lifecycle or UI authority. */
 export interface SessionConfiguration {

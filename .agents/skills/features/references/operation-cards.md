@@ -30,6 +30,11 @@ Outcome unknown means the operation may have taken effect without confirmation. 
 - Queued/preparing/applying remain pending until the owner establishes a terminal outcome. A transport/enqueue acknowledgement is not necessarily completion.
 - Same-operation replacement updates the retained card when supported. Supersession of dispatched work remains feature-specific.
 - Settlement stops shimmer, unpins and retains the mounted card/title/content. Capture the position at the ordered outcome snapshot, not a later paint. Anchor local markers after the then-current non-sticky tail, or before future entries when empty. Later entries never drag settled markers to the bottom.
+- If an operation synchronously produces its own transcript result before its
+  terminal publication, its concrete owner may capture the pre-result boundary
+  at intent acceptance. Settlement uses that explicit boundary so the operation
+  precedes its own output; unrelated configuration operations retain
+  outcome-snapshot anchoring.
 - An authoritative harness user event adopts its existing preview at the harness's position instead of inserting a second receipt. Retain the runtime operation title on that adopted article. Do not write operation metadata into harness history or reconstruct it on Resume.
 - Coalesced/hidden rendering cannot change settlement ordering. If history replacement removes a local anchor, settle once at the remaining tail (or empty start).
 - No forced scrolling/focus, draft changes, replay or repeated navigation. Existing local Send auto-follow policy still applies at submission, never at acceptance.

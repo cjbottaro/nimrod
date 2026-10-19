@@ -80,6 +80,7 @@ test('text commands invoke the SDK once, render labelled output, and never becom
     assert.equal(f.session.state.busy, false);
     assert.equal(f.session.validatePrompt('Newer draft') !== undefined, true);
     f.reply({ kind: 'text', text: '<literal> permission report', markdown: false }); await handling;
+    assert.equal(f.session.state.configurationOperations?.[0].settlementAnchor, null);
     const output = f.session.state.messages[0];
     assert.equal(output.role, 'command'); assert.match(output.originLabel!, /Copilot command/);
     assert.deepEqual(output.content, [{ type: 'raw', text: '<literal> permission report' }]);
