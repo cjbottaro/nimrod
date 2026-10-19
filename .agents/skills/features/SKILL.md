@@ -52,6 +52,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Copilot scope-labelled approval choices, sequential permission picker, nested feedback and Review requests banner | [Copilot permissions](references/copilot-sdk.md#permission-choices-and-interaction) | [Permissions](../../../docs/copilot.md#permissions-and-questions) |
 | Copilot Question picker, nested custom answers and pending-question banner | [Copilot questions](references/copilot-sdk.md#questions-and-custom-answers) | [Questions](../../../docs/copilot.md#permissions-and-questions) |
 | Copilot reported AIC/estimated USD, compact context utilization and optional metadata lifetime | [Copilot usage metrics](references/copilot-sdk.md#usage-metrics) | [Copilot usage](../../../docs/copilot.md#usage-metrics) |
+| Slash-command ownership, lifecycle, generic result handling, reconciliation, audits and adapter criteria | [Slash commands skill](../slash-commands/SKILL.md), [shared ownership](references/harness-presentation.md#harness-command-ownership) | Integration-specific user guides |
 | Copilot command discovery, argument suggestions, harness-owned modal choices and command output | [Copilot slash commands](references/copilot-commands.md) | [Copilot commands](../../../docs/copilot.md#slash-commands) |
 | Project identity, recent projects, session lifecycle and draft storage | [Projects/sessions](references/projects-and-sessions.md) | [Projects](../../../docs/projects.md), [Sessions](../../../docs/sessions.md) |
 | Ordering, pinning, native row menus, activation, connection and cleanup selection | [Session navigation](references/session-navigation.md) | [Sidebar navigation](../../../docs/session-sidebar.md#ordering-and-navigation) |
@@ -64,7 +65,6 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Pi framing, response order and result correlation | [Pi transport](references/pi-transport.md) | [Writing messages](../../../docs/writing-messages.md) |
 | Consumer-oriented interface direction, lifecycle contracts and candidate inventory | [Consumer interfaces](references/consumer-interfaces.md) | Internal architecture only |
 | Shared presentation contracts, harness UI contributions and extraction rationale | [Harness presentation](references/harness-presentation.md) | [ACP sessions](../../../docs/acp.md), [Plugin authoring](../../../docs/card-plugin-api.md) |
-| Cross-harness slash-command ownership, generic plumbing and narrow adapter policy | [Harness command ownership](references/harness-presentation.md#harness-command-ownership) | Integration-specific user guides |
 | Retained internal ACP protocol/adapters and historical POC boundaries | [ACP harnesses](references/acp-harnesses.md) | [ACP sessions (POC)](../../../docs/acp.md) |
 | Native per-session drafts, debounced saves and submission durability | [Native drafts](references/native-drafts.md) | [Drafts](../../../docs/drafts.md) |
 | Send/steer/queue, pending turns and recovery | [Composer](references/composer.md) | [Writing messages](../../../docs/writing-messages.md) |

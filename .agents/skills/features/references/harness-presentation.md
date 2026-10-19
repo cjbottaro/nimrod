@@ -33,6 +33,10 @@ The initial POC aliased `mountPiView` and introduced `ViewHost.acp` branches. It
 
 ### Harness command ownership
 
+The dedicated [slash commands skill](../../slash-commands/SKILL.md) owns the
+cross-harness implementation workflow, compatibility-audit method and review
+checklist. This section owns the architectural boundary.
+
 Harness commands and Nimrod actions are separate user entry points, even when
 they overlap in visible purpose. A harness slash command remains owned by that
 harness: discover, validate and execute it through the harness's command
