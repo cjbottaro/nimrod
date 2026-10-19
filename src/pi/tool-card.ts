@@ -2,7 +2,7 @@ import { acpToolPlugin } from '../acp/card-plugins';
 import { bundledCopilotPlugin } from '../copilot/card-plugins';
 import { type CardRenderer } from './card-renderer';
 import { DomCardController, presentationPlugin, type DomCardRenderer, type CardDomHost } from './dom-card-renderer';
-import { associateOutputViewport } from './card-shell';
+import { associateOutputViewport, createCardSummary } from './card-shell';
 import { renderLiteralOutput } from './literal-output';
 import { sectionOutputSource } from './output-source';
 import { bundledToolRenderer } from './card-plugins/registry';
@@ -27,7 +27,7 @@ export function toolCardIsBusy(block: ToolCardBlock): boolean {
 export function renderToolCard(document: Document, block: ToolCardBlock, details: HTMLDetailsElement,
   renderer: ToolCardRenderer = block.source?.backend === 'copilot-sdk' ? bundledCopilotPlugin(block) : block.source?.backend === 'acp' ? acpToolPlugin : bundledToolRenderer(block), report?: (error: unknown) => void, host: CardDomHost = {}): HTMLDetailsElement {
   disposeToolCard(details); details.classList.add('tool-card');
-  const summary = document.createElement('summary');
+  const summary = createCardSummary(document);
   const row = document.createElement('span'); row.className = 'tool-card-summary';
   const content = document.createElement('span'); content.className = 'card-plugin-summary';
   row.append(content); summary.append(row);
@@ -89,7 +89,7 @@ function syncRawRecovery(document: Document, details: HTMLDetailsElement, block:
   if (provided || !expected.length) { if (recovery) recovery.hidden = true; return; }
   if (!recovery) {
     recovery = document.createElement('details'); recovery.className = 'tool-raw-output tool-raw-inputs';
-    const summary = document.createElement('summary'); summary.textContent = 'Raw output'; recovery.append(summary); details.append(recovery);
+    const summary = createCardSummary(document, 'Raw output'); recovery.append(summary); details.append(recovery);
   }
   recovery.hidden = false;
   const old = new Map(Array.from(recovery.querySelectorAll<HTMLElement>('.tool-section')).map(section => [section.dataset.outputKind!, section]));
@@ -108,8 +108,7 @@ function syncRawRecovery(document: Document, details: HTMLDetailsElement, block:
 function rawInputs(document: Document, value: unknown): HTMLDetailsElement {
   const details = document.createElement("details");
   details.className = "tool-raw-inputs";
-  const summary = document.createElement("summary");
-  summary.textContent = "Raw inputs";
+  const summary = createCardSummary(document, 'Raw inputs');
   const pre = document.createElement("pre");
   pre.textContent = stringify(value);
   details.append(summary, pre);

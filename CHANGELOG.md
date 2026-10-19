@@ -59,6 +59,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Transcript disclosure arrows now use SVG triangles instead of clipped squares to avoid transient vertical-edge artifacts reported on Linux. Native visual confirmation remains pending.
+
 - Linux GTK title-bar buttons now receive clicks instead of having them intercepted by the title-bar wrapper, restoring native Close, Minimize and Maximize actions, including in Settings.
 
 - Linux's GTK-drawn native title bar now follows each window's Nimrod theme and background opacity, including live previews, instead of staying desktop grey. Native window controls are retained; window-manager-drawn title bars remain desktop-controlled.

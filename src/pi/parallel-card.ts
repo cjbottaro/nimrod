@@ -1,6 +1,7 @@
 import type { ParallelToolCluster } from './tool-progress';
 import { DomCardController, type CardDomHost } from './dom-card-renderer';
 import { parallelDomRenderer } from './card-plugins/parallel';
+import { createCardSummary } from './card-shell';
 const instances = new WeakMap<HTMLDetailsElement, DomCardController<ParallelToolCluster>>();
 export function disposeParallelCard(details: HTMLDetailsElement): void { instances.get(details)?.dispose(); instances.delete(details); }
 
@@ -11,7 +12,7 @@ export function renderParallelToolCard(document: Document, cluster: ParallelTool
   let indicator = summary?.querySelector<HTMLElement>('.parallel-indicator');
   if (!summary || !list || !indicator) {
     disposeParallelCard(details); details.replaceChildren(); details.className = 'tool-card parallel-tool-card'; details.open = true;
-    summary = document.createElement('summary');
+    summary = createCardSummary(document);
     const row = document.createElement('span'); row.className = 'tool-card-summary';
     indicator = document.createElement('span'); indicator.className = 'parallel-indicator'; indicator.setAttribute('aria-hidden', 'true');
     const content = document.createElement('span'); content.className = 'card-plugin-summary';
