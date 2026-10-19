@@ -1,10 +1,10 @@
-import type { ContentBlock, DisplayMessage } from './types';
+import type { RenderBlock as ContentBlock, RenderMessage as DisplayMessage } from '../conversation-view-host';
 import { toolMessageBlock } from './tool-call';
 import { normalizedToolName } from './card-plugins/tool-input';
 
 export function rowTool(message: DisplayMessage): ContentBlock | undefined {
   if (message.role === 'tool') return toolMessageBlock(message);
-  if (message.role === 'assistant' && Array.isArray(message.content) && message.content.length === 1 && message.content[0].type === 'toolCall') return message.content[0];
+  if (message.role === 'assistant' && Array.isArray(message.content) && message.content.length === 1 && message.content[0]?.type === 'toolCall') return message.content[0];
   return undefined;
 }
 export function isPiCodemode(block: ContentBlock): boolean {
@@ -39,7 +39,7 @@ export class CodemodeGroups {
   private groups = new Map<string, Group>();
 
   update(block: ContentBlock, card: HTMLDetailsElement): void {
-    if (!block.id || block.source && block.source.backend !== 'pi') return;
+    if (typeof block.id !== 'string' || !block.id || block.source && block.source.backend !== 'pi') return;
     if (!block.parentToolCallId && !isPiCodemode(block) && !this.blocks.has(block.id)) return;
     const previous = this.blocks.get(block.id);
     this.blocks.set(block.id, block);
@@ -76,7 +76,7 @@ export class CodemodeGroups {
   placements(rows: readonly DisplayMessage[], nodes: ReadonlyMap<string, { node: HTMLElement }>): Map<string, HTMLElement> {
     const present = new Set<string>();
     const result = new Map<string, HTMLElement>();
-    for (const row of rows) { const block = rowTool(row); if (block?.id) present.add(block.id); }
+    for (const row of rows) { const block = rowTool(row); if (typeof block?.id === 'string') present.add(block.id); }
     for (const [id, group] of this.groups) if (!present.has(id)) { group.children.replaceChildren(); this.groups.delete(id); this.members.delete(id); }
     for (const [id, block] of this.blocks) if (!present.has(id)) {
       if (block.parentToolCallId) this.members.get(block.parentToolCallId)?.delete(id);
@@ -86,7 +86,7 @@ export class CodemodeGroups {
     for (const row of rows) {
       const block = rowTool(row);
       const group = block?.parentToolCallId && this.groups.get(block.parentToolCallId);
-      if (group && nodes.has(row.key)) result.set(row.key, group.children);
+      if (group && row.key && nodes.has(row.key)) result.set(row.key, group.children);
     }
     for (const [id, group] of this.groups) {
       // Persisted nestedCalls contains bounded inputs/status, not child output.
