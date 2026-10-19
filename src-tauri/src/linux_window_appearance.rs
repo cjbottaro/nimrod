@@ -119,6 +119,18 @@ mod tests {
     }
 
     #[test]
+    fn titlebar_seam_is_removed_without_resetting_outer_decorations() {
+        let css = stylesheet("nimrod-chrome-fixture", [18, 52, 86, 128], [210, 220, 230, 255]);
+        assert!(css.contains(
+            "window.nimrod-chrome-fixture > .titlebar,\nwindow.nimrod-chrome-fixture headerbar {\n    border-bottom-style: none;\n    border-bottom-width: 0;\n}"
+        ));
+        assert!(!css.contains("border: none"));
+        assert!(!css.contains("border: 0"));
+        assert!(!css.contains("border-radius:"));
+        assert!(!css.contains(" decoration {"));
+    }
+
+    #[test]
     fn css_is_window_scoped_and_preserves_foreground_at_every_opacity() {
         for alpha in [0, 64, 128, 255] {
             let css = stylesheet("nimrod-chrome-fixture", [18, 52, 86, alpha], [210, 220, 230, 128]);

@@ -17,6 +17,13 @@ window.$scope > .titlebar {
     color: $foreground;
     box-shadow: none;
 }
+/* Join native chrome to the webview without the desktop theme's seam.
+ * Keep outer decorations, corner geometry and button borders untouched. */
+window.$scope > .titlebar,
+window.$scope headerbar {
+    border-bottom-style: none;
+    border-bottom-width: 0;
+}
 window.$scope headerbar label,
 window.$scope headerbar button {
     color: $foreground;

@@ -59,6 +59,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Linux's GTK title bar joins the app content without the desktop theme's bottom border; native window controls, the outer frame and the themed Project-bar separator are unchanged.
+
 - Session-switch and Project settings shortcuts recognize shifted brace/comma key events when the webview omits physical key codes; recording uses the same normalization, without changing typing, AltGr or saved bindings.
 
 - Transcript disclosure arrows now use SVG triangles instead of clipped squares to avoid transient vertical-edge artifacts reported on Linux. Native visual confirmation remains pending.
