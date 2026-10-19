@@ -167,6 +167,47 @@ test('key matching distinguishes modifiers and handles bracket switching across 
   } finally { f.dom.window.close(); }
 });
 
+test('shifted punctuation without physical codes matches and records canonical shortcuts', () => {
+  for (const platform of ['Linux x86_64', 'MacIntel']) {
+    const f = fixture(platform), mac = platform === 'MacIntel';
+    const modifier = mac ? { metaKey: true } : { ctrlKey: true };
+    try {
+      for (const code of ['', 'Unidentified']) {
+        for (const [key, base] of [['{', '['], ['}', ']'], ['<', ',']] as const) {
+          const event = f.event(key, { ...modifier, code, shiftKey: true });
+          assert.equal(matchesBinding(event, `primary+shift+${base}`, mac), true);
+          assert.equal(recordBinding(event, mac), `primary+shift+${base}`);
+          assert.equal(matchesBinding(f.event(key, { ...modifier, code }), `primary+shift+${base}`, mac), false);
+          assert.equal(matchesBinding(f.event(key, { ...modifier, code, shiftKey: true, altKey: true }), `primary+shift+${base}`, mac), false);
+        }
+      }
+      assert.equal(matchesBinding(f.event('}', { ...modifier, code: 'KeyX', shiftKey: true }), 'primary+shift+]', mac), false, 'do not reinterpret a known different physical key');
+      assert.equal(matchesBinding(f.event('+', { ...modifier, shiftKey: true }), 'primary+plus', mac), true, 'zoom normalization is unchanged');
+    } finally { f.dom.window.close(); }
+  }
+});
+
+test('Linux shifted bracket dispatch preserves modal/repeat/IME guards and configured overrides', () => {
+  const f = fixture('Linux x86_64'), ran: ActionId[] = [];
+  let overrides: KeyOverrides = {};
+  const dispatch = installKeybindingDispatch(f.win, { read: () => overrides, enabled: () => true, run: id => { ran.push(id); }, error: error => { throw error; } });
+  const key = (name: string, extra: KeyboardEventInit = {}) => {
+    const event = f.event(name, { ctrlKey: true, shiftKey: true, code: 'Unidentified', ...extra });
+    f.win.dispatchEvent(event); return event;
+  };
+  try {
+    assert.equal(key('}').defaultPrevented, true); key('{');
+    assert.deepEqual([...ran], ['next', 'previous']);
+    for (const extra of [{ repeat: true }, { isComposing: true }, { keyCode: 229 }]) key('}', extra);
+    f.get<HTMLDialogElement>('pi-dialog').showModal(); key('}'); f.get<HTMLDialogElement>('pi-dialog').close();
+    assert.equal(ran.length, 2);
+    overrides = { next: [], previous: ['primary+shift+j'] };
+    assert.equal(key('}').defaultPrevented, false); assert.equal(key('{').defaultPrevented, false);
+    key('j'); assert.equal(ran.at(-1), 'previous'); assert.equal(ran.length, 3);
+    assert.equal(key('}', { ctrlKey: false }).defaultPrevented, false, 'plain shifted typing is not intercepted');
+  } finally { dispatch.dispose(); f.dom.window.close(); }
+});
+
 test('dispatch intercepts before text editing, consumes repeats/unavailable actions and respects modal priority and IME', () => {
   const f = fixture(), ran: ActionId[] = [], errors: unknown[] = [];
   let overrides: KeyOverrides = {}, enabled = true;

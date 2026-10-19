@@ -81,7 +81,7 @@ Only user overrides are stored in [settings.json](settings.md#configuration-file
 }
 ```
 
-On macOS, Command+Option shortcuts still identify the underlying letter/digit when Option produces a dead key or alternate symbol (for example, Option+N’s tilde). Plain Option typing and IME composition remain text input, not application shortcuts. Alternate keyboard layouts remain incompletely verified.
+On macOS, Command+Option shortcuts still identify the underlying letter/digit when Option produces a dead key or alternate symbol (for example, Option+N’s tilde). Plain Option typing and IME composition remain text input, not application shortcuts. Shifted bracket/comma shortcuts also recognize `{`, `}` and `<` when the webview omits physical key codes; ordinary typing and AltGr are unchanged. Alternate keyboard layouts remain incompletely verified.
 
 `primary` means Cmd on macOS and Ctrl on Linux. Explicit `cmd` and `ctrl` modifiers are also accepted. Modifier order is `primary`, `cmd`, `ctrl`, `alt`, `shift`, followed by the lowercase key. Use names such as `backspace`, `enter`, `arrowup`, or `plus`. Each action accepts up to eight single-keystroke shortcuts. Omitted actions inherit built-in defaults; an empty array disables the action’s shortcuts. Reset removes that action’s override; Reset all leaves an empty overrides object.
 

@@ -1882,6 +1882,32 @@ test('startup prefers list top or minimum reveal from top once, without focus, f
   }
 });
 
+test('Linux brace-shaped session shortcuts without key codes use ordinary navigation and retain drafts', async () => {
+  const f = await fixture(undefined, { platform: 'Linux x86_64', windowWorkspace: '/project', appState: {
+    'nimrod.tabs.v1:/project': { tabs: [
+      { path: '/sessions/a', sessionId: 'fixture-id', name: 'A', lastUsed: 100 },
+      { path: '/sessions/b', sessionId: 'fixture-id', name: 'B', lastUsed: 50 },
+    ], active: '/sessions/a' },
+  } });
+  try {
+    await f.tick(); await f.tick();
+    const rows = f.rows(), prompt = f.element<HTMLTextAreaElement>('prompt');
+    prompt.value = 'Keep A draft'; prompt.dispatchEvent(new f.win.Event('input'));
+    const order = [...f.element('open-sessions').children];
+    for (const code of ['', 'Unidentified']) {
+      const next = new f.win.KeyboardEvent('keydown', { key: '}', code, ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true });
+      prompt.dispatchEvent(next); await f.tick(); await f.tick();
+      assert.equal(next.defaultPrevented, true); assert.equal(rows[1].getAttribute('aria-current'), 'true');
+      const previous = new f.win.KeyboardEvent('keydown', { key: '{', code, ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true });
+      f.element('prompt').dispatchEvent(previous); await f.tick(); await f.tick();
+      assert.equal(previous.defaultPrevented, true); assert.equal(rows[0].getAttribute('aria-current'), 'true');
+      assert.equal(f.element('prompt'), prompt); assert.equal(prompt.value, 'Keep A draft');
+    }
+    assert.deepEqual([...f.element('open-sessions').children], order);
+    assert.equal(f.calls.some(call => call.command === 'write_pi' && (call.args.message as JsonRecord).type === 'prompt'), false);
+  } finally { f.win.close(); }
+});
+
 test('All uses persisted user recency, preserves legacy ties and does not mark restoration as use', async () => {
   const key = 'nimrod.tabs.v1:/project';
   const layout = { tabs: [

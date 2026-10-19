@@ -100,6 +100,13 @@ function eventKey(event: KeyboardEvent, mac?: boolean): string {
   if (event.code === 'Comma' && [',', '<'].includes(event.key)) return ',';
   if (event.code === 'BracketLeft') return '[';
   if (event.code === 'BracketRight') return ']';
+  // Some webviews omit physical codes for shifted punctuation. Normalize only
+  // the existing bracket/comma shortcut forms, not plain typing or AltGr input.
+  if ((!event.code || event.code === 'Unidentified') && event.shiftKey && !event.altKey && (event.ctrlKey || event.metaKey)) {
+    if (event.key === '{') return '[';
+    if (event.key === '}') return ']';
+    if (event.key === '<') return ',';
+  }
   if (event.key === '+' || event.key === '=') return 'plus';
   return event.key === ' ' ? 'space' : event.key.toLowerCase();
 }
