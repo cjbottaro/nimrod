@@ -112,7 +112,7 @@ for (const rejected of [false, true]) test(`configuration ${rejected ? 'error re
 const permissionCatalog = (allowDuringAgentExecution = true) => [{ ...capturedPermissionCommand, allowDuringAgentExecution }];
 
 for (const commandText of ['/permissions allow-all', '/perms allow-all'])
-for (const outcome of ['applied', 'rejected', 'stale'] as const) test(`live ${commandText} ${outcome} bypasses queued model configuration without answering old approvals`, async () => {
+test(`live ${commandText} uses the generic command path without answering old approvals`, async () => {
   let answer!: (value: CopilotDecision) => void;
   const f = await fixture([], () => new Promise(resolve => { answer = resolve; }));
   try {
@@ -125,41 +125,41 @@ for (const outcome of ['applied', 'rejected', 'stale'] as const) test(`live ${co
     f.session.configuration.set('model', model); await flush();
     assert.equal(f.session.validatePrompt(commandText), undefined);
     assert.match(f.session.validatePrompt('ordinary new prompt')!, /not idle/);
-    await f.session.handle({ type: 'command', id: 'live-policy', text: commandText }); await flush();
-    const request = f.last('permission-change');
-    assert.equal(request.value, 'allow-all');
-    assert.equal(f.sent.some(request => ['configure', 'command', 'prompt', 'decision', 'cancel'].includes(request.method)), false);
-    if (outcome === 'rejected') f.session.receive({ kind: 'result', id: request.id, error: 'Policy denied the change' });
-    else {
-      f.reply('permission-change', { outcome: 'applied', mode: 'allow-all' });
-      if (outcome === 'stale') f.event('session.permissions_changed', { mode: 'manual' });
-    }
-    await flush();
+    const handling = f.session.handle({ type: 'command', id: 'live-policy', text: commandText }); await flush();
+    const request = f.last('command');
+    assert.equal(request.name, commandText.startsWith('/perms ') ? 'perms' : 'permissions');
+    assert.equal(request.input, 'allow-all');
+    assert.equal(f.sent.some(request => ['configure', 'permission-change', 'prompt', 'decision', 'cancel'].includes(request.method)), false);
+    f.event('session.permissions_changed', { mode: 'allow-all' });
+    f.reply('command', { kind: 'text', text: 'Permission policy: Allow All for this session.' });
+    await handling; await flush();
     assert.equal(f.session.configuration.operations[0].phase, 'queued');
-    assert.equal(f.session.configuration.operations[1].title, 'Permission change');
-    assert.equal(f.session.configuration.operations[1].phase, outcome === 'applied' ? 'completed' : outcome === 'rejected' ? 'failed' : 'unknown');
+    assert.equal(f.session.state.configurationOperations?.at(-1)?.title, 'Copilot command');
+    assert.equal(f.session.state.configurationOperations?.at(-1)?.phase, 'completed');
+    assert.equal(f.session.configuration.get('permissions'), 'allow-all');
     assert.equal(f.session.state.busy, true);
     assert.equal(f.published.at(-1)?.state?.status, 'Waiting for permission…');
     assert.deepEqual(f.completed, []);
     assert.equal(f.sent.some(request => request.method === 'decision'), false);
     answer({ kind: 'approve-once', approvedInteractively: true }); await flush(); f.reply('decision'); await flush();
-    assert.equal(f.sent.filter(request => request.method === 'permission-change').length, 1);
+    assert.equal(f.sent.filter(request => request.method === 'command').length, 1);
   } finally { f.session.disconnect('fixture complete'); }
 });
 
-test('permission configuration respects a harness that only allows the command at terminal idle', async () => {
+test('generic command queue respects a permission command that only allows terminal-idle execution', async () => {
   const f = await fixture();
   try {
     f.session.receive({ kind: 'commands', commands: permissionCatalog(false) });
     f.event('assistant.turn_start', {});
-    await f.session.handle({ type: 'command', id: 'queued-policy', text: '/permissions allow-all' }); await flush();
-    assert.equal(f.session.configuration.operations[0].phase, 'queued');
-    assert.equal(f.sent.some(request => request.method === 'permission-change'), false);
+    const handling = f.session.handle({ type: 'command', id: 'queued-policy', text: '/permissions allow-all' }); await flush();
+    assert.equal(f.session.state.configurationOperations?.[0].phase, 'queued');
+    assert.equal(f.sent.some(request => request.method === 'command'), false);
     f.event('session.idle', { mode: 'autopilot' }); await flush();
-    assert.equal(f.sent.some(request => request.method === 'permission-change'), false);
+    assert.equal(f.sent.some(request => request.method === 'command'), false);
     f.event('session.idle', {}); await flush();
-    f.reply('permission-change', { outcome: 'applied', mode: 'allow-all' }); await flush();
-    assert.equal(f.session.configuration.operations[0].phase, 'completed');
+    f.event('session.permissions_changed', { mode: 'allow-all' });
+    f.reply('command', { kind: 'completed' }); await handling; await flush();
+    assert.equal(f.session.state.configurationOperations?.[0].phase, 'completed');
   } finally { f.session.disconnect('fixture complete'); }
 });
 

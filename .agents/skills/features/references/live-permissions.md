@@ -20,11 +20,23 @@ A future integration that implements the `permissions` setting gets the picker, 
 
 Existing local debug captures from CLI **1.0.98** report builtin `permissions` with `default | allow-all | show` and `allowDuringAgentExecution:true`. The user's screenshot showed `/permissions allow-all` incorrectly hitting the ordinary idle-only gate. The first implementation and its invented fixture both used the wrong `allow-any` spelling. `test/fixtures/copilot-permission-command.json` now retains only the actual command descriptor from those captures, without session/user data. This confirms advertisement, not successful active-turn invocation of the corrected code.
 
-The first supported mutation is **Allow all**, executing the exact native `/permissions allow-all` command. It is not approximated with `setApproveAll`, `setMode`, URL/path flags or a Nimrod host-side auto-approval rule. Copilot remains authoritative for the command's scope and managed-policy enforcement. Other permission commands such as `show`/`reset` use the [generic queued command workflow](copilot-commands.md#choice-lifecycle-and-concurrency): intent can be accepted during work, but execution waits for idle. This adapter is still not a generic live-command rollout.
+The **Select permissions… → Allow all** action executes the exact native
+`/permissions allow-all` command through its configuration owner. It is not
+approximated with `setApproveAll`, `setMode`, URL/path flags or a Nimrod
+host-side auto-approval rule. Copilot remains authoritative for scope and
+managed-policy enforcement. Composer slash commands—including
+`/permissions`—use the generic [Command-card workflow](copilot-commands.md),
+whose queue honors advertised live-use metadata; they do not enter this action
+adapter.
 
 - Require a registered **builtin** `permissions` command advertising the literal `allow-all` argument. Frontend recognition and bridge revalidation share `permissionArgument` / `advertisedPermissionCommand` from the side-effect-free native helper module, rather than duplicating the spelling/filter. Missing/revoked advertisement means unsupported; no guessed argument or fallback prompt.
-- Explicit `/permissions allow-all` and its advertised command-name aliases are recognized by the Copilot adapter before the ordinary busy-send gate. Only this known single-token argument is canonicalized. Other command inputs retain their existing raw parsing.
-- The shared **Select permissions… → Allow all** picker and choosing `allow-all` from the existing idle `/permissions` argument picker converge on the same configuration owner. Explicit composer submission clears that command immediately, without Send recency/navigation or a literal user turn; later results do not modify a newer draft.
+- The Nimrod action revalidates builtin `/permissions allow-all` metadata before
+  mutation. Slash-command names, aliases and raw arguments remain owned by the
+  generic command workflow.
+- The shared **Select permissions… → Allow all** picker uses this configuration
+  owner. Choosing `allow-all` from the `/permissions` argument picker instead
+  uses the generic Command-card queue; both invoke Copilot's command but do not
+  converge on one local owner.
 - Copilot's model/effort/mode/context settings use the existing idle-only owner. Permission configuration uses a separate owner. It is ready during an active turn, including while decisions are pending, only when `allowDuringAgentExecution` is true. An existing local command or permission mutation defers it; model mutation does not. A runtime advertising idle-only permission commands defers until actual terminal idle, not an Autopilot intermediate idle.
 - The private `permission-change` bridge request accepts only `value:'allow-all'`. Fresh `commands.list()` revalidates builtin identity, exact argument and live-use capability immediately before invocation. It publishes that fresh catalog before returning any pre-mutation deferral so the frontend cannot busy-loop against stale readiness.
 - A deferral proves no native mutation was attempted. The shared controller restores that attempt's prior dispatch flag; later supported readiness may apply the still-pending intent. Once `commands.invoke` starts, no error/uncertainty path becomes deferral or retries it.
@@ -33,7 +45,10 @@ The first supported mutation is **Allow all**, executing the exact native `/perm
 
 ## Existing approvals and operation lifetime
 
-The operation is **PERMISSION CHANGE** with content **Permissions: Allow all**. Pending uses the shared shimmer/stack; confirmed mode settles it at the ordered confirmation boundary. Known command failure uses Failed; missing confirmation uses Outcome unknown. No duplicate command-output receipt or error banner is added for the same operation.
+The Nimrod action's operation is **PERMISSION CHANGE** with content
+**Permissions: Allow all**. A slash invocation instead remains one **COPILOT
+COMMAND** card. Both rely on Copilot's authoritative mode/events, without
+dispatching or impersonating one another.
 
 **Existing permission callbacks are deliberately untouched.** Applying policy does not answer, cancel, hide or reconstruct them, and does not clear the pending-permission banner. The user can Escape out of the picker (dismissal only), submit the command or use the configuration action, then reopen Review requests and answer older requests. Copilot's policy governs subsequent requests. If the runtime itself resolves existing requests, its own lifecycle remains authoritative; this implementation does not promise retroactive resolution.
 
@@ -42,14 +57,21 @@ Applying/rejecting policy does not stop the agent, send a prompt, change busy/Wa
 ## Code and fixtures
 
 - `src/session-configuration{,-set}.ts`, `src/session-backend.ts`, `src/main.ts`, `src/keybindings.ts`: consumer port, independent owners, shared capability action/picker and key-bound cancellation.
-- `src/copilot/permission-configuration.ts`, `src/copilot/session.ts`: concrete advertisement, live readiness, command entry points, native mode/version reconciliation and unchanged pending decisions.
+- `src/copilot/permission-configuration.ts`, `src/copilot/session.ts`: concrete
+  native-action advertisement/readiness plus generic slash-command live-use
+  readiness, native mode/version reconciliation and unchanged pending decisions.
 - `copilot/permission-configuration.mjs`, `copilot/bridge.mjs`: exact native command, fresh busy-capability check, independent incoming IPC dispatch, confirmation and no retry/follow-on effects.
 - `src-tauri/src/copilot.rs`, `src-tauri/build.rs`, `scripts/prepare-copilot.mjs`, `scripts/verify-macos-bundle.ts`: narrow request admission and bundled helper staging/watch/verification. No build was run.
 - `test/session-configuration-set.test.ts`: permission changes bypass queued/in-flight model work, stable publications, key-scoped cancellation and a non-Copilot capability contribution.
 - `test/copilot-permission-configuration.test.ts`: exact native invocation, fresh advertisement/deferral, unsupported effects, unconfirmed mode and read errors without retries.
-- `test/copilot-sdk.test.ts`: busy command/alias acceptance, queued model independence, pending-decision retention, stale native mode precedence, rejection without disconnect and terminal-idle-only fallback.
+- `test/copilot-sdk.test.ts`: generic busy command/alias acceptance, queued model
+  independence, pending-decision retention and terminal-idle-only metadata
+  fallback; native action reconciliation remains separately covered.
 - `test/copilot-bridge.test.ts`, `test/fixtures/copilot-sdk.mjs`: production bridge against an offline SDK with one old approval left unresolved while policy applies, then no second prompt after answering the old one. This deliberately models no retroactive resolution; it is not runtime evidence.
-- `test/browser/live-permissions.spec.ts`: the exact `/permissions allow-all` streaming screenshot regression, explicit command and generic picker, pending/settled card identity, queued-model bypass, retained older permission picker/banner, newer draft and continuation after a single old approval.
+- `test/browser/live-permissions.spec.ts`: the exact `/permissions allow-all`
+  streaming regression through a Command card, the separate native action's
+  Permission-change card, queued-model behavior, retained older permission
+  picker/banner, newer draft and continuation after a single old approval.
 - Native admission tests reject arbitrary policy values. Keybinding fixtures register `permissions` as intentionally unbound.
 
 When requested, validate with `mise run test` and `npm run test:browser`. The mandatory post-merge `mise run check` establishes compilation only. The existing logs establish the 1.0.98 catalog/live flag. Actual corrected invocation while callbacks wait, full policy scope, and native macOS/Linux behaviour remain unverified. Do not infer those from fixture capability declarations.

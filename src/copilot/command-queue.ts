@@ -15,7 +15,7 @@ export class CopilotCommandQueue {
   private pending: CommandIntent[] = [];
   private active?: CommandIntent;
   private disposed = false;
-  constructor(private ready: () => boolean,
+  constructor(private ready: (text: string) => boolean,
     private run: (id: string, text: string, signal: AbortSignal, dispatched: () => void) => Promise<void | boolean>,
     private changed: () => void) {}
   get occupied(): boolean { return !!this.active || this.pending.length > 0; }
@@ -29,7 +29,7 @@ export class CopilotCommandQueue {
     });
   }
   update(): void {
-    if (this.disposed || this.active || !this.pending.length || !this.ready()) return;
+    if (this.disposed || this.active || !this.pending.length || !this.ready(this.pending[0].text)) return;
     const intent = this.pending.shift()!;
     this.active = intent;
     this.progress(intent, 'applying');

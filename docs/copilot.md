@@ -105,17 +105,19 @@ Native focus/stacking and visual acceptance remain pending after a requested bui
 
 If you started a task before allowing its tools, you can submit
 `/permissions allow-all` while Copilot is working, or choose
-**Select permissions… → Allow all** in the command palette. The action appears
-when your runtime advertises that permission operation. Advertised command-name
-aliases work too.
+**Select permissions… → Allow all** in the command palette. These remain
+separate entry points: the slash command uses the generic Command-card queue,
+while the Nimrod action uses its permission configuration owner. Each appears
+only when the runtime advertises the operation. Advertised command-name aliases
+work too.
 
 If the permission picker is open, press Escape first. This hides it without
 answering its requests. Submit the policy change, then use **Review requests**
 to answer any older requests still waiting.
 
-A **PERMISSION CHANGE** operation card appears immediately, shimmering and pinned
-while pending. It stops shimmering and joins normal transcript flow when Copilot
-confirms the policy. The operation runs independently of queued model changes;
+A slash invocation appears as a pinned **COPILOT COMMAND** card; the Nimrod
+action appears as a pinned **PERMISSION CHANGE** card. Each stops shimmering and
+joins normal transcript flow when its owning path settles. The operation runs independently of queued model changes;
 it does not stop or resend your task, replace a newer draft, or answer existing
 permission requests. Copilot's native policy governs subsequent requests.
 
@@ -310,11 +312,12 @@ native verification.
 You can submit advertised slash commands while Copilot is working. They clear the
 submitted draft immediately and appear as pending **Copilot command** operation
 cards, without a literal user-turn preview or forced transcript navigation.
-Commands execute one at a time, in submission order, after the current agent turn
-reaches terminal idle; intermediate Autopilot pauses do not release them. For
-example, an advertised `/allow-all` queues like any other command—it is not
-rewritten into a different permission command. The advertised
-`/permissions allow-all` mutation retains its [live configuration path](#change-permissions-during-work), including when selected from the argument picker.
+Commands execute one at a time in submission order. The head command dispatches
+during work when its fresh metadata advertises live use; otherwise it waits for
+terminal idle. Intermediate Autopilot pauses do not release idle-only commands.
+For example, advertised `/allow-all` and `/permissions allow-all` use the same
+generic readiness rule and are never rewritten into another command or Nimrod
+action.
 
 You can edit a newer draft or queue more advertised commands while waiting;
 ordinary message submission still requires idle. Argument/returned-choice pickers

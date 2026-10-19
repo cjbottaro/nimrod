@@ -28,7 +28,12 @@ You can choose configuration while the agent is working. Nimrod applies it as so
 - **Pi** normally applies model/thinking changes during work, including compaction, for upcoming model requests. A response already streaming keeps its original configuration; a continuation after tool execution can use the new one.
 - **Copilot** applies model/thinking/mode/context configuration while idle. Model, thinking level, mode and context-window changes apply in the existing session without reconnecting or sending another message. You can choose while it is working or handling another configuration/command operation; the change waits for the supported idle boundary without stopping the agent.
 
-Copilot's [permission-policy changes](copilot.md#change-permissions-during-work) use an independent configuration operation. **Select permissions… → Allow all** or `/permissions allow-all` can apply during work when the runtime advertises live support, without waiting behind a queued model change or answering older permission requests. Its stable title is **PERMISSION CHANGE**.
+Copilot's [permission-policy changes](copilot.md#change-permissions-during-work)
+use an independent configuration operation for Nimrod's **Select permissions…
+→ Allow all** action, with stable title **PERMISSION CHANGE**. Copilot
+`/permissions allow-all` is a separate generic Command card; advertised
+live-use metadata lets the command queue invoke it during work without
+substituting the Nimrod action.
 
 A pending **configuration change** appears in the transcript like Queued/Steering: a shimmering title and the requested value, pinned in the same bottom stack. Its title is always **CONFIGURATION CHANGE**, using the same uppercase typography whether pending or settled. Choosing another model updates the **same entry**, rather than adding another pending change. An already-dispatched change finishes before the latest choice is applied.
 

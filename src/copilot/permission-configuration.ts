@@ -1,16 +1,11 @@
 import { advertisedPermissionCommand, permissionArgument } from '../../copilot/permission-configuration.mjs';
 import { SessionConfigurationController, type ConfigurationAvailability } from '../session-configuration';
-import { findCopilotCommand, parseCopilotCommand, type CopilotCommand } from './commands';
+import type { CopilotCommand } from './commands';
 export { permissionArgument };
 
 /** Only the concrete, advertised Copilot mutation is exposed; no allow-all emulation. */
 export function permissionCommand(commands: readonly CopilotCommand[]): CopilotCommand | undefined {
   return advertisedPermissionCommand(commands);
-}
-export function isPermissionChange(commands: readonly CopilotCommand[], text: string): boolean {
-  const invocation = parseCopilotCommand(text);
-  const command = invocation && findCopilotCommand(commands, invocation.name);
-  return command?.kind === 'builtin' && command.name.toLowerCase() === 'permissions' && invocation?.input?.trim() === permissionArgument;
 }
 export function createCopilotPermissionConfiguration(host: {
   commands(): readonly CopilotCommand[];
