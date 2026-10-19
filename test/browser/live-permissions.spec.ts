@@ -24,7 +24,7 @@ for (const entry of ['composer', 'palette']) test(`live permission change via ${
       const invoke = host.__TAURI_INTERNALS__.invoke;
       const gate = new Promise<void>(resolve => { host.__releasePermissionChange = resolve; });
       host.__TAURI_INTERNALS__.invoke = async (command, args) => {
-        if (command === 'write_copilot' && (args?.message as { method?: string })?.method === 'permission-change') await gate;
+        if (command === 'write_copilot' && ['permission-change', 'command'].includes(String((args?.message as { method?: string })?.method))) await gate;
         return invoke(command, args);
       };
     });
@@ -38,8 +38,9 @@ for (const entry of ['composer', 'palette']) test(`live permission change via ${
       await page.locator('#palette-input').fill('Select permissions'); await page.locator('#palette-input').press('Enter');
       await picker.getByRole('option').filter({ hasText: 'Allow all' }).click();
     }
-    const row = page.locator(visible('messages')).locator('.message.configuration').filter({ hasText: 'Permission change' });
-    await expect(row.locator('.delivery-status-shimmer')).toHaveText('Permission change');
+    const title = entry === 'composer' ? 'Copilot command' : 'Permission change';
+    const row = page.locator(visible('messages')).locator('.message.configuration').filter({ hasText: title });
+    await expect(row.locator('.delivery-status-shimmer')).toHaveText(title);
     await expect(row).toHaveClass(/sticky-turn/);
     await row.evaluate(node => { node.setAttribute('data-fixture-identity', 'permission-policy'); });
     await page.evaluate(() => (window as unknown as { __releasePermissionChange: () => void }).__releasePermissionChange());
@@ -58,7 +59,8 @@ for (const entry of ['composer', 'palette']) test(`live permission change via ${
     await expect(page.locator(visible('messages'))).toContainText('Continued after live permission change');
     await expect(picker).toBeHidden(); await expect(banner).toBeHidden();
     await expect(prompt).toHaveValue('Keep newer draft');
-    expect(demo.calls.filter(call => call.command === 'write_copilot' && (call.args.message as { method?: string }).method === 'permission-change')).toHaveLength(1);
+    const expectedMethod = entry === 'composer' ? 'command' : 'permission-change';
+    expect(demo.calls.filter(call => call.command === 'write_copilot' && (call.args.message as { method?: string }).method === expectedMethod)).toHaveLength(1);
     expect(demo.errors).toEqual([]);
   } finally { await demo.close(); }
 });
@@ -78,12 +80,12 @@ test('screenshot regression: /permissions allow-all submits during streaming ins
     await expect(page.locator(visible('send'))).toHaveAttribute('aria-label', 'Stop Copilot');
     await prompt.fill('/permissions allow-all'); await prompt.press('Escape'); await prompt.press('Enter');
     await expect(prompt).toHaveValue('');
-    const row = page.locator(visible('messages')).locator('.message.configuration').filter({ hasText: 'Permission change' });
+    const row = page.locator(visible('messages')).locator('.message.configuration').filter({ hasText: 'Copilot command' });
     await expect(row).toHaveAttribute('data-operation-state', 'succeeded');
     await expect(page.locator(visible('session-notices'))).not.toContainText('Copilot is not idle');
     await expect(page.locator(visible('send'))).toHaveAttribute('aria-label', 'Stop Copilot');
-    const requests = demo.calls.filter(call => call.command === 'write_copilot').map(call => call.args.message as { method: string; value?: string });
-    expect(requests.filter(request => request.method === 'permission-change').map(request => request.value)).toEqual(['allow-all']);
+    const requests = demo.calls.filter(call => call.command === 'write_copilot').map(call => call.args.message as { method: string; value?: string; input?: string });
+    expect(requests.filter(request => request.method === 'command').map(request => request.input)).toEqual(['allow-all']);
     expect(requests.filter(request => request.method === 'prompt')).toHaveLength(2);
     expect(requests.some(request => request.method === 'cancel')).toBe(false);
     expect(demo.errors).toEqual([]);

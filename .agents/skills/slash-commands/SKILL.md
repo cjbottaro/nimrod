@@ -174,13 +174,13 @@ authoritative readiness transition.
   place it in normal transcript flow at its ordered settlement boundary. Later
   output never drags it back to the bottom.
 
-`/permissions <setting>` is the reference specialized case. The slash command
-must remain a Command card even if a separate permission-policy executor handles
-readiness, mutation and authoritative reconciliation. If Copilot advertises
-live use, dispatch at that supported boundary; otherwise keep the card pending
-until terminal idle. Nimrod's **Select permissions…** action is a separate entry
-point and may use a Permission-change operation card. Shared execution code does
-not merge their presentation identities.
+`/permissions <setting>` is the reference generic live-capable case. The command
+queue reads the advertised live-use metadata and dispatches through the ordinary
+harness command interface as soon as that metadata permits; authoritative
+permission events reconcile UI state. It needs no permission-specific slash
+executor. Nimrod's **Select permissions…** action is a separate entry point and
+may use a Permission-change operation card plus its own configuration executor.
+Shared native effects do not merge their presentation or dispatch identities.
 
 ## UI effects and authoritative reconciliation
 

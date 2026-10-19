@@ -13,7 +13,7 @@ import { CopilotCommandQueue } from './command-queue';
 import type { ConfigurationOperation } from '../session-configuration';
 import { initialCopilotUsage, type CopilotUsageSeed } from './usage-seed';
 import { createCopilotConfiguration } from './session-configuration';
-import { createCopilotPermissionConfiguration, isPermissionChange, permissionCommand, permissionArgument } from './permission-configuration';
+import { createCopilotPermissionConfiguration, permissionCommand, permissionArgument } from './permission-configuration';
 import { SessionConfigurationSet } from '../session-configuration-set';
 import { ConfigurationDeferred, ConfigurationSuperseded, ConfigurationUncertain, type SessionConfigurationController } from '../session-configuration';
 import { pickConfiguration } from '../configuration-picker';
@@ -123,7 +123,11 @@ export class CopilotSession {
     });
     this.configuration = new SessionConfigurationSet([this.modelConfiguration, this.permissionConfiguration]);
     this.commandQueue = new CopilotCommandQueue(
-      () => !this.ended && !this.state.sessionUnavailable && !this.state.busy && !this.configuring && !this.permissionChanging && !this.commandOperation,
+      text => {
+        const invocation = parseCopilotCommand(text), command = invocation && findCopilotCommand(this.commands, invocation.name);
+        return !this.ended && !this.state.sessionUnavailable && !this.configuring && !this.permissionChanging && !this.commandOperation
+          && (!this.state.busy || command?.allowDuringAgentExecution === true);
+      },
       (id, text, signal, dispatched) => this.runCommand(id, text, { signal }, dispatched), () => this.publish([]));
     this.usage = new CopilotUsageController(() => this.connection.request('usage', {}, 'reject'), () => this.publish([]),
       () => this.configuring ? Promise.resolve(null) : this.connection.request('context', {}, 'reject'));
@@ -137,11 +141,6 @@ export class CopilotSession {
       : kind === 'mode' ? !!this.mode : !!model?.capabilities?.limits?.max_context_window_tokens;
   }
   validatePrompt(text: string): string | undefined {
-    if (isPermissionChange(this.commands, text)) {
-      if (this.ended || this.state.sessionUnavailable) return 'Connect Copilot before changing permissions. Your draft was kept.';
-      if (!permissionCommand(this.commands)) return 'Copilot did not advertise /permissions allow-all. Nothing was invoked; your draft was kept.';
-      return;
-    }
     if (this.ended || this.state.sessionUnavailable) return 'Connect Copilot before sending. Your draft was kept.';
     if (text.trimStart().startsWith('/')) {
       const invocation = parseCopilotCommand(text);
@@ -188,7 +187,6 @@ export class CopilotSession {
     if (invalid || !id || text.length > 1_000_000 || !text.trim() && !images.length || images.length && text.trimStart().startsWith('/')) {
       this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', error: invalid || 'Invalid Copilot message. Images require a message, not a slash command.' }); return;
     }
-    if (isPermissionChange(this.commands, text)) { await this.acceptPermissionIntent(id); return; }
     if (text.trimStart().startsWith('/')) {
       this.ui.publish({ type: 'submissionReceipt', id, outcome: 'accepted' });
       await this.commandQueue.enqueue(id, text, this.state.messages.at(-1)?.key ?? null); return;
@@ -197,16 +195,6 @@ export class CopilotSession {
       this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', error: 'Invalid Copilot slash command. Nothing was invoked.' }); return;
     }
     await this.sendPrompt(id, text, text, images);
-  }
-  private async acceptPermissionIntent(id: string): Promise<void> {
-    try {
-      const choices = await this.configuration.choices('permissions');
-      const choice = choices.find(choice => choice.value === permissionArgument);
-      if (!choice) throw new Error('Copilot did not advertise a supported permission change.');
-      this.configuration.set('permissions', choice);
-      // Local intent accepted; operation publications own authoritative completion.
-      this.ui.publish({ type: 'submissionReceipt', id, outcome: 'accepted' });
-    } catch (error) { this.ui.publish({ type: 'submissionReceipt', id, outcome: 'rejected', error: String(error) }); }
   }
   private async sendPrompt(id: string, text: string, display = text, images: ImageContent[] = []): Promise<void> {
     const key = `copilot:user:pending:${id}`;
@@ -293,8 +281,9 @@ export class CopilotSession {
       }
       // Each iteration requires a fresh user choice; never retry an invocation.
       while (!operation.signal.aborted && !this.ended) {
-        if (isPermissionChange(this.commands, `/${name} ${input ?? ''}`)) { await this.acceptPermissionIntent(id); return false; }
-        if (this.state.busy) throw new Error('Copilot started working before the command could be invoked. Nothing was invoked again.');
+        const current = findCopilotCommand(this.commands, name);
+        if (this.state.busy && current?.allowDuringAgentExecution !== true)
+          throw new Error('Copilot started working before the command could be invoked. Nothing was invoked again.');
         invoked = true; dispatched(); this.usage.workStarted();
         const result = await this.connection.request('command', { name, ...(input !== undefined ? { input } : {}) });
         if (operation.signal.aborted || this.ended) return;

@@ -58,13 +58,13 @@ separate Pi contract change. Generic ACP keeps advertised-only passthrough; the 
 
 New commands using implemented metadata/result shapes work without command-name
 handlers. This is not universal CLI/TUI parity. Advertised command intent is
-accepted during work and represented by a pinned Command card. Generic command
-execution waits for terminal idle. A permission command may use the independent
-[live permission configuration adapter](live-permissions.md), honouring
-`allowDuringAgentExecution` when advertised and otherwise waiting for terminal
-idle. The slash-command entry remains a Command card even though the permission
-owner performs mutation/reconciliation; it neither sends a steering prompt nor
-becomes Nimrod's Permission-change action.
+accepted during work and represented by a pinned Command card. The generic
+command queue dispatches the head command during work when its freshly
+advertised `allowDuringAgentExecution` is true; otherwise it waits for terminal
+idle. Permission commands use this same path and reconcile through native
+permission events. Nimrod's [live permission configuration
+adapter](live-permissions.md) belongs only to the separate **Select
+permissions…** action.
 
 ## Discovery and autocomplete
 
@@ -114,11 +114,10 @@ becomes Nimrod's Permission-change action.
 | `set-plan-model` | The command's provisional future Plan-model preference is finalized through the same SDK effect transaction and its confirmation is displayed. It does not change the active model or dispatch a Nimrod action. |
 | Unknown/malformed result or unknown mode | Session-owned error; no speculative prompt/action or automatic replay. Supported Interactive, Plan and Autopilot changes reconcile through the session mode configuration; unknown values disconnect before follow-on work. |
 
-Supported permission mutation uses the same concrete permission owner for
-readiness and reconciliation. A slash-command entry presents that work as one
-retained Command card; Nimrod's **Select permissions…** action presents it as a
-**PERMISSION CHANGE** card. Native policy confirmation, pending-callback
-retention and failure/uncertainty semantics are specified in [Live
+Slash-command permission mutations are ordinary retained Command cards and use
+the generic command invocation plus authoritative native events. Nimrod's
+**Select permissions…** action separately uses a **PERMISSION CHANGE** card and
+the concrete configuration owner specified in [Live
 permissions](live-permissions.md).
 
 Command-output rows are **connection-local presentation**, not invented persisted
@@ -141,14 +140,14 @@ connection outcomes keep explicit uncertainty labels and full Details.
 
 Each intent immediately publishes a **COPILOT COMMAND** operation card containing the exact submitted text. Its immutable progress records reuse the existing local operation projector/renderer through `configurationOperations`; they are not configuration mutations or persisted harness rows. Unchanged streaming publications preserve the combined array identity. The queue owns execution/settlement separately from configuration owners; no per-card cancellation capability is advertised. Failures/uncertainty belong to this card, without duplicate submission-error notices. Local acceptance receipts are not invocation completion.
 
-Drain one workflow at a time when connected, root-terminal-idle and free of configuration/permission mutation. Child idle and non-aborted Autopilot intermediate idle never release the queue. Commands queued before idle take priority over deferred model changes; the independent live permission owner remains able to apply during work. Revalidate the catalog before starting each workflow; the bridge revalidates again and rejects an idle-to-busy race before invoking. A rejected/ambiguous dispatch is never retried. The exact advertised name/alias and raw arguments stay intact: `/allow-all` is not rewritten into `/permissions allow-all` or a Nimrod action.
+Drain one workflow at a time when connected and free of configuration/permission mutation. During root work, dispatch only when the head command's fresh metadata advertises `allowDuringAgentExecution`; otherwise wait for root terminal idle. Child idle and non-aborted Autopilot intermediate idle never release an idle-only command. Commands queued before idle take priority over deferred model changes. Revalidate the catalog before starting each workflow; the bridge revalidates live-use metadata again before invoking. A rejected/ambiguous dispatch is never retried. The exact advertised name/alias and raw arguments stay intact: `/allow-all` is not rewritten into `/permissions allow-all` or a Nimrod action.
 
 Each command workflow owns an AbortController and serializes its own invocations.
 Advertised argument choices are available before invocation and must not require
 executing a bare command to discover its default behavior. Separately, waiting
 for a returned `select-subcommand` choice is result-gated because those choices
 are unavailable before invocation. Neither path gates clearing the composer on RPC.
-Ordinary message submissions and model mutation remain locally unavailable until queued command workflows settle; further advertised commands can queue. Live permission intent may be accepted while it waits for the active command owner to finish; the draft stays editable. Ordinary agent turns retain SDK `session.idle`
+Ordinary message submissions and model mutation remain locally unavailable until queued command workflows settle; further advertised commands can queue. The separate native **Select permissions…** action may be accepted when its configuration owner is ready; the draft stays editable. Ordinary agent turns retain SDK `session.idle`
 semantics, separate from local command completion.
 
 Returned choices open only for their still-presented, connected owner with no

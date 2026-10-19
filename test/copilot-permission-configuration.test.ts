@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import capturedCommand from './fixtures/copilot-permission-command.json' with { type: 'json' };
 import { copilotCommands } from '../src/copilot/commands';
-import { isPermissionChange, permissionCommand, createCopilotPermissionConfiguration } from '../src/copilot/permission-configuration';
+import { permissionCommand, createCopilotPermissionConfiguration } from '../src/copilot/permission-configuration';
 import { applyPermissionChange, type PermissionConfigurationSession } from '../copilot/permission-configuration.mjs';
 
 function fixture() {
@@ -18,12 +18,9 @@ function fixture() {
   return { session, invocations, working: () => busy, idle: () => { busy = false; }, disallowBusy: () => { allowed = false; } };
 }
 
-test('captured CLI catalog recognizes the screenshot command before the ordinary busy gate', async () => {
+test('captured CLI catalog exposes the native permission action independently from slash commands', async () => {
   const commands = copilotCommands([capturedCommand]);
   assert.equal(permissionCommand(commands), commands[0]);
-  assert.equal(isPermissionChange(commands, '/permissions allow-all'), true);
-  assert.equal(isPermissionChange(commands, ' /permissions allow-all  '), true);
-  assert.equal(isPermissionChange(commands, '/permissions allow-any'), false, 'do not invent a native argument alias');
   const configuration = createCopilotPermissionConfiguration({ commands: () => commands, mode: () => 'manual',
     availability: command => command.allowDuringAgentExecution ? 'ready' : 'deferred', apply: async () => {}, changed() {} });
   assert.equal(configuration.capabilities[0].availability, 'ready');
