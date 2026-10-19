@@ -47,6 +47,14 @@ work. `/usage`, `/env`, `/list-dirs`, `/permissions show`, `/session info`,
 no state events. Sanitized result-shape fixtures are authored and unrun. This is
 SDK/CLI protocol evidence, not native rendering/focus/busy acceptance.
 
+A second isolated read-only batch confirmed generic text/Markdown results for
+`/session checkpoints`, `/skills list`, `/plugin list`, `/memory show`, `/remote
+show`, `/sandbox status`, `/sandbox policy` and no-server `/mcp show`, with no
+command-caused state events. `/skills info` instead returned a usage error
+requiring `<skill-name>` despite metadata exposing only the `info` choice. The
+public `session.skills.list()` adapter and sanitized fixtures are source-authored
+and unrun; native nested-picker acceptance remains pending.
+
 - TypeScript/jsdom shell tests use mocked native IPC.
 - Rust fixture tests use actual pipes, owned subprocesses and generated disposable session files; deletion tests unlink only those fixtures.
 - Automated Playwright WebKit exercises real browser layout/events with an offline child fixture and mock Tauri operations. Its CSS zoom is not native WKWebView zoom.

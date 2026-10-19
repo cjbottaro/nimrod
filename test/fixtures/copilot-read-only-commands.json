@@ -78,5 +78,53 @@
     },
     "input": "list",
     "result": { "kind": "text", "text": "No MCP servers configured." }
+  },
+  {
+    "name": "session checkpoints",
+    "command": { "name": "session", "kind": "builtin", "allowDuringAgentExecution": true },
+    "input": "checkpoints",
+    "result": { "kind": "text", "text": "No checkpoints yet. Checkpoints are created when context is compacted." }
+  },
+  {
+    "name": "skills list",
+    "command": { "name": "skills", "kind": "builtin", "allowDuringAgentExecution": false },
+    "input": "list",
+    "result": { "kind": "text", "text": "Available Skills\n\nbuiltin:\n  - fixture-skill\n    Fixture skill description\n\nFound 1 skill." }
+  },
+  {
+    "name": "plugin list",
+    "command": { "name": "plugin", "kind": "builtin", "allowDuringAgentExecution": false },
+    "input": "list",
+    "result": { "kind": "text", "text": "No plugins installed." }
+  },
+  {
+    "name": "memory show",
+    "command": { "name": "memory", "kind": "builtin", "allowDuringAgentExecution": false },
+    "input": "show",
+    "result": { "kind": "text", "markdown": true, "text": "🧠 Memory\n\nStatus: enabled" }
+  },
+  {
+    "name": "remote show",
+    "command": { "name": "remote", "kind": "builtin", "allowDuringAgentExecution": false },
+    "input": "show",
+    "result": { "kind": "text", "text": "Remote control is disabled for this session." }
+  },
+  {
+    "name": "sandbox status",
+    "command": { "name": "sandbox", "kind": "builtin", "allowDuringAgentExecution": false },
+    "input": "status",
+    "result": { "kind": "text", "text": "Current sandbox status: disabled for this session" }
+  },
+  {
+    "name": "sandbox policy",
+    "command": { "name": "sandbox", "kind": "builtin", "allowDuringAgentExecution": false },
+    "input": "policy",
+    "result": { "kind": "text", "text": "Command sandboxing is disabled, so no policy is in force and commands run unrestricted." }
+  },
+  {
+    "name": "mcp show",
+    "command": { "name": "mcp", "kind": "builtin", "allowDuringAgentExecution": false },
+    "input": "show",
+    "result": { "kind": "text", "text": "No MCP servers configured." }
   }
 ]

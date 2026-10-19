@@ -40,6 +40,12 @@ the bridge applies only an exact enabled catalog ID through Copilot
 passes through without guessing. This is not Nimrod's **Select model…** action:
 the adapter stays entirely inside Copilot's command/SDK integration.
 
+CLI 1.0.98 also advertises `/skills info` without the required skill-name
+argument. The concrete adapter reads the public session skill catalog, presents
+a second harness-owned picker, revalidates the selected skill and invokes the
+original command as `info <name>`. It never reads skill files or substitutes a
+Nimrod action.
+
 This feature applies to **Copilot SDK sessions**. Pi's existing `/name`,
 `/compact` and bare `/mcp` interception remains unchanged; removing it requires a
 separate Pi contract change. Generic ACP keeps advertised-only passthrough; the Copilot ACP integration has been removed.
