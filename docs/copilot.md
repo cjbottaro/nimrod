@@ -385,6 +385,17 @@ adapter through Copilot's SDK and reconciles the confirmed model. Supplying an
 explicit model argument bypasses the picker; richer model-command syntax is
 passed through without interpretation.
 
+`/config` changes Copilot defaults for future sessions. Type `/config` and a
+setting prefix to complete a known key; after the key, the inline hint changes
+to `[value]` and values remain free-form. Running `/config model`,
+`effortLevel`, `defaultMode`, `contextTier`, `autoTier` or
+`defaultPermissionMode` without a value opens a typed Copilot-owned picker.
+Other keys open a free-form value input when submitted without a value.
+Copilot validates, persists and confirms each write. This does not change the
+current session; use Nimrod's session controls or `/model` for live settings.
+Sensitive proxy passwords remain delegated to Copilot's native secure
+configuration UI.
+
 For `/skills info`, Copilot's command metadata omits the required skill name.
 Nimrod therefore shows Copilot's current skill catalog after you choose
 **info**, then invokes the original slash command with that selection.

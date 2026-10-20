@@ -10,11 +10,21 @@ export class CopilotClient {
     this.cwd = options.workingDirectory;
   }
   defaultsReads = 0;
+  userSettings = {
+    model: 'small', effortLevel: 'low', defaultMode: 'interactive', contextTier: 'default',
+    autoTier: 'balance', defaultPermissionMode: 'manual', memory: true,
+    dynamicRetrieval: { mcp: false, skills: true },
+  };
   rpc = { user: { settings: { get: async () => {
     this.defaultsReads++;
     if (process.env.NIMROD_FIXTURE_COPILOT_MODEL_STATE === 'settings-error') throw new Error('Fixture settings read failed');
-    const defaults = JSON.parse(process.env.NIMROD_FIXTURE_COPILOT_DEFAULTS || '{"model":"small","effortLevel":"low"}');
-    return { settings: Object.fromEntries(Object.entries(defaults).map(([key, value]) => [key, { value, default: null, isDefault: value === null }])) };
+    const overrides = JSON.parse(process.env.NIMROD_FIXTURE_COPILOT_DEFAULTS || '{}');
+    const values = { ...this.userSettings, ...overrides };
+    return { settings: Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { value, default: null, isDefault: value === null }])) };
+  }, set: async ({ settings }) => {
+    for (const [key, value] of Object.entries(settings)) {
+      if (value === null) delete this.userSettings[key]; else this.userSettings[key] = value;
+    }
   } } } };
   async start() {}
   async getStatus() { return { version: '1.0.98', protocolVersion: 3 }; }
@@ -37,7 +47,7 @@ export class CopilotClient {
   async createSession(config) {
     assert.equal(config.name, 'Copilot session');
     assert.equal(this.defaultsReads, 1, 'read configured defaults before creating a session');
-    const defaults = JSON.parse(process.env.NIMROD_FIXTURE_COPILOT_DEFAULTS || '{"model":"small","effortLevel":"low"}');
+    const defaults = { ...this.userSettings, ...JSON.parse(process.env.NIMROD_FIXTURE_COPILOT_DEFAULTS || '{}') };
     for (const [key, source] of [['model', 'model'], ['reasoningEffort', 'effortLevel']]) {
       if (defaults[source] === null || defaults[source] === undefined) assert.equal(Object.hasOwn(config, key), false, `omit unset ${key}`);
       else assert.equal(config[key], defaults[source], `honor the configured ${key}`);

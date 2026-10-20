@@ -3,7 +3,7 @@ import { installInlineCompletion } from './inline-completion';
 
 export interface SlashCommand {
   name: string; description: string; source: "GUI" | "Extension" | "Template" | "Skill" | "Agent";
-  input?: { hint: string; required?: boolean; choices?: { name: string; description: string }[] };
+  input?: { hint: string; required?: boolean; choices?: { name: string; description: string }[]; valueHint?: string };
 }
 
 export function slashCommands(raw: unknown): SlashCommand[] {
@@ -32,6 +32,7 @@ export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLEle
   let argumentCommand: SlashCommand | undefined;
   let argumentPrefix = '';
   let argumentQuery = '';
+  let valueStage = false;
   let argumentSelected = false;
   let selected = 0;
   let previousQuery: string | undefined;
@@ -57,9 +58,10 @@ export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLEle
     if (argumentCommand) {
       hideList();
       const candidate = matches[selected];
-      const hint = argumentCommand.input?.hint.trim() || (matches.length ? matches.map(choice => choice.name).join('|') : '');
+      const hint = (valueStage ? argumentCommand.input?.valueHint : argumentCommand.input?.hint)?.trim()
+        || (matches.length ? matches.map(choice => choice.name).join('|') : '');
       const placeholder = /^[\[<]/.test(hint) ? hint : argumentCommand.input?.required ? `<${hint}>` : `[${hint}]`;
-      const completing = !!candidate && (!!argumentQuery || argumentSelected);
+      const completing = !valueStage && !!candidate && (!!argumentQuery || argumentSelected);
       const suffix = completing ? candidate.name.slice(argumentQuery.length) : argumentQuery || !hint ? '' : placeholder;
       const separator = input.value === argumentPrefix.trimEnd() ? ' ' : '';
       const announcement = candidate && (completing || !hint)
@@ -100,6 +102,7 @@ export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLEle
       || input.selectionStart !== input.selectionEnd || input.selectionEnd !== input.value.length || dismissed === input.value) { close(); return; }
     let query = slashQuery(input.value, input.selectionStart, input.selectionEnd);
     argumentCommand = undefined;
+    valueStage = false;
     // An exact command can show its hint without requiring a trailing space.
     const args = /^\/([^\s/]+)(?:([ \t])([\s\S]*))?$/.exec(input.value);
     const command = args && commands.find(command => command.name.toLowerCase() === args[1].toLowerCase());
@@ -107,6 +110,12 @@ export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLEle
       argumentCommand = command;
       argumentPrefix = args![2] ? input.value.slice(0, args![1].length + 2) : `${input.value} `;
       argumentQuery = args![3] ?? '';
+      const first = /^([^\s]+)(?:\s+([\s\S]*))?$/.exec(argumentQuery);
+      if (command.input.valueHint && first && command.input.choices?.some(choice => choice.name.toLowerCase() === first[1].toLowerCase())) {
+        valueStage = true;
+        argumentPrefix = `${argumentPrefix}${first[1]} `;
+        argumentQuery = first[2] ?? '';
+      }
       query = argumentQuery.toLowerCase();
     }
     if (query === undefined) { close(); return; }
@@ -115,11 +124,11 @@ export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLEle
     if (context !== previousQuery) argumentSelected = false;
     previousQuery = context;
     // Inline suffixes must be literal prefix completions, not fuzzy rewrites.
-    matches = argumentCommand
+    matches = valueStage ? [] : argumentCommand
       ? (argumentCommand.input?.choices ?? []).filter(choice => choice.name.toLowerCase().startsWith(query!))
         .map(choice => ({ ...choice, source: argumentCommand!.source }))
       : matchSlashCommands(commands, query);
-    if (!matches.length && !(argumentCommand?.input?.hint && !argumentQuery)) { close(); return; }
+    if (!matches.length && !(argumentCommand && (valueStage ? argumentCommand.input?.valueHint : argumentCommand.input?.hint) && !argumentQuery)) { close(); return; }
     selected = Math.max(0, matches.findIndex(command => command.name === previous));
     draw();
   }

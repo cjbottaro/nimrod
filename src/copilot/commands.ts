@@ -5,8 +5,22 @@ export interface CopilotCommand extends SlashCommand {
   kind: 'builtin' | 'skill' | 'client';
   aliases: string[];
   allowDuringAgentExecution: boolean;
+  configValues?: Readonly<Record<string, readonly CommandChoice[]>>;
 }
 const name = (value: unknown): value is string => typeof value === 'string' && !!value && !/[\s\u0000-\u001f/]/.test(value);
+function configValueMap(value: unknown): Readonly<Record<string, readonly CommandChoice[]>> | undefined {
+  if (!record(value)) return;
+  const result: Record<string, CommandChoice[]> = {};
+  for (const [key, choices] of Object.entries(value)) {
+    if (!Array.isArray(choices)) return;
+    result[key] = choices.map(choice => {
+      if (!record(choice) || typeof choice.id !== 'string' || !choice.id || typeof choice.label !== 'string'
+        || choice.detail !== undefined && typeof choice.detail !== 'string') throw new Error('Copilot returned invalid config choices.');
+      return { id: choice.id, label: choice.label, detail: choice.detail };
+    });
+  }
+  return result;
+}
 
 /** Released SDK metadata only; never infer a grammar from descriptions. */
 export function copilotCommands(raw: unknown): CopilotCommand[] {
@@ -18,13 +32,15 @@ export function copilotCommands(raw: unknown): CopilotCommand[] {
     const input = record(value.input) && typeof value.input.hint === 'string' ? {
       hint: value.input.hint,
       required: value.input.required === true,
+      valueHint: typeof value.input.valueHint === 'string' ? value.input.valueHint : undefined,
       choices: Array.isArray(value.input.choices) ? value.input.choices.filter(record)
         .filter(choice => typeof choice.name === 'string' && !!choice.name && !/[\r\n\u0000]/.test(choice.name))
         .map(choice => ({ name: String(choice.name), description: typeof choice.description === 'string' ? choice.description : '' })) : undefined,
     } : undefined;
+    const configValues = configValueMap(value.configValues);
     commands.push({ name: value.name, description: typeof value.description === 'string' ? value.description : 'Copilot command', source: 'Agent',
       kind: value.kind as CopilotCommand['kind'], aliases: Array.isArray(value.aliases) ? value.aliases.filter(name) : [],
-      allowDuringAgentExecution: value.allowDuringAgentExecution === true, input });
+      allowDuringAgentExecution: value.allowDuringAgentExecution === true, input, configValues });
   }
   return commands;
 }
@@ -55,6 +71,9 @@ export function isCopilotSkillsInfo(command: CopilotCommand, input: string | und
 }
 export function isCopilotSessionRename(command: CopilotCommand, input: string | undefined): boolean {
   return command.kind === 'builtin' && command.name.toLowerCase() === 'session' && input?.trim().toLowerCase() === 'rename';
+}
+export function isCopilotConfig(command: CopilotCommand): boolean {
+  return command.kind === 'client' && command.name.toLowerCase() === 'config';
 }
 export interface CommandChoice { id: string; label: string; detail?: string; }
 
