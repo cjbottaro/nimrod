@@ -16,7 +16,7 @@ export function validateSignature(details: string, identifier: string): void {
 
 export function verifyMacosBundle(app: string, identifier: string): void {
   const sdk = path.join(app, 'Contents', 'Resources', 'resources', 'copilot');
-  for (const file of ['bridge.mjs', 'configuration.mjs', 'command-effects.mjs', 'permissions.mjs', 'node_modules/@github/copilot-sdk/dist/client.js', 'node_modules/koffi/package.json']) {
+  for (const file of ['bridge.mjs', 'configuration.mjs', 'config-command.mjs', 'command-effects.mjs', 'permissions.mjs', 'node_modules/@github/copilot-sdk/dist/client.js', 'node_modules/koffi/package.json']) {
     if (!existsSync(path.join(sdk, file))) throw new Error(`Missing bundled Copilot SDK resource: ${file}`);
   }
   const inspect = (directory: string) => {

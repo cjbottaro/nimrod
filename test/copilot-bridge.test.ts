@@ -466,6 +466,10 @@ test('SDK commands use discovery/invocation, retain arguments and choices, and n
   try {
     await f.request('initialize'); await f.request('connect', { sessionId: 'fixture-sdk' });
     assert.equal(f.packets.find(packet => packet.kind === 'commands')?.commands[0].input.choices[0].name, 'show');
+    const config = f.packets.find(packet => packet.kind === 'commands')?.commands.find((command: { name: string }) => command.name === 'config');
+    assert.ok(config.input.choices.some((choice: { name: string }) => choice.name === 'dynamicRetrieval.mcp'));
+    assert.equal(config.input.valueHint, '[value]');
+    assert.equal((await f.request('command', { name: 'config', input: 'memory false' })).kind, 'text');
     const menu = await f.request('command', { name: 'permissions' });
     assert.equal(menu.kind, 'text'); assert.equal(menu.text, 'Fixture permission report: show');
     const report = await f.request('command', { name: 'perms', input: 'show  literal\nrest' });

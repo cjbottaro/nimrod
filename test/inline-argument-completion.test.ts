@@ -15,6 +15,10 @@ const commands = [
     ],
   } },
   { name: 'required', kind: 'builtin', input: { hint: 'name', required: true } },
+  { name: 'config', kind: 'client', input: { hint: '[key]', valueHint: '[value]', choices: [
+    { name: 'model', description: 'Default model' },
+    { name: 'memory', description: 'Memory setting' },
+  ] } },
 ];
 function fixture(configure?: (window: JSDOM['window']) => void) {
   const dom = new JSDOM('<div><textarea aria-describedby="existing"></textarea><div id="suggestions" role="listbox"></div><button>Other</button></div>', { pretendToBeVisual: true });
@@ -183,5 +187,18 @@ test('command names keep the existing menu and Tab insertion before arguments sw
     assert.match(f.list.textContent!, /\/review-pr/);
     f.key('Tab'); assert.equal(f.input.value, '/review-pr ');
     assert.equal(f.list.hidden, true); assert.equal(f.ghost(), '[instructions for the skill]');
+  } finally { f.close(); }
+});
+
+test('a selected key advances to a value-only inline hint without value suggestions', () => {
+  const f = fixture();
+  try {
+    f.type('/config m');
+    assert.equal(f.ghost(), 'odel');
+    f.key('Tab');
+    assert.equal(f.input.value, '/config model ');
+    assert.equal(f.ghost(), '[value]');
+    f.type('/config model gpt');
+    assert.equal(f.hidden(), true, 'values remain free-form without completion');
   } finally { f.close(); }
 });

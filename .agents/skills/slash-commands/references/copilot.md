@@ -27,6 +27,7 @@ Canonical protocol/lifecycle: [Copilot commands](../../features/references/copil
 | `/blame` | — | Transcript output, linked sessions | Unaudited |
 | `/chronicle` | — | History reports/search/index | Unaudited; advertised subcommands, some potentially model-backed/stateful |
 | `/compact` | — | Context/history/usage | Unaudited; model-backed compaction requires separate authorization |
+| `/config` | — | Defaults for future Copilot sessions | **Source implemented client adapter**: dynamic/top-level SDK keys plus pinned nested path catalog; curated typed values for agent defaults and free-form SDK-confirmed values elsewhere |
 | `/context` | — | Transcript-only context report | **Generic observed**: typed text output renders correctly; no adapter |
 | `/cwd` | `/cd` | Working directory, permissions, project ownership | Unaudited; high-risk semantic conflict with Nimrod's one-directory-per-window contract |
 | `/env` | — | Transcript environment report | **Generic observed**: Markdown text output; no state events or adapter |
@@ -61,10 +62,18 @@ Canonical protocol/lifecycle: [Copilot commands](../../features/references/copil
 | `/model` | Bare and exact catalog invocation returned `completed`; no picker/effect/model event, and live model remained unchanged | For bare canonical builtin command, show enabled Copilot catalog; after original invocation, apply only exact enabled catalog IDs with `session.setModel()` and reconcile `model.getCurrent()` | Remove or narrow when the pinned SDK/CLI exposes picker metadata plus a confirmed live-switch effect/event |
 | `/skills info` | Metadata advertises `info`, but omits the required second `<skill-name>` argument; direct invocation returns a usage error | Read `session.skills.list()`, present a harness-owned skill picker, revalidate the choice, then invoke exact `/skills info <name>` | Remove when command metadata/results expose the nested skill choice |
 | `/session rename` | Metadata advertises `rename`, but omits the required second free-form `<name>` argument; direct invocation returns a usage error | Present the shared input modal as a Copilot-owned interaction, revalidate the command, then invoke exact `/session rename <name>` | Remove when command metadata/results expose the nested free-form input |
+| `/config` | Terminal TUI command is absent from `commands.list()` and direct invocation returns unknown-command; SDK settings metadata omits nested paths and UI schema | Synthesize a Copilot-owned client command from `user.settings.get/set`, public model metadata and a pinned path-only nested-key supplement; validate/confirm every write | Replace the supplement and curated choices when Copilot exposes its structured settings registry through the SDK |
 
 ## Presentation compatibility
 
 All advertised command classes use the shared [inline argument completion](../../features/references/composer.md#shared-slash-completion): native hints remain placeholders, literal choices support prefix/Tab completion and arrow cycling, and command-name suggestions remain a menu. No command-specific argument grammar or skill-body parsing is introduced. Source/fixtures are implemented; latest native acceptance is pending.
+
+`/config` adds a second inline stage: `/config [key]` completes only known
+setting keys, then `/config <key> [value]` accepts free-form value text without
+value autocomplete. Executing one of the curated agent-default keys uses a
+harness-owned picker; other keys use a shared free-form input when invoked
+without a value. The terminal-client descriptions/type registry is not copied;
+generic rows are labelled as Copilot settings and writes remain SDK-authoritative.
 
 Known rejected commands use a compact red-accent operation card with the
 actionable harness error inline and wrapping. SDK transport prefixes and

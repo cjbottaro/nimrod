@@ -239,6 +239,12 @@ catalog state. Pass richer syntax through untouched when its grammar is not
 public. Record the exact interface gap and removal condition so a later
 SDK/agent improvement can retire the adapter.
 
+For terminal-client-only commands absent from harness discovery, synthesize a
+command only when public harness APIs can provide authoritative discovery,
+validation, mutation and confirmation. Document the pinned compatibility
+catalog separately from dynamic metadata. Never parse terminal screen output at
+runtime or route the adapter through an unrelated Nimrod action.
+
 ## Compatibility audit
 
 Do not discover exceptions by blindly invoking every command. Commands can

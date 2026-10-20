@@ -239,6 +239,45 @@ test('Set permissions action invokes the advertised harness command through a Co
   } finally { f.session.disconnect('fixture complete'); }
 });
 
+test('Copilot /config uses typed curated choices and the original Command card', async () => {
+  const command = {
+    name: 'config', kind: 'client', description: 'Configure defaults', allowDuringAgentExecution: false,
+    input: { hint: '[key]', valueHint: '[value]', choices: [
+      { name: 'model', description: 'Default model' }, { name: 'memory', description: 'Copilot setting' },
+    ] },
+    configValues: { model: [{ id: 'large', label: 'Fixture large', detail: 'large' }] },
+  };
+  const f = await fixture(async (title, choices) => {
+    assert.equal(title, 'Copilot /config model');
+    assert.equal(choices[0].label, 'Fixture large');
+    return 'large';
+  }, [command]);
+  try {
+    const handling = f.session.handle({ type: 'command', id: 'config-model', text: '/config model' }); await flush();
+    assert.deepEqual(f.sent.at(-1) && { method: f.sent.at(-1)!.method, name: f.sent.at(-1)!.name, input: f.sent.at(-1)!.input },
+      { method: 'command', name: 'config', input: 'model large' });
+    f.reply({ kind: 'text', text: 'Configured model for future Copilot sessions.' }); await handling;
+    assert.equal(f.session.state.configurationOperations?.at(-1)?.title, 'Copilot command');
+    assert.equal(f.sent.some(request => request.method === 'configure'), false);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('Copilot /config requests a free-form value for non-curated keys', async () => {
+  const command = {
+    name: 'config', kind: 'client', description: 'Configure defaults', allowDuringAgentExecution: false,
+    input: { hint: '[key]', valueHint: '[value]', choices: [{ name: 'memory', description: 'Copilot setting' }] },
+    configValues: {},
+  };
+  const f = await fixture(undefined, [command], [], async title => {
+    assert.equal(title, 'Copilot /config memory'); return 'false';
+  });
+  try {
+    const handling = f.session.handle({ type: 'command', id: 'config-memory', text: '/config memory' }); await flush();
+    assert.equal(f.sent.at(-1)?.input, 'memory false');
+    f.reply({ kind: 'text', text: 'Configured memory for future Copilot sessions.' }); await handling;
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
 test('cancelling an advertised-argument picker invokes nothing; required choices and stale catalogs stay safe', async () => {
   for (const cancel of ['escape', 'hidden', 'catalog']) {
     let choose!: (value: string | undefined) => void;

@@ -17,7 +17,7 @@ import { createCopilotConfiguration } from './session-configuration';
 import { SessionConfigurationSet } from '../session-configuration-set';
 import { ConfigurationDeferred, ConfigurationSuperseded, type SessionConfigurationController } from '../session-configuration';
 import { pickConfiguration } from '../configuration-picker';
-import { commandChoices, copilotCommands, copilotSkillChoices, findCopilotCommand, isCopilotModelCommand, isCopilotSessionRename, isCopilotSkillsInfo, parseCopilotCommand, type CommandChoice, type CopilotCommand } from './commands';
+import { commandChoices, copilotCommands, copilotSkillChoices, findCopilotCommand, isCopilotConfig, isCopilotModelCommand, isCopilotSessionRename, isCopilotSkillsInfo, parseCopilotCommand, type CommandChoice, type CopilotCommand } from './commands';
 
 interface Model extends CopilotImageModel {
   id: string;
@@ -252,6 +252,31 @@ export class CopilotSession {
         const current = findCopilotCommand(this.commands, name);
         if (!current || current.name !== command.name || !current.input?.choices?.some(choice => choice.name === selected)) throw new Error('Copilot command choices changed. Open the picker again.');
         input = selected;
+      }
+      if (isCopilotConfig(command)) {
+        const match = typeof input === 'string' ? /^([^\s]+)(?:\s+([\s\S]*))?$/.exec(input.trim()) : undefined;
+        const key = match?.[1], rawValue = match?.[2]?.trim();
+        if (key && !rawValue) {
+          const values = command.configValues?.[key];
+          if (values) {
+            if (!values.length) throw new Error(`Configure /config model before setting ${key}.`);
+            if (!this.ui.commandChoice) throw new Error('This Copilot config setting requires a picker that is unavailable.');
+            const selected = await this.ui.commandChoice(`Copilot /config ${key}`, values, operation.signal);
+            if (operation.signal.aborted || this.ended || selected === undefined) return false;
+            const current = findCopilotCommand(this.commands, command.name);
+            if (!current || !isCopilotConfig(current) || !current.configValues?.[key]?.some(choice => choice.id === selected))
+              throw new Error('Copilot config choices changed. Open the command again.');
+            input = `${key} ${selected}`;
+          } else {
+            if (!this.ui.commandInput) throw new Error('This Copilot config setting requires a value input that is unavailable.');
+            const value = await this.ui.commandInput(`Copilot /config ${key}`, operation.signal);
+            if (operation.signal.aborted || this.ended || !value?.trim()) return false;
+            const current = findCopilotCommand(this.commands, command.name);
+            if (!current || !isCopilotConfig(current) || !current.input?.choices?.some(choice => choice.name === key))
+              throw new Error('Copilot config settings changed. Open the command again.');
+            input = `${key} ${value.trim()}`;
+          }
+        }
       }
       // CLI 1.0.98 advertises `info` as a finite /skills choice, but omits the
       // required second skill-name argument. Complete that harness interaction

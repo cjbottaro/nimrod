@@ -2,6 +2,7 @@ import { createInterface } from 'node:readline';
 import { isAbsolute } from 'node:path';
 import { createCopilotConfiguration } from './configuration.mjs';
 import { completeCommandEffect } from './command-effects.mjs';
+import { applyConfigCommand, configCommand } from './config-command.mjs';
 import { validPermissionDecision } from './permissions.mjs';
 
 const [cli, cwd] = process.argv.slice(2);
@@ -45,7 +46,8 @@ async function refreshCommands() {
   commandRefresh = (async () => {
     const { commands } = await session.rpc.commands.list();
     if (!Array.isArray(commands)) throw new Error('Copilot returned an invalid command catalog');
-    send({ kind: 'commands', commands });
+    const additions = commands.some(command => command.name?.toLowerCase() === 'config') ? [] : [await configCommand(client)];
+    send({ kind: 'commands', commands: [...commands, ...additions] });
   })().finally(() => { commandRefresh = undefined; });
   return commandRefresh;
 }
@@ -209,6 +211,12 @@ async function dispatch(message) {
         const { commands } = await session.rpc.commands.list();
         const command = commands.find(item => item.name.toLowerCase() === message.name.toLowerCase())
           ?? commands.find(item => item.aliases?.some(alias => alias.toLowerCase() === message.name.toLowerCase()));
+        if (!command && message.name.toLowerCase() === 'config') {
+          if (working) throw new Error('Copilot started working before command dispatch. Nothing was invoked.');
+          const result = await applyConfigCommand(client, message.input);
+          await refreshCommands();
+          return result;
+        }
         if (!command) throw new Error('This command is not advertised by Copilot. Nothing was invoked.');
         if (working && command.allowDuringAgentExecution !== true) throw new Error('Copilot started working before command dispatch. Nothing was invoked.');
         const invoked = await session.rpc.commands.invoke({ name: command.name, ...(message.input !== undefined ? { input: message.input } : {}) });

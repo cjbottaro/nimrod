@@ -79,6 +79,15 @@ free-form-name interaction; its shared-input adapter and sanitized fixtures are
 source-authored and unrun. No user settings/project/session or provider request
 was touched.
 
+CLI 1.0.98 evidence shows `/config` is absent from SDK command discovery and
+direct invocation returns unknown-command. Public `user.settings.get/set`
+provides values/defaults and writes but not the terminal client's structured
+path/type/description registry. The source-implemented adapter uses dynamic SDK
+keys, a pinned path-only nested supplement, curated public agent-default choices
+and confirmed writes. Offline command/bridge/inline-completion fixtures are
+authored unrun; native picker, persistence and restart/default acceptance remain
+pending.
+
 - TypeScript/jsdom shell tests use mocked native IPC.
 - Rust fixture tests use actual pipes, owned subprocesses and generated disposable session files; deletion tests unlink only those fixtures.
 - Automated Playwright WebKit exercises real browser layout/events with an offline child fixture and mock Tauri operations. Its CSS zoom is not native WKWebView zoom.
