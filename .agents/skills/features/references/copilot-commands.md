@@ -78,12 +78,13 @@ shortcut](live-permissions.md) starts that same advertised command owner.
   choices/descriptions. Names/aliases are matched case-insensitively; canonical
   names win over conflicting aliases. Preserve complete raw argument text,
   including internal/trailing spaces and newlines, after the first delimiter.
-- Shared slash suggestions handle command names and full argument prefixes while
-  the caret is at the draft's end. Hints remain visible without selectable rows;
-  they never consume Enter. No inferred grammar, dynamic argument callbacks or
-  directory completion is claimed. SDK directory-completion hints are not yet
-  implemented; free-text remains available.
-- Tab/click and Enter on a typed argument accept suggestions only. Arrows select
+- The shared [composer completion](composer.md#shared-slash-completion) keeps
+  command-name menus and presents argument hints/literal-prefix completions
+  inline at the draft's end. Hints alone never consume Enter or insert prose.
+  No inferred grammar, dynamic argument callbacks or directory completion is
+  claimed. SDK directory-completion hints are not yet implemented; free-text
+  remains available.
+- Tab and Enter on a typed argument accept completions only. Arrows select
   a choice; Enter on a blank argument without arrow selection submits the command
   intent. If the command advertises literal argument choices, an empty argument
   opens the shared palette-style picker **before any SDK invocation**. Escape
@@ -172,8 +173,9 @@ use the existing bounded request timeout/unknown-outcome disconnect contract.
 - `src/copilot/command-queue.ts`: connection-local FIFO, readiness-driven drain, immutable operation progress, cancellation and disconnect outcome fencing.
 - `src/copilot/{session,view-policy}.ts`: command intent, operation ownership,
   result interpretation, labelled output and submission receipts.
-- `src/pi/slash-completion.ts`: optional presentation-only argument hints/choices;
-  Pi command resolution and submission policy are unchanged.
+- `src/pi/{slash-completion,inline-completion}.ts`: shared metadata-driven
+  inline argument hints/completions; [composer](composer.md#shared-slash-completion)
+  owns presentation and keyboard behavior. Pi resolution/submission policy is unchanged.
 - `src/command-palette.ts`, `src/main.ts`: shared described-choice/standalone page
   and exact session-bound modal composition. No command names become app actions.
   The shell's `session` initializer is explicitly typed `CopilotSession`: its

@@ -106,7 +106,9 @@ A **card** needn't have a visible rectangle. A **disclosure** expands/collapses;
 - **Session notices** — session-owned operational feedback at the top of its conversation area, above and outside the transcript pane, aligned with its gutters. Visible only in that session; not transcript entries or sidebar indicators.
 - **Application notice strip** (or **notice strip**) — shell-owned window/application feedback 48 CSS pixels below the viewport top, including Settings/dialogs. It reserves space and remains accessible through the active dialog's top layer. [Error presentation](../features/references/error-presentation.md) owns placement, routing and lifecycle for both notice surfaces.
 - **Submission notice** — legacy standalone-renderer feedback near the composer; the app routes this feedback to session notices.
-- **Slash suggestions** — autocomplete above the composer.
+- **Slash suggestions** — command-name autocomplete menu above the composer.
+- **Inline argument hint** — muted, non-insertable command-input placeholder after the caret; not part of the draft.
+- **Ghost completion** — muted untyped suffix of an advertised argument choice; Tab accepts it into the draft, Up/Down cycle matches.
 - **Keybinding editor / key recorder** — action shortcut list and nested combination-capture dialog.
 - **Open project / Open recent project** — native directory chooser versus searchable recent-directory picker.
 - **Settings gear / Runtime paths / Zoom picker** — Project settings entry in the Project bar, next-launch executable preferences and whole-webview scale selector.

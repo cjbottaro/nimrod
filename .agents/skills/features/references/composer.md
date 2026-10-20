@@ -31,6 +31,50 @@ Idle sends and busy Enter steering clear the editable draft immediately, indepen
 
 Image attachment behavior and its text-only queue recovery boundary are covered in [Image paste](image-paste.md). Error/uncertainty presentation follows the [error presentation policy](error-presentation.md); this reference owns delivery semantics, not a separate error surface.
 
+## Shared slash completion
+
+`src/pi/slash-completion.ts` owns presentation-only completion using each
+integration's advertised command metadata. Command names keep the existing
+fuzzy-matched suggestion menu. An exact command with input metadata switches to
+inline argument guidance even without a trailing space; aliases retain their
+original spelling and first whitespace delimiter on insertion.
+
+- Empty input shows a muted harness hint, bracketed for optional input or angled
+  for required input unless the supplied hint already has a delimiter. Hints
+  are never inserted. Literal choices can supply a fallback hint, but free-text
+  prose is never parsed into choices.
+- Typed arguments use case-insensitive **literal prefix** matching against
+  advertised choices (not fuzzy argument rewrites). The selected candidate's
+  untyped suffix appears as ghost text; Up/Down cycle matches and Tab accepts
+  the exact choice plus the existing trailing space. No completion invokes a
+  command. Unmatched/free-text input hides the hint.
+- Preserve existing Enter semantics: typed matching arguments or an explicit
+  arrow selection accept completion only; empty arguments without arrow
+  selection pass through to submission. Optional hint-only skills can submit
+  bare. Modified keys, selection/mid-draft editing and IME never accept ghosts.
+  Escape dismisses until the draft changes.
+- `src/pi/inline-completion.ts` mounts an aria-hidden, pointer-transparent,
+  unselectable mirror outside the textarea. Typed text remains transparent in
+  the mirror; a zero-width inline anchor keeps the suffix at the caret without
+  changing wrapping or composer height. Hints/completions clip at the current
+  line's content edge rather than adding lines. Shared typography and native
+  textarea content-box ResizeObserver sizing preserve font/zoom/wrapped-prefix
+  alignment, including scrollbars; scroll events translate only the mirror.
+  Argument typing adds no synchronous layout measurements.
+- An associated live status announces hints/candidates and cycling instructions;
+  the hidden argument menu has no active descendant. Ghost text is never part
+  of drafts, selection, clipboard, persistence or submitted text. Blur,
+  composition, locks, session hiding, catalog removal and disposal clear it.
+  The mounted view owns activation/disposal and listener/observer cleanup.
+
+Authored fixtures: `test/inline-argument-completion.test.ts`, updated
+`test/copilot-commands.test.ts` / `test/shell.test.ts`, and
+`test/browser/inline-argument-completion.spec.ts`. They cover insertion versus
+submission, aliases/raw delimiters, optional hints, ambiguous prefixes, keyboard
+and lifecycle guards, accessibility, typography/wrapped-prefix/scroll geometry
+and unchanged draft text. These fixtures are unrun; native appearance and
+accessibility acceptance remain pending.
+
 ## Shared modifier feedback
 
 All mounted conversations use `src/composer-hints.ts`. `ConversationInteraction.composer().hint` accepts structured `ComposerHint` entries (`text`, optional exact `modifiers`) or a status-only string. Integrations contribute only hints for their real capabilities; new integrations reuse this metadata and shared renderer, never parse labels or add harness branches. `newlineHint` and `sendHint` are shared contributions; Pi separately contributes its busy-only Alt/Option queue hint. Existing hint text and order are unchanged.
