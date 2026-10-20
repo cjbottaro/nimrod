@@ -359,7 +359,7 @@ pub async fn start_acp(
         token,
         cwd.clone(),
         command,
-        Output::channel(window.clone(), on_event),
+        Output::channel(on_event),
     )
     .await?;
     Ok(cwd)

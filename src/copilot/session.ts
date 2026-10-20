@@ -92,7 +92,6 @@ export class CopilotSession {
   constructor(send: (message: BridgeRequest) => Promise<void>, private ui: CopilotSessionUi) {
     this.connection = new CopilotConnection(async message => {
       this.capture(`request.${message.method}`, message);
-      if (this.ui.transcriptLog?.enabled && this.ui.transcriptLog.flush) await this.ui.transcriptLog.flush();
       return send(message);
     }, packet => this.packet(packet), reason => {
       this.capture('bridge.disconnected', { reason });

@@ -3,7 +3,6 @@ import test from 'node:test';
 import { createTranscriptLog, type TranscriptLogRecord } from '../src/transcript-logs';
 import { PiTranscriptLog } from '../src/pi/transcript-logs';
 import { PiTransport } from '../src/pi/transport';
-import { transcriptLogDelivery } from '../src/transcript-log-delivery';
 
 const event = (payload: unknown = { args: { path: 'fixture' } }): TranscriptLogRecord => ({
   source: { backend: 'pi', agent: 'pi' }, sessionId: 'fixture-session', toolCallId: 'extension-call',
@@ -46,7 +45,7 @@ test('synchronous replay bursts span bounded native batches instead of stopping 
     assert.deepEqual(f.batches.flat().map(line => JSON.parse(line).payload.index), Array.from({ length: 600 }, (_, index) => index));
   } finally { f.capture.dispose(); }
 });
-test('a producer waits for the consumer and drains a history burst without dropping records', async () => {
+test('the independent diagnostic drain preserves accepted order through slow queue admission', async () => {
   const batches: string[][] = [];
   let finish!: () => void;
   const f = fixture(lines => {
@@ -71,7 +70,7 @@ test('a producer waits for the consumer and drains a history burst without dropp
     assert.deepEqual(f.errors, []);
   } finally { f.capture.dispose(); }
 });
-test('a history operation above the former 8 Mi-character limit waits without stopping capture', async () => {
+test('a history burst within the bounded snapshot budget retains whole records', async () => {
   let finish!: () => void;
   const batches: string[][] = [];
   const f = fixture(lines => {
@@ -143,23 +142,87 @@ test('a synchronous storage failure stops logging without retry', async () => {
     assert.equal(f.errors.length, 1);
   } finally { f.capture.dispose(); }
 });
-test('native delivery applies each packet synchronously and acknowledges only after logging drains', async () => {
+test('Pi packets and outgoing requests continue while diagnostic admission is blocked', async () => {
   let finish!: () => void;
   const f = fixture(() => new Promise<void>(resolve => { finish = resolve; }));
-  const received: unknown[] = [], acknowledgements: string[] = [], errors: unknown[] = [];
+  const received: unknown[] = [], sent: unknown[] = [];
   f.capture.setEnabled(true);
-  const receive = transcriptLogDelivery(packet => { received.push(packet); f.capture.append(event(packet)); },
-    f.capture, async id => { acknowledgements.push(id); }, error => errors.push(error));
-  receive({ kind: 'rpc', value: { type: 'fixture' } });
-  assert.equal(received.length, 1, 'authoritative state is applied before any promise continuation');
-  receive({ kind: 'logBarrier', id: 'delivery' });
-  assert.deepEqual(acknowledgements, []);
-  finish();
-  await f.capture.flush(); await Promise.resolve(); await Promise.resolve();
-  assert.deepEqual(acknowledgements, ['delivery']);
-  assert.deepEqual(errors, []);
-  f.capture.dispose();
+  const rpc = new PiTransport(async message => { sent.push(message); });
+  rpc.onEvent = packet => { received.push(packet); f.capture.append(event(packet)); };
+  rpc.onTrace = (_name, packet) => f.capture.append(event(packet));
+  rpc.receive({ kind: 'rpc', value: { type: 'first' } });
+  const diagnostic = f.capture.flush();
+  rpc.receive({ kind: 'rpc', value: { type: 'second' } });
+  const request = rpc.request('get_state');
+  assert.equal(received.length, 2, 'ordered semantic application never waits for logging');
+  assert.equal(sent.length, 1, 'outgoing dispatch never waits for logging');
+  rpc.receive({ kind: 'rpc', value: { type: 'response', id: 'nimrod-1', command: 'get_state', success: true } });
+  await request;
+  // Retire pending diagnostics before releasing the old admission promise.
+  f.capture.setEnabled(false); finish(); await diagnostic; f.capture.dispose();
 });
+
+test('frontend queue overflow drops whole records, reports loss and leaves sequence gaps', async () => {
+  const batches: string[][] = [], losses: number[] = [];
+  const capture = createTranscriptLog({ write: async lines => { batches.push(lines); }, failure: message => assert.fail(message),
+    recovered() {}, dropped: count => losses.push(count) });
+  try {
+    capture.setEnabled(true);
+    for (let i = 0; i < 4200; i++) capture.append(event({ i }));
+    // The full queue can reject without inspecting another potentially expensive payload.
+    capture.append(event({ toJSON() { throw new Error('must not serialize dropped data'); } }));
+    await capture.flush();
+    assert.equal(capture.enabled, true); assert.equal(capture.droppedRecords, 105);
+    assert.equal(batches.flat().length, 4096); assert.deepEqual(losses, [105]);
+    capture.append(event({ afterGap: true })); await capture.flush();
+    assert.equal(JSON.parse(batches.flat().at(-1)!).sequence, 4202);
+    capture.append(event({ text: 'x'.repeat(17 * 1024 * 1024) })); await capture.flush();
+    assert.equal(capture.droppedRecords, 106, 'oversized diagnostics are dropped whole, not truncated');
+  } finally { capture.dispose(); }
+});
+
+test('loss notification does not wait for an already blocked diagnostic IPC', async () => {
+  let release!: () => void;
+  const losses: number[] = [];
+  const capture = createTranscriptLog({ write: () => new Promise<void>(resolve => { release = resolve; }),
+    failure: message => assert.fail(message), recovered() {}, dropped: count => losses.push(count) });
+  let diagnostic: Promise<void> | undefined;
+  try {
+    capture.setEnabled(true); capture.append(event()); diagnostic = capture.flush();
+    for (let i = 0; i < 4097; i++) capture.append(event({ i }));
+    await new Promise(resolve => setTimeout(resolve, 75));
+    assert.deepEqual(losses, [1]);
+    assert.equal(capture.enabled, true);
+  } finally { capture.setEnabled(false); release(); await diagnostic; capture.dispose(); }
+});
+
+test('native queue rejection is diagnostic loss, not a session failure or retry', async () => {
+  const batches: string[][] = [], losses: number[] = [];
+  let calls = 0;
+  const capture = createTranscriptLog({ write: async lines => { calls++; if (calls === 1) return { accepted: false }; batches.push(lines); return { accepted: true }; },
+    failure: message => assert.fail(message), recovered() {}, dropped: count => losses.push(count) });
+  try {
+    capture.setEnabled(true);
+    for (let i = 0; i < 600; i++) capture.append(event({ i }));
+    await capture.flush();
+    assert.equal(calls, 2); assert.equal(capture.enabled, true);
+    assert.deepEqual(losses, [512]); assert.equal(JSON.parse(batches[0][0]).sequence, 513);
+  } finally { capture.dispose(); }
+});
+
+test('asynchronous native write errors retire only their originating capture', async () => {
+  const f = fixture();
+  try {
+    f.capture.setEnabled(true); f.capture.append(event()); await f.capture.flush();
+    const old = JSON.parse(f.batches[0][0]).captureId;
+    f.capture.setEnabled(false); f.capture.setEnabled(true); f.capture.append(event()); await f.capture.flush();
+    const current = JSON.parse(f.batches[1][0]).captureId;
+    f.capture.writeFailed(old, 'old storage failure'); assert.equal(f.capture.enabled, true);
+    f.capture.writeFailed(current, 'current storage failure'); assert.equal(f.capture.enabled, false);
+    assert.equal(f.errors.length, 1);
+  } finally { f.capture.dispose(); }
+});
+
 test('Pi transcript logs preserve native prose, reasoning, partial inputs and authoritative results', () => {
   const records: TranscriptLogRecord[] = [];
   const capture = new PiTranscriptLog({ enabled: true, append: record => { records.push(record); } });

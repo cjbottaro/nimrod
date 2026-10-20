@@ -214,20 +214,33 @@ Grouped Pi codemode cards are source-implemented. Authored fixtures in `test/cod
 
 ## Transcript logging
 
-The same CLI 1.0.100 completion trace above showed native completion at
+Before this correction, the CLI 1.0.100 trace above showed native completion at
 05:16:59.794Z reaching frontend capture at 05:25:00.499Z—about eight minutes later.
 Receipt spacing through the drained tail was often around 20–40 ms per record.
-Source inspection identifies per-packet log-flush/acknowledgement flow control as
-a serialization point; this does not separately measure disk, IPC or rendering
-cost. The warning monitors individual native writes waiting at least one second,
-not accumulated stdout/event-delivery age, so many shorter waits can escape that
-signal. No logger implementation change or performance experiment was performed
-with the completion fix. [Logging contract](transcript-logs.md#queue-producer-backpressure-and-failures)
-owns the current flow-control boundaries.
+Source inspection identified per-packet log-flush/acknowledgement flow control as
+a serialization point; this did not separately measure disk, IPC or rendering
+cost. The former warning observed individual native writes waiting at least one
+second rather than accumulated delivery age, so many shorter waits could escape
+that signal.
 
-Expanded full-content native/history/request/UI logging, rotation and retention fixtures are authored but unrun. The bounded native MPSC writer/backpressure change replaces overflow-stop/chunk generation; new fixtures for waiting producer ordering, whole large events, delayed native acknowledgements and the one-second warning/recovery/cancellation are authored but unrun. The naming cleanup and new/legacy setting precedence/migration fixtures are also unrun; compile checks are not behavioral or platform acceptance. Earlier tool-only offline evidence is preserved in [history](history/transcript-logging.md), not evidence for the expanded logger.
+The best-effort correction removes diagnostic delivery barriers/pre-send flushes
+from Pi/SDK/ACP and history connections, uses bounded timed frontend batching and
+nonblocking native MPSC admission, and reports whole-record loss/asynchronous
+writer failures without affecting sessions. Authored **unrun** regressions cover
+blocked logging with independent Pi event/request delivery and SDK Send/decision/
+Stop/settlement, frontend/native overflow, sequence gaps and loss counts, active
+byte accounting, accepted FIFO order/no retry, and stale capture error isolation.
+Existing storage/rotation/privacy and setting-migration fixtures remain separate.
+No tests, build, app launch or live provider/session operation was performed for
+this correction; mandatory post-merge compilation is not native acceptance.
 
-Remaining macOS/Linux acceptance: actual Pi/extensions, SDK and dormant ACP traffic; empty/duplicate/history correlation; large-event/replay limits and overhead; bounded-channel waiting under slow storage and responsive/cancellable native delivery; one shared warning across concurrent producers/windows and its recovery; global setting synchronization; multi-window/process writes; disk failures, recovery and shutdown tails. Windows behavior is unverified. [Transcript logging](transcript-logs.md) owns contracts and fixture locations.
+Remaining macOS/Linux acceptance: actual high-rate native traffic without the old
+lag; overflow warning/counts and unchanged session behavior during slow/failed
+storage; asynchronous window/segment-scoped error delivery; global setting
+synchronization; large-event/replay snapshot overhead; multi-window/process
+writes; recovery and shutdown tails. Windows behavior is unverified.
+[Transcript logging](transcript-logs.md#queue-best-effort-delivery-and-failures)
+owns the current contract and fixture locations.
 
 ## Remaining acceptance by area
 

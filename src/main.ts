@@ -55,7 +55,6 @@ import type { ColorTheme } from './themes/theme';
 import { measureWork } from './performance-diagnostics';
 import type { HostMessage } from './pi/webview-client';
 import { PiTransport, type Packet } from './pi/transport';
-import { transcriptLogDelivery } from './transcript-log-delivery';
 import { PiSession } from './pi/session';
 import { SessionDrafts, type LastSession } from './pi/session-drafts';
 import { NativeDrafts } from './native-drafts';
@@ -642,8 +641,7 @@ function startCopilotHistory(): CopilotSessionHistory | undefined {
     copilotHistory = new CopilotSessionHistory(project, {
       start: (token, receive, disconnected) => {
         const onEvent = new Channel<Packet>();
-        onEvent.onmessage = transcriptLogDelivery(packet => { if (packet.kind === 'rpc') receive(packet.value); else disconnected(packet.message); },
-          settingsSurface.transcriptLog, id => invoke('acknowledge_transcript_delivery', { id }), error => disconnected(String(error)));
+        onEvent.onmessage = packet => { if (packet.kind === 'rpc') receive(packet.value); else disconnected(packet.message); };
         return invoke('start_copilot', { token, config: { cwd: project, node: runtime.current().node, cli: runtime.current().copilot, generation: copilotGeneration }, onEvent });
       },
       send: (token, message) => invoke('write_copilot', { token, message }),
@@ -1423,8 +1421,7 @@ async function launchCopilot(tab: Tab, acceptedAction = false): Promise<void> {
   tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
   tab.receive?.({ type: 'snapshot', state: session.state });
   const onEvent = new Channel<Packet>();
-  onEvent.onmessage = transcriptLogDelivery(packet => { if (!valid()) return; if (packet.kind === 'rpc') session.receive(packet.value); else session.disconnect(packet.message); },
-    settingsSurface.transcriptLog, id => invoke('acknowledge_transcript_delivery', { id }), error => session.disconnect(String(error)));
+  onEvent.onmessage = packet => { if (!valid()) return; if (packet.kind === 'rpc') session.receive(packet.value); else session.disconnect(packet.message); };
   try {
     const confirmed = await invoke<string>('start_copilot', { token, config: { cwd: project, node: runtime.current().node, cli: runtime.current().copilot, generation: copilotGeneration }, onEvent });
     if (!valid() || confirmed !== project) throw new Error('Native SDK host did not confirm this project');
@@ -1488,8 +1485,7 @@ async function launchAcp(tab: Tab, acceptedAction = false): Promise<void> {
   tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
   tab.receive?.({ type: 'snapshot', state: session.state });
   const onEvent = new Channel<Packet>();
-  onEvent.onmessage = transcriptLogDelivery(packet => { if (!valid()) return; if (packet.kind === 'rpc') session.receive(packet.value); else session.disconnect(packet.message); },
-    settingsSurface.transcriptLog, id => invoke('acknowledge_transcript_delivery', { id }), error => session.disconnect(String(error)));
+  onEvent.onmessage = packet => { if (!valid()) return; if (packet.kind === 'rpc') session.receive(packet.value); else session.disconnect(packet.message); };
   try {
     const confirmed = await invoke<string>('start_acp', { token, config: { cwd: project, command: profile.command, args: profile.args, env: profile.env, node: runtime.current().node }, onEvent });
     if (!valid() || confirmed !== project) throw new Error('Native ACP host did not confirm this project');
@@ -1507,7 +1503,6 @@ async function launchPi(tab: Tab, copyDraft?: string, acceptedAction = false, in
   const token = crypto.randomUUID(); tab.token = token; tab.ended = false;
   const currentToken = () => tabs.includes(tab) && tab.token === token;
   const rpc = new PiTransport(async message => {
-    if (settingsSurface.transcriptLog.enabled) await settingsSurface.transcriptLog.flush();
     await invoke('write_pi', { token, message });
   });
   const mode = tab.file?.exists ? 'resume' : tab.mode;
@@ -1593,8 +1588,7 @@ async function launchPi(tab: Tab, copyDraft?: string, acceptedAction = false, in
       },
       currentProject: () => workspace,
       current: currentToken,
-      receive: transcriptLogDelivery(packet => rpc.receive(packet), settingsSurface.transcriptLog,
-        id => invoke('acknowledge_transcript_delivery', { id }), error => rpc.disconnect(String(error))),
+      receive: packet => rpc.receive(packet),
       validated: info => {
         launchInfo = info;
         if (info.session) {

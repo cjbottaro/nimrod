@@ -2,14 +2,8 @@
 use futures_util::StreamExt;
 use serde::Serialize;
 use serde_json::Value;
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-    process::Stdio,
-    sync::{Arc, LazyLock, Mutex as StdMutex},
-    time::Duration,
-};
-use tauri::{Manager, ipc::Channel};
+use std::{path::PathBuf, process::Stdio, sync::Arc, time::Duration};
+use tauri::ipc::Channel;
 use tokio::{
     io::AsyncWriteExt,
     process::{Child, Command},
@@ -28,85 +22,31 @@ const MAX_RECORD: usize = 256 * 1024 * 1024;
 pub enum Packet {
     Rpc { value: Value },
     Disconnected { message: String },
-    LogBarrier { id: String },
 }
-
-static DELIVERIES: LazyLock<StdMutex<HashMap<String, (String, oneshot::Sender<()>)>>> =
-    LazyLock::new(|| StdMutex::new(HashMap::new()));
 
 #[derive(Clone)]
 pub struct Output {
     notify: Arc<dyn Fn(Packet) -> Result<(), String> + Send + Sync>,
-    window: Option<tauri::Window>,
 }
 impl Output {
     #[cfg(test)]
     pub fn new(notify: impl Fn(Packet) -> Result<(), String> + Send + Sync + 'static) -> Self {
         Self {
             notify: Arc::new(notify),
-            window: None,
         }
     }
-    pub fn channel(window: tauri::Window, channel: Channel<Packet>) -> Self {
+    pub fn channel(channel: Channel<Packet>) -> Self {
         Self {
             notify: Arc::new(move |packet| channel.send(packet).map_err(|error| error.to_string())),
-            window: Some(window),
         }
     }
     pub(crate) fn notify(&self, packet: Packet) -> Result<(), String> {
         (self.notify)(packet)
     }
     pub async fn send(&self, packet: Packet) -> Result<(), String> {
-        let logging = self.window.as_ref().is_some_and(|window| {
-            let preferences = window.state::<crate::preferences::Preferences>();
-            crate::transcript_logs::enabled(&preferences.snapshot())
-        });
-        if !logging {
-            return self.notify(packet);
-        }
-        let window = self.window.as_ref().ok_or("Missing logging window")?;
-        let id = uuid::Uuid::new_v4().to_string();
-        let (reply, result) = oneshot::channel();
-        DELIVERIES
-            .lock()
-            .map_err(|_| "Transcript delivery unavailable")?
-            .insert(id.clone(), (window.label().into(), reply));
-        let _delivery = Delivery(id.clone());
-        self.notify(packet)?;
-        self.notify(Packet::LogBarrier { id })?;
-        result
-            .await
-            .map_err(|_| "Transcript delivery acknowledgement lost".into())
+        // Diagnostic logging never participates in session delivery.
+        self.notify(packet)
     }
-}
-struct Delivery(String);
-impl Drop for Delivery {
-    fn drop(&mut self) {
-        match DELIVERIES.lock() {
-            Ok(mut deliveries) => {
-                deliveries.remove(&self.0);
-            }
-            Err(error) => eprintln!("Could not retire transcript delivery: {error}"),
-        }
-    }
-}
-#[tauri::command]
-pub fn acknowledge_transcript_delivery(window: tauri::Window, id: String) -> Result<(), String> {
-    acknowledge_delivery(window.label(), &id)
-}
-fn acknowledge_delivery(window: &str, id: &str) -> Result<(), String> {
-    let mut deliveries = DELIVERIES
-        .lock()
-        .map_err(|_| "Transcript delivery unavailable")?;
-    if let Some((owner, _)) = deliveries.get(id) {
-        if owner != window {
-            return Err("Transcript delivery belongs to another window".into());
-        }
-    }
-    if let Some((_, reply)) = deliveries.remove(id) {
-        let _ = reply.send(());
-    }
-    Ok(())
 }
 
 struct WriteRequest {
@@ -366,32 +306,26 @@ mod tests {
     use serde_json::json;
 
     #[tokio::test]
-    async fn transcript_delivery_is_window_scoped_and_cancellable() {
-        let id = uuid::Uuid::new_v4().to_string();
-        let (reply, mut result) = oneshot::channel();
-        DELIVERIES
-            .lock()
-            .unwrap()
-            .insert(id.clone(), ("one".into(), reply));
-        let delivery = Delivery(id.clone());
-        assert!(acknowledge_delivery("two", &id).is_err());
-        assert!(matches!(
-            result.try_recv(),
-            Err(oneshot::error::TryRecvError::Empty)
-        ));
-        acknowledge_delivery("one", &id).unwrap();
-        result.await.unwrap();
-        drop(delivery);
-        acknowledge_delivery("one", &id).unwrap();
-        let id = uuid::Uuid::new_v4().to_string();
-        let (reply, result) = oneshot::channel();
-        DELIVERIES
-            .lock()
-            .unwrap()
-            .insert(id.clone(), ("one".into(), reply));
-        drop(Delivery(id.clone()));
-        assert!(result.await.is_err());
-        assert!(!DELIVERIES.lock().unwrap().contains_key(&id));
+    async fn session_delivery_needs_no_diagnostic_acknowledgement() {
+        let packets = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let received = packets.clone();
+        let output = Output::new(move |packet| {
+            received.lock().unwrap().push(packet);
+            Ok(())
+        });
+        output
+            .send(Packet::Rpc {
+                value: json!({ "type": "first" }),
+            })
+            .await
+            .unwrap();
+        output
+            .send(Packet::Rpc {
+                value: json!({ "type": "second" }),
+            })
+            .await
+            .unwrap();
+        assert_eq!(packets.lock().unwrap().len(), 2);
     }
 
     #[test]

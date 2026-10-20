@@ -265,7 +265,7 @@ async fn start_pi(
         cwd.clone(),
         token,
         selected.as_ref().map(|info| info.path.clone()),
-        process::Output::channel(window.clone(), on_event),
+        process::Output::channel(on_event),
     )
     .await?;
     Ok(LaunchInfo {
@@ -513,7 +513,7 @@ fn main() {
                 .join("card-plugins"),
             ));
             app.manage(preferences);
-            app.manage(transcript_logs::TranscriptLogs::new()?);
+            app.manage(transcript_logs::TranscriptLogs::new());
             drafts::watch(app.handle());
             preferences::watch(app.handle());
             let workspace = match &initial {
@@ -555,8 +555,6 @@ fn main() {
             performance_diagnostics::write_performance_report,
             transcript_logs::append_transcript_logs,
             transcript_logs::transcript_logs_directory,
-            transcript_logs::transcript_log_pressure,
-            process::acknowledge_transcript_delivery,
             preferences::preferences_snapshot,
             project_preferences::scoped_preferences_snapshot,
             project_preferences::project_preferences_settings,
