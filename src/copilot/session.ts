@@ -81,6 +81,7 @@ export class CopilotSession {
   private replaying = false;
   private failed = false;
   private stopped = false;
+  private acceptedCompletion?: { summary?: string; response?: string };
   private sessionId = '';
   private echo?: { key: string };
   private decisions = new AbortController();
@@ -95,7 +96,7 @@ export class CopilotSession {
       return send(message);
     }, packet => this.packet(packet), reason => {
       this.capture('bridge.disconnected', { reason });
-      this.ended = true; this.cancelDecisions(); this.commandQueue?.cancel(reason); this.configuration?.dispose(reason); this.usage?.dispose(); this.finish();
+      this.ended = true; this.acceptedCompletion = undefined; this.cancelDecisions(); this.commandQueue?.cancel(reason); this.configuration?.dispose(reason); this.usage?.dispose(); this.finish();
       this.state = { ...this.state, sessionUnavailable: true, busy: false, status: 'Disconnected' };
       this.publish(); ui.disconnected(reason);
     });
@@ -169,7 +170,7 @@ export class CopilotSession {
     if (message.type === 'renderError') { this.ui.notice(String(message.error)); return; }
     if (message.type === 'stop') {
       this.cancelCommands();
-      if (this.state.busy) { this.stopped = true; this.cancelDecisions(); await this.connection.request('cancel'); }
+      if (this.state.busy) { this.stopped = true; this.acceptedCompletion = undefined; this.cancelDecisions(); await this.connection.request('cancel'); }
       return;
     }
     if (message.type !== 'prompt' && message.type !== 'command') return;
@@ -194,7 +195,7 @@ export class CopilotSession {
     const key = `copilot:user:pending:${id}`;
     this.echo = { key };
     this.ui.publish({ type: 'submissionMessage', id, key });
-    this.failed = false; this.stopped = false;
+    this.failed = false; this.stopped = false; this.acceptedCompletion = undefined;
     this.state = { ...this.state, busy: true, status: 'Working…' };
     this.replace(key, { key, role: 'user', content: images.length ? [{ type: 'text', text: display }, ...images] : display });
     this.usage.workStarted();
@@ -458,6 +459,9 @@ export class CopilotSession {
     if (this.events.has(raw.id)) return;
     this.events.add(raw.id);
     const data = raw.data, type = raw.type;
+    // A completion review belongs only to the live root work preceding it.
+    if (!this.replaying && !raw.agentId && ['user.message', 'assistant.turn_start', 'model.turn_started', 'model.call_start', 'tool.execution_start'].includes(type))
+      this.acceptedCompletion = undefined;
     if (type === 'assistant.usage' && !this.replaying && !this.state.sessionUnavailable) { this.usage.workStarted(); this.usage.refresh(); }
     if (type === 'session.context_cleared' && !raw.agentId) { this.invalidateContext(); if (!this.replaying && !this.state.sessionUnavailable) this.usage.refresh(); }
     if (type === 'session.compaction_complete' && !raw.agentId && !this.replaying && !this.state.sessionUnavailable) this.usage.refreshContext();
@@ -487,6 +491,8 @@ export class CopilotSession {
       if (delta && previous?.streaming === false) return;
       const content = delta ? (thinking ? block?.thinking : block?.text) || '' : '';
       const value = content + string(delta ? 'deltaContent' : 'content');
+      if (!this.replaying && !raw.agentId && type === 'assistant.message' && value.trim() && this.acceptedCompletion)
+        this.acceptedCompletion.response = value;
       this.replace(key, { key, role: 'assistant', originLabel, streaming: delta, content: [thinking
         ? { type: 'thinking', thinking: value, thinkingComplete: !delta }
         : { type: 'text', text: value }] });
@@ -549,6 +555,10 @@ export class CopilotSession {
       if (!['interactive', 'plan', 'autopilot'].includes(mode)) { this.disconnect(`Copilot changed to unknown mode "${mode}".`); return; }
       this.mode = mode; this.configurationVersion++; this.publish([]);
     } else if (type === 'session.title_changed' && !raw.agentId) { this.state = { ...this.state, sessionName: string('title') }; this.publish([]); }
+    else if (type === 'session.task_complete' && !raw.agentId && !this.replaying) {
+      this.acceptedCompletion = data.success === true && this.state.busy && !this.stopped && !this.failed
+        ? { summary: typeof data.summary === 'string' && data.summary.trim() ? data.summary : undefined } : undefined;
+    }
     else if (type === 'session.idle' && !raw.agentId) {
       if (this.replaying) return;
       if (data.mode !== undefined && !['interactive', 'plan', 'autopilot'].includes(String(data.mode)))
@@ -556,9 +566,9 @@ export class CopilotSession {
       if (data.aborted !== undefined && typeof data.aborted !== 'boolean')
         throw new Error('Copilot returned an invalid idle abort flag.');
       if (data.aborted === true) this.stopped = true;
-      // Match the SDK response waiter: an Autopilot idle is between continuations,
-      // not completion. An explicitly aborted loop is terminal in every mode.
-      if (data.mode === 'autopilot' && data.aborted !== true) return;
+      // Sticky Autopilot mode also appears on final idle. Require accepted root
+      // completion unless this is an explicit abort; intermediate idle stays busy.
+      if (data.mode === 'autopilot' && data.aborted !== true && !this.acceptedCompletion) return;
       this.endTurn();
     } else if (type === 'assistant.turn_start' && !raw.agentId && !this.replaying) {
       if (this.stopped || this.failed) return;
@@ -568,15 +578,18 @@ export class CopilotSession {
   }
   private endTurn(): void {
     const working = this.state.busy;
+    const completion = this.acceptedCompletion;
+    this.acceptedCompletion = undefined;
     if (!working) {
       if (this.pendingDecisions.size) { this.cancelDecisions(); this.publish([]); }
       return;
     }
+    const response = completion?.response || completion?.summary || this.response();
     this.finish(); this.echo = undefined; this.cancelDecisions();
     this.state = { ...this.state, busy: false, status: this.stopped ? 'Stopped' : this.failed ? 'Failed' : 'Idle' };
     this.publish([]);
     if (!this.ended && !this.state.sessionUnavailable) { this.usage.refresh(); this.usage.refreshContext(); }
-    if (working && !this.stopped) this.ui.completed(this.failed, this.failed ? undefined : this.response());
+    if (working && !this.stopped) this.ui.completed(this.failed, this.failed ? undefined : response);
   }
   private message(key: string): DisplayMessage | undefined { const index = this.indices.get(key); return index === undefined ? undefined : this.state.messages[index]; }
   private replace(key: string, message: DisplayMessage): void {

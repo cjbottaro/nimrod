@@ -180,6 +180,23 @@ This is native user-observed acceptance of the ordinary approval/mode-display
 handoff and initial continuation, not completed-task acceptance. No new agent
 prompt, session mutation, build or launch was performed by this investigation.
 
+A later user report showed **Task complete** while Nimrod remained Working.
+Read-only inspection of `2026-10-20.000001.jsonl` found successful `task_complete`,
+root `session.task_complete` with `success:true` (native 05:16:59.794Z),
+`assistant.turn_end`, `assistant.idle`, then root `session.idle` with
+`mode:"autopilot"` (native 05:16:59.870Z). No later model/tool work appeared in that
+capture. The old controller and bridge ignored this final idle solely because
+of the sticky mode. A scrubbed sequence is retained in
+`test/fixtures/copilot/autopilot-completion.json`. The correction pairs live-root
+accepted completion with subsequent idle in both layers and uses its summary
+when no final assistant response follows. Updated `test/copilot-sdk.test.ts`,
+`test/copilot-bridge.test.ts` and the offline SDK fixture cover this sequence,
+intermediate/rejected/stale completion, duplicate IDs/events, new work/prompts,
+child/replay isolation, deferred configuration, idle-only bridge commands, Stop,
+errors and notification deduplication/content. These new regressions are authored
+**unrun**; native acceptance of the correction remains pending. No paid request,
+live session mutation, app launch or build was performed for the fix.
+
 The retained Plan review picker/banner and compact completed card are subsequent
 source changes, not the UI the user accepted. `test/copilot-plans.test.ts`,
 `test/copilot-plan-cards.test.ts` and revised shell coverage are authored **unrun**.
@@ -196,6 +213,17 @@ matrix; do not treat this handoff as full Plan/Autopilot support.
 Grouped Pi codemode cards are source-implemented. Authored fixtures in `test/codemode-groups.test.ts`, `test/native-view.test.ts`, `test/builtin-tool-plugins.test.ts`, `test/tool-card.test.ts` and `test/browser/codemode-groups.spec.ts` cover explicit relationships, adoption/history, bounded/missing records, independent parent/child output, child failures, dynamic progress, coalesced/hidden/gapped delivery, reset and retained DOM/disclosures/focus. Follow-up authored fixtures additionally cover normal saved-child cards/themed dots, absent-data silence, personal overrides, unchanged-record renderer suppression, saved-to-live shell adoption and plugin disposal. These fixtures have **not been run** for this change. Native visual/disclosure/scroll acceptance on macOS/Linux remains pending; no platform acceptance follows from authored jsdom/browser fixtures.
 
 ## Transcript logging
+
+The same CLI 1.0.100 completion trace above showed native completion at
+05:16:59.794Z reaching frontend capture at 05:25:00.499Z—about eight minutes later.
+Receipt spacing through the drained tail was often around 20–40 ms per record.
+Source inspection identifies per-packet log-flush/acknowledgement flow control as
+a serialization point; this does not separately measure disk, IPC or rendering
+cost. The warning monitors individual native writes waiting at least one second,
+not accumulated stdout/event-delivery age, so many shorter waits can escape that
+signal. No logger implementation change or performance experiment was performed
+with the completion fix. [Logging contract](transcript-logs.md#queue-producer-backpressure-and-failures)
+owns the current flow-control boundaries.
 
 Expanded full-content native/history/request/UI logging, rotation and retention fixtures are authored but unrun. The bounded native MPSC writer/backpressure change replaces overflow-stop/chunk generation; new fixtures for waiting producer ordering, whole large events, delayed native acknowledgements and the one-second warning/recovery/cancellation are authored but unrun. The naming cleanup and new/legacy setting precedence/migration fixtures are also unrun; compile checks are not behavioral or platform acceptance. Earlier tool-only offline evidence is preserved in [history](history/transcript-logging.md), not evidence for the expanded logger.
 

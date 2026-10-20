@@ -522,12 +522,15 @@ consume semantic Working/completion state only. No universal Plan/Autopilot
 interface or host-generated continuation prompt is introduced.
 
 The pinned SDK's response waiter ignores root `session.idle` with
-`data.mode === 'autopilot'`. Nimrod follows that exact boundary in both the
-controller and bridge: intermediate idle neither completes/notifies nor cancels
-pending decisions, finalizes cards, or releases deferred configuration. The
-event's mode is not a new confirmed selection: sticky session mode continues to
-come from `mode.get`/`session.mode_changed`. Missing mode retains the SDK waiter's
-legacy terminal behavior. Unknown snapshot/event modes fail explicitly.
+`data.mode === 'autopilot'`, but observed CLI completion retains that mode on its
+final idle too. Nimrod's controller and bridge therefore retain a live-root
+accepted-completion marker only when `session.task_complete.data.success === true`
+while working. The following root idle is terminal even in sticky Autopilot mode.
+The completion event alone never settles work. Without that marker, intermediate
+Autopilot idle neither completes/notifies nor cancels pending decisions, finalizes
+cards, or releases deferred configuration. The event's mode is not a new confirmed
+selection: mode continues to come from `mode.get`/`session.mode_changed`. Missing
+mode retains legacy terminal behavior. Unknown snapshot/event modes fail explicitly.
 
 A non-Autopilot root idle ends active work once. An explicitly
 `aborted: true` idle is terminal even in Autopilot, reports Stopped and does not
@@ -537,13 +540,22 @@ terminal idle does not repeat completion refreshes. Late turn-start after
 Stop/failure cannot revive work; a new explicit prompt resets those flags.
 Child events and replay never complete the root run.
 
-`session.task_complete` is completion-review metadata, not independently
-quiescence: its `success` may be false. Objective updates can describe active,
-paused, cap-reached or completed objectives. Neither event is used to invent a
-terminal boundary or resume work. They remain available in native debug capture.
-The SDK waiter is source evidence; native final-event ordering, sticky-mode
-completion, limit exhaustion and abort behavior still require acceptance.
-Do not infer acceptance from synthetic fixtures.
+`session.task_complete` is a completion-review decision, not independently
+quiescence: rejected/missing/malformed `success` cannot arm terminal Autopilot idle.
+A later review without literal `success:true` clears prior acceptance. New root
+user/assistant/model-turn/model-call/tool starts and explicit prompts invalidate
+prior acceptance; child work does not. Replay and duplicate event IDs cannot arm
+or invalidate live completion. Stop, root failure, disconnect and settlement retire
+the marker. Final assistant text after acceptance supplies completion notification
+content; otherwise the accepted summary is used before the existing response
+fallback. No tool-name/prose parsing or new chat prompt is involved. Both layers
+release their work gates at the same terminal boundary; deferred configuration and
+idle-only commands can proceed. Duplicate terminal events do not repeat completion.
+
+Objective updates alone still cannot settle or resume work. The captured terminal
+sequence and current validation/native gaps are tracked in
+[verification](verification.md#copilot-plan-and-autopilot). Do not infer native
+acceptance of this correction from authored fixtures.
 
 Exit-plan choices remain scoped to their request/connection. The UI rejects
 missing/malformed action lists; the bridge rejects approval without an advertised

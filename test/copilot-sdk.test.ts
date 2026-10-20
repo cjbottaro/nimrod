@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import capturedPermissionCommand from './fixtures/copilot-permission-command.json' with { type: 'json' };
+import autopilotCompletion from './fixtures/copilot/autopilot-completion.json' with { type: 'json' };
 import { CopilotSession, type CopilotSessionUi, type CopilotDecision } from '../src/copilot/session';
 import { CopilotConnection, type BridgeRequest } from '../src/copilot/connection';
 import { copilotSdkScope } from '../src/copilot/session-lifecycle';
@@ -17,13 +18,13 @@ const models = [
   { id: 'large', name: 'Large' },
 ];
 async function fixture(events: unknown[] = [], decision: CopilotSessionUi['decision'] = async () => undefined, autoUsage = true, fresh = false, catalog: unknown[] = models) {
-  const sent: BridgeRequest[] = [], published: ConversationViewMessage[] = [], completed: boolean[] = [], captured: TranscriptLogRecord[] = [];
+  const sent: BridgeRequest[] = [], published: ConversationViewMessage[] = [], completed: boolean[] = [], responses: (string | undefined)[] = [], captured: TranscriptLogRecord[] = [];
   const session: CopilotSession = new CopilotSession(async request => {
     sent.push(request);
     if (autoUsage && ['usage', 'context'].includes(request.method)) queueMicrotask(() => session.receive({ kind: 'result', id: request.id, result: request.method === 'usage' ? {} : null }));
   }, {
     publish: message => published.push(message), changed() {}, identified() {}, disconnected() {}, notice() {},
-    completed: failed => completed.push(failed), decision,
+    completed: (failed, response) => { completed.push(failed); responses.push(response); }, decision,
     transcriptLog: { enabled: true, append: record => captured.push(structuredClone(record)) },
   });
   const last = (method: string) => { const request = [...sent].reverse().find(request => request.method === method); assert.ok(request); return request; };
@@ -34,7 +35,7 @@ async function fixture(events: unknown[] = [], decision: CopilotSessionUi['decis
   reply('connect'); await initializing; await flush();
   let sequence = 0;
   const event = (type: string, data: Record<string, unknown>, id = `event-${sequence++}`) => session.receive({ kind: 'event', event: { id, type, data } });
-  return { session, sent, published, completed, captured, last, reply, event };
+  return { session, sent, published, completed, responses, captured, last, reply, event };
 }
 
 for (const caption of ['', 'Image caption']) test(`image input sends bytes and reconciles the SDK echo (${caption || 'image only'})`, async () => {
@@ -182,7 +183,7 @@ test('SDK replay is read-only and final content wins over buffered deltas', asyn
   f.session.disconnect('fixture complete');
 });
 
-test('Autopilot intermediate idle retains work, decisions and cards until the SDK terminal boundary', async () => {
+test('Autopilot intermediate idle retains work, decisions and cards until accepted completion and idle', async () => {
   let answer!: (value: CopilotDecision) => void;
   let signal!: AbortSignal;
   const f = await fixture([], async (_kind, _request, owned) => {
@@ -213,7 +214,7 @@ test('Autopilot intermediate idle retains work, decisions and cards until the SD
     f.event('assistant.turn_start', {});
     f.event('session.task_complete', { success: true });
     assert.deepEqual(f.completed, [], 'task completion metadata is not physical quiescence');
-    f.event('session.idle', { mode: 'interactive' }); await flush();
+    f.event('session.idle', { mode: 'autopilot' }); await flush();
     assert.deepEqual(f.completed, [false]);
     assert.equal(f.last('configure').value, 'plan');
     f.reply('configure', { model: { modelId: 'small', reasoningEffort: 'low' }, mode: 'plan' }); await flush();
@@ -225,13 +226,110 @@ test('Autopilot intermediate idle retains work, decisions and cards until the SD
   } finally { f.session.disconnect('fixture complete'); }
 });
 
+// Sanitized CLI 1.0.100 ordering from the October 19/20 transcript: accepted
+// task completion, turn end, assistant idle, then idle with sticky Autopilot mode.
+test('captured accepted Autopilot completion settles only at idle, once, using its task summary', async () => {
+  const f = await fixture();
+  try {
+    f.event('session.mode_changed', { newMode: 'autopilot' });
+    const sending = f.session.handle({ type: 'prompt', id: 'captured-task', text: 'Implement the change' });
+    f.reply('prompt'); await sending;
+    for (const event of autopilotCompletion.slice(0, -1)) f.session.receive({ kind: 'event', event });
+    assert.equal(f.session.state.busy, true); assert.deepEqual(f.completed, []);
+    const idle = autopilotCompletion.at(-1)!;
+    f.session.receive({ kind: 'event', event: idle }); await flush();
+    assert.equal(f.session.state.busy, false); assert.equal(f.session.canSubmit, true);
+    assert.equal(f.session.configuration.get('mode'), 'autopilot');
+    assert.deepEqual(f.completed, [false]); assert.deepEqual(f.responses, ['Created the requested change.']);
+    const reads = f.sent.filter(request => ['usage', 'context'].includes(request.method)).length;
+    for (const event of autopilotCompletion) f.session.receive({ kind: 'event', event });
+    f.event('session.idle', { mode: 'autopilot' }); await flush();
+    assert.deepEqual(f.completed, [false]);
+    assert.equal(f.sent.filter(request => ['usage', 'context'].includes(request.method)).length, reads);
+    const next = f.session.handle({ type: 'prompt', id: 'next-autopilot', text: 'Next change' });
+    f.reply('prompt'); await next;
+    f.event('session.idle', { mode: 'autopilot' });
+    assert.equal(f.session.state.busy, true, 'previous acceptance cannot complete a new prompt');
+    assert.equal(f.sent.filter(request => request.method === 'prompt').length, 2);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+for (const type of ['assistant.turn_start', 'user.message', 'model.turn_started', 'model.call_start', 'tool.execution_start', 'session.task_complete']) {
+  test(`new root ${type} invalidates an earlier accepted completion before Autopilot idle`, async () => {
+    const f = await fixture();
+    try {
+      f.event('assistant.turn_start', {});
+      f.event('session.task_complete', { success: true, summary: 'Stale acceptance' }, 'stale-acceptance');
+      f.event(type, { content: 'New root work', toolCallId: 'new-tool', toolName: 'bash', arguments: {}, success: false });
+      // Duplicate acceptance from before the new work must not re-arm completion.
+      f.session.receive({ kind: 'event', event: { id: 'stale-acceptance', type: 'session.task_complete', data: { success: true } } });
+      f.event('session.idle', { mode: 'autopilot' });
+      assert.equal(f.session.state.busy, true); assert.deepEqual(f.completed, []);
+    } finally { f.session.disconnect('fixture complete'); }
+  });
+}
+
+test('child work cannot invalidate root acceptance; child and replay acceptance cannot arm it', async () => {
+  const f = await fixture(autopilotCompletion);
+  try {
+    f.event('assistant.turn_start', {});
+    f.event('session.idle', { mode: 'autopilot' });
+    assert.equal(f.session.state.busy, true, 'history acceptance cannot settle live work');
+    f.session.receive({ kind: 'event', event: { id: 'child-review', agentId: 'child', type: 'session.task_complete', data: { success: true } } });
+    f.event('session.idle', { mode: 'autopilot' }); assert.deepEqual(f.completed, []);
+    f.event('session.task_complete', { success: true, summary: 'Root accepted' });
+    f.session.receive({ kind: 'event', event: { id: 'child-start', agentId: 'child', type: 'assistant.turn_start', data: {} } });
+    f.event('session.idle', { mode: 'autopilot' });
+    assert.deepEqual(f.completed, [false]); assert.deepEqual(f.responses, ['Root accepted']);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('accepted completion waits for idle before retiring pending decisions', async () => {
+  let signal!: AbortSignal;
+  const f = await fixture([], async (_kind, _request, owned) => {
+    signal = owned;
+    return new Promise(resolve => owned.addEventListener('abort', () => resolve(undefined), { once: true }));
+  });
+  try {
+    f.event('assistant.turn_start', {});
+    f.session.receive({ kind: 'input', id: 'pending-at-terminal', request: { question: 'Pending input' } });
+    f.event('session.idle', { mode: 'autopilot' });
+    assert.equal(signal.aborted, false);
+    f.event('session.task_complete', { success: true });
+    assert.equal(signal.aborted, false);
+    f.event('session.idle', { mode: 'autopilot' }); await flush();
+    assert.equal(signal.aborted, true);
+    assert.deepEqual(f.completed, [false]);
+    assert.equal(f.sent.some(request => ['decision', 'cancel'].includes(request.method)), false);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('final root response after accepted completion wins over its summary; errors remain failures', async () => {
+  const f = await fixture();
+  try {
+    f.event('assistant.turn_start', {});
+    f.event('session.task_complete', { success: true, summary: 'Task summary' });
+    f.event('assistant.message', { messageId: 'final', content: 'Final assistant response' });
+    f.event('session.idle', { mode: 'autopilot' });
+    assert.deepEqual(f.responses, ['Final assistant response']);
+    const next = f.session.handle({ type: 'prompt', id: 'error-after-acceptance', text: 'Next task' });
+    f.reply('prompt'); await next;
+    f.event('session.task_complete', { success: true, summary: 'Not a success notification' });
+    f.event('session.error', { message: 'Root failed after review' });
+    f.event('session.idle', { mode: 'autopilot' });
+    assert.deepEqual(f.completed, [false, true]); assert.equal(f.responses[1], undefined);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
 test('Autopilot abort is terminal even while the selected mode stays sticky', async () => {
   const f = await fixture();
   try {
     f.event('session.mode_changed', { newMode: 'autopilot' });
     const sending = f.session.handle({ type: 'prompt', id: 'stop-task', text: 'Stop this task' });
     f.reply('prompt'); await sending;
+    f.event('session.task_complete', { success: true, summary: 'Accepted before Stop' });
     const stopping = f.session.handle({ type: 'stop' });
+    f.event('session.task_complete', { success: true, summary: 'Late review during Stop' });
     f.event('session.idle', { mode: 'autopilot' });
     assert.equal(f.session.state.busy, true, 'wait for abort rather than an unrelated intermediate idle');
     f.event('session.idle', { mode: 'autopilot', aborted: true });

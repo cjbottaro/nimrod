@@ -47,8 +47,9 @@ Already implemented:
 - Optional feedback on approval and Request changes via
   `{approved:false,feedback}`. Cancel declines without sending feedback.
 - Ordinary prompts sent once; no Nimrod-owned autonomous continuation loop.
-- Root Autopilot idle does not complete work, cancel pending decisions or release
-  queued configuration. Explicit aborted idle is terminal.
+- Intermediate root Autopilot idle does not complete work, cancel pending decisions
+  or release queued configuration. Current source also recognizes an accepted
+  root completion followed by sticky Autopilot idle; explicit aborted idle is terminal.
 - Root/child separation and replay suppression.
 
 Evidence and gaps:
@@ -76,6 +77,11 @@ narrows the original acceptance TODO; it does not close it. See the canonical
 [evidence and remaining gaps](../features/references/verification.md#copilot-plan-and-autopilot).
 The subsequent retained Plan review picker/banner and read-only decision card
 still need native acceptance; the earlier inline UI was used for that observation.
+A later captured completed run exposed the sticky-mode Working bug. The controller
+and bridge now pair accepted root completion with subsequent idle, rather than
+copying the SDK waiter's mode-only exclusion; correction fixtures and native gaps
+are recorded in the same verification section. Do not rerun paid work or mutate the
+user's conversation to validate this without explicit authorization.
 
 ## Unfinished problem
 

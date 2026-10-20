@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import permissionCommand from './copilot-permission-command.json' with { type: 'json' };
+import autopilotCompletion from './copilot/autopilot-completion.json' with { type: 'json' };
 export const RuntimeConnection = { forStdio: ({ path }) => ({ path }) };
 export class CopilotClient {
   constructor(options) {
@@ -136,7 +137,7 @@ class Session {
     else { this.model = config.model; this.effort = config.reasoningEffort; this.contextTier = config.contextTier; }
   }
   on(listener) { this.listeners.push(listener); return () => { this.listeners = this.listeners.filter(item => item !== listener); }; }
-  emit(type, data) { const event = { id: `fixture-${this.sequence++}`, type, data }; this.listeners.forEach(listener => listener(event)); }
+  emit(type, data, metadata = {}) { const event = { id: `fixture-${this.sequence++}`, type, data, ...metadata }; this.listeners.forEach(listener => listener(event)); }
   async getEvents() { return this.saved ? [
     { id: 'saved-user', type: 'user.message', data: { content: 'Saved SDK question', ...(process.env.NIMROD_FIXTURE_COPILOT_MODEL_STATE === 'image-history' ? { attachments: [{ type: 'blob', mimeType: 'image/png', data: 'YWJj' }] } : {}) } },
     { id: 'saved-answer', type: 'assistant.message', data: { messageId: 'saved', content: 'Saved SDK answer' } },
@@ -168,6 +169,21 @@ class Session {
     if (attachments?.length) {
       this.emit('assistant.message', { messageId: `image-${turn}`, content: 'Offline SDK image response.' });
       this.emit('session.idle', {}); return;
+    }
+    if (prompt.startsWith('autopilot completion fixture:')) {
+      const scenario = prompt.slice('autopilot completion fixture:'.length);
+      // Scrubbed real CLI ordering; only the negative variants are synthetic.
+      if (scenario !== 'intermediate') for (const event of autopilotCompletion.slice(0, -1)) {
+        const review = event.type === 'session.task_complete';
+        this.emit(event.type, review && scenario === 'rejected' ? { ...event.data, success: false } : event.data,
+          { id: `${turn}:${event.id}`, ...(review && scenario === 'child' ? { agentId: 'child' } : {}) });
+      }
+      if (scenario === 'new-work') {
+        this.emit('assistant.turn_start', {});
+        const review = autopilotCompletion.find(event => event.type === 'session.task_complete');
+        this.emit(review.type, review.data, { id: `${turn}:${review.id}` });
+      }
+      this.emit('session.idle', { mode: 'autopilot' }); return;
     }
     if (prompt === 'plan mode fixture') {
       const result = this.config.onExitPlanModeRequest({
