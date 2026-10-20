@@ -6,49 +6,67 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
     time::{Duration, SystemTime},
 };
 use tauri::Emitter;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 
 static WRITER: Mutex<()> = Mutex::new(());
 const MAX_BATCH: usize = 512 * 1024 * 1024;
 const MAX_LINE: usize = 512 * 1024 * 1024;
 const QUEUE_CAPACITY: usize = 32;
-const BLOCKED_WARNING: Duration = Duration::from_secs(1);
+const QUEUE_BYTES: usize = 64 * 1024 * 1024;
 
+struct QueuedBytes {
+    bytes: usize,
+    total: Arc<AtomicUsize>,
+}
+impl Drop for QueuedBytes {
+    fn drop(&mut self) {
+        self.total.fetch_sub(self.bytes, Ordering::Relaxed);
+    }
+}
 struct WriteJob {
     root: PathBuf,
     lines: Vec<String>,
-    reply: oneshot::Sender<Result<(), String>>,
+    report_error: Box<dyn FnOnce(String) + Send>,
+    _bytes: QueuedBytes,
 }
-
-#[derive(Clone, Copy, Default, Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Pressure {
-    revision: u64,
-    blocked: usize,
-    #[serde(skip)]
-    active: usize,
-    #[serde(skip)]
-    warning: bool,
+struct WriteFailure {
+    capture_id: String,
+    message: String,
 }
-
 pub struct TranscriptLogs {
     sender: mpsc::Sender<WriteJob>,
-    pressure: Arc<Mutex<Pressure>>,
+    bytes: Arc<AtomicUsize>,
+    byte_limit: usize,
 }
-
 impl TranscriptLogs {
-    pub fn new() -> Result<Self, String> {
-        Self::with_writer(QUEUE_CAPACITY, |root, lines| {
+    pub fn new() -> Self {
+        Self::with_writer(QUEUE_CAPACITY, QUEUE_BYTES, |root, lines| {
             groups(lines).and_then(|groups| write_groups(root, groups))
+        })
+        .unwrap_or_else(|error| {
+            // Unavailable diagnostics must not prevent app/session startup.
+            eprintln!("{error}");
+            let (sender, _) = mpsc::channel(1);
+            Self {
+                sender,
+                bytes: Arc::new(AtomicUsize::new(0)),
+                byte_limit: QUEUE_BYTES,
+            }
         })
     }
 
     fn with_writer(
         capacity: usize,
+        byte_limit: usize,
         write: impl Fn(&Path, Vec<String>) -> Result<(), String> + Send + 'static,
     ) -> Result<Self, String> {
         let (sender, mut receiver) = mpsc::channel::<WriteJob>(capacity);
@@ -56,116 +74,59 @@ impl TranscriptLogs {
             .name("transcript-log-writer".into())
             .spawn(move || {
                 while let Some(job) = receiver.blocking_recv() {
-                    let result = write(&job.root, job.lines);
-                    // The producer can disappear during shutdown; never retry accepted writes.
-                    let _ = job.reply.send(result);
+                    if let Err(error) = write(&job.root, job.lines) {
+                        (job.report_error)(error);
+                    }
+                    // The byte lease includes the active write, not only queued jobs.
                 }
             })
             .map_err(|error| format!("Could not start transcript log writer: {error}"))?;
         Ok(Self {
             sender,
-            pressure: Arc::new(Mutex::new(Pressure::default())),
+            bytes: Arc::new(AtomicUsize::new(0)),
+            byte_limit,
         })
     }
 
-    async fn append(
+    // Admit or drop immediately. Persistence is observed only through diagnostic error events.
+    fn append(
         &self,
-        app: &tauri::AppHandle,
         root: PathBuf,
         lines: Vec<String>,
-    ) -> Result<(), String> {
-        let waiting = WaitingProducer::new(app.clone(), self.pressure.clone())?;
-        let write = async {
-            let permit = self
-                .sender
-                .reserve()
-                .await
-                .map_err(|_| "Transcript log writer unavailable")?;
-            let (reply, result) = oneshot::channel();
-            permit.send(WriteJob { root, lines, reply });
-            result
-                .await
-                .map_err(|_| "Transcript log writer stopped during write".to_string())?
+        report_error: impl FnOnce(String) + Send + 'static,
+    ) -> Result<bool, String> {
+        if lines.is_empty() || lines.len() > 512 {
+            return Err("Invalid transcript debug batch".into());
+        }
+        let bytes = lines.iter().map(String::len).sum::<usize>();
+        if self
+            .bytes
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+                current
+                    .checked_add(bytes)
+                    .filter(|next| *next <= self.byte_limit)
+            })
+            .is_err()
+        {
+            return Ok(false);
+        }
+        let job = WriteJob {
+            root,
+            lines,
+            report_error: Box::new(report_error),
+            _bytes: QueuedBytes {
+                bytes,
+                total: self.bytes.clone(),
+            },
         };
-        wait_for_write(write, || waiting.warn()).await
-    }
-}
-
-async fn wait_for_write<G>(
-    write: impl std::future::Future<Output = Result<(), String>>,
-    waiting: impl FnOnce() -> Result<G, String>,
-) -> Result<(), String> {
-    tokio::pin!(write);
-    match tokio::time::timeout(BLOCKED_WARNING, &mut write).await {
-        Ok(result) => result,
-        Err(_) => {
-            let _waiting = waiting()?;
-            write.await
+        match self.sender.try_send(job) {
+            Ok(()) => Ok(true),
+            Err(mpsc::error::TrySendError::Full(_)) => Ok(false),
+            Err(mpsc::error::TrySendError::Closed(_)) => {
+                Err("Transcript log writer unavailable".into())
+            }
         }
     }
-}
-
-struct WaitingProducer {
-    app: tauri::AppHandle,
-    pressure: Arc<Mutex<Pressure>>,
-}
-impl WaitingProducer {
-    fn new(app: tauri::AppHandle, pressure: Arc<Mutex<Pressure>>) -> Result<Self, String> {
-        let waiting = Self { app, pressure };
-        waiting.change(true)?;
-        Ok(waiting)
-    }
-    fn change(&self, blocked: bool) -> Result<(), String> {
-        let mut pressure = self
-            .pressure
-            .lock()
-            .map_err(|_| "Transcript logging pressure unavailable")?;
-        if blocked {
-            pressure.active += 1;
-        } else {
-            pressure.active -= 1;
-        }
-        if pressure.active == 0 {
-            pressure.warning = false;
-        }
-        self.publish(&mut pressure);
-        Ok(())
-    }
-    fn warn(&self) -> Result<(), String> {
-        let mut pressure = self
-            .pressure
-            .lock()
-            .map_err(|_| "Transcript logging pressure unavailable")?;
-        pressure.warning = true;
-        self.publish(&mut pressure);
-        Ok(())
-    }
-    fn publish(&self, pressure: &mut Pressure) {
-        let blocked = if pressure.warning { pressure.active } else { 0 };
-        if pressure.blocked == blocked {
-            return;
-        }
-        pressure.blocked = blocked;
-        pressure.revision += 1;
-        if let Err(error) = self.app.emit("transcript-log-pressure", *pressure) {
-            eprintln!("Could not report transcript logging pressure: {error}");
-        }
-    }
-}
-impl Drop for WaitingProducer {
-    fn drop(&mut self) {
-        if let Err(error) = self.change(false) {
-            eprintln!("Could not report transcript logging recovery: {error}");
-        }
-    }
-}
-
-#[tauri::command]
-pub fn transcript_log_pressure(logs: tauri::State<'_, TranscriptLogs>) -> Result<Pressure, String> {
-    logs.pressure
-        .lock()
-        .map(|pressure| *pressure)
-        .map_err(|_| "Transcript logging pressure unavailable".into())
 }
 #[derive(Clone, Copy)]
 struct Limits {
@@ -530,19 +491,35 @@ pub fn transcript_logs_directory(
     directory(&preferences.snapshot()).map(|p| p.to_string_lossy().into_owned())
 }
 #[tauri::command]
-pub async fn append_transcript_logs(
-    app: tauri::AppHandle,
+pub fn append_transcript_logs(
+    window: tauri::Window,
     logs: tauri::State<'_, TranscriptLogs>,
     preferences: tauri::State<'_, crate::preferences::Preferences>,
     lines: Vec<String>,
-) -> Result<(), String> {
+    capture_id: String,
+) -> Result<serde_json::Value, String> {
     let snapshot = preferences.snapshot();
     // A write already accepted may finish after disable; never retry ambiguous writes.
     if !enabled(&snapshot) {
         return Err("Transcript debug logging is disabled or global settings are invalid".into());
     }
     let root = directory(&snapshot)?;
-    logs.append(&app, root, lines).await
+    if uuid::Uuid::parse_str(&capture_id).is_err() {
+        return Err("Invalid transcript capture ID".into());
+    }
+    let accepted = logs.append(root, lines, move |message| {
+        if let Err(error) = window.emit_to(
+            window.label(),
+            "transcript-log-error",
+            WriteFailure {
+                capture_id,
+                message,
+            },
+        ) {
+            eprintln!("Could not report transcript log writer failure: {error}");
+        }
+    })?;
+    Ok(serde_json::json!({ "accepted": accepted }))
 }
 
 #[cfg(test)]
@@ -556,11 +533,12 @@ mod tests {
             "payload":{"rawInput":{"code":"a\nb"}}})
         .to_string()
     }
-    #[tokio::test]
-    async fn bounded_channel_waits_and_one_consumer_preserves_jobs_without_retry() {
+    #[test]
+    fn admission_is_nonblocking_and_bounded_by_jobs_and_bytes_without_retry() {
         let (entered, observed) = std::sync::mpsc::channel();
         let (release, released) = std::sync::mpsc::channel();
-        let logs = TranscriptLogs::with_writer(1, move |_, lines| {
+        let (fail, failed) = std::sync::mpsc::channel();
+        let logs = TranscriptLogs::with_writer(1, 16, move |_, lines| {
             entered.send(lines.clone()).unwrap();
             released.recv().unwrap();
             if lines == ["fail"] {
@@ -570,48 +548,60 @@ mod tests {
             }
         })
         .unwrap();
-        let job = |line: &str| {
-            let (reply, result) = oneshot::channel();
-            (
-                WriteJob {
-                    root: PathBuf::from("unused"),
-                    lines: vec![line.into()],
-                    reply,
-                },
-                result,
-            )
+        let append = |text: &str| {
+            let fail = fail.clone();
+            logs.append(PathBuf::from("unused"), vec![text.into()], move |error| {
+                fail.send(error).unwrap();
+            })
         };
-        let (first, first_result) = job("first");
-        logs.sender.send(first).await.unwrap();
-        assert_eq!(observed.recv().unwrap(), ["first"]);
-        let (second, second_result) = job("fail");
-        logs.sender.send(second).await.unwrap();
-        assert!(matches!(
-            logs.sender.try_reserve(),
-            Err(mpsc::error::TrySendError::Full(_))
-        ));
-        let reservation = logs.sender.reserve();
-        tokio::pin!(reservation);
         assert!(
-            tokio::time::timeout(Duration::from_millis(10), &mut reservation)
-                .await
+            append("first").unwrap(),
+            "admission does not wait for the blocked writer"
+        );
+        assert_eq!(observed.recv().unwrap(), ["first"]);
+        assert!(append("fail").unwrap());
+        assert!(
+            !append("drop").unwrap(),
+            "a full queue drops instead of waiting"
+        );
+        assert_eq!(
+            logs.bytes.load(Ordering::Relaxed),
+            9,
+            "dropped jobs release their byte lease"
+        );
+        assert!(
+            !append("01234567890123456").unwrap(),
+            "oversized diagnostics are dropped whole"
+        );
+        release.send(()).unwrap();
+        assert_eq!(observed.recv().unwrap(), ["fail"]);
+        assert!(append("third").unwrap());
+        release.send(()).unwrap();
+        assert_eq!(failed.recv().unwrap(), "fixture disk error");
+        assert_eq!(
+            observed.recv().unwrap(),
+            ["third"],
+            "one consumer preserves accepted order; failures are never retried"
+        );
+        release.send(()).unwrap();
+    }
+
+    #[test]
+    fn unavailable_writer_is_only_a_diagnostic_error_and_releases_reserved_bytes() {
+        let (sender, receiver) = mpsc::channel(1);
+        drop(receiver);
+        let logs = TranscriptLogs {
+            sender,
+            bytes: Arc::new(AtomicUsize::new(0)),
+            byte_limit: 16,
+        };
+        assert!(
+            logs.append(PathBuf::from("unused"), vec!["diagnostic".into()], |_| {})
                 .is_err()
         );
-        release.send(()).unwrap();
-        let permit = reservation.await.unwrap();
-        assert_eq!(observed.recv().unwrap(), ["fail"]);
-        let (third, third_result) = job("third");
-        permit.send(third);
-        assert_eq!(first_result.await.unwrap(), Ok(()));
-        release.send(()).unwrap();
-        assert_eq!(
-            second_result.await.unwrap(),
-            Err("fixture disk error".into())
-        );
-        assert_eq!(observed.recv().unwrap(), ["third"]);
-        release.send(()).unwrap();
-        assert_eq!(third_result.await.unwrap(), Ok(()));
+        assert_eq!(logs.bytes.load(Ordering::Relaxed), 0);
     }
+
     #[test]
     fn oversized_native_records_use_one_segment_without_chunks_or_rewriting() {
         let temp = tempfile::tempdir().unwrap();
@@ -636,58 +626,33 @@ mod tests {
             format!("{}\n", line("pi", "pi", 2))
         );
     }
-    #[tokio::test]
-    async fn only_sustained_waits_warn_and_recovery_or_cancellation_clears_them() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        struct Guard(Arc<AtomicUsize>);
-        impl Drop for Guard {
-            fn drop(&mut self) {
-                self.0.fetch_sub(1, Ordering::SeqCst);
-            }
-        }
-        let blocked = Arc::new(AtomicUsize::new(0));
-        wait_for_write(async { Ok(()) }, || -> Result<Guard, String> {
-            panic!("An immediately available writer must not warn");
+    #[test]
+    fn active_write_bytes_count_toward_the_global_buffer_limit() {
+        let (entered, observed) = std::sync::mpsc::channel();
+        let (release, released) = std::sync::mpsc::channel();
+        let logs = TranscriptLogs::with_writer(32, 6, move |_, _| {
+            entered.send(()).unwrap();
+            released.recv().unwrap();
+            Ok(())
         })
-        .await
         .unwrap();
-        let (finish, finished) = oneshot::channel::<()>();
-        let warning = Arc::new(tokio::sync::Notify::new());
-        let started = std::time::Instant::now();
-        let write = wait_for_write(
-            async {
-                finished.await.unwrap();
-                Ok(())
-            },
-            || {
-                blocked.fetch_add(1, Ordering::SeqCst);
-                warning.notify_one();
-                Ok(Guard(blocked.clone()))
-            },
+        assert!(
+            logs.append(PathBuf::from("unused"), vec!["123456".into()], |_| {})
+                .unwrap()
         );
-        tokio::pin!(write);
-        tokio::select! {
-            result = &mut write => panic!("Producer finished before release: {result:?}"),
-            _ = warning.notified() => {},
-        }
-        assert!(started.elapsed() >= BLOCKED_WARNING);
-        assert_eq!(blocked.load(Ordering::SeqCst), 1);
-        finish.send(()).unwrap();
-        write.await.unwrap();
-        assert_eq!(blocked.load(Ordering::SeqCst), 0);
-        let mut write = Box::pin(wait_for_write(std::future::pending(), || {
-            blocked.fetch_add(1, Ordering::SeqCst);
-            warning.notify_one();
-            Ok(Guard(blocked.clone()))
-        }));
-        tokio::select! {
-            _ = &mut write => panic!("A blocked producer must keep waiting"),
-            _ = warning.notified() => {},
-        }
-        assert_eq!(blocked.load(Ordering::SeqCst), 1);
-        drop(write);
-        assert_eq!(blocked.load(Ordering::SeqCst), 0);
+        observed.recv().unwrap();
+        assert!(
+            !logs
+                .append(PathBuf::from("unused"), vec!["x".into()], |_| {})
+                .unwrap()
+        );
+        assert!(
+            logs.append(PathBuf::from("unused"), vec![], |_| {})
+                .is_err()
+        );
+        release.send(()).unwrap();
     }
+
     #[test]
     fn appends_and_separates_native_sources_without_rewriting() {
         let temp = tempfile::tempdir().unwrap();

@@ -377,7 +377,7 @@ pub async fn start_copilot(
         let stderr = child.stderr.take().ok_or("Missing bridge stderr")?;
         let (writer, writes) = mpsc::channel(32);
         let (stop, stopped) = oneshot::channel();
-        let output = Output::channel(window.clone(), on_event);
+        let output = Output::channel(on_event);
         let task = tokio::spawn(supervise(
             child, stdin, stdout, stderr, writes, stopped, output,
         ));

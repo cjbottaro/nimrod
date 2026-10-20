@@ -111,38 +111,36 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   }, false);
   const transcriptLogPicker = required<HTMLSelectElement>('transcript-logs-mode');
   const transcriptLogStatus = required('transcript-logs-status');
-  let transcriptLogPath = '', transcriptLogFailure = '';
+  let transcriptLogPath = '', transcriptLogFailure = '', transcriptLogLoss = '';
   const transcriptLog = createTranscriptLog({
-    write: lines => invoke('append_transcript_logs', { lines }),
+    write: (lines, captureId) => invoke('append_transcript_logs', { lines, captureId }),
     failure: message => {
       if (unloading) return;
       transcriptLogFailure = message;
       transcriptLogStatus.textContent = message;
       notices.report({ id: 'transcript-logs', operation: 'Record transcript debug logs', message });
     },
-    recovered: () => { transcriptLogFailure = ''; notices.resolve('transcript-logs'); },
+    recovered: () => { transcriptLogFailure = ''; transcriptLogLoss = ''; notices.resolve('transcript-logs'); notices.resolve('transcript-log-loss'); },
+    dropped: count => {
+      if (unloading) return;
+      transcriptLogLoss = `Transcript logging dropped ${count} diagnostic records. Capture is incomplete; session processing is unaffected.`;
+      transcriptLogStatus.textContent = transcriptLogLoss;
+      notices.report({ id: 'transcript-log-loss', operation: 'Transcript debug logs', severity: 'warning', message: transcriptLogLoss });
+    },
   });
-  let pressureRevision = -1, unlistenLogPressure: UnlistenFn | undefined;
-  const logPressure = (pressure: { revision: number; blocked: number }) => {
-    if (unloading || pressure.revision < pressureRevision) return;
-    pressureRevision = pressure.revision;
-    if (pressure.blocked > 0) notices.report({ id: 'transcript-log-pressure', operation: 'Transcript debug logs', severity: 'warning',
-      message: 'Transcript logging is catching up. Session processing may be slower while debug logging is enabled.' });
-    else notices.resolve('transcript-log-pressure');
-  };
-  void listen<{ revision: number; blocked: number }>('transcript-log-pressure', event => logPressure(event.payload))
-    .then(async unlisten => {
-      if (unloading) { unlisten(); return; }
-      unlistenLogPressure = unlisten;
-      logPressure(await invoke<{ revision: number; blocked: number }>('transcript_log_pressure'));
-    }).catch(error => {
-      if (!unloading) notices.report({ id: 'transcript-log-pressure-monitor', operation: 'Monitor transcript logging', message: String(error) });
-    });
+  let unlistenLogErrors: UnlistenFn | undefined;
+  void listen<{ captureId: string; message: string }>('transcript-log-error', event => {
+    if (!unloading) transcriptLog.writeFailed(event.payload.captureId, event.payload.message);
+  }).then(unlisten => {
+    if (unloading) unlisten(); else unlistenLogErrors = unlisten;
+  }).catch(error => {
+    if (!unloading) notices.report({ id: 'transcript-log-monitor', operation: 'Monitor transcript logging', message: String(error) });
+  });
   function reloadTranscriptLog(): void {
     const enabled = preferences.transcriptLogEnabled();
     transcriptLog.setEnabled(enabled && !global);
     transcriptLogPicker.value = enabled ? 'on' : 'off';
-    transcriptLogStatus.textContent = transcriptLogFailure || `${enabled ? 'Transcript debug logging enabled for project windows.' : 'Transcript debug logging is off; existing logs are retained.'}${transcriptLogPath ? ` Logs: ${transcriptLogPath}` : ''}`;
+    transcriptLogStatus.textContent = transcriptLogFailure || transcriptLogLoss || `${enabled ? 'Transcript debug logging enabled for project windows.' : 'Transcript debug logging is off; existing logs are retained.'}${transcriptLogPath ? ` Logs: ${transcriptLogPath}` : ''}`;
   }
   transcriptLogPicker.addEventListener('change', () => {
     transcriptLogPicker.disabled = true;
@@ -476,7 +474,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
       animationDuration.removeEventListener('change', changeAnimationDuration);
       pixelBindings.forEach(dispose => dispose()); pixelFade.removeEventListener('change', changePixelFade);
       if (animationPreview.open) closeModal(animationPreview);
-      performanceDiagnostics.dispose(); transcriptLog.dispose(); unlistenLogPressure?.();
+      performanceDiagnostics.dispose(); transcriptLog.dispose(); unlistenLogErrors?.();
       keybindingEditor?.dispose(); settingsNavigation.dispose(); settingsSidebarResize.dispose();
       appearance.dispose(); zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose(); modalMotion.dispose();
     },

@@ -70,7 +70,7 @@ Installed-font discovery and visual behavior still need native acceptance on mac
 
 ## Diagnostics
 
-**Transcript debug logs** is off by default. Enable full-content local conversation traces for debugging; logs can contain secrets and are never uploaded. Logging can slow session processing when the writer falls behind; a sustained-wait warning clears automatically when it catches up. See [Transcript debug logs](transcript-logs.md) for storage, retention and troubleshooting.
+**Transcript debug logs** is off by default. Enable full-content local conversation traces for debugging; logs can contain secrets and are never uploaded. Logging is best-effort and never waits for disk during session delivery. Full buffers drop diagnostic records and report an incomplete capture rather than slowing session processing. See [Transcript debug logs](transcript-logs.md) for storage, retention and troubleshooting.
 
 **Performance diagnostics** are off by default. Enable timing-only in-memory history in global Settings, then choose **Capture performance report** in the affected project window’s command palette when typing or scrolling feels slow. Capture can also be bound to a shortcut. The project window’s notice strip shows capture progress and the saved path; the command’s detail also retains that path. See [Performance reports](performance-diagnostics.md) for privacy, local storage and limitations.
 

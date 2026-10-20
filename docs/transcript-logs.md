@@ -1,6 +1,6 @@
 # Transcript debug logs
 
-Enable **Transcript debug logs** in **Global Settings → Diagnostics** to record the native conversation traffic Nimrod sends and receives. It is off by default; changing it does not restart agents, send prompts or fetch history. Existing enabled preferences are preserved.
+Enable **Transcript debug logs** in **Global Settings → Diagnostics** to capture the native conversation traffic Nimrod sends and receives on a **best-effort** basis. It is off by default; changing it does not restart agents, send prompts or fetch history. Existing enabled preferences are preserved.
 
 ## What is recorded
 
@@ -35,7 +35,7 @@ Give your coding assistant the source/day paths (including adjacent segments), a
 | ACP | Native update names, `history.<name>` replay, `request.<method>`, JSON-RPC `response` and permission traffic |
 | Nimrod | `ui.action` intent/error markers and `ui.configuration` local progress; neither proves harness acceptance |
 
-New events are stored as whole JSONL records, including large history snapshots. Older logs may contain `capture.record_chunk` envelopes: group their payloads by `recordId`, require every index from zero through `count - 1`, concatenate `data` in index order, then JSON-parse the result to recover the original envelope. Incomplete old chunk sets mean missing diagnostic data, not complete events. Reconstruct those older records before filtering on native event/payload fields.
+Captured events are stored as whole JSONL records. Oversized events or bursts that exceed the bounded logging buffers may be omitted, never silently truncated. Sequence gaps indicate missing records when later records survive; leading/trailing loss may leave no on-disk indicator. Older logs may contain `capture.record_chunk` envelopes: group their payloads by `recordId`, require every index from zero through `count - 1`, concatenate `data` in index order, then JSON-parse the result to recover the original envelope. Incomplete old chunk sets mean missing diagnostic data, not complete events. Reconstruct those older records before filtering on native event/payload fields.
 
 For ordinary or already-reconstructed records, filter a UTC window with:
 
@@ -46,12 +46,12 @@ jq -c 'select(.timestamp >= "2026-10-17T20:35:00.000Z" and .timestamp <= "2026-1
 
 ## Failures and limitations
 
-One native writer consumes a bounded shared queue and handles appending, rotation and retention. When it falls behind, producers wait rather than dropping records or stopping logging. **This opt-in development tool can slow session processing.** The UI thread does not block, and disabling logging restores normal ingestion after already accepted writes finish.
+Logging is **fire-and-forget**, with bounded frontend snapshots and one native batched writer for appending, rotation and retention. Sessions never wait for diagnostic writes. Full buffers drop whole diagnostic records instead of delaying agent events, Send, decisions or Stop. Snapshot serialization still consumes some CPU/memory; best-effort does not mean zero overhead.
 
-If a producer waits **at least one second** for queue capacity or the writer, one application warning says **“Transcript logging is catching up. Session processing may be slower while debug logging is enabled.”** Brief waits show nothing. The warning clears automatically when all prolonged waits finish; logging continues without an off/on toggle.
+A warning and Diagnostics status report the capture's cumulative dropped-record count when loss is observed. **The capture is incomplete; session processing is unaffected.** The loss warning stays until a fresh capture starts. Logging can continue after overflow without toggling it; turning logging off/on starts a new segment and clears its loss count. An absent warning does not guarantee a complete trace.
 
-Serialization or actual storage/retention failures still stop logging in the affected window and show a separate error. Records are never silently truncated and ambiguous writes are not retried. Resolve the cause, then toggle logging off/on. Preserve and move aside a file with an incomplete final line before retrying; Nimrod never truncates it for you.
+Serialization or actual storage/retention failures stop logging in the affected window and show a separate error; native writer errors are reported asynchronously and never disconnect the session. Records are never silently truncated and ambiguous writes are not retried. Resolve the cause, then toggle logging off/on. Preserve and move aside a file with an incomplete final line before retrying; Nimrod never truncates it for you. Errors from older captures cannot stop a newer one.
 
-Pending events may be lost when logging is disabled, the window closes or the app crashes; this is a diagnostic trace, not a durable audit log. Full-content snapshots add serialization/memory/disk overhead. Native logging ingress retains a 512 MiB record/batch safety limit; an event exceeding it fails explicitly instead of being truncated.
+Frontend buffering is limited to 4096 pending records / 16 Mi UTF-16 code units plus one in-flight batch. The native queue has 32 batch slots and a shared 64 MiB queued/active-write byte budget. Oversized diagnostic records are dropped whole. Native admission is not proof of persistence, and closing the app never waits for a diagnostic disk flush.
 
-Expanded logging, rotation and backpressure still need native acceptance on macOS/Linux. Earlier tool-only logger checks do not establish acceptance of the current logger; Windows behavior remains unverified.
+Pending events may be lost when logging is disabled, the window closes or the app crashes; this is a diagnostic trace, not a durable audit log. Best-effort logging, overflow reporting and unchanged rotation/retention still need native acceptance on macOS/Linux. Earlier tool-only logger checks do not establish acceptance of the current logger; Windows behavior remains unverified.
