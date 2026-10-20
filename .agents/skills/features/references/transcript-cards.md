@@ -27,6 +27,44 @@ One mounted card per invocation survives placement/lifecycle updates, preserving
 
 Each Pi built-in selects its own metadata-matched mounted plugin; [card plugins](card-plugins.md#built-in-tool-dogfooding) owns the IDs, matching and implementation map. Read summaries can show requested line ranges, and write bodies show literal input-backed **Requested content** alongside Pi output, not a claim of successful execution. File/search/list output remains literal. The shared generic fallback/override remains available for unknown/custom tools.
 
+## Skill disclosures
+
+`src/skill-invocation.ts` owns the shared presentation-only `SkillInvocation`
+interface, `skillUserText` adapter and lazy disclosure renderer. Pi and Copilot
+supply their own parsers in `src/{pi,copilot}/skill-invocation.ts` through their
+existing `ConversationInteraction.userText` contributions. This is not a common
+command or harness protocol. ACP does not interpret either format.
+
+The summary retains the harness's command spelling (`/skill:name` for Pi,
+`/name` for Copilot). The skill body starts collapsed and renders Markdown only
+when opened; optional user arguments render below, outside the disclosure.
+Copilot's injected preamble, base directory and related-file listing remain
+inside the body. No empty argument section is added. Canonical expanded prompts
+and harness history are unchanged; assistant/example text is not reclassified.
+
+Pi recognizes its complete native `<skill>` block. Copilot recognizes the
+anchored explicit-invocation preamble plus base-directory envelope, accepts a
+matching optional `<skill-context>` wrapper, and splits the final literal
+`\n\nARGUMENTS: ` suffix supplied by the runtime. Unknown
+formats fall back to ordinary Markdown, not guessed skill contents or file reads.
+The format is a presentation compatibility boundary, not a supported invocation
+API. Ordinary command/tool semantics are unchanged; [Copilot commands](copilot-commands.md)
+owns command-card reconciliation for a recognized slash-skill result.
+
+Unchanged source text reuses its mounted node before parsing, and unchanged
+presentation fields retain rendered Markdown. Disclosure state survives routine
+full/dirty snapshots and hidden-session catch-up via the existing expanded map
+and previous-node path. No new scroll/focus owner, asynchronous renderer or
+history scan is introduced. Source caches are weak and cannot retain removed
+turns. Skill bodies use the same safe Markdown renderer as other user content;
+labels and Pi locations remain literal text.
+
+Fixtures: `test/skill-invocation.test.ts`, `test/copilot-skill-invocation.test.ts`,
+`test/conversation-view.test.ts` and `test/copilot-commands.test.ts` cover the
+parsers, lazy/no-op work, string/block turns, visible/absent arguments, disclosure
+identity, hidden catch-up, echo adoption, duplicate removal and unknown delivery.
+Execution/native evidence is recorded in [verification](verification.md#skill-disclosures).
+
 ## Pi codemode groups
 
 Pi's explicit `parentToolCallId` survives execution updates, standalone/assistant adoption and full/dirty projection. `CodemodeGroups` in `src/pi/codemode-groups.ts` composes child articles beneath a root Pi codemode shell without rewriting canonical history or inventing a shared harness protocol. Unavailable parents leave children in normal flow; tool IDs retain the same mounted shells, disclosure owners and output viewports. Nested execution events stay in progress/interruption tracking but are excluded from peer parallel-tools overviews and result-processing overlays.

@@ -2,6 +2,20 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
+## Skill disclosures
+
+Pi and Copilot now share the lazy skill renderer and presentation interface.
+New/updated parser, shared-renderer, mounted-view and Copilot command fixtures
+are authored **unrun**. They cover string/block history, arguments, disclosure
+identity/hidden catch-up, echo adoption and command outcome retention. The
+user's screenshot establishes Copilot's expanded invocation presentation; local
+pinned-runtime strings additionally establish its explicit preamble,
+`<skill-context>` wrapper and `ARGUMENTS: ` separator, not native acceptance of
+the new renderer. No app
+build/launch, model request or user-session operation was performed. Actual
+macOS/Linux appearance, interaction and installed-CLI acceptance remain pending.
+See the [skill disclosure contract](transcript-cards.md#skill-disclosures).
+
 ## Evidence boundaries
 
 **Pixel dissolve:** shared-owner mosaic with configurable target size, live per-tile content blur and alpha fading; hard edges remain. Soft rendering uses bounded backdrop-filter tiles plus an inline SVG alpha mask, not form copies. Pure planner, soft-surface cleanup/capability, controller/config/native and offline browser option/alpha/filter/partial-close fixtures are authored **unrun**. Earlier user feedback accepted the sharp dissolve; the soft renderer was then reported to appear smaller until completion. The geometry follow-up normalizes the SVG alpha mask to object-bounding-box units and uses inset-constrained decorative layers; unit coverage and offline browser geometry/edge-pixel regressions at 100/125/150% CSS zoom are authored unrun. This has not yet been reproduced/accepted in native WKWebView. Actual WKWebView/GTK mask rendering, blur appearance, frame cost on large pickers, native zoom, keyboard/focus and accessibility remain unverified. No build/app launch or platform acceptance is claimed. The [modal motion contract](modal-layout.md#modal-motion) owns behavior/schema and fixture locations.

@@ -4,6 +4,10 @@ import { newlineHint, sendHint } from '../composer-hints';
 import type { SessionAction } from '../session-backend';
 import type { CopilotSession } from './session';
 import { copilotSlashCommands, findCopilotCommand } from './commands';
+import { parseCopilotSkillInvocation } from './skill-invocation';
+import { skillUserText } from '../skill-invocation';
+
+const renderCopilotUserText = skillUserText(parseCopilotSkillInvocation);
 export function copilotSessionActions(session?: CopilotSession): readonly SessionAction[] {
   const permissions = session && findCopilotCommand(session.commands, 'permissions');
   return [
@@ -19,6 +23,7 @@ export function copilotInteraction(validate: (text: string) => string | undefine
   return {
     label: 'Copilot',
     commands: copilotSlashCommands,
+    userText: renderCopilotUserText,
     keyboardMode: event => keyboardSubmissionMode(event, false),
     composer: state => ({ hint: [state.busy ? { text: 'Stop to cancel' } : sendHint, newlineHint], stopLabel: 'Stop Copilot' }),
     prepare(text) {

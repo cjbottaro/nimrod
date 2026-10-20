@@ -30,7 +30,7 @@ Click a disclosure arrow or summary to expand a card.
 - **Tool cards** show one invocation with an input preview, raw inputs and output. Expand for full details; summaries don't use hover tooltips.
 - **Reasoning cards** show thinking text actually supplied by Pi.
 - A temporary **parallel-tools overview** summarizes overlapping executions without replacing individual cards.
-- **Skill disclosures** keep expanded skill bodies collapsed within user turns while leaving user arguments visible.
+- **Skill disclosures** in Pi and Copilot show the skill command collapsed within its user turn, followed by any arguments. Expand the command to read the skill instructions; Copilot's injected context and related-file listing stay inside the disclosure too.
 
 Cards start closed. Sustained non-empty execution updates may open a running tool after about half a second; a fast final result alone does not. Your manual disclosure choice wins. Inspecting one tool's output does not reset another tool's reading position.
 

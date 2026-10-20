@@ -402,6 +402,46 @@ test('only an explicit interactive agent-prompt result sends model work', async 
   } finally { f.session.disconnect('fixture complete'); }
 });
 
+for (const withArguments of [false, true]) test(`recognized skill prompt replaces the command card and survives user echo (${withArguments ? 'arguments' : 'no arguments'})`, async () => {
+  const f = await fixture(undefined, [{ name: 'review-pr', aliases: ['review'], kind: 'skill' }]);
+  try {
+    const body = 'The user explicitly invoked the "/review-pr" skill. Follow its instructions now.\n\nBase directory for this skill: /fixture/review-pr\n\n# Review\n\nRead the diff.';
+    const input = withArguments ? 'https://github.com/fixture/project/pull/42' : '';
+    const plain = body + (input ? `\n\nARGUMENTS: ${input}` : '');
+    const prompt = withArguments ? plain.replace('\n\nBase directory', '\n\n<skill-context name="review-pr">\nBase directory') + '\n</skill-context>' : plain;
+    const handling = f.session.handle({ type: 'command', id: 'skill', text: `/review${input ? ` ${input}` : ''}` });
+    assert.equal(f.session.state.configurationOperations!.length, 1, 'accepted intent is visible immediately');
+    f.reply({ kind: 'agent-prompt', prompt, displayPrompt: `/review-pr ${input}` }); await flush();
+    const user = f.session.state.messages.find(message => message.role === 'user')!;
+    assert.equal(user.content, prompt, 'expanded content is available in the disclosure before the native echo');
+    assert.equal(f.sent.filter(request => request.method === 'prompt').length, 1);
+    f.session.receive({ kind: 'event', event: { id: 'skill-echo', type: 'user.message', data: { content: prompt } } });
+    f.reply({ messageId: 'accepted' }, 'prompt'); await handling;
+    assert.equal(f.session.state.configurationOperations!.length, 0, 'successful recognized skills have one user turn, not a duplicate command card');
+    assert.equal(f.session.state.messages.length, 1);
+    assert.equal(f.session.state.messages[0].key, user.key);
+    assert.equal(f.session.state.messages[0].content, prompt);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('unrecognized skill expansions and uncertain skill delivery retain their command outcome', async () => {
+  for (const unknown of [false, true]) {
+    const f = await fixture(undefined, [{ name: 'review', kind: 'skill' }]);
+    try {
+      const handling = f.session.handle({ type: 'command', id: 'skill-outcome', text: '/review' });
+      const prompt = unknown
+        ? 'The user explicitly invoked the "/review" skill. Follow its instructions now.\n\nBase directory for this skill: /fixture/review\n\n# Review'
+        : 'A future, unrecognized expansion format';
+      f.reply({ kind: 'agent-prompt', prompt, displayPrompt: '/review' }); await flush();
+      if (unknown) f.session.disconnect('Delivery was not confirmed');
+      else f.reply({ messageId: 'accepted' }, 'prompt');
+      await handling;
+      assert.equal(f.session.state.configurationOperations!.at(-1)!.phase, unknown ? 'unknown' : 'completed');
+      assert.equal(f.sent.filter(request => request.method === 'prompt').length, 1, 'never replay');
+    } finally { f.session.disconnect('fixture complete'); }
+  }
+});
+
 test('busy /allow-all and subsequent commands queue FIFO until terminal root idle, without prompts or draft effects', async () => {
   const f = await fixture(undefined, [{ name: 'allow-all', aliases: ['allow'], kind: 'builtin' }, ...catalog]);
   try {

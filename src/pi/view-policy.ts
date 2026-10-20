@@ -2,7 +2,8 @@ import type { ConversationInteraction, ConversationViewState } from '../conversa
 import { presentActivity } from './activity-state';
 import { createPiStatusArea } from './status-area';
 import { keyboardHints, keyboardSubmissionMode } from './composer-dom';
-import { renderSkillInvocation } from './skill-invocation';
+import { parseSkillInvocation } from './skill-invocation';
+import { skillUserText } from '../skill-invocation';
 import { slashCommands } from './slash-completion';
 import type { PiViewState } from './view-state';
 import type { SessionAction } from '../session-backend';
@@ -13,7 +14,9 @@ export const piSessionActions: readonly SessionAction[] = [
   { id: 'thinking', label: 'Select thinking level…', keywords: 'effort reasoning', detail: 'Choose the thinking level for this session' },
 ];
 
-/** Pi owns slash interception, steering/queue semantics, compaction and skill UI. */
+const renderPiUserText = skillUserText(parseSkillInvocation);
+
+/** Pi owns slash interception, steering/queue semantics, compaction and skill recognition. */
 export const piInteraction: ConversationInteraction = {
   label: 'Pi',
   commands: slashCommands,
@@ -32,7 +35,7 @@ export const piInteraction: ConversationInteraction = {
     // Hide only that exact standalone format; never alter prompt/history data.
     const visible = text.replace(/(^|\r?\n)\[Image: original \d+x\d+, displayed at \d+x\d+\. Multiply coordinates by \d+\.\d{2} to map to original image\.\](?=\r?\n|$)/g, '');
     const content = visible === text ? text : visible.trimEnd();
-    const node = renderSkillInvocation(document, content, key, expanded, markdown, previous) ?? markdown(content);
+    const node = renderPiUserText(document, content, key, expanded, markdown, previous);
     node.hidden = !content.trim();
     return node;
   },
