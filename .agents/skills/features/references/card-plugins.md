@@ -20,7 +20,7 @@
 | Pi `nimrod.read`, `nimrod.bash`, `nimrod.edit-preview`, `nimrod.write`, `nimrod.grep`, `nimrod.find`, `nimrod.ls`, `nimrod.codemode` | `test/builtin-tool-plugins.test.ts`, `test/edit-card.test.ts`, `test/console-output.test.ts`, `test/browser/builtin-tool-plugins.spec.ts` |
 | Pi `nimrod.tool`, explicit `nimrod.raw`, `nimrod.reasoning`, `nimrod.parallel` | `test/bundled-card-renderers.test.ts`, `test/tool-card.test.ts`, `test/reasoning-card.test.ts`, `test/tool-progress.test.ts` |
 | SDK `nimrod.copilot.tool`, `.shell`, `.read`, `.search`, `.fetch` | `test/copilot-tool-cards.test.ts`, `test/copilot-sdk-presentation.test.ts`, `test/copilot-web-cards.test.ts`, corresponding offline browser fixtures |
-| SDK router specializations: patch, question/answer, SQL, skill, GitHub contents/code search, other MCP | `test/copilot-patch-cards.test.ts`, `test/copilot-question-cards.test.ts`, `test/copilot-sql-cards.test.ts`, `test/copilot-sdk-presentation.test.ts` |
+| SDK router specializations: patch, question/answer, plan review, SQL, skill, GitHub contents/code search, other MCP | `test/copilot-patch-cards.test.ts`, `test/copilot-question-cards.test.ts`, `test/copilot-sql-cards.test.ts`, `test/copilot-sdk-presentation.test.ts` |
 | Internal `nimrod.acp.tool` | `test/acp-cards.test.ts`; no product creation/prompt recipe |
 
 Copilot IDs identify mount-time adapter families, not one ID per visible tool. The shared concrete SDK router can enhance a retained instance after names/categories/metadata arrive. For example, `other`-category SQL initially selects `nimrod.copilot.search`, then receives SQL presentation inside that instance; do not introduce result-dependent reselection or claim a nonexistent dedicated SQL renderer ID. Personal/external plugins retain their existing precedence. Optional Pi Web Access is not bundled.
@@ -61,6 +61,28 @@ The revocation-order follow-up adds `test/card-plugin-callback-guards.test.ts`: 
 - Public `questionAnswerPresentation({question,answer,sections})` in `src/card-plugin-ui.ts` requests optional `CardPresentation.questionAnswer:{answer:string}`. The shared `DomCardController` validates and incrementally patches title/icon/reply while retaining outer summary/body/indicator and keyed option viewports. The tool shell combines the presentation slot's accessible question/answer label with its lifecycle status. Core raw recovery still handles removed/transformed result sections; pure-adapter source bookkeeping avoids scanning accumulated raw DOM. No extra reducer fields, history walks, caches, asynchronous work, timers, output-scroll owner or native dependencies.
 - This is read-only transcript presentation **after** the SDK reports the decision result. The [Question picker](copilot-sdk.md#questions-and-custom-answers), custom-answer modal, FIFO/banner, focus restoration and request cancellation remain integration-owned and unchanged. Cards have no answer buttons or transport methods. Existing manual disclosure, hidden-session catch-up and scroll/focus behavior remain authoritative.
 - `test/copilot-question-cards.test.ts` embeds scrubbed local native shapes observed October 17–18, 2026 (without session/call/telemetry identities). Fixtures cover simple and schema-based questions, exact multiline/literal freeform answers, offered choices/raw recovery, generation → terminal enhancement, retained shell/indicator/reply/icon/raw disclosure/focus/inspection, malformed/error/cancel/interrupted results, source/MCP scoping, public helper bundling/validation and transition back to generic presentation. The list follow-up supplies the real safe-Markdown host and adds semantic ordered-list assertions plus literal HTML/Markdown/link/code/entity and multiline-option coverage; these follow-up fixtures are also unrun. These fixtures have not been run; no app build/launch, live provider request or session-file mutation was performed. Mandatory post-merge compile-check evidence is separate from test/native acceptance.
+
+## Copilot plan review cards
+
+`src/copilot/card-plugins.ts::planPresentation` enhances completed built-in
+`exit_plan_mode` calls through the same public `questionAnswerPresentation` helper
+as question/answer cards. The collapsed card says **Plan review** and retains the
+literal native `detailedContent` outcome; the disclosure renders the tool's
+`summary` arguments as Markdown in conversation typography. This is the supplied
+summary, not an invented copy of a separate plan file. Exact inputs and full
+native results remain core-owned raw disclosures. The full plan is reviewed in
+the separate [Plan review picker](copilot-sdk.md#plan-review-interaction).
+
+Enhancement requires SDK source, no MCP identity, terminal finished/result status,
+no error/interruption/generation phase, native successful completion, a current
+result match through `nativeResult`, and non-empty string `detailedContent`.
+There is no outcome parsing or inferred mode change from prose. Missing/unknown
+result detail, failures and interrupted calls remain generic. The existing mounted
+adapter, keyed summary/body/raw nodes, manual disclosure/focus and shared output
+scroll owner are reused; cards never settle callbacks or provide approval buttons.
+Scrubbed CLI 1.0.100 shapes and retained-node/fallback coverage live in
+`test/copilot-plan-cards.test.ts`; [verification](verification.md#copilot-plan-and-autopilot)
+owns execution/native evidence.
 
 ## Copilot inspection cards
 

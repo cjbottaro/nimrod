@@ -94,6 +94,25 @@ file-change result. Failed/interrupted calls never label the request as applied.
 **Raw inputs** and **Raw output** retain the exact original patch and result details.
 The card does not independently verify disk contents or provide an Apply button.
 
+## Copilot plan review
+
+In a disposable Copilot project, select **Plan** and send:
+
+```text
+Prepare a small plan to add a README example. Do not implement it yet. When the
+plan is ready, use your plan-review tool so I can choose how to continue.
+```
+
+When Copilot calls `exit_plan_mode`, expect the **Plan review picker** with a
+rendered plan and offered actions. Escape should leave a **Review plan** banner;
+reopening must not submit a decision. Try nested feedback cancellation before
+choosing an action. **Finish planning** is the non-implementation choice when
+advertised; choose Autopilot only when you intend to authorize implementation.
+After the tool completes, expect a read-only **Plan review** transcript card with
+Copilot's literal outcome, a disclosed Markdown summary and raw inputs/results.
+This recipe has not been exercised for the new UI; see
+[Plan and Autopilot](copilot.md#plan-and-autopilot) for remaining limitations.
+
 ## Copilot SQL
 
 This is Copilot's built-in `sql` tool—not a shell command or an MCP database tool.

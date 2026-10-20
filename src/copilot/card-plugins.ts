@@ -200,6 +200,18 @@ function questionPresentation(data: Readonly<ToolCardData>, input: Record<string
   const list = options.map(option => `1. ${option.replace(/[^\p{L}\p{N}\s]/gu, character => `&#${character.codePointAt(0)};`).replace(/\r\n|\r|\n/g, '<br>')}`).join('\n');
   return questionAnswerPresentation({ question, answer, sections: options.length ? [{ key: 'question-options', label: 'Available options', text: list, format: 'markdown' }] : [] });
 }
+/** A completed plan decision is read-only; its native outcome is not inferred from approval-looking prose. */
+function planPresentation(data: Readonly<ToolCardData>, input: Record<string, unknown> | undefined): CardPresentation | undefined {
+  if (data.name !== 'exit_plan_mode' || data.isError || data.uiPhase || !['finished', 'result'].includes(data.toolStatus || '')) return;
+  const complete = object(object(data.native)?.['tool.execution_complete']);
+  if (complete?.success !== true) return;
+  const native = nativeResult(data);
+  const outcome = native?.output.detailedContent;
+  if (typeof outcome !== 'string' || !outcome.trim()) return;
+  const summary = firstString(input, ['summary']);
+  return questionAnswerPresentation({ question: 'Plan review', answer: outcome,
+    sections: summary ? [{ key: 'plan-summary', label: 'Plan summary', text: summary, format: 'markdown' }] : [] });
+}
 /** Late names/categories/SDK metadata update content inside the same mounted adapter. */
 function copilotPresentation(data: Readonly<ToolCardData>, context: CardPluginContext, patch: ReturnType<typeof createPatchPresentation>): CardPresentation {
   const raw = rawToolPresentation(data);
@@ -209,8 +221,8 @@ function copilotPresentation(data: Readonly<ToolCardData>, context: CardPluginCo
   const input = data.name === 'apply_patch' && start?.mcpServerName === undefined && start?.mcpToolName === undefined ? undefined : argumentRecord(data.arguments);
   const sections = data.isError ? copilotSections(data) : raw.sections;
   // Native MCP operations with a coincidentally matching name are not built-in questions.
-  const question = !start?.mcpServerName ? questionPresentation(data, input) : undefined;
-  if (question) return question;
+  const decision = !start?.mcpServerName && !start?.mcpToolName ? questionPresentation(data, input) ?? planPresentation(data, input) : undefined;
+  if (decision) return decision;
   if (typeof start?.mcpServerName === 'string' && typeof start.mcpToolName === 'string') {
     // The built-in web search is delivered through GitHub MCP, not only as a
     // bare search-category tool. Match its concrete identity before MCP fallback.

@@ -168,6 +168,29 @@ Source report basenames (local files, not checked into this repository; retentio
 
 Incremental streaming now adds indexed tool updates, dirty-row presentation, append-only text/ANSI rendering and affected-output scroll batching. Its new unit/DOM/shell/offline-browser fixtures, including the review-fix differential lifecycle and mixed-helper/custom-DOM raw-recovery cases, have not been run; there is no native before/after responsiveness claim. Existing reports do not establish its effect. Remaining cumulative Pi-JSON/rendered-prefix costs, immutable array pointer copies and fallback/Markdown work are detailed in the [incremental rendering reference](../../performance-optimizations/references/incremental-transcript.md).
 
+## Copilot Plan and Autopilot
+
+On October 19, 2026 (macOS, local CDT), the user reported selecting **Continue
+with Autopilot**, seeing **Autopilot** in Nimrod's Status area, and apparent
+ongoing execution. Read-only inspection of the existing CLI **1.0.100** trace
+(`2026-10-20.jsonl`, UTC date) corroborated an approved `autopilot` decision at
+04:59:40.964Z, `exit_plan_mode.completed` with `approved:true`, an authoritative
+Plan → Autopilot `session.mode_changed`, and successful exit-plan tool completion.
+This is native user-observed acceptance of the ordinary approval/mode-display
+handoff and initial continuation, not completed-task acceptance. No new agent
+prompt, session mutation, build or launch was performed by this investigation.
+
+The retained Plan review picker/banner and compact completed card are subsequent
+source changes, not the UI the user accepted. `test/copilot-plans.test.ts`,
+`test/copilot-plan-cards.test.ts` and revised shell coverage are authored **unrun**.
+Their native visual/keyboard/feedback/dismissal acceptance on macOS and Linux
+remains pending. The mandatory post-merge compile check is compilation evidence
+only. Distinct planning/execution models, restoration/compaction confirmation,
+Interactive handoff, revision loops, sticky-mode terminal ordering, limits and
+Stop remain unaccepted. Continue using the
+[mode acceptance skill](../../copilot-mode-acceptance/SKILL.md) for the remaining
+matrix; do not treat this handoff as full Plan/Autopilot support.
+
 ## Pi codemode groups
 
 Grouped Pi codemode cards are source-implemented. Authored fixtures in `test/codemode-groups.test.ts`, `test/native-view.test.ts`, `test/builtin-tool-plugins.test.ts`, `test/tool-card.test.ts` and `test/browser/codemode-groups.spec.ts` cover explicit relationships, adoption/history, bounded/missing records, independent parent/child output, child failures, dynamic progress, coalesced/hidden/gapped delivery, reset and retained DOM/disclosures/focus. Follow-up authored fixtures additionally cover normal saved-child cards/themed dots, absent-data silence, personal overrides, unchanged-record renderer suppression, saved-to-live shell adoption and plugin disposal. These fixtures have **not been run** for this change. Native visual/disclosure/scroll acceptance on macOS/Linux remains pending; no platform acceptance follows from authored jsdom/browser fixtures.

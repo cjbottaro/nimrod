@@ -62,9 +62,20 @@ Evidence and gaps:
   `status:"unchanged"` accompanied `modeApplied:true` and an actual mode change.
 - A distinct-plan-model request on an empty session did not actually change the
   selected model. It is **not** evidence of successful model restoration.
-- Actual plan execution, sticky Autopilot completion, limit exhaustion,
-  compaction confirmation and distinct-model handoff remain unaccepted.
+- At this initial baseline, actual plan execution, sticky Autopilot completion,
+  limit exhaustion, compaction confirmation and distinct-model handoff were
+  unaccepted; subsequent ordinary-handoff evidence is linked below.
 - No native GUI acceptance was established.
+
+## Subsequent native evidence
+
+The user has exercised the ordinary **Continue with Autopilot** path and observed
+confirmed Autopilot mode plus initial implementation activity in Nimrod on macOS.
+The existing trace corroborates approval and the native mode transition. This
+narrows the original acceptance TODO; it does not close it. See the canonical
+[evidence and remaining gaps](../features/references/verification.md#copilot-plan-and-autopilot).
+The subsequent retained Plan review picker/banner and read-only decision card
+still need native acceptance; the earlier inline UI was used for that observation.
 
 ## Unfinished problem
 

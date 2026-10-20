@@ -63,6 +63,11 @@ Unit fixtures cover all four arrow directions/wrapping, reversed DOM order, disa
 
 Copilot denial feedback and custom question answers use the existing host input dialog layered above their retained Permission picker or Question picker; the parent does not change size to become a text editor. Questions use **Enter your own answer…** and **Submit answer**, with cancellation returning to the unchanged picker without answering; [Copilot questions](copilot-sdk.md#questions-and-custom-answers) owns lifecycle. `Dialogs.input` accepts an optional submit label (default **Confirm**, permissions use **Send denial**). Shared shell geometry, native topmost focus and input Enter/newline behavior remain authoritative; no feature-specific width/position or motion override is introduced; the shared modal motion applies. Cancellation/disposal revalidates the concrete permission owner before applying text. New retained-palette/permission unit, shell and offline-browser fixtures are authored unrun; native stacking/zoom/accessibility acceptance remains pending.
 
+Copilot plan review reuses the retained palette and the same nested host-input
+lifecycle for revision/optional approval feedback. See the
+[Plan review interaction](copilot-sdk.md#plan-review-interaction) for response and
+dismissal semantics; it adds no modal geometry or motion override.
+
 ## Command rows
 
 `PaletteOptions.commands()` requires a `detail` string; picker items retain optional metadata. Every shell command supplies a short explanatory description in `src/main.ts`, rather than a project path/current value/session title. `src/command-palette.ts` appends the effective-binding `<kbd>` inside `.palette-item-heading`, after the flexible title, and the `.palette-item-description` below it. Unbound commands have no shortcut placeholder. Both fields stay visually secondary on selected rows. Picker-specific rows/order and MRU behavior remain unchanged. Descriptions participate in existing text filtering.

@@ -13,6 +13,7 @@ import { savedSessionKey, resolveSessionListEntry, type SessionListEntry } from 
 import { renderPermissionDetails } from './acp/tool-state';
 import { CopilotPermissionInteraction } from './copilot/permission-interaction';
 import { CopilotQuestionInteraction } from './copilot/question-interaction';
+import { CopilotPlanInteraction } from './copilot/plan-interaction';
 import { acpInteraction } from './acp/view-policy';
 import { createPiViewProjection, piInteraction } from './pi/view-policy';
 import { piSession, acpSession, copilotSession, acpProfile as profileFor, sessionActions, sessionConfiguration, type SessionAction, type SessionBackend } from './session-backend';
@@ -331,7 +332,7 @@ window.addEventListener('unload', () => {
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
   pluginLoading.dispose();
   sessionContextMenu.dispose(); sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); unlistenLinkErrors(); deletions.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
-  for (const tab of tabs) { copilotPermissions.get(tab)?.dispose(); copilotQuestions.get(tab)?.dispose(); tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.lifecycle.disconnect('Window closed'); }
+  for (const tab of tabs) { copilotPermissions.get(tab)?.dispose(); copilotQuestions.get(tab)?.dispose(); copilotPlans.get(tab)?.dispose(); tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.lifecycle.disconnect('Window closed'); }
   keybindingDispatch.dispose(); unlistenProjectSettings();
   unlistenProjectPicker(); palette.dispose();
 }, { once: true });
@@ -468,6 +469,7 @@ function presentConversation(tab: Tab | undefined): void {
       copilotSession(presented)?.cancelCommands();
       copilotPermissions.get(presented)?.setActive(false);
       copilotQuestions.get(presented)?.setActive(false);
+      copilotPlans.get(presented)?.setActive(false);
       const focused = document.activeElement;
       if (focused instanceof HTMLElement && presented.root.contains(focused)) {
         presented.focus = focused;
@@ -477,7 +479,7 @@ function presentConversation(tab: Tab | undefined): void {
     }
     presented = tab;
     conversation.hidden = !tab;
-    if (tab) { tab.root.hidden = false; tab.view.setActive(true); tab.notices.setActive(true); copilotPermissions.get(tab)?.setActive(true); copilotQuestions.get(tab)?.setActive(true); }
+    if (tab) { tab.root.hidden = false; tab.view.setActive(true); tab.notices.setActive(true); copilotPermissions.get(tab)?.setActive(true); copilotQuestions.get(tab)?.setActive(true); copilotPlans.get(tab)?.setActive(true); }
     syncPopouts();
   }
   for (const item of tabs) {
@@ -1232,6 +1234,7 @@ function requestSessionChoice(tab: Tab, details: HTMLElement, options: { id: str
 }
 const copilotPermissions = new WeakMap<Tab, CopilotPermissionInteraction>();
 const copilotQuestions = new WeakMap<Tab, CopilotQuestionInteraction>();
+const copilotPlans = new WeakMap<Tab, CopilotPlanInteraction>();
 async function requestCopilotDecision(tab: Tab, kind: 'permission' | 'input' | 'plan', request: Record<string, unknown>, signal: AbortSignal): Promise<CopilotDecision | undefined> {
   if (kind === 'permission') {
     if (signal.aborted || !tabs.includes(tab) || tab.closing) return { kind: 'user-not-available' };
@@ -1301,31 +1304,39 @@ async function requestCopilotDecision(tab: Tab, kind: 'permission' | 'input' | '
     });
     return choice;
   }
-  const details = document.createElement('div');
-  if (kind === 'plan') {
-    if (!Array.isArray(request.actions) || !request.actions.length
-      || !request.actions.every(action => typeof action === 'string' && action.length > 0))
-      throw new Error('Copilot did not supply valid plan continuation choices.');
-    const title = document.createElement('strong'); title.textContent = typeof request.summary === 'string' ? request.summary : 'Copilot finished planning';
-    details.append(title);
-    if (typeof request.planContent === 'string' && request.planContent) {
-      const plan = document.createElement('pre'); plan.textContent = request.planContent; details.append(plan);
-    }
-    const feedbackLabel = document.createElement('label'); feedbackLabel.textContent = 'Plan feedback (optional)';
-    const feedback = document.createElement('textarea'); feedback.setAttribute('aria-label', 'Plan feedback');
-    feedbackLabel.append(feedback); details.append(feedbackLabel);
-    const actions = request.actions.filter((value): value is string => typeof value === 'string');
-    const choice = await requestSessionChoice(tab, details, [...actions.map((action, index) => ({
-      id: String(index), label: action === 'interactive' ? 'Continue interactively' : action === 'autopilot' ? 'Continue with Autopilot'
-        : action === 'exit_only' ? 'Finish planning' : action,
-    })), { id: 'revise', label: 'Request changes' }], signal);
-    if (choice === undefined || signal.aborted) return { approved: false };
-    const responseFeedback = feedback.value.trim() ? { feedback: feedback.value.trim() } : {};
-    if (choice === 'revise') return { approved: false, ...responseFeedback };
-    const selectedAction = actions[Number(choice)];
-    if (selectedAction === undefined) throw new Error('This Copilot plan action is no longer available.');
-    return { approved: true, selectedAction, ...responseFeedback };
+  if (signal.aborted || !tabs.includes(tab) || tab.closing) return;
+  let interaction = copilotPlans.get(tab);
+  if (!interaction) {
+    const feedbackOwner = `${tab.id}:plan-feedback`;
+    const canPresent = () => !unloading && presented === tab && tabs.includes(tab) && !tab.closing && !tab.restarting && !tab.deleting && !tab.ended
+      && !settings.isOpen && !document.querySelector('dialog[open]:not(#command-palette)');
+    interaction = new CopilotPlanInteraction({
+      document, canPresent,
+      start: dismiss => canPresent() ? palette.startRetainedSelection('Review Copilot plan', dismiss) : undefined,
+      feedback: (revision, current) => dialogs.input(revision ? 'Requested plan changes' : 'Plan feedback (optional)', current, feedbackOwner, revision ? 'Request changes' : 'Save feedback'),
+      cancelFeedback: () => dialogs.cancel(feedbackOwner),
+      openLink: href => invoke('open_card_link', { href }),
+      changed: delta => { tab.inputCount += delta; if (tabs.includes(tab)) updateTab(tab); },
+      banner: (count, review) => {
+        const id = `${tab.id}:plan-required`;
+        if (!count) { notices.resolve(id); return; }
+        notices.report({ id, owner: tab.id, operation: 'Copilot plan review',
+          message: count === 1 ? 'Waiting for plan review' : `Waiting for plan review · ${count} plans`,
+          presentation: 'pending-action', severity: 'info', dismissible: false,
+          actions: [{ label: 'Review plan', enabled: () => !unloading && tabs.includes(tab) && presented === tab && !tab.closing, run: review }] });
+      },
+      error: message => { if (tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:plan-error:${++noticeSequence}`, owner: tab.id, operation: 'Plan feedback', message }); },
+    });
+    copilotPlans.set(tab, interaction);
   }
+  const choice = interaction.request(request, signal);
+  const token = tab.token;
+  if (token) void notifySession('input', {
+    valid: () => !signal.aborted && !unloading && tabs.includes(tab) && tab.token === token && !tab.closing && !tab.ended,
+    selected: () => presented === tab && !settings.isOpen,
+    session: 'Copilot', target: { session: tab.id, token },
+  });
+  return choice;
 }
 async function newCopilotSession(): Promise<void> {
   if (!ready || !copilotReady || settings.isOpen || !await ensureWorkspace() || unloading || deletions.pending) return;
@@ -1721,7 +1732,7 @@ function disposeTab(tab: Tab): void {
   if (!tabs.includes(tab)) return;
   tab.closing = true;
   tab.root.dispatchEvent(new Event('nimrod-dispose-images'));
-  copilotPermissions.get(tab)?.dispose(); copilotQuestions.get(tab)?.dispose();
+  copilotPermissions.get(tab)?.dispose(); copilotQuestions.get(tab)?.dispose(); copilotPlans.get(tab)?.dispose();
   tab.notices.dispose(); notices.store.resolveOwner(tab.id);
   navigation.remove(tab);
   if (active === tab) active = undefined;
@@ -1735,7 +1746,7 @@ function disposeTab(tab: Tab): void {
 function detachTab(tab: Tab): void {
   if (!tabs.includes(tab)) return;
   tab.closing = true;
-  copilotPermissions.get(tab)?.dispose(); copilotQuestions.get(tab)?.dispose();
+  copilotPermissions.get(tab)?.dispose(); copilotQuestions.get(tab)?.dispose(); copilotPlans.get(tab)?.dispose();
   tab.notices.dispose(); notices.store.resolveOwner(tab.id);
   if (tab.token) dialogs.cancel(tab.token);
   tab.cancelPreference?.(); tab.cancelInspector?.(); tab.receive?.({ type: 'sessionDisconnected' }); tab.lifecycle.disconnect('Session closed');

@@ -219,15 +219,23 @@ disconnects rather than guessing or submitting follow-on work.
 ### Plan and Autopilot
 
 **Plan** asks Copilot to investigate and prepare a plan before implementing.
-Review its plan in the owning conversation, then choose one of Copilot's offered
-actions, such as **Continue interactively**, **Continue with Autopilot** or
-**Finish planning**. **Cancel request** declines the transition. A background
-plan request never switches sessions or steals focus.
+The **Plan review picker** shows the rendered plan and Copilot's offered actions,
+such as **Continue interactively**, **Continue with Autopilot** or **Finish planning**.
+Copilot's recommendation is marked, not automatically accepted. A background
+plan request never switches sessions or replaces an existing dialog.
 
-Use **Plan feedback** and **Request changes** to return revisions to Copilot
-without approving implementation. Feedback can also accompany an approval.
-**Cancel request** declines without submitting the feedback. None of these
-actions sends an extra chat prompt or replaces your composer draft.
+Press **Escape** to read the transcript without answering. The session-local
+**Waiting for plan review** banner's **Review plan** action reopens the picker.
+Switching sessions does not undo an explicit dismissal.
+
+**Request changes…** opens a nested feedback modal; submitting non-empty feedback
+returns revisions without approving implementation. **Add feedback…** saves
+optional feedback to accompany your next approval. Cancelling either feedback
+modal returns to the unchanged picker. **Decline plan** explicitly declines the
+request without submitting feedback; dismissing the picker does not decline it.
+None of these actions sends an extra chat prompt or replaces your composer draft.
+The completed tool card retains Copilot's reported decision and a disclosed
+Markdown plan summary, with original inputs/results available in raw disclosures.
 
 **Autopilot** lets Copilot continue through successive steps from one prompt.
 Nimrod keeps the session Working across intermediate pauses, retaining tool
@@ -241,8 +249,9 @@ Nimrod never sends hidden "continue" prompts or replays your task, and reconnect
 does not automatically continue pending work.
 
 The intermediate-idle handling follows the pinned SDK's completion waiter.
-Real CLI completion, sticky Autopilot mode, limits and Stop still need native
-acceptance; this is not a claim of full terminal-UI parity.
+A user-observed Plan → Autopilot handoff has successfully updated the Status area
+and begun execution on macOS. Terminal completion, sticky Autopilot mode, limits
+and Stop still need acceptance; this is not a claim of full terminal-UI parity.
 
 Empty, isolated-session probes confirmed that ordinary mode changes work with
 CLI 1.0.98 without additional host steps. They did not verify model-switch

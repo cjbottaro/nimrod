@@ -279,7 +279,8 @@ Stop/Close/disconnect retire the owning AbortSignal and close owned picker/child
 input; there is no ambiguous **Cancel request** question choice. Generation,
 entry, active-presentation and abort guards reject stale replies. No composer
 mutation, prompt submission, transcript entry, replay or follow change is involved.
-Plan review is unchanged. `test/copilot-questions.test.ts` and the question fixture
+Plan review has its separate [interaction owner](#plan-review-interaction).
+`test/copilot-questions.test.ts` and the question fixture
 in `test/shell.test.ts` cover literal/custom answers, freeform capability, FIFO,
 dismiss/review, nested cancel/empty input, retained draft/focus, background/modal
 priority, navigation, abort/disposal and stale input. These fixtures are authored
@@ -469,18 +470,44 @@ deferred implementation and interactive continuation remain unsupported when
 their result flags are returned. Their existing explicit-error/disconnect
 fallback remains. Further acceptance needs isolated model-backed evidence or
 upstream clarification; no model-backed probe is authorized by the no-prompt
-probe. Native GUI, Linux, active-task Stop and sticky-mode completion are
-unverified. These probes establish only metadata/configuration behavior.
+probe. These probes establish only metadata/configuration behavior. Later
+user-observed native Plan → Autopilot evidence and remaining acceptance gaps
+are tracked in [verification](verification.md#copilot-plan-and-autopilot).
 
-Plan review now offers optional feedback and **Request changes** using the
-existing high-level callback's supported `{approved:false,feedback}` response.
-Approval may also carry feedback; Cancel discards it and returns only
-`{approved:false}`. UI-local choice IDs are separate from native action IDs, so
-future SDK action names cannot collide with Request changes. Feedback never
-uses Send, modifies the composer or creates synthetic transcript history.
-Authored, unrun shell/bridge fixtures cover these responses and draft/focus
-preservation; the configuration fixture records the observed `unchanged`
-model-status result.
+### Plan review interaction
+
+`src/copilot/plan-interaction.ts` owns a request-scoped FIFO independent of its
+retained palette page, following [dismiss-and-resume](dismiss-and-resume.md).
+The **Plan review picker** renders `planContent` (or summary fallback) through
+the shared safe-Markdown renderer in the palette's bounded context viewport.
+Advertised native actions retain exact values; a valid `recommendedAction` is
+marked, never auto-approved. Local action IDs cannot collide with SDK values.
+Only the owning selected session may present; background arrivals and other
+dialogs retain priority. Arrivals patch counts without rebuilding active content,
+filter, selection or nested feedback. Navigation suspends presentation without
+settling callbacks, and explicit dismissal survives switching away/back.
+
+Escape/native dismissal leaves the callback pending and retains a non-dismissable
+**Waiting for plan review · Review plan** session notice. **Request changes…**
+opens a nested host input; non-empty feedback returns `{approved:false,feedback}`.
+**Add feedback…** saves optional feedback for approval without settling the
+callback; **Edit feedback…** can replace/remove it. Child cancellation returns
+to the retained picker. **Decline plan** explicitly returns `{approved:false}`
+without feedback. Approval returns the exact advertised `selectedAction` once,
+optionally with saved feedback. None of these uses Send, modifies the composer,
+mutates mode optimistically or creates synthetic transcript history.
+Stop/disconnect/disposal abort the owning callback, retire banner/child/picker,
+and invalidate late feedback. Markdown links use existing native link validation;
+preview code has no independent transcript/code-action owner.
+
+Completed exit-plan tool presentation is separately owned by
+[plan review cards](card-plugins.md#copilot-plan-review-cards). The callback and
+native mode events remain authoritative, not the read-only card.
+`test/copilot-plans.test.ts` and shell fixtures cover dismissal/reopen, sequential
+arrivals, recommendation, nested feedback/cancellation, background/dialog priority,
+abort/stale replies, advertised-action validation and unchanged drafts/no prompts.
+Existing bridge validation remains in force. Execution and native evidence live
+in [verification](verification.md#copilot-plan-and-autopilot).
 
 Upstream evidence:
 - [Plan callback support](https://github.com/github/copilot-sdk/issues/1053)
