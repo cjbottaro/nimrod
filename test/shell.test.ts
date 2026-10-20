@@ -573,7 +573,8 @@ test('Copilot slash commands discover arguments, open harness choice modals and 
     const send = () => f.element<HTMLButtonElement>('send').click();
     const commands = () => f.calls.filter(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'command');
     type('/permissions sh');
-    assert.match(f.element('slash-suggestions').textContent!, /Show permissions/);
+    assert.equal(f.element('slash-suggestions').hidden, true);
+    assert.equal(prompt.parentElement!.querySelector('.composer-inline-suffix')!.textContent, 'ow');
     type('/permissions'); send(); await f.tick(); await f.tick();
     assert.equal(prompt.value, '');
     assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);

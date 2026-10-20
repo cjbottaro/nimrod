@@ -161,6 +161,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     for (const url of attachmentUrls.values()) URL.revokeObjectURL(url);
     attachmentUrls.clear();
     listeners.abort();
+    slashCompletion.dispose();
     toolDisclosure.dispose();
     for (const entry of rendered.values()) disposeMessageCards(entry.node);
     for (const card of toolCards.values()) disposeToolCard(card);
@@ -184,6 +185,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   prompt.value = composer.draft;
   sizeComposer();
   const slashCompletion = installSlashCompletion(prompt, required("slash-suggestions"), text => updateComposer(updateDraft(composer, text)), host.interaction.commands);
+  slashCompletion.setActive(active);
 
   function post(type: string, extra: Record<string, unknown> = {}): void { host.postMessage({ type, ...extra }); }
   function required<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -1177,6 +1179,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
         toolDisclosure.setActive(false);
       }
       active = value;
+      slashCompletion.setActive(value);
       updateMotion();
       if (value) {
         // The shell has revealed the root. Reconcile once while scroll/disclosure

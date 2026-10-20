@@ -43,6 +43,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- Slash-command argument guidance now appears inline: muted placeholders stay out of the draft, and advertised choices support ghost-text prefix completion with Tab and Up/Down cycling. Command-name menus and Enter submission semantics are retained; optional skills can be invoked bare. Native appearance verification is pending.
+
 - Failed Copilot slash-command cards now show only the concise harness error inline with wrapping text, removing redundant Failed/disclosure UI and transport/retry boilerplate. Unknown outcomes retain their explicit status and diagnostic details.
 - Completed Copilot slash-command cards now remain immediately before the output they produced instead of settling below that result. Pending placement, reader position, focus and command execution are unchanged.
 

@@ -307,12 +307,18 @@ acceptance for these changes remain pending; new offline fixtures are unrun.
 ## Slash commands
 
 Type `/` for commands discovered from your connected Copilot runtime, including
-aliases. Where Copilot supplies argument hints or literal choices, suggestions
-continue after the command name. Tab/click or Enter on a typed argument inserts
-text only; it does not run the command. With an empty argument, Enter submits the
-parent command unless you explicitly select an argument with the arrow keys.
-Hints alone never prevent submission. Free-text arguments remain available;
-dynamic argument and directory completion are not currently supported.
+aliases. After an exact command name, Copilot's argument hints appear as muted
+inline text rather than another popup. These are placeholders, not draft text;
+Tab never inserts placeholder prose. Optional skills can be invoked bare.
+
+When Copilot advertises literal choices, typing a prefix shows the untyped
+completion inline: `/permissions al` shows `low-all` in muted text. **Tab** accepts
+the choice; **Up/Down** cycle matching choices and **Escape** dismisses guidance.
+Enter on a typed matching argument also accepts completion without running it;
+press Enter again to submit. With empty arguments, Enter submits the parent
+command unless you explicitly select a choice with the arrows. Free-text
+arguments remain available; dynamic argument and directory completion are not
+currently supported.
 
 Slash commands belong to **Copilot**, not Nimrod's application actions. When a
 command has no arguments and advertises argument choices, Nimrod first opens a
