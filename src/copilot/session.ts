@@ -10,6 +10,7 @@ import { copilotToolResult } from './tool-result';
 import { createCopilotStatusArea } from './status-area';
 import { CopilotUsageController } from './usage';
 import { CopilotCommandQueue } from './command-queue';
+import { parseCopilotSkillInvocation } from './skill-invocation';
 import type { ConfigurationOperation } from '../session-configuration';
 import { initialCopilotUsage, type CopilotUsageSeed } from './usage-seed';
 import { createCopilotConfiguration } from './session-configuration';
@@ -324,7 +325,12 @@ export class CopilotSession {
           if (typeof result.prompt !== 'string' || !result.prompt.trim() || typeof result.displayPrompt !== 'string') throw new Error('Copilot returned an invalid agent prompt.');
           if (typeof result.notice === 'string' && result.notice) this.commandOutput(result.notice, name);
           if (this.state.busy) throw new Error('Copilot started working before the command prompt could be submitted. Nothing was replayed.');
-          await this.sendPrompt(id, result.prompt, result.displayPrompt);
+          const skill = command.kind === 'skill' ? parseCopilotSkillInvocation(result.prompt) : undefined;
+          const skillTurn = skill?.label === `/${command.name}`;
+          await this.sendPrompt(id, result.prompt, skillTurn ? result.prompt : result.displayPrompt);
+          // The recognized expanded user turn now owns the skill presentation.
+          // Keep the command's unknown-outcome card if delivery disconnected.
+          if (skillTurn && !this.ended && !operation.signal.aborted) return false;
           return;
         } else if (result.kind === 'set-model') {
           if (result.commandApplied !== true || !record(result.configuration)) throw new Error('Copilot returned an incomplete applied model command.');

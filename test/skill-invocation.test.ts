@@ -10,7 +10,7 @@ const block = `<skill name="review" location="/skills/review/SKILL.md">\n${body}
 const invocation = `${block}\n\nCheck the **diff**.`;
 
 test("skill parser recognizes only Pi's complete expanded message format", () => {
-  assert.deepEqual(parseSkillInvocation(invocation), { name: "review", location: "/skills/review/SKILL.md", content: body, userMessage: "Check the **diff**." });
+  assert.deepEqual(parseSkillInvocation(invocation), { label: "/skill:review", location: "/skills/review/SKILL.md", content: body, userMessage: "Check the **diff**." });
   assert.equal(parseSkillInvocation(block)?.userMessage, undefined);
   for (const text of ["/skill:review", "plain text", `Example:\n${invocation}`, `\`\`\`\n${invocation}\n\`\`\``, block.replace("</skill>", ""), block.replace(' location="/skills/review/SKILL.md"', "")]) {
     assert.equal(parseSkillInvocation(text), undefined);

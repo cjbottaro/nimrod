@@ -107,7 +107,7 @@ shortcut](live-permissions.md) starts that same advertised command owner.
 | `add-timeline-entry` | Labelled command row with supplied text/URL; no inferred assistant message or automatic link activation. Suggested prefill never overwrites a newer draft; report its omission. Remediation actions are not executed. |
 | `completed` | Finish; display optional message as command output. No fabricated model response or completion notification. |
 | `select-subcommand` | Validate supplied title/parent/options; open a standalone shared selection modal. Display descriptions/group labels, arrows/Enter select, Escape cancels. Invoke only the exact offered argument against the same session. |
-| `agent-prompt` | Only an interactive/unspecified-mode result may submit its actual returned prompt. Display its supplied display prompt and optional notice. Never treat command invocation failure as this result or send twice. |
+| `agent-prompt` | Only an interactive/unspecified-mode result may submit its actual returned prompt. Display its supplied display prompt and optional notice; recognized skill expansions use the shared skill disclosure instead. Never treat command invocation failure as this result or send twice. |
 | `show-dialog` | Model-picker requests can present the reported enabled-model catalog and return the selection to the originating command, including settings scope/target metadata interpreted by that command. Model enabling and other dialog kinds remain unsupported. |
 | `set-model` | The bridge applies the command-selected live model/effort/Auto tier, reads authoritative state, then calls the SDK's public experimental invocation-effect finalizer with the original effect unchanged. Invalid effects finalize as cancelled; mutation/finalization uncertainty disconnects for explicit reconciliation. This does not dispatch Nimrod's **Select model…** action. |
 | `set-plan-model` | The command's provisional future Plan-model preference is finalized through the same SDK effect transaction and its confirmation is displayed. It does not change the active model or dispatch a Nimrod action. |
@@ -126,6 +126,18 @@ that command rather than anchoring after them.
 The normal transcript renderer owns escaping, Markdown, stable keys, reading
 intent and hidden-view catch-up. Do not synthesize assistant history or write
 SDK session files to persist local output.
+
+For an advertised skill's recognized explicit-invocation `agent-prompt`, the
+expanded prompt supplies the user turn immediately, using the shared
+[skill disclosure](transcript-cards.md#skill-disclosures), rather than briefly
+showing the display label and then replacing it with expanded Markdown. Once
+prompt delivery succeeds, remove the redundant local command card; the retained
+user turn owns the skill name, instructions and arguments. Native user echo
+adopts that same message key, and resumed expanded history uses the same parser.
+A delivery disconnect retains the command's unknown-outcome card. Unknown
+expansion formats and non-skill agent prompts keep the existing display-prompt
+and command-card behavior. No prompt replay, skill-file scanning or persisted
+synthetic history is added.
 
 Known command rejection cards show only the actionable harness error inline,
 wrapping in conversation typography. They omit transport/Nimrod wrapper text,

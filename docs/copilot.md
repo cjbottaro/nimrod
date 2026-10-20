@@ -346,6 +346,13 @@ rolled back; unconfirmed effects show **Outcome unknown**. Late results never op
 a picker in another conversation or overwrite your draft. Command cards/output
 stay within the current connection and are not restored on Close/Resume.
 
+Invoked skills appear as one [skill disclosure](reading-conversations.md): the
+skill command is collapsed by default, with any arguments visible below it.
+Expand it to read the injected skill instructions and related-file context.
+Successful recognized skill invocations replace their temporary command card
+with that user turn; failed or unconfirmed commands retain their outcome card.
+Resumed expanded skill turns use the same presentation.
+
 New commands work automatically when they use supported SDK metadata and
 result/effect types: text/timeline output, completion, subcommand choices,
 model pickers and effects, or an explicit interactive agent-prompt result.
