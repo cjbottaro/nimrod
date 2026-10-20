@@ -141,10 +141,10 @@ for (const harness of ['Pi', 'Copilot'] as const) for (const blocks of [false, t
       assert.equal(f.win.document.querySelector('.skill-invocation > .markdown')!.textContent!.trim(), 'Check the diff.');
       card.open = true; card.dispatchEvent(new f.win.Event('toggle'));
       assert.match(card.querySelector('.skill-body')!.textContent!, /Review instructions/);
-      f.snapshot({ messages: [{ ...message, timestamp: 2 }] });
+      f.snapshot({ messages: [{ ...message, streaming: true }] });
       assert.equal(f.win.document.querySelector('.skill-card'), card);
       f.view.setActive(false);
-      f.snapshot({ messages: [{ ...message, timestamp: 3 }, { key: 'reply', role: 'assistant', content: expanded }] });
+      f.snapshot({ messages: [{ ...message, streaming: false }, { key: 'reply', role: 'assistant', content: expanded }] });
       f.view.setActive(true); f.flush();
       assert.equal(f.win.document.querySelector('.skill-card'), card);
       assert.equal(card.open, true);
