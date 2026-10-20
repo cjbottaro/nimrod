@@ -64,6 +64,8 @@ Canonical protocol/lifecycle: [Copilot commands](../../features/references/copil
 
 ## Presentation compatibility
 
+All advertised command classes use the shared [inline argument completion](../../features/references/composer.md#shared-slash-completion): native hints remain placeholders, literal choices support prefix/Tab completion and arrow cycling, and command-name suggestions remain a menu. No command-specific argument grammar or skill-body parsing is introduced. Source/fixtures are implemented; latest native acceptance is pending.
+
 Known rejected commands use a compact red-accent operation card with the
 actionable harness error inline and wrapping. SDK transport prefixes and
 Nimrod retry/fallback boilerplate are removed, with no redundant **Failed**

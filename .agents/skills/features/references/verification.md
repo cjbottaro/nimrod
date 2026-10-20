@@ -256,6 +256,18 @@ writes; recovery and shutdown tails. Windows behavior is unverified.
 [Transcript logging](transcript-logs.md#queue-best-effort-delivery-and-failures)
 owns the current contract and fixture locations.
 
+## Inline argument completion
+
+Inline argument hints and prefix/Tab completions are source-implemented using
+harness metadata; no native app launch, build, paid prompt or test execution was
+performed for this task. New jsdom fixtures cover keyboard/lifecycle guards,
+non-draft ghost content, mirror scrolling and observer cleanup. An authored
+offline WebKit fixture covers proportional typography, wrapped/scrolling prefix
+alignment and no command/provider invocation. These fixtures are **unrun**.
+Native macOS visual/keyboard/accessibility acceptance and Linux/WebKitGTK
+acceptance remain pending. The [composer contract](composer.md#shared-slash-completion)
+owns implementation details and the fixture map.
+
 ## Remaining acceptance by area
 
 | Area | User/platform checks still needed |

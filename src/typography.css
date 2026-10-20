@@ -9,7 +9,7 @@
   font-family:var(--nimrod-conversation-font);
   font-size:var(--nimrod-conversation-size);
 }
-:is(#prompt, [data-pi-id="prompt"]), .typography-composer {
+:is(#prompt, [data-pi-id="prompt"]), .composer-inline-mirror, .typography-composer {
   font-family:var(--nimrod-conversation-font);
   font-size:var(--nimrod-conversation-size);
   line-height:1.428571;

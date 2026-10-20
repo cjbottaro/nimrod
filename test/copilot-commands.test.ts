@@ -66,7 +66,8 @@ test('argument suggestions insert text, preserve raw arguments, and blank Enter 
       input.dispatchEvent(event); return event;
     };
     type('/perms ');
-    assert.match(list.textContent!, /Show permissions/); assert.match(list.textContent!, /Choose a permission operation/);
+    assert.equal(list.hidden, true, 'argument hints no longer open a menu');
+    assert.equal(dom.window.document.querySelector('.composer-inline-suffix')!.textContent, '[Choose a permission operation]');
     assert.equal(key('Enter').defaultPrevented, false, 'bare command remains executable instead of selecting its first argument');
     type('/perms sh'); key('Tab');
     assert.equal(input.value, '/perms show '); assert.deepEqual(inserted, ['/perms show ']);
