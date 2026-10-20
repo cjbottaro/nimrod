@@ -20,7 +20,7 @@ pre, code, .tool-output:not(.tool-output-web-markdown), .tool-card-preview, .too
   font-size:var(--nimrod-monospace-size);
 }
 pre > code { font-size:inherit; }
-.reasoning-body .tool-output, [data-output-kind="question-options"] > .tool-output {
+.reasoning-body .tool-output, :is([data-output-kind="question-options"], [data-output-kind="plan-summary"]) > .tool-output {
   font-family:var(--nimrod-conversation-font);
   font-size:var(--nimrod-conversation-size);
 }

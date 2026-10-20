@@ -1,6 +1,6 @@
 # Dismiss-and-resume workflow
 
-**Status: official Nimrod UX contract; existing Copilot permission and question implementations.** This reference owns the shared interaction policy, not a universal harness API. Concrete integrations retain request/response and cancellation semantics.
+**Status: official Nimrod UX contract; existing Copilot permission, question and plan review implementations.** This reference owns the shared interaction policy, not a universal harness API. Concrete integrations retain request/response and cancellation semantics.
 
 ## Purpose and scope
 
@@ -27,12 +27,13 @@ Use the shared retained palette and modal helpers; [command interactions](comman
 | --- | --- | --- | --- | --- |
 | Copilot permission request | **Permission picker**; optional nested **Denial-feedback modal** | **Waiting for permission · N requests** (**Pending-permission banner**) | **Review requests** | [Permission choices and interaction](copilot-sdk.md#permission-choices-and-interaction) |
 | Copilot agent question (harness-owned user-input request) | **Question picker**; optional nested **Custom-answer modal** | **Waiting for input · N questions** (**Pending-question banner**) | **Answer question** | [Questions and custom answers](copilot-sdk.md#questions-and-custom-answers) |
+| Copilot exit-plan request | **Plan review picker**; nested plan feedback | **Waiting for plan review** (**Pending-plan banner**) | **Review plan** | [Plan review interaction](copilot-sdk.md#plan-review-interaction) |
 
 Prefer **permission request** and **agent question** in discussion: permissions ask for authorization, while agent questions ask for an answer. “Harness-owned” identifies request authority; it does not imply that all harnesses currently implement this workflow. Completed **Question/answer cards** are read-only transcript records, not the pending interaction or its reopen control.
 
 ## Implementation and regression review
 
-- `src/copilot/permission-interaction.ts` and `question-interaction.ts` own separate FIFO queues, explicit dismissal state, reopening, nested input and abort/stale-reply guards.
+- `src/copilot/permission-interaction.ts`, `question-interaction.ts` and `plan-interaction.ts` own separate FIFO queues, explicit dismissal state, reopening, nested input and abort/stale-reply guards.
 - `src/command-palette.ts` owns `startRetainedSelection`, Escape/native dismissal and guarded focus restoration; it does not own harness callback settlement.
 - `src/main.ts` routes concrete SDK requests, publishes stable `pending-action` session notices and connects each reopen action to its owning interaction. Session navigation suspends/reveals presentation separately from pending requests.
 - `src/copilot/session.ts` keeps waiting state until the decision promise settles; question-picker dismissal must leave that promise pending so it cannot enter the undefined-answer cancellation path.

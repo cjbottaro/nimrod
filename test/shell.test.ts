@@ -1326,7 +1326,7 @@ test('Copilot questions use retained picker and nested input without cancelling 
   } finally { f.win.close(); }
 });
 
-test('Copilot plan review returns feedback without sending a prompt or changing the draft', async () => {
+test('Copilot plan picker retains pending review and returns feedback without prompts or draft changes', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   try {
     f.openPalette();
@@ -1336,26 +1336,51 @@ test('Copilot plan review returns feedback without sending a prompt or changing 
     const target = [...f.sdkSessions.values()].find(session => session.sessionId === 'sdk-fixture')!;
     const draft = f.element<HTMLTextAreaElement>('prompt'); draft.value = 'keep draft'; draft.focus();
     const host = draft.closest('.session-view')!;
-    for (const [id, buttonText, expected] of [
-      ['revise', 'Request changes', { approved: false, feedback: 'Preserve the API.' }],
+    const writes = () => f.calls.filter(call => call.command === 'write_copilot').map(call => call.args.message as JsonRecord);
+    const click = (label: string) => {
+      const row = [...f.win.document.querySelectorAll<HTMLElement>('#palette-list > [role=option]')]
+        .find(row => row.querySelector('.palette-item-label')?.textContent === label);
+      assert.ok(row, label); row.click();
+    };
+    for (const [id, choice, expected] of [
+      ['revise', 'Request changes…', { approved: false, feedback: 'Preserve the API.' }],
       ['approve', 'Continue with Autopilot', { approved: true, selectedAction: 'autopilot', feedback: 'Preserve the API.' }],
-      ['cancel', 'Cancel request', { approved: false }],
+      ['decline', 'Decline plan', { approved: false }],
     ] as const) {
       target.channel.onmessage({ kind: 'rpc', value: { kind: 'plan', id, request: {
-        summary: 'Review plan', planContent: 'Inspect and implement', actions: ['interactive', 'autopilot', 'exit_only'],
+        summary: 'Review plan', planContent: '# Inspect and implement', actions: ['interactive', 'autopilot', 'exit_only'],
+        recommendedAction: 'interactive',
       } } });
       await f.tick();
-      assert.equal(f.win.document.activeElement, draft);
-      const feedback = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Plan feedback"]')!;
-      feedback.value = ' Preserve the API. ';
-      [...host.querySelectorAll<HTMLButtonElement>('.acp-permission button')].find(button => button.textContent === buttonText)!.click();
-      await f.tick();
-      const decision = f.calls.filter(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'decision').at(-1)!;
-      assert.deepEqual((decision.args.message as JsonRecord).value, expected);
-      assert.equal(draft.value, 'keep draft');
+      assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
+      assert.equal(f.win.document.querySelector('#palette-context h1')?.textContent, 'Inspect and implement');
       assert.equal(host.querySelector('.acp-permission'), null);
+      input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      await f.tick();
+      assert.equal(writes().some(message => message.method === 'decision' && message.decisionId === id), false);
+      const banner = host.querySelector('.notice-pending > .application-notice')!;
+      assert.match(banner.textContent!, /Waiting for plan review/);
+      [...banner.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Review plan')!.click();
+      await f.tick();
+      if (id === 'approve') {
+        click('Add feedback…'); await f.tick();
+      } else if (id === 'revise') {
+        click(choice); await f.tick();
+      }
+      if (id !== 'decline') {
+        assert.equal(f.element<HTMLDialogElement>('command-palette').open, true, 'feedback retains the parent picker');
+        assert.equal(f.element<HTMLDialogElement>('host-dialog').open, true);
+        f.element<HTMLTextAreaElement>('host-dialog-input').value = ' Preserve the API. ';
+        f.element<HTMLDialogElement>('host-dialog').close('ok'); await f.tick();
+      }
+      if (id !== 'revise') click(choice);
+      await f.tick();
+      assert.deepEqual(writes().filter(message => message.method === 'decision').at(-1)?.value, expected);
+      assert.equal(draft.value, 'keep draft');
+      assert.equal(host.querySelector('.notice-pending > .application-notice'), null);
+      assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
     }
-    assert.equal(f.calls.some(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'prompt'), false);
+    assert.equal(writes().some(message => message.method === 'prompt' || message.method === 'cancel'), false);
   } finally { f.win.close(); }
 });
 

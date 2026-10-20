@@ -54,6 +54,15 @@ After Copilot reports an answer, its question card shows just the question with 
 
 Expand the disclosure to see the offered options as a numbered list in conversation typography (not a code block), **Raw inputs** and the original **Raw output**. Older schema-based questions retain their labelled answers. Pending, cancelled, interrupted, failed or unrecognized results retain the ordinary tool presentation rather than inventing an answer. This read-only transcript card is separate from the [Question picker](copilot.md#answer-agent-questions) and never submits a decision.
 
+### Copilot plan review cards
+
+After an exit-plan tool call completes, **Plan review** shows Copilot's reported
+outcome in the same compact, read-only style as question/answer cards. Expand it
+for the Markdown plan summary and exact raw inputs/results. The summary is what
+Copilot supplied to the tool, not a separately loaded plan file. Pending decisions
+use the [Plan review picker and Review plan banner](copilot.md#plan-and-autopilot),
+not buttons inside this transcript card.
+
 ### Copilot web cards
 
 Copilot web searches—including its built-in GitHub MCP web search—show the full query in the summary and a formatted **Answer** when expanded. Numbered citations link to source pages; a deduplicated **Sources** list shows their titles and domains. The answer is Copilot's generated summary, not independently verified by Nimrod.
