@@ -1,0 +1,8 @@
+[
+  { "id": "completion-tool-start", "type": "tool.execution_start", "data": { "toolCallId": "completion-tool", "toolName": "task_complete", "arguments": { "summary": "Created the requested change." } } },
+  { "id": "completion-tool-end", "type": "tool.execution_complete", "data": { "toolCallId": "completion-tool", "success": true, "result": { "content": "Created the requested change.", "detailedContent": "✓ Task completed: Created the requested change." } } },
+  { "id": "completion-accepted", "type": "session.task_complete", "data": { "success": true, "summary": "Created the requested change." } },
+  { "id": "completion-turn-end", "type": "assistant.turn_end", "data": { "turnId": "completion-turn" } },
+  { "id": "completion-assistant-idle", "type": "assistant.idle", "data": {} },
+  { "id": "completion-session-idle", "type": "session.idle", "data": { "mode": "autopilot" } }
+]

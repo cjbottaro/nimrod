@@ -21,11 +21,23 @@ let replaying = false, buffered = [];
 let commandRefresh;
 let usageRead;
 let commandExecuting = false;
-let working = false;
+let working = false, acceptedCompletion = false, halted = false;
+const observedWork = new Set();
 function observeWork(value) {
-  if (value.agentId) return;
-  if (value.type === 'assistant.turn_start' || value.type === 'user.message') working = true;
-  if (value.type === 'session.error' || value.type === 'session.idle' && (value.data?.mode !== 'autopilot' || value.data?.aborted === true)) working = false;
+  if (value.agentId || !['user.message', 'assistant.turn_start', 'model.turn_started', 'model.call_start', 'tool.execution_start', 'session.task_complete', 'session.error', 'session.idle'].includes(value.type)) return false;
+  // Keep lifecycle decisions idempotent without suppressing raw event delivery.
+  if (observedWork.has(value.id)) return false;
+  observedWork.add(value.id);
+  if (['user.message', 'assistant.turn_start', 'model.turn_started', 'model.call_start', 'tool.execution_start'].includes(value.type)) acceptedCompletion = false;
+  if (!halted && (value.type === 'assistant.turn_start' || value.type === 'user.message')) working = true;
+  if (value.type === 'session.task_complete') acceptedCompletion = working && !halted && value.data?.success === true;
+  const terminal = value.type === 'session.error' || value.type === 'session.idle'
+    && (value.data?.mode !== 'autopilot' || value.data?.aborted === true || acceptedCompletion);
+  if (terminal) {
+    if (value.type === 'session.error' || value.data?.aborted === true) halted = true;
+    working = false; acceptedCompletion = false;
+  }
+  return terminal;
 }
 async function refreshCommands() {
   if (!session || closing) return;
@@ -59,11 +71,9 @@ const config = () => ({
   onAutoModeSwitchRequest: () => 'no',
 });
 function event(value) {
-  if (!value.agentId && (value.type === 'session.error'
-    || value.type === 'session.idle' && (value.data?.mode !== 'autopilot' || value.data?.aborted === true))) cancelDecisions();
   if (replaying) buffered.push(value);
   else {
-    observeWork(value);
+    if (observeWork(value)) cancelDecisions();
     send({ kind: 'event', event: value });
     if (!value.agentId && value.type === 'commands.changed') void refreshCommands().catch(error => send({ kind: 'command-error', error: `Command discovery failed: ${failure(error)}` }));
   }
@@ -216,11 +226,12 @@ async function dispatch(message) {
       if (typeof message.text !== 'string' || message.text.length > 1_000_000 || message.text.trimStart().startsWith('/')) throw new Error('Invalid prompt; slash commands must use the command invocation API');
       const attachments = promptImages(message.images);
       if (!message.text.trim() && !attachments.length) throw new Error('A message or image is required');
-      working = true;
+      working = true; acceptedCompletion = false; halted = false;
       return await session.send({ prompt: message.text, ...(attachments.length ? { attachments } : {}), mode: 'immediate' });
     }
     case 'cancel':
       if (!session) throw new Error('No connected Copilot session');
+      halted = true; acceptedCompletion = false;
       cancelDecisions();
       return await session.abort();
     case 'configure':
@@ -231,7 +242,7 @@ async function dispatch(message) {
     default: throw new Error('Unsupported Copilot bridge operation');
   }
 }
-function eventAfterReplay(value) { observeWork(value); send({ kind: 'event', event: value }); }
+function eventAfterReplay(value) { if (observeWork(value)) cancelDecisions(); send({ kind: 'event', event: value }); }
 function cancelDecisions() {
   for (const pending of decisions.values()) {
     if (pending.kind === 'permission') pending.resolve({ kind: 'user-not-available' });
@@ -257,7 +268,7 @@ const heartbeat = setInterval(async () => {
 heartbeat.unref();
 async function shutdown() {
   if (closing) return;
-  closing = true;
+  closing = true; acceptedCompletion = false;
   clearInterval(heartbeat);
   cancelDecisions();
   try {

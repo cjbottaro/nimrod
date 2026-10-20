@@ -124,6 +124,43 @@ test('production SDK bridge loads only exact project members and disconnects wit
   } finally { await f.close(); }
 });
 
+for (const scenario of ['accepted', 'rejected', 'new-work', 'child', 'intermediate']) {
+  test(`production bridge and controller agree on sticky Autopilot completion (${scenario})`, { timeout: 5000 }, async () => {
+    let session: CopilotSession | undefined;
+    const completed: boolean[] = [], responses: (string | undefined)[] = [];
+    const f = bridge('autopilot', packet => session?.receive(packet));
+    session = new CopilotSession(async message => f.send(message), {
+      publish() {}, changed() {}, identified() {}, disconnected() {},
+      completed(failed, response) { completed.push(failed); responses.push(response); },
+      notice(message) { assert.fail(message); }, decision: async () => undefined,
+    });
+    try {
+      await session.initialize('fixture-sdk');
+      await session.handle({ type: 'prompt', id: 'autonomous', text: `autopilot completion fixture:${scenario}` });
+      await f.waitFor(packet => packet.kind === 'event' && packet.event.type === 'session.idle');
+      assert.equal(session.state.busy, scenario !== 'accepted');
+      assert.equal(session.canSubmit, scenario === 'accepted');
+      assert.equal(session.configuration.get('mode'), 'autopilot');
+      assert.deepEqual(completed, scenario === 'accepted' ? [false] : []);
+      assert.deepEqual(responses, scenario === 'accepted' ? ['Created the requested change.'] : []);
+      if (scenario === 'accepted') {
+        // This idle-only command proves the production bridge released its own
+        // working gate too, not just the frontend's Working projection.
+        await f.request('command', { name: 'discover-fixture' });
+        await session.handle({ type: 'prompt', id: 'next-autonomous', text: 'autopilot completion fixture:intermediate' });
+        await f.waitFor(packet => packet.kind === 'event' && packet.event.type === 'user.message'
+          && packet.event.data.content === 'autopilot completion fixture:intermediate');
+        await assert.rejects(f.request('command', { name: 'new-fixture' }), /started working/);
+        assert.equal(session.state.busy, true);
+        assert.deepEqual(completed, [false]);
+      } else {
+        await assert.rejects(f.request('command', { name: 'discover-fixture' }), /started working/);
+      }
+      assert.equal(f.packets.filter(packet => packet.kind === 'event' && packet.event.type === 'user.message').length, scenario === 'accepted' ? 2 : 1);
+    } finally { session.disconnect('offline completion fixture complete'); await f.close(); }
+  });
+}
+
 for (const selectedAction of ['interactive', 'autopilot', 'exit_only', 'revise', undefined]) {
   test(`plan decisions remain scoped and survive intermediate idle (${selectedAction ?? 'cancel'})`, { timeout: 5000 }, async () => {
     const f = bridge('plan');

@@ -240,18 +240,21 @@ Markdown plan summary, with original inputs/results available in raw disclosures
 **Autopilot** lets Copilot continue through successive steps from one prompt.
 Nimrod keeps the session Working across intermediate pauses, retaining tool
 cards and pending questions rather than announcing completion at each step.
-Queued configuration waits for the task's terminal boundary. **Stop** aborts
-the run without changing the saved mode or replacing your newer draft.
+When Copilot accepts task completion and subsequently becomes idle, Nimrod clears
+Working and releases queued configuration/idle-only commands—even if the Status
+area still says **Autopilot**. That mode is a saved setting, not ongoing activity.
+Rejected completion attempts and intermediate pauses keep the task Working.
+**Stop** aborts the run without changing the saved mode or replacing your newer draft.
 
 Mode is separate from model, thinking effort and permissions. Autopilot does not
 grant tool access: permission choices and questions still belong to this session.
 Nimrod never sends hidden "continue" prompts or replays your task, and reconnecting
 does not automatically continue pending work.
 
-The intermediate-idle handling follows the pinned SDK's completion waiter.
 A user-observed Plan → Autopilot handoff has successfully updated the Status area
-and begun execution on macOS. Terminal completion, sticky Autopilot mode, limits
-and Stop still need acceptance; this is not a claim of full terminal-UI parity.
+and begun execution on macOS. A captured completed run exposed the sticky-mode
+Working bug addressed above; native acceptance of the correction, limits and Stop
+remains pending. This is not a claim of full terminal-UI parity.
 
 Empty, isolated-session probes confirmed that ordinary mode changes work with
 CLI 1.0.98 without additional host steps. They did not verify model-switch
