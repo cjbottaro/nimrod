@@ -36,6 +36,7 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
   let loadingTimer: number | undefined;
   let executing = false;
   let progressText: HTMLSpanElement | undefined;
+  let bodyProgressText: HTMLSpanElement | undefined;
 
   function clearLoadingTimer(): void {
     if (loadingTimer !== undefined) win.clearTimeout(loadingTimer);
@@ -64,6 +65,7 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
     if (!executing || disposed) return;
     const text = phase === 'stopping' ? 'Stopping sessions…' : 'Deleting sessions…';
     if (progressText) progressText.textContent = text;
+    if (bodyProgressText) bodyProgressText.textContent = text;
   }
   function activate(button: HTMLButtonElement): void {
     if (executing || button.disabled) return;
@@ -74,6 +76,18 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
     cancel.disabled = true; confirm.disabled = true;
     labelDialogAction(cancel, 'Cancel');
     tree.setAttribute('aria-busy', 'true');
+    tree.dataset.executing = 'true';
+    // Reserve the reviewed tree's responsive footprint without presenting it
+    // as the current body. This feedback happens before resolving confirmation.
+    const reviewedTree = tree.firstElementChild!;
+    reviewedTree.classList.add('deletion-tree-reserved');
+    reviewedTree.setAttribute('aria-hidden', 'true');
+    const status = doc.createElement('div'); status.className = 'deletion-execution';
+    // The description's live status announces the same phase once.
+    status.setAttribute('aria-hidden', 'true');
+    const spinner = doc.createElement('span'); spinner.className = 'deletion-spinner';
+    bodyProgressText = doc.createElement('span');
+    status.append(spinner, bodyProgressText); tree.append(status); tree.scrollTop = 0;
     // Keep the reviewed copy in layout so progress cannot shrink the modal.
     // Both spans share a grid cell, preserving responsive wrapping without
     // freezing viewport-dependent shell dimensions in pixels.
@@ -85,8 +99,9 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
     description.replaceChildren(reservedDescription, progressText);
     description.setAttribute('role', 'status');
     // Resolve the answer without closing the dialog or restoring underlying focus.
-    finish(true); progress('stopping');
+    progress('stopping');
     tree.focus({ preventScroll: true });
+    finish(true);
   }
   const onClose = () => {
     if (preview === 'loading') preview = 'cancelled';
@@ -108,7 +123,8 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
       if (disposed || pending || executing || preview === 'loading') return;
       preview = 'loading';
       if (title) title.textContent = reviewTitle;
-      progressText = undefined;
+      progressText = undefined; bodyProgressText = undefined;
+      delete tree.dataset.executing;
       cancel.disabled = false; description.textContent = reviewDescription; description.removeAttribute('role');
       confirm.disabled = true; labelDialogAction(confirm, 'Delete sessions');
       tree.setAttribute('aria-busy', 'true');
@@ -160,6 +176,7 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
       }
       if (seen.size !== files.size) { close(); return Promise.resolve(false); }
       preview = 'idle'; cancel.disabled = false; confirm.disabled = false;
+      bodyProgressText = undefined; delete tree.dataset.executing;
       if (title) title.textContent = data.title || reviewTitle;
       progressText = undefined;
       description.textContent = data.description || reviewDescription; description.removeAttribute('role');

@@ -17,6 +17,13 @@ for (const width of [900, 420]) {
       const reviewed = await dialog.boundingBox();
       const reviewedButton = await page.locator('#deletion-confirm').boundingBox();
       await page.locator('#deletion-confirm').click();
+      // No native execution event has been delivered: confirmation owns feedback.
+      await expect(page.locator('#deletion-confirm')).toBeDisabled();
+      await expect(page.locator('#deletion-cancel')).toBeDisabled();
+      await expect(page.locator('.deletion-execution')).toBeVisible();
+      await expect(page.locator('.deletion-execution')).toHaveText('Stopping sessions…');
+      await expect(page.locator('.deletion-execution .deletion-spinner')).toBeVisible();
+      await expect(page.locator('.deletion-tree-reserved')).toBeHidden();
       await expect(page.locator('.deletion-progress')).toHaveText('Stopping sessions…');
       expect(await dialog.boundingBox()).toEqual(reviewed);
       expect(await page.locator('#deletion-confirm').boundingBox()).toEqual(reviewedButton);
