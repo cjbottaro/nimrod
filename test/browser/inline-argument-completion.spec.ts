@@ -94,7 +94,7 @@ test('autocomplete acceptance defaults to Tab and updates live in an existing mo
     await demo.editPreferences('{"interaction.autocompleteAccept":"tabOrEnter"}');
     await expect(prompt).toHaveValue('/permissions sh');
     await prompt.press('Enter'); await expect(prompt).toHaveValue('/permissions show ');
-    expect(commandCalls()).toHaveLength(1, 'Enter completion is not command invocation');
+    expect(commandCalls(), 'Enter completion is not command invocation').toHaveLength(1);
     await demo.editPreferences('{}');
     await expect(prompt).toHaveValue('/permissions show ');
     expect(demo.calls.some(call => call.command === 'write_copilot' &&
