@@ -314,8 +314,9 @@ Tab never inserts placeholder prose. Optional skills can be invoked bare.
 When Copilot advertises literal choices, typing a prefix shows the untyped
 completion inline: `/permissions al` shows `low-all` in muted text. **Tab** accepts
 the choice; **Up/Down** cycle matching choices and **Escape** dismisses guidance.
-Enter on a typed matching argument also accepts completion without running it;
-press Enter again to submit. With empty arguments, Enter submits the parent
+**Enter** submits a fully typed command or argument immediately. With a partial
+match, Enter completes it first; press Enter again to submit. Tab always accepts
+the selected completion. With empty arguments, Enter submits the parent
 command unless you explicitly select a choice with the arrows. Free-text
 arguments remain available; dynamic argument and directory completion are not
 currently supported.
