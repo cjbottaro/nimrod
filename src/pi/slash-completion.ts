@@ -1,3 +1,4 @@
+import { DEFAULT_AUTOCOMPLETE_ACCEPT, type AutocompleteAccept } from '../autocomplete-settings';
 import { matchSlashCommands } from "./slash-matching";
 import { installInlineCompletion } from './inline-completion';
 
@@ -26,7 +27,7 @@ export function slashQuery(text: string, start: number, end: number): string | u
 }
 
 /** Suggestions only insert text; execution remains the normal submission path. */
-export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLElement, onInsert: (text: string) => void, resolve: (raw: unknown) => SlashCommand[] = slashCommands): { setCommands(raw: unknown): void; refresh(): void; setActive(value: boolean): void; dispose(): void } {
+export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLElement, onInsert: (text: string) => void, resolve: (raw: unknown) => SlashCommand[] = slashCommands, acceptWith: () => AutocompleteAccept = () => DEFAULT_AUTOCOMPLETE_ACCEPT): { setCommands(raw: unknown): void; refresh(): void; setActive(value: boolean): void; dispose(): void } {
   let commands = resolve(undefined);
   let matches: SlashCommand[] = [];
   let argumentCommand: SlashCommand | undefined;
@@ -168,6 +169,8 @@ export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLEle
     // Selection/lock changes may arrive before a selectionchange event.
     if (input.readOnly || input.disabled || input.selectionStart !== input.selectionEnd || input.selectionEnd !== input.value.length) { close(); return; }
     if (!open) return;
+    // Autocomplete must not hijack the composer's normal Enter behavior in Tab-only mode.
+    if (event.key === 'Enter' && acceptWith() === 'tab') return;
     if (event.key === "Escape") {
       event.preventDefault(); event.stopImmediatePropagation(); dismissed = input.value; close();
     } else if (matches.length && !(event.key === 'Enter' && enterSubmits()) && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && ["ArrowUp", "ArrowDown", "Tab", "Enter"].includes(event.key)) {

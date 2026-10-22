@@ -903,6 +903,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
       },
     },
     sendAutoFollow: () => preferences.sendAutoFollow(),
+    autocompleteAccept: () => preferences.autocompleteAccept(),
     performance: settingsSurface.performanceProbe,
     reportNotice: notice => {
       if (unloading || tab.closing || !tabs.includes(tab)) return;

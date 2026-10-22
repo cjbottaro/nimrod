@@ -288,6 +288,11 @@ pub(crate) fn validate(text: &str) -> Result<(), String> {
             );
         }
     }
+    if let Some(mode) = object.get("interaction.autocompleteAccept") {
+        if !matches!(mode.as_str(), Some("tab" | "tabOrEnter")) {
+            return Err("interaction.autocompleteAccept must be tab or tabOrEnter".into());
+        }
+    }
     if let Some(mode) = object.get("appearance.autoFollowAfterSending") {
         if !matches!(mode.as_str(), Some("always" | "whenIdle" | "never")) {
             return Err(
@@ -802,6 +807,16 @@ mod tests {
                 ))
                 .is_err()
             );
+        }
+    }
+
+    #[test]
+    fn autocomplete_acceptance_validation() {
+        for mode in ["tab", "tabOrEnter"] {
+            validate(&serde_json::json!({"interaction.autocompleteAccept": mode}).to_string()).unwrap();
+        }
+        for value in [serde_json::json!("enter"), serde_json::json!(true), serde_json::json!(null), serde_json::json!(1)] {
+            assert!(validate(&serde_json::json!({"interaction.autocompleteAccept": value}).to_string()).is_err());
         }
     }
 

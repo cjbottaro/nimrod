@@ -66,7 +66,7 @@ Canonical protocol/lifecycle: [Copilot commands](../../features/references/copil
 
 ## Presentation compatibility
 
-All advertised command classes use the shared [inline argument completion](../../features/references/composer.md#shared-slash-completion): native hints remain placeholders, literal choices support prefix/Tab completion and arrow cycling, and command-name suggestions remain a menu. Enter submits exact typed names/arguments directly; partial matches still complete first. No command-specific argument grammar or skill-body parsing is introduced. Source/fixtures are implemented; latest native acceptance is pending.
+All advertised command classes use the shared [inline argument completion](../../features/references/composer.md#shared-slash-completion): native hints remain placeholders, literal choices support prefix/Tab completion and arrow cycling, and command-name suggestions remain a menu. Acceptance follows the global/project composer preference: Tab only is the default, leaving Enter to submission; Tab or Enter also accepts partial/arrow-selected completions, with exact typed matches submitting directly. No command-specific argument grammar or skill-body parsing is introduced. Source/fixtures are implemented; latest native acceptance is pending.
 
 `/config` adds a second inline stage: `/config [key]` completes only known
 setting keys, then `/config <key> [value]` accepts free-form value text without

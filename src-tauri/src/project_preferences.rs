@@ -13,6 +13,7 @@ pub const KEYS: &[&str] = &[
     "runtime.piPath",
     "runtime.nodePath",
     "runtime.copilotPath",
+    "interaction.autocompleteAccept",
 ];
 
 #[derive(Clone, Default, PartialEq)]
@@ -261,6 +262,14 @@ pub fn list_project_overrides(app: tauri::AppHandle) -> Vec<ProjectOverride> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn autocomplete_acceptance_is_a_validated_project_override() {
+        validate(r#"{"interaction.autocompleteAccept":"tabOrEnter"}"#, "{}").unwrap();
+        validate(r#"{"interaction.autocompleteAccept":"tab"}"#, r#"{"interaction.autocompleteAccept":"tabOrEnter"}"#).unwrap();
+        assert!(validate(r#"{"interaction.autocompleteAccept":"enter"}"#, "{}").is_err());
+        assert_eq!(overrides(r#"{"interaction.autocompleteAccept":"tab"}"#).unwrap().len(), 1);
+    }
+
     #[test]
     fn overrides_validate_against_global_library_and_reject_global_only_keys() {
         validate(

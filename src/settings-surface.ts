@@ -341,6 +341,17 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     }).finally(() => { reloadSendAutoFollow(); sendAutoFollowPicker.disabled = false; });
   });
   reloadSendAutoFollow();
+  const autocompletePicker = required<HTMLSelectElement>('autocomplete-accept');
+  const reloadAutocomplete = () => { autocompletePicker.value = preferences.autocompleteAccept(); };
+  const changeAutocomplete = () => {
+    autocompletePicker.disabled = true;
+    void preferences.saveAutocompleteAccept(autocompletePicker.value as import('./autocomplete-settings').AutocompleteAccept)
+      .then(() => notices.resolve('autocomplete-settings'))
+      .catch(error => notices.report({ id: 'autocomplete-settings', operation: 'Save autocomplete setting', message: String(error) }))
+      .finally(() => { if (!unloading) { reloadAutocomplete(); autocompletePicker.disabled = false; } });
+  };
+  autocompletePicker.addEventListener('change', changeAutocomplete);
+  reloadAutocomplete();
   const notificationPicker = required<HTMLSelectElement>('notification-mode');
   const notificationStatus = required('notification-status');
   const notificationTest = required<HTMLButtonElement>('notification-test');
@@ -394,6 +405,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   if (!global) {
     const controls: [ProjectSettingKey, string][] = [
       ['appearance.theme', 'theme-picker'],
+      ['interaction.autocompleteAccept', 'autocomplete-accept'],
       ['runtime.piPath', 'pi-path'], ['runtime.nodePath', 'node-path'],
       ['runtime.copilotPath', 'copilot-path'],
     ];
@@ -451,7 +463,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   const unsubscribe = preferences.subscribe(() => {
     const width = preferences.readState(settingsSidebarWidthKey);
     if (!Object.is(width, settingsSidebarWidth)) { settingsSidebarWidth = width; settingsSidebarResize.reload(); }
-    runtime.reload(); themes.reload(); typography.reload(); appearance.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadTranscriptLog(); reloadSendAutoFollow(); reloadModalAnimation(); keybindingEditor?.reload(); reloadSources();
+    runtime.reload(); themes.reload(); typography.reload(); appearance.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadTranscriptLog(); reloadSendAutoFollow(); reloadAutocomplete(); reloadModalAnimation(); keybindingEditor?.reload(); reloadSources();
   });
   reloadSources();
   return {
@@ -468,6 +480,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     dispose() {
       unloading = true; unsubscribe();
       typography.dispose();
+      autocompletePicker.removeEventListener('change', changeAutocomplete);
       required('modal-animation-preview').removeEventListener('click', previewAnimation);
       animationStyle.removeEventListener('change', changeAnimationStyle);
       animationDuration.removeEventListener('input', inputAnimationDuration);

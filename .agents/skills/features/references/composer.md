@@ -48,14 +48,22 @@ original spelling and first whitespace delimiter on insertion.
   untyped suffix appears as ghost text; Up/Down cycle matches and Tab accepts
   the exact choice plus the existing trailing space. No completion invokes a
   command. Unmatched/free-text input hides the hint.
-- Enter submits fully typed command names or literal arguments immediately,
-  case-insensitively, without appending a space or rewriting the draft. Partial
-  matches or an explicit arrow selection of a different candidate complete only;
-  Tab always accepts the selected completion. An exact typed match wins over a
-  longer prefix candidate unless the user explicitly selects that candidate.
-  Empty arguments without arrow selection pass through to submission. Optional
-  hint-only skills can submit bare. Modified keys, selection/mid-draft editing
-  and IME never accept ghosts. Escape dismisses until the draft changes.
+- `interaction.autocompleteAccept` controls acceptance for command names and
+  arguments: `tab` (default) leaves every Enter to the normal composer handler,
+  including partial matches and arrow selections; `tabOrEnter` allows Enter to
+  complete partial/explicitly selected candidates. In the latter mode exact typed
+  names/arguments submit directly without adding a space, and an exact match
+  wins over a longer candidate unless explicitly arrow-selected. Tab always
+  accepts the selected completion. Empty arguments without arrow selection and
+  optional hint-only skills can submit bare. Modified keys, selection/mid-draft
+  editing and IME never accept ghosts. Escape dismisses until the draft changes.
+  Palette/modal acceptance and normal Enter/Shift+Enter delivery are unchanged.
+- [Preferences](preferences.md#project-layering) owns the global/project JSONC
+  setting, native/frontend enum validation and reset-by-deletion. **Interaction
+  → Accept autocomplete with** is available in both scoped Settings surfaces.
+  Mounted views read the effective preference at keydown via a host getter:
+  changes affect open suggestions without replacing conversations, drafting
+  text, restarting agents or rebuilding presentation.
 - `src/pi/inline-completion.ts` mounts an aria-hidden, pointer-transparent,
   unselectable mirror outside the textarea. Typed text remains transparent in
   the mirror; a zero-width inline anchor keeps the suffix at the caret without

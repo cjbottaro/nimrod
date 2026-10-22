@@ -314,10 +314,13 @@ Tab never inserts placeholder prose. Optional skills can be invoked bare.
 When Copilot advertises literal choices, typing a prefix shows the untyped
 completion inline: `/permissions al` shows `low-all` in muted text. **Tab** accepts
 the choice; **Up/Down** cycle matching choices and **Escape** dismisses guidance.
-**Enter** submits a fully typed command or argument immediately. With a partial
-match, Enter completes it first; press Enter again to submit. Tab always accepts
-the selected completion. With empty arguments, Enter submits the parent
-command unless you explicitly select a choice with the arrows. Free-text
+Autocomplete defaults to **Tab only**: Enter follows the composer's normal
+submission behavior even with partial or arrow-selected suggestions. Choose
+**Settings → Interaction → Accept autocomplete with → Tab or Enter** to also
+accept partial/selected completions with Enter; exact matches still submit
+immediately. This has global defaults and project overrides; see [Settings](settings.md#interaction).
+With empty arguments, Enter submits the parent command. In **Tab or Enter** mode,
+explicitly arrow-selecting a choice makes Enter accept that choice instead. Free-text
 arguments remain available; dynamic argument and directory completion are not
 currently supported.
 

@@ -47,7 +47,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 - Copilot skill invocations now use the same collapsed skill disclosure as Pi, with instructions and injected context inside and arguments visible below. Successful recognized invocations no longer leave a redundant command card; both integrations share lazy rendering and retained disclosure behavior.
 
-- Slash-command argument guidance now appears inline: muted placeholders stay out of the draft, and advertised choices support ghost-text prefix completion with Tab and Up/Down cycling. Command-name menus and Enter submission semantics are retained; optional skills can be invoked bare. Native appearance verification is pending.
+- Slash-command argument guidance now appears inline: muted placeholders stay out of the draft, and advertised choices support ghost-text prefix completion with Tab and Up/Down cycling. **Settings → Interaction → Accept autocomplete with** defaults to **Tab only**, so suggestions never hijack Enter; **Tab or Enter** also accepts partial/selected completions while exact matches submit directly. Global defaults and project overrides apply live to command names and arguments. Optional skills can be invoked bare; palette/modal selection and composer submission/newline bindings are unchanged. Native appearance verification is pending.
 
 - Failed Copilot slash-command cards now show only the concise harness error inline with wrapping text, removing redundant Failed/disclosure UI and transport/retry boilerplate. Unknown outcomes retain their explicit status and diagnostic details.
 - Completed Copilot slash-command cards now remain immediately before the output they produced instead of settling below that result. Pending placement, reader position, focus and command execution are unchanged.
@@ -71,7 +71,6 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
-- Fully typed slash commands and advertised arguments now submit on the first Enter instead of appending a redundant space and requiring another Enter. Partial matches still complete first; Tab remains explicit completion.
 
 - Copilot Autopilot now clears Working after accepted task completion followed by idle, even when the selected mode stays Autopilot. Idle-only commands and queued configuration resume, completion is reported once, and the accepted task summary supplies notification text when no final assistant response follows. Intermediate pauses, rejected completion, Stop and errors retain their separate semantics.
 

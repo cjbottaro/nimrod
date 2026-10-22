@@ -58,7 +58,7 @@ test('argument suggestions insert text, preserve raw arguments, and blank Enter 
   try {
     const input = dom.window.document.querySelector('textarea')!, list = dom.window.document.querySelector<HTMLElement>('#suggestions')!;
     const inserted: string[] = [];
-    const completion = installSlashCompletion(input, list, value => inserted.push(value), copilotSlashCommands);
+    const completion = installSlashCompletion(input, list, value => inserted.push(value), copilotSlashCommands, () => 'tabOrEnter');
     completion.setCommands(catalog); input.focus();
     const type = (value: string) => { input.value = value; input.setSelectionRange(value.length, value.length); input.dispatchEvent(new dom.window.Event('input')); };
     const key = (value: string, init: KeyboardEventInit = {}) => {
