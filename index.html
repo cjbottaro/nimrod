@@ -51,6 +51,7 @@
       <aside id="settings-sidebar" class="layout-sidebar" aria-label="Settings categories">
         <div id="settings-categories" role="tablist" aria-label="Settings categories" aria-orientation="vertical">
           <button id="settings-category-appearance" type="button" role="tab" aria-selected="true" aria-controls="settings-panel-appearance" data-category="appearance">Appearance</button>
+          <button id="settings-category-interaction" type="button" role="tab" aria-selected="false" aria-controls="settings-panel-interaction" data-category="interaction" tabindex="-1">Interaction</button>
           <button id="settings-category-notifications" type="button" role="tab" aria-selected="false" aria-controls="settings-panel-notifications" data-category="notifications" tabindex="-1">Notifications</button>
           <button id="settings-category-diagnostics" type="button" role="tab" aria-selected="false" aria-controls="settings-panel-diagnostics" data-category="diagnostics" tabindex="-1">Diagnostics</button>
           <button id="settings-category-keybindings" type="button" role="tab" aria-selected="false" aria-controls="keybindings-section" data-category="keybindings" tabindex="-1">Keybindings</button>
@@ -123,6 +124,12 @@ console.log(greeting); // 0123456789</code></pre>
         <select id="send-auto-follow" aria-describedby="send-auto-follow-hint"><option value="always">Always</option><option value="whenIdle" selected>When idle (default)</option><option value="never">Never</option></select>
         <p id="send-auto-follow-hint" class="settings-hint">Jump to the bottom and follow new output after sending. When idle preserves your reading position for steering and queued follow-ups. Never preserves current scroll intent, including active auto-follow. Scrolling upward always pauses auto-follow.</p>
         </div>
+      </section>
+      <section id="settings-panel-interaction" class="settings-panel" data-category="interaction" role="tabpanel" aria-labelledby="settings-category-interaction" tabindex="0" hidden>
+        <h2>Interaction</h2>
+        <label for="autocomplete-accept">Accept autocomplete with</label>
+        <select id="autocomplete-accept" aria-describedby="autocomplete-accept-hint"><option value="tab">Tab only (default)</option><option value="tabOrEnter">Tab or Enter</option></select>
+        <p id="autocomplete-accept-hint" class="settings-hint">Applies to slash-command names and argument completions. Tab only leaves Enter to submit and Shift+Enter to insert a newline. Tab or Enter also accepts partial or arrow-selected suggestions with Enter; exact matches submit normally. Palette and modal selection are unchanged.</p>
       </section>
       <section id="settings-panel-notifications" class="settings-panel" data-category="notifications" role="tabpanel" aria-labelledby="settings-category-notifications" tabindex="0" hidden>
         <h2 id="notifications-title">Notifications</h2>

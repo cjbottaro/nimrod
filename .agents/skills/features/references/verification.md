@@ -267,6 +267,14 @@ owns the current contract and fixture locations.
 
 ## Inline argument completion
 
+The configurable global/project acceptance preference is source-implemented with
+Tab only as the default. New/updated frontend, native validation, keyboard and
+scoped Settings fixtures are authored but unrun; no app build, launch, paid
+prompt or native acceptance was performed. Existing pane/draft/session ownership
+is retained; native Settings synchronization and keyboard acceptance remain
+pending. [Settings](settings-layout.md) and [composer](composer.md#shared-slash-completion)
+own the current contracts.
+
 Inline argument hints and prefix/Tab completions are source-implemented using
 harness metadata; no native app launch, build, paid prompt or test execution was
 performed for this task. New jsdom fixtures cover keyboard/lifecycle guards,

@@ -4533,6 +4533,30 @@ test('closing cold Settings suppresses late readiness and native focus requests'
   } finally { release(); f.win.close(); }
 });
 
+test('autocomplete Settings has global defaults, project provenance and reset without harness work', async () => {
+  for (const globalSettings of [true, false]) {
+    const f = await fixture(undefined, globalSettings ? { globalSettings: true } : { windowWorkspace: '/project' });
+    try {
+      if (!globalSettings) f.openSettings();
+      f.element<HTMLButtonElement>('settings-category-interaction').click();
+      assert.equal(f.element('settings-panel-interaction').hidden, false);
+      const picker = f.element<HTMLSelectElement>('autocomplete-accept');
+      assert.equal(picker.value, 'tab');
+      picker.value = 'tabOrEnter'; picker.dispatchEvent(new f.win.Event('change')); await f.tick(); await f.tick();
+      assert.equal(picker.value, 'tabOrEnter');
+      const source = globalSettings ? f.preferences.value.text : f.preferences.value.projectText!;
+      assert.equal(parseSettings(source)['interaction.autocompleteAccept'], 'tabOrEnter');
+      if (!globalSettings) {
+        assert.equal(f.element('autocomplete-accept-source').textContent, 'Project override');
+        picker.nextElementSibling!.querySelector<HTMLButtonElement>('button')!.click(); await f.tick(); await f.tick();
+        assert.equal(picker.value, 'tab'); assert.equal(f.element('autocomplete-accept-source').textContent, 'Global default');
+        assert.equal(parseSettings(f.preferences.value.projectText!)['interaction.autocompleteAccept'], undefined);
+      }
+      assert.equal(f.calls.some(call => ['start_pi', 'start_copilot', 'write_pi', 'write_copilot'].includes(call.command)), false);
+    } finally { f.win.close(); }
+  }
+});
+
 test('global Settings boots without any project services', async () => {
   const f = await fixture(undefined, { globalSettings: true });
   try {

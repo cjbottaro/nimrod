@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { copilotSlashCommands } from '../src/copilot/commands';
+import type { AutocompleteAccept } from '../src/autocomplete-settings';
 import { installSlashCompletion } from '../src/pi/slash-completion';
 
 const commands = [
@@ -20,13 +21,13 @@ const commands = [
     { name: 'memory', description: 'Memory setting' },
   ] } },
 ];
-function fixture(configure?: (window: JSDOM['window']) => void) {
+function fixture(configure?: (window: JSDOM['window']) => void, acceptWith: (() => AutocompleteAccept) | null = () => 'tabOrEnter') {
   const dom = new JSDOM('<div><textarea aria-describedby="existing"></textarea><div id="suggestions" role="listbox"></div><button>Other</button></div>', { pretendToBeVisual: true });
   configure?.(dom.window);
   const input = dom.window.document.querySelector('textarea')!;
   const list = dom.window.document.querySelector<HTMLElement>('#suggestions')!;
   const inserted: string[] = [];
-  const completion = installSlashCompletion(input, list, value => inserted.push(value), copilotSlashCommands);
+  const completion = installSlashCompletion(input, list, value => inserted.push(value), copilotSlashCommands, acceptWith ?? undefined);
   completion.setCommands(commands); input.focus();
   return {
     dom, input, list, inserted, completion,
@@ -41,6 +42,34 @@ function fixture(configure?: (window: JSDOM['window']) => void) {
     close() { completion.dispose(); dom.window.close(); },
   };
 }
+
+test('Tab-only is the default and leaves every Enter to the normal composer handler', () => {
+  const f = fixture(undefined, null);
+  try {
+    for (const value of ['/rev', '/review-pr', '/permissions al', '/permissions allow-all', '/permissions ']) {
+      f.type(value); f.key('ArrowDown');
+      assert.equal(f.key('Enter').defaultPrevented, false);
+      assert.equal(f.input.value, value);
+    }
+    assert.deepEqual(f.inserted, []);
+    f.type('/permissions al'); f.key('Tab');
+    assert.equal(f.input.value, '/permissions allow-all ');
+  } finally { f.close(); }
+});
+
+test('acceptance preference changes affect already-open suggestions without changing the draft', () => {
+  let mode: AutocompleteAccept = 'tab';
+  const f = fixture(undefined, () => mode);
+  try {
+    f.type('/permissions al');
+    assert.equal(f.key('Enter').defaultPrevented, false);
+    mode = 'tabOrEnter'; assert.equal(f.key('Enter').defaultPrevented, true);
+    assert.equal(f.input.value, '/permissions allow-all ');
+    f.type('/rev'); mode = 'tab'; assert.equal(f.key('Enter').defaultPrevented, false);
+    mode = 'tabOrEnter'; assert.equal(f.key('Enter').defaultPrevented, true);
+    assert.equal(f.input.value, '/review-pr ');
+  } finally { f.close(); }
+});
 
 test('bare skill hints are inline, optional, non-insertable and disappear with free text', () => {
   const f = fixture();

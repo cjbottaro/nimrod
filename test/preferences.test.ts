@@ -13,6 +13,34 @@ function fixture() {
   return { dom, host, errors, install: () => installPreferences(host, dom.window.localStorage, error => errors.push(error)) };
 }
 
+test('autocomplete acceptance defaults to Tab, layers project overrides and preserves JSONC and last valid values', async () => {
+  const f = fixture(), p = await f.install();
+  try {
+    assert.equal(p.autocompleteAccept(), 'tab');
+    f.host.external('// Global\n{"custom":true}');
+    await p.saveAutocompleteAccept('tabOrEnter');
+    assert.equal(p.autocompleteAccept(), 'tabOrEnter');
+    assert.match(f.host.value.text, /Global/); assert.equal(parseSettings(f.host.value.text).custom, true);
+    f.host.value.projectPath = '/project/.nimrod/settings.json'; f.host.externalProject('// Project\n{}');
+    await p.saveAutocompleteAccept('tabOrEnter');
+    assert.equal(p.isOverridden('interaction.autocompleteAccept'), true, 'equal-valued overrides stay explicit');
+    f.host.external('// Global\n{"interaction.autocompleteAccept":"tab"}');
+    assert.equal(p.autocompleteAccept(), 'tabOrEnter');
+    await p.useGlobal('interaction.autocompleteAccept');
+    assert.equal(p.autocompleteAccept(), 'tab');
+    assert.equal(p.isOverridden('interaction.autocompleteAccept'), false);
+    assert.equal(parseSettings(f.host.value.projectText!)['interaction.autocompleteAccept'], undefined);
+    assert.match(f.host.value.projectText!, /Project/);
+    await p.saveAutocompleteAccept('tabOrEnter');
+    f.host.externalProject('{"interaction.autocompleteAccept":"enter"}');
+    assert.equal(p.autocompleteAccept(), 'tabOrEnter');
+    await assert.rejects(p.saveAutocompleteAccept('tab'));
+    f.host.externalProject('{}'); assert.equal(p.autocompleteAccept(), 'tab');
+    for (const value of ['enter', '', true, null, 1, {}])
+      assert.throws(() => parseSettings(JSON.stringify({ 'interaction.autocompleteAccept': value })));
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
 test('typography saves globally, preserves JSONC/project settings, rejects malformed files and resets by deletion', async () => {
   const f = fixture(), p = await f.install();
   try {

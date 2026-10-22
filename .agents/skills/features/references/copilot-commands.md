@@ -94,9 +94,11 @@ shortcut](live-permissions.md) starts that same advertised command owner.
   No inferred grammar, dynamic argument callbacks or directory completion is
   claimed. SDK directory-completion hints are not yet implemented; free-text
   remains available.
-- Tab accepts completion; Enter submits exact typed command names/arguments
-  without an extra completion step. Partial arguments or an explicit arrow
-  selection of a different candidate complete only. Arrows select a choice; Enter on a blank argument without arrow selection submits the command
+- The shared [composer acceptance preference](composer.md#shared-slash-completion)
+  defaults to Tab only: Enter always follows submission rather than accepting
+  suggestions. Tab or Enter restores partial/arrow-selected completion with
+  Enter while exact typed names/arguments submit directly. In Tab or Enter mode,
+  arrows select a choice and Enter on a blank argument without arrow selection submits the command
   intent. If the command advertises literal argument choices, an empty argument
   opens the shared palette-style picker **before any SDK invocation**. Escape
   invokes nothing; selection invokes the command once with that exact argument.

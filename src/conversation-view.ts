@@ -184,7 +184,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   if (isTemporaryRestore(bootstrapRestore)) composer = { ...composer, recovered: [], queue: { steering: [], followUp: [], authoritative: false } };
   prompt.value = composer.draft;
   sizeComposer();
-  const slashCompletion = installSlashCompletion(prompt, required("slash-suggestions"), text => updateComposer(updateDraft(composer, text)), host.interaction.commands);
+  const slashCompletion = installSlashCompletion(prompt, required("slash-suggestions"), text => updateComposer(updateDraft(composer, text)), host.interaction.commands, host.autocompleteAccept);
   slashCompletion.setActive(active);
 
   function post(type: string, extra: Record<string, unknown> = {}): void { host.postMessage({ type, ...extra }); }

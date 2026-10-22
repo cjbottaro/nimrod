@@ -14,7 +14,7 @@ test('project provenance and global defaults reconcile across independent Settin
     await expect(page.locator('#settings-translucency')).toBeHidden();
     await expect(page.locator('#settings-zoom')).toBeHidden();
     await expect(page.locator('#settings-send-auto-follow')).toBeHidden();
-    await expect(page.locator('.settings-source')).toHaveCount(3);
+    await expect(page.locator('.settings-source')).toHaveCount(5);
     await expect(page.locator('#theme-picker-source')).toHaveText('Global default');
     await page.locator('#theme-picker').selectOption('dracula');
     await expect(page.locator('#theme-picker-source')).toHaveText('Project override');
@@ -39,6 +39,18 @@ test('project provenance and global defaults reconcile across independent Settin
     await expect(settingsPage.locator('.settings-project-links')).toHaveText('No open project has overrides.');
     await fixture.editPreferences('{"appearance.theme":"osaka-jade"}');
     await expect(page.locator('#theme-picker')).toHaveValue('osaka-jade');
+    await settingsPage.locator('#settings-category-interaction').click();
+    await settingsPage.locator('#autocomplete-accept').selectOption('tabOrEnter');
+    await page.locator('#settings-category-interaction').click();
+    await expect(page.locator('#autocomplete-accept')).toHaveValue('tabOrEnter');
+    await expect(page.locator('#autocomplete-accept-source')).toHaveText('Global default');
+    await page.locator('#autocomplete-accept').selectOption('tabOrEnter');
+    await expect(page.locator('#autocomplete-accept-source')).toHaveText('Project override');
+    await settingsPage.locator('#autocomplete-accept').selectOption('tab');
+    await expect(page.locator('#autocomplete-accept')).toHaveValue('tabOrEnter');
+    await page.getByRole('button', { name: 'Use global default for Accept autocomplete with', exact: true }).click();
+    await expect(page.locator('#autocomplete-accept')).toHaveValue('tab');
+    await expect(page.locator('#autocomplete-accept-source')).toHaveText('Global default');
     await page.locator('#settings-back').click();
     await expect(prompt).toHaveValue('Keep my draft');
     expect(fixture.calls.filter(call => call.command === 'start_pi')).toHaveLength(starts);

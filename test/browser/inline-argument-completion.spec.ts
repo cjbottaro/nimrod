@@ -74,3 +74,31 @@ test('inline argument hints and completions stay outside the draft and track wra
     expect(demo.errors).toEqual([]);
   } finally { await demo.close(); }
 });
+
+test('autocomplete acceptance defaults to Tab and updates live in an existing mounted session', async ({ page }) => {
+  const demo = await demoFixture(page);
+  try {
+    await page.keyboard.press('Meta+Shift+P');
+    await page.locator('#palette-input').fill('New Copilot session');
+    await page.locator('#palette-input').press('Enter');
+    await expect(page.locator(visible('send'))).toBeEnabled();
+    const prompt = page.locator(visible('prompt'));
+    const commandCalls = () => demo.calls.filter(call => call.command === 'write_copilot' &&
+      (call.args.message as { method?: string }).method === 'command');
+    // This is the isolated SDK fixture's provider-free report, not a real session.
+    await prompt.fill('/permissions sh'); await prompt.press('Enter');
+    await expect(page.locator(visible('messages'))).toContainText('Fixture permission report: sh');
+    expect((commandCalls()[0].args.message as { input: string }).input).toBe('sh');
+    await expect(prompt).toHaveValue('');
+    await prompt.fill('/permissions sh');
+    await demo.editPreferences('{"interaction.autocompleteAccept":"tabOrEnter"}');
+    await expect(prompt).toHaveValue('/permissions sh');
+    await prompt.press('Enter'); await expect(prompt).toHaveValue('/permissions show ');
+    expect(commandCalls()).toHaveLength(1, 'Enter completion is not command invocation');
+    await demo.editPreferences('{}');
+    await expect(prompt).toHaveValue('/permissions show ');
+    expect(demo.calls.some(call => call.command === 'write_copilot' &&
+      (call.args.message as { method?: string }).method === 'prompt')).toBe(false);
+    expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});

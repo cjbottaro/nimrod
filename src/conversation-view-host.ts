@@ -53,6 +53,7 @@ export interface ConversationViewHost {
   resolveNoticeCause?(cause: string): void;
   promptSubmitted?(): void;
   sendAutoFollow?(): import('./pi/transcript-scroll').SendAutoFollow;
+  autocompleteAccept?(): import('./autocomplete-settings').AutocompleteAccept;
   postMessage(message: Record<string, unknown>): void;
   onMessage(listener: (message: ConversationViewMessage) => void): void;
   getState(): unknown;
