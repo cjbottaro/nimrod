@@ -71,6 +71,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Fully typed slash commands and advertised arguments now submit on the first Enter instead of appending a redundant space and requiring another Enter. Partial matches still complete first; Tab remains explicit completion.
+
 - Copilot Autopilot now clears Working after accepted task completion followed by idle, even when the selected mode stays Autopilot. Idle-only commands and queued configuration resume, completion is reported once, and the accepted task summary supplies notification text when no final assistant response follows. Intermediate pauses, rejected completion, Stop and errors retain their separate semantics.
 
 - Copilot sessions now explicitly enable the harness's native configuration discovery on creation and Resume, addressing project skills missing from the session catalog without adding Nimrod-owned skill scanning or search paths. Installed-CLI verification is pending.

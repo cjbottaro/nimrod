@@ -101,6 +101,37 @@ test('ambiguous choices cycle inline while blank and typed Enter retain their ex
   } finally { f.close(); }
 });
 
+test('exact arguments submit on the first Enter without rewriting the draft; Tab still completes explicitly', () => {
+  const f = fixture();
+  try {
+    f.completion.setCommands([...commands, { name: 'allow-all', kind: 'builtin', input: {
+      hint: '[on|off]', choices: [{ name: 'onward', description: 'Longer prefix' }, { name: 'on', description: 'Enable' }, { name: 'off', description: 'Disable' }],
+    } }]);
+    for (const value of ['/allow-all on', '/permissions show', '/PeRmS\tSHOW']) {
+      f.type(value);
+      assert.equal(f.key('Enter').defaultPrevented, false, 'an exact match wins even if a longer candidate appears first');
+      assert.equal(f.input.value, value); assert.deepEqual(f.inserted, []);
+    }
+    f.type('/allow-all on');
+    assert.equal(f.hidden(), true, 'an exact match does not show a longer candidate as ghost text');
+    f.key('ArrowUp'); f.key('Enter'); // Explicitly choose the longer onward.
+    assert.equal(f.input.value, '/allow-all onward ');
+    f.type('/permissions show'); f.key('Tab');
+    assert.equal(f.input.value, '/permissions show ', 'Tab remains explicit completion');
+  } finally { f.close(); }
+});
+
+test('exact command names submit while partial names still complete on Enter', () => {
+  const f = fixture();
+  try {
+    f.completion.setCommands([{ name: 'context', kind: 'builtin' }]);
+    f.type('/context'); assert.equal(f.key('Enter').defaultPrevented, false);
+    assert.equal(f.input.value, '/context'); assert.deepEqual(f.inserted, []);
+    f.type('/con'); assert.equal(f.key('Enter').defaultPrevented, true);
+    assert.equal(f.input.value, '/context ');
+  } finally { f.close(); }
+});
+
 test('Escape, selections, locks, modifiers and IME never accidentally accept ghost text', () => {
   const f = fixture();
   try {

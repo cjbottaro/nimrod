@@ -129,10 +129,18 @@ export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLEle
         .map(choice => ({ ...choice, source: argumentCommand!.source }))
       : matchSlashCommands(commands, query);
     if (!matches.length && !(argumentCommand && (valueStage ? argumentCommand.input?.valueHint : argumentCommand.input?.hint) && !argumentQuery)) { close(); return; }
-    selected = Math.max(0, matches.findIndex(command => command.name === previous));
+    const retained = matches.findIndex(command => command.name === previous);
+    selected = retained >= 0 ? retained : Math.max(0, matches.findIndex(command => command.name.toLowerCase() === query));
     draw();
   }
-  function queryHasArguments(): boolean { return argumentQuery.trim().length > 0; }
+  function enterSubmits(): boolean {
+    const query = argumentCommand ? argumentQuery.toLowerCase() : slashQuery(input.value, input.selectionStart, input.selectionEnd);
+    const exact = matches.some(match => match.name.toLowerCase() === query);
+    // A fully typed command/argument needs no completion. An explicit arrow
+    // choice may still select a different (longer) candidate.
+    if (exact && (!argumentSelected || matches[selected]?.name.toLowerCase() === query)) return true;
+    return !!argumentCommand && !argumentSelected && !argumentQuery.trim();
+  }
   function accept(index: number): void {
     const command = matches[index];
     if (!command || input.readOnly || input.disabled) return;
@@ -162,7 +170,7 @@ export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLEle
     if (!open) return;
     if (event.key === "Escape") {
       event.preventDefault(); event.stopImmediatePropagation(); dismissed = input.value; close();
-    } else if (matches.length && !(event.key === 'Enter' && argumentCommand && !argumentSelected && !queryHasArguments()) && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && ["ArrowUp", "ArrowDown", "Tab", "Enter"].includes(event.key)) {
+    } else if (matches.length && !(event.key === 'Enter' && enterSubmits()) && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && ["ArrowUp", "ArrowDown", "Tab", "Enter"].includes(event.key)) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (event.key === "Enter" || event.key === "Tab") accept(selected);
       else { argumentSelected = true; selected = (selected + (event.key === "ArrowDown" ? 1 : -1) + matches.length) % matches.length; draw(); }

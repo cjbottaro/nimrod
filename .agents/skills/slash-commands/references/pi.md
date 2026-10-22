@@ -14,7 +14,8 @@ inspector](../../features/references/mcp-inspector.md), and
 
 Nimrod contributes `/name` and `/compact` completion metadata, then merges
 Pi-reported extension, prompt-template and skill commands without overriding
-those names. Suggestions insert text only; normal Pi submission remains the
+those names. Suggestions insert text only; Enter on an exact typed command
+passes directly to normal Pi submission without an extra completion step. That remains the
 execution path except for the documented local/intercepted commands below.
 
 ## Matrix

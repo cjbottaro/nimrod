@@ -4124,11 +4124,7 @@ test('MCP inspector routes palette and composer entries to the same session with
     assert.equal(f.win.document.activeElement, prompt);
     prompt.value = '/mcp'; prompt.dispatchEvent(new f.win.Event('input'));
     prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-    assert.equal(prompt.value, '/mcp ', 'first Enter accepts the slash suggestion without executing it');
-    assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
-    assert.equal(f.calls.filter(call => (call.args.message as JsonRecord)?.type === 'prompt').length, 1);
-    prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-    await f.tick(); await f.tick();
+    await f.tick(); await f.tick(); // An exact command submits on the first Enter.
     assert.equal(prompt.value, '');
     assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
     assert.equal(f.element('session-notices').hidden, true);
