@@ -1,8 +1,10 @@
+import { DEFAULT_AUTOCOMPLETE_ACCEPT, type AutocompleteAccept } from '../autocomplete-settings';
 import { matchSlashCommands } from "./slash-matching";
+import { installInlineCompletion } from './inline-completion';
 
 export interface SlashCommand {
   name: string; description: string; source: "GUI" | "Extension" | "Template" | "Skill" | "Agent";
-  input?: { hint: string; required?: boolean; choices?: { name: string; description: string }[] };
+  input?: { hint: string; required?: boolean; choices?: { name: string; description: string }[]; valueHint?: string };
 }
 
 export function slashCommands(raw: unknown): SlashCommand[] {
@@ -25,26 +27,51 @@ export function slashQuery(text: string, start: number, end: number): string | u
 }
 
 /** Suggestions only insert text; execution remains the normal submission path. */
-export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLElement, onInsert: (text: string) => void, resolve: (raw: unknown) => SlashCommand[] = slashCommands): { setCommands(raw: unknown): void; refresh(): void } {
+export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLElement, onInsert: (text: string) => void, resolve: (raw: unknown) => SlashCommand[] = slashCommands, acceptWith: () => AutocompleteAccept = () => DEFAULT_AUTOCOMPLETE_ACCEPT): { setCommands(raw: unknown): void; refresh(): void; setActive(value: boolean): void; dispose(): void } {
   let commands = resolve(undefined);
   let matches: SlashCommand[] = [];
   let argumentCommand: SlashCommand | undefined;
   let argumentPrefix = '';
+  let argumentQuery = '';
+  let valueStage = false;
   let argumentSelected = false;
   let selected = 0;
   let previousQuery: string | undefined;
   let dismissed: string | undefined;
   let composing = false;
+  let active = true;
+  let open = false;
   const document = input.ownerDocument;
-  input.setAttribute("aria-autocomplete", "list");
+  const listeners = new (document.defaultView!.AbortController)();
+  const options = { signal: listeners.signal };
+  const inline = installInlineCompletion(input, `${list.id}-inline-status`);
+  input.setAttribute("aria-autocomplete", "both");
   input.setAttribute("aria-controls", list.id);
 
-  function close(): void {
+  function hideList(): void {
     list.hidden = true;
     input.setAttribute("aria-expanded", "false");
     input.removeAttribute("aria-activedescendant");
   }
+  function close(): void { open = false; hideList(); inline.hide(); }
   function draw(): void {
+    open = true;
+    if (argumentCommand) {
+      hideList();
+      const candidate = matches[selected];
+      const hint = (valueStage ? argumentCommand.input?.valueHint : argumentCommand.input?.hint)?.trim()
+        || (matches.length ? matches.map(choice => choice.name).join('|') : '');
+      const placeholder = /^[\[<]/.test(hint) ? hint : argumentCommand.input?.required ? `<${hint}>` : `[${hint}]`;
+      const completing = !valueStage && !!candidate && (!!argumentQuery || argumentSelected);
+      const suffix = completing ? candidate.name.slice(argumentQuery.length) : argumentQuery || !hint ? '' : placeholder;
+      const separator = input.value === argumentPrefix.trimEnd() ? ' ' : '';
+      const announcement = candidate && (completing || !hint)
+        ? `${candidate.name}${candidate.description ? `: ${candidate.description}` : ''}. ${selected + 1} of ${matches.length}. Tab to complete; Up and Down to choose.`
+        : suffix ? `${argumentCommand.input?.required ? 'Required' : 'Optional'}: ${hint}` : '';
+      inline.show(suffix ? `${separator}${suffix}` : '', announcement);
+      return;
+    }
+    inline.hide();
     list.replaceChildren();
     matches.forEach((command, index) => {
       const option = document.createElement("div");
@@ -53,23 +80,16 @@ export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLEle
       option.setAttribute("aria-selected", String(index === selected));
       option.dataset.index = String(index);
       const name = document.createElement("strong");
-      name.textContent = argumentCommand ? command.name : `/${command.name}`;
+      name.textContent = `/${command.name}`;
       const description = document.createElement("span");
       description.textContent = `${command.source} · ${command.description}`;
       option.title = command.source === "Extension" ? `${command.description} — provided by a Pi extension; RPC UI compatibility depends on that extension.` : command.description;
       option.append(name, description);
       list.append(option);
     });
-    if (argumentCommand?.input?.hint) {
-      const hint = document.createElement('div');
-      hint.setAttribute('role', 'status');
-      hint.textContent = `${argumentCommand.input.required ? 'Required: ' : ''}${argumentCommand.input.hint}`;
-      list.prepend(hint);
-    }
     list.hidden = false;
     input.setAttribute("aria-expanded", "true");
-    if (matches.length) input.setAttribute("aria-activedescendant", `${list.id}-${selected}`);
-    else input.removeAttribute('aria-activedescendant');
+    input.setAttribute("aria-activedescendant", `${list.id}-${selected}`);
     const option = list.querySelector<HTMLElement>(`[data-index="${selected}"]`) ?? undefined;
     if (option) {
       if (option.offsetTop < list.scrollTop) list.scrollTop = option.offsetTop;
@@ -79,64 +99,98 @@ export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLEle
     }
   }
   function refresh(): void {
+    if (!active || input.readOnly || input.disabled || composing || document.activeElement !== input
+      || input.selectionStart !== input.selectionEnd || input.selectionEnd !== input.value.length || dismissed === input.value) { close(); return; }
     let query = slashQuery(input.value, input.selectionStart, input.selectionEnd);
     argumentCommand = undefined;
-    if (input.selectionStart === input.selectionEnd && input.selectionEnd === input.value.length) {
-      const args = /^\/([^\s/]+)([ \t])([\s\S]*)$/.exec(input.value);
-      const command = args && commands.find(command => command.name.toLowerCase() === args[1].toLowerCase());
-      if (command?.input) {
-        argumentCommand = command; argumentPrefix = input.value.slice(0, args![1].length + 2);
-        query = args![3].toLowerCase();
+    valueStage = false;
+    // An exact command can show its hint without requiring a trailing space.
+    const args = /^\/([^\s/]+)(?:([ \t])([\s\S]*))?$/.exec(input.value);
+    const command = args && commands.find(command => command.name.toLowerCase() === args[1].toLowerCase());
+    if (command?.input) {
+      argumentCommand = command;
+      argumentPrefix = args![2] ? input.value.slice(0, args![1].length + 2) : `${input.value} `;
+      argumentQuery = args![3] ?? '';
+      const first = /^([^\s]+)(?:\s+([\s\S]*))?$/.exec(argumentQuery);
+      if (command.input.valueHint && first && command.input.choices?.some(choice => choice.name.toLowerCase() === first[1].toLowerCase())) {
+        valueStage = true;
+        argumentPrefix = `${argumentPrefix}${first[1]} `;
+        argumentQuery = first[2] ?? '';
       }
+      query = argumentQuery.toLowerCase();
     }
-    if (input.readOnly || composing || document.activeElement !== input || query === undefined || dismissed === input.value) { close(); return; }
+    if (query === undefined) { close(); return; }
     const context = argumentCommand ? `${argumentCommand.name} ${query}` : query;
     const previous = context === previousQuery ? matches[selected]?.name : undefined;
     if (context !== previousQuery) argumentSelected = false;
     previousQuery = context;
-    matches = matchSlashCommands(argumentCommand
-      ? (argumentCommand.input?.choices ?? []).map(choice => ({ ...choice, source: argumentCommand!.source })) : commands, query);
-    if (!matches.length && !argumentCommand?.input?.hint) { close(); return; }
-    selected = Math.max(0, matches.findIndex(command => command.name === previous));
+    // Inline suffixes must be literal prefix completions, not fuzzy rewrites.
+    matches = valueStage ? [] : argumentCommand
+      ? (argumentCommand.input?.choices ?? []).filter(choice => choice.name.toLowerCase().startsWith(query!))
+        .map(choice => ({ ...choice, source: argumentCommand!.source }))
+      : matchSlashCommands(commands, query);
+    if (!matches.length && !(argumentCommand && (valueStage ? argumentCommand.input?.valueHint : argumentCommand.input?.hint) && !argumentQuery)) { close(); return; }
+    const retained = matches.findIndex(command => command.name === previous);
+    selected = retained >= 0 ? retained : Math.max(0, matches.findIndex(command => command.name.toLowerCase() === query));
     draw();
   }
-  function queryHasArguments(): boolean { return input.value.slice(argumentPrefix.length).trim().length > 0; }
+  function enterSubmits(): boolean {
+    const query = argumentCommand ? argumentQuery.toLowerCase() : slashQuery(input.value, input.selectionStart, input.selectionEnd);
+    const exact = matches.some(match => match.name.toLowerCase() === query);
+    // A fully typed command/argument needs no completion. An explicit arrow
+    // choice may still select a different (longer) candidate.
+    if (exact && (!argumentSelected || matches[selected]?.name.toLowerCase() === query)) return true;
+    return !!argumentCommand && !argumentSelected && !argumentQuery.trim();
+  }
   function accept(index: number): void {
     const command = matches[index];
-    if (!command || input.readOnly) return;
+    if (!command || input.readOnly || input.disabled) return;
     const text = argumentCommand ? `${argumentPrefix}${command.name} ` : `/${command.name} `;
     close();
     input.value = text;
     input.setSelectionRange(text.length, text.length);
     onInsert(text);
+    refresh();
   }
-  input.addEventListener("input", () => { dismissed = undefined; refresh(); });
-  input.addEventListener("focus", refresh);
-  input.addEventListener("click", refresh);
-  input.addEventListener("keyup", event => { if (event.key === "ArrowLeft" || event.key === "ArrowRight" || event.key === "Home" || event.key === "End") refresh(); });
-  input.addEventListener("blur", close);
-  input.addEventListener("compositionstart", () => { composing = true; close(); });
-  input.addEventListener("compositionend", () => { composing = false; refresh(); });
+  input.addEventListener("input", () => { dismissed = undefined; refresh(); }, options);
+  input.addEventListener("focus", refresh, options);
+  input.addEventListener("click", refresh, options);
+  input.addEventListener("keyup", event => { if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) refresh(); }, options);
+  // Covers mouse/keyboard selections as well as programmatic caret moves.
+  document.addEventListener('selectionchange', () => { if (document.activeElement === input) refresh(); }, options);
+  input.addEventListener("blur", () => { composing = false; close(); }, options);
+  document.defaultView!.addEventListener("blur", close, options);
+  document.defaultView!.addEventListener("focus", refresh, options);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) close(); else refresh(); }, options);
+  input.addEventListener("compositionstart", () => { composing = true; close(); }, options);
+  input.addEventListener("compositionend", () => { composing = false; refresh(); }, options);
   input.addEventListener("keydown", event => {
-    if (event.isComposing || event.keyCode === 229 || list.hidden) return;
+    if (event.isComposing || event.keyCode === 229) return;
+    // Selection/lock changes may arrive before a selectionchange event.
+    if (input.readOnly || input.disabled || input.selectionStart !== input.selectionEnd || input.selectionEnd !== input.value.length) { close(); return; }
+    if (!open) return;
+    // Autocomplete must not hijack the composer's normal Enter behavior in Tab-only mode.
+    if (event.key === 'Enter' && acceptWith() === 'tab') return;
     if (event.key === "Escape") {
       event.preventDefault(); event.stopImmediatePropagation(); dismissed = input.value; close();
-    } else if (matches.length && !(event.key === 'Enter' && argumentCommand && !argumentSelected && !queryHasArguments()) && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && ["ArrowUp", "ArrowDown", "Tab", "Enter"].includes(event.key)) {
+    } else if (matches.length && !(event.key === 'Enter' && enterSubmits()) && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && ["ArrowUp", "ArrowDown", "Tab", "Enter"].includes(event.key)) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (event.key === "Enter" || event.key === "Tab") accept(selected);
       else { argumentSelected = true; selected = (selected + (event.key === "ArrowDown" ? 1 : -1) + matches.length) % matches.length; draw(); }
     }
-  });
+  }, options);
   list.addEventListener("mousedown", event => {
     const target = event.target as HTMLElement | null;
     const option = target?.closest<HTMLElement>("[data-index]");
-    if (!option) return;
+    if (!option || list.hidden || !active) return;
     event.preventDefault();
     accept(Number(option.dataset.index));
-  });
+  }, options);
   close();
   return {
     refresh,
+    setActive(value) { active = value; if (value) refresh(); else close(); },
+    dispose() { active = false; close(); listeners.abort(); inline.dispose(); },
     setCommands(raw) {
       const next = resolve(raw);
       if (JSON.stringify(next) === JSON.stringify(commands)) return;

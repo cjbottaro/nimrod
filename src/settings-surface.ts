@@ -111,38 +111,36 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   }, false);
   const transcriptLogPicker = required<HTMLSelectElement>('transcript-logs-mode');
   const transcriptLogStatus = required('transcript-logs-status');
-  let transcriptLogPath = '', transcriptLogFailure = '';
+  let transcriptLogPath = '', transcriptLogFailure = '', transcriptLogLoss = '';
   const transcriptLog = createTranscriptLog({
-    write: lines => invoke('append_transcript_logs', { lines }),
+    write: (lines, captureId) => invoke('append_transcript_logs', { lines, captureId }),
     failure: message => {
       if (unloading) return;
       transcriptLogFailure = message;
       transcriptLogStatus.textContent = message;
       notices.report({ id: 'transcript-logs', operation: 'Record transcript debug logs', message });
     },
-    recovered: () => { transcriptLogFailure = ''; notices.resolve('transcript-logs'); },
+    recovered: () => { transcriptLogFailure = ''; transcriptLogLoss = ''; notices.resolve('transcript-logs'); notices.resolve('transcript-log-loss'); },
+    dropped: count => {
+      if (unloading) return;
+      transcriptLogLoss = `Transcript logging dropped ${count} diagnostic records. Capture is incomplete; session processing is unaffected.`;
+      transcriptLogStatus.textContent = transcriptLogLoss;
+      notices.report({ id: 'transcript-log-loss', operation: 'Transcript debug logs', severity: 'warning', message: transcriptLogLoss });
+    },
   });
-  let pressureRevision = -1, unlistenLogPressure: UnlistenFn | undefined;
-  const logPressure = (pressure: { revision: number; blocked: number }) => {
-    if (unloading || pressure.revision < pressureRevision) return;
-    pressureRevision = pressure.revision;
-    if (pressure.blocked > 0) notices.report({ id: 'transcript-log-pressure', operation: 'Transcript debug logs', severity: 'warning',
-      message: 'Transcript logging is catching up. Session processing may be slower while debug logging is enabled.' });
-    else notices.resolve('transcript-log-pressure');
-  };
-  void listen<{ revision: number; blocked: number }>('transcript-log-pressure', event => logPressure(event.payload))
-    .then(async unlisten => {
-      if (unloading) { unlisten(); return; }
-      unlistenLogPressure = unlisten;
-      logPressure(await invoke<{ revision: number; blocked: number }>('transcript_log_pressure'));
-    }).catch(error => {
-      if (!unloading) notices.report({ id: 'transcript-log-pressure-monitor', operation: 'Monitor transcript logging', message: String(error) });
-    });
+  let unlistenLogErrors: UnlistenFn | undefined;
+  void listen<{ captureId: string; message: string }>('transcript-log-error', event => {
+    if (!unloading) transcriptLog.writeFailed(event.payload.captureId, event.payload.message);
+  }).then(unlisten => {
+    if (unloading) unlisten(); else unlistenLogErrors = unlisten;
+  }).catch(error => {
+    if (!unloading) notices.report({ id: 'transcript-log-monitor', operation: 'Monitor transcript logging', message: String(error) });
+  });
   function reloadTranscriptLog(): void {
     const enabled = preferences.transcriptLogEnabled();
     transcriptLog.setEnabled(enabled && !global);
     transcriptLogPicker.value = enabled ? 'on' : 'off';
-    transcriptLogStatus.textContent = transcriptLogFailure || `${enabled ? 'Transcript debug logging enabled for project windows.' : 'Transcript debug logging is off; existing logs are retained.'}${transcriptLogPath ? ` Logs: ${transcriptLogPath}` : ''}`;
+    transcriptLogStatus.textContent = transcriptLogFailure || transcriptLogLoss || `${enabled ? 'Transcript debug logging enabled for project windows.' : 'Transcript debug logging is off; existing logs are retained.'}${transcriptLogPath ? ` Logs: ${transcriptLogPath}` : ''}`;
   }
   transcriptLogPicker.addEventListener('change', () => {
     transcriptLogPicker.disabled = true;
@@ -343,6 +341,17 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     }).finally(() => { reloadSendAutoFollow(); sendAutoFollowPicker.disabled = false; });
   });
   reloadSendAutoFollow();
+  const autocompletePicker = required<HTMLSelectElement>('autocomplete-accept');
+  const reloadAutocomplete = () => { autocompletePicker.value = preferences.autocompleteAccept(); };
+  const changeAutocomplete = () => {
+    autocompletePicker.disabled = true;
+    void preferences.saveAutocompleteAccept(autocompletePicker.value as import('./autocomplete-settings').AutocompleteAccept)
+      .then(() => notices.resolve('autocomplete-settings'))
+      .catch(error => notices.report({ id: 'autocomplete-settings', operation: 'Save autocomplete setting', message: String(error) }))
+      .finally(() => { if (!unloading) { reloadAutocomplete(); autocompletePicker.disabled = false; } });
+  };
+  autocompletePicker.addEventListener('change', changeAutocomplete);
+  reloadAutocomplete();
   const notificationPicker = required<HTMLSelectElement>('notification-mode');
   const notificationStatus = required('notification-status');
   const notificationTest = required<HTMLButtonElement>('notification-test');
@@ -396,6 +405,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   if (!global) {
     const controls: [ProjectSettingKey, string][] = [
       ['appearance.theme', 'theme-picker'],
+      ['interaction.autocompleteAccept', 'autocomplete-accept'],
       ['runtime.piPath', 'pi-path'], ['runtime.nodePath', 'node-path'],
       ['runtime.copilotPath', 'copilot-path'],
     ];
@@ -453,7 +463,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   const unsubscribe = preferences.subscribe(() => {
     const width = preferences.readState(settingsSidebarWidthKey);
     if (!Object.is(width, settingsSidebarWidth)) { settingsSidebarWidth = width; settingsSidebarResize.reload(); }
-    runtime.reload(); themes.reload(); typography.reload(); appearance.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadTranscriptLog(); reloadSendAutoFollow(); reloadModalAnimation(); keybindingEditor?.reload(); reloadSources();
+    runtime.reload(); themes.reload(); typography.reload(); appearance.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadTranscriptLog(); reloadSendAutoFollow(); reloadAutocomplete(); reloadModalAnimation(); keybindingEditor?.reload(); reloadSources();
   });
   reloadSources();
   return {
@@ -470,13 +480,14 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     dispose() {
       unloading = true; unsubscribe();
       typography.dispose();
+      autocompletePicker.removeEventListener('change', changeAutocomplete);
       required('modal-animation-preview').removeEventListener('click', previewAnimation);
       animationStyle.removeEventListener('change', changeAnimationStyle);
       animationDuration.removeEventListener('input', inputAnimationDuration);
       animationDuration.removeEventListener('change', changeAnimationDuration);
       pixelBindings.forEach(dispose => dispose()); pixelFade.removeEventListener('change', changePixelFade);
       if (animationPreview.open) closeModal(animationPreview);
-      performanceDiagnostics.dispose(); transcriptLog.dispose(); unlistenLogPressure?.();
+      performanceDiagnostics.dispose(); transcriptLog.dispose(); unlistenLogErrors?.();
       keybindingEditor?.dispose(); settingsNavigation.dispose(); settingsSidebarResize.dispose();
       appearance.dispose(); zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose(); modalMotion.dispose();
     },

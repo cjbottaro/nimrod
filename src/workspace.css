@@ -78,7 +78,10 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor:col-resize !important; u
 .deletion-tree-root .deletion-tree-icon { color:var(--vscode-progressBar-background); }
 #deletion-description[role="status"] { display:grid; }
 #deletion-description[role="status"] > span { grid-area:1 / 1; }
-.deletion-description-reserved { visibility:hidden; }
+.deletion-description-reserved, .deletion-tree-reserved { visibility:hidden; }
+#deletion-tree[data-executing] { display:grid; }
+#deletion-tree[data-executing] > * { grid-area:1 / 1; min-width:0; }
+.deletion-execution { display:flex; align-items:center; align-self:start; gap:10px; box-sizing:border-box; min-height:32px; padding:6px 8px; color:var(--vscode-descriptionForeground); }
 #deletion-confirm { background:var(--nimrod-danger-background, var(--vscode-errorForeground)); color:var(--nimrod-danger-foreground, var(--vscode-editor-background)); }
 .deletion-loading { display:flex; align-items:center; gap:10px; min-height:80px; color:var(--vscode-descriptionForeground); }
 .deletion-spinner { width:16px; height:16px; flex:none; border:2px solid var(--vscode-panel-border); border-top-color:var(--vscode-descriptionForeground); border-radius:50%; animation:deletion-spin .8s linear infinite; }

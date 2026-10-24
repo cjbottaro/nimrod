@@ -9,6 +9,8 @@ Read repository `AGENTS.md`, [architecture](references/architecture.md) and the 
 
 When adding or changing error paths, notices, banners, flash messages or operational notifications, load the [error presentation policy](references/error-presentation.md). It owns ownership-based placement (session conversation notices versus the application notice strip), shared routing, wording, deduplication and lifecycle. Do not invent additional error surfaces.
 
+When designing or reviewing pending agent decisions (including permission requests and agent questions), follow the [dismiss-and-resume workflow](references/dismiss-and-resume.md): modal dismissal is separate from request settlement; use a persistent session-local pending-action banner to reopen supported pending interactions.
+
 When adding or changing a modal, dialog, picker or preview, load the [modal implementation checklist](references/modal-layout.md#implementation-checklist). Ordinary modals **must** use the shared shell and `src/modal-motion.ts` lifecycle helpers (or an existing component that uses them), not raw dialog methods or custom open/close animations. Full-window Settings and native OS choosers are explicit exceptions documented there. Shared styling alone does not wire all motion paths.
 
 When adding or changing Settings sliders, follow [shared range inputs](references/settings-layout.md#range-inputs): use the shared track styling and initialize/update fill after programmatic value changes, not only after user input. Never dispatch fake input/change events to force initial paint.
@@ -50,6 +52,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Built-in Copilot SDK, runtime/process ownership, identity/legacy policy and SDK semantics | [Copilot SDK](references/copilot-sdk.md) | [Copilot](../../../docs/copilot.md) |
 | Finish Plan/Autopilot support: controlled acceptance, distinct-model handoffs and compaction confirmation gaps | [Copilot mode acceptance skill](../copilot-mode-acceptance/SKILL.md) | [Plan and Autopilot](../../../docs/copilot.md#plan-and-autopilot) |
 | Copilot scope-labelled approval choices, sequential permission picker, nested feedback and Review requests banner | [Copilot permissions](references/copilot-sdk.md#permission-choices-and-interaction) | [Permissions](../../../docs/copilot.md#permissions-and-questions) |
+| Copilot Plan review picker, feedback, pending-plan banner and completed cards | [Plan review](references/copilot-sdk.md#plan-review-interaction), [cards](references/card-plugins.md#copilot-plan-review-cards) | [Plan and Autopilot](../../../docs/copilot.md#plan-and-autopilot) |
 | Copilot Question picker, nested custom answers and pending-question banner | [Copilot questions](references/copilot-sdk.md#questions-and-custom-answers) | [Questions](../../../docs/copilot.md#permissions-and-questions) |
 | Copilot reported AIC/estimated USD, compact context utilization and optional metadata lifetime | [Copilot usage metrics](references/copilot-sdk.md#usage-metrics) | [Copilot usage](../../../docs/copilot.md#usage-metrics) |
 | Slash-command ownership, lifecycle, generic result handling, reconciliation, audits and adapter criteria | [Slash commands skill](../slash-commands/SKILL.md), [shared ownership](references/harness-presentation.md#harness-command-ownership) | Integration-specific user guides |
@@ -77,13 +80,14 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Snapshot storage, visibility and native reference focus | [Pop-outs](references/pop-outs.md) | [Pop-outs](../../../docs/pop-outs.md) |
 | Background alerts, previews and native click routing | [Notifications](references/notifications.md) | [Notifications](../../../docs/notifications.md) |
 | Capability-driven Status-area interface, Pi/SDK projections and keyed controls | [Status-area contract](references/harness-presentation.md#status-area-interface) | [Model/thinking](../../../docs/model-thinking.md) |
-| Live permission-policy changes, independent configuration domains and future harness capability adapters | [Live permissions](references/live-permissions.md) | [Copilot permission changes](../../../docs/copilot.md#change-permissions-during-work) |
+| Harness-contributed Set permissions command shortcuts and Copilot mapping | [Permission command shortcut](references/live-permissions.md) | [Copilot permission changes](../../../docs/copilot.md#change-permissions-during-work) |
 | Session configuration interface, model/effort choices, deferred changes and local transcript progress | [Model/thinking](references/model-thinking.md) | [Model/thinking](../../../docs/model-thinking.md) |
 | Global defaults, project JSONC overrides, migration and window state | [Preferences](references/preferences.md) | [Settings](../../../docs/settings.md) |
 | Global Settings window, Project settings page, categories and independent width | [Settings layout](references/settings-layout.md) | [Settings](../../../docs/settings.md) |
 | Global conversation/code font families and sizes, installed-font pickers, previews and content-only reflow | [Typography](references/typography.md) | [Typography settings](../../../docs/settings.md#typography) |
 | Bindable actions, recorder and conflicts | [Keybindings](references/keybindings.md) | [Keybindings](../../../docs/keybindings.md) |
 | Read-only built-in Pi MCP status inspection | [MCP inspector](references/mcp-inspector.md) | [MCP inspector](../../../docs/mcp.md) |
+| Dismiss-and-resume: pending agent decisions, picker dismissal and banner reopening | [Dismiss-and-resume workflow](references/dismiss-and-resume.md) | [Copilot permissions and questions](../../../docs/copilot.md#permissions-and-questions) |
 | Palette page lifecycle and cancellation | [Command interactions](references/command-interactions.md) | [Command palette](../../../docs/command-palette.md) |
 | Palette command ranking and usage storage | [Command ranking](references/command-ranking.md) | [Ordering](../../../docs/command-palette.md#ordering) |
 | Shared modal shell, configurable motion and action focus | [Modal layout](references/modal-layout.md) | [Confirmations](../../../docs/command-palette.md#confirmation-dialogs) |
@@ -100,7 +104,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Signed GitHub releases, Homebrew cask and packaged launcher | [Release distribution](references/releases.md) | [Installation](../../../docs/installation.md), [Release setup](../../../CONTRIBUTING.md#release-setup) |
 | Explicit builds, publication and compiler cache | [Build workflow](references/build-cache.md) | [Contributing](../../../CONTRIBUTING.md#app-builds) |
 | Optional external renderer for Pi web search/fetch/stored content/source check | [Pi Web Access cards](references/pi-web-access-plugin.md) | [Pi Web Access cards](../../../docs/pi-web-access-plugin.md) |
-| Built-in Pi/Copilot card inventory, manual prompt recipes and automated coverage map | [Card inventory](references/card-plugins.md#built-in-inventory-and-manual-acceptance), [SQL](references/card-plugins.md#copilot-sql-cards) | [Built-in card cookbook](../../../docs/builtin-card-cookbook.md) |
+| Built-in Pi/Copilot card inventory, manual prompt recipes and automated coverage map | [Card inventory](references/card-plugins.md#built-in-inventory-and-manual-acceptance), [patches](references/card-plugins.md#copilot-patch-cards), [SQL](references/card-plugins.md#copilot-sql-cards) | [Built-in card cookbook](../../../docs/builtin-card-cookbook.md) |
 | Mounted DOM renderers, cached personal TypeScript discovery/reload and legacy packages | [Card plugins](references/card-plugins.md) | [Card plugins](../../../docs/card-plugins.md), [Authoring](../../../docs/card-plugin-api.md) |
 
 ## Workflow and documentation

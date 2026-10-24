@@ -60,3 +60,16 @@ test('cancellation is capability-bound and only restores focus when its control 
     assert.equal(node.querySelector('button'), null, 'terminal operations never offer cancellation');
   } finally { dom.window.close(); }
 });
+
+test('compact command failures render one wrapping inline error without outcome or disclosure', () => {
+  const dom = new JSDOM('<article><div class="content">/rename</div></article>');
+  try {
+    const node = dom.window.document.querySelector('article')!;
+    renderOperationCard(node, { title: 'Copilot command', state: 'failed', inlineError: 'Usage: /rename <name>' }, () => {});
+    assert.equal(node.dataset.operationState, 'failed');
+    assert.equal(node.querySelector('.operation-inline-error')?.textContent, 'Usage: /rename <name>');
+    assert.equal(node.querySelector('.operation-outcome'), null);
+    assert.equal(node.querySelector('details'), null);
+    assert.equal(node.querySelector('pre'), null);
+  } finally { dom.window.close(); }
+});

@@ -15,7 +15,7 @@ export class CopilotCommandQueue {
   private pending: CommandIntent[] = [];
   private active?: CommandIntent;
   private disposed = false;
-  constructor(private ready: () => boolean,
+  constructor(private ready: (text: string) => boolean,
     private run: (id: string, text: string, signal: AbortSignal, dispatched: () => void) => Promise<void | boolean>,
     private changed: () => void) {}
   get occupied(): boolean { return !!this.active || this.pending.length > 0; }
@@ -29,7 +29,7 @@ export class CopilotCommandQueue {
     });
   }
   update(): void {
-    if (this.disposed || this.active || !this.pending.length || !this.ready()) return;
+    if (this.disposed || this.active || !this.pending.length || !this.ready(this.pending[0].text)) return;
     const intent = this.pending.shift()!;
     this.active = intent;
     this.progress(intent, 'applying');
@@ -39,7 +39,7 @@ export class CopilotCommandQueue {
         else this.progress(intent, 'completed');
       }
     }, error => {
-      if (!intent.signal.signal.aborted) this.progress(intent, 'failed', String(error));
+      if (!intent.signal.signal.aborted) this.progress(intent, 'failed', error instanceof Error ? error.message : String(error));
     }).finally(() => {
       this.active = undefined; intent.resolve(); this.changed(); this.update();
     });
@@ -66,7 +66,8 @@ export class CopilotCommandQueue {
   }
   private progress(intent: CommandIntent, phase: ConfigurationOperation['phase'], details?: string, connection = false): void {
     this.operations = this.operations.map(operation => operation.key === intent.key
-      ? { ...operation, phase, details, ...(connection ? { cause: 'connection' as const } : {}) } : operation);
+      ? { ...operation, phase, details: phase === 'failed' ? undefined : details,
+        inlineError: phase === 'failed' ? details : undefined, ...(connection ? { cause: 'connection' as const } : {}) } : operation);
     this.changed();
   }
 }

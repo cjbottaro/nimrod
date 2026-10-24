@@ -3,24 +3,24 @@
   --nimrod-conversation-size:14px;
   --nimrod-monospace-size:14px;
 }
-.message > .markdown, .skill-invocation .markdown, .reasoning-body, .configuration-text, .operation-outcome,
+.message > .markdown, .skill-invocation .markdown, .reasoning-body, .configuration-text, .operation-outcome, .operation-inline-error,
 .card-question-answer, .tool-output-web-markdown, .popout-document.popout-markdown,
 .typography-prose {
   font-family:var(--nimrod-conversation-font);
   font-size:var(--nimrod-conversation-size);
 }
-:is(#prompt, [data-pi-id="prompt"]), .typography-composer {
+:is(#prompt, [data-pi-id="prompt"]), .composer-inline-mirror, .typography-composer {
   font-family:var(--nimrod-conversation-font);
   font-size:var(--nimrod-conversation-size);
   line-height:1.428571;
 }
-pre, code, .tool-output:not(.tool-output-web-markdown), .tool-card-preview,
+pre, code, .tool-output:not(.tool-output-web-markdown), .tool-card-preview, .tool-card-diff-stats,
 .tool-input-summary, .edit-card-diff, .typography-code {
   font-family:var(--vscode-editor-font-family, monospace);
   font-size:var(--nimrod-monospace-size);
 }
 pre > code { font-size:inherit; }
-.reasoning-body .tool-output, [data-output-kind="question-options"] > .tool-output {
+.reasoning-body .tool-output, :is([data-output-kind="question-options"], [data-output-kind="plan-summary"]) > .tool-output {
   font-family:var(--nimrod-conversation-font);
   font-size:var(--nimrod-conversation-size);
 }

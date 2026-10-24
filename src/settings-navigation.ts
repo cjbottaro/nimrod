@@ -1,4 +1,4 @@
-export type SettingsCategory = 'appearance' | 'notifications' | 'diagnostics' | 'keybindings' | 'runtime';
+export type SettingsCategory = 'appearance' | 'interaction' | 'notifications' | 'diagnostics' | 'keybindings' | 'runtime';
 
 /** Mounted category panels retain dirty controls, searches and independent scroll offsets. */
 export function installSettingsNavigation(page: HTMLDialogElement) {

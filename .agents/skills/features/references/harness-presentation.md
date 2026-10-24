@@ -39,12 +39,13 @@ checklist, including its [per-harness compatibility matrix
 index](../../slash-commands/SKILL.md#harness-compatibility-matrices). This
 section owns the architectural boundary.
 
-Harness commands and Nimrod actions are separate user entry points, even when
-they overlap in visible purpose. A harness slash command remains owned by that
-harness: discover, validate and execute it through the harness's command
-interface, and preserve its arguments, persistence, effects, warnings and
-lifecycle. Never intercept a harness command and substitute a Nimrod action such
-as **Select model…**, nor implement a Nimrod action by submitting slash text.
+Harness commands remain owned by their harness: discover, validate and execute
+them through the harness command interface, preserving arguments, persistence,
+effects, warnings and lifecycle. Never intercept a command and substitute an
+unrelated Nimrod mutation such as **Select model…**. A concrete integration may
+contribute a Nimrod action as an explicit shortcut into an advertised harness
+command; that shortcut must enter the same command lifecycle and Command card,
+not submit slash text as an ordinary prompt or create a second mutation path.
 
 Prefer generic, metadata-driven command plumbing for every integration:
 advertised commands, aliases, argument metadata, invocation, standardized
@@ -91,7 +92,7 @@ ACP is a broad fallback, not a ceiling or universal harness protocol. Copilot us
 - `src/acp/session.ts`: produces display state directly, without fabricated Pi queue, extension or model-control records. Agent-advertised model/thinking/**mode** categories contribute keyed Status-area controls; remaining or uncategorized options remain in the palette. Values/descriptions come from the agent; a mode label does not imply a client-invented permission policy.
 - `src/session-backend.ts`: discriminated Pi/SDK/ACP ownership with one optional concrete controller. Session actions come from the selected integration. `main.ts` captures their owning conversation for palette execution, revalidates availability, and shares the dispatcher with shortcuts. `SessionLifecycle` (`src/session-lifecycle.ts`, concrete implementations under `pi/`, `copilot/` and `acp/`) composes `SessionPersistence` and `SessionConnectivity`: saved identity/key/draft scope, connection state/eligibility, connect, owned stop and disconnect. Restart capability never decides sidebar persistence. [Session history](session-history.md) owns the shared list/status and discovery ports; Resume selects through native file/exact-ID loading. Restart remains Pi-specific; deletion has concrete Pi and Copilot SDK implementations.
 
-Control updates preserve existing button nodes by ID, hide unsupported controls/separators, and do not navigate or focus. New controls use the same Status-area layout. Connected configuration controls accept immediate or deferred intent, including replacements during a mutation. Pi can apply during work/compaction; Copilot model/effort/mode/context and dormant ACP apply at their supported idle boundary. Copilot's [live permission configuration](live-permissions.md) is a separate owner and uses advertised live-command readiness, without another renderer or backend-specific picker. [Model/thinking](model-thinking.md) owns the shared configuration port, readiness, dependencies and local transcript progress.
+Control updates preserve existing button nodes by ID, hide unsupported controls/separators, and do not navigate or focus. New controls use the same Status-area layout. Connected configuration controls accept immediate or deferred intent, including replacements during a mutation. Pi can apply during work/compaction; Copilot model/effort/mode/context and dormant ACP apply at their supported idle boundary. Harness integrations may contribute [Set permissions command shortcuts](live-permissions.md) through their session actions; these enter the integration's normal command owner rather than a universal configuration setting. [Model/thinking](model-thinking.md) owns the shared configuration port, readiness, dependencies and local transcript progress.
 
 Composer hints are presentation contributions: policies supply structured text plus exact modifier metadata to the shared `src/composer-hints.ts` renderer (or a status-only string). Focus-scoped color feedback is shared by current and future integrations without label parsing or harness checks; it never adds shortcuts/capabilities or changes policy-owned delivery. See [shared modifier feedback](composer.md#shared-modifier-feedback).
 

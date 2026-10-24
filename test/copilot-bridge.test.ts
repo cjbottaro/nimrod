@@ -59,6 +59,22 @@ for (const text of ['', 'Image caption']) test(`SDK bridge maps inline images to
   } finally { await f.close(); }
 });
 
+for (const sessionId of [undefined, 'fixture-sdk']) {
+  test(`SDK bridge delegates configuration discovery to Copilot on ${sessionId ? 'Resume' : 'creation'}`, { timeout: 5000 }, async () => {
+    const f = bridge();
+    try {
+      await f.request('initialize');
+      // The SDK fixture asserts discovery is enabled without host-supplied roots.
+      await f.request('connect', sessionId ? { sessionId } : {});
+      assert.deepEqual(await f.request('command-skills'), { skills: [
+        { name: 'fixture-skill', description: 'Fixture skill details', enabled: true },
+        { name: 'disabled-skill', description: 'Disabled fixture skill', enabled: false },
+      ] });
+      assert.equal(f.packets.some(packet => ['event', 'permission', 'input'].includes(packet.kind)), false, 'discovery does not send prompts or resume pending work');
+    } finally { await f.close(); }
+  });
+}
+
 test('SDK bridge rejects malformed and oversized images before invoking send', { timeout: 5000 }, async () => {
   const f = bridge();
   try {
@@ -84,23 +100,6 @@ test('SDK getEvents returns image history through the same controller projection
   } finally { session.disconnect('fixture complete'); await f.close(); }
 });
 
-test('live native permission command applies before old requests resolve and prevents subsequent prompts', { timeout: 5000 }, async () => {
-  const f = bridge();
-  try {
-    await f.request('initialize'); await f.request('connect');
-    await f.request('prompt', { text: 'live permission change fixture' });
-    const pending = await f.waitFor(packet => packet.kind === 'permission');
-    const result = await f.request('permission-change', { value: 'allow-all' });
-    assert.deepEqual(result, { outcome: 'applied', mode: 'allow-all' });
-    assert.equal(f.packets.filter(packet => packet.kind === 'permission').length, 1);
-    assert.equal(f.packets.some(packet => packet.kind === 'event' && packet.event.type === 'assistant.message'), false, 'old approval is still waiting');
-    await f.request('decision', { decisionId: pending.id, value: { kind: 'approve-once', approvedInteractively: true } });
-    const answer = await f.waitFor(packet => packet.kind === 'event' && packet.event.type === 'assistant.message');
-    assert.equal(answer.event.data.content, 'Continued after live permission change');
-    assert.equal(f.packets.filter(packet => packet.kind === 'permission').length, 1, 'the second tool uses native allow-all policy');
-  } finally { await f.close(); }
-});
-
 test('production SDK bridge loads only exact project members and disconnects without deleting', { timeout: 5000 }, async () => {
   const f = bridge();
   try {
@@ -124,6 +123,43 @@ test('production SDK bridge loads only exact project members and disconnects wit
     await assert.rejects(f.request('delete', { sessionId: 'fixture-sdk' }), /history-only/);
   } finally { await f.close(); }
 });
+
+for (const scenario of ['accepted', 'rejected', 'new-work', 'child', 'intermediate']) {
+  test(`production bridge and controller agree on sticky Autopilot completion (${scenario})`, { timeout: 5000 }, async () => {
+    let session: CopilotSession | undefined;
+    const completed: boolean[] = [], responses: (string | undefined)[] = [];
+    const f = bridge('autopilot', packet => session?.receive(packet));
+    session = new CopilotSession(async message => f.send(message), {
+      publish() {}, changed() {}, identified() {}, disconnected() {},
+      completed(failed, response) { completed.push(failed); responses.push(response); },
+      notice(message) { assert.fail(message); }, decision: async () => undefined,
+    });
+    try {
+      await session.initialize('fixture-sdk');
+      await session.handle({ type: 'prompt', id: 'autonomous', text: `autopilot completion fixture:${scenario}` });
+      await f.waitFor(packet => packet.kind === 'event' && packet.event.type === 'session.idle');
+      assert.equal(session.state.busy, scenario !== 'accepted');
+      assert.equal(session.canSubmit, scenario === 'accepted');
+      assert.equal(session.configuration.get('mode'), 'autopilot');
+      assert.deepEqual(completed, scenario === 'accepted' ? [false] : []);
+      assert.deepEqual(responses, scenario === 'accepted' ? ['Created the requested change.'] : []);
+      if (scenario === 'accepted') {
+        // This idle-only command proves the production bridge released its own
+        // working gate too, not just the frontend's Working projection.
+        await f.request('command', { name: 'discover-fixture' });
+        await session.handle({ type: 'prompt', id: 'next-autonomous', text: 'autopilot completion fixture:intermediate' });
+        await f.waitFor(packet => packet.kind === 'event' && packet.event.type === 'user.message'
+          && packet.event.data.content === 'autopilot completion fixture:intermediate');
+        await assert.rejects(f.request('command', { name: 'new-fixture' }), /started working/);
+        assert.equal(session.state.busy, true);
+        assert.deepEqual(completed, [false]);
+      } else {
+        await assert.rejects(f.request('command', { name: 'discover-fixture' }), /started working/);
+      }
+      assert.equal(f.packets.filter(packet => packet.kind === 'event' && packet.event.type === 'user.message').length, scenario === 'accepted' ? 2 : 1);
+    } finally { session.disconnect('offline completion fixture complete'); await f.close(); }
+  });
+}
 
 for (const selectedAction of ['interactive', 'autopilot', 'exit_only', 'revise', undefined]) {
   test(`plan decisions remain scoped and survive intermediate idle (${selectedAction ?? 'cancel'})`, { timeout: 5000 }, async () => {
@@ -430,10 +466,18 @@ test('SDK commands use discovery/invocation, retain arguments and choices, and n
   try {
     await f.request('initialize'); await f.request('connect', { sessionId: 'fixture-sdk' });
     assert.equal(f.packets.find(packet => packet.kind === 'commands')?.commands[0].input.choices[0].name, 'show');
+    const config = f.packets.find(packet => packet.kind === 'commands')?.commands.find((command: { name: string }) => command.name === 'config');
+    assert.ok(config.input.choices.some((choice: { name: string }) => choice.name === 'dynamicRetrieval.mcp'));
+    assert.equal(config.input.valueHint, '[value]');
+    assert.equal((await f.request('command', { name: 'config', input: 'memory false' })).kind, 'text');
     const menu = await f.request('command', { name: 'permissions' });
     assert.equal(menu.kind, 'text'); assert.equal(menu.text, 'Fixture permission report: show');
     const report = await f.request('command', { name: 'perms', input: 'show  literal\nrest' });
     assert.equal(report.kind, 'text'); assert.equal(report.text, 'Fixture permission report: show  literal\nrest');
+    assert.deepEqual(await f.request('command-skills'), { skills: [
+      { name: 'fixture-skill', description: 'Fixture skill details', enabled: true },
+      { name: 'disabled-skill', description: 'Disabled fixture skill', enabled: false },
+    ] });
     await assert.rejects(f.request('command', { name: 'missing' }), /not advertised/);
     await assert.rejects(f.request('prompt', { text: '/permissions show' }), /invocation API/);
     await f.request('command', { name: 'discover-fixture' });

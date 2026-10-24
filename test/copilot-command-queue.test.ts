@@ -50,7 +50,21 @@ test('picker cancellation removes only its command card; failure settles once wi
   assert.equal(queue.operations.length, 0);
   await queue.enqueue('two', '/two', null);
   assert.equal(queue.operations[0].phase, 'failed');
-  assert.match(queue.operations[0].details!, /Known unsupported/);
+  assert.equal(queue.operations[0].inlineError, 'Known unsupported result');
+  assert.equal(queue.operations[0].details, undefined);
   queue.update(); await flush();
   assert.equal(runs, 2);
+});
+
+test('head command dispatches during work only when its concrete metadata permits live use', async () => {
+  let busy = true;
+  const calls: string[] = [];
+  const queue = new CopilotCommandQueue(text => !busy || text === '/live', async (_id, text) => { calls.push(text); }, () => {});
+  const live = queue.enqueue('live', '/live', null); await live;
+  assert.deepEqual(calls, ['/live']);
+  const idle = queue.enqueue('idle', '/idle', null); await flush();
+  assert.deepEqual(calls, ['/live']);
+  assert.equal(queue.operations.at(-1)?.phase, 'queued');
+  busy = false; queue.update(); await idle;
+  assert.deepEqual(calls, ['/live', '/idle']);
 });

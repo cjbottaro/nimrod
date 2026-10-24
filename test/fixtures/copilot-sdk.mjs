@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import permissionCommand from './copilot-permission-command.json' with { type: 'json' };
+import autopilotCompletion from './copilot/autopilot-completion.json' with { type: 'json' };
 export const RuntimeConnection = { forStdio: ({ path }) => ({ path }) };
 export class CopilotClient {
   constructor(options) {
@@ -9,11 +10,21 @@ export class CopilotClient {
     this.cwd = options.workingDirectory;
   }
   defaultsReads = 0;
+  userSettings = {
+    model: 'small', effortLevel: 'low', defaultMode: 'interactive', contextTier: 'default',
+    autoTier: 'balance', defaultPermissionMode: 'manual', memory: true,
+    dynamicRetrieval: { mcp: false, skills: true },
+  };
   rpc = { user: { settings: { get: async () => {
     this.defaultsReads++;
     if (process.env.NIMROD_FIXTURE_COPILOT_MODEL_STATE === 'settings-error') throw new Error('Fixture settings read failed');
-    const defaults = JSON.parse(process.env.NIMROD_FIXTURE_COPILOT_DEFAULTS || '{"model":"small","effortLevel":"low"}');
-    return { settings: Object.fromEntries(Object.entries(defaults).map(([key, value]) => [key, { value, default: null, isDefault: value === null }])) };
+    const overrides = JSON.parse(process.env.NIMROD_FIXTURE_COPILOT_DEFAULTS || '{}');
+    const values = { ...this.userSettings, ...overrides };
+    return { settings: Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { value, default: null, isDefault: value === null }])) };
+  }, set: async ({ settings }) => {
+    for (const [key, value] of Object.entries(settings)) {
+      if (value === null) delete this.userSettings[key]; else this.userSettings[key] = value;
+    }
   } } } };
   async start() {}
   async getStatus() { return { version: '1.0.98', protocolVersion: 3 }; }
@@ -36,7 +47,7 @@ export class CopilotClient {
   async createSession(config) {
     assert.equal(config.name, 'Copilot session');
     assert.equal(this.defaultsReads, 1, 'read configured defaults before creating a session');
-    const defaults = JSON.parse(process.env.NIMROD_FIXTURE_COPILOT_DEFAULTS || '{"model":"small","effortLevel":"low"}');
+    const defaults = { ...this.userSettings, ...JSON.parse(process.env.NIMROD_FIXTURE_COPILOT_DEFAULTS || '{}') };
     for (const [key, source] of [['model', 'model'], ['reasoningEffort', 'effortLevel']]) {
       if (defaults[source] === null || defaults[source] === undefined) assert.equal(Object.hasOwn(config, key), false, `omit unset ${key}`);
       else assert.equal(config[key], defaults[source], `honor the configured ${key}`);
@@ -70,6 +81,10 @@ class Session {
   ];
   rpc = {
     permissions: { getMode: async () => ({ mode: this.permissionMode }) },
+    skills: { list: async () => ({ skills: [
+      { name: 'fixture-skill', description: 'Fixture skill details', enabled: true },
+      { name: 'disabled-skill', description: 'Disabled fixture skill', enabled: false },
+    ] }) },
     metadata: { contextInfo: async parameters => {
       assert.deepEqual(parameters, { promptTokenLimit: 0, outputTokenLimit: 0 }, 'the runtime resolves the current model/tier');
       const state = process.env.NIMROD_FIXTURE_COPILOT_CONTEXT_STATE;
@@ -124,12 +139,15 @@ class Session {
     },
   };
   constructor(config, saved) {
+    assert.equal(config.enableConfigDiscovery, true, 'creation and Resume explicitly enable Copilot-owned discovery');
+    for (const key of ['skillDirectories', 'agentDirectories', 'hookDirectories', 'pluginDirectories', 'instructionDirectories'])
+      assert.equal(Object.hasOwn(config, key), false, `leave ${key} discovery to Copilot`);
     this.config = config; this.saved = saved; this.listeners = [config.onEvent];
     if (saved) { this.model = 'large'; this.effort = undefined; this.totalNanoAiu = 12_300_000_000; }
     else { this.model = config.model; this.effort = config.reasoningEffort; this.contextTier = config.contextTier; }
   }
   on(listener) { this.listeners.push(listener); return () => { this.listeners = this.listeners.filter(item => item !== listener); }; }
-  emit(type, data) { const event = { id: `fixture-${this.sequence++}`, type, data }; this.listeners.forEach(listener => listener(event)); }
+  emit(type, data, metadata = {}) { const event = { id: `fixture-${this.sequence++}`, type, data, ...metadata }; this.listeners.forEach(listener => listener(event)); }
   async getEvents() { return this.saved ? [
     { id: 'saved-user', type: 'user.message', data: { content: 'Saved SDK question', ...(process.env.NIMROD_FIXTURE_COPILOT_MODEL_STATE === 'image-history' ? { attachments: [{ type: 'blob', mimeType: 'image/png', data: 'YWJj' }] } : {}) } },
     { id: 'saved-answer', type: 'assistant.message', data: { messageId: 'saved', content: 'Saved SDK answer' } },
@@ -161,6 +179,21 @@ class Session {
     if (attachments?.length) {
       this.emit('assistant.message', { messageId: `image-${turn}`, content: 'Offline SDK image response.' });
       this.emit('session.idle', {}); return;
+    }
+    if (prompt.startsWith('autopilot completion fixture:')) {
+      const scenario = prompt.slice('autopilot completion fixture:'.length);
+      // Scrubbed real CLI ordering; only the negative variants are synthetic.
+      if (scenario !== 'intermediate') for (const event of autopilotCompletion.slice(0, -1)) {
+        const review = event.type === 'session.task_complete';
+        this.emit(event.type, review && scenario === 'rejected' ? { ...event.data, success: false } : event.data,
+          { id: `${turn}:${event.id}`, ...(review && scenario === 'child' ? { agentId: 'child' } : {}) });
+      }
+      if (scenario === 'new-work') {
+        this.emit('assistant.turn_start', {});
+        const review = autopilotCompletion.find(event => event.type === 'session.task_complete');
+        this.emit(review.type, review.data, { id: `${turn}:${review.id}` });
+      }
+      this.emit('session.idle', { mode: 'autopilot' }); return;
     }
     if (prompt === 'plan mode fixture') {
       const result = this.config.onExitPlanModeRequest({

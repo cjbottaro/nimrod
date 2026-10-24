@@ -74,6 +74,7 @@ Corrupt/stale caches rebuild. Failed edits do not execute the old bundle as a fa
 | `grep` | `nimrod.grep` | Pattern/path preview and literal matches. |
 | `find` | `nimrod.find` | Glob/path preview and literal results. |
 | `ls` | `nimrod.ls` | Directory preview and literal listing. |
+| `codemode` | `nimrod.codemode` | Script/Output disclosures inside a core-owned [call group](reading-conversations.md#pi-codemode-groups). |
 
 Each invocation mounts its own plugin instance. These use the same API-v2 lifecycle and context as personal plugins; shared helpers do not own tool selection or conversation state. External matches still take precedence unless explicitly overridden.
 

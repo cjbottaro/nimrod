@@ -231,7 +231,14 @@ test('confirmation keeps the modal open, blocks cancel/repeated submit and repor
     const cancel = f.doc.querySelector<HTMLButtonElement>('#deletion-cancel')!;
     const reviewedDescription = f.doc.querySelector('#deletion-description')!.textContent;
     const reviewedLabel = confirm.textContent;
-    confirm.click(); assert.equal(await answer, true);
+    confirm.click();
+    // Check synchronously: no confirmation continuation or native progress yet.
+    assert.equal(confirm.disabled, true); assert.equal(cancel.disabled, true);
+    assert.equal(f.doc.querySelector('.deletion-execution span:last-child')!.textContent, 'Stopping sessions…');
+    assert.ok(f.doc.querySelector('.deletion-execution .deletion-spinner'));
+    assert.equal(f.doc.querySelector('.deletion-tree-reserved')!.getAttribute('aria-hidden'), 'true');
+    assert.equal(f.doc.querySelector('#deletion-tree')!.getAttribute('data-executing'), 'true');
+    assert.equal(await answer, true);
     const reserved = f.doc.querySelector('.deletion-description-reserved')!;
     assert.equal(reserved.textContent, reviewedDescription);
     assert.equal(reserved.getAttribute('aria-hidden'), 'true');
@@ -248,6 +255,7 @@ test('confirmation keeps the modal open, blocks cancel/repeated submit and repor
     cancel.click(); assert.equal(f.dialog.open, true);
     assert.equal(await f.controller.review({ id: 'duplicate', sessions }), false);
     f.controller.progress('deleting'); assert.equal(f.doc.querySelector('.deletion-progress')!.textContent, 'Deleting sessions…');
+    assert.equal(f.doc.querySelector('.deletion-execution span:last-child')!.textContent, 'Deleting sessions…');
     assert.equal(f.doc.querySelector('.deletion-description-reserved'), reserved);
     assert.equal(confirm.textContent, reviewedLabel);
     f.controller.cancel(); assert.equal(f.dialog.open, false);
@@ -256,6 +264,8 @@ test('confirmation keeps the modal open, blocks cancel/repeated submit and repor
     assert.match(f.doc.querySelector('#deletion-description')!.textContent!, /Stops work/);
     assert.equal(f.doc.querySelector('.deletion-description-reserved'), null);
     assert.equal(f.doc.querySelector('.deletion-progress'), null);
+    assert.equal(f.doc.querySelector('.deletion-execution'), null);
+    assert.equal(f.doc.querySelector('#deletion-tree')!.hasAttribute('data-executing'), false);
     cancel.click(); assert.equal(await next, false);
   } finally { f.dispose(); }
 });

@@ -2,6 +2,20 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
+## Skill disclosures
+
+Pi and Copilot now share the lazy skill renderer and presentation interface.
+New/updated parser, shared-renderer, mounted-view and Copilot command fixtures
+are authored **unrun**. They cover string/block history, arguments, disclosure
+identity/hidden catch-up, echo adoption and command outcome retention. The
+user's screenshot establishes Copilot's expanded invocation presentation; local
+pinned-runtime strings additionally establish its explicit preamble,
+`<skill-context>` wrapper and `ARGUMENTS: ` separator, not native acceptance of
+the new renderer. No app
+build/launch, model request or user-session operation was performed. Actual
+macOS/Linux appearance, interaction and installed-CLI acceptance remain pending.
+See the [skill disclosure contract](transcript-cards.md#skill-disclosures).
+
 ## Evidence boundaries
 
 **Linux title-bar seam:** the user reports a thin dark line between the native title bar and Project bar. The window-scoped GTK stylesheet now suppresses bottom borders on both the titlebar host and nested HeaderBar, alongside the existing shadow reset. A pure stylesheet regression fixture is authored **unrun**. Native visual confirmation remains pending for focused/backdrop windows, dark/light themes, opaque/translucent backgrounds and Settings/pop-outs. No build or app launch was performed; the mandatory post-merge compile check is separate. [Native title bars](translucency.md#native-title-bars-and-first-presentation) owns the styling boundary.
@@ -52,12 +66,50 @@ and left the Status area on `gpt-5.6-sol`. This is protocol-shape evidence for
 the narrow catalog-picker/live-switch adapter, not acceptance of the adapter
 itself; its offline fixtures and native focus/effect behavior are unrun.
 
+An isolated provider-free command audit used CLI 1.0.98 with a disposable custom
+session filesystem, fail-closed permissions, no prompts and no external/model
+work. `/usage`, `/env`, `/list-dirs`, `/permissions show`, `/session info`,
+`/session files`, `/session plan` and `/mcp list` returned typed text and emitted
+no state events. Sanitized result-shape fixtures are authored and unrun. This is
+SDK/CLI protocol evidence, not native rendering/focus/busy acceptance.
+
+A second isolated read-only batch confirmed generic text/Markdown results for
+`/session checkpoints`, `/skills list`, `/plugin list`, `/memory show`, `/remote
+show`, `/sandbox status`, `/sandbox policy` and no-server `/mcp show`, with no
+command-caused state events. `/skills info` instead returned a usage error
+requiring `<skill-name>` despite metadata exposing only the `info` choice. The
+public `session.skills.list()` adapter and sanitized fixtures are source-authored
+and unrun; native nested-picker acceptance remains pending.
+
+An explicitly authorized isolated local-state audit used disposable Copilot
+home, project and SessionFS storage. `/rename`, `/memory on/off`, `/skills
+reload`, `/permissions default`, `/allow-all on/off`, `/reset-allowed-tools`,
+`/sandbox enable/disable` and `/init suppress` used generic results plus
+authoritative events/settings where applicable. Bare `/init` returned
+`agent-prompt` and was not submitted. `/session rename` exposed a missing
+free-form-name interaction; its shared-input adapter and sanitized fixtures are
+source-authored and unrun. No user settings/project/session or provider request
+was touched.
+
+CLI 1.0.98 evidence shows `/config` is absent from SDK command discovery and
+direct invocation returns unknown-command. Public `user.settings.get/set`
+provides values/defaults and writes but not the terminal client's structured
+path/type/description registry. The source-implemented adapter uses dynamic SDK
+keys, a pinned path-only nested supplement, curated public agent-default choices
+and confirmed writes. Offline command/bridge/inline-completion fixtures are
+authored unrun; native picker, persistence and restart/default acceptance remain
+pending.
+
 - TypeScript/jsdom shell tests use mocked native IPC.
 - Rust fixture tests use actual pipes, owned subprocesses and generated disposable session files; deletion tests unlink only those fixtures.
 - Automated Playwright WebKit exercises real browser layout/events with an offline child fixture and mock Tauri operations. Its CSS zoom is not native WKWebView zoom.
 - macOS bundles have been produced and signature-verified historically. Building/signing is not native delivery, focus or lifecycle acceptance.
 - No Linux build/native parity or Windows acceptance is established by macOS checks. Windows remains a possible future target.
 - Installed-Pi metadata smokes isolate config/projects/history and make no provider requests; they don't establish provider-generated first-save or queue behavior.
+
+## Copilot patch cards
+
+`test/copilot-patch-cards.test.ts`, including the multi-file-summary/colored-line-count follow-up, is authored but unrun. Payload inspection used existing local October 19 CLI 1.0.98 transcript logs only; no tools/providers were invoked and no user sessions/logs were changed. Native macOS/Linux visual/scroll acceptance remains pending; no app build or launch was performed. The mandatory post-merge `mise run check` is compilation evidence only, not fixture/native acceptance.
 
 ## Copilot SQL cards
 
@@ -151,11 +203,99 @@ Source report basenames (local files, not checked into this repository; retentio
 
 Incremental streaming now adds indexed tool updates, dirty-row presentation, append-only text/ANSI rendering and affected-output scroll batching. Its new unit/DOM/shell/offline-browser fixtures, including the review-fix differential lifecycle and mixed-helper/custom-DOM raw-recovery cases, have not been run; there is no native before/after responsiveness claim. Existing reports do not establish its effect. Remaining cumulative Pi-JSON/rendered-prefix costs, immutable array pointer copies and fallback/Markdown work are detailed in the [incremental rendering reference](../../performance-optimizations/references/incremental-transcript.md).
 
+## Copilot Plan and Autopilot
+
+On October 19, 2026 (macOS, local CDT), the user reported selecting **Continue
+with Autopilot**, seeing **Autopilot** in Nimrod's Status area, and apparent
+ongoing execution. Read-only inspection of the existing CLI **1.0.100** trace
+(`2026-10-20.jsonl`, UTC date) corroborated an approved `autopilot` decision at
+04:59:40.964Z, `exit_plan_mode.completed` with `approved:true`, an authoritative
+Plan → Autopilot `session.mode_changed`, and successful exit-plan tool completion.
+This is native user-observed acceptance of the ordinary approval/mode-display
+handoff and initial continuation, not completed-task acceptance. No new agent
+prompt, session mutation, build or launch was performed by this investigation.
+
+A later user report showed **Task complete** while Nimrod remained Working.
+Read-only inspection of `2026-10-20.000001.jsonl` found successful `task_complete`,
+root `session.task_complete` with `success:true` (native 05:16:59.794Z),
+`assistant.turn_end`, `assistant.idle`, then root `session.idle` with
+`mode:"autopilot"` (native 05:16:59.870Z). No later model/tool work appeared in that
+capture. The old controller and bridge ignored this final idle solely because
+of the sticky mode. A scrubbed sequence is retained in
+`test/fixtures/copilot/autopilot-completion.json`. The correction pairs live-root
+accepted completion with subsequent idle in both layers and uses its summary
+when no final assistant response follows. Updated `test/copilot-sdk.test.ts`,
+`test/copilot-bridge.test.ts` and the offline SDK fixture cover this sequence,
+intermediate/rejected/stale completion, duplicate IDs/events, new work/prompts,
+child/replay isolation, deferred configuration, idle-only bridge commands, Stop,
+errors and notification deduplication/content. These new regressions are authored
+**unrun**; native acceptance of the correction remains pending. No paid request,
+live session mutation, app launch or build was performed for the fix.
+
+The retained Plan review picker/banner and compact completed card are subsequent
+source changes, not the UI the user accepted. `test/copilot-plans.test.ts`,
+`test/copilot-plan-cards.test.ts` and revised shell coverage are authored **unrun**.
+Their native visual/keyboard/feedback/dismissal acceptance on macOS and Linux
+remains pending. The mandatory post-merge compile check is compilation evidence
+only. Distinct planning/execution models, restoration/compaction confirmation,
+Interactive handoff, revision loops, sticky-mode terminal ordering, limits and
+Stop remain unaccepted. Continue using the
+[mode acceptance skill](../../copilot-mode-acceptance/SKILL.md) for the remaining
+matrix; do not treat this handoff as full Plan/Autopilot support.
+
+## Pi codemode groups
+
+Grouped Pi codemode cards are source-implemented. Authored fixtures in `test/codemode-groups.test.ts`, `test/native-view.test.ts`, `test/builtin-tool-plugins.test.ts`, `test/tool-card.test.ts` and `test/browser/codemode-groups.spec.ts` cover explicit relationships, adoption/history, bounded/missing records, independent parent/child output, child failures, dynamic progress, coalesced/hidden/gapped delivery, reset and retained DOM/disclosures/focus. Follow-up authored fixtures additionally cover normal saved-child cards/themed dots, absent-data silence, personal overrides, unchanged-record renderer suppression, saved-to-live shell adoption and plugin disposal. These fixtures have **not been run** for this change. Native visual/disclosure/scroll acceptance on macOS/Linux remains pending; no platform acceptance follows from authored jsdom/browser fixtures.
+
 ## Transcript logging
 
-Expanded full-content native/history/request/UI logging, rotation and retention fixtures are authored but unrun. The bounded native MPSC writer/backpressure change replaces overflow-stop/chunk generation; new fixtures for waiting producer ordering, whole large events, delayed native acknowledgements and the one-second warning/recovery/cancellation are authored but unrun. The naming cleanup and new/legacy setting precedence/migration fixtures are also unrun; compile checks are not behavioral or platform acceptance. Earlier tool-only offline evidence is preserved in [history](history/transcript-logging.md), not evidence for the expanded logger.
+Before this correction, the CLI 1.0.100 trace above showed native completion at
+05:16:59.794Z reaching frontend capture at 05:25:00.499Z—about eight minutes later.
+Receipt spacing through the drained tail was often around 20–40 ms per record.
+Source inspection identified per-packet log-flush/acknowledgement flow control as
+a serialization point; this did not separately measure disk, IPC or rendering
+cost. The former warning observed individual native writes waiting at least one
+second rather than accumulated delivery age, so many shorter waits could escape
+that signal.
 
-Remaining macOS/Linux acceptance: actual Pi/extensions, SDK and dormant ACP traffic; empty/duplicate/history correlation; large-event/replay limits and overhead; bounded-channel waiting under slow storage and responsive/cancellable native delivery; one shared warning across concurrent producers/windows and its recovery; global setting synchronization; multi-window/process writes; disk failures, recovery and shutdown tails. Windows behavior is unverified. [Transcript logging](transcript-logs.md) owns contracts and fixture locations.
+The best-effort correction removes diagnostic delivery barriers/pre-send flushes
+from Pi/SDK/ACP and history connections, uses bounded timed frontend batching and
+nonblocking native MPSC admission, and reports whole-record loss/asynchronous
+writer failures without affecting sessions. Authored **unrun** regressions cover
+blocked logging with independent Pi event/request delivery and SDK Send/decision/
+Stop/settlement, frontend/native overflow, sequence gaps and loss counts, active
+byte accounting, accepted FIFO order/no retry, and stale capture error isolation.
+Existing storage/rotation/privacy and setting-migration fixtures remain separate.
+No tests, build, app launch or live provider/session operation was performed for
+this correction; mandatory post-merge compilation is not native acceptance.
+
+Remaining macOS/Linux acceptance: actual high-rate native traffic without the old
+lag; overflow warning/counts and unchanged session behavior during slow/failed
+storage; asynchronous window/segment-scoped error delivery; global setting
+synchronization; large-event/replay snapshot overhead; multi-window/process
+writes; recovery and shutdown tails. Windows behavior is unverified.
+[Transcript logging](transcript-logs.md#queue-best-effort-delivery-and-failures)
+owns the current contract and fixture locations.
+
+## Inline argument completion
+
+The configurable global/project acceptance preference is source-implemented with
+Tab only as the default. New/updated frontend, native validation, keyboard and
+scoped Settings fixtures are authored but unrun; no app build, launch, paid
+prompt or native acceptance was performed. Existing pane/draft/session ownership
+is retained; native Settings synchronization and keyboard acceptance remain
+pending. [Settings](settings-layout.md) and [composer](composer.md#shared-slash-completion)
+own the current contracts.
+
+Inline argument hints and prefix/Tab completions are source-implemented using
+harness metadata; no native app launch, build, paid prompt or test execution was
+performed for this task. New jsdom fixtures cover keyboard/lifecycle guards,
+non-draft ghost content, mirror scrolling and observer cleanup. An authored
+offline WebKit fixture covers proportional typography, wrapped/scrolling prefix
+alignment and no command/provider invocation. These fixtures are **unrun**.
+Native macOS visual/keyboard/accessibility acceptance and Linux/WebKitGTK
+acceptance remain pending. The [composer contract](composer.md#shared-slash-completion)
+owns implementation details and the fixture map.
 
 ## Remaining acceptance by area
 

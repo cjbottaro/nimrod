@@ -121,6 +121,39 @@ test('all integration policies use shared modifier hints without changing submis
   }
 });
 
+for (const harness of ['Pi', 'Copilot'] as const) for (const blocks of [false, true]) {
+  test(`${harness} skill turns share collapsed presentation and retain disclosure through hidden catch-up (${blocks ? 'blocks' : 'string'})`, () => {
+    const f = fixture(harness === 'Pi' ? piInteraction : copilotInteraction(() => undefined));
+    try {
+      const body = '# Review instructions\n\nRead the diff.';
+      const expanded = harness === 'Pi'
+        ? `<skill name="review" location="/fixture/SKILL.md">\n${body}\n</skill>\n\nCheck the **diff**.`
+        : `The user explicitly invoked the "/review" skill. Follow its instructions now.\n\nBase directory for this skill: /fixture\n\n${body}\n\nARGUMENTS: Check the **diff**.`;
+      const text = harness === 'Copilot' && blocks
+        ? expanded.replace('\n\nBase directory', '\n\n<skill-context name="review">\nBase directory') + '\n</skill-context>' : expanded;
+      const message = { key: 'skill-user', role: 'user', content: blocks ? [{ type: 'text', text }] : text };
+      const original = JSON.stringify(message);
+      f.snapshot({ messages: [message] });
+      const card = f.win.document.querySelector<HTMLDetailsElement>('.skill-card')!;
+      assert.equal(card.open, false);
+      assert.equal(card.querySelector('summary')!.textContent, harness === 'Pi' ? '/skill:review' : '/review');
+      assert.equal(card.querySelector('.skill-body')!.textContent, '');
+      assert.equal(f.win.document.querySelector('.skill-invocation > .markdown')!.textContent!.trim(), 'Check the diff.');
+      card.open = true; card.dispatchEvent(new f.win.Event('toggle'));
+      assert.match(card.querySelector('.skill-body')!.textContent!, /Review instructions/);
+      f.snapshot({ messages: [{ ...message, originLabel: 'Updated skill turn' }] });
+      assert.equal(f.win.document.querySelector('.skill-card'), card);
+      f.view.setActive(false);
+      f.snapshot({ messages: [{ ...message, originLabel: 'Updated while hidden' }, { key: 'reply', role: 'assistant', content: expanded }] });
+      f.view.setActive(true); f.flush();
+      assert.equal(f.win.document.querySelector('.skill-card'), card);
+      assert.equal(card.open, true);
+      assert.equal(f.win.document.querySelectorAll('.skill-card').length, 1, 'assistant skill examples remain ordinary Markdown');
+      assert.equal(JSON.stringify(message), original, 'presentation never rewrites harness content');
+    } finally { f.view.dispose(); f.dom.window.close(); }
+  });
+}
+
 test('empty assistant envelopes stay mounted without visible markers through streaming and hidden catch-up', () => {
   const f = fixture();
   try {

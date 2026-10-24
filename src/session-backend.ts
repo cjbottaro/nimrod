@@ -17,6 +17,8 @@ export interface SessionAction {
   label: string;
   detail: string;
   keywords?: string;
+  /** Session-bound harness operation, revalidated by sessionActions before dispatch. */
+  run?: () => Promise<void>;
   /** Opaque setting routed through the shared configuration picker. */
   configurationSetting?: string;
 }
@@ -29,8 +31,6 @@ export function sessionConfiguration(owner: Owner): import('./session-configurat
 export function sessionActions(owner: Owner): readonly SessionAction[] {
   const actions = owner.backend.kind === 'pi' ? piSessionActions : owner.backend.kind === 'copilot-sdk' ? copilotSessionActions(owner.backend.session) : acpSessionActions(owner.backend.session);
   const configuration = sessionConfiguration(owner);
-  const contributed: readonly SessionAction[] = configuration?.capabilities.some(setting => setting.id === 'permissions')
-    ? [...actions, { id: 'permissions', label: 'Select permissions…', detail: 'Change the permission policy for this session', configurationSetting: 'permissions' }] : actions;
   return configuration?.cancel && configuration.operations.some(operation => operation.cancellable)
-    ? [...contributed, { id: 'cancel-configuration', label: 'Cancel pending configuration change', detail: 'Withdraw configuration that has not been dispatched' }] : contributed;
+    ? [...actions, { id: 'cancel-configuration', label: 'Cancel pending configuration change', detail: 'Withdraw configuration that has not been dispatched' }] : actions;
 }

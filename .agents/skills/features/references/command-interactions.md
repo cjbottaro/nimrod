@@ -6,7 +6,7 @@ Human guide: [Command interactions](../../../../docs/command-palette.md#pickers-
 
 ## Specification and acceptance criteria
 
-One interaction owns every palette page and entry point. Escape cancels the whole interaction, Back alone returns to commands, accepted actions run after focus restoration, and stale results cannot mutate or reopen canceled pages.
+One interaction owns every palette page and entry point. Escape dismisses the whole palette interaction, Back alone returns to commands, accepted actions run after focus restoration, and stale results cannot mutate or reopen dismissed pages. Ordinary one-shot choices resolve as cancelled; retained agent decisions follow [dismiss-and-resume](dismiss-and-resume.md), leaving the underlying request pending.
 
 ## Ownership and extension points
 
@@ -23,10 +23,12 @@ Repeated deletion is one deliberate nested-dialog interaction: the shared deleti
 Project navigation is another shared page, not a separate modal controller; see [recent-project picker](projects-and-sessions.md#recent-project-picker). Its recent-directory page uses inline project rows and has no OS folder-chooser action; native File Open / Cmd/Ctrl+O is separate.
 Command-list sorting and accepted-command history are independent of page lifecycle; see [Command ranking](command-ranking.md). Subordinate picker order is unchanged.
 
-## Retained permission interaction
+## Retained decision interactions
 
-`startRetainedSelection` is the shared presentation lifecycle used by
-[Copilot permissions](copilot-sdk.md#permission-choices-and-interaction).
+[Dismiss-and-resume](dismiss-and-resume.md) owns the shared UX workflow.
+`startRetainedSelection` is its shared presentation lifecycle used by
+[Copilot permissions](copilot-sdk.md#permission-choices-and-interaction) and
+[agent questions](copilot-sdk.md#questions-and-custom-answers).
 It refuses to replace an already-open dialog; its standalone page hides
 application Back/Retry and does not enter command rankings. `show` supplies
 operation context and choices, `remaining` patches only header text, and `focus`
@@ -37,8 +39,9 @@ advances it or explicitly cancels it when empty.
 Escape/native close still dismisses the whole palette interaction and invalidates
 callbacks synchronously. Unlike `chooseItems`, this API does not own a harness
 decision promise: dismissal notifies the concrete owner, which leaves its queue
-pending behind a Review requests banner. It never translates Escape into denial.
-A nested host input dialog is a deliberate exception for denial feedback: only
+pending behind its Pending-action banner (**Review requests** for permissions,
+**Answer question** for questions). It never translates Escape into a harness response.
+A nested host input dialog is a deliberate exception for denial feedback or custom answers: only
 the top modal handles Escape; cancellation returns to the mounted picker, submit
 advances it. Owner-generation/AbortSignal guards retire both on cancellation.
 Existing one-shot selections and post-close application actions are unchanged.
@@ -63,7 +66,7 @@ The [presentation extraction rationale](harness-presentation.md) documents this 
 
 ## Lifecycle contract
 
-- Escape from any control and the native dialog `cancel` event call `closeInteraction()` with no action. Public `close()` and an active selection request's `cancel()` use the same path. All dismiss the entire interaction; none invoke commands or navigate backward.
+- Escape from any control and the native dialog `cancel` event call `closeInteraction()` with no action. Public `close()` and an active selection request's `cancel()` use the same path. All dismiss the entire palette interaction; none invoke commands or navigate backward. For retained decisions this closes presentation only, not the underlying request.
 - `closeInteraction(action?)` is the sole controlled close boundary. It synchronously invalidates request generations, resolves a pending choice to `undefined`, clears naming/Retry callbacks, and closes the modal. Metadata RPCs may finish in the background, but cannot update or reopen a dismissed page or mutate a preference through a canceled choice.
 - Resume passes an AbortSignal and generation-bound page publisher to history composition. Each source/page can publish usable rows before other sources finish; these rows are actionable without waiting for all discovery. Closing, Back, Refresh, replacing the page or disposal aborts the consumer and rejects stale publications. This does not stop project-owned discovery or send ACP turn cancellation. Resume sorts each publication by displayed recency across sources after overlaying open rows; equal times retain source order. The current query/selected identity is retained across incremental results.
 - Successful selection/naming passes an action to that same boundary. The native `close` event restores the original workspace focus before running the accepted action in a microtask. Canceling is distinct from accepting an action; failure never replays it.

@@ -5,7 +5,7 @@ import { createCardSummary, createToolDetails } from '../src/pi/card-shell';
 import { renderToolCard, updateToolCard } from '../src/pi/tool-card';
 import { renderReasoningCard, updateReasoningCard } from '../src/pi/reasoning-card';
 import { renderParallelToolCard } from '../src/pi/parallel-card';
-import { renderSkillInvocation } from '../src/pi/skill-invocation';
+import { renderSkillInvocation } from '../src/skill-invocation';
 
 function arrow(summary: Element): Element {
   const svg = summary.firstElementChild!;
@@ -58,6 +58,36 @@ test('all card shells use retained SVG arrows outside plugin-owned content', () 
   renderParallelToolCard(doc, cluster, parallel);
   assert.equal(arrow(parallel.querySelector('summary')!), parallelArrow);
 
-  const skill = renderSkillInvocation(doc, '<skill name="review" location="/fixture/SKILL.md">\nInstructions\n</skill>', 'skill', new Map(), render)!;
-  arrow(skill.querySelector('summary')!);
+  for (const label of ['/skill:review', '/review']) {
+    const skill = renderSkillInvocation(doc, { label, location: '/fixture/SKILL.md', content: 'Instructions' }, 'skill', new Map(), render);
+    arrow(skill.querySelector('summary')!);
+    assert.equal(skill.querySelector('summary')!.textContent, label);
+  }
+});
+
+test('input and output disclosure labels update without removing SVG arrows', () => {
+  const doc = new JSDOM().window.document;
+  const block = { name: 'custom', arguments: { code: 'return 1' }, toolStatus: 'running' as const, executionOutput: 'one' };
+  const tool = renderToolCard(doc, block, createToolDetails(doc, new Map(), 'tool'), {
+    id: 'disclosure-fixture', supports: () => true, mount: () => ({
+      update: data => ({ title: 'Custom', inputDisclosure: { label: 'Script', field: 'code' },
+        outputDisclosure: data.toolStatus === 'result' ? 'Final output' : 'Output',
+        sections: [{ key: 'execution', label: 'Output', text: data.executionOutput || '' }] }),
+      dispose() {},
+    }),
+  });
+  const input = tool.querySelector<HTMLDetailsElement>(':scope > .tool-raw-inputs')!;
+  const output = tool.querySelector<HTMLDetailsElement>('.card-output-disclosure')!;
+  const inputSummary = input.querySelector('summary')!, outputSummary = output.querySelector('summary')!;
+  const inputArrow = arrow(inputSummary), outputArrow = arrow(outputSummary);
+  assert.equal(inputSummary.textContent, 'Script');
+  assert.equal(outputSummary.textContent, 'Output');
+  input.open = output.open = true;
+  updateToolCard(doc, tool, { ...block, arguments: { code: 'return 2', extra: true }, toolStatus: 'result' });
+  assert.equal(inputSummary.textContent, 'Raw inputs');
+  assert.equal(outputSummary.textContent, 'Final output');
+  assert.equal(arrow(inputSummary), inputArrow);
+  assert.equal(arrow(outputSummary), outputArrow);
+  assert.equal(input.open, true);
+  assert.equal(output.open, true);
 });

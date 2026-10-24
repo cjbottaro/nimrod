@@ -30,7 +30,7 @@ Click a disclosure arrow or summary to expand a card.
 - **Tool cards** show one invocation with an input preview, raw inputs and output. Expand for full details; summaries don't use hover tooltips.
 - **Reasoning cards** show thinking text actually supplied by Pi.
 - A temporary **parallel-tools overview** summarizes overlapping executions without replacing individual cards.
-- **Skill disclosures** keep expanded skill bodies collapsed within user turns while leaving user arguments visible.
+- **Skill disclosures** in Pi and Copilot show the skill command collapsed within its user turn, followed by any arguments. Expand the command to read the skill instructions; Copilot's injected context and related-file listing stay inside the disclosure too.
 
 Cards start closed. Sustained non-empty execution updates may open a running tool after about half a second; a fast final result alone does not. Your manual disclosure choice wins. Inspecting one tool's output does not reset another tool's reading position.
 
@@ -40,11 +40,28 @@ A tool may keep its activity indicator after execution finishes while Pi process
 
 Each Pi built-in has a dedicated [card plugin](card-plugins.md#matching-and-overrides). Read summaries include the requested path and line range when supplied. Write cards show the destination and literal **Requested content**, separately scrollable from Pi's output; this previews the input, not a successful write. Grep/find show the pattern and path, and ls shows the directory. Edit cards retain requested diffs with Wrap/Copy. Unknown tools use a generic card, and personal plugins can override built-in presentation.
 
+### Pi codemode groups
+
+Codemode scripts appear as one grouped tool card. While running, **n/m calls** and a small progress bar show completed calls out of calls discovered so far. More calls can start as the script runs, so the denominator can increase; reaching n/n does not mean the script has finished. Once it finishes, the summary shows the call count, with failures called out even if the script handled them successfully.
+
+Expand the group to inspect each child tool independently. **Script** reveals the JavaScript; **Output** reveals what the script printed, separately from child results. Expanding or reading one output preserves the others' disclosures and reading positions. Calls with no available parent stay visible as ordinary tool cards.
+
+When resuming history, Pi may retain child names, inputs and statuses without their output. Saved children use the same tool cards and personal plugins as live calls, with themed success/failure dots and whatever input previews or errors Pi retained. Missing inputs or output are simply omitted, without placeholder messages. A **+** after the count and an incomplete-record note mean Pi's saved record is incomplete; omitted calls/results cannot be recovered by Nimrod.
+
 ### Copilot question/answer cards
 
 After Copilot reports an answer, its question card shows just the question with a small speech-bubble icon and your answer inset beneath it, marked by a short theme-accent line. The reply line begins beneath the speech-bubble icon, using the same 2px line and 12px inner spacing as nested quotes rather than adding another question-text indent. There is no extra title, badge or enclosing box. Long questions and answers wrap; multiline replies stay literal.
 
 Expand the disclosure to see the offered options as a numbered list in conversation typography (not a code block), **Raw inputs** and the original **Raw output**. Older schema-based questions retain their labelled answers. Pending, cancelled, interrupted, failed or unrecognized results retain the ordinary tool presentation rather than inventing an answer. This read-only transcript card is separate from the [Question picker](copilot.md#answer-agent-questions) and never submits a decision.
+
+### Copilot plan review cards
+
+After an exit-plan tool call completes, **Plan review** shows Copilot's reported
+outcome in the same compact, read-only style as question/answer cards. Expand it
+for the Markdown plan summary and exact raw inputs/results. The summary is what
+Copilot supplied to the tool, not a separately loaded plan file. Pending decisions
+use the [Plan review picker and Review plan banner](copilot.md#plan-and-autopilot),
+not buttons inside this transcript card.
 
 ### Copilot web cards
 

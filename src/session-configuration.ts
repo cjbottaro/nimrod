@@ -18,6 +18,8 @@ export interface ConfigurationOperation {
   readonly title: string;
   readonly text: string;
   readonly details?: string;
+  /** Concise known failure rendered inline instead of as diagnostic disclosure. */
+  readonly inlineError?: string;
   readonly cause?: 'connection';
   readonly cancellable?: boolean;
   /** Pre-result transcript boundary for operations whose own output is appended before settlement. Null means before the first row. */

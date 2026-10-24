@@ -14,8 +14,19 @@ export function createCardSummary(document: Document, label?: string): HTMLEleme
   triangle.setAttribute('d', 'M15 0 L85 50 L15 100 Z');
   arrow.append(triangle);
   summary.append(arrow);
-  if (label !== undefined) summary.append(label);
+  if (label !== undefined) setCardSummaryLabel(summary, label);
   return summary;
+}
+
+/** Update disclosure text without replacing its retained decorative arrow. */
+export function setCardSummaryLabel(summary: HTMLElement, label: string): void {
+  let text = summary.querySelector<HTMLElement>('.card-disclosure-label');
+  if (!text) {
+    text = summary.ownerDocument.createElement('span');
+    text.className = 'card-disclosure-label';
+    summary.append(text);
+  }
+  if (text.textContent !== label) text.textContent = label;
 }
 
 export interface ToolOutputScrollState { top: number; atBottom: boolean; }
@@ -26,7 +37,7 @@ export function associateOutputViewport(root: ParentNode, viewport?: HTMLElement
 function liveViewport(root: ParentNode): HTMLElement | null {
   const associated = outputViewports.get(root);
   if (associated) return associated.classList.contains('tool-output-streaming') ? associated : null;
-  return root.querySelector<HTMLElement>('.tool-output-streaming');
+  return Array.from(root.querySelectorAll<HTMLElement>('.tool-output-streaming')).find(output => output.closest('.tool-card') === root) ?? null;
 }
 
 /**

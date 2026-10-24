@@ -2,7 +2,7 @@ import { createInterface } from 'node:readline';
 import { isAbsolute } from 'node:path';
 import { createCopilotConfiguration } from './configuration.mjs';
 import { completeCommandEffect } from './command-effects.mjs';
-import { permissionMode, applyPermissionChange } from './permission-configuration.mjs';
+import { applyConfigCommand, configCommand } from './config-command.mjs';
 import { validPermissionDecision } from './permissions.mjs';
 
 const [cli, cwd] = process.argv.slice(2);
@@ -22,19 +22,23 @@ let replaying = false, buffered = [];
 let commandRefresh;
 let usageRead;
 let commandExecuting = false;
-let working = false, permissionRevision = 0;
-async function refreshPermissionMode(owner) {
-  const revision = permissionRevision;
-  try {
-    const mode = await permissionMode(owner);
-    if (!closing && session === owner && permissionRevision === revision) send({ kind: 'permission-mode', mode });
-  } catch { /* Optional metadata leaves the current value unknown; never gate chat. */ }
-}
+let working = false, acceptedCompletion = false, halted = false;
+const observedWork = new Set();
 function observeWork(value) {
-  if (value.agentId) return;
-  if (value.type === 'session.permissions_changed' && value.data?.mode !== undefined) permissionRevision++;
-  if (value.type === 'assistant.turn_start' || value.type === 'user.message') working = true;
-  if (value.type === 'session.error' || value.type === 'session.idle' && (value.data?.mode !== 'autopilot' || value.data?.aborted === true)) working = false;
+  if (value.agentId || !['user.message', 'assistant.turn_start', 'model.turn_started', 'model.call_start', 'tool.execution_start', 'session.task_complete', 'session.error', 'session.idle'].includes(value.type)) return false;
+  // Keep lifecycle decisions idempotent without suppressing raw event delivery.
+  if (observedWork.has(value.id)) return false;
+  observedWork.add(value.id);
+  if (['user.message', 'assistant.turn_start', 'model.turn_started', 'model.call_start', 'tool.execution_start'].includes(value.type)) acceptedCompletion = false;
+  if (!halted && (value.type === 'assistant.turn_start' || value.type === 'user.message')) working = true;
+  if (value.type === 'session.task_complete') acceptedCompletion = working && !halted && value.data?.success === true;
+  const terminal = value.type === 'session.error' || value.type === 'session.idle'
+    && (value.data?.mode !== 'autopilot' || value.data?.aborted === true || acceptedCompletion);
+  if (terminal) {
+    if (value.type === 'session.error' || value.data?.aborted === true) halted = true;
+    working = false; acceptedCompletion = false;
+  }
+  return terminal;
 }
 async function refreshCommands() {
   if (!session || closing) return;
@@ -42,7 +46,8 @@ async function refreshCommands() {
   commandRefresh = (async () => {
     const { commands } = await session.rpc.commands.list();
     if (!Array.isArray(commands)) throw new Error('Copilot returned an invalid command catalog');
-    send({ kind: 'commands', commands });
+    const additions = commands.some(command => command.name?.toLowerCase() === 'config') ? [] : [await configCommand(client)];
+    send({ kind: 'commands', commands: [...commands, ...additions] });
   })().finally(() => { commandRefresh = undefined; });
   return commandRefresh;
 }
@@ -59,6 +64,8 @@ function decision(kind, request) {
 }
 const config = () => ({
   workingDirectory: cwd, streaming: true, clientName: 'Nimrod',
+  // Let Copilot discover its own configuration on both creation and Resume.
+  enableConfigDiscovery: true,
   onEvent: event,
   onPermissionRequest: request => decision('permission', request),
   onUserInputRequest: request => decision('input', request),
@@ -66,11 +73,9 @@ const config = () => ({
   onAutoModeSwitchRequest: () => 'no',
 });
 function event(value) {
-  if (!value.agentId && (value.type === 'session.error'
-    || value.type === 'session.idle' && (value.data?.mode !== 'autopilot' || value.data?.aborted === true))) cancelDecisions();
   if (replaying) buffered.push(value);
   else {
-    observeWork(value);
+    if (observeWork(value)) cancelDecisions();
     send({ kind: 'event', event: value });
     if (!value.agentId && value.type === 'commands.changed') void refreshCommands().catch(error => send({ kind: 'command-error', error: `Command discovery failed: ${failure(error)}` }));
   }
@@ -155,7 +160,6 @@ async function dispatch(message) {
         const seen = new Set(events.map(item => item.id));
         for (const item of buffered) if (!seen.has(item.id)) eventAfterReplay(item);
         buffered = []; replaying = false;
-        void refreshPermissionMode(session);
         // Command discovery is optional: failure must not disable ordinary chat.
         try { await refreshCommands(); }
         catch (error) { send({ kind: 'command-error', error: `Command discovery failed: ${failure(error)}` }); }
@@ -187,13 +191,16 @@ async function dispatch(message) {
     case 'commands':
       if (!session) throw new Error('No connected Copilot session');
       return await refreshCommands();
-    case 'permission-change': {
+    case 'command-skills': {
       if (!session) throw new Error('No connected Copilot session');
-      if (commandExecuting) throw new Error('A Copilot command is already executing. Nothing was invoked.');
-      commandExecuting = true;
-      permissionRevision++; // Fence an older optional read before this mutation.
-      try { return await applyPermissionChange(session, message.value, () => working, commands => send({ kind: 'commands', commands })); }
-      finally { commandExecuting = false; }
+      const result = await session.rpc.skills.list();
+      if (!result || !Array.isArray(result.skills)) throw new Error('Copilot returned an invalid skill catalog');
+      return { skills: result.skills.map(skill => {
+        if (!skill || typeof skill.name !== 'string' || !skill.name
+          || typeof skill.description !== 'string' || typeof skill.enabled !== 'boolean')
+          throw new Error('Copilot returned an invalid skill catalog');
+        return { name: skill.name, description: skill.description, enabled: skill.enabled };
+      }) };
     }
     case 'command': {
       if (!session) throw new Error('No connected Copilot session');
@@ -204,15 +211,18 @@ async function dispatch(message) {
         const { commands } = await session.rpc.commands.list();
         const command = commands.find(item => item.name.toLowerCase() === message.name.toLowerCase())
           ?? commands.find(item => item.aliases?.some(alias => alias.toLowerCase() === message.name.toLowerCase()));
+        if (!command && message.name.toLowerCase() === 'config') {
+          if (working) throw new Error('Copilot started working before command dispatch. Nothing was invoked.');
+          const result = await applyConfigCommand(client, message.input);
+          await refreshCommands();
+          return result;
+        }
         if (!command) throw new Error('This command is not advertised by Copilot. Nothing was invoked.');
-        if (working) throw new Error('Copilot started working before command dispatch. Nothing was invoked.');
-        const permissions = command.kind === 'builtin' && command.name.toLowerCase() === 'permissions';
-        if (permissions) permissionRevision++;
+        if (working && command.allowDuringAgentExecution !== true) throw new Error('Copilot started working before command dispatch. Nothing was invoked.');
         const invoked = await session.rpc.commands.invoke({ name: command.name, ...(message.input !== undefined ? { input: message.input } : {}) });
         const result = await completeCommandEffect(session, invoked, {
           command, input: message.input, models: () => client.listModels(),
         });
-        if (permissions) void refreshPermissionMode(session);
         // Refresh metadata without re-invoking the command or changing its result.
         try { await refreshCommands(); }
         catch (error) { send({ kind: 'command-error', error: `Command discovery failed: ${failure(error)}` }); }
@@ -224,11 +234,12 @@ async function dispatch(message) {
       if (typeof message.text !== 'string' || message.text.length > 1_000_000 || message.text.trimStart().startsWith('/')) throw new Error('Invalid prompt; slash commands must use the command invocation API');
       const attachments = promptImages(message.images);
       if (!message.text.trim() && !attachments.length) throw new Error('A message or image is required');
-      working = true;
+      working = true; acceptedCompletion = false; halted = false;
       return await session.send({ prompt: message.text, ...(attachments.length ? { attachments } : {}), mode: 'immediate' });
     }
     case 'cancel':
       if (!session) throw new Error('No connected Copilot session');
+      halted = true; acceptedCompletion = false;
       cancelDecisions();
       return await session.abort();
     case 'configure':
@@ -239,7 +250,7 @@ async function dispatch(message) {
     default: throw new Error('Unsupported Copilot bridge operation');
   }
 }
-function eventAfterReplay(value) { observeWork(value); send({ kind: 'event', event: value }); }
+function eventAfterReplay(value) { if (observeWork(value)) cancelDecisions(); send({ kind: 'event', event: value }); }
 function cancelDecisions() {
   for (const pending of decisions.values()) {
     if (pending.kind === 'permission') pending.resolve({ kind: 'user-not-available' });
@@ -265,7 +276,7 @@ const heartbeat = setInterval(async () => {
 heartbeat.unref();
 async function shutdown() {
   if (closing) return;
-  closing = true;
+  closing = true; acceptedCompletion = false;
   clearInterval(heartbeat);
   cancelDecisions();
   try {

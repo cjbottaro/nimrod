@@ -40,12 +40,40 @@ the bridge applies only an exact enabled catalog ID through Copilot
 passes through without guessing. This is not Nimrod's **Select model…** action:
 the adapter stays entirely inside Copilot's command/SDK integration.
 
+CLI 1.0.98 also advertises `/skills info` without the required skill-name
+argument. The concrete adapter reads the public session skill catalog, presents
+a second harness-owned picker, revalidates the selected skill and invokes the
+original command as `info <name>`. It never reads skill files or substitutes a
+Nimrod action.
+
+Likewise, `/session rename` omits its required free-form name. Nimrod presents
+the shared host input modal as a Copilot-owned interaction, revalidates the
+advertised command, and invokes exact `/session rename <name>`. The resulting
+native title event remains authoritative; this does not dispatch a Nimrod
+rename action.
+
+CLI 1.0.98 keeps `/config` entirely in its terminal client: it is absent from
+`commands.list()` and direct command RPC rejects it. Nimrod synthesizes a
+Copilot-owned client command from public `user.settings.get/set` and model
+metadata. Key completion combines dynamic SDK keys with a pinned path-only
+nested-key compatibility supplement. Model, effort, default mode, context tier,
+Auto tier and default permission mode use typed harness pickers; remaining
+values are free-form, conservatively decoded, written and authoritatively
+confirmed by Copilot. These are defaults for future sessions and never dispatch
+Nimrod's live session configuration actions.
+
 This feature applies to **Copilot SDK sessions**. Pi's existing `/name`,
 `/compact` and bare `/mcp` interception remains unchanged; removing it requires a
 separate Pi contract change. Generic ACP keeps advertised-only passthrough; the Copilot ACP integration has been removed.
 
 New commands using implemented metadata/result shapes work without command-name
-handlers. This is not universal CLI/TUI parity. Generic command execution remains idle-only, but advertised command intent is accepted during work and queued locally. The deliberate exception is advertised builtin `/permissions allow-all`: the [live permission configuration adapter](live-permissions.md) accepts it during work, honours `allowDuringAgentExecution`, and executes the exact native command through its own configuration owner. It neither sends a steering prompt nor invents a host permission policy.
+handlers. This is not universal CLI/TUI parity. Advertised command intent is
+accepted during work and represented by a pinned Command card. The generic
+command queue dispatches the head command during work when its freshly
+advertised `allowDuringAgentExecution` is true; otherwise it waits for terminal
+idle. Permission commands use this same path and reconcile through native
+permission events. Nimrod's [Set permissions command
+shortcut](live-permissions.md) starts that same advertised command owner.
 
 ## Discovery and autocomplete
 
@@ -60,13 +88,17 @@ handlers. This is not universal CLI/TUI parity. Generic command execution remain
   choices/descriptions. Names/aliases are matched case-insensitively; canonical
   names win over conflicting aliases. Preserve complete raw argument text,
   including internal/trailing spaces and newlines, after the first delimiter.
-- Shared slash suggestions handle command names and full argument prefixes while
-  the caret is at the draft's end. Hints remain visible without selectable rows;
-  they never consume Enter. No inferred grammar, dynamic argument callbacks or
-  directory completion is claimed. SDK directory-completion hints are not yet
-  implemented; free-text remains available.
-- Tab/click and Enter on a typed argument accept suggestions only. Arrows select
-  a choice; Enter on a blank argument without arrow selection submits the command
+- The shared [composer completion](composer.md#shared-slash-completion) keeps
+  command-name menus and presents argument hints/literal-prefix completions
+  inline at the draft's end. Hints alone never consume Enter or insert prose.
+  No inferred grammar, dynamic argument callbacks or directory completion is
+  claimed. SDK directory-completion hints are not yet implemented; free-text
+  remains available.
+- The shared [composer acceptance preference](composer.md#shared-slash-completion)
+  defaults to Tab only: Enter always follows submission rather than accepting
+  suggestions. Tab or Enter restores partial/arrow-selected completion with
+  Enter while exact typed names/arguments submit directly. In Tab or Enter mode,
+  arrows select a choice and Enter on a blank argument without arrow selection submits the command
   intent. If the command advertises literal argument choices, an empty argument
   opens the shared palette-style picker **before any SDK invocation**. Escape
   invokes nothing; selection invokes the command once with that exact argument.
@@ -89,13 +121,16 @@ handlers. This is not universal CLI/TUI parity. Generic command execution remain
 | `add-timeline-entry` | Labelled command row with supplied text/URL; no inferred assistant message or automatic link activation. Suggested prefill never overwrites a newer draft; report its omission. Remediation actions are not executed. |
 | `completed` | Finish; display optional message as command output. No fabricated model response or completion notification. |
 | `select-subcommand` | Validate supplied title/parent/options; open a standalone shared selection modal. Display descriptions/group labels, arrows/Enter select, Escape cancels. Invoke only the exact offered argument against the same session. |
-| `agent-prompt` | Only an interactive/unspecified-mode result may submit its actual returned prompt. Display its supplied display prompt and optional notice. Never treat command invocation failure as this result or send twice. |
+| `agent-prompt` | Only an interactive/unspecified-mode result may submit its actual returned prompt. Display its supplied display prompt and optional notice; recognized skill expansions use the shared skill disclosure instead. Never treat command invocation failure as this result or send twice. |
 | `show-dialog` | Model-picker requests can present the reported enabled-model catalog and return the selection to the originating command, including settings scope/target metadata interpreted by that command. Model enabling and other dialog kinds remain unsupported. |
 | `set-model` | The bridge applies the command-selected live model/effort/Auto tier, reads authoritative state, then calls the SDK's public experimental invocation-effect finalizer with the original effect unchanged. Invalid effects finalize as cancelled; mutation/finalization uncertainty disconnects for explicit reconciliation. This does not dispatch Nimrod's **Select model…** action. |
 | `set-plan-model` | The command's provisional future Plan-model preference is finalized through the same SDK effect transaction and its confirmation is displayed. It does not change the active model or dispatch a Nimrod action. |
 | Unknown/malformed result or unknown mode | Session-owned error; no speculative prompt/action or automatic replay. Supported Interactive, Plan and Autopilot changes reconcile through the session mode configuration; unknown values disconnect before follow-on work. |
 
-Supported permission mutation uses one **PERMISSION CHANGE** operation card instead of a duplicate command-output row. Choosing `allow-all` in the existing argument/result-choice workflow converges on that same owner. Native policy confirmation, pending-callback retention and failure/uncertainty semantics are specified in [Live permissions](live-permissions.md).
+Slash-command permission mutations and Nimrod's **Set permissions…** shortcut
+both enter the same generic command owner, produce Command cards and use
+authoritative native events. The action simply starts bare advertised
+`/permissions`; see [Permission command shortcut](live-permissions.md).
 
 Command-output rows are **connection-local presentation**, not invented persisted
 Copilot events. They survive switching within that connection, not Close/Resume.
@@ -106,20 +141,37 @@ The normal transcript renderer owns escaping, Markdown, stable keys, reading
 intent and hidden-view catch-up. Do not synthesize assistant history or write
 SDK session files to persist local output.
 
+For an advertised skill's recognized explicit-invocation `agent-prompt`, the
+expanded prompt supplies the user turn immediately, using the shared
+[skill disclosure](transcript-cards.md#skill-disclosures), rather than briefly
+showing the display label and then replacing it with expanded Markdown. Once
+prompt delivery succeeds, remove the redundant local command card; the retained
+user turn owns the skill name, instructions and arguments. Native user echo
+adopts that same message key, and resumed expanded history uses the same parser.
+A delivery disconnect retains the command's unknown-outcome card. Unknown
+expansion formats and non-skill agent prompts keep the existing display-prompt
+and command-card behavior. No prompt replay, skill-file scanning or persisted
+synthetic history is added.
+
+Known command rejection cards show only the actionable harness error inline,
+wrapping in conversation typography. They omit transport/Nimrod wrapper text,
+the redundant **Failed** label and diagnostic disclosure. Ambiguous delivery or
+connection outcomes keep explicit uncertainty labels and full Details.
+
 ## Choice lifecycle and concurrency
 
 `CopilotCommandQueue` owns a connection-local FIFO of validated command intents. Accepting an advertised command clears the composer immediately, even during agent work or another command workflow. Unknown commands, required free-text input and attachments still fail before clearing. Ordinary text/image prompts retain their busy rejection; this is not SDK prompt steering/queueing.
 
 Each intent immediately publishes a **COPILOT COMMAND** operation card containing the exact submitted text. Its immutable progress records reuse the existing local operation projector/renderer through `configurationOperations`; they are not configuration mutations or persisted harness rows. Unchanged streaming publications preserve the combined array identity. The queue owns execution/settlement separately from configuration owners; no per-card cancellation capability is advertised. Failures/uncertainty belong to this card, without duplicate submission-error notices. Local acceptance receipts are not invocation completion.
 
-Drain one workflow at a time when connected, root-terminal-idle and free of configuration/permission mutation. Child idle and non-aborted Autopilot intermediate idle never release the queue. Commands queued before idle take priority over deferred model changes; the independent live permission owner remains able to apply during work. Revalidate the catalog before starting each workflow; the bridge revalidates again and rejects an idle-to-busy race before invoking. A rejected/ambiguous dispatch is never retried. The exact advertised name/alias and raw arguments stay intact: `/allow-all` is not rewritten into `/permissions allow-all` or a Nimrod action.
+Drain one workflow at a time when connected and free of configuration/permission mutation. During root work, dispatch only when the head command's fresh metadata advertises `allowDuringAgentExecution`; otherwise wait for root terminal idle. Child idle and non-aborted Autopilot intermediate idle never release an idle-only command. Commands queued before idle take priority over deferred model changes. Revalidate the catalog before starting each workflow; the bridge revalidates live-use metadata again before invoking. A rejected/ambiguous dispatch is never retried. The exact advertised name/alias and raw arguments stay intact: `/allow-all` is not rewritten into `/permissions allow-all` or a Nimrod action.
 
 Each command workflow owns an AbortController and serializes its own invocations.
 Advertised argument choices are available before invocation and must not require
 executing a bare command to discover its default behavior. Separately, waiting
 for a returned `select-subcommand` choice is result-gated because those choices
 are unavailable before invocation. Neither path gates clearing the composer on RPC.
-Ordinary message submissions and model mutation remain locally unavailable until queued command workflows settle; further advertised commands can queue. Live permission intent may be accepted while it waits for the active command owner to finish; the draft stays editable. Ordinary agent turns retain SDK `session.idle`
+Ordinary message submissions and model mutation remain locally unavailable until queued command workflows settle; further advertised commands and contributed command shortcuts can queue. The draft stays editable. Ordinary agent turns retain SDK `session.idle`
 semantics, separate from local command completion.
 
 Returned choices open only for their still-presented, connected owner with no
@@ -146,8 +198,9 @@ use the existing bounded request timeout/unknown-outcome disconnect contract.
 - `src/copilot/command-queue.ts`: connection-local FIFO, readiness-driven drain, immutable operation progress, cancellation and disconnect outcome fencing.
 - `src/copilot/{session,view-policy}.ts`: command intent, operation ownership,
   result interpretation, labelled output and submission receipts.
-- `src/pi/slash-completion.ts`: optional presentation-only argument hints/choices;
-  Pi command resolution and submission policy are unchanged.
+- `src/pi/{slash-completion,inline-completion}.ts`: shared metadata-driven
+  inline argument hints/completions; [composer](composer.md#shared-slash-completion)
+  owns presentation and keyboard behavior. Pi resolution/submission policy is unchanged.
 - `src/command-palette.ts`, `src/main.ts`: shared described-choice/standalone page
   and exact session-bound modal composition. No command names become app actions.
   The shell's `session` initializer is explicitly typed `CopilotSession`: its

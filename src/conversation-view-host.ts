@@ -53,6 +53,7 @@ export interface ConversationViewHost {
   resolveNoticeCause?(cause: string): void;
   promptSubmitted?(): void;
   sendAutoFollow?(): import('./pi/transcript-scroll').SendAutoFollow;
+  autocompleteAccept?(): import('./autocomplete-settings').AutocompleteAccept;
   postMessage(message: Record<string, unknown>): void;
   onMessage(listener: (message: ConversationViewMessage) => void): void;
   getState(): unknown;
@@ -92,6 +93,8 @@ export interface RenderBlock extends ToolCardData {
   thinkingComplete?: boolean;
   uiPhase?: "thinking" | "stopped";
   id?: unknown;
+  parentToolCallId?: string;
+  nestedCalls?: unknown;
   name?: unknown;
   arguments?: unknown;
   executionOutput?: string;
@@ -121,6 +124,8 @@ export interface RenderMessage {
   toolKind?: string;
   toolNative?: unknown;
   toolArguments?: unknown;
+  parentToolCallId?: string;
+  toolNestedCalls?: unknown;
   isError?: boolean;
   output?: string;
   hasStreamingOutput?: boolean;

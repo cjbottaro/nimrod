@@ -81,7 +81,12 @@ Mounted IDs are unique per session; anchors above are semantic template names wi
 - **Skill disclosure** — collapsed skill body inside a user turn; user arguments remain outside.
 - **Pending user turn** — local user-turn preview awaiting acknowledgement/authoritative user event; includes ordinary sends and **pending steering turns**.
 - **Operation card** — a transcript entry representing an operation from pending intent through its outcome, with a stable **title**, **content**, optional **outcome text**, **details disclosure** and supported **Cancel** control. [Operation cards](../features/references/operation-cards.md) owns the pattern; configuration changes and steering/queued previews use it.
-- **Permission change** — operation card for a supported session permission-policy change; **Select permissions…** opens its configuration picker, distinct from answering individual requests in the **Permission picker**. [Live permissions](../features/references/live-permissions.md) owns behaviour.
+- **Command card** — specialized operation card for one harness slash-command invocation. It appears at accepted intent, stays pinned/shimmering through interaction, queued readiness and invocation, then unpins into normal flow and adapts its settled body to command output, confirmed effects, concise errors or uncertainty instead of creating separate request/response rows. [Slash commands](../slash-commands/SKILL.md#command-cards) owns the cross-harness pattern.
+- **Set permissions…** — harness-contributed Nimrod action that starts the
+  integration's advertised permission command and produces a **Command card**;
+  distinct from answering individual requests in the **Permission picker**.
+  [Permission command shortcut](../features/references/live-permissions.md) owns
+  behavior.
 - **Configuration change** — Nimrod-owned operation card for a session-setting change, distinct from a user/assistant turn or saved harness history. [Model/thinking](../features/references/model-thinking.md) owns its behavior.
 - **Queue entries / recovered messages** — authoritative pending work versus text retained for explicit Restore.
 
@@ -89,6 +94,7 @@ A **card** needn't have a visible rectangle. A **disclosure** expands/collapses;
 
 ## Controls and feedback
 
+- **Dismiss-and-resume** — workflow for dismissing a pending agent decision's modal without answering or cancelling it, then reopening it from a persistent session-local **Pending-action banner**. Permission requests and agent questions are current examples. This is presentation resumption, not **Resume session**. [Dismiss-and-resume workflow](../features/references/dismiss-and-resume.md) owns the shared contract; the Permission/Question picker entries below name its concrete surfaces.
 - **Action** — an operation that must be available in the command palette. A keybinding is optional; buttons and menus may provide additional entry points to the same action. “Command” is synonymous in command-palette discussions; not every button or UI interaction is an action.
 - **Session-row context menu** — OS-rendered menu opened by right-click/Control-click or Menu key/Shift+F10 on a sidebar row; actions target that row, not necessarily the selected session. **Pinned session** means an open session organized above unpinned rows, not protected from Close/Delete.
 - **Command palette** — modal action selector; subordinate pickers are pages in that interaction.
@@ -100,7 +106,9 @@ A **card** needn't have a visible rectangle. A **disclosure** expands/collapses;
 - **Session notices** — session-owned operational feedback at the top of its conversation area, above and outside the transcript pane, aligned with its gutters. Visible only in that session; not transcript entries or sidebar indicators.
 - **Application notice strip** (or **notice strip**) — shell-owned window/application feedback 48 CSS pixels below the viewport top, including Settings/dialogs. It reserves space and remains accessible through the active dialog's top layer. [Error presentation](../features/references/error-presentation.md) owns placement, routing and lifecycle for both notice surfaces.
 - **Submission notice** — legacy standalone-renderer feedback near the composer; the app routes this feedback to session notices.
-- **Slash suggestions** — autocomplete above the composer.
+- **Slash suggestions** — command-name autocomplete menu above the composer.
+- **Inline argument hint** — muted, non-insertable command-input placeholder after the caret; not part of the draft.
+- **Ghost completion** — muted untyped suffix of an advertised argument choice; Tab accepts it into the draft, Up/Down cycle matches.
 - **Keybinding editor / key recorder** — action shortcut list and nested combination-capture dialog.
 - **Open project / Open recent project** — native directory chooser versus searchable recent-directory picker.
 - **Settings gear / Runtime paths / Zoom picker** — Project settings entry in the Project bar, next-launch executable preferences and whole-webview scale selector.
@@ -109,6 +117,7 @@ A **card** needn't have a visible rectangle. A **disclosure** expands/collapses;
 - **Desktop notification** — OS-level background alert, distinct from Pi in-app notices. **Background session alerts**, **Send test notification** and **Refresh notification diagnostics** are Settings controls.
 - **Permission picker** — Copilot's command-palette-style modal for sequential permission decisions, showing the active operation and remaining count. **Denial-feedback modal** is the nested input dialog above it on the z-axis. **Pending-permission banner** is the non-dismissable, session-local **Waiting for permission · N requests** banner with **Review requests**, first above separate error banners. [Permission specification](../features/references/copilot-sdk.md#permission-choices-and-interaction) owns scope and lifecycle.
 - **Question picker** — Copilot's command-palette-style modal for sequential agent questions. **Enter your own answer…** opens a nested **Custom-answer modal** above it; its **Submit answer** action answers the question. **Pending-question banner** is the non-dismissable, session-local **Waiting for input · N questions** banner with **Answer question**. Dismissing either modal does not answer or cancel the request. An **inline question panel** is an embedded form in the conversation layout, not a modal; Copilot questions no longer use it. [Question specification](../features/references/copilot-sdk.md#questions-and-custom-answers) owns lifecycle.
+- **Plan review picker** — Copilot's retained action picker with a rendered plan preview; separate nested feedback for revisions or optional approval feedback. Escape dismisses presentation only; the **Pending-plan banner** says **Waiting for plan review** with **Review plan**. Completed **Plan review cards** are read-only transcript records, not pending controls. [Plan review specification](../features/references/copilot-sdk.md#plan-review-interaction) owns semantics.
 - **Dialog / modal shell** — choice/editing overlay versus its shared outer geometry/style. Project settings is the full-window exception; Global Settings has its own native window.
 
 [Command interactions](../features/references/command-interactions.md), [keybindings](../features/references/keybindings.md), [Settings](../features/references/settings-layout.md), [notifications](../features/references/notifications.md) and [modal layout](../features/references/modal-layout.md) own specifications.

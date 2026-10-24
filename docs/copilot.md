@@ -25,6 +25,14 @@ working, Enter keeps your draft; there is no steering/queue. **Stop** cancels th
 turn, not the saved conversation. A failed connection retains its row and draft;
 fix the executable/authentication issue, then reconnect explicitly.
 
+## Configuration discovery
+
+New and resumed sessions explicitly enable Copilot's native configuration
+discovery, including skills. Copilot decides which configuration sources are
+supported and how they are combined; Nimrod does not maintain a separate skill
+search path. Use `/skills list` to inspect the connected session's catalog.
+Discovery parity with the interactive CLI still needs native verification.
+
 ## Permissions and questions
 
 Permission requests use a command-palette-style modal, one request at a time.
@@ -105,17 +113,17 @@ Native focus/stacking and visual acceptance remain pending after a requested bui
 
 If you started a task before allowing its tools, you can submit
 `/permissions allow-all` while Copilot is working, or choose
-**Select permissions… → Allow all** in the command palette. The action appears
-when your runtime advertises that permission operation. Advertised command-name
-aliases work too.
+**Set permissions…** in the command palette. The action is a shortcut into the
+same advertised `/permissions` command and choice picker; both produce a
+Command card. The action appears only when the runtime advertises the builtin
+permission command. Advertised command-name aliases work too.
 
 If the permission picker is open, press Escape first. This hides it without
 answering its requests. Submit the policy change, then use **Review requests**
 to answer any older requests still waiting.
 
-A **PERMISSION CHANGE** operation card appears immediately, shimmering and pinned
-while pending. It stops shimmering and joins normal transcript flow when Copilot
-confirms the policy. The operation runs independently of queued model changes;
+Either entry appears as a pinned **COPILOT COMMAND** card, stops shimmering and
+joins normal transcript flow when the command settles. The operation runs independently of queued model changes;
 it does not stop or resend your task, replace a newer draft, or answer existing
 permission requests. Copilot's native policy governs subsequent requests.
 
@@ -211,30 +219,42 @@ disconnects rather than guessing or submitting follow-on work.
 ### Plan and Autopilot
 
 **Plan** asks Copilot to investigate and prepare a plan before implementing.
-Review its plan in the owning conversation, then choose one of Copilot's offered
-actions, such as **Continue interactively**, **Continue with Autopilot** or
-**Finish planning**. **Cancel request** declines the transition. A background
-plan request never switches sessions or steals focus.
+The **Plan review picker** shows the rendered plan and Copilot's offered actions,
+such as **Continue interactively**, **Continue with Autopilot** or **Finish planning**.
+Copilot's recommendation is marked, not automatically accepted. A background
+plan request never switches sessions or replaces an existing dialog.
 
-Use **Plan feedback** and **Request changes** to return revisions to Copilot
-without approving implementation. Feedback can also accompany an approval.
-**Cancel request** declines without submitting the feedback. None of these
-actions sends an extra chat prompt or replaces your composer draft.
+Press **Escape** to read the transcript without answering. The session-local
+**Waiting for plan review** banner's **Review plan** action reopens the picker.
+Switching sessions does not undo an explicit dismissal.
+
+**Request changes…** opens a nested feedback modal; submitting non-empty feedback
+returns revisions without approving implementation. **Add feedback…** saves
+optional feedback to accompany your next approval. Cancelling either feedback
+modal returns to the unchanged picker. **Decline plan** explicitly declines the
+request without submitting feedback; dismissing the picker does not decline it.
+None of these actions sends an extra chat prompt or replaces your composer draft.
+The completed tool card retains Copilot's reported decision and a disclosed
+Markdown plan summary, with original inputs/results available in raw disclosures.
 
 **Autopilot** lets Copilot continue through successive steps from one prompt.
 Nimrod keeps the session Working across intermediate pauses, retaining tool
 cards and pending questions rather than announcing completion at each step.
-Queued configuration waits for the task's terminal boundary. **Stop** aborts
-the run without changing the saved mode or replacing your newer draft.
+When Copilot accepts task completion and subsequently becomes idle, Nimrod clears
+Working and releases queued configuration/idle-only commands—even if the Status
+area still says **Autopilot**. That mode is a saved setting, not ongoing activity.
+Rejected completion attempts and intermediate pauses keep the task Working.
+**Stop** aborts the run without changing the saved mode or replacing your newer draft.
 
 Mode is separate from model, thinking effort and permissions. Autopilot does not
 grant tool access: permission choices and questions still belong to this session.
 Nimrod never sends hidden "continue" prompts or replays your task, and reconnecting
 does not automatically continue pending work.
 
-The intermediate-idle handling follows the pinned SDK's completion waiter.
-Real CLI completion, sticky Autopilot mode, limits and Stop still need native
-acceptance; this is not a claim of full terminal-UI parity.
+A user-observed Plan → Autopilot handoff has successfully updated the Status area
+and begun execution on macOS. A captured completed run exposed the sticky-mode
+Working bug addressed above; native acceptance of the correction, limits and Stop
+remains pending. This is not a claim of full terminal-UI parity.
 
 Empty, isolated-session probes confirmed that ordinary mode changes work with
 CLI 1.0.98 without additional host steps. They did not verify model-switch
@@ -287,12 +307,22 @@ acceptance for these changes remain pending; new offline fixtures are unrun.
 ## Slash commands
 
 Type `/` for commands discovered from your connected Copilot runtime, including
-aliases. Where Copilot supplies argument hints or literal choices, suggestions
-continue after the command name. Tab/click or Enter on a typed argument inserts
-text only; it does not run the command. With an empty argument, Enter submits the
-parent command unless you explicitly select an argument with the arrow keys.
-Hints alone never prevent submission. Free-text arguments remain available;
-dynamic argument and directory completion are not currently supported.
+aliases. After an exact command name, Copilot's argument hints appear as muted
+inline text rather than another popup. These are placeholders, not draft text;
+Tab never inserts placeholder prose. Optional skills can be invoked bare.
+
+When Copilot advertises literal choices, typing a prefix shows the untyped
+completion inline: `/permissions al` shows `low-all` in muted text. **Tab** accepts
+the choice; **Up/Down** cycle matching choices and **Escape** dismisses guidance.
+Autocomplete defaults to **Tab only**: Enter follows the composer's normal
+submission behavior even with partial or arrow-selected suggestions. Choose
+**Settings → Interaction → Accept autocomplete with → Tab or Enter** to also
+accept partial/selected completions with Enter; exact matches still submit
+immediately. This has global defaults and project overrides; see [Settings](settings.md#interaction).
+With empty arguments, Enter submits the parent command. In **Tab or Enter** mode,
+explicitly arrow-selecting a choice makes Enter accept that choice instead. Free-text
+arguments remain available; dynamic argument and directory completion are not
+currently supported.
 
 Slash commands belong to **Copilot**, not Nimrod's application actions. When a
 command has no arguments and advertises argument choices, Nimrod first opens a
@@ -310,11 +340,12 @@ native verification.
 You can submit advertised slash commands while Copilot is working. They clear the
 submitted draft immediately and appear as pending **Copilot command** operation
 cards, without a literal user-turn preview or forced transcript navigation.
-Commands execute one at a time, in submission order, after the current agent turn
-reaches terminal idle; intermediate Autopilot pauses do not release them. For
-example, an advertised `/allow-all` queues like any other command—it is not
-rewritten into a different permission command. The advertised
-`/permissions allow-all` mutation retains its [live configuration path](#change-permissions-during-work), including when selected from the argument picker.
+Commands execute one at a time in submission order. The head command dispatches
+during work when its fresh metadata advertises live use; otherwise it waits for
+terminal idle. Intermediate Autopilot pauses do not release idle-only commands.
+For example, advertised `/allow-all` and `/permissions allow-all` use the same
+generic readiness rule and are never rewritten into another command or Nimrod
+action.
 
 You can edit a newer draft or queue more advertised commands while waiting;
 ordinary message submission still requires idle. Argument/returned-choice pickers
@@ -325,11 +356,22 @@ rolled back; unconfirmed effects show **Outcome unknown**. Late results never op
 a picker in another conversation or overwrite your draft. Command cards/output
 stay within the current connection and are not restored on Close/Resume.
 
+Invoked skills appear as one [skill disclosure](reading-conversations.md): the
+skill command is collapsed by default, with any arguments visible below it.
+Expand it to read the injected skill instructions and related-file context.
+Successful recognized skill invocations replace their temporary command card
+with that user turn; failed or unconfirmed commands retain their outcome card.
+Resumed expanded skill turns use the same presentation.
+
 New commands work automatically when they use supported SDK metadata and
 result/effect types: text/timeline output, completion, subcommand choices,
 model pickers and effects, or an explicit interactive agent-prompt result.
 Unknown commands are rejected with the draft kept. Unsupported results report
 an error—never an ordinary prompt fallback or automatic retry.
+
+Known slash-command errors appear directly on the command card as concise,
+wrapping text. Transport boilerplate and redundant failure disclosures are
+omitted; uncertain outcomes still retain explicit details.
 
 Harness commands remain independent from overlapping Nimrod actions. Copilot
 `/model` uses Copilot's picker/effect/persistence transaction; **Select model…**
@@ -346,6 +388,27 @@ session for an exact catalog argument, so Nimrod completes that narrow harness
 adapter through Copilot's SDK and reconciles the confirmed model. Supplying an
 explicit model argument bypasses the picker; richer model-command syntax is
 passed through without interpretation.
+
+`/config` changes Copilot defaults for future sessions. Type `/config` and a
+setting prefix to complete a known key; after the key, the inline hint changes
+to `[value]` and values remain free-form. Running `/config model`,
+`effortLevel`, `defaultMode`, `contextTier`, `autoTier` or
+`defaultPermissionMode` without a value opens a typed Copilot-owned picker.
+Other keys open a free-form value input when submitted without a value.
+Copilot validates, persists and confirms each write. This does not change the
+current session; use Nimrod's session controls or `/model` for live settings.
+Sensitive proxy passwords remain delegated to Copilot's native secure
+configuration UI.
+
+For `/skills info`, Copilot's command metadata omits the required skill name.
+Nimrod therefore shows Copilot's current skill catalog after you choose
+**info**, then invokes the original slash command with that selection.
+`/skills list` and ordinary command output remain on the generic path.
+
+For `/session rename`, Copilot similarly omits the required free-form name.
+Nimrod asks for the name in a Copilot-labelled input modal, then invokes the
+original command. Copilot's title event updates the Session sidebar; no Nimrod
+rename action is substituted.
 
 Command discovery, argument suggestions and modal/output fixtures are authored
 but unrun. This is not a claim of complete Copilot TUI command parity.

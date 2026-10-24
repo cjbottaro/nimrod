@@ -5,6 +5,9 @@
 #palette-context .acp-permission-description { font-family:var(--vscode-editor-font-family, monospace); }
 #palette-context pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
 #palette-context .acp-permission-command { padding:6px 8px; background:var(--modal-inset-surface); border-radius:4px; margin:6px 0 0; }
+#palette-context .copilot-plan-preview { overflow-wrap:anywhere; }
+#palette-context .copilot-plan-preview :is(h1, h2) { font-size:1.12em; }
+#palette-context .copilot-plan-preview :is(h3, h4, h5, h6) { font-size:1em; }
 #palette-remaining { margin-left:auto; color:var(--vscode-descriptionForeground); font-size:11px; white-space:nowrap; }
 #command-palette[data-retained] #palette-hint { margin-left:0; }
 #command-palette[data-retained] #palette-list .palette-item-label { white-space:normal; overflow:visible; overflow-wrap:anywhere; }

@@ -1,0 +1,73 @@
+[
+  {
+    "name": "rename",
+    "command": { "name": "rename", "kind": "builtin", "allowDuringAgentExecution": true },
+    "input": "Renamed fixture",
+    "result": { "kind": "text", "text": "Session renamed to: Renamed fixture" },
+    "event": { "type": "session.title_changed", "data": { "title": "Renamed fixture" } }
+  },
+  {
+    "name": "memory off",
+    "command": { "name": "memory", "kind": "builtin", "allowDuringAgentExecution": false },
+    "input": "off",
+    "result": { "kind": "text", "markdown": true, "text": "🧠 Memory is disabled." }
+  },
+  {
+    "name": "memory on",
+    "command": { "name": "memory", "kind": "builtin", "allowDuringAgentExecution": false },
+    "input": "on",
+    "result": { "kind": "text", "markdown": true, "text": "🧠 Memory is enabled." }
+  },
+  {
+    "name": "skills reload",
+    "command": { "name": "skills", "kind": "builtin", "allowDuringAgentExecution": false },
+    "input": "reload",
+    "result": { "kind": "text", "text": "Skills reloaded. Found 2 skills." },
+    "event": { "type": "session.skills_loaded", "data": { "skills": [] } }
+  },
+  {
+    "name": "permissions default",
+    "command": { "name": "permissions", "kind": "builtin", "allowDuringAgentExecution": true },
+    "input": "default",
+    "result": { "kind": "text", "text": "Permission policy: Manual Approval for this session." },
+    "event": { "type": "session.permissions_changed", "data": { "mode": "manual", "previousMode": "allow-all" } }
+  },
+  {
+    "name": "allow-all on",
+    "command": { "name": "allow-all", "aliases": ["yolo"], "kind": "builtin", "allowDuringAgentExecution": true },
+    "input": "on",
+    "result": { "kind": "text", "text": "Permission policy: Allow All for this session." },
+    "event": { "type": "session.permissions_changed", "data": { "mode": "allow-all", "previousMode": "manual" } }
+  },
+  {
+    "name": "allow-all off",
+    "command": { "name": "allow-all", "aliases": ["yolo"], "kind": "builtin", "allowDuringAgentExecution": true },
+    "input": "off",
+    "result": { "kind": "text", "text": "Permission policy: Manual Approval for this session." },
+    "event": { "type": "session.permissions_changed", "data": { "mode": "manual", "previousMode": "allow-all" } }
+  },
+  {
+    "name": "reset-allowed-tools",
+    "command": { "name": "reset-allowed-tools", "kind": "builtin", "allowDuringAgentExecution": true },
+    "result": { "kind": "text", "text": "Session tool and exact-path approvals have been reset." },
+    "event": { "type": "session.permissions_changed", "data": { "mode": "manual", "previousMode": "allow-all" } }
+  },
+  {
+    "name": "sandbox enable",
+    "command": { "name": "sandbox", "kind": "builtin", "allowDuringAgentExecution": false },
+    "input": "enable",
+    "result": { "kind": "text", "markdown": true, "text": "**Sandbox mode enabled**" }
+  },
+  {
+    "name": "sandbox disable",
+    "command": { "name": "sandbox", "kind": "builtin", "allowDuringAgentExecution": false },
+    "input": "disable",
+    "result": { "kind": "text", "text": "Sandboxing has been disabled." }
+  },
+  {
+    "name": "init suppress",
+    "command": { "name": "init", "kind": "builtin", "allowDuringAgentExecution": false },
+    "input": "suppress",
+    "result": { "kind": "text", "text": "Init suggestion suppressed for this repository." }
+  }
+]

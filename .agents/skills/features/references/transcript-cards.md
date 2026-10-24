@@ -17,7 +17,7 @@ One mounted card per invocation survives placement/lifecycle updates, preserving
 - `src/pi/tool-card.ts`: core incremental tool-card shell, indicator/ARIA, raw inputs and keyed output rendering. Per-shell `CardRendererController` routes creation and every patch through validated presentation; unsupported/failing renderers latch to raw fallback without resetting sibling shells. View removal/reset/disposal releases instances.
 - `src/pi/card-renderer.ts`, `card-plugins/`: shared mounted DOM instance contract (with a pure-presentation adapter), per-built-in tool/reasoning/parallel implementations and explicitly trusted executable/optional declarative tool catalog. The standalone `src/card-plugin-api.ts` owns supported types; plugin callbacks receive immutable data snapshots. [Card plugins](card-plugins.md) owns matching, loading and API scope. Tool selection is fixed per mounted shell; missing/incompatible/failed explicit renderers use retained raw recovery. Executable trust removal blocks managed callbacks/actions and disposes to raw recovery on the next event/update; it is not a sandbox or a global-code undo operation. `tool-presentation.ts` remains a compatibility export.
 - Edit sections are input-backed line-diff previews, not applied-file diffs. Their compact toolbar shows change counts, multi-edit position when needed, Wrap and Copy; unchanged lines remain context. Raw inputs follow the preview. Routine completed output remains in a closed Raw output disclosure; running/error/stopped output remains prominent. Generic cards retain their existing raw-input position; [Copilot inspection cards](card-plugins.md#copilot-inspection-cards) deliberately place core-owned Raw inputs after the result and retain original wrapped output in Raw output when presenting extracted native text. Raw inputs/Pi output remain readable. Plugins explicitly register keyed output viewports; core retains per-viewport inspection and lifecycle caps. Custom DOM also retains independent raw recovery when it omits raw sections.
-- `src/pi/card-shell.ts`: disclosure and existing live-output scroll helpers, re-exported by `tool-card.ts` for compatibility. `createCardSummary` mounts one decorative, non-focusable inline SVG triangle outside plugin-owned content for tool, reasoning, parallel, skill and raw-input/output summaries. `transcript.css` retains the 7px footprint, current-color fill, open-state rotation and question/answer alignment without a filled-square `clip-path`; lifecycle patches retain the arrow node. `test/card-disclosure-arrow.test.ts` covers shell adoption, raw recovery and retained identity; visual evidence is tracked in [verification](verification.md#evidence-boundaries).
+- `src/pi/card-shell.ts`: disclosure and existing live-output scroll helpers, re-exported by `tool-card.ts` for compatibility. `createCardSummary` mounts one decorative, non-focusable inline SVG triangle outside plugin-owned content for tool, reasoning, parallel, shared Pi/Copilot skill and raw-input/output summaries, including plugin-labelled Script/Output disclosures. `setCardSummaryLabel` updates a separate text span without replacing the arrow when those labels change. `transcript.css` retains the 7px footprint, current-color fill, open-state rotation and question/answer alignment without a filled-square `clip-path`; lifecycle patches retain the arrow node. `test/card-disclosure-arrow.test.ts` covers shell adoption, raw recovery and retained identity; visual evidence is tracked in [verification](verification.md#evidence-boundaries).
 - `src/pi/tool-disclosure.ts`: qualifying-update delay, minimum open dwell and manual-choice precedence.
 - `src/pi/reasoning-card.ts`, `parallel-card.ts`: core shell/indicator/disclosure rendering around bundled presentation; view removal/reset/disposal releases instances. Reasoning retains unchanged Markdown nodes but replaces them when text changes; do not claim preservation of focused inner nodes across changed Markdown.
 - Card summaries, indicators and previews have no `title` attributes: hovering does not show native tooltips, including after streaming/lifecycle updates.
@@ -26,6 +26,56 @@ One mounted card per invocation survives placement/lifecycle updates, preserving
 - Preserve connected spinner/disclosure nodes, manual toggle precedence, automatic disclosure timing and output scrolling; see [transcript interaction](transcript-interaction.md) and the disclosure contract below.
 
 Each Pi built-in selects its own metadata-matched mounted plugin; [card plugins](card-plugins.md#built-in-tool-dogfooding) owns the IDs, matching and implementation map. Read summaries can show requested line ranges, and write bodies show literal input-backed **Requested content** alongside Pi output, not a claim of successful execution. File/search/list output remains literal. The shared generic fallback/override remains available for unknown/custom tools.
+
+## Skill disclosures
+
+`src/skill-invocation.ts` owns the shared presentation-only `SkillInvocation`
+interface, `skillUserText` adapter and lazy disclosure renderer. Pi and Copilot
+supply their own parsers in `src/{pi,copilot}/skill-invocation.ts` through their
+existing `ConversationInteraction.userText` contributions. This is not a common
+command or harness protocol. ACP does not interpret either format.
+
+The summary retains the harness's command spelling (`/skill:name` for Pi,
+`/name` for Copilot). The skill body starts collapsed and renders Markdown only
+when opened; optional user arguments render below, outside the disclosure.
+Copilot's injected preamble, base directory and related-file listing remain
+inside the body. No empty argument section is added. Canonical expanded prompts
+and harness history are unchanged; assistant/example text is not reclassified.
+
+Pi recognizes its complete native `<skill>` block. Copilot recognizes the
+anchored explicit-invocation preamble plus base-directory envelope, accepts a
+matching optional `<skill-context>` wrapper, and splits the final literal
+`\n\nARGUMENTS: ` suffix supplied by the runtime. Unknown
+formats fall back to ordinary Markdown, not guessed skill contents or file reads.
+The format is a presentation compatibility boundary, not a supported invocation
+API. Ordinary command/tool semantics are unchanged; [Copilot commands](copilot-commands.md)
+owns command-card reconciliation for a recognized slash-skill result.
+
+Unchanged source text reuses its mounted node before parsing, and unchanged
+presentation fields retain rendered Markdown. Disclosure state survives routine
+full/dirty snapshots and hidden-session catch-up via the existing expanded map
+and previous-node path. No new scroll/focus owner, asynchronous renderer or
+history scan is introduced. Source caches are weak and cannot retain removed
+turns. Skill bodies use the same safe Markdown renderer as other user content;
+labels and Pi locations remain literal text.
+
+Fixtures: `test/skill-invocation.test.ts`, `test/copilot-skill-invocation.test.ts`,
+`test/conversation-view.test.ts` and `test/copilot-commands.test.ts` cover the
+parsers, lazy/no-op work, string/block turns, visible/absent arguments, disclosure
+identity, hidden catch-up, echo adoption, duplicate removal and unknown delivery.
+Execution/native evidence is recorded in [verification](verification.md#skill-disclosures).
+
+## Pi codemode groups
+
+Pi's explicit `parentToolCallId` survives execution updates, standalone/assistant adoption and full/dirty projection. `CodemodeGroups` in `src/pi/codemode-groups.ts` composes child articles beneath a root Pi codemode shell without rewriting canonical history or inventing a shared harness protocol. Unavailable parents leave children in normal flow; tool IDs retain the same mounted shells, disclosure owners and output viewports. Nested execution events stay in progress/interruption tracking but are excluded from peer parallel-tools overviews and result-processing overlays.
+
+The summary shows completed/discovered `n/m calls` plus a native progress element while the parent executes, then a settled call count. The denominator is dynamic, not a prediction; n/n does not settle the parent. Child failures remain visible even when the script succeeds. Parent processing indicators remain harness-owned, independently of the execution-only progress bar. Existing disclosure timing/manual precedence is unchanged.
+
+Full/structural paints alone reconcile child placement, recorded-call fallback and pruning. Output-only paints update the affected child and its own parent's small metadata aggregate, not historical rows or sibling renderers/viewports. `tool-card.ts` and `card-shell.ts` scope output selection to the owning shell, never nested children. Reset/disposal clears composition maps. Hidden/coalesced/revision-gap updates use existing delivery and full-recovery paths.
+
+Pi `nestedCalls` on saved tool results is retained immutably. It is a bounded record of names, inputs, status and optional error, **not child output**. Missing live children use the same `renderToolCard` callback, call-ID registry, renderer selection/personal overrides, themed status indicators and disclosure owner as live calls. Retained inputs and actual error text can supply previews/details; missing inputs/results stay absent with no placeholder prose or fabricated result bodies. Saved records are presentation-only and never enter canonical messages or live membership. Unchanged record identity skips renderer updates; a subsequent live row adopts the same shell before fallback bookkeeping is removed, and normal registry pruning/reset/disposal releases saved instances. Incomplete records show a lower-bound `+` count and a note. Real live children win over matching saved entries. No ID-prefix parsing or script-source inference.
+
+The `nimrod.codemode` plugin uses shared public `inputDisclosure` and `outputDisclosure` presentation fields for **Script** / **Output**; unknown/extra input fields retain the full Raw inputs shape. External overrides retain normal raw recovery and core-owned grouping. The [plugin contract](card-plugins.md) owns component details; [verification](verification.md#pi-codemode-groups) owns evidence.
 
 ## Completed Copilot questions
 

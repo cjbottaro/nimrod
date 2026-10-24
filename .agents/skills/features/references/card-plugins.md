@@ -17,17 +17,17 @@
 
 | Bundled inventory | Automated coverage entry points |
 | --- | --- |
-| Pi `nimrod.read`, `nimrod.bash`, `nimrod.edit-preview`, `nimrod.write`, `nimrod.grep`, `nimrod.find`, `nimrod.ls` | `test/builtin-tool-plugins.test.ts`, `test/edit-card.test.ts`, `test/console-output.test.ts`, `test/browser/builtin-tool-plugins.spec.ts` |
+| Pi `nimrod.read`, `nimrod.bash`, `nimrod.edit-preview`, `nimrod.write`, `nimrod.grep`, `nimrod.find`, `nimrod.ls`, `nimrod.codemode` | `test/builtin-tool-plugins.test.ts`, `test/edit-card.test.ts`, `test/console-output.test.ts`, `test/browser/builtin-tool-plugins.spec.ts` |
 | Pi `nimrod.tool`, explicit `nimrod.raw`, `nimrod.reasoning`, `nimrod.parallel` | `test/bundled-card-renderers.test.ts`, `test/tool-card.test.ts`, `test/reasoning-card.test.ts`, `test/tool-progress.test.ts` |
 | SDK `nimrod.copilot.tool`, `.shell`, `.read`, `.search`, `.fetch` | `test/copilot-tool-cards.test.ts`, `test/copilot-sdk-presentation.test.ts`, `test/copilot-web-cards.test.ts`, corresponding offline browser fixtures |
-| SDK router specializations: question/answer, SQL, skill, GitHub contents/code search, other MCP | `test/copilot-question-cards.test.ts`, `test/copilot-sql-cards.test.ts`, `test/copilot-sdk-presentation.test.ts` |
+| SDK router specializations: patch, question/answer, plan review, SQL, skill, GitHub contents/code search, other MCP | `test/copilot-patch-cards.test.ts`, `test/copilot-question-cards.test.ts`, `test/copilot-sql-cards.test.ts`, `test/copilot-sdk-presentation.test.ts` |
 | Internal `nimrod.acp.tool` | `test/acp-cards.test.ts`; no product creation/prompt recipe |
 
 Copilot IDs identify mount-time adapter families, not one ID per visible tool. The shared concrete SDK router can enhance a retained instance after names/categories/metadata arrive. For example, `other`-category SQL initially selects `nimrod.copilot.search`, then receives SQL presentation inside that instance; do not introduce result-dependent reselection or claim a nonexistent dedicated SQL renderer ID. Personal/external plugins retain their existing precedence. Optional Pi Web Access is not bundled.
 
 ## Built-in tool dogfooding
 
-- Each of Pi's seven built-ins has an independent API-v2 plugin: `read.ts` → `nimrod.read`, `bash.ts` → `nimrod.bash`, `edit.ts` → `nimrod.edit-preview`, `write.ts` → `nimrod.write`, `grep.ts` → `nimrod.grep`, `find.ts` → `nimrod.find`, `ls.ts` → `nimrod.ls`. Bash also matches the existing `shell`/`terminal` aliases. `registry.ts` selects by exported normalized `tools` metadata, independent of argument completeness. Each invocation owns its mounted instance; there is no per-tool shell, transport or privileged capability.
+- Each of Pi's eight built-ins has an independent API-v2 plugin: `read.ts` → `nimrod.read`, `bash.ts` → `nimrod.bash`, `edit.ts` → `nimrod.edit-preview`, `write.ts` → `nimrod.write`, `grep.ts` → `nimrod.grep`, `find.ts` → `nimrod.find`, `ls.ts` → `nimrod.ls`, `codemode.ts` → `nimrod.codemode`. Bash also matches the existing `shell`/`terminal` aliases. `registry.ts` selects by exported normalized `tools` metadata, independent of argument completeness. Each invocation owns its mounted instance; there is no per-tool shell, transport or privileged capability.
 - The pure tool plugins use `tool-shared.ts::toolPlugin`, the existing `presentationPlugin` adapter and public `context.renderPresentation`; edit retains its public-context custom DOM controls. Preserve adapter object identity (including when adding metadata) so existing registered source coverage avoids accumulated DOM text scans. Custom edit DOM still uses core compatibility inspection. Raw recovery, keyed outputs, immutable snapshots, mounted selection, disclosure, focus/scroll and hidden-session catch-up remain core-owned.
 - Each tool module owns its presentation callback and preview, with neutral `tool-input.ts` helpers for the unchanged partial-JSON string parser, field/path/search extraction and name normalization. `input-preview.ts` dispatches the same tool-owned preview functions for generic overrides and the parallel-tools overview; it is not the tool-body renderer. Edit no longer delegates to the generic tool renderer.
 - Read summaries include valid positive safe-integer requested `offset`/`limit` ranges (default start 1 only when offset is absent); malformed values do not invent ranges. Partial string arguments preserve complete top-level strings only; numeric ranges appear once structured/complete JSON is available. Output remains literal, without parsing fabricated file line numbers or image data.
@@ -62,6 +62,28 @@ The revocation-order follow-up adds `test/card-plugin-callback-guards.test.ts`: 
 - This is read-only transcript presentation **after** the SDK reports the decision result. The [Question picker](copilot-sdk.md#questions-and-custom-answers), custom-answer modal, FIFO/banner, focus restoration and request cancellation remain integration-owned and unchanged. Cards have no answer buttons or transport methods. Existing manual disclosure, hidden-session catch-up and scroll/focus behavior remain authoritative.
 - `test/copilot-question-cards.test.ts` embeds scrubbed local native shapes observed October 17–18, 2026 (without session/call/telemetry identities). Fixtures cover simple and schema-based questions, exact multiline/literal freeform answers, offered choices/raw recovery, generation → terminal enhancement, retained shell/indicator/reply/icon/raw disclosure/focus/inspection, malformed/error/cancel/interrupted results, source/MCP scoping, public helper bundling/validation and transition back to generic presentation. The list follow-up supplies the real safe-Markdown host and adds semantic ordered-list assertions plus literal HTML/Markdown/link/code/entity and multiline-option coverage; these follow-up fixtures are also unrun. These fixtures have not been run; no app build/launch, live provider request or session-file mutation was performed. Mandatory post-merge compile-check evidence is separate from test/native acceptance.
 
+## Copilot plan review cards
+
+`src/copilot/card-plugins.ts::planPresentation` enhances completed built-in
+`exit_plan_mode` calls through the same public `questionAnswerPresentation` helper
+as question/answer cards. The collapsed card says **Plan review** and retains the
+literal native `detailedContent` outcome; the disclosure renders the tool's
+`summary` arguments as Markdown in conversation typography. This is the supplied
+summary, not an invented copy of a separate plan file. Exact inputs and full
+native results remain core-owned raw disclosures. The full plan is reviewed in
+the separate [Plan review picker](copilot-sdk.md#plan-review-interaction).
+
+Enhancement requires SDK source, no MCP identity, terminal finished/result status,
+no error/interruption/generation phase, native successful completion, a current
+result match through `nativeResult`, and non-empty string `detailedContent`.
+There is no outcome parsing or inferred mode change from prose. Missing/unknown
+result detail, failures and interrupted calls remain generic. The existing mounted
+adapter, keyed summary/body/raw nodes, manual disclosure/focus and shared output
+scroll owner are reused; cards never settle callbacks or provide approval buttons.
+Scrubbed CLI 1.0.100 shapes and retained-node/fallback coverage live in
+`test/copilot-plan-cards.test.ts`; [verification](verification.md#copilot-plan-and-autopilot)
+owns execution/native evidence.
+
 ## Copilot inspection cards
 
 The same bundled shell/read/search components now accept explicit official SDK
@@ -81,6 +103,15 @@ and mounted instances retain identity. New SDK fixture acceptance is pending.
 - Public `displayFilePath(path, projectDirectory?)` (`src/card-display-path.ts`, re-exported through `card-plugin-ui.ts`) performs lexical component-aware formatting: shorten only a full owning-project ancestor; preserve outside absolute paths; resolve supplied relative paths/dot segments against a known project so `../outside` displays absolute. Exact project root displays `.`. Comparisons are conservative/case-sensitive, not filesystem canonicalization or symlink resolution. POSIX, drive and UNC display forms are covered by fixtures, not Windows native acceptance. Missing project context never invents a cwd; native/raw arguments, output, links and capture records remain untouched.
 - Both components request existing `rawInputsPlacement: 'after'`; output goes first and core-owned raw inputs/output recovery remain accessible. They use `definePresentationPlugin`/`context.renderPresentation`, preserving pure-adapter identity/source-coverage caching, registered keyed output viewports, append behavior, disclosure, focus, reader positions, errors/interruption and hidden-view catch-up. No plugin-specific shell, output cap, timer or action privileges.
 - `test/card-display-path.test.ts` adds project-prefix boundaries, relative/outside/traversal/root and display-only Windows/UNC cases. `test/copilot-tool-cards.test.ts` adds independent per-view contexts and raw-input preservation, and covers observed/scrubbed read/grep/glob shapes, capitalized identity, aliases, native unwrapping/raw preservation, partial inputs, requested ranges/EOF, literal markup, generic/Pi scoping, retained instances/focus/disclosures, error/standard-content fallback and external bundling of the same public helpers. `test/browser/copilot-tool-cards.spec.ts` uses the offline SDK fixture, injecting only SDK semantic events; it covers summary/output/raw and inspected viewport identity through completion without sending a prompt. Existing fixture identity defaults are unchanged. **These fixtures have not been run; no checks/build/app launch or live provider requests were performed.**
+
+## Copilot patch cards
+
+Exact built-in SDK `apply_patch` calls use **Apply patch** inside the existing mounted SDK router (`nimrod.copilot.tool` for edit-category calls), not a new result-selected plugin. Known Copilot identity and absence of both MCP identity fields are required; other harnesses/tools retain their existing presentation.
+
+- `src/copilot/patch-card.ts` inspects the observed plain-string `*** Begin Patch` / `*** End Patch` envelope. Update/Add/Delete file headers provide affected-file identities; a Move-to destination replaces its source for preview/counting rather than counting a rename twice. A single file previews its project-relative path (outside-project paths remain absolute); multiple files preview only **N files**, never the first path plus a total. The original complete patch is a literal diff-formatted **Requested patch**, never evidence of successful edits. Partial/non-string/unknown envelopes stay in core Raw inputs.
+- Only a terminal, non-error, non-interrupted native completion with `success:true`, an exact current flattened result match and Git-diff-shaped string `result.detailedContent` upgrades that same keyed viewport to **Applied patch**. The supplied short `result.content` remains a separate literal result. Unknown/mismatched/in-flight results stay literal beside the requested patch; errors use the existing native-message presentation. Independent live output is retained. No files are read, patched or reconstructed, and telemetry is not required.
+- Public `namedToolPresentation`, `displayFilePath` and keyed `format:'diff'` sections retain shared shell/disclosure/focus/output-scroll/raw-recovery ownership. Public `CardPresentation.diffStats:{added,removed}` adds retained green/red **+N −N** summary nodes with accessible labels, using the theme's existing diff colors and monospace typography. Complete requested patches supply requested line counts; delete requests omit old contents, so their aggregate counts stay absent until a recognized reported diff supplies them. Reported counts come only from complete unified-diff hunks, excluding file headers/context/newline markers; binary or malformed/incomplete hunks omit counts rather than falling back to requested totals. A bounded per-mount last-input/last-result cache avoids rescanning unchanged patch/diff strings; patch strings bypass JSON-record parsing. There are no transcript walks, asynchronous work, native capabilities or alternate output/scroll owners.
+- `test/copilot-patch-cards.test.ts` uses minimized/scrubbed CLI 1.0.98 native shapes observed in local October 19 transcript logs (plain patch arguments, result summary plus Git diff and fileEdits). It covers requested/reported transitions, exact raw recovery, malformed/partial/multi-path/add/delete/move inputs, literal markup, error/stopped/mismatched results, source/MCP boundaries, retained nodes/focus/disclosures, single/multi-file summaries, rename counting, requested/reported line totals and public count validation. [Verification](verification.md#copilot-patch-cards) owns execution status and native acceptance gaps.
 
 ## Copilot SQL cards
 

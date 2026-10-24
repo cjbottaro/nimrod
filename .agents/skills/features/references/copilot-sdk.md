@@ -34,9 +34,30 @@ in-process execution, an existing user's server or a user-installed SDK.
 The SDK launches the selected CLI with `--headless --no-auto-update --stdio`.
 Nimrod leaves authentication to the installed CLI; no tokens enter settings.
 
+## Harness-owned configuration discovery
+
+The shared `copilot/bridge.mjs` session config explicitly supplies
+`enableConfigDiscovery: true` to both `createSession` and exact-ID `resumeSession`.
+Copilot owns discovery, supported sources, precedence and policy for its native
+configuration, including skills; Nimrod does not scan for skills, inject discovery
+roots or copy skill bodies into prompts. This opts into the runtime's broader
+supported configuration discovery, not a skills-only loader. File-hook execution
+and other independently controlled features retain Copilot's own defaults and
+policy; discovery is not a blanket permission grant. Resume still disables
+transcript recovery and pending-work continuation.
+
+`test/fixtures/copilot-sdk.mjs` asserts the option and absence of host-injected
+roots for both paths. `test/copilot-bridge.test.ts` covers new/Resume connection
+and catalog reads without prompts. These fixtures are authored but unrun;
+installed-CLI discovery parity remains pending user acceptance.
+
 ## Distribution and native ownership
 
-- `copilot/bridge.mjs` imports the bundled official SDK, its concrete `copilot/configuration.mjs` adapter and the shared UI/bridge decision-scope validator `copilot/permissions.mjs`. The live permission helper `copilot/permission-configuration.mjs` is staged with those modules; all are staged checkout-locally, watched by `build.rs` and required by the bundle verifier. The bridge's JSON-line
+- `copilot/bridge.mjs` imports the bundled official SDK, its concrete
+  `copilot/configuration.mjs` adapter and the shared UI/bridge decision-scope
+  validator `copilot/permissions.mjs`. Those modules are staged
+  checkout-locally, watched by `build.rs` and required by the bundle verifier.
+  The bridge's JSON-line
   records are private Nimrod IPC, **not another harness protocol**.
 - `scripts/prepare-copilot.mjs`, called by `src-tauri/build.rs`, stages the bridge,
   SDK dist/package metadata and required dependency packages into ignored
@@ -231,6 +252,8 @@ retain the shared mounted decision surface and their existing native choices/can
 
 ### Questions and custom answers
 
+Agent questions implement the shared [dismiss-and-resume workflow](dismiss-and-resume.md), with SDK user-input semantics retained below.
+
 `src/copilot/question-interaction.ts` owns a session/connection-bound FIFO of SDK
 user-input callbacks. The **Question picker** uses `startRetainedSelection`, the
 same shared palette lifecycle as permissions, not an inline form above the
@@ -256,13 +279,16 @@ Stop/Close/disconnect retire the owning AbortSignal and close owned picker/child
 input; there is no ambiguous **Cancel request** question choice. Generation,
 entry, active-presentation and abort guards reject stale replies. No composer
 mutation, prompt submission, transcript entry, replay or follow change is involved.
-Plan review is unchanged. `test/copilot-questions.test.ts` and the question fixture
+Plan review has its separate [interaction owner](#plan-review-interaction).
+`test/copilot-questions.test.ts` and the question fixture
 in `test/shell.test.ts` cover literal/custom answers, freeform capability, FIFO,
 dismiss/review, nested cancel/empty input, retained draft/focus, background/modal
 priority, navigation, abort/disposal and stale input. These fixtures are authored
 but unrun; native macOS/Linux stacking, focus and visual acceptance remain pending.
 
 ### Permission choices and interaction
+
+Permission requests implement the shared [dismiss-and-resume workflow](dismiss-and-resume.md), with Copilot approval/denial semantics retained below.
 
 `copilot/permissions.mjs` owns the exact options and bridge validation for the
 concrete `CopilotDecision` permission union (declared in `permissions.d.mts`).
@@ -304,7 +330,11 @@ selection approves:
   rejection, retaining prominent policy/escalation notes. Unknown or incomplete
   scopes retain literal details and one-time approval/rejection.
 
-The separate [live permission configuration](live-permissions.md) invokes the exact advertised `/permissions allow-all` command through SDK command RPC, honours live-use metadata and confirms native mode. It is not a host decision or substitute approval policy; existing callback promises remain independently owned. Generic model configuration remains idle-only.
+The [Set permissions command shortcut](live-permissions.md) and composer slash
+commands use the same generic command queue and advertised live-use metadata.
+Neither is a host decision or substitute approval policy; existing callback
+promises remain independently owned. Generic model configuration remains
+idle-only.
 
 Every decision is checked against the bridge's retained original request using
 the same option builder; unrelated domains, broader MCP scopes, mismatched
@@ -440,18 +470,44 @@ deferred implementation and interactive continuation remain unsupported when
 their result flags are returned. Their existing explicit-error/disconnect
 fallback remains. Further acceptance needs isolated model-backed evidence or
 upstream clarification; no model-backed probe is authorized by the no-prompt
-probe. Native GUI, Linux, active-task Stop and sticky-mode completion are
-unverified. These probes establish only metadata/configuration behavior.
+probe. These probes establish only metadata/configuration behavior. Later
+user-observed native Plan → Autopilot evidence and remaining acceptance gaps
+are tracked in [verification](verification.md#copilot-plan-and-autopilot).
 
-Plan review now offers optional feedback and **Request changes** using the
-existing high-level callback's supported `{approved:false,feedback}` response.
-Approval may also carry feedback; Cancel discards it and returns only
-`{approved:false}`. UI-local choice IDs are separate from native action IDs, so
-future SDK action names cannot collide with Request changes. Feedback never
-uses Send, modifies the composer or creates synthetic transcript history.
-Authored, unrun shell/bridge fixtures cover these responses and draft/focus
-preservation; the configuration fixture records the observed `unchanged`
-model-status result.
+### Plan review interaction
+
+`src/copilot/plan-interaction.ts` owns a request-scoped FIFO independent of its
+retained palette page, following [dismiss-and-resume](dismiss-and-resume.md).
+The **Plan review picker** renders `planContent` (or summary fallback) through
+the shared safe-Markdown renderer in the palette's bounded context viewport.
+Advertised native actions retain exact values; a valid `recommendedAction` is
+marked, never auto-approved. Local action IDs cannot collide with SDK values.
+Only the owning selected session may present; background arrivals and other
+dialogs retain priority. Arrivals patch counts without rebuilding active content,
+filter, selection or nested feedback. Navigation suspends presentation without
+settling callbacks, and explicit dismissal survives switching away/back.
+
+Escape/native dismissal leaves the callback pending and retains a non-dismissable
+**Waiting for plan review · Review plan** session notice. **Request changes…**
+opens a nested host input; non-empty feedback returns `{approved:false,feedback}`.
+**Add feedback…** saves optional feedback for approval without settling the
+callback; **Edit feedback…** can replace/remove it. Child cancellation returns
+to the retained picker. **Decline plan** explicitly returns `{approved:false}`
+without feedback. Approval returns the exact advertised `selectedAction` once,
+optionally with saved feedback. None of these uses Send, modifies the composer,
+mutates mode optimistically or creates synthetic transcript history.
+Stop/disconnect/disposal abort the owning callback, retire banner/child/picker,
+and invalidate late feedback. Markdown links use existing native link validation;
+preview code has no independent transcript/code-action owner.
+
+Completed exit-plan tool presentation is separately owned by
+[plan review cards](card-plugins.md#copilot-plan-review-cards). The callback and
+native mode events remain authoritative, not the read-only card.
+`test/copilot-plans.test.ts` and shell fixtures cover dismissal/reopen, sequential
+arrivals, recommendation, nested feedback/cancellation, background/dialog priority,
+abort/stale replies, advertised-action validation and unchanged drafts/no prompts.
+Existing bridge validation remains in force. Execution and native evidence live
+in [verification](verification.md#copilot-plan-and-autopilot).
 
 Upstream evidence:
 - [Plan callback support](https://github.com/github/copilot-sdk/issues/1053)
@@ -466,12 +522,15 @@ consume semantic Working/completion state only. No universal Plan/Autopilot
 interface or host-generated continuation prompt is introduced.
 
 The pinned SDK's response waiter ignores root `session.idle` with
-`data.mode === 'autopilot'`. Nimrod follows that exact boundary in both the
-controller and bridge: intermediate idle neither completes/notifies nor cancels
-pending decisions, finalizes cards, or releases deferred configuration. The
-event's mode is not a new confirmed selection: sticky session mode continues to
-come from `mode.get`/`session.mode_changed`. Missing mode retains the SDK waiter's
-legacy terminal behavior. Unknown snapshot/event modes fail explicitly.
+`data.mode === 'autopilot'`, but observed CLI completion retains that mode on its
+final idle too. Nimrod's controller and bridge therefore retain a live-root
+accepted-completion marker only when `session.task_complete.data.success === true`
+while working. The following root idle is terminal even in sticky Autopilot mode.
+The completion event alone never settles work. Without that marker, intermediate
+Autopilot idle neither completes/notifies nor cancels pending decisions, finalizes
+cards, or releases deferred configuration. The event's mode is not a new confirmed
+selection: mode continues to come from `mode.get`/`session.mode_changed`. Missing
+mode retains legacy terminal behavior. Unknown snapshot/event modes fail explicitly.
 
 A non-Autopilot root idle ends active work once. An explicitly
 `aborted: true` idle is terminal even in Autopilot, reports Stopped and does not
@@ -481,13 +540,22 @@ terminal idle does not repeat completion refreshes. Late turn-start after
 Stop/failure cannot revive work; a new explicit prompt resets those flags.
 Child events and replay never complete the root run.
 
-`session.task_complete` is completion-review metadata, not independently
-quiescence: its `success` may be false. Objective updates can describe active,
-paused, cap-reached or completed objectives. Neither event is used to invent a
-terminal boundary or resume work. They remain available in native debug capture.
-The SDK waiter is source evidence; native final-event ordering, sticky-mode
-completion, limit exhaustion and abort behavior still require acceptance.
-Do not infer acceptance from synthetic fixtures.
+`session.task_complete` is a completion-review decision, not independently
+quiescence: rejected/missing/malformed `success` cannot arm terminal Autopilot idle.
+A later review without literal `success:true` clears prior acceptance. New root
+user/assistant/model-turn/model-call/tool starts and explicit prompts invalidate
+prior acceptance; child work does not. Replay and duplicate event IDs cannot arm
+or invalidate live completion. Stop, root failure, disconnect and settlement retire
+the marker. Final assistant text after acceptance supplies completion notification
+content; otherwise the accepted summary is used before the existing response
+fallback. No tool-name/prose parsing or new chat prompt is involved. Both layers
+release their work gates at the same terminal boundary; deferred configuration and
+idle-only commands can proceed. Duplicate terminal events do not repeat completion.
+
+Objective updates alone still cannot settle or resume work. The captured terminal
+sequence and current validation/native gaps are tracked in
+[verification](verification.md#copilot-plan-and-autopilot). Do not infer native
+acceptance of this correction from authored fixtures.
 
 Exit-plan choices remain scoped to their request/connection. The UI rejects
 missing/malformed action lists; the bridge rejects approval without an advertised

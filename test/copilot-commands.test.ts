@@ -1,25 +1,28 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
-import { copilotCommands, copilotSlashCommands, isCopilotModelCommand, parseCopilotCommand } from '../src/copilot/commands';
+import localStateCommands from './fixtures/copilot-local-state-commands.json' with { type: 'json' };
+import readOnlyCommands from './fixtures/copilot-read-only-commands.json' with { type: 'json' };
+import { copilotCommands, copilotSkillChoices, copilotSlashCommands, isCopilotModelCommand, isCopilotSessionRename, isCopilotSkillsInfo, parseCopilotCommand } from '../src/copilot/commands';
 import { CopilotSession, type CopilotSessionUi } from '../src/copilot/session';
 import type { BridgeRequest } from '../src/copilot/connection';
 import type { ConversationViewMessage } from '../src/conversation-view-host';
-import { copilotInteraction } from '../src/copilot/view-policy';
+import { copilotInteraction, copilotSessionActions } from '../src/copilot/view-policy';
 import { installSlashCompletion } from '../src/pi/slash-completion';
 
 const catalog = [{ name: 'permissions', aliases: ['perms'], description: 'Manage permissions', kind: 'builtin', allowDuringAgentExecution: true,
   input: { hint: 'Choose a permission operation', choices: [{ name: 'show', description: 'Show permissions' }, { name: 'reset', description: 'Clear approvals' }] } }];
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 const resultOnlyCatalog = catalog.map(({ input: _input, ...command }) => command);
-async function fixture(commandChoice?: CopilotSessionUi['commandChoice'], commands: unknown[] = catalog, models: unknown[] = []) {
+async function fixture(commandChoice?: CopilotSessionUi['commandChoice'], commands: unknown[] = catalog, models: unknown[] = [],
+  commandInput?: CopilotSessionUi['commandInput']) {
   const sent: BridgeRequest[] = [], published: ConversationViewMessage[] = [], notices: string[] = [], completions: boolean[] = [];
   const session: CopilotSession = new CopilotSession(async request => {
     sent.push(request);
     if (['usage', 'context'].includes(request.method)) queueMicrotask(() => session.receive({ kind: 'result', id: request.id, result: request.method === 'usage' ? {} : null }));
   }, {
     publish: message => published.push(message), changed() {}, identified() {}, disconnected() {}, completed(failed) { completions.push(failed); },
-    notice: message => notices.push(message), decision: async () => undefined, commandChoice,
+    notice: message => notices.push(message), decision: async () => undefined, commandChoice, commandInput,
   });
   const reply = (result: unknown, method = 'command') => {
     const request = [...sent].reverse().find(request => request.method === method)!;
@@ -40,6 +43,11 @@ test('SDK command metadata retains aliases, hints and choices, without synthetic
   assert.deepEqual(parseCopilotCommand('/permissions'), { name: 'permissions' });
   assert.equal(isCopilotModelCommand(copilotCommands([{ name: 'model', kind: 'builtin' }])[0]), true);
   assert.equal(isCopilotModelCommand(copilotCommands([{ name: 'model', kind: 'client' }])[0]), false);
+  const skills = copilotCommands([{ name: 'skills', kind: 'builtin' }])[0];
+  assert.equal(isCopilotSkillsInfo(skills, ' info '), true);
+  assert.equal(isCopilotSessionRename(copilotCommands([{ name: 'session', kind: 'builtin' }])[0], ' rename '), true);
+  assert.deepEqual(copilotSkillChoices({ skills: [{ name: 'a', description: 'Skill A', enabled: true }] }),
+    [{ id: 'a', label: 'a', detail: 'Skill A' }]);
   const interaction = copilotInteraction(() => undefined);
   assert.deepEqual(interaction.prepare('/permissions', {}), { kind: 'request', message: { type: 'command' }, preview: false, navigate: false });
   assert.equal(interaction.prepare('Hello', {}).kind, 'request');
@@ -50,7 +58,7 @@ test('argument suggestions insert text, preserve raw arguments, and blank Enter 
   try {
     const input = dom.window.document.querySelector('textarea')!, list = dom.window.document.querySelector<HTMLElement>('#suggestions')!;
     const inserted: string[] = [];
-    const completion = installSlashCompletion(input, list, value => inserted.push(value), copilotSlashCommands);
+    const completion = installSlashCompletion(input, list, value => inserted.push(value), copilotSlashCommands, () => 'tabOrEnter');
     completion.setCommands(catalog); input.focus();
     const type = (value: string) => { input.value = value; input.setSelectionRange(value.length, value.length); input.dispatchEvent(new dom.window.Event('input')); };
     const key = (value: string, init: KeyboardEventInit = {}) => {
@@ -58,7 +66,8 @@ test('argument suggestions insert text, preserve raw arguments, and blank Enter 
       input.dispatchEvent(event); return event;
     };
     type('/perms ');
-    assert.match(list.textContent!, /Show permissions/); assert.match(list.textContent!, /Choose a permission operation/);
+    assert.equal(list.hidden, true, 'argument hints no longer open a menu');
+    assert.equal(dom.window.document.querySelector('.composer-inline-suffix')!.textContent, '[Choose a permission operation]');
     assert.equal(key('Enter').defaultPrevented, false, 'bare command remains executable instead of selecting its first argument');
     type('/perms sh'); key('Tab');
     assert.equal(input.value, '/perms show '); assert.deepEqual(inserted, ['/perms show ']);
@@ -91,6 +100,110 @@ test('text commands invoke the SDK once, render labelled output, and never becom
   } finally { f.session.disconnect('fixture complete'); }
 });
 
+for (const captured of readOnlyCommands) test(`captured read-only /${captured.name} uses generic command output`, async () => {
+  const f = await fixture(undefined, [captured.command]);
+  try {
+    const text = `/${captured.command.name}${captured.input === undefined ? '' : ` ${captured.input}`}`;
+    const handling = f.session.handle({ type: 'command', id: captured.name, text });
+    assert.equal(f.sent.at(-1)?.method, 'command');
+    assert.equal(f.sent.at(-1)?.name, captured.command.name);
+    assert.equal(f.sent.at(-1)?.input, captured.input);
+    f.reply(captured.result); await handling;
+    const output = f.session.state.messages.at(-1)!;
+    assert.equal(output.role, 'command');
+    assert.equal(output.originLabel, `Copilot command · /${captured.command.name}`);
+    assert.equal(f.sent.some(request => request.method === 'prompt' || request.method === 'configure'), false);
+    assert.deepEqual(f.completions, []);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+for (const captured of localStateCommands) test(`captured local-state /${captured.name} uses generic output and authoritative events`, async () => {
+  const f = await fixture(undefined, [captured.command]);
+  try {
+    const text = `/${captured.command.name}${captured.input === undefined ? '' : ` ${captured.input}`}`;
+    const handling = f.session.handle({ type: 'command', id: captured.name, text });
+    if (captured.event) f.session.receive({ kind: 'event', event: { id: `event-${captured.name}`, ...captured.event } });
+    f.reply(captured.result); await handling;
+    assert.equal(f.session.state.messages.at(-1)?.role, 'command');
+    assert.equal(f.sent.some(request => request.method === 'prompt' || request.method === 'configure'), false);
+    if (captured.event?.type === 'session.title_changed') assert.equal(f.session.state.sessionName, 'Renamed fixture');
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('Copilot /skills info fills the omitted skill argument from the public harness catalog', async () => {
+  let choose!: (value: string | undefined) => void;
+  const commands = [{ name: 'skills', description: 'Manage skills', kind: 'builtin',
+    input: { hint: '', choices: [{ name: 'list', description: 'List skills' }, { name: 'info', description: 'Show skill details' }] } }];
+  const f = await fixture(async (title, choices) => {
+    assert.equal(title, 'Copilot /skills info');
+    assert.deepEqual(choices, [
+      { id: 'fixture-skill', label: 'fixture-skill', detail: 'Fixture details' },
+      { id: 'disabled-skill', label: 'disabled-skill', detail: 'Disabled · Disabled details' },
+    ]);
+    return new Promise(resolve => { choose = resolve; });
+  }, commands);
+  try {
+    const handling = f.session.handle({ type: 'command', id: 'skill-info', text: '/skills info' });
+    assert.equal(f.sent.at(-1)?.method, 'command-skills');
+    f.reply({ skills: [
+      { name: 'fixture-skill', description: 'Fixture details', enabled: true },
+      { name: 'disabled-skill', description: 'Disabled details', enabled: false },
+    ] }, 'command-skills');
+    await flush(); choose('fixture-skill'); await flush();
+    assert.equal(f.sent.at(-1)?.method, 'command-skills', 'revalidate the selected skill before invocation');
+    f.reply({ skills: [{ name: 'fixture-skill', description: 'Fixture details', enabled: true }] }, 'command-skills');
+    await flush();
+    assert.deepEqual(f.sent.at(-1) && { method: f.sent.at(-1)!.method, name: f.sent.at(-1)!.name, input: f.sent.at(-1)!.input },
+      { method: 'command', name: 'skills', input: 'info fixture-skill' });
+    f.reply({ kind: 'text', text: 'Fixture skill details' }); await handling;
+    assert.equal(f.sent.filter(request => request.method === 'command').length, 1);
+    assert.equal(f.sent.some(request => request.method === 'prompt'), false);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('cancelling Copilot /skills info picker invokes no command', async () => {
+  const commands = [{ name: 'skills', description: 'Manage skills', kind: 'builtin',
+    input: { hint: '', choices: [{ name: 'info', description: 'Show skill details' }] } }];
+  const f = await fixture(async () => undefined, commands);
+  try {
+    const handling = f.session.handle({ type: 'command', id: 'skill-info-cancel', text: '/skills info' });
+    f.reply({ skills: [{ name: 'fixture-skill', description: 'Fixture details', enabled: true }] }, 'command-skills');
+    await handling;
+    assert.equal(f.sent.some(request => request.method === 'command'), false);
+    assert.equal(f.session.state.configurationOperations?.some(operation => operation.text === '/skills info'), false);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('Copilot /session rename fills the omitted free-form name through a harness-owned input', async () => {
+  const commands = [{ name: 'session', aliases: ['sessions'], description: 'Manage sessions', kind: 'builtin',
+    input: { hint: '', choices: [{ name: 'rename', description: 'Rename this session' }] } }];
+  let requested = '';
+  const f = await fixture(undefined, commands, [], async title => { requested = title; return 'Renamed fixture'; });
+  try {
+    const handling = f.session.handle({ type: 'command', id: 'session-rename', text: '/sessions rename' });
+    await flush();
+    assert.equal(requested, 'Copilot /session rename');
+    assert.deepEqual(f.sent.at(-1) && { method: f.sent.at(-1)!.method, name: f.sent.at(-1)!.name, input: f.sent.at(-1)!.input },
+      { method: 'command', name: 'sessions', input: 'rename Renamed fixture' });
+    f.reply({ kind: 'text', text: 'Session renamed to: Renamed fixture' }); await handling;
+    assert.equal(f.sent.filter(request => request.method === 'command').length, 1);
+    assert.equal(f.sent.some(request => request.method === 'prompt'), false);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('blank or cancelled Copilot /session rename input invokes no command', async () => {
+  const commands = [{ name: 'session', description: 'Manage sessions', kind: 'builtin',
+    input: { hint: '', choices: [{ name: 'rename', description: 'Rename this session' }] } }];
+  for (const value of [undefined, '   ']) {
+    const f = await fixture(undefined, commands, [], async () => value);
+    try {
+      await f.session.handle({ type: 'command', id: `rename-${String(value)}`, text: '/session rename' });
+      assert.equal(f.sent.some(request => request.method === 'command'), false);
+      assert.equal(f.session.state.configurationOperations?.some(operation => operation.text === '/session rename'), false);
+    } finally { f.session.disconnect('fixture complete'); }
+  }
+});
+
 test('bare commands with advertised arguments open a picker before invoking, even when the SDK would return text', async () => {
   let choose!: (value: string | undefined) => void;
   const f = await fixture(async (title, choices) => {
@@ -108,6 +221,60 @@ test('bare commands with advertised arguments open a picker before invoking, eve
     const explicit = f.session.handle({ type: 'command', id: 'explicit', text: '/permissions show' });
     f.reply({ kind: 'text', text: 'Explicit report' }); await explicit;
     assert.equal(f.sent.filter(request => request.method === 'command').length, 2);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('Set permissions action invokes the advertised harness command through a Command card', async () => {
+  const f = await fixture(async (_title, choices) => choices.find(choice => choice.id === 'show')?.id);
+  try {
+    const action = copilotSessionActions(f.session).find(action => action.id === 'permissions');
+    assert.ok(action?.run);
+    const running = action.run(); await flush();
+    assert.equal(f.sent.at(-1)?.method, 'command');
+    assert.equal(f.sent.at(-1)?.name, 'permissions');
+    assert.equal(f.sent.at(-1)?.input, 'show');
+    assert.equal(f.session.state.configurationOperations?.at(-1)?.title, 'Copilot command');
+    f.reply({ kind: 'text', text: 'Permission policy: Manual Approval' }); await running;
+    assert.equal(f.sent.some(request => request.method === 'configure'), false);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('Copilot /config uses typed curated choices and the original Command card', async () => {
+  const command = {
+    name: 'config', kind: 'client', description: 'Configure defaults', allowDuringAgentExecution: false,
+    input: { hint: '[key]', valueHint: '[value]', choices: [
+      { name: 'model', description: 'Default model' }, { name: 'memory', description: 'Copilot setting' },
+    ] },
+    configValues: { model: [{ id: 'large', label: 'Fixture large', detail: 'large' }] },
+  };
+  const f = await fixture(async (title, choices) => {
+    assert.equal(title, 'Copilot /config model');
+    assert.equal(choices[0].label, 'Fixture large');
+    return 'large';
+  }, [command]);
+  try {
+    const handling = f.session.handle({ type: 'command', id: 'config-model', text: '/config model' }); await flush();
+    assert.deepEqual(f.sent.at(-1) && { method: f.sent.at(-1)!.method, name: f.sent.at(-1)!.name, input: f.sent.at(-1)!.input },
+      { method: 'command', name: 'config', input: 'model large' });
+    f.reply({ kind: 'text', text: 'Configured model for future Copilot sessions.' }); await handling;
+    assert.equal(f.session.state.configurationOperations?.at(-1)?.title, 'Copilot command');
+    assert.equal(f.sent.some(request => request.method === 'configure'), false);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('Copilot /config requests a free-form value for non-curated keys', async () => {
+  const command = {
+    name: 'config', kind: 'client', description: 'Configure defaults', allowDuringAgentExecution: false,
+    input: { hint: '[key]', valueHint: '[value]', choices: [{ name: 'memory', description: 'Copilot setting' }] },
+    configValues: {},
+  };
+  const f = await fixture(undefined, [command], [], async title => {
+    assert.equal(title, 'Copilot /config memory'); return 'false';
+  });
+  try {
+    const handling = f.session.handle({ type: 'command', id: 'config-memory', text: '/config memory' }); await flush();
+    assert.equal(f.sent.at(-1)?.input, 'memory false');
+    f.reply({ kind: 'text', text: 'Configured memory for future Copilot sessions.' }); await handling;
   } finally { f.session.disconnect('fixture complete'); }
 });
 
@@ -219,7 +386,8 @@ test('new catalog commands work mechanically; unknown, malformed and unsupported
       f.reply(result); await handling;
       const operation = f.session.state.configurationOperations!.at(-1)!;
       assert.equal(operation.phase, 'failed');
-      assert.match(operation.details!, /No.*fallback|Nothing was retried/);
+      assert.match(operation.inlineError!, /Unsupported|invalid/);
+      assert.equal(operation.details, undefined);
       assert.equal(f.published.some(message => message.type === 'submissionReceipt' && message.outcome === 'rejected'), false, 'the operation card owns the error');
     }
     assert.equal(f.sent.some(request => ['prompt', 'configure'].includes(request.method)), false);
@@ -254,7 +422,7 @@ test('finalization failure belongs to the queued command card without a duplicat
       await handling;
       const operation = f.session.state.configurationOperations!.at(-1)!;
       assert.equal(operation.phase, outcome === 'cancelled' ? 'failed' : 'unknown');
-      assert.match(operation.details!, /Native finalization/);
+      assert.match((outcome === 'cancelled' ? operation.inlineError : operation.details)!, /Native finalization/);
       assert.equal(f.published.some(message => message.type === 'submissionReceipt' && message.outcome !== 'accepted'), false);
       assert.equal(f.sent.filter(request => request.method === 'command').length, 1);
       assert.equal(f.sent.some(request => request.method === 'prompt'), false);
@@ -271,6 +439,46 @@ test('only an explicit interactive agent-prompt result sends model work', async 
     f.reply({ messageId: 'accepted' }, 'prompt'); await handling;
     assert.equal(f.session.state.messages[0].content, 'Visible command request');
   } finally { f.session.disconnect('fixture complete'); }
+});
+
+for (const withArguments of [false, true]) test(`recognized skill prompt replaces the command card and survives user echo (${withArguments ? 'arguments' : 'no arguments'})`, async () => {
+  const f = await fixture(undefined, [{ name: 'review-pr', aliases: ['review'], kind: 'skill' }]);
+  try {
+    const body = 'The user explicitly invoked the "/review-pr" skill. Follow its instructions now.\n\nBase directory for this skill: /fixture/review-pr\n\n# Review\n\nRead the diff.';
+    const input = withArguments ? 'https://github.com/fixture/project/pull/42' : '';
+    const plain = body + (input ? `\n\nARGUMENTS: ${input}` : '');
+    const prompt = withArguments ? plain.replace('\n\nBase directory', '\n\n<skill-context name="review-pr">\nBase directory') + '\n</skill-context>' : plain;
+    const handling = f.session.handle({ type: 'command', id: 'skill', text: `/review${input ? ` ${input}` : ''}` });
+    assert.equal(f.session.state.configurationOperations!.length, 1, 'accepted intent is visible immediately');
+    f.reply({ kind: 'agent-prompt', prompt, displayPrompt: `/review-pr ${input}` }); await flush();
+    const user = f.session.state.messages.find(message => message.role === 'user')!;
+    assert.equal(user.content, prompt, 'expanded content is available in the disclosure before the native echo');
+    assert.equal(f.sent.filter(request => request.method === 'prompt').length, 1);
+    f.session.receive({ kind: 'event', event: { id: 'skill-echo', type: 'user.message', data: { content: prompt } } });
+    f.reply({ messageId: 'accepted' }, 'prompt'); await handling;
+    assert.equal(f.session.state.configurationOperations!.length, 0, 'successful recognized skills have one user turn, not a duplicate command card');
+    assert.equal(f.session.state.messages.length, 1);
+    assert.equal(f.session.state.messages[0].key, user.key);
+    assert.equal(f.session.state.messages[0].content, prompt);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('unrecognized skill expansions and uncertain skill delivery retain their command outcome', async () => {
+  for (const unknown of [false, true]) {
+    const f = await fixture(undefined, [{ name: 'review', kind: 'skill' }]);
+    try {
+      const handling = f.session.handle({ type: 'command', id: 'skill-outcome', text: '/review' });
+      const prompt = unknown
+        ? 'The user explicitly invoked the "/review" skill. Follow its instructions now.\n\nBase directory for this skill: /fixture/review\n\n# Review'
+        : 'A future, unrecognized expansion format';
+      f.reply({ kind: 'agent-prompt', prompt, displayPrompt: '/review' }); await flush();
+      if (unknown) f.session.disconnect('Delivery was not confirmed');
+      else f.reply({ messageId: 'accepted' }, 'prompt');
+      await handling;
+      assert.equal(f.session.state.configurationOperations!.at(-1)!.phase, unknown ? 'unknown' : 'completed');
+      assert.equal(f.sent.filter(request => request.method === 'prompt').length, 1, 'never replay');
+    } finally { f.session.disconnect('fixture complete'); }
+  }
 });
 
 test('busy /allow-all and subsequent commands queue FIFO until terminal root idle, without prompts or draft effects', async () => {
@@ -336,6 +544,21 @@ test('queued commands revalidate revoked advertisement without invoking or repla
     await handling;
     assert.equal(f.sent.some(request => ['command', 'prompt'].includes(request.method)), false);
     assert.equal(f.session.state.configurationOperations![0].phase, 'failed');
-    assert.match(f.session.state.configurationOperations![0].details!, /not advertised/);
+    assert.match(f.session.state.configurationOperations![0].inlineError!, /not advertised/);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('known SDK command failures keep only the actionable harness message', async () => {
+  const f = await fixture(undefined, [{ name: 'rename', description: 'Rename session', kind: 'builtin' }]);
+  try {
+    const handling = f.session.handle({ type: 'command', id: 'rename-error', text: '/rename' });
+    const request = f.sent.at(-1)!;
+    f.session.receive({ kind: 'result', id: request.id,
+      error: 'Request session.commands.invoke failed with message: Usage: /rename <name>' });
+    await handling;
+    const operation = f.session.state.configurationOperations!.at(-1)!;
+    assert.equal(operation.phase, 'failed');
+    assert.equal(operation.inlineError, 'Usage: /rename <name>');
+    assert.equal(operation.details, undefined);
   } finally { f.session.disconnect('fixture complete'); }
 });

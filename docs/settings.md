@@ -12,7 +12,7 @@ Project settings shows effective values, not a second independent configuration.
 
 Overrides stay explicit even if they match the global value. Global edits update inheriting projects, but never replace explicit project values. The Appearance pane in global Settings links to open projects with overrides.
 
-Project overrides cover **theme and runtime paths** only. **Typography, translucency, zoom, modal animations and auto-follow after sending are global-only**, along with notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration. Project settings contains only the theme picker under Appearance and runtime paths under Runtime. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
+Project overrides cover **theme, autocomplete acceptance and runtime paths**. **Typography, translucency, zoom, modal animations and auto-follow after sending are global-only**, along with notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration. Project settings contains the theme picker under Appearance, autocomplete acceptance under Interaction and runtime paths under Runtime. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
 
 This layering applies only to Nimrod preferences. Pi retains its own configuration and precedence.
 
@@ -64,13 +64,30 @@ The preview contains prose, code and a composer sample. Selections apply immedia
 
 Installed-font discovery and visual behavior still need native acceptance on macOS; Linux remains unverified.
 
+## Interaction
+
+**Accept autocomplete with** applies to slash-command name suggestions and inline
+argument completions, across harnesses:
+
+- **Tab only (default):** Tab accepts the selected completion. Enter always follows
+  normal composer behavior—submit, or Shift+Enter for a newline—even when a
+  partial match or arrow-selected suggestion is showing.
+- **Tab or Enter:** Enter also accepts partial or arrow-selected suggestions.
+  Fully typed command names/arguments still submit directly, without adding a
+  redundant space. Tab remains available.
+
+This preference supports global defaults and project overrides. Changes apply
+immediately to already-open suggestions without altering the draft. Palette and
+modal selection are unchanged. It does not change the composer's submission or
+newline bindings.
+
 ## Notifications
 
 **Background session alerts** are on by default. Turn them off across windows, send a fixed-content delivery test, or refresh read-only macOS diagnostics. See [Notifications](notifications.md) for triggers, click behavior and troubleshooting.
 
 ## Diagnostics
 
-**Transcript debug logs** is off by default. Enable full-content local conversation traces for debugging; logs can contain secrets and are never uploaded. Logging can slow session processing when the writer falls behind; a sustained-wait warning clears automatically when it catches up. See [Transcript debug logs](transcript-logs.md) for storage, retention and troubleshooting.
+**Transcript debug logs** is off by default. Enable full-content local conversation traces for debugging; logs can contain secrets and are never uploaded. Logging is best-effort and never waits for disk during session delivery. Full buffers drop diagnostic records and report an incomplete capture rather than slowing session processing. See [Transcript debug logs](transcript-logs.md) for storage, retention and troubleshooting.
 
 **Performance diagnostics** are off by default. Enable timing-only in-memory history in global Settings, then choose **Capture performance report** in the affected project window’s command palette when typing or scrolling feels slow. Capture can also be bound to a shortcut. The project window’s notice strip shows capture progress and the saved path; the command’s detail also retains that path. See [Performance reports](performance-diagnostics.md) for privacy, local storage and limitations.
 
@@ -121,6 +138,7 @@ The global `settings.json` accepts comments and trailing commas:
   "appearance.modalAnimation": "subtle",
   "appearance.modalAnimationDuration": 500,
   "appearance.modalScanSpeed": 1000,
+  "interaction.autocompleteAccept": "tab",
   "notifications.enabled": true,
   "runtime.piPath": "/path/to/pi",
   "runtime.nodePath": "/path/to/node",
@@ -130,7 +148,7 @@ The global `settings.json` accepts comments and trailing commas:
 
 Personal [card plugins](card-plugins.md#personal-typescript-plugins) are discovered/compiled automatically from the dedicated user directory; `cards.autoLoad: false` disables this directory-trusted workflow. Existing manifests use `cards.plugins` / `cards.trustedPlugins`; `cards.renderers` overrides tool matching. Declarative manifests need no executable trust. They are configured in this file, not a dedicated Settings category. Package load errors use the shared notice strip, including while Settings is open; catalog changes affect newly mounted cards without restarting agents.
 
-The project file applies only `appearance.theme`, `runtime.piPath`, `runtime.nodePath`, and `runtime.copilotPath`. Earlier project entries for `appearance.zoom` and `appearance.autoFollowAfterSending` are ignored; their bytes/comments are preserved on unrelated saves, never copied into global preferences, and you can remove those obsolete entries manually. Other unsupported project keys still report a configuration error. Nimrod creates it only on an explicit override save, not when opening a project or Settings. There is no ancestor-directory discovery: the canonical project directory is the only project scope. You can choose whether to version-control `.nimrod/settings.json`; imported theme IDs refer to your global theme library.
+The project file applies only `appearance.theme`, `interaction.autocompleteAccept`, `runtime.piPath`, `runtime.nodePath`, and `runtime.copilotPath`. Earlier project entries for `appearance.zoom` and `appearance.autoFollowAfterSending` are ignored; their bytes/comments are preserved on unrelated saves, never copied into global preferences, and you can remove those obsolete entries manually. Other unsupported project keys still report a configuration error. Nimrod creates it only on an explicit override save, not when opening a project or Settings. There is no ancestor-directory discovery: the canonical project directory is the only project scope. You can choose whether to version-control `.nimrod/settings.json`; imported theme IDs refer to your global theme library.
 
 Omitted project keys inherit global settings; omitted global keys use defaults or runtime discovery. Imported themes live in `appearance.importedThemes`; [keybinding overrides](keybindings.md#configuration-file) live in `keybindings`. Pi's settings remain Pi-owned. [Drafts](drafts.md) use separate Rust-managed per-session files with debounced asynchronous saves; legacy webview drafts are ignored without migration.
 

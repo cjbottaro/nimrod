@@ -1,0 +1,130 @@
+[
+  {
+    "name": "usage",
+    "command": { "name": "usage", "kind": "builtin", "allowDuringAgentExecution": true },
+    "result": { "kind": "text", "text": "Session Usage\n\nChanges: +0 -0\nRequests: 0 AI Credits (0s)" }
+  },
+  {
+    "name": "env",
+    "command": { "name": "env", "kind": "builtin", "allowDuringAgentExecution": true },
+    "result": { "kind": "text", "markdown": true, "text": "**Custom Instructions**\n\n- `AGENTS.md`\n\n**MCP Servers**\n\nNo MCP servers configured." }
+  },
+  {
+    "name": "list-dirs",
+    "command": { "name": "list-dirs", "kind": "builtin", "allowDuringAgentExecution": true },
+    "result": { "kind": "text", "text": "Allowed directories for file access:\n\n1. /fixture/project\n2. /state/temp\n\nTotal: 2 directories" }
+  },
+  {
+    "name": "permissions show",
+    "command": {
+      "name": "permissions",
+      "kind": "builtin",
+      "allowDuringAgentExecution": true,
+      "input": {
+        "hint": "[default|allow-all|show]",
+        "choices": [
+          { "name": "default", "description": "Require approval for each request" },
+          { "name": "allow-all", "description": "Auto-approve all permission requests" },
+          { "name": "show", "description": "Show current permission status" }
+        ]
+      }
+    },
+    "input": "show",
+    "result": { "kind": "text", "text": "Permission policy: Manual Approval for this session." }
+  },
+  {
+    "name": "session info",
+    "command": {
+      "name": "session",
+      "kind": "builtin",
+      "allowDuringAgentExecution": true,
+      "input": {
+        "hint": "",
+        "choices": [
+          { "name": "info", "description": "Show session details" },
+          { "name": "files", "description": "List files changed this session" },
+          { "name": "plan", "description": "Show the session plan" }
+        ]
+      }
+    },
+    "input": "info",
+    "result": { "kind": "text", "text": "Session Info\n\nID: fixture-session\nWorking directory: /fixture/project\nName: Fixture" }
+  },
+  {
+    "name": "session files",
+    "command": { "name": "session", "kind": "builtin", "allowDuringAgentExecution": true },
+    "input": "files",
+    "result": { "kind": "text", "text": "No files in workspace yet." }
+  },
+  {
+    "name": "session plan",
+    "command": { "name": "session", "kind": "builtin", "allowDuringAgentExecution": true },
+    "input": "plan",
+    "result": { "kind": "text", "text": "No plan exists for this session." }
+  },
+  {
+    "name": "mcp list",
+    "command": {
+      "name": "mcp",
+      "kind": "builtin",
+      "allowDuringAgentExecution": false,
+      "input": {
+        "hint": "",
+        "choices": [
+          { "name": "list", "description": "Open the MCP server list" },
+          { "name": "show", "description": "Show details for a server" }
+        ]
+      }
+    },
+    "input": "list",
+    "result": { "kind": "text", "text": "No MCP servers configured." }
+  },
+  {
+    "name": "session checkpoints",
+    "command": { "name": "session", "kind": "builtin", "allowDuringAgentExecution": true },
+    "input": "checkpoints",
+    "result": { "kind": "text", "text": "No checkpoints yet. Checkpoints are created when context is compacted." }
+  },
+  {
+    "name": "skills list",
+    "command": { "name": "skills", "kind": "builtin", "allowDuringAgentExecution": false },
+    "input": "list",
+    "result": { "kind": "text", "text": "Available Skills\n\nbuiltin:\n  - fixture-skill\n    Fixture skill description\n\nFound 1 skill." }
+  },
+  {
+    "name": "plugin list",
+    "command": { "name": "plugin", "kind": "builtin", "allowDuringAgentExecution": false },
+    "input": "list",
+    "result": { "kind": "text", "text": "No plugins installed." }
+  },
+  {
+    "name": "memory show",
+    "command": { "name": "memory", "kind": "builtin", "allowDuringAgentExecution": false },
+    "input": "show",
+    "result": { "kind": "text", "markdown": true, "text": "🧠 Memory\n\nStatus: enabled" }
+  },
+  {
+    "name": "remote show",
+    "command": { "name": "remote", "kind": "builtin", "allowDuringAgentExecution": false },
+    "input": "show",
+    "result": { "kind": "text", "text": "Remote control is disabled for this session." }
+  },
+  {
+    "name": "sandbox status",
+    "command": { "name": "sandbox", "kind": "builtin", "allowDuringAgentExecution": false },
+    "input": "status",
+    "result": { "kind": "text", "text": "Current sandbox status: disabled for this session" }
+  },
+  {
+    "name": "sandbox policy",
+    "command": { "name": "sandbox", "kind": "builtin", "allowDuringAgentExecution": false },
+    "input": "policy",
+    "result": { "kind": "text", "text": "Command sandboxing is disabled, so no policy is in force and commands run unrestricted." }
+  },
+  {
+    "name": "mcp show",
+    "command": { "name": "mcp", "kind": "builtin", "allowDuringAgentExecution": false },
+    "input": "show",
+    "result": { "kind": "text", "text": "No MCP servers configured." }
+  }
+]

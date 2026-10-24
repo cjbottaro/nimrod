@@ -11,6 +11,32 @@ function card(doc: Document, block: Parameters<typeof renderToolCard>[1], open =
   return renderToolCard(doc, { toolStatus: "result", ...block }, createToolDetails(doc, new Map(), "tool", open));
 }
 
+test('public input/output disclosures retain identity and recover unsupported input shapes', () => {
+  const doc = document();
+  const renderer = { id: 'fixture.disclosures', supports: () => true, mount: () => ({
+    update: (data: { executionOutput?: string }) => ({
+      title: 'Custom script', inputDisclosure: { label: 'Script', field: 'source' }, outputDisclosure: 'Output',
+      sections: [{ key: 'result', label: 'Result', text: data.executionOutput || '' }],
+    }), dispose() {},
+  }) };
+  const args = { source: '<literal code>' };
+  const tool = renderToolCard(doc, { name: 'custom', arguments: args, executionOutput: 'first', toolStatus: 'running' }, doc.createElement('details'), renderer);
+  const input = tool.querySelector<HTMLDetailsElement>(':scope > .tool-raw-inputs')!;
+  const output = tool.querySelector<HTMLDetailsElement>('.card-output-disclosure')!;
+  input.open = true; output.open = true;
+  assert.equal(input.querySelector('summary')!.textContent, 'Script');
+  assert.equal(input.querySelector('pre')!.textContent, args.source);
+  updateToolCard(doc, tool, { name: 'custom', arguments: args, executionOutput: 'second', toolStatus: 'running' });
+  assert.equal(tool.querySelector('.card-output-disclosure'), output);
+  assert.equal(tool.querySelector(':scope > .tool-raw-inputs'), input);
+  assert.equal(output.open, true); assert.equal(input.open, true);
+  assert.equal(output.querySelector('.tool-output')!.textContent, 'second');
+  updateToolCard(doc, tool, { name: 'custom', arguments: { ...args, extra: 1 }, executionOutput: 'second' });
+  assert.equal(input.querySelector('summary')!.textContent, 'Raw inputs');
+  assert.match(input.querySelector('pre')!.textContent!, /"extra": 1/);
+  assert.equal(tool.querySelector('literal'), null);
+});
+
 test("incomplete tool arguments show a preparation spinner without placeholder previews", () => {
   const doc = document();
   for (const name of ["bash", "read", "Agent", "steer_subagent"]) {

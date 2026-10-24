@@ -56,7 +56,10 @@ they have the same visible purpose.
 - Execute slash commands through the owning harness command interface.
 - Never replace `/model`, `/permissions`, `/mcp` or another harness command with
   a Nimrod action.
-- Never implement a Nimrod action by submitting slash text.
+- A Nimrod action may be an explicit harness-command shortcut when the concrete
+  integration contributes it. It must enter the same command owner/lifecycle,
+  produce a Command card and invoke the harness command API—not submit slash
+  text as an ordinary prompt or impersonate a separate native mutation.
 - Shared Nimrod pickers and operation cards may present harness work; UI reuse
   does not change ownership.
 - Harnesses remain authoritative for command meaning, arguments, persistence,
@@ -110,6 +113,80 @@ raw values and harness labels; do not infer executable actions from prose.
 Unknown/malformed results remain unsupported until their contract is
 implemented.
 
+## Command cards
+
+Every accepted slash command starts with an operation lifecycle, but its settled
+presentation is a specialized **Command card**, not a requirement that every
+result resemble a configuration-change card.
+
+The Command card owns one invocation from accepted intent through terminal
+outcome:
+
+- Create it immediately after local validation accepts the command.
+- Retain one stable card/key while queued, collecting interaction, waiting for
+  harness readiness, invoking and settling.
+- Keep it in the shared bottom-pinned stack while any accepted work remains
+  pending, including a human picker/input or a harness-required idle boundary.
+- Shimmer only its command title while pending.
+- Put typed command results into that same card rather than appending a separate
+  request card and response row.
+- Preserve the command text, ordering, reader intent, focus and newer drafts.
+- Keep command output connection-local; never manufacture harness history.
+
+Settled presentation adapts to the semantic result:
+
+| Result | Command-card presentation |
+| --- | --- |
+| Text/Markdown report | Result body inside the retained card |
+| Confirmed state change | Compact command plus harness confirmation when useful; authoritative UI projections update separately |
+| Known rejection | Concise wrapping harness error inline |
+| Output-free completion | Minimal settled command card |
+| Agent prompt | Card records the command transition; actual user/assistant turns remain separate harness conversation history |
+| Unknown/not applied | Explicit operation outcome and diagnostic Details |
+
+This specialization reuses operation-card identity, pending placement,
+cancellation, settlement, failure/uncertainty semantics and accessibility. It
+does not force reports, state changes and agent prompts into identical terminal
+layouts. A slash command is one operation, so separate request/response cards
+are inappropriate unless the harness actually reports independent operations.
+
+### Deferred execution and readiness
+
+An accepted slash command should execute as soon as its concrete harness
+semantics permit; immediate dispatch is not required. Acceptance creates the
+Command card immediately, while the owning integration waits for an
+authoritative readiness transition.
+
+- Pending cards remain pinned and shimmering while queued, collecting required
+  user interaction, or waiting for the harness's supported dispatch boundary.
+- Dispatch at the earliest safe boundary reported by the concrete integration:
+  for example terminal idle, or an advertised live-use capability.
+- Do not poll, stop work, reconnect, submit a hidden prompt, replay the command
+  or treat a child/intermediate idle event as readiness unless the harness
+  contract explicitly does.
+- Preserve accepted FIFO ordering within one command owner unless that harness
+  defines independent semantic domains. An independent live-capable owner may
+  bypass an unrelated queue only when the concrete contract guarantees it.
+- A command accepted during work remains bound to its originating session and
+  exact advertised command/arguments. Revalidate catalog and choice provenance
+  immediately before dispatch.
+- Cancellation removes the pinned card only while the entire command can still
+  be withdrawn. After possible dispatch, retain the honest confirmed or unknown
+  outcome.
+- On terminal success/failure/known cancellation, unpin the retained card and
+  place it in normal transcript flow at its ordered settlement boundary. Later
+  output never drags it back to the bottom.
+
+`/permissions <setting>` is the reference generic live-capable case. The command
+queue reads the advertised live-use metadata and dispatches through the ordinary
+harness command interface as soon as that metadata permits; authoritative
+permission events reconcile UI state. It needs no permission-specific slash
+executor. Copilot contributes **Set permissions…** as a shortcut that enqueues
+the same advertised `/permissions` command, opens its harness choices and
+produces the same Command card. A future harness can contribute an equivalent
+shortcut for its own permission command. No universal permission command name,
+configuration setting or mutation executor is inferred.
+
 ## UI effects and authoritative reconciliation
 
 Some commands only render output; others affect Nimrod projections. Never parse
@@ -162,6 +239,12 @@ catalog state. Pass richer syntax through untouched when its grammar is not
 public. Record the exact interface gap and removal condition so a later
 SDK/agent improvement can retire the adapter.
 
+For terminal-client-only commands absent from harness discovery, synthesize a
+command only when public harness APIs can provide authoritative discovery,
+validation, mutation and confirmation. Document the pinned compatibility
+catalog separately from dynamic metadata. Never parse terminal screen output at
+runtime or route the adapter through an unrelated Nimrod action.
+
 ## Compatibility audit
 
 Do not discover exceptions by blindly invoking every command. Commands can
@@ -204,7 +287,8 @@ new version still needs it.
 - Background results and modal choices stay bound to the originating session;
   they never navigate or steal focus.
 - Busy behavior comes from the concrete harness. Queue accepted command intent
-  only when the integration documents that lifecycle.
+  and keep its Command card pinned only when the integration documents that
+  lifecycle/readiness.
 - Unknown effects do not become success-shaped output.
 - Operation-specific failures belong on the operation card, not duplicated in a
   session notice.

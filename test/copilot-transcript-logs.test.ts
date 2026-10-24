@@ -5,7 +5,7 @@ import type { BridgeRequest } from '../src/copilot/connection';
 import { createTranscriptLog } from '../src/transcript-logs';
 
 const tick = async () => { for (let index = 0; index < 12; index++) await Promise.resolve(); };
-function fixture(enabled = true) {
+function fixture(enabled = true, write?: () => Promise<void>) {
   const sent: BridgeRequest[] = [], lines: string[] = [], errors: string[] = [];
   const capture = createTranscriptLog({
     write: async batch => {
@@ -16,6 +16,7 @@ function fixture(enabled = true) {
         assert.equal(record.source.agent, 'copilot');
       }
       lines.push(...batch);
+      await write?.();
     }, failure: message => errors.push(message), recovered() {},
   });
   capture.setEnabled(enabled);
@@ -45,6 +46,31 @@ function fixture(enabled = true) {
 }
 const event = (id: string, type: string, data: Record<string, unknown>, agentId?: string) => ({
   id, type, data, timestamp: '2026-10-17T12:00:00.000Z', parentId: null, ...(agentId ? { agentId } : {}),
+});
+
+test('SDK sends, decisions, Stop and completion remain independent of a blocked logger', async () => {
+  let release!: () => void;
+  const blocked = new Promise<void>(resolve => { release = resolve; });
+  const f = fixture(true, () => blocked);
+  let diagnostic: Promise<void> | undefined;
+  try {
+    await f.connect();
+    diagnostic = f.capture.flush();
+    const sending = f.session.handle({ type: 'prompt', id: 'independent', text: 'Offline fixture' });
+    assert.ok(f.sent.some(request => request.method === 'prompt'));
+    const prompt = f.sent.find(request => request.method === 'prompt')!;
+    f.session.receive({ kind: 'result', id: prompt.id, result: null }); await sending;
+    f.session.receive({ kind: 'permission', id: 'independent-permission', request: { kind: 'read' } });
+    await tick(); assert.ok(f.sent.some(request => request.method === 'decision'));
+    const stopping = f.session.handle({ type: 'stop' });
+    const cancel = f.sent.find(request => request.method === 'cancel'); assert.ok(cancel);
+    f.session.receive({ kind: 'result', id: cancel.id, result: null }); await stopping;
+    f.session.receive({ kind: 'event', event: event('stopped', 'session.idle', { aborted: true }) });
+    assert.equal(f.session.state.busy, false);
+    const segment = JSON.parse(f.lines[0]).captureId;
+    f.capture.writeFailed(segment, 'fixture asynchronous disk failure');
+    assert.equal(f.session.state.sessionUnavailable, false, 'logging failure cannot disconnect the session');
+  } finally { f.capture.setEnabled(false); release(); await diagnostic; f.close(); }
 });
 
 test('SDK native tool/input/permission lifecycle reaches the real JSONL sink without Pi/ACP translation', async () => {

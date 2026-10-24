@@ -47,8 +47,9 @@ Already implemented:
 - Optional feedback on approval and Request changes via
   `{approved:false,feedback}`. Cancel declines without sending feedback.
 - Ordinary prompts sent once; no Nimrod-owned autonomous continuation loop.
-- Root Autopilot idle does not complete work, cancel pending decisions or release
-  queued configuration. Explicit aborted idle is terminal.
+- Intermediate root Autopilot idle does not complete work, cancel pending decisions
+  or release queued configuration. Current source also recognizes an accepted
+  root completion followed by sticky Autopilot idle; explicit aborted idle is terminal.
 - Root/child separation and replay suppression.
 
 Evidence and gaps:
@@ -62,9 +63,25 @@ Evidence and gaps:
   `status:"unchanged"` accompanied `modeApplied:true` and an actual mode change.
 - A distinct-plan-model request on an empty session did not actually change the
   selected model. It is **not** evidence of successful model restoration.
-- Actual plan execution, sticky Autopilot completion, limit exhaustion,
-  compaction confirmation and distinct-model handoff remain unaccepted.
+- At this initial baseline, actual plan execution, sticky Autopilot completion,
+  limit exhaustion, compaction confirmation and distinct-model handoff were
+  unaccepted; subsequent ordinary-handoff evidence is linked below.
 - No native GUI acceptance was established.
+
+## Subsequent native evidence
+
+The user has exercised the ordinary **Continue with Autopilot** path and observed
+confirmed Autopilot mode plus initial implementation activity in Nimrod on macOS.
+The existing trace corroborates approval and the native mode transition. This
+narrows the original acceptance TODO; it does not close it. See the canonical
+[evidence and remaining gaps](../features/references/verification.md#copilot-plan-and-autopilot).
+The subsequent retained Plan review picker/banner and read-only decision card
+still need native acceptance; the earlier inline UI was used for that observation.
+A later captured completed run exposed the sticky-mode Working bug. The controller
+and bridge now pair accepted root completion with subsequent idle, rather than
+copying the SDK waiter's mode-only exclusion; correction fixtures and native gaps
+are recorded in the same verification section. Do not rerun paid work or mutate the
+user's conversation to validate this without explicit authorization.
 
 ## Unfinished problem
 

@@ -34,7 +34,7 @@ acceptance. [Transcript debug logs](transcript-logs.md) can capture actual input
 results and metadata for a reproducible fixture; do not paste unrelated log content
 or credentials into reports.
 
-## Pi: seven built-in tools
+## Pi: built-in tools
 
 These require a **Pi session** with the named tools enabled. Use the tools directly,
 not a shell substitute. Recipes that create files use `nimrod-card-demo.txt` only;
@@ -49,6 +49,7 @@ choose another filename if it already exists. Do not overwrite existing work.
 | `grep` | `Use grep to search README.md for Nimrod. Do not use bash.` | Pattern/path preview; literal matches. |
 | `find` | `Use find with pattern **/*.md and path docs. Do not use bash.` | Glob/path preview and literal filenames. |
 | `ls` | `Use ls to list docs. Do not use bash.` | Directory preview and literal listing. |
+| `codemode` | `Use codemode to read README.md and package.json concurrently, then print only their character counts. Do not modify files.` | Requires Pi codemode enabled. One group with two independent child cards, dynamic n/m progress while running, then a settled count; Script and Output disclosures. Resume may retain child inputs/status but not outputs. |
 
 For a multiple-substitution edit, ask for `alpha → ALPHA` and `gamma → GAMMA` in
 one edit invocation using that tool's supported input. If the harness makes two
@@ -70,6 +71,47 @@ an existing card without replacing it.
 | Find files | `Use your file-pattern search tool to find **/*schema* under src. Do not use a shell or read file contents.` | **Find files**, pattern and supplied scope; literal results. A different native argument shape may retain generic presentation. |
 | Local content search | `Use rg with pattern TODO, paths src, output_mode content and glob *.ts. Do not use bash or web search.` | **Search**, full pattern, scope and file filter. No matches is still a valid result. |
 | Skill | `Use the skill tool to load the installed skill named <installed-skill-name>. Do not install anything or perform its workflow; just load it.` | **Use skill** plus its real name and native outcome. Replace the placeholder with a skill available to that Copilot session. Missing skills can show errors; the card does not install them. |
+
+## Copilot patches
+
+In a disposable project/worktree, ask:
+
+```text
+Use apply_patch to add card-patch-demo.txt containing "before", then use a second
+apply_patch call to change it to "after". Do not use shell redirection or another
+editing tool. Leave the file for inspection.
+```
+
+Expect **Apply patch** with the affected path for one file (project-relative when
+inside this project), or simply **N files** for multiple files. The preview also
+shows green **+N** and red **−N** line counts when available: requested counts
+while running, then counts from the successful reported diff. A move counts as
+one file; delete requests have no old contents, so their line totals appear only
+after a recognized reported diff. Expanding a complete request shows a colored
+**Requested patch**. A recognized successful native result
+replaces it with **Applied patch**, showing Copilot's reported Git diff and a short
+file-change result. Failed/interrupted calls never label the request as applied.
+**Raw inputs** and **Raw output** retain the exact original patch and result details.
+The card does not independently verify disk contents or provide an Apply button.
+
+## Copilot plan review
+
+In a disposable Copilot project, select **Plan** and send:
+
+```text
+Prepare a small plan to add a README example. Do not implement it yet. When the
+plan is ready, use your plan-review tool so I can choose how to continue.
+```
+
+When Copilot calls `exit_plan_mode`, expect the **Plan review picker** with a
+rendered plan and offered actions. Escape should leave a **Review plan** banner;
+reopening must not submit a decision. Try nested feedback cancellation before
+choosing an action. **Finish planning** is the non-implementation choice when
+advertised; choose Autopilot only when you intend to authorize implementation.
+After the tool completes, expect a read-only **Plan review** transcript card with
+Copilot's literal outcome, a disclosed Markdown summary and raw inputs/results.
+This recipe has not been exercised for the new UI; see
+[Plan and Autopilot](copilot.md#plan-and-autopilot) for remaining limitations.
 
 ## Copilot SQL
 

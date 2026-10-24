@@ -220,7 +220,16 @@ fn validate_message(value: &Value) -> Result<(), String> {
         return Err("Invalid Copilot SDK bridge record".into());
     }
     match value["method"].as_str() {
-        Some("initialize" | "list" | "connect" | "cancel" | "commands" | "usage" | "context") => {}
+        Some(
+            "initialize"
+            | "list"
+            | "connect"
+            | "cancel"
+            | "commands"
+            | "command-skills"
+            | "usage"
+            | "context",
+        ) => {}
         Some("command")
             if value["name"].as_str().is_some_and(|name| {
                 !name.is_empty()
@@ -228,7 +237,6 @@ fn validate_message(value: &Value) -> Result<(), String> {
                         .chars()
                         .any(|c| c.is_whitespace() || c.is_control() || c == '/')
             }) && value.get("input").is_none_or(|input| input.is_string()) => {}
-        Some("permission-change") if value["value"].as_str() == Some("allow-all") => {}
         Some("prompt") => validate_prompt(value)?,
         Some("configure")
             if matches!(
@@ -369,7 +377,7 @@ pub async fn start_copilot(
         let stderr = child.stderr.take().ok_or("Missing bridge stderr")?;
         let (writer, writes) = mpsc::channel(32);
         let (stop, stopped) = oneshot::channel();
-        let output = Output::channel(window.clone(), on_event);
+        let output = Output::channel(on_event);
         let task = tokio::spawn(supervise(
             child, stdin, stdout, stderr, writes, stopped, output,
         ));

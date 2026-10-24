@@ -24,10 +24,16 @@ export interface CardSection {
 export interface CardPresentation {
   title: string;
   preview?: string;
+  /** Display-only line counts; adapters distinguish requested from confirmed changes. */
+  diffStats?: { added: number; removed: number };
   /** Read-only question/reply summary; title is the question. No decision controls. */
   questionAnswer?: { answer: string };
   /** Core-owned raw inputs default before the body; renderers may request them below it. */
   rawInputsPlacement?: 'before' | 'after';
+  /** Compact display of a sole string input field; other shapes retain Raw inputs. */
+  inputDisclosure?: { label: string; field: string };
+  /** Optional retained disclosure around output sections. */
+  outputDisclosure?: string;
   sections: readonly CardSection[];
   members?: readonly { key: string; title: string; preview?: string }[];
 }
