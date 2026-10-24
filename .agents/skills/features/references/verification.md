@@ -15,8 +15,8 @@ errors and cleanup details are separate, and native group failures now identify
 phase/group without weakening observed-exit/reservation semantics.
 
 New real-draft-store/startup/error-correlation fixtures are authored **unrun**.
-The required post-merge compile check is pending. Only the existing log and CLI
-version were inspected; no server connection, prompt, user-session mutation,
+The required post-merge `mise run check` passed on `main` (TypeScript and Rust
+compilation only). Only the existing log and CLI version were inspected; no server connection, prompt, user-session mutation,
 build, app launch or actual shutdown was performed for this task. Post-fix
 startup and the native EPERM mechanism remain unverified. See [startup contract](../../codex-integration/references/startup.md).
 
