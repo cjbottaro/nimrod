@@ -63,8 +63,7 @@ retains an honest unknown outcome.
 
 ## Code and evidence
 
-- `src/session-backend.ts`: internal session action supports a session-bound
-  runner; it does not infer permission capabilities.
+- `src/harness-contract.ts`, `session-actions.ts`: registered actions require a session-bound runner or explicit configuration target; permission actions are never inferred from configuration names.
 - `src/copilot/view-policy.ts`: contributes **Set permissions…** from the fresh
   advertised builtin command.
 - `src/copilot/session.ts`, `command-queue.ts`, `commands.ts`: generic command
