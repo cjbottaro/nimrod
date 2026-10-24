@@ -85,6 +85,10 @@ incomplete; tagged persistence is integration-owned. Existing ACP fixtures remai
 but unrun. See the [Codex integration skill](../../codex-integration/SKILL.md)
 for current mappings/scope and [verification](verification.md#codex-integration) for evidence.
 
+## Retained question presentation
+
+`src/question-interaction.ts` owns the actual presentation/FIFO/input responsibility extracted from Copilot for two concrete consumers: Copilot SDK questions and Codex experimental question batches. `QuestionPrompt` supplies only text/header, literal choice labels/details, freeform availability and an optional answer-size bound. `QuestionUi` supplies the shared retained palette and child input, guarded eligibility, counts/banner and error effects. `QuestionAnswer` returns the literal answer plus whether the user entered text. Dismissal does not settle a request; abort/disposal does, without inventing a protocol reply. Concrete adapters retain native IDs, schema validation, batching and permission/mode meaning. This is not a session controller or universal interaction protocol; existing lifecycle/configuration interfaces are unchanged. New Codex and existing Copilot fixtures are authored/unrun for this extraction; [Codex questions](../../codex-integration/references/questions.md) and [verification](verification.md#codex-questions) own mappings/evidence.
+
 ## Candidate inventory
 
 Names below are working labels, not pre-approved exported interfaces. Extract only when the named consumer and implementation evidence justify it.

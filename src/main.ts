@@ -5,6 +5,8 @@ import { CodexSessionHistory, codexHistoryKey } from './codex/session-history';
 import { nativeCodexTransport } from './codex/native';
 import { codexSessionLifecycle, codexScope } from './codex/session-lifecycle';
 import { codexInteraction } from './codex/view-policy';
+import { CodexQuestionInteraction } from './codex/question-interaction';
+import type { CodexQuestionRequest, CodexQuestionAnswers } from './codex/questions';
 import { CodexApprovalInteraction } from './codex/approval-interaction';
 import type { CodexApproval, CodexApprovalDecision } from './codex/protocol';
 import { CopilotSession, type CopilotDecision } from './copilot/session';
@@ -343,7 +345,7 @@ window.addEventListener('unload', () => {
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
   pluginLoading.dispose();
   sessionContextMenu.dispose(); sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); unlistenLinkErrors(); deletions.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
-  for (const tab of tabs) { codexApprovals.get(tab)?.dispose(); copilotPermissions.get(tab)?.dispose(); copilotQuestions.get(tab)?.dispose(); copilotPlans.get(tab)?.dispose(); tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.lifecycle.disconnect('Window closed'); }
+  for (const tab of tabs) { codexQuestions.get(tab)?.dispose(); codexApprovals.get(tab)?.dispose(); copilotPermissions.get(tab)?.dispose(); copilotQuestions.get(tab)?.dispose(); copilotPlans.get(tab)?.dispose(); tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.lifecycle.disconnect('Window closed'); }
   keybindingDispatch.dispose(); unlistenProjectSettings();
   unlistenProjectPicker(); palette.dispose();
 }, { once: true });
@@ -478,6 +480,7 @@ function presentConversation(tab: Tab | undefined): void {
   if (presented !== tab) {
     if (presented) {
       copilotSession(presented)?.cancelCommands();
+      codexQuestions.get(presented)?.setActive(false);
       codexApprovals.get(presented)?.setActive(false);
       copilotPermissions.get(presented)?.setActive(false);
       copilotQuestions.get(presented)?.setActive(false);
@@ -491,7 +494,7 @@ function presentConversation(tab: Tab | undefined): void {
     }
     presented = tab;
     conversation.hidden = !tab;
-    if (tab) { tab.root.hidden = false; codexApprovals.get(tab)?.setActive(true); tab.view.setActive(true); tab.notices.setActive(true); copilotPermissions.get(tab)?.setActive(true); copilotQuestions.get(tab)?.setActive(true); copilotPlans.get(tab)?.setActive(true); }
+    if (tab) { tab.root.hidden = false; codexQuestions.get(tab)?.setActive(true); codexApprovals.get(tab)?.setActive(true); tab.view.setActive(true); tab.notices.setActive(true); copilotPermissions.get(tab)?.setActive(true); copilotQuestions.get(tab)?.setActive(true); copilotPlans.get(tab)?.setActive(true); }
     syncPopouts();
   }
   for (const item of tabs) {
@@ -654,7 +657,11 @@ function startCodexHistory(): CodexSessionHistory | undefined {
   if (!workspace || unloading || !codexReady || stored(codexHistoryKey(workspace)) !== true) return;
   if (!codexHistory) {
     const project = workspace;
-    codexHistory = new CodexSessionHistory(project, nativeCodexTransport(project, () => ({ cli: runtime.current().codex, generation: codexGeneration }), true), error => historyError('codex', 'Codex', String(error)));
+    codexHistory = new CodexSessionHistory(project, nativeCodexTransport(project, () => ({ cli: runtime.current().codex, generation: codexGeneration }), true), error => historyError('codex', 'Codex', String(error)), {
+      transcriptLog: settingsSurface.transcriptLog,
+      interactionFailure: failure => { if (!unloading) notices.report({ id: `history:codex-interaction:${++noticeSequence}`, operation: 'Codex catalog interaction',
+        message: `Codex catalog requested an interaction Nimrod could not handle (${failure.method}). No answer or approval was supplied.`, details: JSON.stringify(failure, null, 2) }); },
+    });
   }
   return codexHistory;
 }
@@ -1275,6 +1282,37 @@ function requestSessionChoice(tab: Tab, details: HTMLElement, options: { id: str
     });
   });
 }
+const codexQuestions = new WeakMap<Tab, CodexQuestionInteraction>();
+function requestCodexQuestion(tab: Tab, request: CodexQuestionRequest, signal: AbortSignal): Promise<CodexQuestionAnswers | undefined> {
+  if (signal.aborted || unloading || tab.closing || !tabs.includes(tab)) return Promise.resolve(undefined);
+  let interaction = codexQuestions.get(tab);
+  if (!interaction) {
+    const inputOwner = `${tab.id}:codex-question-input`;
+    const canPresent = () => !unloading && tabs.includes(tab) && presented === tab && !tab.closing && !tab.restarting && !tab.deleting && !tab.ended
+      && !settings.isOpen && !document.querySelector('dialog[open]:not(#command-palette)');
+    interaction = new CodexQuestionInteraction({
+      document, canPresent,
+      start: dismiss => canPresent() ? palette.startRetainedSelection('Codex question', dismiss) : undefined,
+      input: question => dialogs.input(question, undefined, inputOwner, 'Submit answer'),
+      cancelInput: () => dialogs.cancel(inputOwner),
+      changed: delta => { tab.inputCount += delta; if (tabs.includes(tab)) updateTab(tab); },
+      banner: (count, review) => {
+        const id = `${tab.id}:codex-question`;
+        if (!count) { notices.resolve(id); return; }
+        notices.report({ id, owner: tab.id, operation: 'Codex questions',
+          message: `Waiting for input · ${count} ${count === 1 ? 'question' : 'questions'}`,
+          presentation: 'pending-action', severity: 'info', dismissible: false,
+          actions: [{ label: 'Answer question', enabled: canPresent, run: review }] });
+      },
+      error: message => { if (!unloading && tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:codex-question-error:${++noticeSequence}`, owner: tab.id, operation: 'Answer Codex question', message }); },
+    });
+    codexQuestions.set(tab, interaction);
+  }
+  const result = interaction.request(request, signal), token = tab.token;
+  if (token) void notifySession('input', { valid: () => !signal.aborted && !unloading && tabs.includes(tab) && tab.token === token && !tab.closing && !tab.ended,
+    selected: () => presented === tab && !settings.isOpen, session: 'Codex', target: { session: tab.id, token } });
+  return result;
+}
 const codexApprovals = new WeakMap<Tab, CodexApprovalInteraction>();
 function requestCodexApproval(tab: Tab, request: CodexApproval, signal: AbortSignal): Promise<CodexApprovalDecision> {
   if (signal.aborted || tab.closing || !tabs.includes(tab)) return Promise.resolve('cancel');
@@ -1342,6 +1380,14 @@ async function launchCodex(tab: Tab, acceptedAction = false): Promise<void> {
       if (next !== signature) { signature = next; if (state.busy) tab.failed = false; updateTab(tab); if (tab.lifecycle.identity) persistTabs(); }
     },
     approval: (request, signal) => requestCodexApproval(tab, request, signal),
+    question: (request, signal) => requestCodexQuestion(tab, request, signal),
+    interactionFailure: failure => {
+      if (!valid() || tab.closing) return;
+      const guidance = settingsSurface.transcriptLog.enabled ? 'Transcript debug logging is enabled; inspect it for the raw request.' : 'Enable Transcript debug logs before another attempt to capture the raw request.';
+      notices.report({ id: `${tab.id}:codex-interaction:${++noticeSequence}`, owner: tab.id, operation: 'Codex interaction',
+        message: `Codex requested an interaction Nimrod could not handle (${failure.method}). No answer or approval was supplied. ${guidance}`,
+        details: JSON.stringify(failure, null, 2) });
+    },
     notice: message => { if (valid() && !tab.closing) notices.report({ id: `${tab.id}:codex:${++noticeSequence}`, owner: tab.id, operation: 'Codex', message }); },
     disconnected: message => {
       if (!valid()) return;
@@ -1866,6 +1912,7 @@ function disposeTab(tab: Tab): void {
   if (!tabs.includes(tab)) return;
   tab.closing = true;
   tab.root.dispatchEvent(new Event('nimrod-dispose-images'));
+  codexQuestions.get(tab)?.dispose();
   codexApprovals.get(tab)?.dispose();
   copilotPermissions.get(tab)?.dispose(); copilotQuestions.get(tab)?.dispose(); copilotPlans.get(tab)?.dispose();
   tab.notices.dispose(); notices.store.resolveOwner(tab.id);
@@ -1881,6 +1928,7 @@ function disposeTab(tab: Tab): void {
 function detachTab(tab: Tab): void {
   if (!tabs.includes(tab)) return;
   tab.closing = true;
+  codexQuestions.get(tab)?.dispose();
   codexApprovals.get(tab)?.dispose();
   copilotPermissions.get(tab)?.dispose(); copilotQuestions.get(tab)?.dispose(); copilotPlans.get(tab)?.dispose();
   tab.notices.dispose(); notices.store.resolveOwner(tab.id);

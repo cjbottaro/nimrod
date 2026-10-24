@@ -254,8 +254,9 @@ retain the shared mounted decision surface and their existing native choices/can
 
 Agent questions implement the shared [dismiss-and-resume workflow](dismiss-and-resume.md), with SDK user-input semantics retained below.
 
-`src/copilot/question-interaction.ts` owns a session/connection-bound FIFO of SDK
-user-input callbacks. The **Question picker** uses `startRetainedSelection`, the
+`src/copilot/question-interaction.ts` maps SDK user-input callbacks into the
+session-bound presentation FIFO in `src/question-interaction.ts`, also used by
+Codex without sharing response semantics. The **Question picker** uses `startRetainedSelection`, the
 same shared palette lifecycle as permissions, not an inline form above the
 composer. The question is the context above searchable literal SDK choices;
 choosing one returns `{answer: choice, wasFreeform:false}` without rewriting it.

@@ -1,3 +1,4 @@
+import { codexQuestionRequest, codexQuestionAnswers, type CodexQuestionRequest, type CodexQuestionAnswers } from './questions';
 import type { ImageContent } from '../image-attachments';
 import packageInfo from '../../package.json';
 import { JsonRpcConnection, RpcConnectionError, RpcResponseError, isRecord, isRpcId, type RpcId, type RpcRecord } from '../json-rpc-connection';
@@ -8,6 +9,7 @@ import { item, nonempty, page, record, thread, turn, type CodexApproval, type Co
  * Framing/size bounds, executable discovery and observed owned-process exit are NOT this port.
  */
 export interface CodexWriter { write(packet: CodexPacket): void | Promise<void>; }
+export interface CodexInteractionFailure { method: string; requestId: RpcId; reason: string; }
 export interface CodexClientHooks {
   /** Identity validation and draft binding must finish synchronously before replay/publication. */
   identified?(thread: CodexThread, settings: Readonly<RpcRecord>): void;
@@ -16,6 +18,8 @@ export interface CodexClientHooks {
   deleted?(threadId: string): void;
   /** Remains pending on modal dismissal. Owner retirement/resolution aborts the signal. */
   approval?(request: CodexApproval, signal: AbortSignal): Promise<CodexApprovalDecision>;
+  question?(request: CodexQuestionRequest, signal: AbortSignal): Promise<CodexQuestionAnswers | undefined>;
+  interactionFailure?(failure: CodexInteractionFailure): void;
   disconnected?(error: RpcConnectionError): void;
 }
 interface StartingTurn { observedId?: string; completed?: boolean; }
@@ -62,7 +66,7 @@ export class CodexClient {
     this.state = 'initializing';
     try {
       await this.rpc('initialize', { clientInfo: { name: 'nimrod', title: 'Nimrod', version: packageInfo.version },
-        capabilities: { experimentalApi: false, requestAttestation: false } }, value => {
+        capabilities: { experimentalApi: true, requestAttestation: false } }, value => {
         const result = record(value, 'initialization'); nonempty(result.userAgent, 'user agent');
         // Send in the ordered response callback, not a continuation after later wire events.
         this.connection.notify('initialized', {}); this.state = 'ready';
@@ -266,16 +270,44 @@ export class CodexClient {
     this.state = value.status === 'inProgress' ? 'working' : 'idle';
   }
   private request(method: string, value: unknown, signal: AbortSignal, id: RpcId): Promise<unknown> {
-    if (method !== 'item/commandExecution/requestApproval' && method !== 'item/fileChange/requestApproval') throw new RpcResponseError(-32601, 'Codex request is not supported by Nimrod');
+    let pending: Promise<unknown>;
+    try { pending = this.routeRequest(method, value, signal, id); }
+    catch (error) { this.reportInteractionFailure(method, id, error); throw error; }
+    return pending.catch(error => {
+      if (!signal.aborted) this.reportInteractionFailure(method, id, error);
+      throw error;
+    });
+  }
+  private reportInteractionFailure(method: string, requestId: RpcId, error: unknown): void {
+    this.hooks.interactionFailure?.({ method, requestId, reason: error instanceof Error ? error.message : String(error) });
+  }
+  private routeRequest(method: string, value: unknown, signal: AbortSignal, id: RpcId): Promise<unknown> {
+    if (method === 'item/tool/requestUserInput') {
+      const request = codexQuestionRequest(record(value, 'question request'));
+      if (!this.hooks.question) throw new RpcResponseError(-32601, 'Codex questions are unavailable in this client');
+      return this.ownedDecision(request, signal, id, abort => this.hooks.question!(request, abort)
+        .then(answers => ({ answers: codexQuestionAnswers(request, answers) })));
+    }
+    if (method !== 'item/commandExecution/requestApproval' && method !== 'item/fileChange/requestApproval')
+      throw new RpcResponseError(-32601, 'This Codex interaction method is not supported by Nimrod');
     const params = record(value, 'approval');
-    // Live resume may omit turns, but the server's thread-scoped request itself
-    // supplies authoritative active-turn identity before history hydration.
-    if (this.bound && params.threadId === this.bound.id && this.state === 'working' && !this.currentTurn && !this.startingTurn)
-      this.currentTurn = { id: nonempty(params.turnId, 'approval turn ID'), completed: false };
-    if (!this.bound || params.threadId !== this.bound.id || this.state !== 'working' || params.turnId !== this.activeTurnId)
-      throw new RpcResponseError(-32602, 'Approval does not belong to the active Nimrod thread and turn');
-    nonempty(params.itemId, 'approval item ID');
     if (!this.hooks.approval) throw new RpcResponseError(-32601, 'Codex approvals are unavailable');
+    return this.ownedDecision(params, signal, id, abort => this.hooks.approval!({
+      kind: method === 'item/commandExecution/requestApproval' ? 'command' : 'fileChange',
+      threadId: params.threadId as string, turnId: params.turnId as string, itemId: params.itemId as string, native: params,
+    }, abort).then(decision => {
+      if (!['accept', 'acceptForSession', 'decline', 'cancel'].includes(decision)) throw new RpcResponseError(-32602, 'Unsupported Codex approval decision');
+      return { decision };
+    }));
+  }
+  /** Shared callback ownership mechanics; question/approval schemas remain concrete above. */
+  private ownedDecision(params: { threadId?: unknown; turnId?: unknown; itemId?: unknown }, signal: AbortSignal, id: RpcId, run: (signal: AbortSignal) => Promise<unknown>): Promise<unknown> {
+    // A live resume may provide active identity in its request before history hydrates.
+    if (this.bound && params.threadId === this.bound.id && this.state === 'working' && !this.currentTurn && !this.startingTurn)
+      this.currentTurn = { id: nonempty(params.turnId, 'decision turn ID'), completed: false };
+    if (!this.bound || params.threadId !== this.bound.id || this.state !== 'working' || params.turnId !== this.activeTurnId)
+      throw new RpcResponseError(-32602, 'Interaction does not belong to the active Nimrod thread and turn');
+    nonempty(params.itemId, 'decision item ID');
     const controller = new AbortController();
     const abort = () => {
       controller.abort();
@@ -283,14 +315,11 @@ export class CodexClient {
     };
     signal.addEventListener('abort', abort, { once: true });
     this.decisions.set(id, { turnId: params.turnId as string, controller });
-    let pending: Promise<CodexApprovalDecision>;
-    try { pending = this.hooks.approval({ kind: method === 'item/commandExecution/requestApproval' ? 'command' : 'fileChange',
-      threadId: this.bound.id, turnId: params.turnId as string, itemId: params.itemId as string, native: params }, controller.signal); }
-    catch (error) { pending = Promise.reject(error); }
-    return pending.then(decision => {
-      if (controller.signal.aborted) throw new RpcResponseError(-32800, 'Codex approval is no longer pending');
-      if (!['accept', 'acceptForSession', 'decline', 'cancel'].includes(decision)) throw new RpcResponseError(-32602, 'Unsupported Codex approval decision');
-      return { decision };
+    let pending: Promise<unknown>;
+    try { pending = run(controller.signal); } catch (error) { pending = Promise.reject(error); }
+    return pending.then(result => {
+      if (controller.signal.aborted) throw new RpcResponseError(-32800, 'Codex interaction is no longer pending');
+      return result;
     }).finally(() => {
       signal.removeEventListener('abort', abort);
       if (this.decisions.get(id)?.controller === controller) this.decisions.delete(id);

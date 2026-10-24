@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CodexSession } from '../src/codex/session';
+import { CodexSession, type CodexSessionUi } from '../src/codex/session';
+import type { TranscriptLogRecord } from '../src/transcript-logs';
 import type { CodexPacket } from '../src/codex/protocol';
 import type { ConversationViewMessage } from '../src/conversation-view-host';
 import { codexScope, codexSessionLifecycle } from '../src/codex/session-lifecycle';
@@ -13,14 +14,14 @@ const thread = () => ({ id: 'thread', cwd, ephemeral: false, parentThreadId: nul
 const model = { model: 'fixture-model', displayName: 'Fixture model', hidden: false, supportedReasoningEfforts: [{ reasoningEffort: 'low', description: 'Low' }, { reasoningEffort: 'high', description: 'High' }], inputModalities: ['text', 'image'] };
 const turn = (status = 'inProgress') => ({ id: 'turn', status, items: [], itemsView: 'full' });
 const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
-function fixture(custom?: (packet: CodexPacket, reply: (result: unknown) => void, session: CodexSession) => boolean) {
+function fixture(custom?: (packet: CodexPacket, reply: (result: unknown) => void, session: CodexSession) => boolean, ui: Partial<CodexSessionUi> = {}) {
   const sent: CodexPacket[] = [], publications: ConversationViewMessage[] = [], notices: string[] = [], completions: boolean[] = [], ids: string[] = [];
   let session!: CodexSession;
   const event = (method: string, params: Record<string, unknown>) => session.receive({ method, params: { threadId: 'thread', ...params } });
   session = new CodexSession({ write: packet => {
     sent.push(packet); const reply = (result: unknown) => session.receive({ id: packet.id, result });
     if (custom?.(packet, reply, session)) return;
-    if (packet.method === 'initialized') return;
+    if (packet.method === 'initialized' || packet.method === undefined) return;
     const params = packet.params as Record<string, unknown>;
     switch (packet.method) {
       case 'initialize': reply({ userAgent: 'fixture/0.162.0' }); break;
@@ -37,7 +38,7 @@ function fixture(custom?: (packet: CodexPacket, reply: (result: unknown) => void
     }
   } }, {
     publish: message => publications.push(message), changed() {}, notice: message => notices.push(message), identified: id => ids.push(id),
-    approval: async () => 'decline', disconnected() {}, completed: failed => completions.push(failed),
+    approval: async () => 'decline', disconnected() {}, completed: failed => completions.push(failed), ...ui,
   });
   return { session, sent, publications, notices, completions, ids, event };
 }
@@ -154,6 +155,24 @@ test('Codex native turn errors remain harness transcript records, not fake user 
   f.event('turn/completed', { turn: { ...turn('failed'), error: { message: 'fixture provider failure' } } });
   assert.equal(f.session.state.messages.at(-1)?.role, 'error'); assert.deepEqual(f.completions, [true]);
   assert.deepEqual(f.notices, []); f.session.disconnect('done');
+});
+
+test('Codex logs raw experimental requests/replies and surfaces unsupported interactions without a grant', async () => {
+  const logs: TranscriptLogRecord[] = [];
+  const f = fixture(undefined, { transcriptLog: { enabled: true, append: value => logs.push(structuredClone(value)) },
+    question: async () => ({ scope: { answers: ['A'] } }) });
+  await f.session.initialize(cwd); await f.session.messageInput.submit({ id: 'start', text: 'fixture', mode: 'normal' });
+  const params = { threadId: 'thread', turnId: 'turn', itemId: 'input', isBlocking: true, autoResolutionMs: null,
+    questions: [{ id: 'scope', header: 'Scope', question: 'Which?', isSecret: false, isOther: false, options: [{ label: 'A', description: 'Local' }] }] };
+  f.session.receive({ id: 'input', method: 'item/tool/requestUserInput', params }); await flush();
+  assert.ok(logs.some(log => log.event === 'receive' && (log.payload as Record<string, unknown>).method === 'item/tool/requestUserInput'));
+  assert.ok(logs.some(log => log.event === 'response' && (log.payload as Record<string, unknown>).id === 'input'));
+  f.session.receive({ id: 'unknown', method: 'future/interaction', params: { preserve: 'raw data' } }); await flush();
+  assert.ok(f.notices.some(message => /future\/interaction/.test(message) && /No answer or approval/.test(message)));
+  assert.ok(logs.some(log => log.event === 'interaction.rejected' && (log.payload as Record<string, unknown>).requestId === 'unknown'));
+  assert.ok(f.sent.find(packet => packet.id === 'unknown')?.error);
+  assert.equal(f.session.state.messages.some(row => row.role === 'user' && row.content === 'A'), false, 'answers are RPC responses, not replayed prompts');
+  f.session.disconnect('done');
 });
 
 test('Codex is a distinct card-plugin target, not a synthetic Pi/ACP tool', () => {

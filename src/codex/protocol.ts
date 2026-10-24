@@ -1,4 +1,4 @@
-/** Reviewed consumer subset of codex-cli 0.162.0's generated stable app-server schema.
+/** Reviewed consumer subset of codex-cli 0.162.0's generated app-server schema.
  * Not generated, not a complete Codex API. Unknown item variants retain native data.
  */
 import { isRecord, type RpcRecord } from '../json-rpc-connection';
@@ -17,7 +17,7 @@ export interface CodexPage<T> { data: T[]; nextCursor: string | null; }
 export interface CodexItemEntry extends RpcRecord { turnId: string; item: CodexItem; }
 export interface CodexEvent { method: string; params: RpcRecord; }
 export type CodexApprovalDecision = 'accept' | 'acceptForSession' | 'decline' | 'cancel';
-/** Policy amendments and experimental questions are deliberately not supported in this first slice. */
+/** Basic approval responses; policy amendment objects are not synthesized. */
 export interface CodexApproval {
   kind: 'command' | 'fileChange';
   threadId: string;
