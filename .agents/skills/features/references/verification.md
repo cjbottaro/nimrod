@@ -9,9 +9,9 @@ history/drafts, streaming, text steering/Stop, image input, retained approvals
 and result-confirmed model/effort source paths are implemented. New RPC/client,
 session/approval and native-record fixtures are authored **unrun**; existing
 shell/runtime/draft/Copilot regressions have not been rerun. The required
-post-merge TypeScript/Rust compile check is pending for this integration
-checkpoint. Earlier foundation compilation passed; it does not establish the
-new integration's behavior.
+post-merge `mise run check` passed on `main` for the native integration
+(TypeScript and Rust compilation only). This does not establish the new
+integration's behavior; no test suite or native acceptance has been run.
 
 Only local CLI 0.162.0 version/help/schema generation and public documentation
 were inspected. No app-server connection, authentication change, real session

@@ -153,7 +153,12 @@ export class CodexSession {
     const merged = new Map(history.map(row => [row.key, this.live.has(row.key) ? current.get(row.key)! : row]));
     for (const row of this.state.messages) if (!merged.has(row.key)) merged.set(row.key, row);
     this.state = { ...this.state, messages: [...merged.values()], busy: this.client.phase === 'working', sessionUnavailable: false, status: this.client.phase === 'working' ? 'Working…' : 'Idle' };
-    this.reindex(); this.hydrating = false;
+    this.reindex();
+    // A stale page can still contain in-progress items after a terminal event
+    // arrived during hydration. An idle owner cannot leave those spinners live
+    // or infer success for items without a terminal native snapshot.
+    if (this.client.phase === 'idle') this.finishRows(true);
+    this.hydrating = false;
     // Catalog failure must not make an otherwise valid conversation unavailable.
     try { await this.refreshModels(); } catch (error) { if (!this.ended) this.ui.notice(`Codex model catalog unavailable: ${String(error)}`); }
     if (this.ended) throw new Error('Codex initialization was disconnected');
@@ -238,7 +243,7 @@ export class CodexSession {
     if (value.type === 'reasoning') return { ...base, role: 'assistant', content: [{ type: 'thinking', thinking: [...(Array.isArray(value.summary) ? value.summary : []), ...(Array.isArray(value.content) ? value.content : [])].filter(entry => typeof entry === 'string').join('\n\n'), thinkingComplete: completed }] };
     const status = string(value.status); const terminal = completed || ['completed', 'failed', 'declined'].includes(status);
     const output = value.type === 'commandExecution' ? string(value.aggregatedOutput) : value.type === 'fileChange' ? json(value.changes) : json(value.result ?? value.error ?? value);
-    return { ...base, role: 'tool', toolCallId: identity, toolName: value.type, toolSource: { backend: 'codex', agent: 'codex' }, toolTitle: string(value.command) || (value.type === 'mcpToolCall' ? `${string(value.server)} · ${string(value.tool)}` : value.type),
+    return { ...base, ...(completed && status === 'inProgress' ? { uiPhase: 'stopped' as const } : {}), role: 'tool', toolCallId: identity, toolName: value.type, toolSource: { backend: 'codex', agent: 'codex' }, toolTitle: string(value.command) || (value.type === 'mcpToolCall' ? `${string(value.server)} · ${string(value.tool)}` : value.type),
       toolArguments: previousRow && previous && previous.command === value.command && previous.cwd === value.cwd && previous.arguments === value.arguments && previous.changes === value.changes
         ? previousRow.toolArguments : immutableSnapshot(value.type === 'commandExecution' ? { command: value.command, cwd: value.cwd } : value.arguments ?? value.changes ?? {}), toolNative: immutableSnapshot(value),
       output, hasStreamingOutput: !terminal && !!output, ...(terminal ? { resultOutput: output, toolStatus: 'result' as const } : { toolStatus: 'running' as const }), isError: status === 'failed' || status === 'declined' || typeof value.exitCode === 'number' && value.exitCode !== 0 || !!value.error || value.success === false };
@@ -250,7 +255,7 @@ export class CodexSession {
   }
   private reindex(): void { this.positions = new Map(this.state.messages.map((row, index) => [row.key, index])); }
   private finishRows(stopped = this.ended): void {
-    this.state = { ...this.state, messages: this.state.messages.map(row => row.streaming ? { ...row, streaming: false, ...(stopped ? { uiPhase: 'stopped' as const } : {}), ...(Array.isArray(row.content) ? { content: row.content.map(block => block.type === 'thinking' ? { ...block, thinkingComplete: true } : block) } : {}), ...(row.role === 'tool' ? { hasStreamingOutput: false, toolStatus: 'result' as const, resultOutput: row.output } : {}) } : row) };
+    this.state = { ...this.state, messages: this.state.messages.map(row => row.streaming ? { ...row, streaming: false, ...(stopped || row.role === 'tool' && row.toolStatus !== 'result' ? { uiPhase: 'stopped' as const } : {}), ...(Array.isArray(row.content) ? { content: row.content.map(block => block.type === 'thinking' ? { ...block, thinkingComplete: true, ...(stopped ? { uiPhase: 'stopped' as const } : {}) } : block) } : {}), ...(row.role === 'tool' ? { hasStreamingOutput: false, toolStatus: 'result' as const, resultOutput: row.output } : {}) } : row) };
   }
   private response(): string | undefined { for (let i = this.state.messages.length - 1; i >= 0; i--) { const row = this.state.messages[i]; if (row.role === 'assistant' && Array.isArray(row.content)) { const text = row.content.map(block => block.text || '').join(''); if (text) return text; } } }
   private receipt(id: string, outcome: 'accepted' | 'rejected' | 'unknown', error?: string): void { this.ui.publish({ type: 'submissionReceipt', id, outcome, error }); }
