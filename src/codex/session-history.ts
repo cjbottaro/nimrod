@@ -33,8 +33,9 @@ export class CodexSessionHistory implements SessionHistory {
     await this.stop(); if (this.disposed) throw new Error('Codex history is closed');
     const token = crypto.randomUUID(); this.owner.token = token;
     const client = this.client = new CodexClient({ write: packet => this.host.write(token, packet) }, { disconnected: error => {
-      if (!this.disposed && !this.deleting) this.error(error);
-      void this.stop().catch(error => { if (!this.deleting) this.error(error); });
+      const reportDiscoveryFailure = !this.disposed && !this.deleting;
+      if (reportDiscoveryFailure) this.error(error);
+      void this.stop().catch(error => { if (reportDiscoveryFailure && !this.disposed) this.error(error); });
     }, deleted: id => this.confirmed?.(id) });
     try {
       this.launching = this.host.start(token, packet => client.receive(packet), reason => client.disconnect(reason));
