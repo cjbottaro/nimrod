@@ -73,6 +73,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Removed the dark strip beneath the last queued message or other bottom-pinned operation card, preserving spacing between cards.
 
 - Copilot Autopilot now clears Working after accepted task completion followed by idle, even when the selected mode stays Autopilot. Idle-only commands and queued configuration resume, completion is reported once, and the accepted task summary supplies notification text when no final assistant response follows. Intermediate pauses, rejected completion, Stop and errors retain their separate semantics.
 

@@ -9,7 +9,7 @@ An **Operation card** represents a Nimrod-initiated operation from pending inten
 - Titles name the operation, not its lifecycle: **CONFIGURATION CHANGE**, **STEERING**, **QUEUED**. Never change configuration titles to “Changing configuration” or “Configuration changed.”
 - Every state uses the existing Queued/Steering title typography: inherited system-UI font, `0.78em`, normal weight, uppercase presentation and `0.05em` letter spacing. Only the title shimmers, never content/the whole card.
 - Content describes intent concretely (`Model: GPT-6.1 Sol`, `Thinking level: medium`, or the submitted message), permits wrapping/multiple lines and remains across transitions. Outcome information is additional, not a replacement for identity/content.
-- Reuse user-turn-like padding, background, accent-line geometry, gutters and inter-entry spacing. Use theme tokens, not hardcoded colours.
+- Reuse user-turn-like padding, background, accent-line geometry, gutters and inter-entry spacing. Use theme tokens, not hardcoded colours. The pinned stack's final card has no trailing bottom margin: its backing ends flush with the card rather than exposing a dark strip below it.
 
 ## States
 

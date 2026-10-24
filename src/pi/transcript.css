@@ -60,6 +60,8 @@ button { color:var(--nimrod-button-foreground, var(--vscode-button-foreground));
 :is(#messages, [data-pi-id="messages"]):has(> .queued-turns:not([hidden])) { flex:1; display:flex; flex-direction:column; }
 :is(#messages, [data-pi-id="messages"]):has(> .queued-turns:not([hidden])) > .message { flex:none; margin:0 0 16px; }
 .queued-turns { position:sticky; bottom:0; z-index:1; flex:none; margin-top:auto; max-height:40vh; overflow:auto; overscroll-behavior:contain; background:var(--vscode-editor-background); }
+/* Keep the opaque sticky backing flush with the final card, not its turn margin. */
+.queued-turns > .message:last-child { margin-bottom:0; }
 .queued-turns[hidden] { display:none; }
 .message > :first-child, .markdown > :first-child { margin-top:0; }
 .message > :last-child, .markdown > :last-child, .tool-card > :last-child { margin-bottom:0; } .label { font-size:.78em; color:var(--vscode-descriptionForeground); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
