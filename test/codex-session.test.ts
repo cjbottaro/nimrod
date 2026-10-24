@@ -104,6 +104,19 @@ test('Codex history hydration does not overwrite live rows or the native delta b
   assert.deepEqual(f.session.state.messages.at(-1)!.content, [{ type: 'text', text: 'live+' }]); f.session.disconnect('done');
 });
 
+test('Codex terminal delivery during hydration cannot revive stale history spinners', async () => {
+  const f = fixture((packet, reply, session) => {
+    if (packet.method !== 'thread/turns/list') return false;
+    session.receive({ method: 'turn/completed', params: { threadId: 'thread', turn: turn('interrupted') } });
+    reply({ data: [{ ...turn(), items: [{ id: 'old-tool', type: 'commandExecution', command: 'fixture', cwd, status: 'inProgress', aggregatedOutput: 'partial' }] }], nextCursor: null });
+    return true;
+  });
+  await f.session.initialize(cwd, 'thread');
+  const row = f.session.state.messages.at(-1)!;
+  assert.equal(row.streaming, false); assert.equal(row.uiPhase, 'stopped'); assert.equal(f.session.state.busy, false);
+  f.session.disconnect('done');
+});
+
 test('Codex applies advertised effort through result-confirmed configuration without a prompt', async () => {
   const f = fixture(); await f.session.initialize(cwd);
   const choices = await f.session.configuration.choices('effort');
