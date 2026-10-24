@@ -1,4 +1,4 @@
-import type { RetainedSelectionRequest } from '../command-palette';
+import type { RetainedSelectionRequest } from './command-palette';
 
 export interface QuestionAnswer { answer: string; wasFreeform: boolean; }
 export interface QuestionUi {
