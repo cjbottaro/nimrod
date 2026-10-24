@@ -11,13 +11,17 @@ retained-ACP ownership, registered action/card presentation and generic tagged
 identity/recency handling. Normal typechecking now includes the architectural
 dependency gate and negative contract assertions.
 
-New registry/prototype/default, boundary-gate, typed-negative, generic recency,
-retired Pi launch and mounted-shell unknown-registration fixtures are authored
-**unrun**. Existing concrete/shell/card fixtures were adapted but not rerun.
-The review branch is intentionally unmerged; no typecheck, tests, build, browser/
-app launch, native process handshake or user-session operation has been executed
-for this migration. Validation authorization was requested; earlier main-branch
-compile results below do not validate this work. The source-level integration
+The migration is merged locally into `main`; `refactor/harness-contract` and its
+worktree are retained for review and incremental follow-ups. The required
+post-merge `mise run check` passed: the architectural dependency gate,
+TypeScript (including negative contract assertions) and Rust compilation.
+
+New registry/prototype/default, boundary-gate unit, generic recency, retired Pi
+launch and mounted-shell unknown-registration runtime fixtures are authored
+**unrun**. Existing concrete/shell/card runtime fixtures were adapted but not
+rerun. Behavioral testing is user-led and incremental. No test suite, build,
+browser/app launch, native process handshake or user-session operation was
+performed for this migration. The source-level integration
 goal is not a claim of verified wire compatibility, full feature parity or
 macOS/Linux native acceptance. [Consumer interfaces](consumer-interfaces.md#enforcement-and-acceptance)
 owns the contracts and enforcement scope.

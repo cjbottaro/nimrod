@@ -1,6 +1,6 @@
 # Consumer-oriented integration interfaces
 
-**Status: required application registration/consumer ports source-implemented; compile, behavioral and native acceptance for the review migration are pending. Not a universal harness wire SDK.** Pi, Copilot SDK and ACP remain concrete integrations. This reference owns how we identify, define and extract internal interfaces; [harness presentation](harness-presentation.md) owns the existing presentation contracts, and feature references own behavior. No new user-visible capability or harness parity is implied.
+**Status: required application registration/consumer ports source-implemented; behavioral and native acceptance remain pending; compile evidence is recorded in verification. Not a universal harness wire SDK.** Pi, Copilot SDK and ACP remain concrete integrations. This reference owns how we identify, define and extract internal interfaces; [harness presentation](harness-presentation.md) owns the existing presentation contracts, and feature references own behavior. No new user-visible capability or harness parity is implied.
 
 ## Decision
 
