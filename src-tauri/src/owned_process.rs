@@ -34,7 +34,7 @@ pub(crate) async fn terminate(
         if !graceful {
             match killpg(group, Signal::SIGTERM) {
                 Ok(()) | Err(Errno::ESRCH) => {}
-                Err(error) => return Err(error.to_string()),
+                Err(error) => return Err(format!("Could not send SIGTERM to owned process group {}: {error}; reservation retained", group.as_raw())),
             }
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
@@ -46,7 +46,7 @@ pub(crate) async fn terminate(
                     Err(error)
                 }
             })
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| format!("Could not send SIGKILL to owned process group {}: {error}; reservation retained", group.as_raw()))?;
         timeout(Duration::from_secs(3), child.wait())
             .await
             .map_err(|_| "Owned agent did not exit")?
@@ -56,7 +56,7 @@ pub(crate) async fn terminate(
             match killpg(group, None) {
                 Err(Errno::ESRCH) => return Ok(()),
                 Ok(()) => {}
-                Err(error) => return Err(error.to_string()),
+                Err(error) => return Err(format!("Could not observe exit of owned process group {}: {error}; reservation retained", group.as_raw())),
             }
             if tokio::time::Instant::now() >= deadline {
                 return Err(

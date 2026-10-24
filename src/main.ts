@@ -1,5 +1,6 @@
 import { AcpSession } from './acp/session';
 import { CodexSession } from './codex/session';
+import { codexConnectionFailure } from './codex/connection-failure';
 import { codexSessionDeletion } from './codex/session-deletion';
 import { CodexSessionHistory, codexHistoryKey } from './codex/session-history';
 import { nativeCodexTransport } from './codex/native';
@@ -1115,9 +1116,9 @@ function updateTabPresentation(tab: Tab): void {
   if (presented === tab) presentConversation(tab);
   renderSidebar();
 }
-function showNotice(tab: Tab, text: string, retry = false): void {
+function showNotice(tab: Tab, text: string, retry = false, details?: string): void {
   tab.notice.hidden = true; tab.notice.replaceChildren();
-  notices.report({ id: `${tab.id}:connection`, owner: tab.id, cause: 'connection', priority: 10, operation: 'Session connection', message: text,
+  notices.report({ id: `${tab.id}:connection`, owner: tab.id, cause: 'connection', priority: 10, operation: 'Session connection', message: text, ...(details === undefined ? {} : { details }),
     actions: retry && !deletion.blocked(tab.file?.path) ? [{ label: 'Retry connection', enabled: () => tabs.includes(tab) && !tab.closing && !tab.restarting && !tab.deleting && !deletion.locked(tab.file?.path), run: () => tab.lifecycle.connect() }] : undefined,
   });
   updateTab(tab);
@@ -1352,15 +1353,27 @@ async function launchCodex(tab: Tab, acceptedAction = false): Promise<void> {
   const conflict = (id: string) => tabs.some(other => other !== tab && other.backend.kind === 'codex' && other.lifecycle.identity?.sessionId === id);
   if (savedId && conflict(savedId)) { showNotice(tab, 'This Codex thread is already open in this window.'); return; }
   tab.awaitingSelection = false; tab.starting = true; updateTab(tab);
-  try { await tab.lifecycle.stop(); }
+  try { await tab.lifecycle.stop(); notices.resolve(`${tab.id}:codex-cleanup`); }
   catch (error) { tab.starting = false; showNotice(tab, `Could not stop the previous Codex process: ${String(error)}`, !!savedId); return; }
   if (unloading || workspace !== project || !tabs.includes(tab) || tab.closing) { tab.starting = false; return; }
   tab.cancelPreference?.(); tab.lifecycle.disconnect('Reconnecting Codex');
   tab.token = crypto.randomUUID(); tab.ended = false;
   const token = tab.token, valid = () => !unloading && tabs.includes(tab) && tab.token === token;
   const transport = nativeCodexTransport(project, () => ({ cli: runtime.current().codex, generation: codexGeneration }));
-  let signature = '';
-  const session = new CodexSession({ write: packet => transport.write(token, packet) }, {
+  let signature = '', disconnectReason: string | undefined;
+  let initialized = false;
+  const reportConnection = (cleanup?: unknown): void => {
+    if (cleanup !== undefined) session.recordCleanupFailure(cleanup);
+    if (!valid() || tab.closing || tab.deleting || !disconnectReason) return;
+    const failure = codexConnectionFailure(disconnectReason, !initialized, cleanup);
+    if (tab.view.hasConnectionOutcome?.()) {
+      if (cleanup !== undefined) notices.report({ id: `${tab.id}:codex-cleanup`, owner: tab.id, operation: 'Stop Codex',
+        message: 'Could not finish Codex cleanup; owned process exit is unconfirmed.', details: failure.details });
+      return;
+    }
+    showNotice(tab, failure.message, !!tab.lifecycle.identity, failure.details);
+  };
+  const session: CodexSession = new CodexSession({ write: packet => transport.write(token, packet) }, {
     transcriptLog: settingsSurface.transcriptLog,
     publish: message => { if (valid()) tab.receive?.(message); },
     identified: id => {
@@ -1391,9 +1404,12 @@ async function launchCodex(tab: Tab, acceptedAction = false): Promise<void> {
     notice: message => { if (valid() && !tab.closing) notices.report({ id: `${tab.id}:codex:${++noticeSequence}`, owner: tab.id, operation: 'Codex', message }); },
     disconnected: message => {
       if (!valid()) return;
+      disconnectReason ??= message;
       tab.ended = true; tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' });
-      if (!tab.closing && !tab.deleting && !tab.view.hasConnectionOutcome?.()) showNotice(tab, `${message}. Saved identity and draft remain; nothing was replayed.`, !!tab.lifecycle.identity);
-      void tab.lifecycle.stop().catch(error => { if (valid()) showNotice(tab, String(error), !!savedId); });
+      reportConnection();
+      // Startup owns its catch/teardown path. Close/deletion also own their
+      // shutdown, so a disconnect callback must not duplicate or mask it.
+      if (initialized && !tab.closing && !tab.deleting) void tab.lifecycle.stop().catch(error => reportConnection(error));
       updateTab(tab);
     },
     completed: (failed, response) => {
@@ -1410,9 +1426,13 @@ async function launchCodex(tab: Tab, acceptedAction = false): Promise<void> {
   try {
     const confirmed = await transport.start(token, packet => { if (valid()) session.receive(packet); }, message => { if (valid()) session.disconnect(message); });
     if (!valid() || confirmed !== project) throw new Error('Native Codex host did not confirm the project');
-    await session.initialize(project, savedId);
+    await session.initialize(project, savedId); initialized = true;
     if (valid()) notices.resolve(`${tab.id}:connection`);
-  } catch (error) { session.disconnect(error); try { await tab.lifecycle.stop(); } catch (stopError) { if (valid()) showNotice(tab, String(stopError), !!savedId); } }
+  } catch (error) {
+    disconnectReason ??= error instanceof Error ? error.message : String(error);
+    session.disconnect(error);
+    try { await tab.lifecycle.stop(); } catch (stopError) { reportConnection(stopError); }
+  }
   finally { tab.starting = false; if (valid()) { updateTab(tab); controls(); } }
 }
 const copilotPermissions = new WeakMap<Tab, CopilotPermissionInteraction>();

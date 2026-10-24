@@ -33,7 +33,7 @@ Give your coding assistant the source/day paths (including adjacent segments), a
 | --- | --- |
 | Pi | `message_start`, `message_update`, `message_end`, `tool_execution_end`, `agent_settled`; outgoing `request.<type>`, replies `response.<command>` including normal history responses |
 | Copilot | `assistant.message`, `assistant.reasoning_delta`, `tool.execution_complete`, `session.idle`; saved events `history.<native-type>`; `request.<method>`, `bridge.result`, full `permission.request` / `input.request` callback packets and `request.decision` answers |
-| Codex | `receive` raw server records, outgoing `request` and `response` packets, plus `interaction.rejected` diagnostics. Inspect payload `method` and correlate RPC `id` with connection identity; history pages are correlated RPC replies, not separately labelled history events. Separate project catalogs use `catalog.*` events and catalog connection identities. |
+| Codex | `receive` raw server records, outgoing `request` and `response` packets, plus `interaction.rejected` and local `connection.*` diagnostics. Connection/cleanup markers preserve failure causes and do not prove process exit. Inspect payload `method` and correlate RPC `id` with connection identity; history pages are correlated RPC replies, not separately labelled history events. Separate project catalogs use `catalog.*` events and catalog connection identities. |
 | ACP | Native update names, `history.<name>` replay, `request.<method>`, JSON-RPC `response` and permission traffic |
 | Nimrod | `ui.action` intent/error markers and `ui.configuration` local progress; neither proves harness acceptance |
 
