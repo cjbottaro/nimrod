@@ -1345,7 +1345,7 @@ async function newCodexSession(): Promise<void> {
 }
 /** Composition only: Codex owns startup/identity/cleanup; the shell owns these effects. */
 function composeCodexConnection(readTab: () => Tab, backend: Extract<SessionBackend, { kind: 'codex' }>): SessionLifecycle {
-  const project = workspace;
+  const project = workspace ?? ''; // No project means unavailable; never start a native transport.
   let signature = '';
   return createCodexConnection(readTab, backend, {
     project,
