@@ -2,6 +2,7 @@ export const KEYBINDINGS_SETTING = 'keybindings';
 export const ACTIONS = [
   { id: 'open-recent-project', label: 'Open recent project…', scope: 'project', context: 'project', defaults: ['primary+shift+o'] },
   { id: 'new', label: 'New session', scope: 'project', context: 'project', defaults: ['primary+n'] },
+  { id: 'new-codex', label: 'New Codex session', scope: 'project', context: 'project', defaults: [] },
   { id: 'new-copilot', label: 'New Copilot session', scope: 'project', context: 'project', defaults: [] },
   { id: 'temporary', label: 'New temporary session', scope: 'project', context: 'project', defaults: ['primary+shift+n'] },
   { id: 'delete', label: 'Delete session / Pi session tree…', scope: 'project', context: 'session', defaults: ['primary+backspace'] },

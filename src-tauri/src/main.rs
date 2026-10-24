@@ -4,6 +4,8 @@ mod card_plugins;
 mod cli;
 mod command_usage;
 mod copilot;
+mod codex;
+mod owned_process;
 mod drafts;
 mod fonts;
 mod keybindings;
@@ -412,12 +414,15 @@ fn request_exit(app: &tauri::AppHandle) {
         let compiler = app.state::<plugin_compiler::Compiler>();
         let acp = app.state::<acp::AcpHost>();
         let copilot = app.state::<copilot::CopilotHost>();
-        let (result, acp_result, copilot_result, ()) = tokio::join!(
+        let codex = app.state::<codex::CodexHost>();
+        let (result, acp_result, copilot_result, codex_result, ()) = tokio::join!(
             host.shutdown(),
             acp.shutdown(),
             copilot.shutdown(),
+            codex.shutdown(),
             compiler.shutdown()
         );
+        if let Err(error) = codex_result { eprintln!("Nimrod Codex shutdown: {error}"); }
         if let Err(error) = copilot_result {
             eprintln!("Nimrod Copilot shutdown: {error}");
         }
@@ -461,6 +466,7 @@ fn main() {
         .manage(WorkspaceHost::default())
         .manage(acp::AcpHost::default())
         .manage(copilot::CopilotHost::default())
+        .manage(codex::CodexHost::default())
         .manage(WorkspaceWindows::default())
         .manage(project_preferences::ProjectPreferences::default())
         .manage(settings_window::SettingsWindow::default())
@@ -585,6 +591,9 @@ fn main() {
             copilot::start_copilot,
             copilot::write_copilot,
             copilot::stop_copilot,
+            codex::start_codex,
+            codex::write_codex,
+            codex::stop_codex,
             session_file_info,
             write_pi,
             stop_pi,
@@ -698,6 +707,7 @@ fn main() {
                     app.state::<copilot::CopilotHost>()
                         .retire_window(window.label())
                         .await;
+                    app.state::<codex::CodexHost>().retire_window(window.label()).await;
                     popouts::close_project(app, window.label()).await;
                     let store = app.state::<drafts::Drafts>().inner().clone();
                     if let Err(error) =
@@ -710,11 +720,14 @@ fn main() {
                     let pi = app.state::<WorkspaceHost>();
                     let acp = app.state::<acp::AcpHost>();
                     let copilot = app.state::<copilot::CopilotHost>();
-                    let (pi_result, acp_result, copilot_result) = tokio::join!(
+                    let codex = app.state::<codex::CodexHost>();
+                    let (pi_result, acp_result, copilot_result, codex_result) = tokio::join!(
                         pi.close_window(window.label()),
                         acp.stop_window(window.label(), None, true),
                         copilot.stop_window(window.label(), None, true),
+                        codex.stop_window(window.label(), None, true),
                     );
+                    if let Err(error) = codex_result { eprintln!("Nimrod Codex window shutdown: {error}"); }
                     if let Err(error) = pi_result {
                         eprintln!("Nimrod window shutdown: {error}");
                     }

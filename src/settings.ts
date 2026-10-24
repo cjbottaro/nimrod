@@ -1,8 +1,8 @@
 import { clearModalMotion } from './modal-motion';
 
 export const RUNTIME_STORAGE_KEY = 'nimrod.runtime.v1';
-export interface RuntimePaths { pi: string; node: string; copilot?: string; }
-export type RuntimeField = 'pi' | 'node' | 'copilot';
+export interface RuntimePaths { pi: string; node: string; copilot?: string; codex?: string; }
+export type RuntimeField = 'pi' | 'node' | 'copilot' | 'codex';
 
 /** A full-window settings page, using native modality to keep the workspace inert but laid out. */
 export function installSettings(window: Window, page: HTMLDialogElement, openButton: HTMLButtonElement, backButton: HTMLButtonElement, shortcuts = true, options: { canOpen?(): boolean; unavailable?(): void; closeWindow?(): void } = {}): {
@@ -52,61 +52,54 @@ export function runtimePaths(value: unknown): RuntimePaths {
     if (typeof value !== 'string' || !value.trim() || value.length > 4096 || /[\u0000-\u001f\u007f]/.test(value)) throw new Error(`${name} must be a non-empty executable name or path on one line.`);
     return value.trim();
   };
-  return { pi: path(raw.pi, 'Pi'), node: path(raw.node, 'Node'), ...(raw.copilot === undefined ? {} : { copilot: path(raw.copilot, 'Copilot') }) };
+  return { pi: path(raw.pi, 'Pi'), node: path(raw.node, 'Node'), ...(raw.copilot === undefined ? {} : { copilot: path(raw.copilot, 'Copilot') }), ...(raw.codex === undefined ? {} : { codex: path(raw.codex, 'Codex') }) };
 }
 
 /** Runtime fields have an explicit Save boundary; unsaved edits never affect a launch. */
 export function installRuntimeSettings(elements: {
-  form: HTMLFormElement; fields: HTMLFieldSetElement; pi: HTMLInputElement; node: HTMLInputElement; copilot?: HTMLInputElement; status: HTMLElement;
+  form: HTMLFormElement; fields: HTMLFieldSetElement; pi: HTMLInputElement; node: HTMLInputElement; copilot?: HTMLInputElement; codex?: HTMLInputElement; status: HTMLElement;
 }, host: { read(): unknown; save(paths: RuntimePaths & { version: 1 }, changed: RuntimeField[]): void | RuntimePaths | Promise<void | RuntimePaths>; error?(message?: string): void }): {
   initialize(defaults: RuntimePaths, legacy?: unknown): void;
-  current(): RuntimePaths;
-  resetField(key: RuntimeField): void;
-  reload(): void;
-  dispose(): void;
+  current(): RuntimePaths; resetField(key: RuntimeField): void; reload(): void; dispose(): void;
 } {
-  const { form, fields, pi, node, copilot, status } = elements;
+  const { form, fields, status } = elements;
+  const inputs = new Map<RuntimeField, HTMLInputElement>();
+  for (const key of ['pi', 'node', 'copilot', 'codex'] as const) if (elements[key]) inputs.set(key, elements[key]!);
   let committed: RuntimePaths | undefined;
   const edited = new Set<RuntimeField>();
+  const effective = (paths: RuntimePaths, key: RuntimeField) => paths[key] ?? key;
   fields.disabled = true;
   if (host.error) form.noValidate = true;
   const message = (text: string, error = false) => {
     if (error && host.error) { host.error(text); status.textContent = ''; status.classList.remove('error'); }
     else { status.textContent = text; status.classList.toggle('error', error); }
   };
-  const show = () => { if (committed) { pi.value = committed.pi; node.value = committed.node; if (copilot) copilot.value = committed.copilot ?? 'copilot'; } };
-  const dirty = () => !!committed && (pi.value !== committed.pi || node.value !== committed.node || !!copilot && copilot.value !== (committed.copilot ?? 'copilot'));
+  const dirtyKeys = () => [...inputs].filter(([key, input]) => committed && (input.value !== effective(committed, key) || edited.has(key))).map(([key]) => key);
+  const show = () => { if (committed) for (const [key, input] of inputs) input.value = effective(committed, key); };
   const submit = async (event: Event) => {
-    event.preventDefault();
-    if (!committed) return;
+    event.preventDefault(); if (!committed) return;
     try {
-      const next = runtimePaths({ pi: pi.value, node: node.value, ...(copilot ? { copilot: copilot.value } : {}) });
+      const next = runtimePaths(Object.fromEntries([...inputs].map(([key, input]) => [key, input.value])));
       fields.disabled = true;
-      const changed = (['pi', 'node', ...(copilot ? ['copilot' as const] : [])] as RuntimeField[]).filter(key => edited.has(key) || next[key] !== committed![key]);
-      const saving = host.save({ version: 1, ...next }, changed);
-      const authoritative = saving ? await saving : undefined;
+      const changed = dirtyKeys();
+      const authoritative = await host.save({ version: 1, ...next }, changed);
       committed = authoritative ? runtimePaths(authoritative) : next; edited.clear(); show(); host.error?.();
       message('Saved. These paths will be used for the next session.');
     } catch (error) { message(`Not saved: ${String(error)}`, true); }
     finally { fields.disabled = false; }
   };
   const input = (event: Event) => {
-    if (event.target === pi) edited.add('pi');
-    if (event.target === node) edited.add('node');
-    if (event.target === copilot) edited.add('copilot');
-    if (!committed) return;
-    message(dirty() ? 'Unsaved changes. Save to use these paths for the next session.' : '');
+    for (const [key, element] of inputs) if (event.target === element) edited.add(key);
+    if (committed) message(dirtyKeys().length ? 'Unsaved changes. Save to use these paths for the next session.' : '');
   };
-  form.addEventListener('submit', submit);
-  form.addEventListener('input', input);
+  form.addEventListener('submit', submit); form.addEventListener('input', input);
   return {
     initialize(defaults, legacy) {
-      // Preserve previous launch preferences without replacing a new-format saved choice.
       committed = runtimePaths(defaults);
       try {
         const old = legacy && typeof legacy === 'object' ? legacy as Partial<RuntimePaths> : {};
-        committed = runtimePaths({ pi: old.pi ?? defaults.pi, node: old.node ?? defaults.node, ...(defaults.copilot === undefined ? {} : { copilot: defaults.copilot }) });
-      } catch { /* invalid legacy values fall back to detected paths */ }
+        committed = runtimePaths({ ...defaults, pi: old.pi ?? defaults.pi, node: old.node ?? defaults.node });
+      } catch { /* Preserve detected defaults for invalid legacy values. */ }
       try {
         const saved = host.read();
         if (saved != null) {
@@ -119,31 +112,19 @@ export function installRuntimeSettings(elements: {
     },
     reload() {
       if (!committed) return;
-      const dirtyPi = pi.value !== committed.pi || edited.has('pi');
-      const dirtyNode = node.value !== committed.node || edited.has('node');
-      const dirtyCopilot = !!copilot && (copilot.value !== (committed.copilot ?? 'copilot') || edited.has('copilot'));
-      const saved = host.read();
-      if (saved == null) return;
+      const dirty = new Set(dirtyKeys()), saved = host.read(); if (saved == null) return;
       const next = runtimePaths(saved);
-      if (next.pi === committed.pi && next.node === committed.node && next.copilot === committed.copilot) return;
+      if ([...inputs.keys()].every(key => effective(next, key) === effective(committed!, key))) return;
       committed = next;
-      if (!dirtyPi) pi.value = next.pi;
-      if (!dirtyNode) node.value = next.node;
-      if (copilot && !dirtyCopilot) copilot.value = next.copilot ?? 'copilot';
-      if (!dirtyPi && !dirtyNode && !dirtyCopilot) message('Updated from settings.json. Applies to the next session.');
-      else message('Saved paths changed in settings.json. Your unsaved edits are retained; Save replaces the corresponding saved paths.');
+      for (const [key, input] of inputs) if (!dirty.has(key)) input.value = effective(next, key);
+      message(dirty.size ? 'Saved paths changed in settings.json. Your unsaved edits are retained; Save replaces the corresponding saved paths.' : 'Updated from settings.json. Applies to the next session.');
     },
     resetField(key) {
       if (!committed) return;
-      const field = key === 'pi' ? pi : key === 'node' ? node : copilot;
-      if (field) field.value = committed[key] ?? 'copilot';
-      edited.delete(key);
-      message(dirty() ? 'Unsaved changes. Save to use these paths for the next session.' : '');
+      const input = inputs.get(key); if (input) input.value = effective(committed, key);
+      edited.delete(key); message(dirtyKeys().length ? 'Unsaved changes. Save to use these paths for the next session.' : '');
     },
-    current() {
-      if (!committed) throw new Error('Runtime paths are not ready.');
-      return { ...committed };
-    },
+    current() { if (!committed) throw new Error('Runtime paths are not ready.'); return { ...committed }; },
     dispose() { form.removeEventListener('submit', submit); form.removeEventListener('input', input); },
   };
 }

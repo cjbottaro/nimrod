@@ -35,7 +35,7 @@ const TRANSCRIPT_LOGS_SETTING = 'diagnostics.transcriptLogs';
 // Read compatibility only; an explicit save replaces this key in the same JSONC edit.
 const LEGACY_TRANSCRIPT_LOGS_SETTING = 'diagnostics.toolCapture';
 
-export const PROJECT_SETTING_KEYS = ['appearance.theme', 'runtime.piPath', 'runtime.nodePath', 'runtime.copilotPath', AUTOCOMPLETE_ACCEPT_SETTING] as const;
+export const PROJECT_SETTING_KEYS = ['appearance.theme', 'runtime.piPath', 'runtime.nodePath', 'runtime.copilotPath', 'runtime.codexPath', AUTOCOMPLETE_ACCEPT_SETTING] as const;
 // Retain these old project-file entries without applying or migrating them.
 const LEGACY_PROJECT_SETTING_KEYS = ['appearance.zoom', 'appearance.autoFollowAfterSending'];
 export type ProjectSettingKey = typeof PROJECT_SETTING_KEYS[number];
@@ -69,7 +69,7 @@ export function parseSettings(text: string): Record<string, unknown> {
   if (sendAutoFollow !== undefined && !['always', 'whenIdle', 'never'].includes(sendAutoFollow as string)) throw new Error('appearance.autoFollowAfterSending must be always, whenIdle or never.');
   const zoom = settings['appearance.zoom'];
   if (zoom !== undefined && !ZOOM_LEVELS.includes(zoom)) throw new Error('Invalid appearance.zoom percentage.');
-  for (const key of ['runtime.piPath', 'runtime.nodePath', 'runtime.copilotPath']) {
+  for (const key of ['runtime.piPath', 'runtime.nodePath', 'runtime.copilotPath', 'runtime.codexPath']) {
     if (settings[key] !== undefined) runtimePaths({ pi: settings[key], node: settings[key] });
   }
   if (settings['appearance.theme'] !== undefined && typeof settings['appearance.theme'] !== 'string') throw new Error('appearance.theme must be a string.');
@@ -213,9 +213,9 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
     isOverridden(key: ProjectSettingKey) { return Object.hasOwn(projectSettings, key); },
     useGlobal(key: ProjectSettingKey) { return patch({ [key]: undefined }, true); },
     subscribe(callback: () => void) { subscribers.add(callback); return () => { subscribers.delete(callback); }; },
-    runtime(defaults: { pi: string; node: string; copilot?: string }) { return { version: 1 as const, pi: settings['runtime.piPath'] as string ?? defaults.pi, node: settings['runtime.nodePath'] as string ?? defaults.node, copilot: settings['runtime.copilotPath'] as string ?? defaults.copilot ?? 'copilot' }; },
-    saveRuntime(paths: { pi: string; node: string; copilot?: string }, fields: ('pi' | 'node' | 'copilot')[] = ['pi', 'node', ...(paths.copilot === undefined ? [] : ['copilot' as const])]) {
-      return patch(Object.fromEntries(fields.map(key => [key === 'pi' ? 'runtime.piPath' : key === 'node' ? 'runtime.nodePath' : 'runtime.copilotPath', paths[key]])));
+    runtime(defaults: { pi: string; node: string; copilot?: string; codex?: string }) { return { version: 1 as const, pi: settings['runtime.piPath'] as string ?? defaults.pi, node: settings['runtime.nodePath'] as string ?? defaults.node, copilot: settings['runtime.copilotPath'] as string ?? defaults.copilot ?? 'copilot', codex: settings['runtime.codexPath'] as string ?? defaults.codex ?? 'codex' }; },
+    saveRuntime(paths: { pi: string; node: string; copilot?: string; codex?: string }, fields: ('pi' | 'node' | 'copilot' | 'codex')[] = ['pi', 'node', ...(paths.copilot === undefined ? [] : ['copilot' as const]), ...(paths.codex === undefined ? [] : ['codex' as const])]) {
+      return patch(Object.fromEntries(fields.map(key => [key === 'pi' ? 'runtime.piPath' : key === 'node' ? 'runtime.nodePath' : key === 'copilot' ? 'runtime.copilotPath' : 'runtime.codexPath', paths[key]])));
     },
     theme(): ThemeLibrary { return readLibrary({ version: 1, selected: settings['appearance.theme'] ?? 'nimrod', imports: settings['appearance.importedThemes'] ?? [] }); },
     saveTheme(library: ThemeLibrary) {

@@ -93,6 +93,10 @@ Copilot model choices use the catalog's friendly name as the picker label and mo
 
 New sessions honor non-null Copilot model/effort preferences read through the SDK; each null value is omitted independently from creation options. Unknown display values are lowercase `default model` / `default effort`, and actual session values supersede creation inputs. Resume never inherits newly configured defaults. `copilot/configuration.mjs` owns that concrete bridge-side policy; live getters/pickers remain behind `SessionConfiguration`, and presentation remains behind `StatusAreaSnapshot`. Native `session.model_change`/deselection outrank older results. Mutation failure/uncertainty disconnects rather than continuing with unconfirmed configuration. Shared code checks the reconciled getter before declaring success and never replays a failed request. [Copilot SDK](copilot-sdk.md) owns native transport/API scope.
 
+### Codex app-server
+
+[Codex](../../codex-integration/SKILL.md) implements this same port over its advertised model/effort catalog and supported idle resume overrides. Busy intent waits for idle; returned effective values must match. Newer native settings events outrank older response snapshots, and uncertainty disconnects rather than claiming success or replaying. No prompt, process restart or global configuration write is used to force mutation. Loaded-thread override acceptance remains unverified; the Codex skill owns that limitation and possible future policy choices.
+
 ### Dormant generic ACP
 
 `AcpSession.configuration` maps advertised options, including model/thought-level/mode and opaque remaining option IDs. It queues while the agent/configuration is working and applies through the existing supported ACP method at real idle. Response/update receive order remains authoritative. Thought-level choices are not approximated for a pending different model; wait for its advertised options. This does not restore any ACP product entry points or Copilot ACP support.

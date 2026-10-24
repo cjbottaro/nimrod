@@ -6,6 +6,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Added
 
+- Codex sessions through the installed CLI's native app-server, with explicit create/Resume, project-local history and drafts, streamed conversation/tool/reasoning cards, text steering and Stop, model-advertised image input, retained command/file approval pickers and result-confirmed model/effort controls. Codex inherits its own authentication and policies; recursive deletion, experimental Plan/questions and CLI slash commands are not exposed. Installed-runtime and native macOS/Linux acceptance remain pending.
+
 - Copilot `/config` now provides inline key completion and free-form values for Copilot defaults, with typed pickers for model, effort, mode, context tier, Auto tier and default permission mode. Settings are validated, persisted and confirmed through the SDK for future sessions; the current session is unchanged. Nested keys use a pinned path-only compatibility catalog, and secure proxy passwords remain delegated to Copilot's native UI. Native acceptance is pending.
 
 - Pi codemode activity now appears in one grouped tool card, with independently expandable child calls, a live completed/discovered call count and subtle progress bar, failure totals, and **Script** / **Output** disclosures. Saved children reuse the normal tool cards and personal overrides, with themed status dots and any retained input previews or errors; missing data adds no placeholder prose. Incomplete saved records remain marked in the group count.

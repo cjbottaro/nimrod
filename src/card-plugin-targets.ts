@@ -3,7 +3,7 @@ export function pluginTargets(value: unknown): readonly CardPluginTarget[] {
   if (value === undefined) return [{ backend: 'pi' }];
   if (!Array.isArray(value) || !value.length || value.length > 16) throw new Error('Invalid card plugin targets');
   return value.map(target => {
-    if (!target || typeof target !== 'object' || Array.isArray(target) || Object.keys(target).some(key => !['backend', 'agent'].includes(key)) || !['pi', 'acp', 'copilot-sdk'].includes(target.backend) || target.agent !== undefined && (typeof target.agent !== 'string' || !target.agent || target.agent.length > 128)) throw new Error('Invalid card plugin target');
+    if (!target || typeof target !== 'object' || Array.isArray(target) || Object.keys(target).some(key => !['backend', 'agent'].includes(key)) || !['pi', 'acp', 'copilot-sdk', 'codex'].includes(target.backend) || target.agent !== undefined && (typeof target.agent !== 'string' || !target.agent || target.agent.length > 128)) throw new Error('Invalid card plugin target');
     return { backend: target.backend, ...(target.agent === undefined ? {} : { agent: target.agent }) } as CardPluginTarget;
   });
 }
