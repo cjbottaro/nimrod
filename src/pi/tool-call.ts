@@ -22,7 +22,8 @@ export function toolMessageBlock(message: Pick<DisplayMessage, "toolCallId" | "t
   }
   return {
     type: "toolCall", id: message.toolCallId, name: message.toolName, arguments: args,
-    ...(message.toolSource ? { source: message.toolSource, title: message.toolTitle, kind: message.toolKind, native: message.toolNative } : {}),
+    ...(message.toolSource || message.toolTitle !== undefined || message.toolKind !== undefined || message.toolNative !== undefined
+      ? { source: message.toolSource, title: message.toolTitle, kind: message.toolKind, native: message.toolNative } : {}),
     ...(message.parentToolCallId ? { parentToolCallId: message.parentToolCallId } : {}),
     ...(message.toolNestedCalls !== undefined ? { nestedCalls: message.toolNestedCalls } : {}),
     executionOutput: message.output, hasStreamingOutput: message.hasStreamingOutput,

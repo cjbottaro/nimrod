@@ -1,3 +1,4 @@
+import '../src/bundled-card-renderers';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { CardPluginCatalog, type ExecutablePluginHost } from '../src/pi/card-plugins/catalog';

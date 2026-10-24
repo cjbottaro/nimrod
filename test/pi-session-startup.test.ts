@@ -42,6 +42,19 @@ for (const [name, info, error] of [
   });
 }
 
+test('retired Pi launch completion cannot bind drafts, replay packets or initialize a replacement', async () => {
+  let current = true, release!: (info: PiLaunchInfo) => void;
+  const effects: string[] = [];
+  const startup = startPiSession({ mode: 'saved' }, {
+    start: receive => { receive(first); return new Promise(resolve => { release = resolve; }); },
+    current: () => current, currentProject: () => '/fixture',
+    validated: () => effects.push('bind'), receive: () => effects.push('packet'), initialize: async () => { effects.push('initialize'); },
+  });
+  current = false; release({ cwd: '/fixture', session: file });
+  await assert.rejects(startup, /attempt was retired/);
+  assert.deepEqual(effects, []);
+});
+
 test('Pi startup propagates initialization failure without replaying buffered packets', async () => {
   let packets = 0;
   await assert.rejects(startPiSession({ mode: 'saved' }, {

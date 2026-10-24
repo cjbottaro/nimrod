@@ -1,43 +1,17 @@
-import { AcpSession } from './acp/session';
-import { createCodexConnection } from './codex/connection';
-import { codexSessionDeletion } from './codex/session-deletion';
-import { CodexSessionHistory, codexHistoryKey } from './codex/session-history';
-import { nativeCodexTransport } from './codex/native';
-import { codexScope } from './codex/session-lifecycle';
-import { codexInteraction } from './codex/view-policy';
-import { CodexQuestionInteraction } from './codex/question-interaction';
-import type { CodexQuestionRequest, CodexQuestionAnswers } from './codex/questions';
-import { CodexApprovalInteraction } from './codex/approval-interaction';
-import type { CodexApproval, CodexApprovalDecision } from './codex/protocol';
-import { CopilotSession, type CopilotDecision } from './copilot/session';
-import { CopilotSessionHistory, copilotHistoryKey } from './copilot/session-history';
-import { copilotSessionDeletion } from './copilot/session-deletion';
-import { copilotSessionLifecycle, copilotSdkScope } from './copilot/session-lifecycle';
-import { copilotInteraction } from './copilot/view-policy';
-import { piSessionDeletion } from './pi/session-deletion';
+import { createBundledHarnessRegistry } from './bundled-harnesses';
+import type { HarnessProject, HarnessSession, SessionRequest, HarnessAction as SessionAction } from './harness-contract';
+import type { HarnessSessionHost, HarnessDeletionParticipant } from './harness-host';
 import { SessionDeletionCoordinator } from './session-deletion-coordinator';
 import type { SessionDeletionOperation, SessionDeletionTarget } from './session-deletion-operation';
-import { PiSessionHistory, type PiSessionSummary as SessionSummary } from './pi/session-history';
-import { loadSessionHistory, type SessionHistory, type SessionHistorySnapshot } from './session-history';
+import { loadSessionHistory, type SessionHistorySnapshot } from './session-history';
 import { savedSessionKey, resolveSessionListEntry, type SessionListEntry } from './session-list';
-import { renderPermissionDetails } from './acp/tool-state';
-import { CopilotPermissionInteraction } from './copilot/permission-interaction';
-import { CopilotQuestionInteraction } from './copilot/question-interaction';
-import { CopilotPlanInteraction } from './copilot/plan-interaction';
-import { acpInteraction } from './acp/view-policy';
-import { createPiViewProjection, piInteraction } from './pi/view-policy';
-import { piSession, acpSession, copilotSession, codexSession, acpProfile as profileFor, sessionActions, sessionConfiguration, type SessionAction, type SessionBackend } from './session-backend';
+import { availableSessionActions } from './session-actions';
 import { pickConfiguration } from './configuration-picker';
-import { piSessionLifecycle } from './pi/session-lifecycle';
-import type { SessionFile } from './pi/session-file';
-import { startPiSession, type PiLaunchInfo } from './pi/session-startup';
-import { acpSessionLifecycle } from './acp/session-lifecycle';
-import { readSavedSidebarSession, type SessionLifecycle, type LaunchMode, type SavedSidebarSession, type SavedSessionIdentity } from './session-lifecycle';
+import { readSavedSidebarSession, type SessionLifecycle, type SessionLifecycleOwner, type SavedSidebarSession, type SavedSessionIdentity } from './session-lifecycle';
 import type { ConversationViewMessage, ConversationView } from './conversation-view-host';
-import type { AcpProfile } from './acp/profiles';
 import { mountConversationView } from './conversation-view';
 import { installApplicationNotices } from './application-notices';
-import { Channel, invoke } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { notificationPreview, sessionNotifications, type NotificationDispatch, type NotificationClick } from './notifications';
 import { SessionNavigation, SESSION_VIEWS, type SessionView, type SelectionIntent, type NavigationSnapshot } from './session-navigation';
@@ -47,10 +21,6 @@ import { installSidebarResize, sidebarWidthKey } from './sidebar-resize';
 import { lastUsed, sortByRecency, captureSidebarScroll, revealSidebarRow, SessionRecency } from './session-recency';
 import { sessionStatus, sessionListLabel, createSessionRowContent, updateSessionRowContent, updateSessionRowTime, installSessionTimeRefresh } from './session-sidebar';
 import { installDeletionReview } from './deletion-review';
-import type { DeletionEvent, DeletionSnapshot } from './session-deletion';
-import { presentActivity } from './pi/activity-state';
-import { messageChanges, messageVersion } from './pi/conversation-index';
-import type { ConversationState } from './pi/types';
 import { listen } from '@tauri-apps/api/event';
 import { CardPluginCatalog, type PersonalBundles } from './pi/card-plugins/catalog';
 import { installCardPluginLoading } from './card-plugin-loading';
@@ -63,10 +33,7 @@ import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { BUILTIN_THEMES, CATALOG_THEMES } from './themes/builtins';
 import type { ColorTheme } from './themes/theme';
 import { measureWork } from './performance-diagnostics';
-import type { HostMessage } from './pi/webview-client';
-import { PiTransport, type Packet } from './pi/transport';
-import { PiSession } from './pi/session';
-import { SessionDrafts, type LastSession } from './session-drafts';
+import { SessionDrafts } from './session-drafts';
 import { NativeDrafts } from './native-drafts';
 import { referencedAttachments } from './image-attachments';
 import { restoreComposerState } from './pi/webview-state';
@@ -144,20 +111,12 @@ const settingsSurface = installSettingsSurface(preferences, notices);
 const { settings, themes, zoom, runtime, notificationError, notificationProgress, capturePerformance } = settingsSurface;
 const settingsKey = 'nimrod.poc.launch';
 const recentKey = 'nimrod.workspaces.v1';
-const lastKey = 'nimrod.last-session.v1';
 const localState = new Map<string, unknown>();
 const attachmentStore = new AttachmentStore();
 const temporaryImages = new Map<string, Blob>();
 let ready = false;
-let acpReady = false;
-let codexReady = false;
-let codexGeneration = '';
-let codexHistory: CodexSessionHistory | undefined;
-let copilotReady = false;
-let copilotGeneration = '';
 let unloading = false;
 let workspace: string | undefined;
-let copilotHistory: CopilotSessionHistory | undefined;
 let homeDirectory: string | undefined;
 let opening: Promise<boolean> | undefined;
 let sidebarVisible = stored('nimrod.sidebar.visible') !== false;
@@ -185,20 +144,19 @@ const unlistenLinkErrors = await listen<string>('nimrod-link-error', event => {
 }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
 function syncPopouts(): void {
   if (!workspace) return;
-  popouts.sync(tabs.map(tab => ({ runtimeId: tab.id, pi: tab.file?.exists && tab.mode !== 'temporary'
-    ? { path: tab.file.path, sessionId: tab.file.sessionId } : null })), presented?.id ?? null);
+  popouts.sync(tabs.map(tab => ({ runtimeId: tab.id, pi: tab.integration.references.file() ?? null })), presented?.id ?? null);
 }
 interface Tab {
-  readonly backend: SessionBackend;
+  readonly project: HarnessProject;
+  readonly integration: HarnessSession;
   readonly lifecycle: SessionLifecycle;
-  id: string; token?: string; title: string; lastUsed: number; pinned: boolean; mode: LaunchMode; file?: SessionFile;
-  root: HTMLElement; view: ConversationView; drafts: SessionDrafts; receive?: (message: HostMessage | ConversationViewMessage) => void;
+  id: string; token?: string; title: string; lastUsed: number; pinned: boolean;
+  root: HTMLElement; view: ConversationView; drafts: SessionDrafts; receive?: (message: ConversationViewMessage) => void;
   starting: boolean; closing: boolean; restarting: boolean; deleting: boolean; deletionExecuting: boolean; ended: boolean;
   awaitingSelection: boolean;
   inputCount: number; unread: boolean; failed: boolean; focus?: HTMLElement; notice: HTMLElement;
   notices: ReturnType<typeof installApplicationNotices>;
   cancelPreference?: () => void;
-  cancelInspector?: () => void;
   closeButton: HTMLButtonElement; pinButton: HTMLButtonElement;
   row: HTMLButtonElement; rowLabel: HTMLElement; rowIndicator: HTMLElement; rowTime: HTMLTimeElement; rowHarness: HTMLElement; rowNode: HTMLElement;
 }
@@ -227,11 +185,7 @@ const sidebarResize = installSidebarResize(window, {
   save: width => { if (workspace) save(sidebarWidthKey(workspace), width); },
 });
 let drafts = makeDrafts();
-function lastSession(): LastSession | undefined {
-  if (workspace) return drafts.last?.cwd === workspace ? drafts.last : undefined;
-  const last = stored(lastKey) as Partial<LastSession> | null;
-  return last && typeof last.path === 'string' && typeof last.cwd === 'string' && typeof last.sessionId === 'string' ? last as LastSession : drafts.last;
-}
+function lastSession() { return harnesses.get(harnesses.defaultId).saved.last(); }
 const previewResponse = notificationPreview(window);
 const notifySession = sessionNotifications({
   focused: () => getCurrentWindow().isFocused(),
@@ -247,6 +201,24 @@ const selectedConnection = new SessionConnection<Tab>({
   connect: tab => tab.lifecycle.connect({ acceptedAction: true }),
   failed: (tab, error) => { if (tabs.includes(tab)) showNotice(tab, `Could not connect ${tab.lifecycle.label}: ${error}`, true); },
 });
+let registryConstructed = false, deletionCoordinatorReady = false;
+const harnesses = createBundledHarnessRegistry({
+  project: () => workspace, current: () => !unloading, applicationReady: () => ready, deletionPending: () => deletionCoordinatorReady && deletions.pending,
+  runtime: () => ({ ...runtime.current() }), store: { read: stored, save }, recency: () => recency,
+  open: () => tabs.map(sessionRow), drafts: () => drafts, transcriptLog: settingsSurface.transcriptLog,
+  participants: () => tabs.map<HarnessDeletionParticipant>(tab => {
+    const composer = restoreComposerState(tab.drafts.read());
+    return { reference: tab.lifecycle.identity, token: tab.token, title: tab.title, busy: deletionBusy(tab),
+      hasDraft: !!(composer.draft.trim() || composer.attachments?.length || composer.recovered.length),
+      lock: (locked, executing) => { tab.deleting = locked; if (executing !== undefined) tab.deletionExecuting = executing; else if (!locked) tab.deletionExecuting = false; tab.receive?.({ type: 'deletionLock', locked }); updateTab(tab); },
+      failed: message => { tab.ended = true; tab.lifecycle.disconnect('Session deletion did not complete'); showNotice(tab, message); } };
+  }),
+  changed: () => { if (!registryConstructed || unloading) return; for (const tab of tabs) updateTab(tab); controls(); selectedConnection.barriersChanged(); },
+  notice: notice => { if (!unloading) notices.report(notice); }, resolve: id => notices.resolve(id),
+});
+registryConstructed = true;
+function blocked(tab: Tab): boolean { return tab.project.saved.blocked(tab.lifecycle.key); }
+function locked(tab: Tab): boolean { return tab.project.saved.locked(tab.lifecycle.key); }
 const deletions = new SessionDeletionCoordinator({
   canRun: (reference, target) => {
     if (!ready || unloading || settings.isOpen) return false;
@@ -262,7 +234,7 @@ const deletions = new SessionDeletionCoordinator({
     },
     stop: async () => {
       tab.awaitingSelection = true;
-      tab.cancelPreference?.(); tab.cancelInspector?.();
+      tab.cancelPreference?.();
       if (tab.token) dialogs.cancel(tab.token);
       await tab.lifecycle.stop();
       tab.ended = true;
@@ -278,33 +250,8 @@ const deletions = new SessionDeletionCoordinator({
   },
   error: message => { notices.report({ id: `delete:${++noticeSequence}`, operation: 'Delete session', message }); },
 });
-const piDeletion = deletions.register(context => piSessionDeletion({
-  panels: () => tabs.filter(tab => tab.file?.exists && tab.mode !== 'temporary').map(tab => ({
-    file: tab.file!.path,
-    lock: locked => { tab.deleting = locked; if (!locked) tab.deletionExecuting = false; tab.receive?.({ type: 'deletionLock', locked }); updateTab(tab); },
-    executionStarted: () => { tab.deletionExecuting = true; updateTab(tab); },
-    report: () => {
-      const composer = restoreComposerState(tab.drafts.read());
-      return { file: tab.file!.path, token: tab.token, title: tab.title, busy: deletionBusy(tab), hasDraft: !!(composer.draft.trim() || composer.attachments?.length || composer.recovered.length) };
-    },
-    deleted: () => context.removed([{ key: tab.file!.path, draftScope: `file:${tab.file!.path}` }]),
-    failed: message => {
-      tab.ended = true; piSession(tab)?.rpc.disconnect('Session deletion did not complete');
-      showNotice(tab, message);
-    },
-  })),
-  acknowledge: (id, sessions) => {
-    if (!ready || unloading) return Promise.reject(new Error('Project window is not ready to acknowledge deletion'));
-    return invoke('acknowledge_deletion', { id, sessions });
-  },
-  snapshot: () => invoke<DeletionSnapshot>('deletion_snapshot'),
-  run: (root, sessionId) => invoke('delete_session_tree', { root, sessionId }),
-  recover: (path, sessionId) => invoke('recover_deletion_session', { path, sessionId }),
-  confirm: (id, confirmed) => invoke('confirm_session_deletion', { id, confirmed }),
-}, context));
-const deletion = piDeletion.transaction;
-deletions.register(context => codexSessionDeletion(() => startCodexHistory(), context));
-deletions.register(context => copilotSessionDeletion(() => copilotHistory, context));
+deletionCoordinatorReady = true;
+for (const project of harnesses.projects) deletions.register(context => project.deletion(context));
 function tabDeletion(tab: Tab | undefined): SessionDeletionOperation | undefined {
   const reference = tab?.lifecycle.identity;
   return reference && tab ? deletions.operation(reference, tab.title) : undefined;
@@ -315,7 +262,7 @@ const unlistenNotificationClicks = await listen<NotificationClick>('nimrod-notif
   const target = event.payload;
   const tab = tabs.find(tab => tab.id === target?.session && tab.token === target?.token);
   const valid = () => ready && !unloading && !!tab && tabs.includes(tab) && tab.token === target.token &&
-    !tab.starting && !tab.closing && !tab.restarting && !tab.deleting && !deletion.locked(tab.file?.path) && !deletion.blocked(tab.file?.path);
+    !tab.starting && !tab.closing && !tab.restarting && !tab.deleting && !locked(tab) && !blocked(tab);
   if (!valid()) return;
   const navigation = ++notificationNavigation;
   void (async () => {
@@ -328,7 +275,6 @@ const unlistenNotificationClicks = await listen<NotificationClick>('nimrod-notif
     tab.view.scrollToBottom();
   })();
 }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
-const unlistenDeletion = await listen<DeletionEvent>('nimrod-session-deletion', event => { void deletion.handle(event.payload); }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
 preferences.subscribe(() => { void reloadCardPlugins(); refreshShortcutHints(); });
 const unlistenDraftErrors = await listen<string>('nimrod-draft-error', event => draftPersistenceError(event.payload));
 const unlistenDraftClose = await getCurrentWindow().onCloseRequested(() => {
@@ -339,14 +285,13 @@ window.addEventListener('pagehide', () => { void nativeDrafts?.flush().catch(dra
 const disposeTimeRefresh = installSessionTimeRefresh(window, () => { for (const tab of tabs) refreshTime(tab); });
 window.addEventListener('unload', () => {
   unloading = true;
-  void codexHistory?.dispose().catch(error => console.error('Could not stop Codex history discovery', error));
-  void copilotHistory?.dispose().catch(error => console.error('Could not stop Copilot history discovery', error));
+  harnesses.dispose();
   notices.dispose();
   settingsSurface.dispose();
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
   pluginLoading.dispose();
-  sessionContextMenu.dispose(); sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); unlistenLinkErrors(); deletions.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
-  for (const tab of tabs) { codexQuestions.get(tab)?.dispose(); codexApprovals.get(tab)?.dispose(); copilotPermissions.get(tab)?.dispose(); copilotQuestions.get(tab)?.dispose(); copilotPlans.get(tab)?.dispose(); tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.lifecycle.disconnect('Window closed'); }
+  sessionContextMenu.dispose(); sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); unlistenLinkErrors(); deletions.dispose(); deletionReview.dispose(); unlistenNotificationClicks();
+  for (const tab of tabs) { tab.integration.interactions.dispose(); tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.lifecycle.disconnect('Window closed'); }
   keybindingDispatch.dispose(); unlistenProjectSettings();
   unlistenProjectPicker(); palette.dispose();
 }, { once: true });
@@ -360,6 +305,8 @@ function controls(): void {
   for (const id of ['workspace-new', 'workspace-resume', 'start-pi', 'start-temporary', 'resume-last', 'recover-draft', 'browse', 'cwd', 'enter-workspace', 'sidebar-new']) {
     (required(id) as HTMLButtonElement | HTMLInputElement).disabled = !ready;
   }
+  const creation = harnesses.get(harnesses.defaultId).creation;
+  required<HTMLButtonElement>('start-temporary').disabled = !ready || !creation.modes.includes('temporary');
   cwd.readOnly = !!workspace;
   required('resume-last').hidden = !lastSession();
   required('recover-draft').hidden = !recoverableDrafts().length;
@@ -370,13 +317,13 @@ function controls(): void {
 }
 function needsAttention(tab: Tab): boolean { return !!tab.inputCount || tab.unread || tab.failed; }
 function isWorking(tab: Tab): boolean {
-  const state = tab.backend.session?.state;
+  const state = tab.integration.conversation.state;
   return !tab.starting && !tab.closing && !tab.restarting && !tab.deleting && !tab.ended && !tab.inputCount &&
-    !!state && !state.sessionUnavailable && (state.busy || !!presentActivity(false, '', piSession(tab)?.state.extensionStatuses).subagents);
+    !!state && !state.sessionUnavailable && tab.integration.presentation.snapshot().working;
 }
 function isConnected(tab: Tab): boolean {
   return tab.lifecycle.connection === 'connected' &&
-    !tab.closing && !tab.restarting && !tab.deleting && !deletion.blocked(tab.file?.path);
+    !tab.closing && !tab.restarting && !tab.deleting && !blocked(tab);
 }
 function navigationSnapshot(): NavigationSnapshot<Tab> { return navigation.snapshot(sidebarView, presented, active); }
 function sidebarTabs(): readonly Tab[] { return navigationSnapshot().visible; }
@@ -392,7 +339,7 @@ function touchTab(tab: Tab): void {
   persistTabs();
 }
 function canPin(tab: Tab): boolean {
-  return ready && !unloading && tabs.includes(tab) && !tab.closing && !tab.restarting && !tab.deleting && !deletion.locked(tab.file?.path);
+  return ready && !unloading && tabs.includes(tab) && !tab.closing && !tab.restarting && !tab.deleting && !locked(tab);
 }
 function canClose(tab: Tab): boolean {
   return canPin(tab) && !tab.starting;
@@ -480,12 +427,7 @@ function selectSidebarView(view: SessionView): void {
 function presentConversation(tab: Tab | undefined): void {
   if (presented !== tab) {
     if (presented) {
-      copilotSession(presented)?.cancelCommands();
-      codexQuestions.get(presented)?.setActive(false);
-      codexApprovals.get(presented)?.setActive(false);
-      copilotPermissions.get(presented)?.setActive(false);
-      copilotQuestions.get(presented)?.setActive(false);
-      copilotPlans.get(presented)?.setActive(false);
+      presented.integration.interactions.setActive(false);
       const focused = document.activeElement;
       if (focused instanceof HTMLElement && presented.root.contains(focused)) {
         presented.focus = focused;
@@ -495,7 +437,7 @@ function presentConversation(tab: Tab | undefined): void {
     }
     presented = tab;
     conversation.hidden = !tab;
-    if (tab) { tab.root.hidden = false; codexQuestions.get(tab)?.setActive(true); codexApprovals.get(tab)?.setActive(true); tab.view.setActive(true); tab.notices.setActive(true); copilotPermissions.get(tab)?.setActive(true); copilotQuestions.get(tab)?.setActive(true); copilotPlans.get(tab)?.setActive(true); }
+    if (tab) { tab.root.hidden = false; tab.integration.interactions.setActive(true); tab.view.setActive(true); tab.notices.setActive(true); }
     syncPopouts();
   }
   for (const item of tabs) {
@@ -508,19 +450,15 @@ function presentConversation(tab: Tab | undefined): void {
   if (sessionName.textContent !== title) sessionName.textContent = title;
   if (sessionIdentity.title !== title) sessionIdentity.title = title;
   const badge = required('mode-badge');
-  badge.textContent = !tab ? '' : tab.backend.kind === 'codex' ? 'Codex' : tab.backend.kind === 'copilot-sdk' ? 'Copilot' : profileFor(tab) ? `${profileFor(tab)!.name} · ACP POC` : tab.mode === 'temporary' ? 'Pi · temporary' : tab.file?.exists ? 'Pi' : 'Pi · awaiting first save';
-  badge.title = tab?.file?.path || '';
+  badge.textContent = tab?.integration.presentation.snapshot().badge ?? '';
+  badge.title = tab?.integration.presentation.snapshot().badgeTitle ?? '';
   restartControl();
 }
-function promptPending(tab: Tab): boolean {
-  const backend = tab.backend;
-  return backend.kind === 'acp' ? backend.session?.client.phase === 'working' : backend.kind === 'copilot-sdk' || backend.kind === 'codex' ? backend.session?.state.busy === true : backend.session?.rpc.hasPendingRequest('prompt', 'set_session_name') ?? false;
-}
+function promptPending(tab: Tab): boolean { return tab.integration.presentation.snapshot().pending; }
 function deletionBusy(tab: Tab): boolean {
-  const state = piSession(tab)?.state;
-  return tab.starting || tab.closing || tab.restarting || !!tab.inputCount || promptPending(tab) || !!(state && !tab.ended && (state.busy || state.compacting || state.modelControls.changing || state.sessionUnavailable || state.queue.pendingCount || state.queue.steering.length || state.queue.followUp.length || presentActivity(false, '', state.extensionStatuses).subagents));
+  return tab.starting || tab.closing || tab.restarting || !!tab.inputCount || tab.integration.presentation.snapshot().destructiveBusy;
 }
-function restartable(tab: Tab): boolean { return tab.backend.kind === 'pi' && !!tab.file?.exists && tab.mode !== 'temporary'; }
+function restartable(tab: Tab): boolean { const restart = tab.integration.restart; return restart.supported && restart.available(); }
 function deletable(tab: Tab | undefined): boolean {
   return ready && !deletions.pending && !!tab && tabs.includes(tab) && !!tabDeletion(tab)?.available() &&
     !tab.deleting && !tab.starting && !tab.closing && !tab.restarting;
@@ -528,7 +466,7 @@ function deletable(tab: Tab | undefined): boolean {
 function restartControl(): void {
   const active = presented;
   const button = required<HTMLButtonElement>('restart-session');
-  button.disabled = !ready || !active || !restartable(active) || active.deleting || deletion.locked(active.file?.path) || deletion.blocked(active.file?.path) || active.starting || active.closing || active.restarting;
+  button.disabled = !ready || !active || !restartable(active) || active.deleting || locked(active) || blocked(active) || active.starting || active.closing || active.restarting;
   const remove = required<HTMLButtonElement>('delete-session');
   remove.disabled = !deletable(active);
   const operation = tabDeletion(active);
@@ -537,9 +475,8 @@ function restartControl(): void {
     : !operation?.available() ? operation?.unavailableReason || 'requires saved history and harness deletion support'
     : active.starting || active.closing || active.restarting ? 'session lifecycle operation pending' : undefined;
   remove.title = `${operation?.label || 'Delete session…'}${unavailable ? ` — ${unavailable}` : ''}`;
-  button.title = !active ? 'Restart session — no open session' : active.backend.kind === 'codex' ? 'Restart session — Close and Resume Codex explicitly' : active.backend.kind === 'copilot-sdk' ? 'Restart session — unavailable for Copilot; Close and Resume explicitly' : profileFor(active) ? 'Restart session — unavailable in the ACP POC' : deletion.blocked(active.file?.path) ? 'Restart session — recover through Resume session first' : active.mode === 'temporary'
-    ? 'Restart session — unavailable for temporary sessions' : !active.file?.exists
-    ? 'Restart session — available after the first save' : active.restarting ? 'Restarting session…' : 'Restart session';
+  const restart = active?.integration.restart;
+  button.title = !restart ? 'Restart session — no open session' : restart.supported ? restart.reason() : restart.reason;
 }
 function layoutKey(): string { return `nimrod.tabs.v1:${workspace}`; }
 function recencyKey(): string { return `nimrod.recency.v1:${workspace}`; }
@@ -551,7 +488,7 @@ function prepareTabBookkeeping(): void {
   let changed = false;
   for (const tab of tabs) {
     const identity = tab.lifecycle.identity;
-    if (identity && 'path' in identity && recency.record(identity, tab.lastUsed)) changed = true;
+    if (identity && recency.record(identity, tab.lastUsed)) changed = true;
   }
   if (changed) save(recencyKey(), recency.dump());
   save(layoutKey(), { tabs: tabs.flatMap<SavedSidebarSession>(tab => {
@@ -585,7 +522,7 @@ async function enterWorkspace(path: string): Promise<void> {
   await preferences.refresh();
   refreshShortcutHints();
   recency = new SessionRecency(stored(recencyKey()));
-  if (recency.delete(Object.keys(recency.dump()).filter(file => deletion.removed(file)))) save(recencyKey(), recency.dump());
+  if (recency.delete(Object.keys(recency.dump()).filter(key => harnesses.projects.some(project => project.saved.removed(key))))) save(recencyKey(), recency.dump());
   ready = false; controls();
   sidebarResize.reload();
   const savedView = stored(`nimrod.sidebar.view:${path}`);
@@ -601,33 +538,25 @@ async function enterWorkspace(path: string): Promise<void> {
   save(recentKey, [path, ...recentWorkspaces().filter(p => p !== path)].slice(0, 30)); renderRecents();
   const layout = stored(layoutKey()) as { tabs?: unknown[]; active?: string } | null;
   for (const value of Array.isArray(layout?.tabs) ? layout.tabs : []) {
-    const t = readSavedSidebarSession(value);
-    if (!t) continue;
-    if ('kind' in t) {
-      const codex = t.kind === 'codex';
-      if (tabs.some(tab => tab.lifecycle.key === (codex ? codexScope(t.sessionId) : copilotSdkScope(t.sessionId)))) continue;
-      const tab = createTab('resume', undefined, t.name, lastUsed(t.lastUsed), { kind: t.kind, sessionId: t.sessionId }, t.pinned);
-      if (codex) tab.awaitingSelection = true;
+    const entry = readSavedSidebarSession(value);
+    if (!entry) continue;
+    let project: HarnessProject;
+    try { project = harnesses.forReference(entry); } catch { continue; }
+    const key = project.saved.key(entry);
+    if (project.saved.removed(key) || tabs.some(tab => tab.lifecycle.key === key)) continue;
+    try {
+      const prepared = await project.saved.prepare(entry, { title: entry.name, lastUsed: entry.lastUsed, pinned: entry.pinned }, true);
+      if (unloading) return;
+      const tab = createTab(prepared.request, project, prepared.title, prepared.lastUsed, prepared.pinned);
+      tab.awaitingSelection = tab.integration.selection.deferRestored;
       tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
-      continue;
-    }
-    if (deletion.removed(t.path) || tabs.some(tab => tab.lifecycle.key === t.path)) continue;
-    let used = Math.max(lastUsed(t.lastUsed), recency.get({ path: t.path, sessionId: t.sessionId }));
-    if (!used) {
-      try {
-        const info = await invoke<SessionFile>('inspect_workspace_session', { path: t.path });
-        if (info.path === t.path && info.sessionId === t.sessionId) used = lastUsed(info.lastUserMessageAt);
-      } catch { /* Retain unreadable entries/drafts for explicit recovery; never substitute mtime. */ }
-    }
-    if (unloading) return;
-    if (deletion.removed(t.path)) continue;
-    const tab = createTab('resume', { path: t.path, sessionId: t.sessionId, exists: true }, typeof t.name === 'string' ? t.name : 'Session', used, { kind: 'pi' }, t.pinned);
-    tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
+    } catch (failure) { if (!project.saved.removed(key)) persistenceError(failure); }
   }
   ready = true;
-  if (tabs.some(tab => tab.backend.kind === 'copilot-sdk')) rememberCopilot();
-  else startCopilotHistory();
-  if (tabs.some(tab => tab.backend.kind === 'codex')) rememberCodex(); else startCodexHistory();
+  for (const project of harnesses.projects) {
+    if (tabs.some(tab => tab.project === project)) project.history.associate();
+    else project.history.source();
+  }
   const selected = tabs.find(t => t.lifecycle.key === layout?.active) || navigation.all()[0];
   if (selected) activate(selected, 'startup');
   controls();
@@ -644,60 +573,8 @@ function openSessionPicker(): PalettePage {
     })),
   };
 }
-const piHistory = new PiSessionHistory({
-  catalog: () => invoke('list_workspace_sessions'),
-  inspect: path => invoke('inspect_workspace_session', { path }),
-  open: () => tabs.map(sessionRow),
-  removed: path => deletion.removed(path),
-  recency: reference => recency.get(reference),
-});
 function historyError(source: string, label: string, message: string): void {
   if (!unloading) notices.report({ id: `history:${source}`, operation: `Read ${label} history`, message });
-}
-function startCodexHistory(): CodexSessionHistory | undefined {
-  if (!workspace || unloading || !codexReady || stored(codexHistoryKey(workspace)) !== true) return;
-  if (!codexHistory) {
-    const project = workspace;
-    codexHistory = new CodexSessionHistory(project, nativeCodexTransport(project, () => ({ cli: runtime.current().codex, generation: codexGeneration }), true), error => historyError('codex', 'Codex', String(error)), {
-      transcriptLog: settingsSurface.transcriptLog,
-      interactionFailure: failure => { if (!unloading) notices.report({ id: `history:codex-interaction:${++noticeSequence}`, operation: 'Codex catalog interaction',
-        message: `Codex catalog requested an interaction Nimrod could not handle (${failure.method}). No answer or approval was supplied.`, details: JSON.stringify(failure, null, 2) }); },
-    });
-  }
-  return codexHistory;
-}
-function rememberCodex(): void {
-  if (!workspace) return;
-  save(codexHistoryKey(workspace), true);
-  startCodexHistory();
-}
-function startCopilotHistory(): CopilotSessionHistory | undefined {
-  if (!workspace || unloading || !copilotReady || stored(copilotHistoryKey(workspace)) !== true) return;
-  if (!copilotHistory) {
-    const project = workspace;
-    copilotHistory = new CopilotSessionHistory(project, {
-      start: (token, receive, disconnected) => {
-        const onEvent = new Channel<Packet>();
-        onEvent.onmessage = packet => { if (packet.kind === 'rpc') receive(packet.value); else disconnected(packet.message); };
-        return invoke('start_copilot', { token, config: { cwd: project, node: runtime.current().node, cli: runtime.current().copilot, generation: copilotGeneration }, onEvent });
-      },
-      send: (token, message) => invoke('write_copilot', { token, message }),
-      stop: token => invoke('stop_copilot', { token }),
-      error: error => {
-        historyError('copilot-sdk', 'Copilot', String(error));
-        if (!unloading) { for (const tab of tabs) updateTab(tab); controls(); }
-      },
-    });
-    void copilotHistory.initialize().then(() => {
-      if (!unloading) { for (const tab of tabs) updateTab(tab); controls(); }
-    }).catch(error => historyError('copilot-sdk', 'Copilot', String(error)));
-  }
-  return copilotHistory;
-}
-function rememberCopilot(): void {
-  if (!workspace) return;
-  save(copilotHistoryKey(workspace), true);
-  startCopilotHistory();
 }
 function sessionListItem(entry: SessionListEntry) {
   return {
@@ -708,21 +585,11 @@ function sessionListItem(entry: SessionListEntry) {
 }
 async function paletteSessions(signal: AbortSignal, publish: (page: PalettePage) => void, kind: 'resume' | 'delete' = 'resume'): Promise<PalettePage> {
   if (!workspace) return { items: [], notice: 'Open a project first.' };
-  const sources: SessionHistory[] = [piHistory];
-  if (stored(copilotHistoryKey(workspace)) === true) {
-    const history = startCopilotHistory();
-    if (history) sources.push(history);
-    else historyError('copilot-sdk', 'Copilot', 'Copilot history is unavailable while the SDK host is unavailable or initializing. Use Refresh after resolving the problem. Pi history remains available.');
-  }
-  if (stored(codexHistoryKey(workspace)) === true) {
-    const history = startCodexHistory();
-    if (history) sources.push(history);
-    else historyError('codex', 'Codex', 'Codex history is unavailable while its native host initializes. Use Refresh.');
-  }
+  const sources = harnesses.projects.flatMap(project => { const source = project.history.source(); return source ? [source] : []; });
   const project = workspace;
   const page = (snapshot: SessionHistorySnapshot): PalettePage => {
     const open = tabs.map(sessionRow);
-    const entries = snapshot.entries.map(entry => resolveSessionListEntry(entry, open))
+    const entries = snapshot.entries.map(entry => resolveSessionListEntry({ ...entry, timestamp: Math.max(lastUsed(entry.timestamp), entry.reference ? recency.get(entry.reference) : 0) || undefined }, open))
       .filter(entry => !deletions.removed(sessionListItem(entry).id))
       .filter(entry => kind !== 'delete' || !!entry.reference && !!deletions.operation(entry.reference, entry.title)?.supported);
     return {
@@ -800,19 +667,17 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     { id: 'select-theme', label: 'Select theme…', detail: 'Preview bundled VS Code themes and saved imports', next: true, run: () => pickTheme() },
     { id: 'resume', label: 'Resume session…', detail: 'Open a saved conversation in this project', next: true, run: () => palette.sessions() },
     { id: 'delete-sessions', label: 'Delete sessions…', detail: 'Repeatedly review and delete supported saved sessions in this project', next: true, run: () => palette.deleteSessions() },
-    { id: 'new', label: 'New session', detail: 'Pi · persistent conversation (default harness)', run: () => newSession() },
-    ...(codexReady ? [{ id: 'new-codex', label: 'New Codex session', detail: 'Start a Codex app-server session', run: newCodexSession }] : []),
-    ...(copilotReady ? [{ id: 'new-copilot', label: 'New Copilot session', detail: 'Start a Copilot session', run: newCopilotSession }] : []),
-    { id: 'new-named', label: 'New named session…', detail: 'Choose a name before starting', next: true, run: newNamedSession },
+    ...harnesses.projects.flatMap(project => project.creation.action && project.initialization.ready() ? [{ ...project.creation.action, run: () => newHarnessSession(project) }] : []),
+    ...(harnesses.get(harnesses.defaultId).creation.named ? [{ id: 'new-named', label: 'New named session…', detail: 'Choose a name before starting', next: true, run: newNamedSession }] : []),
     ...(tabs.length ? [{ id: 'switch-session', label: 'Switch session…', detail: 'All open sessions, regardless of sidebar view', next: true, run: () => palette.openSessions() }] : []),
     ...(active ? sessionCommands(active) : []),
     ...(active && restartable(active) ? [
-      { id: 'restart', label: 'Restart session', detail: 'Restart Pi and retain this conversation', run: () => restartSession(active!) },
+      { id: 'restart', label: 'Restart session', detail: active.integration.restart.supported ? active.integration.restart.detail : '', run: () => restartSession(active!) },
     ] : []),
     ...(active && tabDeletion(active)?.available() ? [{
       id: 'delete', label: tabDeletion(active)!.label, detail: tabDeletion(active)!.detail, run: () => runSessionRowAction(active, 'delete'),
     }] : []),
-    { id: 'temporary', label: 'New temporary session', detail: 'Pi · conversation without saved history', run: () => newSession('temporary') },
+    ...(harnesses.get(harnesses.defaultId).creation.modes.includes('temporary') ? [{ id: 'temporary', label: 'New temporary session', detail: 'Conversation without saved history', run: () => newSession('temporary') }] : []),
     ...(active ? [
       { id: 'pin', label: active.pinned ? 'Unpin session' : 'Pin session', detail: 'Keep this session above unpinned sessions in the sidebar', run: () => runSessionRowAction(active, 'pin') },
       { id: 'close', label: 'Close session', detail: 'Stop its agent and remove it from the sidebar; saved history stays', run: () => runSessionRowAction(active, 'close') },
@@ -865,11 +730,58 @@ const unlistenProjectPicker = await listen('nimrod-open-project', () => { void t
 function button(text: string, click: () => void): HTMLButtonElement {
   const node = document.createElement('button'); node.type = 'button'; node.textContent = text; node.addEventListener('click', click); return node;
 }
-type SessionCreation = { kind: 'pi' } | { kind: 'acp'; profile: AcpProfile } | { kind: 'copilot-sdk' | 'codex'; sessionId?: string };
-function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'temporary' ? 'Temporary session' : 'Session', used = 0, creation: SessionCreation = { kind: 'pi' }, pinned = false): Tab {
-  const acpProfile = creation.kind === 'acp' ? creation.profile : undefined;
-  const codex = creation.kind === 'codex';
-  const sdk = creation.kind === 'copilot-sdk' || codex;
+function sessionHost(tab: Tab, owner: SessionLifecycleOwner): HarnessSessionHost {
+  const project = workspace ?? '';
+  const current = () => !unloading && workspace === project && tabs.includes(tab);
+  const selected = () => presented === tab;
+  const focusComposer = () => {
+    if (current() && selected() && !settings.isOpen && !tab.closing && !tab.restarting && !document.querySelector('dialog[open]'))
+      tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true });
+  };
+  return {
+    id: tab.id, project, ownership: owner, drafts: tab.drafts,
+    performance: settingsSurface.performanceProbe, transcriptLog: settingsSurface.transcriptLog,
+    lifetime: {
+      current, selected, settingsOpen: () => settings.isOpen,
+      closing: () => tab.closing, restarting: () => tab.restarting, deleting: () => tab.deleting,
+      available: options => ready && !!project && current() && !tab.deleting && !tab.closing && !blocked(tab) && !locked(tab) && (!!options.acceptedAction || !settings.isOpen),
+      conflicts: reference => tabs.some(other => other !== tab && other.lifecycle.identity && savedSessionKey(other.lifecycle.identity) === savedSessionKey(reference)),
+    },
+    effects: {
+      publish: message => tab.receive?.(message), title: () => tab.title,
+      changed: change => {
+        if (!current()) return;
+        if (change?.title !== undefined) tab.title = change.title;
+        if (change?.clearFailed) tab.failed = false;
+        if (tab.starting) tab.awaitingSelection = false;
+        updateTab(tab); if (change?.persist) persistTabs();
+      },
+      identified: () => { if (current()) { harnesses.assertIdentity(tab.project, tab.integration); persistTabs(); syncPopouts(); } },
+      retire: () => { tab.cancelPreference?.(); if (tab.token) dialogs.cancel(tab.token); },
+      input: delta => { tab.inputCount += delta; if (current()) updateTab(tab); },
+      attention: (kind, token, label, response, signal) => {
+        const valid = () => current() && tab.token === token && !tab.closing && !tab.restarting && !tab.deleting && !signal?.aborted && (kind === 'failed' || !tab.ended);
+        if (!valid()) return;
+        if (kind === 'failed') tab.failed = true;
+        else if (kind === 'completed' && (!selected() || settings.isOpen)) tab.unread = true;
+        updateTab(tab);
+        void notifySession(kind, { valid, selected: () => selected() && !settings.isOpen, session: label,
+          target: { session: tab.id, token }, preview: kind === 'completed' ? previewResponse(response) : undefined });
+      },
+      notice: notice => { if (current() && !tab.closing) notices.report({ ...notice, id: `${tab.id}:${notice.id}`, owner: tab.id }); },
+      resolve: id => notices.resolve(`${tab.id}:${id}`),
+      connection: (message, retry, details) => { if (current() && !tab.closing && !tab.deleting) showNotice(tab, message, retry, details); },
+      hasConnectionOutcome: () => !!tab.view.hasConnectionOutcome?.(),
+      storageFailure: persistenceError,
+    },
+    ui: { document, root: tab.root, palette, dialogs, focusComposer,
+      canPresent: () => current() && selected() && !tab.closing && !tab.restarting && !tab.deleting && !tab.ended
+        && !settings.isOpen && !document.querySelector('dialog[open]:not(#command-palette)'),
+      withDialog: (action, title) => withTabDialog(tab, action, title),
+    },
+  };
+}
+function createTab(request: SessionRequest, project = harnesses.get(harnesses.defaultId), title = request.mode === 'temporary' ? 'Temporary session' : project.creation.title, used = 0, pinned = false, copyDraft?: string): Tab {
   const id = crypto.randomUUID();
   const root = document.createElement('section'); root.className = 'session-view'; root.id = `panel-${id}`; root.setAttribute('role', 'region'); root.hidden = true;
   root.innerHTML = transcript;
@@ -901,30 +813,25 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
     if (event.repeat) return;
     const rect = row.getBoundingClientRect(); void showSessionContextMenu(tab, { x: rect.left, y: rect.bottom });
   });
-  const backend: SessionBackend = creation.kind === 'copilot-sdk' || creation.kind === 'codex'
-    ? { kind: creation.kind, savedSessionId: creation.sessionId } : creation.kind === 'acp' ? { kind: 'acp', profile: creation.profile } : { kind: 'pi' };
-  const lifecycle: SessionLifecycle = backend.kind === 'codex' ? composeCodexConnection(() => tab, backend) : backend.kind === 'copilot-sdk' ? copilotSessionLifecycle(() => tab, backend, {
-    connect: options => launchCopilot(tab, options.acceptedAction),
-    stop: token => invoke<void>('stop_copilot', { token }),
-    gate: () => copilotReady && !tab.deleting && !deletions.pending ? 'ready' : 'blocked',
-  }) : backend.kind === 'acp' ? acpSessionLifecycle(() => tab, backend, {
-    connect: options => launchAcp(tab, options.acceptedAction),
-    stop: token => invoke<void>('stop_acp', { token }),
-    gate: () => acpReady && !tab.deleting ? 'ready' : 'blocked',
-  }) : piSessionLifecycle(() => tab, backend, {
-    connect: options => launchPi(tab, undefined, options.acceptedAction),
-    stop: token => invoke<void>('stop_pi', { token }),
-    gate: () => deletion.blocked(tab.file?.path) ? 'unavailable' : tab.deleting || deletion.locked(tab.file?.path) ? 'blocked' : 'ready',
-  });
-  const tab: Tab = { id, mode, file, title, pinned, backend, lifecycle, lastUsed: Math.max(lastUsed(used), file ? recency.get(file) : 0), root, notice, notices: sessionNotices, closeButton, pinButton, row, rowLabel, rowIndicator, rowTime, rowHarness, rowNode,
-    drafts: drafts.fork(), starting: false, closing: false, restarting: false, deleting: false, deletionExecuting: false, ended: false, awaitingSelection: false, inputCount: 0, unread: false, failed: deletion.blocked(file?.path),
+  const owner: SessionLifecycleOwner = { starting: false, ended: false };
+  let integration!: HarnessSession;
+  const tab: Tab = { id, title, pinned, project, get integration() { return integration; }, get lifecycle() { return integration.lifecycle; },
+    get token() { return owner.token; }, set token(value) { owner.token = value; },
+    get starting() { return owner.starting; }, set starting(value) { owner.starting = value; },
+    get ended() { return owner.ended; }, set ended(value) { owner.ended = value; },
+    lastUsed: lastUsed(used), root, notice, notices: sessionNotices, closeButton, pinButton, row, rowLabel, rowIndicator, rowTime, rowHarness, rowNode,
+    drafts: drafts.fork(), closing: false, restarting: false, deleting: false, deletionExecuting: false,
+    awaitingSelection: false, inputCount: 0, unread: false, failed: false,
     view: { setActive() {}, scrollToBottom() {}, dispose() {} } };
+  try { integration = harnesses.create(project, sessionHost(tab, owner), request); }
+  catch (error) { sessionNotices.dispose(); root.remove(); rowNode.remove(); throw error; }
+  tab.failed = blocked(tab);
   root.addEventListener('focusin', event => { if (event.target instanceof HTMLElement) tab.focus = event.target; });
-  tab.drafts.select(lifecycle.draftScope ?? (file ? `file:${file.path}` : mode === 'temporary' ? `temporary:${workspace}:${id}` : `unassigned:${id}`));
+  tab.drafts.select(integration.lifecycle.draftScope ?? (integration.drafts.durability === 'memory' ? `temporary:${workspace}:${id}` : `unassigned:${id}`), copyDraft);
   const ephemeralImages = new Set<string>();
   let imagesDisposed = false;
   function releaseTemporaryImages(): void {
-    if (tab.mode !== 'temporary') return;
+    if (tab.integration.drafts.durability !== 'memory') return;
     const retained = referencedAttachments(tab.drafts.read());
     for (const id of ephemeralImages) if (!retained.has(id)) { temporaryImages.delete(id); ephemeralImages.delete(id); }
   }
@@ -932,25 +839,10 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
   function guardCardAction(): void {
     if (!ready || !workspace || presented !== tab || !tabs.includes(tab) || tab.closing || tab.restarting || tab.deleting || document.querySelector('dialog[open]')) throw new Error('Card action is no longer available');
   }
-  const projectPi = createPiViewProjection();
   tab.view = mountConversationView({
     projectDirectory: workspace,
-    interaction: codex ? codexInteraction(text => tab.starting || !codexSession(tab) ? 'Codex is still connecting. Your draft was kept.' : codexSession(tab)!.validatePrompt(text)) : sdk ? copilotInteraction(text => tab.starting || !copilotSession(tab)
-      ? 'Copilot is still connecting. Your draft was kept.' : copilotSession(tab)!.validatePrompt(text)) : acpProfile ? acpInteraction(acpProfile.name, text => tab.starting || !acpSession(tab)
-      ? 'ACP is still connecting. Your draft was kept.' : acpSession(tab)!.validatePrompt(text)) : piInteraction,
-    messageInput: {
-      capabilities: () => tab.backend.session?.messageInput.capabilities() ?? { imageUnavailableReason: 'Connect this session before attaching images.' },
-      submit: async message => {
-        const session = tab.backend.session;
-        if (!session || unloading || tab.closing || tab.restarting || tab.deleting || !tabs.includes(tab)) {
-          tab.receive?.({ type: 'submissionReceipt', id: message.id, outcome: 'rejected', error: 'Session is no longer available. Nothing was sent.' });
-          return;
-        }
-        try { const submitted = session.messageInput.submit(message); updateTab(tab); await submitted; }
-        catch (error) { tab.receive?.({ type: 'submissionReceipt', id: message.id, outcome: 'unknown', error: `Delivery was not confirmed: ${String(error)}. Nothing was replayed.` }); }
-        finally { if (tabs.includes(tab) && tab.backend.session === session) updateTab(tab); }
-      },
-    },
+    interaction: integration.conversation.interaction,
+    messageInput: integration.conversation.messageInput,
     sendAutoFollow: () => preferences.sendAutoFollow(),
     autocompleteAccept: () => preferences.autocompleteAccept(),
     performance: settingsSurface.performanceProbe,
@@ -960,6 +852,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
     },
     resolveNotice: id => notices.resolve(`${tab.id}:${id}`),
     resolveNoticeCause: cause => notices.store.resolveCause(cause, tab.id),
+    cardSource: { backend: project.id },
     cardRenderer: data => cardPlugins.select(data),
     cardActions: {
       copy: async text => { guardCardAction(); await writeText(text); },
@@ -975,7 +868,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
     attachments: {
       readClipboard: readClipboardImage,
       put: async (blob, name) => {
-        if (mode !== 'temporary') return attachmentStore.put(blob, name);
+        if (integration.drafts.durability !== 'memory') return attachmentStore.put(blob, name);
         const { validateImageDimensions } = await import('./image-attachments');
         await validateImageDimensions(blob);
         if (imagesDisposed) throw new Error('Temporary session closed while preparing image.');
@@ -984,7 +877,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
         temporaryImages.set(image.id, blob); ephemeralImages.add(image.id); return image;
       },
       get: async image => {
-        if (mode !== 'temporary') return attachmentStore.get(image);
+        if (integration.drafts.durability !== 'memory') return attachmentStore.get(image);
         const blob = temporaryImages.get(image.id);
         if (!blob) throw new Error('Temporary image draft is missing.');
         return blob;
@@ -997,11 +890,11 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
       const next = value as typeof previous;
       releaseTemporaryImages();
       // Best-effort durability of cleared drafts, not a gate on prompt dispatch.
-      if (tab.mode !== 'temporary' && (previous?.recovered !== next?.recovered || previous?.attachments !== next?.attachments || (previous?.draft && !next?.draft))) void nativeDrafts?.flush().catch(draftPersistenceError);
+      if (tab.integration.drafts.durability !== 'memory' && (previous?.recovered !== next?.recovered || previous?.attachments !== next?.attachments || (previous?.draft && !next?.draft))) void nativeDrafts?.flush().catch(draftPersistenceError);
     },
-    onMessage: receive => { tab.receive = message => receive(acpProfile || sdk || !message.state ? message : { ...message, state: projectPi(message.state) }); },
+    onMessage: receive => { tab.receive = receive; },
     promptSubmitted: () => {
-      if (!unloading && tabs.includes(tab) && tab.backend.session && !tab.ended && !tab.closing && !tab.restarting && !tab.deleting) touchTab(tab);
+      if (!unloading && tabs.includes(tab) && tab.integration.conversation.state && !tab.ended && !tab.closing && !tab.restarting && !tab.deleting) touchTab(tab);
     },
     postMessage: message => {
       if (message.type === 'deletionState') return;
@@ -1021,21 +914,11 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
       if (message.type === 'selectControl') {
         const action = sessionActions(tab).find(candidate => candidate.id === message.id);
         if (action) void runSessionAction(tab, action.id);
-        else {
-          const option = typeof message.id === 'string' ? acpSession(tab)?.controlOption(message.id) : undefined;
-          if (option) void pickAcpOption(tab, undefined, option);
-        }
+        else if (typeof message.id === 'string') void integration.actions.control(message.id).catch(error => { if (tabs.includes(tab)) notices.report({ id: `${tab.id}:control:${++noticeSequence}`, owner: tab.id, operation: 'Session control', message: String(error) }); });
         return;
       }
       if (message.type === 'inspectMcp') { void runSessionAction(tab, 'mcp'); return; }
-      const backend = tab.backend;
-      if (!backend.session) return;
-      if (backend.kind !== 'pi') void backend.session.handle(message).catch(error => showNotice(tab, String(error)));
-      else {
-        const session = backend.session;
-        void session.handle(message).finally(() => { if (tabs.includes(tab) && tab.backend.session === session) updateTab(tab); });
-        updateTab(tab);
-      }
+      void integration.conversation.handle(message).catch(error => showNotice(tab, String(error)));
     },
   }, root);
   tab.receive?.({ type: 'snapshot', state: { sessionUnavailable: true } });
@@ -1046,7 +929,7 @@ function activate(tab: Tab, intent: SelectionIntent = 'explicit'): void {
   if (!ready) return;
   const plan = navigation.selection(tab, navigationSnapshot(), intent);
   if (!plan) return;
-  if (intent !== 'startup' && (tab.backend.kind !== 'codex' || intent === 'explicit' || intent === 'row' || intent === 'notification')) tab.awaitingSelection = false;
+  if (tab.integration.selection.releasesDeferral(intent)) tab.awaitingSelection = false;
   notificationNavigation++;
   if (plan.view !== sidebarView) {
     sidebarView = plan.view;
@@ -1066,44 +949,30 @@ function refreshTime(tab: Tab): void {
   updateSessionRowTime(tab.rowTime, tab.lastUsed);
 }
 function status(tab: Tab) {
-  const state = tab.backend.session?.state;
+  const state = tab.integration.conversation.state, projection = tab.integration.presentation.snapshot();
   // A preview lock is not activity; show Deleting only after confirmation.
-  return sessionStatus({ ...tab, deleting: tab.deletionExecuting, blocked: deletion.blocked(tab.file?.path),
-    inactive: tab.ended || !state || state.sessionUnavailable, compacting: piSession(tab)?.state.compacting,
-    busy: state?.busy || !!presentActivity(false, '', piSession(tab)?.state.extensionStatuses).subagents, pending: promptPending(tab) });
+  return sessionStatus({ ...tab, deleting: tab.deletionExecuting, blocked: blocked(tab),
+    inactive: tab.ended || !state || state.sessionUnavailable, compacting: projection.compacting,
+    busy: projection.working, pending: projection.pending });
 }
 function sessionRow(tab: Tab): SessionListEntry {
   const reference = tab.lifecycle.identity;
   return {
     key: reference ? savedSessionKey(reference) : tab.id,
-    title: tab.title, harnessLabel: tab.backend.kind === 'codex' ? 'Codex' : tab.backend.kind === 'copilot-sdk' ? 'Copilot' : profileFor(tab) ? `${profileFor(tab)!.name} ACP` : 'Pi',
+    title: tab.title, harnessLabel: tab.integration.presentation.snapshot().harnessLabel,
     timestamp: tab.lastUsed || undefined, open: true, status: status(tab), reference,
   };
 }
 function updateTab(tab: Tab): void {
   measureWork(settingsSurface.performanceProbe, 'sidebar-row-update', () => updateTabPresentation(tab), presented === tab);
 }
-/** State dependencies of sidebar/title/bookkeeping updates; local tab effects run separately. */
-function shellPresentationChanged(before: ConversationState | undefined, after: ConversationState): boolean {
-  if (!before) return true;
-  if (before.busy !== after.busy || before.compacting !== after.compacting
-    || before.sessionUnavailable !== after.sessionUnavailable || before.sessionName !== after.sessionName
-    || before.extensionStatuses !== after.extensionStatuses || before.queue !== after.queue
-    || before.modelControls !== after.modelControls) return true;
-  if (before.messages === after.messages) return false;
-  const changes = messageChanges(after.messages);
-  // Only user content supplies an automatic session title. Untracked history
-  // replacement is conservative even if its visible title happens to be equal.
-  if (!changes || changes.previous !== messageVersion(before.messages)) return true;
-  return changes.indices.some(index => after.messages[index].role === 'user');
-}
 function updateTabPresentation(tab: Tab): void {
   tab.root.inert = tab.closing || tab.restarting || tab.deleting || tab !== presented;
   const entry = sessionRow(tab), name = sessionListLabel(entry);
-  tab.root.setAttribute('aria-busy', String(tab.backend.session?.state.busy === true));
+  tab.root.setAttribute('aria-busy', String(tab.integration.conversation.state?.busy === true));
   updateSessionRowContent(tab, entry, false);
   tab.row.disabled = !ready;
-  tab.row.setAttribute('aria-current', String(tab === presented)); tab.closeButton.setAttribute('aria-label', `Close ${name}`); tab.closeButton.disabled = !ready || tab.deleting || deletion.locked(tab.file?.path) || tab.closing || tab.starting || tab.restarting;
+  tab.row.setAttribute('aria-current', String(tab === presented)); tab.closeButton.setAttribute('aria-label', `Close ${name}`); tab.closeButton.disabled = !ready || tab.deleting || locked(tab) || tab.closing || tab.starting || tab.restarting;
   tab.pinButton.setAttribute('aria-label', `${tab.pinned ? 'Unpin' : 'Pin'} ${name}`);
   tab.pinButton.setAttribute('aria-pressed', String(tab.pinned));
   tab.pinButton.title = tab.pinned ? 'Unpin session' : 'Pin session';
@@ -1116,7 +985,7 @@ function updateTabPresentation(tab: Tab): void {
 function showNotice(tab: Tab, text: string, retry = false, details?: string): void {
   tab.notice.hidden = true; tab.notice.replaceChildren();
   notices.report({ id: `${tab.id}:connection`, owner: tab.id, cause: 'connection', priority: 10, operation: 'Session connection', message: text, ...(details === undefined ? {} : { details }),
-    actions: retry && !deletion.blocked(tab.file?.path) ? [{ label: 'Retry connection', enabled: () => tabs.includes(tab) && !tab.closing && !tab.restarting && !tab.deleting && !deletion.locked(tab.file?.path), run: () => tab.lifecycle.connect() }] : undefined,
+    actions: retry && !blocked(tab) ? [{ label: 'Retry connection', enabled: () => tabs.includes(tab) && !tab.closing && !tab.restarting && !tab.deleting && !locked(tab), run: () => tab.lifecycle.connect() }] : undefined,
   });
   updateTab(tab);
 }
@@ -1130,7 +999,7 @@ function sessionCommands(tab: Tab) {
     .map(action => ({ ...action, next: action.id !== 'cancel-configuration', run: () => runSessionAction(tab, action.id) }));
 }
 function cancelConfiguration(tab: Tab, key?: string): void {
-  if (!tabs.includes(tab) || tab.ended || tab.closing || tab.restarting || tab.deleting || deletion.blocked(tab.file?.path)) return;
+  if (!tabs.includes(tab) || tab.ended || tab.closing || tab.restarting || tab.deleting || blocked(tab)) return;
   const configuration = sessionConfiguration(tab);
   const target = key ?? configuration?.operations.find(operation => operation.cancellable)?.key;
   if (target) configuration?.cancel?.(target);
@@ -1147,61 +1016,17 @@ async function pickConfigurationCancellation(tab: Tab): Promise<void> {
     if (key && tab.cancelPreference === request.cancel && sessionConfiguration(tab) === configuration) cancelConfiguration(tab, key);
   } finally { request.finish(); if (tab.cancelPreference === request.cancel) tab.cancelPreference = undefined; }
 }
+function sessionConfiguration(tab: Tab) { return tab.integration.configuration.current(); }
+function sessionActions(tab: Tab): readonly SessionAction[] {
+  return availableSessionActions(tab.integration, () => pickConfigurationCancellation(tab));
+}
 async function runSessionAction(tab: Tab, id: SessionAction['id']): Promise<void> {
-  if (!tabs.includes(tab) || tab.closing || tab.restarting || tab.deleting || !ACTIONS.some(action => action.id === id) || !sessionActions(tab).some(action => action.id === id)) return;
-  if (id === 'cancel-configuration') return pickConfigurationCancellation(tab);
+  if (!tabs.includes(tab) || tab.closing || tab.restarting || tab.deleting) return;
   const action = sessionActions(tab).find(action => action.id === id);
-  if (action?.run) return action.run();
-  if (action?.configurationSetting) return pickConfigurationSetting(tab, action.configurationSetting, action.label.replace(/…$/, ''));
-  if (id === 'mcp') return inspectMcp(tab);
-  if (id === 'acp-options') return pickAcpOption(tab);
-  return pickPreference(tab, id as 'model' | 'thinking' | 'mode' | 'context-window');
-}
-async function inspectMcp(tab: Tab): Promise<void> {
-  if (profileFor(tab)) return;
-  const request = palette.startInspection('MCP servers', () => { void inspectMcp(tab); });
-  if (!request) return;
-  tab.cancelInspector = request.cancel;
-  const session = piSession(tab);
-  const valid = () => tabs.includes(tab) && piSession(tab) === session && !tab.ended && !tab.closing && !tab.restarting && !tab.deleting && !deletion.blocked(tab.file?.path);
-  if (!session || !valid()) {
-    request.cancel();
-    if (tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:mcp-inspection`, owner: tab.id, operation: 'Inspect MCP servers', message: 'Connect this session before inspecting MCP servers.' });
-    return;
-  }
-  try {
-    const report = await session.inspectMcp();
-    if (!request.isCurrent()) return;
-    if (!valid()) { request.cancel(); return; }
-    notices.resolve(`${tab.id}:mcp-inspection`);
-    const attention = new Set(['failed', 'needs sign-in', 'disconnected']);
-    request.show({
-      items: [
-        ...[...report.servers].sort((a, b) => Number(attention.has(b.state)) - Number(attention.has(a.state))).map(server => ({
-          id: server.name, label: server.name, badge: server.state,
-          detail: `${server.toolCount === undefined ? 'Tool count unavailable' : `${server.toolCount} tools`} · ${server.exposure}`,
-          keywords: server.details,
-          inspection: { fields: [
-            ['Connection', server.state], ['Exposure', server.exposure],
-            ['Tools', server.toolCount === undefined ? 'Not reported' : String(server.toolCount)],
-          ] as [string, string][], text: server.details || (server.state === 'disconnected' ? 'Pi reconnects this server on its next call.' : undefined) },
-          run() {},
-        })),
-        ...(report.diagnostics.length ? [{ id: ':diagnostics', label: 'Configuration diagnostics', detail: `${report.diagnostics.length} reported entries`, inspection: { fields: [] as [string, string][], text: report.diagnostics.join('\n\n') }, run() {} }] : []),
-      ],
-      notice: report.empty || 'Read-only snapshot from Pi · Refresh to update. Tool details and configuration sources are not exposed by this status API.',
-    });
-  } catch (error) {
-    if (!request.isCurrent()) return;
-    request.cancel();
-    if (valid()) notices.report({ id: `${tab.id}:mcp-inspection`, owner: tab.id, operation: 'Inspect MCP servers', message: String(error) });
-  }
-}
-async function pickPreference(tab: Tab, kind: 'model' | 'thinking' | 'mode' | 'context-window'): Promise<void> {
-  const operation = kind === 'model' ? 'Select model' : kind === 'thinking' ? 'Select thinking level'
-    : kind === 'mode' ? 'Select mode' : 'Select context window';
-  const setting = kind === 'model' ? 'model' : kind === 'thinking' ? 'effort' : kind === 'context-window' ? 'context-tier' : 'mode';
-  return pickConfigurationSetting(tab, setting, operation);
+  if (!action) return;
+  if (action.run) return action.run();
+  if (typeof action.configurationSetting === 'string') return pickConfigurationSetting(tab, action.configurationSetting, action.label.replace(/…$/, ''));
+  throw new Error('Advertised session action has no implementation');
 }
 async function pickConfigurationSetting(tab: Tab, setting: string, operation: string): Promise<void> {
   const request = palette.startSelection(operation, () => { void pickConfigurationSetting(tab, setting, operation); }, message => {
@@ -1209,7 +1034,7 @@ async function pickConfigurationSetting(tab: Tab, setting: string, operation: st
   });
   if (!request) return;
   const configuration = sessionConfiguration(tab);
-  if (!configuration || tab.ended || tab.closing || tab.restarting || tab.deleting || deletion.blocked(tab.file?.path)) { request.error('Resume this session before changing its configuration.'); return; }
+  if (!configuration || tab.ended || tab.closing || tab.restarting || tab.deleting || blocked(tab)) { request.error('Resume this session before changing its configuration.'); return; }
   tab.cancelPreference?.(); tab.cancelPreference = request.cancel;
   const valid = () => tabs.includes(tab) && sessionConfiguration(tab) === configuration && tab.cancelPreference === request.cancel
     && !tab.ended && !tab.closing && !tab.restarting && !tab.deleting;
@@ -1218,566 +1043,6 @@ async function pickConfigurationSetting(tab: Tab, setting: string, operation: st
       (options, current) => request.chooseItems(options.map(option => ({ id: option.value, label: option.label, detail: option.detail, keywords: option.keywords })), current), valid);
   } catch (error) { if (valid()) request.error(String(error)); }
   finally { request.finish(); if (tab.cancelPreference === request.cancel) tab.cancelPreference = undefined; }
-}
-async function pickAcpOption(tab: Tab, kind?: 'model' | 'thinking', selectedOption?: import('./acp/session').AcpOption): Promise<void> {
-  const session = acpSession(tab);
-  if (!session || tab.ended || tab.closing) return;
-  const operation = kind === 'model' ? 'Select model' : kind === 'thinking' ? 'Select thinking level' : 'ACP session options';
-  const request = palette.startSelection(operation, () => { void pickAcpOption(tab, kind); }, message => {
-    if (tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:acp-option:${++noticeSequence}`, owner: tab.id, operation, message });
-  });
-  if (!request) return;
-  tab.cancelPreference?.(); tab.cancelPreference = request.cancel;
-  try {
-    let option = selectedOption ?? (kind ? session.options.find(option => option.category === (kind === 'model' ? 'model' : 'thought_level')) : undefined);
-    if (!kind && !selectedOption) {
-      const options = session.options.slice(), labels = options.map((option, index) => `${index + 1}. ${option.name}`);
-      const choice = await request.choose(labels);
-      const selected = choice ? options[labels.indexOf(choice)] : undefined;
-      if (selected && tabs.includes(tab) && acpSession(tab) === session && !tab.ended && !tab.closing) return pickAcpOption(tab, undefined, selected);
-      return;
-    }
-    if (!option) { request.error('This ACP option is no longer available.'); return; }
-    if (tab.cancelPreference !== request.cancel || acpSession(tab) !== session || tab.closing || tab.ended) return;
-    await session.selectOption(option, (_title, values, current) => request.choose(values, current));
-  } catch (error) { request.error(String(error)); }
-  finally { request.finish(); if (tab.cancelPreference === request.cancel) tab.cancelPreference = undefined; }
-}
-function requestAcpPermission(tab: Tab, request: import('./acp/client').AcpPermissionRequest, signal: AbortSignal): Promise<string | undefined> {
-  return requestSessionChoice(tab, renderPermissionDetails(document, request.toolCall), request.options.map(option => ({ id: option.optionId, label: option.name, kind: option.kind })), signal);
-}
-function requestSessionChoice(tab: Tab, details: HTMLElement, options: { id: string; label: string; kind?: string }[], signal: AbortSignal): Promise<string | undefined> {
-  if (signal.aborted || !tabs.includes(tab) || tab.closing) return Promise.resolve(undefined);
-  return new Promise(resolve => {
-    const region = document.createElement('section'); region.className = 'acp-permission'; region.setAttribute('role', 'group'); region.setAttribute('aria-label', 'Agent permission request');
-    region.append(details);
-    const actions = document.createElement('div'); actions.className = 'acp-permission-actions'; region.append(actions);
-    const raw = details.querySelector('.acp-permission-raw'); if (raw) region.append(raw);
-    let settled = false;
-    const finish = (choice?: string) => {
-      if (settled) return; settled = true;
-      signal.removeEventListener('abort', abort);
-      const restoreFocus = region.contains(document.activeElement);
-      region.remove(); tab.inputCount--; if (tabs.includes(tab)) updateTab(tab);
-      if (restoreFocus && presented === tab && !tab.closing && !document.querySelector('dialog[open]')) tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true });
-      resolve(choice);
-    };
-    const abort = () => finish();
-    for (const option of options) {
-      const control = button(option.label, () => { if (!signal.aborted && presented === tab && !tab.closing && !document.querySelector('dialog[open]')) finish(option.id); });
-      if (option.kind) control.dataset.permissionKind = option.kind; actions.append(control);
-    }
-    actions.append(button('Cancel request', () => finish()));
-    signal.addEventListener('abort', abort, { once: true });
-    tab.inputCount++;
-    tab.root.querySelector('[data-pi-id="composer-area"]')!.prepend(region);
-    updateTab(tab); // No focus, modal, navigation or background live-region announcement.
-    const token = tab.token;
-    if (token) void notifySession('input', {
-      valid: () => !signal.aborted && !unloading && tabs.includes(tab) && tab.token === token && !tab.closing && !tab.ended,
-      selected: () => presented === tab && !settings.isOpen,
-      session: tab.backend.kind === 'copilot-sdk' ? 'Copilot' : profileFor(tab)?.name || 'ACP session', target: { session: tab.id, token },
-    });
-  });
-}
-const codexQuestions = new WeakMap<Tab, CodexQuestionInteraction>();
-function requestCodexQuestion(tab: Tab, request: CodexQuestionRequest, signal: AbortSignal): Promise<CodexQuestionAnswers | undefined> {
-  if (signal.aborted || unloading || tab.closing || !tabs.includes(tab)) return Promise.resolve(undefined);
-  let interaction = codexQuestions.get(tab);
-  if (!interaction) {
-    const inputOwner = `${tab.id}:codex-question-input`;
-    const canPresent = () => !unloading && tabs.includes(tab) && presented === tab && !tab.closing && !tab.restarting && !tab.deleting && !tab.ended
-      && !settings.isOpen && !document.querySelector('dialog[open]:not(#command-palette)');
-    interaction = new CodexQuestionInteraction({
-      document, canPresent,
-      start: dismiss => canPresent() ? palette.startRetainedSelection('Codex question', dismiss) : undefined,
-      input: question => dialogs.input(question, undefined, inputOwner, 'Submit answer'),
-      cancelInput: () => dialogs.cancel(inputOwner),
-      changed: delta => { tab.inputCount += delta; if (tabs.includes(tab)) updateTab(tab); },
-      banner: (count, review) => {
-        const id = `${tab.id}:codex-question`;
-        if (!count) { notices.resolve(id); return; }
-        notices.report({ id, owner: tab.id, operation: 'Codex questions',
-          message: `Waiting for input · ${count} ${count === 1 ? 'question' : 'questions'}`,
-          presentation: 'pending-action', severity: 'info', dismissible: false,
-          actions: [{ label: 'Answer question', enabled: canPresent, run: review }] });
-      },
-      error: message => { if (!unloading && tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:codex-question-error:${++noticeSequence}`, owner: tab.id, operation: 'Answer Codex question', message }); },
-    });
-    codexQuestions.set(tab, interaction);
-  }
-  const result = interaction.request(request, signal), token = tab.token;
-  if (token) void notifySession('input', { valid: () => !signal.aborted && !unloading && tabs.includes(tab) && tab.token === token && !tab.closing && !tab.ended,
-    selected: () => presented === tab && !settings.isOpen, session: 'Codex', target: { session: tab.id, token } });
-  return result;
-}
-const codexApprovals = new WeakMap<Tab, CodexApprovalInteraction>();
-function requestCodexApproval(tab: Tab, request: CodexApproval, signal: AbortSignal): Promise<CodexApprovalDecision> {
-  if (signal.aborted || tab.closing || !tabs.includes(tab)) return Promise.resolve('cancel');
-  let interaction = codexApprovals.get(tab);
-  if (!interaction) {
-    const canPresent = () => !unloading && tabs.includes(tab) && presented === tab && !tab.closing && !tab.restarting && !tab.deleting && !tab.ended
-      && !settings.isOpen && !document.querySelector('dialog[open]:not(#command-palette)');
-    interaction = new CodexApprovalInteraction({
-      document, canPresent,
-      start: dismiss => canPresent() ? palette.startRetainedSelection('Codex approval', dismiss) : undefined,
-      changed: delta => { tab.inputCount += delta; if (tabs.includes(tab)) updateTab(tab); },
-      banner: (count, review) => {
-        const id = `${tab.id}:codex-approval`;
-        if (!count) { notices.resolve(id); return; }
-        notices.report({ id, owner: tab.id, operation: 'Codex approval', message: `Waiting for permission · ${count} ${count === 1 ? 'request' : 'requests'}`,
-          presentation: 'pending-action', severity: 'info', dismissible: false,
-          actions: [{ label: 'Review requests', enabled: canPresent, run: review }] });
-      },
-    });
-    codexApprovals.set(tab, interaction);
-  }
-  const result = interaction.request(request, signal), token = tab.token;
-  if (token) void notifySession('input', { valid: () => !signal.aborted && !unloading && tabs.includes(tab) && tab.token === token && !tab.closing && !tab.ended,
-    selected: () => presented === tab && !settings.isOpen, session: 'Codex', target: { session: tab.id, token } });
-  return result;
-}
-async function newCodexSession(): Promise<void> {
-  if (!ready || !codexReady || settings.isOpen || !await ensureWorkspace() || unloading || deletions.pending) return;
-  rememberCodex();
-  const tab = createTab('saved', undefined, 'Codex session', navigation.nextRecency(), { kind: 'codex' });
-  activate(tab); await tab.lifecycle.connect({ acceptedAction: true });
-}
-/** Composition only: Codex owns startup/identity/cleanup; the shell owns these effects. */
-function composeCodexConnection(readTab: () => Tab, backend: Extract<SessionBackend, { kind: 'codex' }>): SessionLifecycle {
-  const project = workspace ?? ''; // No project means unavailable; never start a native transport.
-  let signature = '';
-  return createCodexConnection(readTab, backend, {
-    project,
-    transport: nativeCodexTransport(project, () => ({ cli: runtime.current().codex, generation: codexGeneration })),
-    current: () => !unloading && workspace === project && tabs.includes(readTab()),
-    available: options => ready && codexReady && !!project && !deletions.pending && !readTab().deleting
-      && !readTab().closing && !readTab().restarting && (!!options.acceptedAction || !settings.isOpen),
-    tearingDown: () => readTab().closing || readTab().deleting,
-    gate: () => codexReady && !readTab().deleting && !deletions.pending ? 'ready' : 'blocked',
-    conflicts: id => tabs.some(other => other !== readTab() && other.backend.kind === 'codex' && other.lifecycle.identity?.sessionId === id),
-    drafts: { read: () => readTab().drafts.read(), bindScope: scope => readTab().drafts.bindScope(scope) },
-    effects: {
-      changed: () => { const tab = readTab(); if (tab.starting) tab.awaitingSelection = false; updateTab(tab); controls(); },
-      identified: persistTabs,
-      retire: () => readTab().cancelPreference?.(),
-      resolved: issue => notices.resolve(`${readTab().id}:${issue === 'cleanup' ? 'codex-cleanup' : 'connection'}`),
-      hasConnectionOutcome: () => !!readTab().view.hasConnectionOutcome?.(),
-      failure: failure => {
-        const tab = readTab(); if (tab.closing || tab.deleting) return;
-        if (failure.kind === 'cleanup') notices.report({ id: `${tab.id}:codex-cleanup`, owner: tab.id, operation: 'Stop Codex', message: failure.message, details: failure.details });
-        else showNotice(tab, failure.message, failure.resumable, failure.details);
-      },
-    },
-    ui: {
-      transcriptLog: settingsSurface.transcriptLog,
-      publish: message => readTab().receive?.(message),
-      changed: state => {
-        const tab = readTab();
-        if (state.sessionName) tab.title = state.sessionName;
-        else if (tab.title === 'Codex session') {
-          const user = state.messages.find(row => row.role === 'user');
-          const text = typeof user?.content === 'string' ? user.content : Array.isArray(user?.content) ? user.content.map(block => block.text || '').join('') : '';
-          if (text.trim()) tab.title = text.trim().replace(/\s+/g, ' ').slice(0, 70);
-        }
-        const next = JSON.stringify([state.busy, state.sessionUnavailable, tab.title]);
-        if (next !== signature) { signature = next; if (state.busy) tab.failed = false; updateTab(tab); if (tab.lifecycle.identity) persistTabs(); }
-      },
-      approval: (request, signal) => requestCodexApproval(readTab(), request, signal),
-      question: (request, signal) => requestCodexQuestion(readTab(), request, signal),
-      interactionFailure: failure => {
-        const tab = readTab(); if (tab.closing) return;
-        const guidance = settingsSurface.transcriptLog.enabled ? 'Transcript debug logging is enabled; inspect it for the raw request.' : 'Enable Transcript debug logs before another attempt to capture the raw request.';
-        notices.report({ id: `${tab.id}:codex-interaction:${++noticeSequence}`, owner: tab.id, operation: 'Codex interaction',
-          message: `Codex requested an interaction Nimrod could not handle (${failure.method}). No answer or approval was supplied. ${guidance}`,
-          details: JSON.stringify(failure, null, 2) });
-      },
-      notice: message => { const tab = readTab(); if (!tab.closing) notices.report({ id: `${tab.id}:codex:${++noticeSequence}`, owner: tab.id, operation: 'Codex', message }); },
-      completed: (failed, response) => {
-        const tab = readTab(), token = tab.token!;
-        if (tab.closing || tab.deleting) return;
-        if (failed) tab.failed = true; else if (presented !== tab || settings.isOpen) tab.unread = true;
-        updateTab(tab);
-        void notifySession(failed ? 'failed' : 'completed', { valid: () => !unloading && tabs.includes(tab) && tab.token === token && !tab.closing, selected: () => presented === tab && !settings.isOpen,
-          session: 'Codex', target: { session: tab.id, token }, preview: failed ? undefined : previewResponse(response) });
-      },
-    },
-  });
-}
-const copilotPermissions = new WeakMap<Tab, CopilotPermissionInteraction>();
-const copilotQuestions = new WeakMap<Tab, CopilotQuestionInteraction>();
-const copilotPlans = new WeakMap<Tab, CopilotPlanInteraction>();
-async function requestCopilotDecision(tab: Tab, kind: 'permission' | 'input' | 'plan', request: Record<string, unknown>, signal: AbortSignal): Promise<CopilotDecision | undefined> {
-  if (kind === 'permission') {
-    if (signal.aborted || !tabs.includes(tab) || tab.closing) return { kind: 'user-not-available' };
-    let interaction = copilotPermissions.get(tab);
-    if (!interaction) {
-      const feedbackOwner = `${tab.id}:permission-feedback`;
-      const canPresent = () => !unloading && presented === tab && tabs.includes(tab) && !tab.closing && !tab.restarting && !tab.deleting && !tab.ended
-        && !settings.isOpen && !document.querySelector('dialog[open]:not(#command-palette)');
-      interaction = new CopilotPermissionInteraction({
-        document, project: workspace, canPresent,
-        start: dismiss => canPresent() ? palette.startRetainedSelection('Copilot permission', dismiss) : undefined,
-        feedback: () => dialogs.input('Reason or suggested alternative', undefined, feedbackOwner, 'Send denial'),
-        cancelFeedback: () => dialogs.cancel(feedbackOwner),
-        changed: delta => { tab.inputCount += delta; if (tabs.includes(tab)) updateTab(tab); },
-        banner: (count, review) => {
-          const id = `${tab.id}:permission-required`;
-          if (!count) { notices.resolve(id); return; }
-          notices.report({ id, owner: tab.id, operation: 'Copilot permissions',
-            message: `Waiting for permission · ${count} ${count === 1 ? 'request' : 'requests'}`,
-            presentation: 'pending-action', severity: 'info', dismissible: false,
-            actions: [{ label: 'Review requests', enabled: () => !unloading && tabs.includes(tab) && presented === tab && !tab.closing, run: review }] });
-        },
-        error: message => { if (tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:permission-error:${++noticeSequence}`, owner: tab.id, operation: 'Permission feedback', message }); },
-      });
-      copilotPermissions.set(tab, interaction);
-    }
-    const choice = interaction.request(request, signal);
-    const token = tab.token;
-    if (token) void notifySession('input', {
-      valid: () => !signal.aborted && !unloading && tabs.includes(tab) && tab.token === token && !tab.closing && !tab.ended,
-      selected: () => presented === tab && !settings.isOpen,
-      session: 'Copilot', target: { session: tab.id, token },
-    });
-    return await choice ?? { kind: 'user-not-available' };
-  }
-  if (kind === 'input') {
-    if (signal.aborted || !tabs.includes(tab) || tab.closing) return;
-    let interaction = copilotQuestions.get(tab);
-    if (!interaction) {
-      const inputOwner = `${tab.id}:question-input`;
-      const canPresent = () => !unloading && presented === tab && tabs.includes(tab) && !tab.closing && !tab.restarting && !tab.deleting && !tab.ended
-        && !settings.isOpen && !document.querySelector('dialog[open]:not(#command-palette)');
-      interaction = new CopilotQuestionInteraction({
-        document, canPresent,
-        start: dismiss => canPresent() ? palette.startRetainedSelection('Copilot question', dismiss) : undefined,
-        input: question => dialogs.input(question, undefined, inputOwner, 'Submit answer'),
-        cancelInput: () => dialogs.cancel(inputOwner),
-        changed: delta => { tab.inputCount += delta; if (tabs.includes(tab)) updateTab(tab); },
-        banner: (count, review) => {
-          const id = `${tab.id}:question-required`;
-          if (!count) { notices.resolve(id); return; }
-          notices.report({ id, owner: tab.id, operation: 'Copilot questions',
-            message: `Waiting for input · ${count} ${count === 1 ? 'question' : 'questions'}`,
-            presentation: 'pending-action', severity: 'info', dismissible: false,
-            actions: [{ label: 'Answer question', enabled: () => !unloading && tabs.includes(tab) && presented === tab && !tab.closing, run: review }] });
-        },
-        error: message => { if (tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:question-error:${++noticeSequence}`, owner: tab.id, operation: 'Answer question', message }); },
-      });
-      copilotQuestions.set(tab, interaction);
-    }
-    const choice = interaction.request(request, signal);
-    const token = tab.token;
-    if (token) void notifySession('input', {
-      valid: () => !signal.aborted && !unloading && tabs.includes(tab) && tab.token === token && !tab.closing && !tab.ended,
-      selected: () => presented === tab && !settings.isOpen,
-      session: 'Copilot', target: { session: tab.id, token },
-    });
-    return choice;
-  }
-  if (signal.aborted || !tabs.includes(tab) || tab.closing) return;
-  let interaction = copilotPlans.get(tab);
-  if (!interaction) {
-    const feedbackOwner = `${tab.id}:plan-feedback`;
-    const canPresent = () => !unloading && presented === tab && tabs.includes(tab) && !tab.closing && !tab.restarting && !tab.deleting && !tab.ended
-      && !settings.isOpen && !document.querySelector('dialog[open]:not(#command-palette)');
-    interaction = new CopilotPlanInteraction({
-      document, canPresent,
-      start: dismiss => canPresent() ? palette.startRetainedSelection('Review Copilot plan', dismiss) : undefined,
-      feedback: (revision, current) => dialogs.input(revision ? 'Requested plan changes' : 'Plan feedback (optional)', current, feedbackOwner, revision ? 'Request changes' : 'Save feedback'),
-      cancelFeedback: () => dialogs.cancel(feedbackOwner),
-      openLink: href => invoke('open_card_link', { href }),
-      changed: delta => { tab.inputCount += delta; if (tabs.includes(tab)) updateTab(tab); },
-      banner: (count, review) => {
-        const id = `${tab.id}:plan-required`;
-        if (!count) { notices.resolve(id); return; }
-        notices.report({ id, owner: tab.id, operation: 'Copilot plan review',
-          message: count === 1 ? 'Waiting for plan review' : `Waiting for plan review · ${count} plans`,
-          presentation: 'pending-action', severity: 'info', dismissible: false,
-          actions: [{ label: 'Review plan', enabled: () => !unloading && tabs.includes(tab) && presented === tab && !tab.closing, run: review }] });
-      },
-      error: message => { if (tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:plan-error:${++noticeSequence}`, owner: tab.id, operation: 'Plan feedback', message }); },
-    });
-    copilotPlans.set(tab, interaction);
-  }
-  const choice = interaction.request(request, signal);
-  const token = tab.token;
-  if (token) void notifySession('input', {
-    valid: () => !signal.aborted && !unloading && tabs.includes(tab) && tab.token === token && !tab.closing && !tab.ended,
-    selected: () => presented === tab && !settings.isOpen,
-    session: 'Copilot', target: { session: tab.id, token },
-  });
-  return choice;
-}
-async function newCopilotSession(): Promise<void> {
-  if (!ready || !copilotReady || settings.isOpen || !await ensureWorkspace() || unloading || deletions.pending) return;
-  rememberCopilot();
-  const tab = createTab('saved', undefined, 'Copilot session', navigation.nextRecency(), { kind: 'copilot-sdk' });
-  activate(tab);
-  await tab.lifecycle.connect({ acceptedAction: true });
-}
-function conflictingCopilotIdentity(tab: Tab, id: string): boolean {
-  return tabs.some(other => other !== tab && other.backend.kind === 'copilot-sdk' && other.lifecycle.identity?.sessionId === id);
-}
-async function launchCopilot(tab: Tab, acceptedAction = false): Promise<void> {
-  if (tab.backend.kind !== 'copilot-sdk' || !ready || !copilotReady || unloading || !workspace || !tabs.includes(tab) || deletions.pending || tab.deleting || tab.starting || tab.closing || tab.restarting || tab.backend.session && !tab.ended || !acceptedAction && settings.isOpen) return;
-  const backend = tab.backend, project = workspace, savedId = backend.savedSessionId;
-  if (savedId && conflictingCopilotIdentity(tab, savedId)) { showNotice(tab, 'This ID is already open in another Copilot session. Select that entry or close it before connecting.'); return; }
-  tab.awaitingSelection = false; tab.starting = true; updateTab(tab);
-  try { await tab.lifecycle.stop(); }
-  catch (error) { tab.starting = false; showNotice(tab, `Could not stop the previous Copilot connection: ${String(error)}`, !!savedId); updateTab(tab); return; }
-  if (unloading || !tabs.includes(tab) || tab.closing || workspace !== project) { tab.starting = false; return; }
-  tab.cancelPreference?.(); tab.lifecycle.disconnect('Reconnecting Copilot');
-  tab.token = crypto.randomUUID(); tab.ended = false;
-  const token = tab.token;
-  const valid = () => !unloading && tabs.includes(tab) && tab.token === token;
-  let shellSignature = '';
-  const session: CopilotSession = new CopilotSession(message => invoke('write_copilot', { token, message }), {
-    transcriptLog: settingsSurface.transcriptLog,
-    publish: message => { if (valid()) tab.receive?.(message); },
-    identified: id => {
-      if (!valid()) throw new Error('Copilot connection is no longer owned');
-      if (savedId !== undefined && id !== savedId || conflictingCopilotIdentity(tab, id)) throw new Error('Copilot returned a conflicting identity. No draft was migrated or replaced.');
-      tab.drafts.bindScope(copilotSdkScope(id)); backend.savedSessionId = id; persistTabs();
-    },
-    changed: () => {
-      if (!valid()) return;
-      const state = session.state;
-      const first = state.messages.find(message => message.role === 'user' && !message.originLabel);
-      // The initial SDK name makes empty sessions durable, not meaningfully titled.
-      const name = state.sessionName === 'Copilot session' ? undefined : state.sessionName;
-      tab.title = name || (typeof first?.content === 'string' ? first.content.trim().replace(/\s+/g, ' ').slice(0, 70) : '') || tab.title;
-      const signature = JSON.stringify([state.busy, state.sessionUnavailable, tab.title]);
-      if (signature !== shellSignature) { shellSignature = signature; if (state.busy) tab.failed = false; updateTab(tab); if (tab.lifecycle.identity) persistTabs(); }
-    },
-    notice: message => { if (valid() && !tab.closing) notices.report({ id: `${tab.id}:copilot:${++noticeSequence}`, owner: tab.id, operation: 'Copilot', message }); },
-    decision: (kind, request, signal) => requestCopilotDecision(tab, kind, request, signal),
-    commandChoice: async (title, choices, signal) => {
-      const current = () => valid() && copilotSession(tab) === session && presented === tab && !settings.isOpen && !tab.closing && !tab.deleting && !signal.aborted;
-      // A late/background result never opens or replaces a modal interaction.
-      if (!current() || document.querySelector('dialog[open]')) return;
-      const request = palette.startSelection(title, () => {}, undefined, true);
-      if (!request) return;
-      const cancel = () => request.cancel();
-      signal.addEventListener('abort', cancel, { once: true });
-      try {
-        const selected = await request.chooseItems(choices);
-        return current() ? selected : undefined;
-      } finally { signal.removeEventListener('abort', cancel); request.finish(); }
-    },
-    commandInput: async (title, signal) => {
-      const owner = `${tab.id}:copilot-command-input`;
-      const current = () => valid() && copilotSession(tab) === session && presented === tab && !settings.isOpen && !tab.closing && !tab.deleting && !signal.aborted;
-      if (!current() || document.querySelector('dialog[open]')) return;
-      const cancel = () => dialogs.cancel(owner);
-      signal.addEventListener('abort', cancel, { once: true });
-      try {
-        const value = await dialogs.input(title, undefined, owner, 'Run command');
-        return current() ? value : undefined;
-      } finally { signal.removeEventListener('abort', cancel); }
-    },
-    disconnected: message => {
-      if (!valid()) return;
-      tab.ended = true; tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' });
-      if (!tab.closing && !tab.deleting && !tab.view.hasConnectionOutcome?.()) showNotice(tab, `${message}. Your draft and any saved identity remain. Nothing was replayed or replaced by a new session.`, !!tab.lifecycle.identity);
-      void tab.lifecycle.stop().catch(error => { if (valid()) showNotice(tab, `Could not stop Copilot: ${String(error)}`, !!tab.lifecycle.identity); });
-      updateTab(tab);
-    },
-    completed: (failed, response) => {
-      if (!valid() || tab.closing || tab.deleting) return;
-      if (failed) tab.failed = true; else if (presented !== tab || settings.isOpen) tab.unread = true;
-      updateTab(tab);
-      void notifySession(failed ? 'failed' : 'completed', { valid: () => valid() && !tab.closing, selected: () => presented === tab && !settings.isOpen, session: 'Copilot', target: { session: tab.id, token }, preview: failed ? undefined : previewResponse(response) });
-    },
-  });
-  backend.session = session;
-  tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
-  tab.receive?.({ type: 'snapshot', state: session.state });
-  const onEvent = new Channel<Packet>();
-  onEvent.onmessage = packet => { if (!valid()) return; if (packet.kind === 'rpc') session.receive(packet.value); else session.disconnect(packet.message); };
-  try {
-    const confirmed = await invoke<string>('start_copilot', { token, config: { cwd: project, node: runtime.current().node, cli: runtime.current().copilot, generation: copilotGeneration }, onEvent });
-    if (!valid() || confirmed !== project) throw new Error('Native SDK host did not confirm this project');
-    await session.initialize(savedId);
-    if (valid()) notices.resolve(`${tab.id}:connection`);
-  } catch (error) {
-    session.disconnect(String(error));
-    try { await tab.lifecycle.stop(); } catch (error) { if (valid()) showNotice(tab, String(error), !!savedId); }
-  } finally { tab.starting = false; if (valid()) { updateTab(tab); controls(); } }
-}
-async function launchAcp(tab: Tab, acceptedAction = false): Promise<void> {
-  const profile = profileFor(tab);
-  if (!profile || !ready || !acpReady || unloading || !workspace || !tabs.includes(tab) || deletions.pending || tab.deleting || tab.starting || tab.closing || tab.restarting || (tab.backend.session && !tab.ended) || (!acceptedAction && settings.isOpen)) return;
-  const project = workspace;
-  tab.awaitingSelection = false;
-  tab.starting = true; updateTab(tab);
-  try { await tab.lifecycle.stop(); }
-  catch (error) { tab.starting = false; showNotice(tab, `Could not stop the previous ACP process: ${error}`, !!tab.lifecycle.identity); updateTab(tab); return; }
-  if (unloading || !tabs.includes(tab) || tab.closing || workspace !== project) { tab.starting = false; return; }
-  tab.cancelPreference?.();
-  tab.lifecycle.disconnect('Reconnecting session');
-  tab.starting = true; tab.token = crypto.randomUUID(); tab.ended = false; updateTab(tab);
-  const token = tab.token;
-  const valid = () => !unloading && tabs.includes(tab) && tab.token === token;
-  let shellSignature = '';
-  const session = new AcpSession(message => invoke('write_acp', { token, message }), {
-    transcriptLog: settingsSurface.transcriptLog,
-    publish: message => { if (valid()) tab.receive?.(message); },
-    changed: () => {
-      if (!valid()) return;
-      const state = session.state;
-      if (state.sessionName) tab.title = state.sessionName;
-      else {
-        const first = state.messages.find(message => message.role === 'user');
-        if (typeof first?.content === 'string') tab.title = first.content.trim().replace(/\s+/g, ' ').slice(0, 70) || `${profile.name} session`;
-      }
-      const signature = JSON.stringify([state.busy, state.sessionUnavailable, tab.title]);
-      if (signature !== shellSignature) {
-        shellSignature = signature; if (state.busy) tab.failed = false; updateTab(tab);
-        if (tab.lifecycle.identity) persistTabs();
-      }
-    },
-    notice: message => { if (valid() && !tab.closing) notices.report({ id: `${tab.id}:acp:${++noticeSequence}`, owner: tab.id, operation: 'ACP session', message }); },
-    permission: (request, signal) => requestAcpPermission(tab, request, signal),
-    disconnected: message => {
-      if (!valid()) return;
-      tab.ended = true; tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' });
-      if (!tab.closing && !tab.deleting && !tab.view.hasConnectionOutcome?.()) showNotice(tab, `${message}. Nothing was retried. Create a new ACP session explicitly.`);
-      void tab.lifecycle.stop().catch(error => { if (valid()) showNotice(tab, `Could not stop ACP agent: ${error}`, !!tab.lifecycle.identity); });
-      updateTab(tab);
-    },
-    completed: (failed, response) => {
-      if (!valid() || tab.closing || tab.deleting) return;
-      if (failed) tab.failed = true; else if (presented !== tab || settings.isOpen) tab.unread = true;
-      updateTab(tab);
-      const kind = failed ? 'failed' : 'completed';
-      void notifySession(kind, { valid: () => valid() && !tab.closing, selected: () => presented === tab && !settings.isOpen, session: profile.name, target: { session: tab.id, token }, preview: failed ? undefined : previewResponse(response) });
-    },
-  });
-  if (tab.backend.kind === 'acp') tab.backend.session = session;
-  tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
-  tab.receive?.({ type: 'snapshot', state: session.state });
-  const onEvent = new Channel<Packet>();
-  onEvent.onmessage = packet => { if (!valid()) return; if (packet.kind === 'rpc') session.receive(packet.value); else session.disconnect(packet.message); };
-  try {
-    const confirmed = await invoke<string>('start_acp', { token, config: { cwd: project, command: profile.command, args: profile.args, env: profile.env, node: runtime.current().node }, onEvent });
-    if (!valid() || confirmed !== project) throw new Error('Native ACP host did not confirm this project');
-    await session.initialize(project);
-    if (!valid()) return;
-    notices.resolve(`${tab.id}:connection`);
-    if (presented === tab && !document.querySelector('dialog[open]')) tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true });
-  } catch (error) { session.disconnect(error); try { await tab.lifecycle.stop(); } catch (error) { if (valid()) showNotice(tab, String(error), !!tab.lifecycle.identity); } }
-  finally { tab.starting = false; if (valid()) { updateTab(tab); controls(); } }
-}
-async function launchPi(tab: Tab, copyDraft?: string, acceptedAction = false, initialName?: string): Promise<void> {
-  if (!ready || deletion.blocked(tab.file?.path) || deletion.locked(tab.file?.path) || tab.deleting || tab.starting || tab.closing || (piSession(tab) && !tab.ended) || (!acceptedAction && settings.isOpen) || !workspace) return;
-  tab.starting = true; tab.failed = false; updateTab(tab); error.textContent = ''; tab.notice.hidden = true;
-  try { await tab.lifecycle.stop(); } catch (e) { tab.starting = false; showNotice(tab, `Could not stop the previous process: ${e}`); updateTab(tab); return; }
-  const token = crypto.randomUUID(); tab.token = token; tab.ended = false;
-  const currentToken = () => tabs.includes(tab) && tab.token === token;
-  const rpc = new PiTransport(async message => {
-    await invoke('write_pi', { token, message });
-  });
-  const mode = tab.file?.exists ? 'resume' : tab.mode;
-  const config = { cwd: workspace, pi: runtime.current().pi, node: runtime.current().node, mode, sessionName: initialName, sessionFile: mode === 'resume' ? tab.file?.path : undefined, sessionId: mode === 'resume' ? tab.file?.sessionId || undefined : undefined };
-  let launchInfo: PiLaunchInfo;
-  let identityGeneration = 0;
-  let confirmedRaw: { path: string; sessionId: string } | undefined;
-  let shellState: ConversationState | undefined;
-  const current = new PiSession(rpc, {
-    transcriptLog: settingsSurface.transcriptLog,
-    performance: settingsSurface.performanceProbe,
-    active: () => presented === tab,
-    publish: message => { if (currentToken()) tab.receive?.(message); },
-    notice: (message, severity, cause) => {
-      if (currentToken() && !tab.closing && !tab.restarting && !tab.deleting) notices.report({ id: `${tab.id}:pi:${++noticeSequence}`, owner: tab.id, cause, operation: 'Pi operation', message, severity });
-    },
-    attention: (kind, response) => {
-      if (unloading || !currentToken() || tab.closing || tab.restarting || tab.deleting) return;
-      if (kind === 'completed' && (presented !== tab || settings.isOpen)) tab.unread = true;
-      if (kind === 'failed') tab.failed = true;
-      updateTab(tab);
-      void notifySession(kind, {
-        valid: () => !unloading && currentToken() && !tab.closing && !tab.restarting && !tab.deleting && (kind === 'failed' || !tab.ended),
-        selected: () => presented === tab && !settings.isOpen,
-        // Auto-generated sidebar titles are prompt excerpts, not notification-safe labels.
-        session: piSession(tab)?.state.sessionName || 'Session',
-        target: { session: tab.id, token },
-        preview: kind === 'completed' ? previewResponse(response) : undefined,
-      });
-    },
-    choose: (title, options) => withTabDialog(tab, label => dialogs.choose(label, options, token), title),
-    input: (title, prefill) => withTabDialog(tab, label => dialogs.input(label, prefill, token), title),
-    confirm: (title, message) => withTabDialog(tab, label => dialogs.confirm(label, message, token), title),
-    copy: writeText, openLink: href => invoke('open_link', { token, href }),
-    disconnected: reason => {
-      if (!currentToken()) return;
-      tab.ended = true; tab.cancelPreference?.(); tab.cancelInspector?.(); tab.receive?.({ type: 'sessionDisconnected' }); dialogs.cancel(token);
-      void tab.lifecycle.stop().catch(e => { if (currentToken()) showNotice(tab, `Could not stop Pi: ${e}`); });
-      if (!tab.closing && !tab.restarting && !tab.deleting && !tab.view.hasConnectionOutcome?.()) showNotice(tab, `${reason || 'Session disconnected'}. Nothing will be sent automatically.`, !!tab.file?.exists);
-      updateTab(tab); controls();
-    },
-    identity: async (file, id) => {
-      if (!currentToken() || tab.ended) return;
-      if (!file || !id) { if (mode === 'resume') throw new Error('Pi did not confirm the selected session identity'); return; }
-      if (confirmedRaw && (file !== confirmedRaw.path || id !== confirmedRaw.sessionId)) throw new Error('Pi unexpectedly changed session identity');
-      if (confirmedRaw && tab.file?.exists) return;
-      const generation = ++identityGeneration;
-      const info = await invoke<SessionFile>('session_file_info', { token, path: file, sessionId: id });
-      if (!currentToken() || tab.ended || generation !== identityGeneration) return;
-      if (launchInfo.session && (!info.exists || info.path !== launchInfo.session.path || info.sessionId !== launchInfo.session.sessionId)) throw new Error('Pi did not resume the exact selected session');
-      confirmedRaw = { path: file, sessionId: id }; tab.file = info;
-      if (info.exists) {
-        try { tab.drafts.bind(info.path); tab.drafts.remember({ path: info.path, sessionId: info.sessionId, cwd: launchInfo.cwd }); save(lastKey, { path: info.path, sessionId: info.sessionId, cwd: launchInfo.cwd }); } catch (e) { persistenceError(e); }
-        persistTabs(); syncPopouts();
-      }
-      updateTab(tab);
-    },
-    changed: state => {
-      if (!currentToken()) return;
-      const before = shellState; shellState = state;
-      if (!shellPresentationChanged(before, state)) return;
-      if (!state.sessionUnavailable) notices.resolve(`${tab.id}:connection`);
-      if (state.busy && !state.compacting && !state.sessionUnavailable) tab.failed = false;
-      const previousTitle = tab.title;
-      if (state.sessionName) tab.title = state.sessionName;
-      else {
-        const first = state.messages.find(message => message.role === 'user');
-        const content = first?.content;
-        const preview = typeof content === 'string' ? content : Array.isArray(content) ? content.filter(block => block.type === 'text').map(block => String(block.text || '')).join(' ') : '';
-        tab.title = tab.mode === 'temporary' ? 'Temporary session' : preview.trim().replace(/\s+/g, ' ').slice(0, 70) || (tab.starting ? previousTitle : 'Session');
-      }
-      updateTab(tab); persistTabs();
-    },
-  }, mode === 'temporary');
-  if (tab.backend.kind === 'pi') tab.backend.session = current;
-  try {
-    if (copyDraft) tab.drafts.select(`unassigned:${tab.id}`, copyDraft);
-    tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
-    await startPiSession(config, {
-      start: receive => {
-        const onEvent = new Channel<Packet>(); onEvent.onmessage = receive;
-        return invoke<PiLaunchInfo>('start_pi', { config, token, onEvent });
-      },
-      currentProject: () => workspace,
-      current: currentToken,
-      receive: packet => rpc.receive(packet),
-      validated: info => {
-        launchInfo = info;
-        if (info.session) {
-          tab.file = info.session;
-          tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.select(`file:${info.session.path}`) });
-        }
-      },
-      initialize: () => current.initialize(initialName),
-    });
-    if (presented === tab && !tab.restarting && !document.querySelector('dialog[open]')) tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true });
-  } catch (e) {
-    rpc.disconnect(String(e));
-    try { await tab.lifecycle.stop(); } catch (stopError) { notices.report({ id: `${tab.id}:stop:${++noticeSequence}`, owner: tab.id, operation: 'Stop Pi', message: String(stopError) }); }
-    showNotice(tab, String(e), !!tab.file?.exists); tab.ended = true;
-  } finally { tab.starting = false; updateTab(tab); controls(); }
 }
 function cycleTab(direction: 1 | -1): void {
   if (!active || !tabs.length || (tabs.length < 2 && presented)) return;
@@ -1788,81 +1053,54 @@ function newNamedSession(): void {
   if (!ready || settings.isOpen) return;
   palette.namedSession(name => newSession('saved', undefined, name));
 }
-async function newSession(mode: LaunchMode = 'saved', copyDraft?: string, initialName?: string): Promise<void> {
-  if (!ready || settings.isOpen || !await ensureWorkspace()) return;
+async function newSession(mode: 'saved' | 'temporary' = harnesses.get(harnesses.defaultId).creation.defaultMode, copyDraft?: string, initialName?: string): Promise<void> {
+  return newHarnessSession(harnesses.get(harnesses.defaultId), mode, copyDraft, initialName);
+}
+async function newHarnessSession(project: HarnessProject, mode: 'saved' | 'temporary' = project.creation.defaultMode, copyDraft?: string, initialName?: string): Promise<void> {
+  if (!ready || !project.initialization.ready() || settings.isOpen || !await ensureWorkspace()) return;
   if (!ready || unloading || settings.isOpen) return;
-  const tab = createTab(mode, undefined, undefined, navigation.nextRecency()); activate(tab); await launchPi(tab, copyDraft, true, initialName);
+  project.history.associate();
+  let tab: Tab;
+  try { tab = createTab({ mode, initialName }, project, undefined, navigation.nextRecency(), false, copyDraft); }
+  catch (error) { notices.report({ id: `create-session:${++noticeSequence}`, operation: 'Create session', message: String(error) }); return; }
+  activate(tab); await tab.lifecycle.connect({ acceptedAction: true });
 }
 async function openSavedSession(entry: SessionListEntry): Promise<void> {
-  const reference = entry.reference;
-  if (!reference) throw new Error('This session has no saved identity');
+  if (!entry.reference) throw new Error('This session has no saved identity');
   if (deletions.removed(sessionListItem(entry).id)) throw new Error('The selected session was deleted. Refresh history and choose another session.');
-  if ('path' in reference) return openSession({ ...reference, name: entry.title, lastUserMessageAt: entry.timestamp });
-  if (!ready || unloading || settings.isOpen || !workspace) return;
-  if (deletions.pending) throw new Error('Finish the deletion review before opening another harness connection.');
-  const isCodex = reference.kind === 'codex';
-  if (isCodex) rememberCodex(); else rememberCopilot();
-  const existing = tabs.find(tab => tab.backend.kind === reference.kind && tab.lifecycle.identity?.sessionId === reference.sessionId);
-  if (existing) { activate(existing); return; }
-  const tab = createTab('resume', undefined, entry.title, lastUsed(entry.timestamp), { kind: reference.kind, sessionId: reference.sessionId });
-  tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
-  activate(tab);
+  await openSavedReference(entry.reference, entry.title, lastUsed(entry.timestamp));
 }
-async function openSession(info: Pick<SessionSummary, 'path' | 'sessionId' | 'name' | 'lastUserMessageAt'>): Promise<void> {
-  if (!ready || settings.isOpen || !await ensureWorkspace()) return;
-  if (deletion.locked(info.path)) { error.textContent = 'This session is locked for deletion. Finish or cancel its review before resuming it.'; return; }
-  if (deletion.removed(info.path)) { error.textContent = 'The selected session was deleted. Refresh Resume session and choose another session.'; return; }
-  if (deletion.blocked(info.path)) {
-    try { await deletion.recover(info.path, info.sessionId); } catch (e) { error.textContent = String(e); return; }
-  }
-  const existing = tabs.find(tab => tab.file?.path === info.path);
-  if (existing) {
-    if (existing.file?.sessionId !== info.sessionId) { error.textContent = 'This file is open with a different saved session identity. Close that session and refresh history before resuming it.'; return; }
-    activate(existing); return;
-  }
-  let used = Math.max(recency.get(info), lastUsed(info.lastUserMessageAt));
-  if (info.lastUserMessageAt === undefined) {
-    try {
-      const inspected = await invoke<SessionFile>('inspect_workspace_session', { path: info.path });
-      if (inspected.sessionId !== info.sessionId) throw new Error('The session file was replaced with a different session');
-      info = { ...info, path: inspected.path, lastUserMessageAt: inspected.lastUserMessageAt };
-      used = Math.max(recency.get(info), lastUsed(info.lastUserMessageAt));
-    } catch (e) { error.textContent = String(e); return; }
-  }
-  // Recheck after metadata awaits: duplicate open actions must share one mounted session.
+async function openSavedReference(reference: SavedSessionIdentity, title = 'Session', timestamp = 0): Promise<void> {
+  if (!ready || settings.isOpen || !await ensureWorkspace() || unloading) return;
+  const project = harnesses.forReference(reference), key = project.saved.key(reference);
+  const existing = () => tabs.find(tab => tab.project === project && tab.lifecycle.key === key);
+  const selectExisting = (tab: Tab) => {
+    if (!tab.lifecycle.identity || savedSessionKey(tab.lifecycle.identity) !== savedSessionKey(reference)) throw new Error('This session is open with a different saved session identity. Close it and refresh history before resuming it.');
+    activate(tab);
+  };
+  project.history.associate();
+  const open = existing(); if (open) { selectExisting(open); return; }
+  const prepared = await project.saved.prepare(reference, { title, lastUsed: timestamp }, false);
   if (!ready || unloading || settings.isOpen) return;
-  if (deletion.removed(info.path)) { error.textContent = 'The selected session was deleted. Refresh Resume session and choose another session.'; return; }
-  if (deletion.locked(info.path) || deletion.blocked(info.path)) { error.textContent = 'This session is unavailable because of deletion. Finish or cancel its review, or explicitly recover it through Resume session.'; return; }
-  const concurrent = tabs.find(tab => tab.file?.path === info.path);
-  if (concurrent) {
-    if (concurrent.file?.sessionId !== info.sessionId) { error.textContent = 'This file is open with a different saved session identity. Close that session and refresh history before resuming it.'; return; }
-    activate(concurrent); return;
-  }
-  const tab = createTab('resume', { path: info.path, sessionId: info.sessionId, exists: true }, info.name || 'Session', used);
+  const concurrent = existing(); if (concurrent) { selectExisting(concurrent); return; }
+  const tab = createTab(prepared.request, project, prepared.title, prepared.lastUsed);
+  tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
   activate(tab); await tab.lifecycle.connect({ acceptedAction: true });
 }
 async function restartSession(tab: Tab): Promise<void> {
-  if (!ready || tab.deleting || deletion.locked(tab.file?.path) || deletion.blocked(tab.file?.path) || !tabs.includes(tab) || !restartable(tab) || tab.starting || tab.closing || tab.restarting || settings.isOpen) return;
-  const session = piSession(tab);
-  const needsConfirmation = !!session && !tab.ended && (session.state.busy || promptPending(tab) || !!tab.inputCount || !!session.state.queue?.pendingCount);
+  if (!ready || tab.deleting || locked(tab) || blocked(tab) || !tabs.includes(tab) || !restartable(tab) || tab.starting || tab.closing || tab.restarting || settings.isOpen) return;
+  const restart = tab.integration.restart;
+  if (!restart.supported) return;
+  const needsConfirmation = restart.needsConfirmation(!!tab.inputCount);
   tab.restarting = true; updateTab(tab);
   let resumed = false;
   try {
-    if (needsConfirmation && !await dialogs.confirm(`Restart ${tab.title}?`, 'This interrupts this session’s agent and resumes its saved history. Your draft stays; queued and in-flight work will not continue. Nothing is sent again automatically.', undefined, 'Restart session')) return;
+    if (needsConfirmation && !await dialogs.confirm(`Restart ${tab.title}?`, restart.confirmation, undefined, 'Restart session')) return;
     if (!tabs.includes(tab)) return;
-    // Stop is a native lifecycle operation, not an RPC request to a stuck agent.
-    await tab.lifecycle.stop();
-    tab.cancelPreference?.(); tab.cancelInspector?.();
-    if (tab.token) dialogs.cancel(tab.token);
-    tab.receive?.({ type: 'sessionDisconnected' }); piSession(tab)?.rpc.disconnect('Session restarted');
-    tab.ended = true;
-    resumed = true;
-    await tab.lifecycle.connect({ acceptedAction: true });
-  } catch (error) { showNotice(tab, `Could not restart Pi: ${error}`); }
+    resumed = true; await restart.run();
+  } catch (error) { showNotice(tab, `Could not restart ${tab.lifecycle.label}: ${error}`); }
   finally {
     tab.restarting = false; if (tabs.includes(tab)) updateTab(tab); controls();
-    // The restart lock keeps the pane inert during startup. Restore explicit-launch
-    // focus only after unlocking, never over another session or an open dialog.
     if (resumed && presented === tab && !tab.ended && !document.querySelector('dialog[open]')) tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true });
   }
 }
@@ -1885,7 +1123,6 @@ function removeDeletedSessions(targets: readonly SessionDeletionTarget[]): void 
   for (const tab of removed) disposeTab(tab);
   for (const target of targets) {
     try { drafts.deleteScope(target.draftScope); } catch (e) { persistenceError(e); }
-    if ((stored(lastKey) as LastSession | null)?.path === target.key) save(lastKey, null);
   }
   void nativeDrafts?.flush().catch(draftPersistenceError);
   if (selected && removed.includes(selected)) selectCleanupReplacement(before);
@@ -1901,15 +1138,13 @@ function disposeTab(tab: Tab): void {
   if (!tabs.includes(tab)) return;
   tab.closing = true;
   tab.root.dispatchEvent(new Event('nimrod-dispose-images'));
-  codexQuestions.get(tab)?.dispose();
-  codexApprovals.get(tab)?.dispose();
-  copilotPermissions.get(tab)?.dispose(); copilotQuestions.get(tab)?.dispose(); copilotPlans.get(tab)?.dispose();
+  tab.integration.interactions.dispose();
   tab.notices.dispose(); notices.store.resolveOwner(tab.id);
   navigation.remove(tab);
   if (active === tab) active = undefined;
   if (presented === tab) { tab.view.setActive(false); presented = undefined; conversation.hidden = true; }
   if (tab.token) dialogs.cancel(tab.token);
-  tab.cancelPreference?.(); tab.cancelInspector?.(); tab.receive?.({ type: 'sessionDisconnected' }); tab.lifecycle.disconnect('Session closed');
+  tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' }); tab.lifecycle.disconnect('Session closed');
   tab.view.dispose();
   try { tab.drafts.discardTemporary(); } catch (e) { persistenceError(e); }
   tab.root.remove(); tab.rowNode.remove();
@@ -1917,12 +1152,10 @@ function disposeTab(tab: Tab): void {
 function detachTab(tab: Tab): void {
   if (!tabs.includes(tab)) return;
   tab.closing = true;
-  codexQuestions.get(tab)?.dispose();
-  codexApprovals.get(tab)?.dispose();
-  copilotPermissions.get(tab)?.dispose(); copilotQuestions.get(tab)?.dispose(); copilotPlans.get(tab)?.dispose();
+  tab.integration.interactions.dispose();
   tab.notices.dispose(); notices.store.resolveOwner(tab.id);
   if (tab.token) dialogs.cancel(tab.token);
-  tab.cancelPreference?.(); tab.cancelInspector?.(); tab.receive?.({ type: 'sessionDisconnected' }); tab.lifecycle.disconnect('Session closed');
+  tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' }); tab.lifecycle.disconnect('Session closed');
   const before = navigationSnapshot();
   navigation.remove(tab); tab.view.dispose();
   try { tab.drafts.discardTemporary(); } catch (e) { persistenceError(e); }
@@ -1936,10 +1169,11 @@ function detachTab(tab: Tab): void {
   controls(); persistTabs(); syncPopouts();
 }
 async function closeTab(tab: Tab): Promise<void> {
-  if (tab.deleting || deletion.locked(tab.file?.path) || tab.closing || tab.starting || tab.restarting || settings.isOpen) return;
-  const state = tab.backend.session?.state;
-  const running = tab.backend.session && !tab.ended;
-  if ((profileFor(tab) || tab.mode === 'temporary' || (running && (state?.busy || promptPending(tab) || tab.inputCount || piSession(tab)?.state.queue?.pendingCount))) && !await dialogs.confirm(`Close ${tab.title}?`, profileFor(tab) ? 'This stops this ACP agent and discards Nimrod’s in-memory transcript, draft and pop-outs. Nimrod cannot resume it in this POC. The agent may keep its own saved history; this does not delete it.' : tab.mode === 'temporary' ? 'This stops its agent and discards this temporary session, including its draft, queued messages and pop-outs.' : 'This stops only this session’s agent. Written history and your draft remain; queued and in-flight work will not continue.', undefined, profileFor(tab) ? 'Close ACP session' : tab.mode === 'temporary' ? 'Close temporary session' : 'Close session')) return;
+  if (tab.deleting || locked(tab) || tab.closing || tab.starting || tab.restarting || settings.isOpen) return;
+  const snapshot = tab.integration.presentation.snapshot(), policy = tab.integration.close;
+  const running = !!tab.integration.conversation.state && !tab.ended;
+  if ((policy.alwaysConfirm || running && (snapshot.busy || snapshot.pending || tab.inputCount || snapshot.queuePending))
+    && !await dialogs.confirm(`Close ${tab.title}?`, policy.message, undefined, policy.label)) return;
   if (tab.closing || !tabs.includes(tab)) return;
   tab.closing = true; updateTab(tab);
   try {
@@ -1962,7 +1196,7 @@ required('workspace-resume').addEventListener('click', () => { if (ready && !set
 required('start-temporary').addEventListener('click', () => void newSession('temporary'));
 required('browse').addEventListener('click', () => void pickWorkspace());
 required('enter-workspace').addEventListener('click', () => void openWorkspace(cwd.value.trim()));
-required('resume-last').addEventListener('click', () => { const last = lastSession(); if (last) void (async () => { if (workspace !== last.cwd && !await openWorkspace(last.cwd)) return; await openSession(last); })(); });
+required('resume-last').addEventListener('click', () => { const last = lastSession(); if (last) void (async () => { if (workspace !== last.project && !await openWorkspace(last.project)) return; await openSavedReference(last.reference); })().catch(failure => { error.textContent = String(failure); }); });
 required('recover-draft').addEventListener('click', () => {
   const options = recoverableDrafts();
   void dialogs.choose('Recover draft into a new session (never sent automatically)', options.map((o, i) => `${i + 1}. ${o.label}`)).then(choice => {
@@ -2034,19 +1268,22 @@ const keybindingDispatch = installKeybindingDispatch(window, {
     if (!actionContextAvailable(id, { project: !!workspace, sessionActions: contributed })) return false;
     if (actionDefinition(id).context === 'application') return true;
     if (!ready) return false;
-    if (id === 'new-codex') return codexReady;
-    if (id === 'new-copilot') return copilotReady;
+    const creation = harnesses.projects.find(project => project.creation.action?.id === id);
+    if (creation) return creation.initialization.ready();
+    if (id === 'new-named') return harnesses.get(harnesses.defaultId).creation.named;
+    if (id === 'temporary') return harnesses.get(harnesses.defaultId).creation.modes.includes('temporary');
     if (id === 'capture-performance') return preferences.performanceEnabled() && !settingsSurface.capturingPerformance;
-    if (['mcp', 'model', 'thinking', 'mode', 'context-window', 'permissions', 'cancel-configuration'].includes(id)) return !!presented && sessionActions(presented).some(action => action.id === id);
+    if (actionDefinition(id).context === 'session' && !['pin', 'close', 'delete', 'restart'].includes(id)) return !!presented && sessionActions(presented).some(action => action.id === id);
     return true;
   },
   run: (id: ActionId) => {
     if (isApplicationAction(window, id)) return runApplication(id);
+    const creation = harnesses.projects.find(project => project.creation.action?.id === id);
+    if (creation) return newHarnessSession(creation);
+    if (presented && sessionActions(presented).some(action => action.id === id)) return runSessionAction(presented, id);
     switch (id) {
       case 'open-recent-project': return palette.projects();
       case 'new': return newSession();
-      case 'new-codex': return newCodexSession();
-      case 'new-copilot': return newCopilotSession();
       case 'temporary': return newSession('temporary');
       case 'delete': return presented ? runSessionRowAction(presented, 'delete') : undefined;
       case 'pin': return presented ? runSessionRowAction(presented, 'pin') : undefined;
@@ -2054,7 +1291,6 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'capture-performance': return capturePerformance(true);
       case 'reload-card-plugins': return reloadCardPlugins(true);
       case 'select-theme': return pickTheme();
-      case 'mcp': case 'model': case 'thinking': case 'mode': case 'context-window': case 'permissions': case 'cancel-configuration': return presented ? runSessionAction(presented, id) : undefined;
       case 'palette': palette.open(); return;
       case 'close': return presented ? runSessionRowAction(presented, 'close') : undefined;
       case 'sidebar': required<HTMLButtonElement>('toggle-sidebar').click(); return;
@@ -2078,24 +1314,7 @@ refreshShortcutHints();
 async function boot(): Promise<void> {
   controls(); renderRecents();
   try {
-    await invoke('stop_pi'); // Window-scoped reload cleanup; never stop another workspace.
-    // Reap any owned legacy child left by a webview reload. This does not
-    // enable ACP creation or register product actions.
-    void invoke('stop_acp').then(() => {
-      if (!unloading) { acpReady = true; selectedConnection.barriersChanged(); }
-    }).catch(error => {
-      if (!unloading) notices.report({ id: 'acp-startup', operation: 'Clean up agents', message: `Could not finish legacy agent cleanup; Pi remains available. ${String(error)}` });
-    });
-    void invoke<string>('stop_copilot').then(generation => {
-      if (typeof generation !== 'string' || !generation) throw new Error('Native Copilot host did not confirm a new window generation');
-      if (!unloading) { copilotGeneration = generation; copilotReady = true; selectedConnection.barriersChanged(); startCopilotHistory(); }
-    }).catch(error => {
-      if (!unloading) notices.report({ id: 'copilot-startup', operation: 'Initialize Copilot', message: `Copilot is unavailable; Pi remains available. ${String(error)}` });
-    });
-    void invoke<string>('stop_codex').then(generation => {
-      if (!generation) throw new Error('Native Codex host did not confirm a new generation');
-      if (!unloading) { codexGeneration = generation; codexReady = true; selectedConnection.barriersChanged(); startCodexHistory(); for (const tab of tabs) updateTab(tab); controls(); }
-    }).catch(error => { if (!unloading) notices.report({ id: 'codex-startup', operation: 'Initialize Codex', message: String(error) }); });
+    await harnesses.initialize();
     await zoom.ready;
     const defaults = await invoke<{ pi: string; node: string; cwd: string; home?: string }>('runtime_defaults');
     homeDirectory = defaults.home;
@@ -2103,7 +1322,6 @@ async function boot(): Promise<void> {
     cwd.value = typeof saved?.cwd === 'string' ? saved.cwd : defaults.cwd;
     settingsSurface.initializeRuntime(defaults);
     const path = await invoke<string | null>('window_workspace');
-    deletion.load(await invoke<DeletionSnapshot>('deletion_snapshot'));
     ready = true;
     if (path) { await enterWorkspace(path); syncPopouts(); }
     controls();

@@ -18,6 +18,7 @@ import { copilotSdkScope } from '../src/copilot/session-lifecycle';
 
 // Real shell/renderer/controller bundle, mocked native boundary—not native WebKit acceptance.
 interface ShellOptions {
+  fixtureHarness?: boolean;
   platform?: string;
   menuError?: string;
   menuGate?: Promise<void>;
@@ -87,6 +88,16 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   const bundle = await build({ entryPoints: ['src/main.ts'], bundle: true, format: 'iife', platform: 'browser', write: false,
     loader: { '.css': 'empty' },
     plugins: [{ name: 'raw-fixture', setup(build) {
+      if (options.fixtureHarness) {
+        build.onResolve({ filter: /^\.\/bundled-harnesses$/ }, () => ({ path: 'offline-harness-composition', namespace: 'fixture-harness' }));
+        build.onLoad({ filter: /.*/, namespace: 'fixture-harness' }, () => ({ loader: 'ts', resolveDir: process.cwd(), contents: [
+          `import { HarnessRegistry, registerHarnessMetadata } from ${JSON.stringify(path.resolve('src/harness-registry.ts'))};`,
+          `import { piHarness } from ${JSON.stringify(path.resolve('src/pi/integration.ts'))};`,
+          `import { fixtureHarness } from ${JSON.stringify(path.resolve('test/fixtures/fixture-harness.ts'))};`,
+          'const registrations = [piHarness, fixtureHarness]; registerHarnessMetadata(registrations);',
+          'export function createBundledHarnessRegistry(host) { return new HarnessRegistry(registrations, host, "pi"); }',
+        ].join('\n') }));
+      }
       build.onResolve({ filter: /\.html\?raw$/ }, args => ({ path: path.resolve(args.resolveDir, args.path.replace('?raw', '')), namespace: 'raw' }));
       build.onLoad({ filter: /.*/, namespace: 'raw' }, args => ({ contents: readFileSync(args.path, 'utf8'), loader: 'text' }));
     } }],
@@ -141,7 +152,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   let linkError: ((message: string, target?: string) => void) | undefined;
   let nativeBlurFailure: ((payload: { request: string; message: string }, target?: string) => void) | undefined;
   let projectPickerPending = options.projectPickerPending || false;
-  Object.assign(win, { TextEncoder, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener() {} }, __TAURI_INTERNALS__: {
+  Object.assign(win, { TextEncoder, TextDecoder, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener() {} }, __TAURI_INTERNALS__: {
     metadata: { currentWindow: { label: options.windowLabel || 'main' }, currentWebview: { label: options.windowLabel || 'main' } },
     transformCallback: (callback: (event: unknown) => void) => { const id = callbacks.size + 1; callbacks.set(id, callback); return id; }, unregisterCallback: () => {},
     invoke: async (command: string, args: JsonRecord = {}) => {
@@ -392,6 +403,39 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     disconnect: () => channel.onmessage({ kind: 'disconnected', message: 'fixture closed' }),
   };
 }
+
+test('a registration unknown to the shell creates, sends, displays fallback questions, closes, resumes and deletes through unchanged consumers', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', fixtureHarness: true });
+  const enter = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  const search = (text: string) => { const input = f.element<HTMLInputElement>('palette-input'); input.value = text; input.dispatchEvent(new f.win.Event('input')); };
+  try {
+    f.openPalette(); search('New fixture session'); enter(); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 1); assert.equal(f.element('mode-badge').textContent, 'Fixture');
+    const layout = f.preferences.value.state['nimrod.tabs.v1:/project'] as { tabs: { kind: string; sessionId: string }[] };
+    assert.equal(layout.tabs[0].kind, 'fixture-harness');
+    const sessionId = layout.tabs[0].sessionId, scope = `fixture-harness:${JSON.stringify(sessionId)}`;
+    let prompt = f.element<HTMLTextAreaElement>('prompt');
+    prompt.value = 'Explicit fixture message'; prompt.dispatchEvent(new f.win.Event('input')); f.element<HTMLButtonElement>('send').click();
+    await f.tick(); await f.tick();
+    assert.equal(prompt.value, ''); assert.match(f.win.document.querySelector('.session-view:not([hidden])')!.textContent!, /Offline fixture reply/);
+    assert.match(f.win.document.querySelector('.session-view:not([hidden])')!.textContent!, /Fixture tool/);
+    assert.match(f.win.document.querySelector('.session-view:not([hidden])')!.textContent!, /unknown fixture item/);
+    prompt.value = 'Preserve newer draft'; prompt.dispatchEvent(new f.win.Event('input')); await f.tick();
+    f.openPalette(); search('Display fixture question'); enter(); await f.tick(); await f.tick();
+    assert.match(f.win.document.querySelector('.session-view:not([hidden])')!.textContent!, /Which option should the agent use/);
+    assert.equal(prompt.value, 'Preserve newer draft');
+    f.rows()[0].parentElement!.querySelector<HTMLButtonElement>('.session-close')!.click(); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 0); assert.equal(f.saved().drafts[scope].draft, 'Preserve newer draft');
+    f.openPalette(); search('Resume session'); enter(); await f.tick(); await f.tick(); search(sessionId); enter(); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 1); prompt = f.element<HTMLTextAreaElement>('prompt');
+    assert.equal(prompt.value, 'Preserve newer draft');
+    f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('deletion-review').open, true);
+    f.element<HTMLButtonElement>('deletion-confirm').click(); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 0); assert.equal(f.saved().drafts[scope], undefined);
+    assert.equal(f.calls.some(call => ['start_pi', 'write_pi', 'start_copilot', 'write_copilot', 'start_codex', 'write_codex', 'delete_session_tree'].includes(call.command)), false);
+  } finally { f.win.close(); }
+});
 
 test('native row menu pins its background target without selection, connection, recency or draft effects', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project', appState: {

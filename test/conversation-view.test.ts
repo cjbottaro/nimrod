@@ -3,10 +3,9 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { buildSync } from 'esbuild';
 import { webviewHtml } from './view-fixture';
-import { createPiViewProjection, piInteraction } from '../src/pi/view-policy';
-import { acpInteraction } from '../src/acp/view-policy';
+import { createPiViewProjection, piInteraction, piSessionActions } from '../src/pi/view-policy';
+import { acpInteraction, acpSessionActions } from '../src/acp/view-policy';
 import { copilotInteraction } from '../src/copilot/view-policy';
-import { sessionActions, type SessionBackend } from '../src/session-backend';
 import type { ConversationView, ConversationViewHost, ConversationViewMessage, ConversationViewState } from '../src/conversation-view-host';
 
 const enter = { key: 'Enter', shiftKey: false, altKey: false, isComposing: false, keyCode: 13 };
@@ -57,10 +56,8 @@ test('Pi view projection keeps lazy history and stable content-only UI dependenc
 });
 
 test('session action contributions expose only the owning integration operations', () => {
-  const pi: SessionBackend = { kind: 'pi' };
-  const acp: SessionBackend = { kind: 'acp', profile: { id: 'fixture', name: 'Fixture', command: 'unused', args: [], env: {} } };
-  assert.deepEqual(sessionActions({ backend: pi }).map(action => action.id), ['mcp', 'model', 'thinking']);
-  assert.deepEqual(sessionActions({ backend: acp }), []);
+  assert.deepEqual(piSessionActions.map(action => action.id), ['mcp', 'model', 'thinking']);
+  assert.deepEqual(acpSessionActions(undefined), []);
 });
 
 function fixture(interaction: ConversationViewHost['interaction'] = acpInteraction('Fixture', () => undefined)) {

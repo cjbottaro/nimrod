@@ -6,7 +6,7 @@ import { parseSkillInvocation } from './skill-invocation';
 import { skillUserText } from '../skill-invocation';
 import { slashCommands } from './slash-completion';
 import type { PiViewState } from './view-state';
-import type { SessionAction } from '../session-backend';
+import type { HarnessActionContribution as SessionAction } from '../harness-contract';
 
 export const piSessionActions: readonly SessionAction[] = [
   { id: 'mcp', label: 'MCP servers…', detail: 'Inspect this Pi session’s MCP connections, exposure and reported errors' },

@@ -19,7 +19,7 @@ export function personalRenderer(module: unknown): { renderer: DomCardRenderer<T
   if (!definition || typeof definition !== 'object') throw new Error('Personal source must default-export a card plugin');
   const candidate = definition as { apiVersion?: unknown; id?: unknown; tools?: unknown; kinds?: unknown; targets?: unknown };
   const kinds = pluginKinds(candidate.kinds);
-  if (kinds.length && !pluginTargets(candidate.targets).some(target => target.backend !== 'pi')) throw new Error('Tool kinds require an ACP or Copilot SDK target');
+  if (kinds.length && !pluginTargets(candidate.targets).some(target => target.backend !== 'pi')) throw new Error('Tool kinds require an explicitly targeted non-legacy integration');
   if (candidate.tools === undefined && kinds.length) {
     // Personal sources can select categories without pretending those are tool
     // names. Legacy manifests keep their existing nonempty-tools schema.

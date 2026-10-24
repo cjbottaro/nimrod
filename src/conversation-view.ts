@@ -342,6 +342,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   }
 
   function renderToolCard(block: ContentBlock, detailKey: string, recorded = false): HTMLDetailsElement {
+    if (!block.source && host.cardSource) block = { ...block, source: host.cardSource };
     // Identity belongs to the invocation, not its current message/placement.
     const key = safeText(block.id) ? `tool:${safeText(block.id)}` : detailKey;
     let details = toolCards.get(key);

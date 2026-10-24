@@ -1,11 +1,9 @@
-import { acpToolPlugin } from '../acp/card-plugins';
-import { bundledCopilotPlugin } from '../copilot/card-plugins';
+import { selectHarnessCard } from '../card-renderers';
 import { type CardRenderer } from './card-renderer';
 import { DomCardController, presentationPlugin, type DomCardRenderer, type CardDomHost } from './dom-card-renderer';
 import { associateOutputViewport, createCardSummary, setCardSummaryLabel } from './card-shell';
 import { renderLiteralOutput } from './literal-output';
 import { sectionOutputSource } from './output-source';
-import { bundledToolRenderer } from './card-plugins/registry';
 import { rawToolPresentation } from './tool-presentation';
 export { toolInputPreview } from './tool-presentation';
 export { TOOL_AUTO_DISCLOSURE_MS, createToolDetails, setToolDetailsAutoOpen, captureStreamingOutput, restoreStreamingOutput } from './card-shell';
@@ -25,7 +23,7 @@ export function toolCardIsBusy(block: ToolCardBlock): boolean {
   const status = toolStatus(block); return status === 'running' || status === 'thinking';
 }
 export function renderToolCard(document: Document, block: ToolCardBlock, details: HTMLDetailsElement,
-  renderer: ToolCardRenderer = block.source?.backend === 'copilot-sdk' ? bundledCopilotPlugin(block) : block.source?.backend === 'acp' ? acpToolPlugin : bundledToolRenderer(block), report?: (error: unknown) => void, host: CardDomHost = {}): HTMLDetailsElement {
+  renderer: ToolCardRenderer = selectHarnessCard(block), report?: (error: unknown) => void, host: CardDomHost = {}): HTMLDetailsElement {
   disposeToolCard(details); details.classList.add('tool-card');
   const summary = createCardSummary(document);
   const row = document.createElement('span'); row.className = 'tool-card-summary';

@@ -45,6 +45,8 @@ export interface ConversationViewHost {
   interaction: ConversationInteraction;
   messageInput: import('./session-message-input').SessionMessageInput;
   performance?: import('./performance-diagnostics').PerformanceProbe;
+  /** Owning registration supplies the source for generic items that omit one. Legacy callers default to Pi. */
+  readonly cardSource?: Readonly<CardPluginTarget>;
   cardRenderer?: (data: Readonly<import('./card-plugin-api').ToolCardData>) => import('./pi/tool-card').ToolCardRenderer;
   cardActions?: Pick<CardPluginContext, 'copy' | 'openLink'> & { popOutCode(text: string, language: string): Promise<void> };
   attachments?: import('./image-attachments').AttachmentHost;

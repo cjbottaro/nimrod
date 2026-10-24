@@ -15,7 +15,7 @@ interface PiStartupHost {
 
 /** Native Pi may emit packets before start resolves. Validate its launch identity and bind the
  * shell's draft before releasing those packets in order, then perform Pi initialization.
- * The shell still owns teardown/error presentation and the owning generation's lifetime.
+ * The concrete Pi integration owns teardown and generation lifetime; shell effects stay scoped.
  */
 export async function startPiSession(expected: { mode: string; sessionId?: string }, host: PiStartupHost): Promise<void> {
   let startupPackets: Packet[] | undefined = [];
@@ -26,6 +26,7 @@ export async function startPiSession(expected: { mode: string; sessionId?: strin
   };
   try {
     const info = await host.start(receive);
+    if (!host.current()) throw new Error('Pi startup attempt was retired');
     if (!info?.cwd || info.cwd !== host.currentProject()) throw new Error('Native host did not confirm this project');
     if (expected.mode === 'resume' && !info.session) throw new Error('Native host did not validate the selected session');
     if (info.session && expected.sessionId && expected.sessionId !== info.session.sessionId) throw new Error('The session file was replaced with a different session');
