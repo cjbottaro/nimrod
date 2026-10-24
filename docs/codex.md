@@ -31,6 +31,8 @@ Codex threads have their own saved identity and draft namespace; an identical Pi
 
 Restored Codex rows stay disconnected until you explicitly select or Resume one. Resume uses the exact thread ID and project; a failure never creates a replacement session. Background sessions remain independently live once connected. Closing stops only Nimrod's owned process and keeps saved Codex history and your draft. No background-process continuity or coordination with external writers is promised.
 
+Startup failures preserve your local draft and do not replay a prompt. If cleanup also fails, the original startup error remains visible with cleanup diagnostics in Details. Late startup cleanup targets only its original process, not a replacement connection.
+
 Restart is currently unavailable for Codex; use Close and explicit Resume. Close is not deletion.
 
 ## Delete a Codex thread tree

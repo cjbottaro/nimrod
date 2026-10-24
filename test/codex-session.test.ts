@@ -8,7 +8,7 @@ import { codexScope, codexSessionLifecycle } from '../src/codex/session-lifecycl
 import { readSavedSidebarSession } from '../src/session-lifecycle';
 import { savedSessionKey } from '../src/session-list';
 import { pluginTargets } from '../src/card-plugin-targets';
-import { SessionDrafts } from '../src/pi/session-drafts';
+import { SessionDrafts } from '../src/session-drafts';
 import { codexConnectionFailure } from '../src/codex/connection-failure';
 
 const cwd = '/fixture/codex';

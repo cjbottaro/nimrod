@@ -1,10 +1,9 @@
 import { AcpSession } from './acp/session';
-import { CodexSession } from './codex/session';
-import { codexConnectionFailure } from './codex/connection-failure';
+import { createCodexConnection } from './codex/connection';
 import { codexSessionDeletion } from './codex/session-deletion';
 import { CodexSessionHistory, codexHistoryKey } from './codex/session-history';
 import { nativeCodexTransport } from './codex/native';
-import { codexSessionLifecycle, codexScope } from './codex/session-lifecycle';
+import { codexScope } from './codex/session-lifecycle';
 import { codexInteraction } from './codex/view-policy';
 import { CodexQuestionInteraction } from './codex/question-interaction';
 import type { CodexQuestionRequest, CodexQuestionAnswers } from './codex/questions';
@@ -67,7 +66,7 @@ import { measureWork } from './performance-diagnostics';
 import type { HostMessage } from './pi/webview-client';
 import { PiTransport, type Packet } from './pi/transport';
 import { PiSession } from './pi/session';
-import { SessionDrafts, type LastSession } from './pi/session-drafts';
+import { SessionDrafts, type LastSession } from './session-drafts';
 import { NativeDrafts } from './native-drafts';
 import { referencedAttachments } from './image-attachments';
 import { restoreComposerState } from './pi/webview-state';
@@ -904,11 +903,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
   });
   const backend: SessionBackend = creation.kind === 'copilot-sdk' || creation.kind === 'codex'
     ? { kind: creation.kind, savedSessionId: creation.sessionId } : creation.kind === 'acp' ? { kind: 'acp', profile: creation.profile } : { kind: 'pi' };
-  const lifecycle: SessionLifecycle = backend.kind === 'codex' ? codexSessionLifecycle(() => tab, backend, {
-    connect: options => launchCodex(tab, options.acceptedAction),
-    stop: async token => { await invoke('stop_codex', { token }); },
-    gate: () => codexReady && !tab.deleting && !deletions.pending ? 'ready' : 'blocked',
-  }) : backend.kind === 'copilot-sdk' ? copilotSessionLifecycle(() => tab, backend, {
+  const lifecycle: SessionLifecycle = backend.kind === 'codex' ? composeCodexConnection(() => tab, backend) : backend.kind === 'copilot-sdk' ? copilotSessionLifecycle(() => tab, backend, {
     connect: options => launchCopilot(tab, options.acceptedAction),
     stop: token => invoke<void>('stop_copilot', { token }),
     gate: () => copilotReady && !tab.deleting && !deletions.pending ? 'ready' : 'blocked',
@@ -1348,94 +1343,66 @@ async function newCodexSession(): Promise<void> {
   const tab = createTab('saved', undefined, 'Codex session', navigation.nextRecency(), { kind: 'codex' });
   activate(tab); await tab.lifecycle.connect({ acceptedAction: true });
 }
-async function launchCodex(tab: Tab, acceptedAction = false): Promise<void> {
-  if (tab.backend.kind !== 'codex' || !ready || !codexReady || unloading || !workspace || !tabs.includes(tab)
-    || deletions.pending || tab.deleting || tab.starting || tab.closing || tab.restarting || tab.backend.session && !tab.ended || !acceptedAction && settings.isOpen) return;
-  const backend = tab.backend, project = workspace, savedId = backend.savedSessionId;
-  const conflict = (id: string) => tabs.some(other => other !== tab && other.backend.kind === 'codex' && other.lifecycle.identity?.sessionId === id);
-  if (savedId && conflict(savedId)) { showNotice(tab, 'This Codex thread is already open in this window.'); return; }
-  tab.awaitingSelection = false; tab.starting = true; updateTab(tab);
-  try { await tab.lifecycle.stop(); notices.resolve(`${tab.id}:codex-cleanup`); }
-  catch (error) { tab.starting = false; showNotice(tab, `Could not stop the previous Codex process: ${String(error)}`, !!savedId); return; }
-  if (unloading || workspace !== project || !tabs.includes(tab) || tab.closing) { tab.starting = false; return; }
-  tab.cancelPreference?.(); tab.lifecycle.disconnect('Reconnecting Codex');
-  tab.token = crypto.randomUUID(); tab.ended = false;
-  const token = tab.token, valid = () => !unloading && tabs.includes(tab) && tab.token === token;
-  const transport = nativeCodexTransport(project, () => ({ cli: runtime.current().codex, generation: codexGeneration }));
-  let signature = '', disconnectReason: string | undefined;
-  let initialized = false;
-  const reportConnection = (cleanup?: unknown): void => {
-    if (cleanup !== undefined) session.recordCleanupFailure(cleanup);
-    if (!valid() || tab.closing || tab.deleting || !disconnectReason) return;
-    const failure = codexConnectionFailure(disconnectReason, !initialized, cleanup);
-    if (tab.view.hasConnectionOutcome?.()) {
-      if (cleanup !== undefined) notices.report({ id: `${tab.id}:codex-cleanup`, owner: tab.id, operation: 'Stop Codex',
-        message: 'Could not finish Codex cleanup; owned process exit is unconfirmed.', details: failure.details });
-      return;
-    }
-    showNotice(tab, failure.message, !!tab.lifecycle.identity, failure.details);
-  };
-  const session: CodexSession = new CodexSession({ write: packet => transport.write(token, packet) }, {
-    transcriptLog: settingsSurface.transcriptLog,
-    publish: message => { if (valid()) tab.receive?.(message); },
-    identified: id => {
-      if (!valid() || savedId !== undefined && savedId !== id || conflict(id)) throw new Error('Codex returned a conflicting or retired identity');
-      tab.drafts.bindScope(codexScope(id)); backend.savedSessionId = id; persistTabs();
+/** Composition only: Codex owns startup/identity/cleanup; the shell owns these effects. */
+function composeCodexConnection(readTab: () => Tab, backend: Extract<SessionBackend, { kind: 'codex' }>): SessionLifecycle {
+  const project = workspace;
+  let signature = '';
+  return createCodexConnection(readTab, backend, {
+    project,
+    transport: nativeCodexTransport(project, () => ({ cli: runtime.current().codex, generation: codexGeneration })),
+    current: () => !unloading && workspace === project && tabs.includes(readTab()),
+    available: options => ready && codexReady && !!project && !deletions.pending && !readTab().deleting
+      && !readTab().closing && !readTab().restarting && (!!options.acceptedAction || !settings.isOpen),
+    tearingDown: () => readTab().closing || readTab().deleting,
+    gate: () => codexReady && !readTab().deleting && !deletions.pending ? 'ready' : 'blocked',
+    conflicts: id => tabs.some(other => other !== readTab() && other.backend.kind === 'codex' && other.lifecycle.identity?.sessionId === id),
+    drafts: { read: () => readTab().drafts.read(), bindScope: scope => readTab().drafts.bindScope(scope) },
+    effects: {
+      changed: () => { const tab = readTab(); if (tab.starting) tab.awaitingSelection = false; updateTab(tab); controls(); },
+      identified: persistTabs,
+      retire: () => readTab().cancelPreference?.(),
+      resolved: issue => notices.resolve(`${readTab().id}:${issue === 'cleanup' ? 'codex-cleanup' : 'connection'}`),
+      hasConnectionOutcome: () => !!readTab().view.hasConnectionOutcome?.(),
+      failure: failure => {
+        const tab = readTab(); if (tab.closing || tab.deleting) return;
+        if (failure.kind === 'cleanup') notices.report({ id: `${tab.id}:codex-cleanup`, owner: tab.id, operation: 'Stop Codex', message: failure.message, details: failure.details });
+        else showNotice(tab, failure.message, failure.resumable, failure.details);
+      },
     },
-    changed: () => {
-      if (!valid()) return;
-      const state = session.state;
-      if (state.sessionName) tab.title = state.sessionName;
-      else if (tab.title === 'Codex session') {
-        const user = state.messages.find(row => row.role === 'user');
-        const text = typeof user?.content === 'string' ? user.content : Array.isArray(user?.content) ? user.content.map(block => block.text || '').join('') : '';
-        if (text.trim()) tab.title = text.trim().replace(/\s+/g, ' ').slice(0, 70);
-      }
-      const next = JSON.stringify([state.busy, state.sessionUnavailable, tab.title]);
-      if (next !== signature) { signature = next; if (state.busy) tab.failed = false; updateTab(tab); if (tab.lifecycle.identity) persistTabs(); }
-    },
-    approval: (request, signal) => requestCodexApproval(tab, request, signal),
-    question: (request, signal) => requestCodexQuestion(tab, request, signal),
-    interactionFailure: failure => {
-      if (!valid() || tab.closing) return;
-      const guidance = settingsSurface.transcriptLog.enabled ? 'Transcript debug logging is enabled; inspect it for the raw request.' : 'Enable Transcript debug logs before another attempt to capture the raw request.';
-      notices.report({ id: `${tab.id}:codex-interaction:${++noticeSequence}`, owner: tab.id, operation: 'Codex interaction',
-        message: `Codex requested an interaction Nimrod could not handle (${failure.method}). No answer or approval was supplied. ${guidance}`,
-        details: JSON.stringify(failure, null, 2) });
-    },
-    notice: message => { if (valid() && !tab.closing) notices.report({ id: `${tab.id}:codex:${++noticeSequence}`, owner: tab.id, operation: 'Codex', message }); },
-    disconnected: message => {
-      if (!valid()) return;
-      disconnectReason ??= message;
-      tab.ended = true; tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' });
-      reportConnection();
-      // Startup owns its catch/teardown path. Close/deletion also own their
-      // shutdown, so a disconnect callback must not duplicate or mask it.
-      if (initialized && !tab.closing && !tab.deleting) void tab.lifecycle.stop().catch(error => reportConnection(error));
-      updateTab(tab);
-    },
-    completed: (failed, response) => {
-      if (!valid() || tab.closing || tab.deleting) return;
-      if (failed) tab.failed = true; else if (presented !== tab || settings.isOpen) tab.unread = true;
-      updateTab(tab);
-      void notifySession(failed ? 'failed' : 'completed', { valid: () => valid() && !tab.closing, selected: () => presented === tab && !settings.isOpen,
-        session: 'Codex', target: { session: tab.id, token }, preview: failed ? undefined : previewResponse(response) });
+    ui: {
+      transcriptLog: settingsSurface.transcriptLog,
+      publish: message => readTab().receive?.(message),
+      changed: state => {
+        const tab = readTab();
+        if (state.sessionName) tab.title = state.sessionName;
+        else if (tab.title === 'Codex session') {
+          const user = state.messages.find(row => row.role === 'user');
+          const text = typeof user?.content === 'string' ? user.content : Array.isArray(user?.content) ? user.content.map(block => block.text || '').join('') : '';
+          if (text.trim()) tab.title = text.trim().replace(/\s+/g, ' ').slice(0, 70);
+        }
+        const next = JSON.stringify([state.busy, state.sessionUnavailable, tab.title]);
+        if (next !== signature) { signature = next; if (state.busy) tab.failed = false; updateTab(tab); if (tab.lifecycle.identity) persistTabs(); }
+      },
+      approval: (request, signal) => requestCodexApproval(readTab(), request, signal),
+      question: (request, signal) => requestCodexQuestion(readTab(), request, signal),
+      interactionFailure: failure => {
+        const tab = readTab(); if (tab.closing) return;
+        const guidance = settingsSurface.transcriptLog.enabled ? 'Transcript debug logging is enabled; inspect it for the raw request.' : 'Enable Transcript debug logs before another attempt to capture the raw request.';
+        notices.report({ id: `${tab.id}:codex-interaction:${++noticeSequence}`, owner: tab.id, operation: 'Codex interaction',
+          message: `Codex requested an interaction Nimrod could not handle (${failure.method}). No answer or approval was supplied. ${guidance}`,
+          details: JSON.stringify(failure, null, 2) });
+      },
+      notice: message => { const tab = readTab(); if (!tab.closing) notices.report({ id: `${tab.id}:codex:${++noticeSequence}`, owner: tab.id, operation: 'Codex', message }); },
+      completed: (failed, response) => {
+        const tab = readTab(), token = tab.token!;
+        if (tab.closing || tab.deleting) return;
+        if (failed) tab.failed = true; else if (presented !== tab || settings.isOpen) tab.unread = true;
+        updateTab(tab);
+        void notifySession(failed ? 'failed' : 'completed', { valid: () => !unloading && tabs.includes(tab) && tab.token === token && !tab.closing, selected: () => presented === tab && !settings.isOpen,
+          session: 'Codex', target: { session: tab.id, token }, preview: failed ? undefined : previewResponse(response) });
+      },
     },
   });
-  backend.session = session;
-  tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
-  tab.receive?.({ type: 'snapshot', state: session.state });
-  try {
-    const confirmed = await transport.start(token, packet => { if (valid()) session.receive(packet); }, message => { if (valid()) session.disconnect(message); });
-    if (!valid() || confirmed !== project) throw new Error('Native Codex host did not confirm the project');
-    await session.initialize(project, savedId); initialized = true;
-    if (valid()) notices.resolve(`${tab.id}:connection`);
-  } catch (error) {
-    disconnectReason ??= error instanceof Error ? error.message : String(error);
-    session.disconnect(error);
-    try { await tab.lifecycle.stop(); } catch (stopError) { reportConnection(stopError); }
-  }
-  finally { tab.starting = false; if (valid()) { updateTab(tab); controls(); } }
 }
 const copilotPermissions = new WeakMap<Tab, CopilotPermissionInteraction>();
 const copilotQuestions = new WeakMap<Tab, CopilotQuestionInteraction>();

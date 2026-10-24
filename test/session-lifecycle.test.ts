@@ -7,7 +7,7 @@ import { CopilotSession } from '../src/copilot/session';
 import { parseAcpProfile } from '../src/acp/profiles';
 import { PiSession } from '../src/pi/session';
 import { PiTransport } from '../src/pi/transport';
-import { readSavedSidebarSession, type ConnectSessionOptions, type SessionLifecycle, type SessionLifecycleHost, type SessionLifecycleOwner, type SessionPersistence } from '../src/session-lifecycle';
+import { ownedProcessStop, readSavedSidebarSession, type ConnectSessionOptions, type SessionLifecycle, type SessionLifecycleHost, type SessionLifecycleOwner, type SessionPersistence } from '../src/session-lifecycle';
 
 function fixture(kind: 'pi' | 'copilot') {
   const owner: PiSessionLifecycleOwner = { mode: 'saved', starting: false, ended: false };
@@ -101,6 +101,19 @@ for (const kind of ['pi', 'copilot'] as const) {
     assert.deepEqual(f.stops, ['owned-a', 'owned-b', 'owned-b']);
   });
 }
+
+test('token-bound cleanup deduplicates retired tokens without redirecting to a newer owner', async () => {
+  const calls: string[] = [];
+  let release!: () => void;
+  const stop = ownedProcessStop(async token => { calls.push(token); if (token === 'old') await new Promise<void>(resolve => { release = resolve; }); });
+  const old = stop('old');
+  await stop('replacement');
+  const concurrent = stop('old');
+  assert.deepEqual(calls, ['old', 'replacement']);
+  release(); await Promise.all([old, concurrent]);
+  await stop('old'); await stop('replacement');
+  assert.deepEqual(calls, ['old', 'replacement'], 'completed work survives a token change');
+});
 
 test('ACP lifecycle needs only connection ownership; persistence consumers need no controller operations', async () => {
   const owner: SessionLifecycleOwner = { starting: false, ended: true };

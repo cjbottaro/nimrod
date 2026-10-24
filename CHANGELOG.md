@@ -75,7 +75,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
-- Codex startup/Resume now accepts its saved draft namespace in the shared draft manager, and confirmed Codex deletion can clear that scope without touching Pi/Copilot drafts. Startup errors remain visible when owned-process cleanup also fails; cleanup Details and opt-in logs include the original cause and native signal/exit phase instead of replacing it with a bare permission error. Post-fix native acceptance remains pending.
+- Codex startup/Resume now binds saved drafts through shared storage without harness-specific namespace allowlists, and confirmed deletion clears only its target scope without touching Pi/Copilot drafts. Late startup cleanup stays bound to the original process rather than a replacement connection. Startup errors remain visible when owned-process cleanup also fails; cleanup Details and opt-in logs include the original cause and native signal/exit phase instead of replacing it with a bare permission error. Post-fix native acceptance remains pending.
 
 - Removed the dark strip beneath the last queued message or other bottom-pinned operation card, preserving spacing between cards.
 

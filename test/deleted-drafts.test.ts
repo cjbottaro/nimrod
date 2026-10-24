@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { purgeDeletedDrafts } from '../src/pi/session-drafts';
+import { purgeDeletedDrafts } from '../src/session-drafts';
 
 test('confirmed deletion purges file drafts, recovery/submission data and last pointers in closed libraries only', () => {
   const data = new Map<string, string>([
