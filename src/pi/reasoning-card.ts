@@ -1,5 +1,6 @@
 import { DomCardController, type CardDomHost } from './dom-card-renderer';
 import { reasoningDomRenderer } from './card-plugins/reasoning';
+import { createCardSummary } from './card-shell';
 const instances = new WeakMap<HTMLDetailsElement, DomCardController<string>>();
 export function disposeReasoningCard(details: HTMLDetailsElement): void { instances.get(details)?.dispose(); instances.delete(details); }
 export type ReasoningRenderer = (thinking: string) => HTMLElement;
@@ -10,7 +11,7 @@ export function renderReasoningCard(document: Document, expanded: Map<string, bo
   const details = document.createElement('details'); details.className = 'tool-card reasoning-card'; details.dataset.detailKey = key;
   details.open = expanded.get(key) ?? false;
   details.addEventListener('toggle', () => expanded.set(key, details.open));
-  const summary = document.createElement('summary');
+  const summary = createCardSummary(document);
   const row = document.createElement('span'); row.className = 'tool-card-summary';
   const indicator = document.createElement('span'); indicator.className = 'reasoning-indicator'; indicator.setAttribute('aria-hidden', 'true');
   const content = document.createElement('span'); content.className = 'card-plugin-summary';

@@ -1,6 +1,6 @@
 import { showModal, closeModal } from './modal-motion';
 import { confirmationKey, labelDialogAction, navigateDialogActions } from './dialog-actions';
-import { ACTIONS, bindingsFor, bindingConflicts, isMac, recordBinding, shortcutLabel, type ActionId, type KeyOverrides } from './keybindings';
+import { ACTIONS, actionsForWindow, bindingsFor, bindingConflicts, isMac, recordBinding, shortcutLabel, type ActionId, type KeyOverrides } from './keybindings';
 
 /** Settings-only editor. Host commits against a fresh snapshot, not this UI's stale copy. */
 export function installKeybindingEditor(window: Window, content: HTMLElement, host: {
@@ -32,7 +32,7 @@ export function installKeybindingEditor(window: Window, content: HTMLElement, ho
     const overrides = host.read(), query = search.value.toLowerCase().trim();
     renderedOverrides = JSON.stringify(overrides);
     const focusedLabel = list.contains(document.activeElement) ? document.activeElement?.getAttribute('aria-label') : undefined;
-    const visible = ACTIONS.filter(action => `${action.label} ${'keywords' in action ? action.keywords : ''} ${action.id} ${bindingsFor(action.id, overrides).map(binding => `${binding} ${shortcutLabel(binding, mac)}`).join(' ')} ${overrides[action.id] !== undefined ? 'modified' : ''}`.toLowerCase().includes(query));
+    const visible = actionsForWindow(window).filter(action => `${action.label} ${'keywords' in action ? action.keywords : ''} ${action.id} ${bindingsFor(action.id, overrides).map(binding => `${binding} ${shortcutLabel(binding, mac)}`).join(' ')} ${overrides[action.id] !== undefined ? 'modified' : ''}`.toLowerCase().includes(query));
     list.replaceChildren(...visible.map(action => {
       const row = document.createElement('div'); row.className = 'keybinding-row'; row.dataset.action = action.id;
       const description = document.createElement('div'); description.className = 'keybinding-description';

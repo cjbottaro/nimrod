@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { installAppearanceEffects } from '../src/window-appearance-effects';
-import type { AppearanceCapabilities } from '../src/window-appearance';
+import type { AppearanceCapabilities, TitlebarTint } from '../src/window-appearance';
 const capabilities: AppearanceCapabilities = { platform: 'macos', transparency: true, frost: true, reducedTransparency: false };
 const tick = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 
@@ -85,6 +85,28 @@ test('failed stages are not repeated by unchanged requests or native refresh', a
     assert.equal(tints, 2); assert.equal(failures.length, 1);
     effects.request({ tint: [30, 0, 0, 255] }); await effects.settled(); assert.equal(tints, 3);
   } finally { effects.dispose(); }
+});
+
+test('tint-only chrome snapshots copy and coalesce foreground as well as background', async () => {
+  let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
+  const calls: { color: TitlebarTint; foreground?: TitlebarTint }[] = [];
+  const effects = installAppearanceEffects({
+    apply: async () => { throw new Error('Linux chrome must not apply material'); },
+    tintTitlebar: async (color, foreground) => { calls.push({ color, foreground }); if (calls.length === 1) await gate; },
+    report: () => {},
+  }, () => {});
+  try {
+    const tint: TitlebarTint = [10, 20, 30, 128], foreground: TitlebarTint = [200, 210, 220, 255];
+    effects.request({ tint, foreground }); tint[0] = 99; foreground[0] = 99;
+    await tick();
+    assert.deepEqual(calls[0], { color: [10, 20, 30, 128], foreground: [200, 210, 220, 255] });
+    effects.request({ tint: [10, 20, 30, 128], foreground: [210, 220, 230, 255] });
+    effects.request({ tint: [10, 20, 30, 128], foreground: [220, 230, 240, 255] });
+    release(); await effects.settled();
+    assert.equal(calls.length, 2); assert.deepEqual(calls.at(-1)!.foreground, [220, 230, 240, 255]);
+    effects.request({ tint: [10, 20, 30, 128], foreground: [220, 230, 240, 255] });
+    await effects.settled(); assert.equal(calls.length, 2);
+  } finally { release(); effects.dispose(); }
 });
 
 test('capture requested values and suppress remaining native stages after disposal', async () => {

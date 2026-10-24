@@ -1,5 +1,5 @@
-//! Project navigation lives in the native File menu. Keep native editing/window
-//! actions, but route macOS Quit through observed owned-child shutdown.
+//! Native macOS menus and directory-picker helpers shared by Linux app actions.
+//! Keep macOS editing/window actions and route Quit through owned-child shutdown.
 use std::{collections::HashSet, sync::Mutex};
 use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
@@ -35,6 +35,11 @@ pub fn is_open_project(id: &str) -> bool {
 }
 
 pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
+    // Linux uses the command palette and configurable app shortcuts, not an
+    // attached (or merely hidden) GTK menu/accelerator group.
+    if cfg!(target_os = "linux") {
+        return Ok(());
+    }
     use tauri::menu::{Menu, MenuItem, MenuItemKind, PredefinedMenuItem, Submenu};
     let menu = Menu::default(app)?;
     let open = MenuItem::with_id(
@@ -158,12 +163,18 @@ pub fn open_project_settings(app: &tauri::AppHandle) {
 }
 
 pub fn open_project(app: &tauri::AppHandle) {
+    let windows = app.webview_windows();
+    let parent = windows.values().find(|w| w.is_focused().unwrap_or(false));
+    pick_project(app, parent);
+}
+
+pub fn open_project_in(window: &tauri::WebviewWindow) {
+    pick_project(window.app_handle(), Some(window));
+}
+
+fn pick_project(app: &tauri::AppHandle, parent: Option<&tauri::WebviewWindow>) {
     let mut dialog = app.dialog().file().set_title("Open project directory");
-    if let Some(window) = app
-        .webview_windows()
-        .values()
-        .find(|w| w.is_focused().unwrap_or(false))
-    {
+    if let Some(window) = parent {
         dialog = dialog.set_parent(window);
     }
     let app = app.clone();
@@ -231,6 +242,21 @@ fn request_project_picker(app: &tauri::AppHandle) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn linux_skips_app_menu_construction_instead_of_hiding_accelerators() {
+        let source = include_str!("native_menu.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap();
+        let install = source.split("pub fn install(").nth(1).unwrap();
+        let before_menu = install
+            .split("let menu = Menu::default(app)?;")
+            .next()
+            .unwrap();
+        assert!(before_menu.contains("if cfg!(target_os = \"linux\")"));
+        assert!(before_menu.contains("return Ok(());"));
+    }
+
     #[test]
     fn only_the_app_owned_quit_action_requests_shutdown() {
         assert!(is_quit(QUIT_ID));

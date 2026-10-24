@@ -1,5 +1,34 @@
 export const TOOL_AUTO_DISCLOSURE_MS = 500;
 
+/** Paint the triangle directly, avoiding transient clip-path edges in WebKitGTK. */
+export function createCardSummary(document: Document, label?: string): HTMLElement {
+  const summary = document.createElement('summary');
+  const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  arrow.classList.add('card-disclosure-arrow');
+  arrow.setAttribute('viewBox', '0 0 100 100');
+  arrow.setAttribute('width', '7');
+  arrow.setAttribute('height', '7');
+  arrow.setAttribute('aria-hidden', 'true');
+  arrow.setAttribute('focusable', 'false');
+  const triangle = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  triangle.setAttribute('d', 'M15 0 L85 50 L15 100 Z');
+  arrow.append(triangle);
+  summary.append(arrow);
+  if (label !== undefined) setCardSummaryLabel(summary, label);
+  return summary;
+}
+
+/** Update disclosure text without replacing its retained decorative arrow. */
+export function setCardSummaryLabel(summary: HTMLElement, label: string): void {
+  let text = summary.querySelector<HTMLElement>('.card-disclosure-label');
+  if (!text) {
+    text = summary.ownerDocument.createElement('span');
+    text.className = 'card-disclosure-label';
+    summary.append(text);
+  }
+  if (text.textContent !== label) text.textContent = label;
+}
+
 export interface ToolOutputScrollState { top: number; atBottom: boolean; }
 const outputViewports = new WeakMap<ParentNode, HTMLElement>();
 export function associateOutputViewport(root: ParentNode, viewport?: HTMLElement): void {

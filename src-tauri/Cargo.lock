@@ -2295,6 +2295,7 @@ dependencies = [
  "chrono",
  "font-kit",
  "futures-util",
+ "gtk",
  "nix",
  "notify-rust",
  "objc2",

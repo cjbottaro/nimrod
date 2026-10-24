@@ -1,3 +1,4 @@
+import { applicationActions, isApplicationAction, runApplicationAction } from './application-actions';
 import { installApplicationNotices } from './application-notices';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -40,8 +41,8 @@ export async function mountPopout(): Promise<void> {
   });
   window.addEventListener('unload', () => appearance.dispose(), { once: true });
   const settingsDispatch = installKeybindingDispatch(window, {
-    actions: ['settings'], read: () => readKeyOverrides(globalSettings.keybindings), enabled: () => true,
-    run: () => invoke('open_global_settings'), error: report,
+    actions: ['settings', ...applicationActions(window).map(action => action.id)], read: () => readKeyOverrides(globalSettings.keybindings), enabled: () => true,
+    run: id => isApplicationAction(window, id) ? runApplicationAction(id) : invoke('open_global_settings'), error: report,
   });
   window.addEventListener('unload', () => settingsDispatch.dispose(), { once: true });
   const applyPreferences = (snapshot: PreferencesSnapshot) => {

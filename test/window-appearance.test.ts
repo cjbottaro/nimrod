@@ -10,7 +10,7 @@ import { applyTheme } from '../src/themes/theme';
 const mac: AppearanceCapabilities = { platform: 'macos', transparency: true, frost: true, reducedTransparency: false };
 const linux: AppearanceCapabilities = { platform: 'linux', transparency: true, frost: false, reducedTransparency: false };
 const tick = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
-function fixture(support = mac, initial: Partial<WindowAppearance> = {}, tintTitlebar?: (color: TitlebarTint) => Promise<void>) {
+function fixture(support = mac, initial: Partial<WindowAppearance> = {}, tintTitlebar?: (color: TitlebarTint, foreground?: TitlebarTint) => Promise<void>) {
   const dom = new JSDOM('<input id="opacity" type="range" min="0" max="100"><output></output><div id="blur"><input type="range" min="0" max="40"><output id="blur-value"></output></div><p></p><textarea>draft</textarea><details open>Retained card</details>', { pretendToBeVisual: true });
   const window = dom.window as unknown as Window;
   const root = dom.window.document.documentElement;
@@ -306,7 +306,7 @@ test('surface density is continuous, role-ordered and converges exactly to the o
   assert.ok(middle.control < .15); assert.ok(middle.panel > .25 && middle.panel < .30);
 });
 
-test('Linux exposes whole-window opacity without frosting or any native effect work; input previews before saving', async () => {
+test('Linux exposes whole-window opacity without compositor effects; input previews before saving', async () => {
   const f = fixture(linux);
   try {
     await tick(); assert.equal(f.root.dataset.translucency, 'off'); assert.equal(f.controls.blurGroup.hidden, true);
@@ -319,6 +319,37 @@ test('Linux exposes whole-window opacity without frosting or any native effect w
     assert.deepEqual(f.saves, [{ opacity: 65 }]);
     f.controller.reload(); f.controller.reload(); await tick(); assert.equal(f.effects.length, 0);
   } finally { f.close(); }
+});
+
+test('Linux GTK chrome follows window-local palette and opacity without native blur calls', async () => {
+  const tints: { color: TitlebarTint; foreground?: TitlebarTint }[] = [];
+  const otherTints: TitlebarTint[] = [];
+  const f = fixture(linux, { opacity: 50 }, async (color, foreground) => { tints.push({ color, foreground }); });
+  const other = fixture(linux, { opacity: 75 }, async color => { otherTints.push(color); });
+  try {
+    const palette = (foreground: string) => applyTheme(f.root, {
+      id: 'linux-chrome', name: 'Linux chrome', mode: 'dark', syntax: {},
+      colors: { 'editor.background': '#123456', foreground },
+    });
+    palette('#ddeeff');
+    await f.controller.ready; await other.controller.ready;
+    assert.deepEqual(tints.at(-1), { color: [18, 52, 86, 128], foreground: [221, 238, 255, 255] });
+    const beforeOther = otherTints.length, before = tints.length;
+    for (let i = 0; i < 200; i++) f.controller.reload();
+    await f.controller.settled(); assert.equal(tints.length, before);
+    // Same background/mode, different text colour must invalidate native chrome.
+    palette('#aabbcc'); await f.controller.settled();
+    assert.deepEqual(tints.at(-1), { color: [18, 52, 86, 128], foreground: [170, 187, 204, 255] });
+    f.external({ opacity: 0 }); await f.controller.settled();
+    assert.deepEqual(tints.at(-1), { color: [18, 52, 86, 0], foreground: [170, 187, 204, 255] });
+    f.external({ opacity: 100 }); await f.controller.settled();
+    assert.equal(tints.at(-1)!.color[3], 255);
+    f.setTheme('light', '#f7f9f8'); await f.controller.settled();
+    assert.deepEqual(tints.at(-1)!.color, [247, 249, 248, 255]);
+    assert.equal(otherTints.length, beforeOther);
+    assert.equal(f.effects.length, 0); assert.equal(other.effects.length, 0);
+    assert.equal(f.controls.blurGroup.hidden, true);
+  } finally { f.close(); other.close(); }
 });
 
 test('macOS blur follows opacity, strength and local dark/light theme previews without repeated effect work', async () => {

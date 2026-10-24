@@ -85,7 +85,7 @@ export function installNativeWindowAppearance(host: Pick<AppearanceHost, 'read' 
       if (failure) throw new Error(failure);
       return observed ? next : { ...next, frost: false };
     },
-    tintTitlebar: color => invoke<void>('tint_window_titlebar', { color }),
+    tintTitlebar: (color, foreground) => invoke<void>('tint_window_titlebar', { color, foreground }),
   }, controls);
   const previewReady = listen<AppearancePreviewSnapshot>('nimrod-window-appearance-preview', event => receivePreview(event.payload)).then(async stop => {
     if (disposed) { stop(); return; }

@@ -1,0 +1,45 @@
+/* GTK's existing client-side decoration, scoped to one window.
+ * Paint the tint once: the titlebar host owns it, nested HeaderBars are clear.
+ * Server-side decorations and popup menus remain native desktop surfaces. */
+window.$scope {
+    background-color: transparent;
+    background-image: none;
+}
+window.$scope headerbar {
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
+    color: $foreground;
+}
+window.$scope > .titlebar {
+    background-color: $background;
+    background-image: none;
+    color: $foreground;
+    box-shadow: none;
+}
+/* Join native chrome to the webview without the desktop theme's seam.
+ * Keep outer decorations, corner geometry and button borders untouched. */
+window.$scope > .titlebar,
+window.$scope headerbar {
+    border-bottom-style: none;
+    border-bottom-width: 0;
+}
+window.$scope headerbar label,
+window.$scope headerbar button {
+    color: $foreground;
+}
+window.$scope headerbar button {
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
+}
+window.$scope headerbar button:hover {
+    background-color: $hover;
+}
+window.$scope headerbar button:active {
+    background-color: $active;
+}
+window.$scope headerbar button:disabled,
+window.$scope headerbar button:disabled label {
+    color: $disabled;
+}

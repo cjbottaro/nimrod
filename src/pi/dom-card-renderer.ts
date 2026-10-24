@@ -1,5 +1,6 @@
 import { definePresentationPlugin, isPresentationPlugin, constrainWebLinks } from '../card-plugin-ui';
 import { isSafeLink } from './safe-markdown';
+import { createCardSummary, setCardSummaryLabel } from './card-shell';
 import { renderConsoleOutput, clearConsoleOutput, consoleOutputIsLiteral } from './console-output';
 import { renderLiteralOutput, clearLiteralOutput } from './literal-output';
 import { immutableSnapshot } from './immutable-snapshot';
@@ -252,10 +253,10 @@ export class DomCardController<Data> {
     if (value.outputDisclosure !== undefined) {
       if (!disclosure) {
         disclosure = doc.createElement('details'); disclosure.className = 'tool-raw-inputs card-output-disclosure';
-        disclosure.append(doc.createElement('summary')); this.body.prepend(disclosure);
+        disclosure.append(createCardSummary(doc)); this.body.prepend(disclosure);
         for (const section of Array.from(this.body.children).filter(node => node.classList.contains('tool-section'))) disclosure.append(section);
       }
-      disclosure.querySelector('summary')!.textContent = value.outputDisclosure;
+      setCardSummaryLabel(disclosure.querySelector('summary')!, value.outputDisclosure);
     } else if (disclosure) {
       for (const section of Array.from(disclosure.children).filter(node => node.classList.contains('tool-section'))) this.body.insertBefore(section, disclosure);
       disclosure.remove(); disclosure = undefined;

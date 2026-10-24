@@ -1,3 +1,5 @@
+import { createCardSummary } from './pi/card-shell';
+
 /** Presentation-only input. Harness adapters own recognition and command spelling. */
 export interface SkillInvocation {
   label: string;
@@ -40,7 +42,7 @@ export function renderSkillInvocation(
   details.className = 'tool-card skill-card';
   details.dataset.detailKey = key;
   details.open = previous?.querySelector<HTMLDetailsElement>('.skill-card')?.open ?? expanded.get(key) ?? false;
-  const summary = document.createElement('summary');
+  const summary = createCardSummary(document);
   const label = document.createElement('span');
   label.className = 'tool-card-preview skill-name';
   label.textContent = skill.label;

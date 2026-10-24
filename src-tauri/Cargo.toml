@@ -39,6 +39,7 @@ objc2-app-kit = { version = "0.3", default-features = false, features = ["NSWind
 objc2-quartz-core = { version = "0.3", default-features = false, features = ["CALayer", "objc2-core-graphics"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
 notify-rust = { version = "4.17", default-features = false, features = ["z-with-tokio"] }
 
 [target.'cfg(unix)'.dependencies]

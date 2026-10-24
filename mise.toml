@@ -18,7 +18,7 @@ run = "npm run typecheck && cargo check --manifest-path src-tauri/Cargo.toml"
 run = "npm run check:docs && npm test && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml"
 
 [tasks.build]
-run = "npm run tauri build -- --bundles app && npm run verify:bundle"
+run = "node scripts/build-app.mjs"
 
 [tasks.themes-discover]
 description = "Explicit Open VSX discovery; write pinned package lock and omission report"
