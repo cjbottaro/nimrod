@@ -2,6 +2,21 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
+## Codex questions
+
+Experimental protocol opt-in, reviewed non-secret question batches, shared
+Copilot/Codex retained question presentation, explicit unsupported-request
+notices and raw question/response/error capture are source-implemented. New
+parser/client/actual-palette/session-log fixtures are authored **unrun**;
+existing Copilot question fixtures were preserved but not rerun. The required
+post-merge TypeScript/Rust compile check is pending for this task. No tests,
+app builds/launches, runtime feature-flag writes, mode changes or live prompts
+were performed. Installed-CLI question schema/default-versus-Plan availability,
+actual native focus/layout, cancellation timing and persisted capture remain
+unverified. The user plans to trigger and share their own interaction traces;
+that intent is not acceptance evidence. [Codex questions](../../codex-integration/references/questions.md)
+owns capture instructions, scope and policies.
+
 ## Codex tree deletion
 
 The shared review now consumes opaque key/parentKey nodes; Pi's native wire

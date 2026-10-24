@@ -4,7 +4,7 @@ Enable **Transcript debug logs** in **Global Settings → Diagnostics** to captu
 
 ## What is recorded
 
-Pi (including extension tools) and built-in Copilot logs include full prompts, responses, reasoning, tools, streaming fragments, errors, usage/configuration events, requests/replies, permission/question traffic and session UI actions. History delivered during normal connection/Resume or refresh is marked separately. Dormant ACP infrastructure uses the same logger. Unsent drafts, DOM snapshots and OS-wide activity are not collected; already-mounted conversation content is not backfilled.
+Pi (including extension tools), Codex and built-in Copilot logs include full prompts, responses, reasoning, tools, streaming fragments, errors, usage/configuration events, requests/replies, permission/question traffic and session UI actions. History delivered during normal connection/Resume or refresh is marked separately. Dormant ACP infrastructure uses the same logger. Unsent drafts, DOM snapshots and OS-wide activity are not collected; already-mounted conversation content is not backfilled.
 
 **Logs can contain secrets, image bytes and other full conversation content.** They are neither redacted nor uploaded. Performance diagnostics are separate timing-only reports.
 
@@ -17,6 +17,7 @@ The resolved directory appears beside the setting. Nimrod honors an absolute `XD
   pi/YYYY-MM-DD.jsonl
   pi/YYYY-MM-DD.000001.jsonl
   copilot-sdk/copilot/YYYY-MM-DD.jsonl
+  codex/codex/YYYY-MM-DD.jsonl
   acp/<agent>/YYYY-MM-DD.jsonl
 ```
 
@@ -32,6 +33,7 @@ Give your coding assistant the source/day paths (including adjacent segments), a
 | --- | --- |
 | Pi | `message_start`, `message_update`, `message_end`, `tool_execution_end`, `agent_settled`; outgoing `request.<type>`, replies `response.<command>` including normal history responses |
 | Copilot | `assistant.message`, `assistant.reasoning_delta`, `tool.execution_complete`, `session.idle`; saved events `history.<native-type>`; `request.<method>`, `bridge.result`, full `permission.request` / `input.request` callback packets and `request.decision` answers |
+| Codex | `receive` raw server records, outgoing `request` and `response` packets, plus `interaction.rejected` diagnostics. Inspect payload `method` and correlate RPC `id` with connection identity; history pages are correlated RPC replies, not separately labelled history events. Separate project catalogs use `catalog.*` events and catalog connection identities. |
 | ACP | Native update names, `history.<name>` replay, `request.<method>`, JSON-RPC `response` and permission traffic |
 | Nimrod | `ui.action` intent/error markers and `ui.configuration` local progress; neither proves harness acceptance |
 

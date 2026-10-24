@@ -13,6 +13,8 @@ export interface CodexSessionUi {
   changed(): void; notice(message: string): void;
   identified(id: string): void;
   approval: NonNullable<CodexClientHooks['approval']>;
+  question?: CodexClientHooks['question'];
+  interactionFailure?: CodexClientHooks['interactionFailure'];
   disconnected(message: string): void;
   completed(failed: boolean, response?: string): void;
   transcriptLog?: TranscriptLogSink;
@@ -41,12 +43,17 @@ export class CodexSession {
   private aliases = new Map<string, string>();
   private readonly connectionId = crypto.randomUUID();
   constructor(writer: CodexWriter, private ui: CodexSessionUi) {
-    this.client = new CodexClient({ write: packet => { this.capture('request', packet); return writer.write(packet); } }, {
+    this.client = new CodexClient({ write: packet => { this.capture(typeof packet.method === 'string' ? 'request' : 'response', packet); return writer.write(packet); } }, {
       identified: (thread, settings) => {
         ui.identified(thread.id); this.applySettings(settings);
         this.state = { ...this.state, sessionName: string(thread.name) || undefined };
       },
-      event: event => this.event(event), approval: ui.approval,
+      event: event => this.event(event), approval: ui.approval, question: ui.question,
+      interactionFailure: failure => {
+        this.capture('interaction.rejected', failure);
+        if (ui.interactionFailure) ui.interactionFailure(failure);
+        else ui.notice(`Codex interaction ${failure.method} could not be handled: ${failure.reason}. No answer or approval was supplied.`);
+      },
       disconnected: error => {
         this.ended = true; this.configuration?.dispose(error.message);
         this.finishRows(); this.state = { ...this.state, busy: false, sessionUnavailable: true, status: 'Disconnected' };

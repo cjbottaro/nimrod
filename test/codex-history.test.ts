@@ -3,6 +3,7 @@ import test from 'node:test';
 import { CodexSessionHistory } from '../src/codex/session-history';
 import { loadSessionHistory } from '../src/session-history';
 import type { CodexPacket } from '../src/codex/protocol';
+import type { TranscriptLogRecord } from '../src/transcript-logs';
 const cwd = '/fixture/codex-history';
 const thread = (id: string, directory = cwd) => ({ id, cwd: directory, ephemeral: false, parentThreadId: null, turns: [], status: { type: 'notLoaded' }, name: id, updatedAt: 100 });
 function fixture() {
@@ -60,6 +61,24 @@ test('Codex deletion inventory includes archived descendants and retires an unce
   await history.reserveDeletion('operation', 'root', tree.ids); await history.stopDeletionOwners('operation');
   await assert.rejects(history.deleteTree('root', () => {})); await history.finishDeletion('operation', true);
   assert.ok(events.indexOf('catalog-exited') < events.indexOf('release')); assert.equal(events.includes('duplicate-discovery-error'), false);
+  assert.equal(sent.some(packet => ['thread/start', 'thread/resume', 'turn/start'].includes(String(packet.method))), false);
+  await history.dispose();
+});
+
+test('Codex catalog captures and reports unsupported server interactions without creating a conversation', async () => {
+  const logs: TranscriptLogRecord[] = [], errors: unknown[] = [], sent: CodexPacket[] = [];
+  let receive!: (packet: unknown) => void;
+  const history = new CodexSessionHistory(cwd, {
+    start: async (_token, listener) => { receive = listener; return cwd; },
+    write: async (_token, packet) => { sent.push(packet); if (packet.method === 'initialize') receive({ id: packet.id, result: { userAgent: 'fixture' } }); },
+    stop: async () => {},
+  }, error => errors.push(error), { transcriptLog: { enabled: true, append: record => logs.push(structuredClone(record)) } });
+  await history.initialize();
+  receive({ id: 'unsupported', method: 'future/catalogInteraction', params: { native: 'retain' } });
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  assert.ok(errors.some(error => String(error).includes('future/catalogInteraction')));
+  assert.ok(logs.some(log => log.event === 'catalog.receive' && (log.payload as Record<string, unknown>).method === 'future/catalogInteraction'));
+  assert.ok(logs.some(log => log.event === 'catalog.response' && (log.payload as Record<string, unknown>).id === 'unsupported'));
   assert.equal(sent.some(packet => ['thread/start', 'thread/resume', 'turn/start'].includes(String(packet.method))), false);
   await history.dispose();
 });

@@ -4,7 +4,7 @@ import { CodexClient, type CodexClientHooks } from '../src/codex/client';
 import { RpcConnectionError, RpcResponseError } from '../src/json-rpc-connection';
 import type { CodexPacket, CodexApprovalDecision } from '../src/codex/protocol';
 
-const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
+const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 const cwd = '/fixture/project';
 const thread = (id = 'thread-a', directory = cwd) => ({ id, cwd: directory, ephemeral: false, parentThreadId: null, turns: [], status: { type: 'idle' } });
 const turn = (status = 'inProgress', id = 'turn-a') => ({ id, status, items: [], itemsView: 'full', error: null });
@@ -37,7 +37,7 @@ test('Codex handshake omits the JSON-RPC version member and does not start work'
   assert.equal(f.client.phase, 'ready', 'response is applied synchronously');
   assert.deepEqual(f.sent.map(packet => packet.method), ['initialize', 'initialized']);
   assert.ok(f.sent.every(packet => !('jsonrpc' in packet)));
-  assert.deepEqual((f.last('initialize').params as Record<string, unknown>).capabilities, { experimentalApi: false, requestAttestation: false });
+  assert.deepEqual((f.last('initialize').params as Record<string, unknown>).capabilities, { experimentalApi: true, requestAttestation: false });
   await pending;
   await assert.rejects(f.client.initialize(), /unavailable/);
   f.client.disconnect();
@@ -214,7 +214,7 @@ test('Codex command and file approvals send only explicit supported decisions', 
   }
 });
 
-test('Codex unknown/experimental requests and wrong-owner approvals never become grants', async () => {
+test('Codex unknown/malformed requests and wrong-owner approvals never become grants', async () => {
   let approvals = 0;
   const f = fixture({ approval: async () => { approvals++; return 'accept'; } }); await f.working();
   for (const [id, method, owner] of [['foreign', 'item/commandExecution/requestApproval', 'other'], ['question', 'item/tool/requestUserInput', 'thread-a'], ['unknown', 'future/request', 'thread-a']]) {
@@ -234,6 +234,51 @@ test('Codex completion/disconnect aborts pending decisions and ignores late repl
     assert.equal(signal.aborted, true); answer('accept'); await flush();
     assert.equal(f.sent.some(packet => packet.id === 99), false); f.client.disconnect();
   }
+});
+
+const questionParams = (threadId = 'thread-a') => ({ threadId, turnId: 'turn-a', itemId: 'question-tool', isBlocking: true, autoResolutionMs: null,
+  questions: [{ id: 'scope', header: 'Scope', question: 'Which scope?', isOther: false, isSecret: false, options: [{ label: 'Local', description: 'This project' }, { label: 'All', description: 'All projects' }] }] });
+
+test('Codex questions return exact keyed answer arrays without a prompt or permission translation', async () => {
+  let calls = 0;
+  const f = fixture({ question: async request => { calls++; assert.equal(request.questions[0].id, 'scope'); return { scope: { answers: ['Local'] } }; } });
+  await f.working(); f.client.receive({ id: 'question', method: 'item/tool/requestUserInput', params: questionParams() });
+  await flush(); assert.equal(calls, 1); assert.deepEqual(f.sent.at(-1), { id: 'question', result: { answers: { scope: { answers: ['Local'] } } } });
+  assert.equal(f.sent.filter(packet => packet.method === 'turn/start').length, 1); f.client.disconnect();
+});
+
+test('Codex question resolution/completion/disconnect aborts UI and suppresses stale replies', async () => {
+  for (const kind of ['resolved', 'completed', 'disconnected']) {
+    let signal!: AbortSignal; let answer!: (value: { scope: { answers: string[] } }) => void;
+    const failures: unknown[] = [];
+    const f = fixture({ question: (_request, abort) => { signal = abort; return new Promise(resolve => { answer = resolve; }); }, interactionFailure: failure => failures.push(failure) });
+    await f.working(); f.client.receive({ id: 'question', method: 'item/tool/requestUserInput', params: questionParams() });
+    if (kind === 'resolved') f.event('serverRequest/resolved', { requestId: 'question' });
+    else if (kind === 'completed') f.event('turn/completed', { turn: turn('completed') });
+    else f.client.disconnect();
+    assert.equal(signal.aborted, true); answer({ scope: { answers: ['Local'] } }); await flush();
+    assert.equal(f.sent.some(packet => packet.id === 'question'), false); assert.deepEqual(failures, []); f.client.disconnect();
+  }
+});
+
+test('Codex malformed/secret/foreign questions and unknown interactions remain visible failures, not grants', async () => {
+  let questions = 0; const failures: { method: string; requestId: string | number; reason: string }[] = [];
+  const f = fixture({ question: async () => { questions++; return {}; }, interactionFailure: failure => failures.push(failure) }); await f.working();
+  for (const [id, params] of [
+    ['foreign', questionParams('other')],
+    ['secret', { ...questionParams(), questions: [{ ...questionParams().questions[0], isSecret: true }] }],
+    ['malformed', { ...questionParams(), questions: [] }],
+  ] as const) f.client.receive({ id, method: 'item/tool/requestUserInput', params });
+  f.client.receive({ id: 'unknown', method: 'future/interaction', params: { native: 'keep in logs' } });
+  await flush(); assert.equal(questions, 0); assert.equal(failures.length, 4); assert.equal(f.client.phase, 'working');
+  for (const id of ['foreign', 'secret', 'malformed', 'unknown']) assert.ok(f.sent.find(packet => packet.id === id)?.error);
+  assert.ok(failures.some(failure => failure.requestId === 'secret' && /secret/.test(failure.reason))); f.client.disconnect();
+});
+
+test('Codex rejects invented/unoffered answer values without silently answering another question', async () => {
+  const f = fixture({ question: async () => ({ scope: { answers: ['Invented'] } }) }); await f.working();
+  f.client.receive({ id: 'question', method: 'item/tool/requestUserInput', params: questionParams() }); await flush();
+  assert.ok(f.sent.find(packet => packet.id === 'question')?.error); assert.equal(f.client.phase, 'working'); f.client.disconnect();
 });
 
 test('Codex acknowledgement timeout disconnects once, retains identity and never retries', async () => {

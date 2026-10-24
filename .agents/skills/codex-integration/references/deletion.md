@@ -8,7 +8,7 @@ Use the existing `SessionDeletionSource` / `SessionDeletionOperation` / `Session
 
 The reviewed CLI remains **0.162.0**. Its generated stable `Thread` contains `parentThreadId`, `forkedFromId`, cwd and ephemeral state; `ThreadSourceKind` enumerates ten source kinds. Official [app-server docs](https://developers.openai.com/codex/app-server/) say `thread/delete` permanently removes the persisted active/archived root and spawned descendants, existing rollout files and associated metadata, returns `{}` on success and emits `thread/deleted` per removed thread. Missing rollout files count as already deleted; ephemeral roots cannot be deleted.
 
-This is **spawned ancestry**, not Pi's file lineage, `forkedFromId`, or Codex's tree-wide `sessionId`. We do not treat a history fork as deletion ancestry without evidence. The experimental `ancestorThreadId`/`parentThreadId` request filters described in current docs are not enabled: stable returned parent metadata plus an exhaustive source/archive inventory is sufficient for the implemented policy. Runtime compatibility of that metadata still needs installed-CLI acceptance.
+This is **spawned ancestry**, not Pi's file lineage, `forkedFromId`, or Codex's tree-wide `sessionId`. We do not treat a history fork as deletion ancestry without evidence. The experimental `ancestorThreadId`/`parentThreadId` request filters described in current docs are not used: stable returned parent metadata plus an exhaustive source/archive inventory is sufficient for the implemented policy. Runtime compatibility of that metadata still needs installed-CLI acceptance.
 
 ## Inventory and policy boundaries
 
@@ -43,7 +43,7 @@ The reservation is Codex-specific native safety machinery, not another UI deleti
 - Codex owns the precise meaning of rollout/associated-metadata removal. Nimrod does not claim all external artifacts or project worktrees/files are removed, and performs no broad directory cleanup.
 - There is no Pi-style persisted file quarantine for Codex. Known individual deletion notifications allow partial reconciliation; missing/uncertain notifications leave identity/drafts intact for explicit history refresh/verification. Reload's observed server exit retires in-flight work, not a claim that an uncertain deletion failed.
 - Native checks use the reviewed stable parent metadata and all known source kinds. There is no runtime semver gate. Re-review schema/source kinds for CLI upgrades; do not promise unknown versions produce a complete inventory.
-- Cross-project descendants and fork semantics remain future policy/runtime acceptance questions. Do not weaken checks or enable experimental APIs silently to broaden support.
+- Cross-project descendants and fork semantics remain future policy/runtime acceptance questions. Do not weaken checks or start using unimplemented experimental deletion filters to broaden support. The separate question integration's user-approved protocol opt-in does not change this deletion policy.
 
 ## Fixtures
 
