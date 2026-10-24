@@ -11,13 +11,19 @@ test('queued stack anchors at the bottom of a short transcript and bounds long q
     const bounds = () => page.locator(visible('transcript-viewport')).evaluate(pane => {
       const stack = pane.querySelector('.queued-turns')!;
       const rect = stack.getBoundingClientRect(), viewport = pane.getBoundingClientRect();
-      return { gap: viewport.bottom - rect.bottom, top: rect.top - viewport.top, overflow: stack.scrollHeight - stack.clientHeight };
+      const last = stack.lastElementChild!;
+      return { gap: viewport.bottom - rect.bottom, top: rect.top - viewport.top, overflow: stack.scrollHeight - stack.clientHeight,
+        trailingGap: rect.bottom - last.getBoundingClientRect().bottom, trailingMargin: getComputedStyle(last).marginBottom };
     });
     await queue(['Short queue']);
     await expect(page.locator(visible('messages')).locator('.queued-turns .user')).toHaveCount(1);
+    await expect.poll(async () => (await bounds()).trailingGap).toBeCloseTo(0, 1);
+    expect((await bounds()).trailingMargin).toBe('0px');
     await expect.poll(async () => (await bounds()).gap).toBeLessThanOrEqual(25);
     await queue(Array.from({ length: 10 }, (_, i) => `Long queued message ${i}\n\n${'More content\n\n'.repeat(10)}`));
     await expect(page.locator(visible('messages')).locator('.queued-turns .user')).toHaveCount(11);
+    expect((await bounds()).trailingMargin).toBe('0px');
+    await expect(page.locator(visible('messages')).locator('.queued-turns .user').first()).toHaveCSS('margin-bottom', '16px');
     await expect.poll(async () => (await bounds()).overflow).toBeGreaterThan(100);
     expect((await bounds()).top).toBeGreaterThanOrEqual(0);
     await expect.poll(async () => (await bounds()).gap).toBeLessThanOrEqual(25);
