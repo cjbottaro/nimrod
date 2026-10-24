@@ -74,6 +74,8 @@ Core always retains raw inputs. Optional `inputDisclosure: { label, field }` dis
 
 ## Harness targets and shared runtime
 
+`CardPluginTarget.backend` is an integration identifier, not a fixed harness enum. Targets use lowercase ASCII letters, digits and hyphens, start with a letter and are at most 128 characters. New registered integrations can use their own target without changing the plugin API. Sources without a specialized registered renderer retain generic cards, literal native details and raw recovery; they never inherit another harness's specialized presentation. This metadata grants no execution or native authority.
+
 Codex-native tool cards use `{ backend: 'codex', agent: 'codex' }` (or `{ backend: 'codex' }` for any Codex source). They expose native command/file/MCP/item metadata without masquerading as Pi or ACP tools. Bundled command/diff cards use the same public presentation runtime as external plugins; unknown items keep raw recovery. See [Codex sessions](codex.md) for acceptance status and integration limitations.
 
 Official SDK Copilot has an explicit target

@@ -1,3 +1,6 @@
+import { registerCardRenderer } from '../card-renderers';
+import { bundledToolRenderer } from './card-plugins/registry';
+registerCardRenderer('pi', bundledToolRenderer);
 import { mountConversationView } from '../conversation-view';
 import { createPiViewProjection, piInteraction } from './view-policy';
 import type { ViewHost } from './view-host';

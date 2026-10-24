@@ -3,13 +3,13 @@ import type { SlashCommand } from '../pi/slash-completion';
 import { keyboardSubmissionMode } from '../pi/composer-dom';
 import { newlineHint, sendHint } from '../composer-hints';
 import type { AcpSession } from './session';
-import type { SessionAction } from '../session-backend';
+import type { HarnessActionContribution as SessionAction } from '../harness-contract';
 
 export function acpSessionActions(session: AcpSession | undefined): readonly SessionAction[] {
   const actions: SessionAction[] = [];
   if (session?.configuration.capabilities.some(setting => setting.id === 'model')) actions.push({ id: 'model', label: 'Select model…', detail: 'Choose the model for this session' });
   if (session?.configuration.capabilities.some(setting => setting.id === 'effort')) actions.push({ id: 'thinking', label: 'Select thinking level…', keywords: 'effort reasoning', detail: 'Choose the thinking level for this session' });
-  if (session?.options.length) actions.push({ id: 'acp-options', label: 'ACP session options…', detail: 'Configuration selectors advertised by this ACP agent' });
+  if (session?.options.length) actions.push({ id: 'harness-acp-options', label: 'ACP session options…', detail: 'Configuration selectors advertised by this ACP agent' });
   return actions;
 }
 

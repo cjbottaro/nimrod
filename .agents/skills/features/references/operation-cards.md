@@ -83,7 +83,7 @@ Expose operation state accessibly, independent of colour/animation. Reduced moti
 
 ## Implementation and verification targets
 
-Code: `src/operation-card.ts` owns the shared mounted header/footer; `conversation-view.ts` integrates content, scrolling, focus and card-owned receipt errors; `configuration-transcript.ts` / `pi/steering-transcript.ts` project concrete lifecycle/placement. `session-configuration.ts` and concrete adapters own cancellation/dispatch tracking. `main.ts`, `session-backend.ts` and `keybindings.ts` route the card and palette's owner-bound cancellation action. `ConversationView.hasConnectionOutcome` is only a notice-deduplication query, not a delivery/connection state source.
+Code: `src/operation-card.ts` owns the shared mounted header/footer; `conversation-view.ts` integrates content, scrolling, focus and card-owned receipt errors; `configuration-transcript.ts` / `pi/steering-transcript.ts` project concrete lifecycle/placement. `session-configuration.ts` and concrete adapters own cancellation/dispatch tracking. `main.ts`, `session-actions.ts` and `keybindings.ts` route the card and palette's owner-bound cancellation action. `ConversationView.hasConnectionOutcome` is only a notice-deduplication query, not a delivery/connection state source.
 
 Share the mounted title/outcome/details/cancel presentation across consumers; keep lifecycle decisions in their concrete controllers/projectors. Same-key progress patches exact dirty rows without lazy history reads; insertion/unpin/removal uses existing structural reconciliation. Ordered lifecycle observation must precede the hidden/coalesced paint gate.
 

@@ -1,7 +1,7 @@
 import type { ConversationInteraction } from '../conversation-view-host';
 import { keyboardSubmissionMode } from '../pi/composer-dom';
 import { newlineHint, sendHint } from '../composer-hints';
-import type { SessionAction } from '../session-backend';
+import type { HarnessActionContribution as SessionAction } from '../harness-contract';
 import type { CopilotSession } from './session';
 import { copilotSlashCommands, findCopilotCommand } from './commands';
 import { parseCopilotSkillInvocation } from './skill-invocation';

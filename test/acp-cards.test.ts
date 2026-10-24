@@ -1,3 +1,4 @@
+import '../src/bundled-card-renderers';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -49,7 +50,8 @@ test('plugin target metadata is explicit and Pi/Copilot shell entries import onl
   assert.deepEqual(pluginTargets(undefined), [{ backend: 'pi' }]);
   assert.equal(matchesTarget([{ backend: 'acp', agent: 'copilot' }], data), false);
   assert.equal(matchesTarget([{ backend: 'acp' }], data), true);
-  assert.throws(() => pluginTargets([{ backend: 'bogus' }]));
+  assert.deepEqual(pluginTargets([{ backend: 'future-harness' }]), [{ backend: 'future-harness' }]);
+  assert.throws(() => pluginTargets([{ backend: '../invalid' }]));
   assert.throws(() => pluginKinds(['execute', 'execute']));
   for (const path of ['src/pi/card-plugins/bash.ts', 'src/acp/card-plugins.ts', 'examples/card-plugins/acp-shell/plugin.ts']) {
     const source = readFileSync(path, 'utf8');
@@ -105,7 +107,7 @@ test('mount-time applicability can decline a category match without hiding anoth
     assert.equal(firstMatches, matches, 'mounted updates do not re-evaluate applicability or swap plugins');
     disposeToolCard(card);
   } finally { dom.window.close(); }
-  assert.throws(() => personalRenderer({ default: { ...base, targets: undefined } }), /ACP target/);
+  assert.throws(() => personalRenderer({ default: { ...base, targets: undefined } }), /targeted non-legacy integration/);
 });
 
 test('invalid asynchronous applicability is declined and its rejection is consumed', async () => {

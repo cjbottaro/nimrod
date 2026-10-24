@@ -1,5 +1,5 @@
 export const KEYBINDINGS_SETTING = 'keybindings';
-export const ACTIONS = [
+const BUILTIN_ACTIONS = [
   { id: 'open-project', label: 'Open project…', scope: 'app', context: 'application', platform: 'linux', defaults: ['ctrl+o'] },
   { id: 'quit', label: 'Quit Nimrod', scope: 'app', context: 'application', platform: 'linux', defaults: ['ctrl+q'] },
   { id: 'minimize-window', label: 'Minimize window', scope: 'app', context: 'application', platform: 'linux', defaults: [] },
@@ -40,8 +40,25 @@ export const ACTIONS = [
   { id: 'new-named', label: 'New named session…', scope: 'project', context: 'project', defaults: ['primary+alt+n'] },
   { id: 'restart', label: 'Restart session', scope: 'project', context: 'session', defaults: ['primary+r'] },
 ] as const;
-export type ActionId = typeof ACTIONS[number]['id'];
-export type ActionContext = typeof ACTIONS[number]['context'];
+export type BuiltinActionDefinition = typeof BUILTIN_ACTIONS[number];
+export type ActionId = BuiltinActionDefinition['id'] | `harness-${string}`;
+export type ActionContext = typeof BUILTIN_ACTIONS[number]['context'];
+export interface ActionDefinition {
+  id: ActionId; label: string; keywords?: string; scope: 'app' | 'project';
+  context: ActionContext; defaults: readonly string[]; platform?: 'linux';
+}
+const actionRegistry: ActionDefinition[] = [...BUILTIN_ACTIONS];
+export const ACTIONS: readonly ActionDefinition[] = actionRegistry;
+/** Bundled/registered integrations contribute commands through the same bindable registry. */
+export function registerHarnessAction(action: Omit<ActionDefinition, 'scope'>): void {
+  const existing = actionRegistry.find(candidate => candidate.id === action.id);
+  if (existing) {
+    if (existing.context !== action.context) throw new Error(`Conflicting action context: ${action.id}`);
+    return;
+  }
+  if (!/^harness-[a-z0-9-]{1,72}$/.test(action.id)) throw new Error('New integration actions must use the harness- namespace');
+  actionRegistry.push({ ...action, scope: 'project' });
+}
 export function actionsForWindow(window: Window) {
   return ACTIONS.filter(action => !('platform' in action) || /Linux/i.test(window.navigator.platform));
 }

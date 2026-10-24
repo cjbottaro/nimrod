@@ -47,6 +47,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- Card-plugin targets accept explicit integration identifiers. Unrecognized tool sources keep generic/raw rendering instead of inheriting Pi-specific cards; existing bundled presentations remain available through integration registration.
+
 - Linux no longer shows a File/Edit/Window/Help menu bar. Open project, Quit, window actions and About are available in the command palette; Ctrl+O and Ctrl+Q are configurable, including in Settings and pop-outs. Quit uses the existing whole-app shutdown path. Native title-bar controls, context menus and macOS menus are unchanged.
 
 - Copilot skill invocations now use the same collapsed skill disclosure as Pi, with instructions and injected context inside and arguments visible below. Successful recognized invocations no longer leave a redundant command card; both integrations share lazy rendering and retained disclosure behavior.
@@ -74,6 +76,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 - GitHub release notes use reviewed changelog entries, with Unreleased snapshots for prereleases.
 
 ### Fixed
+
+- Retired Pi startup attempts are rejected before identity binding, buffered packet replay or initialization, with cleanup scoped to the original child. Native acceptance remains pending.
 
 - Codex startup/Resume now binds saved drafts through shared storage without harness-specific namespace allowlists, and confirmed deletion clears only its target scope without touching Pi/Copilot drafts. Late startup cleanup stays bound to the original process rather than a replacement connection. Startup errors remain visible when owned-process cleanup also fails; cleanup Details and opt-in logs include the original cause and native signal/exit phase instead of replacing it with a bare permission error. Post-fix native acceptance remains pending.
 

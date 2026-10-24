@@ -35,6 +35,14 @@ test('Codex composition cannot regain concrete session construction or per-sessi
   visit(shell); assert.deepEqual(violations, []);
 });
 
+test('normal compilation includes the architectural dependency gate and negative contract fixtures', () => {
+  const scripts = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).scripts;
+  assert.match(scripts.typecheck, /check-harness-boundaries\.mjs/);
+  const fixture = readFileSync(new URL('./harness-contract.types.ts', import.meta.url), 'utf8');
+  assert.match(fixture, /@ts-expect-error/);
+  assert.match(fixture, /withoutLifecycle/);
+});
+
 test('concrete Codex connection owner cannot depend on the project shell, DOM or native implementation', () => {
   const owner = source('src/codex/connection.ts');
   assert.deepEqual(imports(owner).filter(dependency => dependency.path === '../main' || dependency.path === './native' && !dependency.typeOnly), []);

@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
-import { actionsForWindow, type ACTIONS, type ActionId } from './keybindings';
+import { actionsForWindow, type BuiltinActionDefinition, type ActionId } from './keybindings';
 
-type ApplicationAction = Extract<typeof ACTIONS[number], { platform: 'linux' }>;
+type ApplicationAction = Extract<BuiltinActionDefinition, { platform: 'linux' }>;
 export type ApplicationActionId = ApplicationAction['id'];
 
 /** Linux's menuless app actions. macOS keeps its native menu/accelerators. */

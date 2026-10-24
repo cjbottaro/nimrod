@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { SessionConfigurationController } from '../src/session-configuration';
 import { SessionConfigurationSet } from '../src/session-configuration-set';
-import { sessionActions } from '../src/session-backend';
+import { availableSessionActions } from '../src/session-actions';
 
 const flush = async () => { for (let i = 0; i < 16; i++) await Promise.resolve(); };
 for (const active of [false, true]) test(`independent configuration owner bypasses ${active ? 'in-flight' : 'idle-only queued'} model work`, async () => {
@@ -43,7 +43,6 @@ test('configuration capability does not manufacture a harness-command action', (
     capabilities: () => [{ id: 'permissions', label: 'Permissions', availability: 'ready' }],
     get: () => undefined, choices: async () => [], apply: async () => {},
   }, () => {})]);
-  const session = { configuration } as unknown as import('../src/pi/session').PiSession;
-  const action = sessionActions({ backend: { kind: 'pi', session } }).find(action => action.id === 'permissions');
+  const action = availableSessionActions({ actions: { current: () => [], async control() {} }, configuration: { current: () => configuration } }, async () => {}).find(action => action.id === 'permissions');
   assert.equal(action, undefined);
 });

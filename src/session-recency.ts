@@ -1,3 +1,6 @@
+import type { SavedSessionIdentity } from './session-lifecycle';
+import { savedDraftScope } from './draft-scope';
+
 /** All's user-driven recency is independent of Pi activity and inbox arrival order. */
 export function lastUsed(value: unknown): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= 8_640_000_000_000_000 ? value : 0;
@@ -14,7 +17,9 @@ export function nextLastUsed(sessions: readonly { lastUsed: number }[], now = Da
   return Math.max(lastUsed(now), Math.min(8_640_000_000_000_000, previous + 1));
 }
 
-export interface RecencyIdentity { path: string; sessionId: string; }
+export type RecencyIdentity = SavedSessionIdentity;
+// Retain legacy pathname keys; tagged identities use their own opaque namespace.
+const recencyKey = (identity: RecencyIdentity) => 'path' in identity ? identity.path : savedDraftScope(identity.kind, identity.sessionId);
 /** Closed sessions retain only identity + recency, never conversation content. */
 export class SessionRecency {
   private entries = new Map<string, { sessionId: string; lastUsed: number }>();
@@ -28,13 +33,14 @@ export class SessionRecency {
     }
   }
   get(identity: RecencyIdentity): number {
-    const entry = this.entries.get(identity.path);
+    const entry = this.entries.get(recencyKey(identity));
     return entry?.sessionId === identity.sessionId ? entry.lastUsed : 0;
   }
   record(identity: RecencyIdentity, timestamp: unknown): boolean {
     const used = lastUsed(timestamp);
-    if (!identity.path || !identity.sessionId || !used || used <= this.get(identity)) return false;
-    this.entries.set(identity.path, { sessionId: identity.sessionId, lastUsed: used });
+    const key = recencyKey(identity);
+    if (!key || !identity.sessionId || !used || used <= this.get(identity)) return false;
+    this.entries.set(key, { sessionId: identity.sessionId, lastUsed: used });
     return true;
   }
   delete(files: readonly string[]): boolean {

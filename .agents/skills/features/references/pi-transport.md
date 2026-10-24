@@ -16,7 +16,7 @@ Ordinary RPC result timeout is 20 seconds. Explicit rejection, successful result
 
 ## Code map
 
-- `src/pi/session-startup.ts`: Pi-only native launch identity checks and pre-result packet buffering; binds validated shell identity/drafts before ordered packet release and initialization. `main.ts` retains native wiring, controller callbacks and error/teardown effects. See [consumer interfaces](consumer-interfaces.md#implemented-extraction-and-remaining-debt) for the remaining extraction boundary.
+- `src/pi/session-startup.ts`: Pi-only native launch identity checks and pre-result packet buffering; binds validated shell identity/drafts before ordered packet release and initialization. `src/pi/integration.ts` owns native wiring, controller callbacks and token-bound teardown, with scoped shell effects behind the registered ports. Retired launch completion is rejected before identity binding/replay/initialization. See [consumer interfaces](consumer-interfaces.md#implemented-extraction-and-registration-boundary).
 - `src/pi/transport.ts`: correlation, synchronous response callbacks, deadlines, disconnect invalidation and hasPendingRequest queries over the existing RPC map for lifecycle/model/compaction guards.
 - `src/pi/session.ts`: launch metadata, history, queue/control semantics, Pi capabilities and identity guards.
 - `src/pi/reducer.ts`: validated event state.

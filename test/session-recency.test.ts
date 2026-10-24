@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
-import { lastUsed, recentSessions, sortByRecency, nextLastUsed, captureSidebarScroll, revealSidebarRow } from '../src/session-recency';
+import { SessionRecency, lastUsed, recentSessions, sortByRecency, nextLastUsed, captureSidebarScroll, revealSidebarRow } from '../src/session-recency';
 
 test('recency sorts copies with stable legacy ties and validates stored timestamps', () => {
   const sessions = [{ lastUsed: 0 }, { lastUsed: 30 }, { lastUsed: 10 }, { lastUsed: 30 }, { lastUsed: 0 }];
@@ -11,6 +11,18 @@ test('recency sorts copies with stable legacy ties and validates stored timestam
   assert.equal(nextLastUsed(sessions, 30), 31);
   assert.equal(nextLastUsed(sessions, 2), 31, 'clock regression does not reverse use order');
   assert.equal(nextLastUsed(sessions, 100), 100);
+});
+
+test('tagged recency persists without a harness list and remains isolated from legacy file keys', () => {
+  const recency = new SessionRecency(undefined), identity = { kind: 'fixture-harness', sessionId: 'same' };
+  assert.equal(recency.record(identity, 123), true);
+  assert.equal(recency.record({ path: '/same', sessionId: 'same' }, 456), true);
+  const restored = new SessionRecency(recency.dump());
+  assert.equal(restored.get(identity), 123);
+  assert.equal(restored.get({ kind: 'another-harness', sessionId: 'same' }), 0);
+  assert.equal(restored.get({ path: '/same', sessionId: 'same' }), 456);
+  assert.equal(restored.delete(['fixture-harness:"same"']), true);
+  assert.equal(restored.get(identity), 0);
 });
 
 test('list timestamp sorting shares sidebar recency rules and keeps unknown times last with stable ties', () => {

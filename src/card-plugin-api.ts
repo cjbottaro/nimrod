@@ -1,5 +1,5 @@
 /** Standalone type-only SDK for executable card manifest API v2. No runtime imports. */
-export interface CardPluginTarget { backend: 'pi' | 'acp' | 'copilot-sdk' | 'codex'; agent?: string; }
+export interface CardPluginTarget { backend: string; agent?: string; }
 export interface ToolCardData {
   /** Absence means legacy Pi. Supplied by Nimrod, not inferred from a tool name. */
   source?: CardPluginTarget;

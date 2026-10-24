@@ -2,6 +2,26 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
+## Registered harness application contract
+
+The review-branch migration is source-implemented: required typed registration/
+project/session factories, explicit unsupported/generic feature implementations,
+all shared shell consumers routed through those ports, concrete Pi/SDK/Codex/
+retained-ACP ownership, registered action/card presentation and generic tagged
+identity/recency handling. Normal typechecking now includes the architectural
+dependency gate and negative contract assertions.
+
+New registry/prototype/default, boundary-gate, typed-negative, generic recency,
+retired Pi launch and mounted-shell unknown-registration fixtures are authored
+**unrun**. Existing concrete/shell/card fixtures were adapted but not rerun.
+The review branch is intentionally unmerged; no typecheck, tests, build, browser/
+app launch, native process handshake or user-session operation has been executed
+for this migration. Validation authorization was requested; earlier main-branch
+compile results below do not validate this work. The source-level integration
+goal is not a claim of verified wire compatibility, full feature parity or
+macOS/Linux native acceptance. [Consumer interfaces](consumer-interfaces.md#enforcement-and-acceptance)
+owns the contracts and enforcement scope.
+
 ## Integration consumer boundaries
 
 Codex connection startup/identity/cleanup now resides in its concrete owner,
@@ -15,9 +35,7 @@ post-merge `mise run check` passed on `main` after narrowing the optional projec
 capture in a dedicated fix worktree (TypeScript and Rust compilation only). This
 is not behavioral evidence.
 
-This is the first completed extraction slice, not registration-only integration
-acceptance: remaining Pi/Copilot/ACP shell launch owners and other concrete
-consumer dependencies are documented in [consumer interfaces](consumer-interfaces.md#implemented-extraction-and-remaining-debt).
+This records the earlier first extraction slice, not registration-only integration acceptance. The subsequent registered-consumer migration above supersedes its remaining shell-owner debt; [consumer interfaces](consumer-interfaces.md#implemented-extraction-and-registration-boundary) owns the current source boundary.
 No tests, builds, browser/app launch, live CLI handshake/model request or
 user-session operations were performed for this slice. Codex native startup,
 original EPERM diagnosis, replacement/Close races and macOS/Linux acceptance
