@@ -89,6 +89,7 @@ impl Drafts {
             || record
                 .key
                 .strip_prefix("copilot-sdk:")
+                .or_else(|| record.key.strip_prefix("codex:"))
                 .is_some_and(|id| !id.is_empty()))
             || record.key.len() > 32768
             || record.revision == 0

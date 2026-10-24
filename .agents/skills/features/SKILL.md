@@ -49,7 +49,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 
 | Work area | Canonical reference | User guide |
 | --- | --- | --- |
-| Codex app-server foundation, staged integration, protocol evidence and limitations | [Codex integration skill](../codex-integration/SKILL.md) | Not yet user-visible |
+| Codex app-server, interface mappings, protocol evidence, limitations and policy questions | [Codex integration skill](../codex-integration/SKILL.md) | [Codex](../../../docs/codex.md) |
 | Built-in Copilot SDK, runtime/process ownership, identity/legacy policy and SDK semantics | [Copilot SDK](references/copilot-sdk.md) | [Copilot](../../../docs/copilot.md) |
 | Finish Plan/Autopilot support: controlled acceptance, distinct-model handoffs and compaction confirmation gaps | [Copilot mode acceptance skill](../copilot-mode-acceptance/SKILL.md) | [Plan and Autopilot](../../../docs/copilot.md#plan-and-autopilot) |
 | Copilot scope-labelled approval choices, sequential permission picker, nested feedback and Review requests banner | [Copilot permissions](references/copilot-sdk.md#permission-choices-and-interaction) | [Permissions](../../../docs/copilot.md#permissions-and-questions) |

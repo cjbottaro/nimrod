@@ -1,3 +1,4 @@
+import type { ImageContent } from '../image-attachments';
 import packageInfo from '../../package.json';
 import { JsonRpcConnection, RpcConnectionError, RpcResponseError, isRecord, isRpcId, type RpcId, type RpcRecord } from '../json-rpc-connection';
 import { item, nonempty, page, record, thread, turn, type CodexApproval, type CodexApprovalDecision, type CodexEvent,
@@ -99,13 +100,13 @@ export class CodexClient {
     } catch (error) { this.disconnect(error); throw error; }
   }
 
-  async startTurn(text: string, clientUserMessageId: string): Promise<void> {
+  async startTurn(text: string, clientUserMessageId: string, images: readonly ImageContent[] = []): Promise<void> {
     if (this.state !== 'idle' || !this.bound) throw new Error('Codex is not idle');
-    nonempty(text, 'prompt'); nonempty(clientUserMessageId, 'client message ID');
+    if (!images.length) nonempty(text, 'prompt'); nonempty(clientUserMessageId, 'client message ID');
     const attempt: StartingTurn = {};
     this.startingTurn = attempt; this.state = 'working'; this.currentTurn = undefined;
     try {
-      await this.rpc('turn/start', { threadId: this.bound.id, clientUserMessageId, input: [{ type: 'text', text, text_elements: [] }] }, value => {
+      await this.rpc('turn/start', { threadId: this.bound.id, clientUserMessageId, input: [...(text ? [{ type: 'text', text, text_elements: [] }] : []), ...images.map(image => ({ type: 'image', url: `data:${image.mimeType};base64,${image.data}` }))] }, value => {
         const result = turn(record(value, 'turn response').turn);
         if (attempt.observedId && attempt.observedId !== result.id) throw new Error('Codex returned a conflicting turn ID');
         // A completion notification can precede this response. An older response
@@ -168,6 +169,40 @@ export class CodexClient {
     });
     return result;
   }
+  /** Supported resume overrides, with strict result confirmation; never submits a turn. */
+  async configure(cwd: string, setting: 'model' | 'effort', value: string): Promise<RpcRecord> {
+    if (this.state !== 'idle') throw new Error('Codex configuration requires idle');
+    const threadId = this.requireBound(); nonempty(value, 'configuration value');
+    let result!: RpcRecord;
+    await this.rpc('thread/resume', { threadId, cwd, excludeTurns: true,
+      ...(setting === 'model' ? { model: value } : { config: { model_reasoning_effort: value } }) }, data => {
+      result = record(data, 'configuration');
+      const identity = thread(result.thread);
+      if (identity.id !== threadId || identity.cwd !== cwd || result.cwd !== cwd) throw new Error('Codex configuration returned a conflicting identity');
+      if (identity.status.type !== 'idle' || this.state !== 'idle') throw new Error('Codex configuration overlapped active work; effective state is uncertain');
+      if ((setting === 'model' ? result.model : result.reasoningEffort) !== value)
+        throw new Error('Codex did not confirm the requested setting on this loaded thread');
+    });
+    return result;
+  }
+  async models(cursor?: string): Promise<CodexPage<RpcRecord>> {
+    if (!['ready', 'idle', 'working'].includes(this.state)) throw new Error('Codex model catalog unavailable');
+    let result!: CodexPage<RpcRecord>;
+    await this.rpc('model/list', { includeHidden: false, limit: 100, ...(cursor ? { cursor } : {}) }, data => {
+      result = page(data, value => {
+        const model = record(value, 'model');
+        nonempty(model.model, 'model ID'); nonempty(model.displayName, 'model name');
+        if (!Array.isArray(model.supportedReasoningEfforts) || !Array.isArray(model.inputModalities)) throw new Error('Invalid Codex model capabilities');
+        return model;
+      });
+    });
+    return result;
+  }
+  /** Only hydrate an unknown live ID; never let a history snapshot overwrite observed events. */
+  recoverActiveTurn(value: CodexTurn): void {
+    if (this.state === 'working' && !this.currentTurn && !this.startingTurn && value.status === 'inProgress')
+      this.currentTurn = { id: value.id, completed: false };
+  }
   private requireBound(): string {
     if (!this.bound || !['idle', 'working'].includes(this.state)) throw new Error('Codex has no connected thread');
     return this.bound.id;
@@ -188,6 +223,7 @@ export class CodexClient {
     // App-server may report child-agent threads. They are not this conversation.
     const threadId = params.threadId ?? (isRecord(params.thread) ? params.thread.id : undefined);
     if (!this.bound || threadId !== this.bound.id) return;
+    if (['thread/closed', 'thread/deleted', 'thread/archived'].includes(method)) { this.disconnect(`Codex reported ${method}. Saved identity and draft were retained.`); return; }
     if (method === 'serverRequest/resolved') {
       if (!isRpcId(params.requestId)) throw new Error('Invalid Codex resolved request ID');
       this.connection.cancelIncoming(params.requestId);
@@ -212,6 +248,10 @@ export class CodexClient {
   private request(method: string, value: unknown, signal: AbortSignal, id: RpcId): Promise<unknown> {
     if (method !== 'item/commandExecution/requestApproval' && method !== 'item/fileChange/requestApproval') throw new RpcResponseError(-32601, 'Codex request is not supported by Nimrod');
     const params = record(value, 'approval');
+    // Live resume may omit turns, but the server's thread-scoped request itself
+    // supplies authoritative active-turn identity before history hydration.
+    if (this.bound && params.threadId === this.bound.id && this.state === 'working' && !this.currentTurn && !this.startingTurn)
+      this.currentTurn = { id: nonempty(params.turnId, 'approval turn ID'), completed: false };
     if (!this.bound || params.threadId !== this.bound.id || this.state !== 'working' || params.turnId !== this.activeTurnId)
       throw new RpcResponseError(-32602, 'Approval does not belong to the active Nimrod thread and turn');
     nonempty(params.itemId, 'approval item ID');

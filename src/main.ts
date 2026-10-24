@@ -1,4 +1,12 @@
 import { AcpSession } from './acp/session';
+import { CodexSession } from './codex/session';
+import { codexSessionDeletion } from './codex/session-deletion';
+import { CodexSessionHistory, codexHistoryKey } from './codex/session-history';
+import { nativeCodexTransport } from './codex/native';
+import { codexSessionLifecycle, codexScope } from './codex/session-lifecycle';
+import { codexInteraction } from './codex/view-policy';
+import { CodexApprovalInteraction } from './codex/approval-interaction';
+import type { CodexApproval, CodexApprovalDecision } from './codex/protocol';
 import { CopilotSession, type CopilotDecision } from './copilot/session';
 import { CopilotSessionHistory, copilotHistoryKey } from './copilot/session-history';
 import { copilotSessionDeletion } from './copilot/session-deletion';
@@ -16,7 +24,7 @@ import { CopilotQuestionInteraction } from './copilot/question-interaction';
 import { CopilotPlanInteraction } from './copilot/plan-interaction';
 import { acpInteraction } from './acp/view-policy';
 import { createPiViewProjection, piInteraction } from './pi/view-policy';
-import { piSession, acpSession, copilotSession, acpProfile as profileFor, sessionActions, sessionConfiguration, type SessionAction, type SessionBackend } from './session-backend';
+import { piSession, acpSession, copilotSession, codexSession, acpProfile as profileFor, sessionActions, sessionConfiguration, type SessionAction, type SessionBackend } from './session-backend';
 import { pickConfiguration } from './configuration-picker';
 import { piSessionLifecycle } from './pi/session-lifecycle';
 import type { SessionFile } from './pi/session-file';
@@ -139,6 +147,9 @@ const attachmentStore = new AttachmentStore();
 const temporaryImages = new Map<string, Blob>();
 let ready = false;
 let acpReady = false;
+let codexReady = false;
+let codexGeneration = '';
+let codexHistory: CodexSessionHistory | undefined;
 let copilotReady = false;
 let copilotGeneration = '';
 let unloading = false;
@@ -236,7 +247,6 @@ const selectedConnection = new SessionConnection<Tab>({
 const deletions = new SessionDeletionCoordinator({
   canRun: (reference, target) => {
     if (!ready || unloading || settings.isOpen) return false;
-    if ('kind' in reference && tabs.some(tab => tab.backend.kind !== 'pi' && tab.backend.kind !== reference.kind && tab.lifecycle.identity?.sessionId === reference.sessionId)) return false;
     const tab = tabs.find(tab => tab.lifecycle.key === target.key);
     return !tab || !!tab.lifecycle.identity && savedSessionKey(tab.lifecycle.identity) === savedSessionKey(reference)
       && !tab.deleting && !tab.starting && !tab.closing && !tab.restarting;
@@ -290,6 +300,7 @@ const piDeletion = deletions.register(context => piSessionDeletion({
   confirm: (id, confirmed) => invoke('confirm_session_deletion', { id, confirmed }),
 }, context));
 const deletion = piDeletion.transaction;
+deletions.register(() => codexSessionDeletion());
 deletions.register(context => copilotSessionDeletion(() => copilotHistory, context));
 function tabDeletion(tab: Tab | undefined): SessionDeletionOperation | undefined {
   const reference = tab?.lifecycle.identity;
@@ -325,13 +336,14 @@ window.addEventListener('pagehide', () => { void nativeDrafts?.flush().catch(dra
 const disposeTimeRefresh = installSessionTimeRefresh(window, () => { for (const tab of tabs) refreshTime(tab); });
 window.addEventListener('unload', () => {
   unloading = true;
+  void codexHistory?.dispose().catch(error => console.error('Could not stop Codex history discovery', error));
   void copilotHistory?.dispose().catch(error => console.error('Could not stop Copilot history discovery', error));
   notices.dispose();
   settingsSurface.dispose();
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
   pluginLoading.dispose();
   sessionContextMenu.dispose(); sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); unlistenLinkErrors(); deletions.dispose(); deletionReview.dispose(); unlistenDeletion(); unlistenNotificationClicks();
-  for (const tab of tabs) { copilotPermissions.get(tab)?.dispose(); copilotQuestions.get(tab)?.dispose(); copilotPlans.get(tab)?.dispose(); tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.lifecycle.disconnect('Window closed'); }
+  for (const tab of tabs) { codexApprovals.get(tab)?.dispose(); copilotPermissions.get(tab)?.dispose(); copilotQuestions.get(tab)?.dispose(); copilotPlans.get(tab)?.dispose(); tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.lifecycle.disconnect('Window closed'); }
   keybindingDispatch.dispose(); unlistenProjectSettings();
   unlistenProjectPicker(); palette.dispose();
 }, { once: true });
@@ -466,6 +478,7 @@ function presentConversation(tab: Tab | undefined): void {
   if (presented !== tab) {
     if (presented) {
       copilotSession(presented)?.cancelCommands();
+      codexApprovals.get(presented)?.setActive(false);
       copilotPermissions.get(presented)?.setActive(false);
       copilotQuestions.get(presented)?.setActive(false);
       copilotPlans.get(presented)?.setActive(false);
@@ -478,7 +491,7 @@ function presentConversation(tab: Tab | undefined): void {
     }
     presented = tab;
     conversation.hidden = !tab;
-    if (tab) { tab.root.hidden = false; tab.view.setActive(true); tab.notices.setActive(true); copilotPermissions.get(tab)?.setActive(true); copilotQuestions.get(tab)?.setActive(true); copilotPlans.get(tab)?.setActive(true); }
+    if (tab) { tab.root.hidden = false; codexApprovals.get(tab)?.setActive(true); tab.view.setActive(true); tab.notices.setActive(true); copilotPermissions.get(tab)?.setActive(true); copilotQuestions.get(tab)?.setActive(true); copilotPlans.get(tab)?.setActive(true); }
     syncPopouts();
   }
   for (const item of tabs) {
@@ -491,13 +504,13 @@ function presentConversation(tab: Tab | undefined): void {
   if (sessionName.textContent !== title) sessionName.textContent = title;
   if (sessionIdentity.title !== title) sessionIdentity.title = title;
   const badge = required('mode-badge');
-  badge.textContent = !tab ? '' : tab.backend.kind === 'copilot-sdk' ? 'Copilot' : profileFor(tab) ? `${profileFor(tab)!.name} · ACP POC` : tab.mode === 'temporary' ? 'Pi · temporary' : tab.file?.exists ? 'Pi' : 'Pi · awaiting first save';
+  badge.textContent = !tab ? '' : tab.backend.kind === 'codex' ? 'Codex' : tab.backend.kind === 'copilot-sdk' ? 'Copilot' : profileFor(tab) ? `${profileFor(tab)!.name} · ACP POC` : tab.mode === 'temporary' ? 'Pi · temporary' : tab.file?.exists ? 'Pi' : 'Pi · awaiting first save';
   badge.title = tab?.file?.path || '';
   restartControl();
 }
 function promptPending(tab: Tab): boolean {
   const backend = tab.backend;
-  return backend.kind === 'acp' ? backend.session?.client.phase === 'working' : backend.kind === 'copilot-sdk' ? backend.session?.state.busy === true : backend.session?.rpc.hasPendingRequest('prompt', 'set_session_name') ?? false;
+  return backend.kind === 'acp' ? backend.session?.client.phase === 'working' : backend.kind === 'copilot-sdk' || backend.kind === 'codex' ? backend.session?.state.busy === true : backend.session?.rpc.hasPendingRequest('prompt', 'set_session_name') ?? false;
 }
 function deletionBusy(tab: Tab): boolean {
   const state = piSession(tab)?.state;
@@ -520,7 +533,7 @@ function restartControl(): void {
     : !operation?.available() ? operation?.unavailableReason || 'requires saved history and harness deletion support'
     : active.starting || active.closing || active.restarting ? 'session lifecycle operation pending' : undefined;
   remove.title = `${operation?.label || 'Delete session…'}${unavailable ? ` — ${unavailable}` : ''}`;
-  button.title = !active ? 'Restart session — no open session' : active.backend.kind === 'copilot-sdk' ? 'Restart session — unavailable for Copilot; Close and Resume explicitly' : profileFor(active) ? 'Restart session — unavailable in the ACP POC' : deletion.blocked(active.file?.path) ? 'Restart session — recover through Resume session first' : active.mode === 'temporary'
+  button.title = !active ? 'Restart session — no open session' : active.backend.kind === 'codex' ? 'Restart session — Close and Resume Codex explicitly' : active.backend.kind === 'copilot-sdk' ? 'Restart session — unavailable for Copilot; Close and Resume explicitly' : profileFor(active) ? 'Restart session — unavailable in the ACP POC' : deletion.blocked(active.file?.path) ? 'Restart session — recover through Resume session first' : active.mode === 'temporary'
     ? 'Restart session — unavailable for temporary sessions' : !active.file?.exists
     ? 'Restart session — available after the first save' : active.restarting ? 'Restarting session…' : 'Restart session';
 }
@@ -587,8 +600,10 @@ async function enterWorkspace(path: string): Promise<void> {
     const t = readSavedSidebarSession(value);
     if (!t) continue;
     if ('kind' in t) {
-      if (tabs.some(tab => tab.lifecycle.key === copilotSdkScope(t.sessionId))) continue;
-      const tab = createTab('resume', undefined, t.name, lastUsed(t.lastUsed), undefined, t.sessionId, true, t.pinned);
+      const codex = t.kind === 'codex';
+      if (tabs.some(tab => tab.lifecycle.key === (codex ? codexScope(t.sessionId) : copilotSdkScope(t.sessionId)))) continue;
+      const tab = createTab('resume', undefined, t.name, lastUsed(t.lastUsed), { kind: t.kind, sessionId: t.sessionId }, t.pinned);
+      if (codex) tab.awaitingSelection = true;
       tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
       continue;
     }
@@ -602,12 +617,13 @@ async function enterWorkspace(path: string): Promise<void> {
     }
     if (unloading) return;
     if (deletion.removed(t.path)) continue;
-    const tab = createTab('resume', { path: t.path, sessionId: t.sessionId, exists: true }, typeof t.name === 'string' ? t.name : 'Session', used, undefined, undefined, false, t.pinned);
+    const tab = createTab('resume', { path: t.path, sessionId: t.sessionId, exists: true }, typeof t.name === 'string' ? t.name : 'Session', used, { kind: 'pi' }, t.pinned);
     tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
   }
   ready = true;
   if (tabs.some(tab => tab.backend.kind === 'copilot-sdk')) rememberCopilot();
   else startCopilotHistory();
+  if (tabs.some(tab => tab.backend.kind === 'codex')) rememberCodex(); else startCodexHistory();
   const selected = tabs.find(t => t.lifecycle.key === layout?.active) || navigation.all()[0];
   if (selected) activate(selected, 'startup');
   controls();
@@ -633,6 +649,19 @@ const piHistory = new PiSessionHistory({
 });
 function historyError(source: string, label: string, message: string): void {
   if (!unloading) notices.report({ id: `history:${source}`, operation: `Read ${label} history`, message });
+}
+function startCodexHistory(): CodexSessionHistory | undefined {
+  if (!workspace || unloading || !codexReady || stored(codexHistoryKey(workspace)) !== true) return;
+  if (!codexHistory) {
+    const project = workspace;
+    codexHistory = new CodexSessionHistory(project, nativeCodexTransport(project, () => ({ cli: runtime.current().codex, generation: codexGeneration })), error => historyError('codex', 'Codex', String(error)));
+  }
+  return codexHistory;
+}
+function rememberCodex(): void {
+  if (!workspace) return;
+  save(codexHistoryKey(workspace), true);
+  startCodexHistory();
 }
 function startCopilotHistory(): CopilotSessionHistory | undefined {
   if (!workspace || unloading || !copilotReady || stored(copilotHistoryKey(workspace)) !== true) return;
@@ -676,6 +705,11 @@ async function paletteSessions(signal: AbortSignal, publish: (page: PalettePage)
     const history = startCopilotHistory();
     if (history) sources.push(history);
     else historyError('copilot-sdk', 'Copilot', 'Copilot history is unavailable while the SDK host is unavailable or initializing. Use Refresh after resolving the problem. Pi history remains available.');
+  }
+  if (stored(codexHistoryKey(workspace)) === true) {
+    const history = startCodexHistory();
+    if (history) sources.push(history);
+    else historyError('codex', 'Codex', 'Codex history is unavailable while its native host initializes. Use Refresh.');
   }
   const project = workspace;
   const page = (snapshot: SessionHistorySnapshot): PalettePage => {
@@ -758,6 +792,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     { id: 'resume', label: 'Resume session…', detail: 'Open a saved conversation in this project', next: true, run: () => palette.sessions() },
     { id: 'delete-sessions', label: 'Delete sessions…', detail: 'Repeatedly review and delete supported saved sessions in this project', next: true, run: () => palette.deleteSessions() },
     { id: 'new', label: 'New session', detail: 'Pi · persistent conversation (default harness)', run: () => newSession() },
+    ...(codexReady ? [{ id: 'new-codex', label: 'New Codex session', detail: 'Start a Codex app-server session', run: newCodexSession }] : []),
     ...(copilotReady ? [{ id: 'new-copilot', label: 'New Copilot session', detail: 'Start a Copilot session', run: newCopilotSession }] : []),
     { id: 'new-named', label: 'New named session…', detail: 'Choose a name before starting', next: true, run: newNamedSession },
     ...(tabs.length ? [{ id: 'switch-session', label: 'Switch session…', detail: 'All open sessions, regardless of sidebar view', next: true, run: () => palette.openSessions() }] : []),
@@ -821,7 +856,11 @@ const unlistenProjectPicker = await listen('nimrod-open-project', () => { void t
 function button(text: string, click: () => void): HTMLButtonElement {
   const node = document.createElement('button'); node.type = 'button'; node.textContent = text; node.addEventListener('click', click); return node;
 }
-function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'temporary' ? 'Temporary session' : 'Session', used = 0, acpProfile?: AcpProfile, copilotSessionId?: string, sdk = false, pinned = false): Tab {
+type SessionCreation = { kind: 'pi' } | { kind: 'acp'; profile: AcpProfile } | { kind: 'copilot-sdk' | 'codex'; sessionId?: string };
+function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'temporary' ? 'Temporary session' : 'Session', used = 0, creation: SessionCreation = { kind: 'pi' }, pinned = false): Tab {
+  const acpProfile = creation.kind === 'acp' ? creation.profile : undefined;
+  const codex = creation.kind === 'codex';
+  const sdk = creation.kind === 'copilot-sdk' || codex;
   const id = crypto.randomUUID();
   const root = document.createElement('section'); root.className = 'session-view'; root.id = `panel-${id}`; root.setAttribute('role', 'region'); root.hidden = true;
   root.innerHTML = transcript;
@@ -853,8 +892,13 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
     if (event.repeat) return;
     const rect = row.getBoundingClientRect(); void showSessionContextMenu(tab, { x: rect.left, y: rect.bottom });
   });
-  const backend: SessionBackend = sdk ? { kind: 'copilot-sdk', savedSessionId: copilotSessionId } : acpProfile ? { kind: 'acp', profile: acpProfile } : { kind: 'pi' };
-  const lifecycle: SessionLifecycle = backend.kind === 'copilot-sdk' ? copilotSessionLifecycle(() => tab, backend, {
+  const backend: SessionBackend = creation.kind === 'copilot-sdk' || creation.kind === 'codex'
+    ? { kind: creation.kind, savedSessionId: creation.sessionId } : creation.kind === 'acp' ? { kind: 'acp', profile: creation.profile } : { kind: 'pi' };
+  const lifecycle: SessionLifecycle = backend.kind === 'codex' ? codexSessionLifecycle(() => tab, backend, {
+    connect: options => launchCodex(tab, options.acceptedAction),
+    stop: async token => { await invoke('stop_codex', { token }); },
+    gate: () => codexReady && !tab.deleting && !deletions.pending ? 'ready' : 'blocked',
+  }) : backend.kind === 'copilot-sdk' ? copilotSessionLifecycle(() => tab, backend, {
     connect: options => launchCopilot(tab, options.acceptedAction),
     stop: token => invoke<void>('stop_copilot', { token }),
     gate: () => copilotReady && !tab.deleting && !deletions.pending ? 'ready' : 'blocked',
@@ -886,7 +930,7 @@ function createTab(mode: LaunchMode, file?: SessionFile, title = mode === 'tempo
   const projectPi = createPiViewProjection();
   tab.view = mountConversationView({
     projectDirectory: workspace,
-    interaction: sdk ? copilotInteraction(text => tab.starting || !copilotSession(tab)
+    interaction: codex ? codexInteraction(text => tab.starting || !codexSession(tab) ? 'Codex is still connecting. Your draft was kept.' : codexSession(tab)!.validatePrompt(text)) : sdk ? copilotInteraction(text => tab.starting || !copilotSession(tab)
       ? 'Copilot is still connecting. Your draft was kept.' : copilotSession(tab)!.validatePrompt(text)) : acpProfile ? acpInteraction(acpProfile.name, text => tab.starting || !acpSession(tab)
       ? 'ACP is still connecting. Your draft was kept.' : acpSession(tab)!.validatePrompt(text)) : piInteraction,
     messageInput: {
@@ -997,7 +1041,7 @@ function activate(tab: Tab, intent: SelectionIntent = 'explicit'): void {
   if (!ready) return;
   const plan = navigation.selection(tab, navigationSnapshot(), intent);
   if (!plan) return;
-  if (intent !== 'startup') tab.awaitingSelection = false;
+  if (intent !== 'startup' && (tab.backend.kind !== 'codex' || intent === 'explicit' || intent === 'row' || intent === 'notification')) tab.awaitingSelection = false;
   notificationNavigation++;
   if (plan.view !== sidebarView) {
     sidebarView = plan.view;
@@ -1027,7 +1071,7 @@ function sessionRow(tab: Tab): SessionListEntry {
   const reference = tab.lifecycle.identity;
   return {
     key: reference ? savedSessionKey(reference) : tab.id,
-    title: tab.title, harnessLabel: tab.backend.kind === 'copilot-sdk' ? 'Copilot' : profileFor(tab) ? `${profileFor(tab)!.name} ACP` : 'Pi',
+    title: tab.title, harnessLabel: tab.backend.kind === 'codex' ? 'Codex' : tab.backend.kind === 'copilot-sdk' ? 'Copilot' : profileFor(tab) ? `${profileFor(tab)!.name} ACP` : 'Pi',
     timestamp: tab.lastUsed || undefined, open: true, status: status(tab), reference,
   };
 }
@@ -1231,6 +1275,100 @@ function requestSessionChoice(tab: Tab, details: HTMLElement, options: { id: str
     });
   });
 }
+const codexApprovals = new WeakMap<Tab, CodexApprovalInteraction>();
+function requestCodexApproval(tab: Tab, request: CodexApproval, signal: AbortSignal): Promise<CodexApprovalDecision> {
+  if (signal.aborted || tab.closing || !tabs.includes(tab)) return Promise.resolve('cancel');
+  let interaction = codexApprovals.get(tab);
+  if (!interaction) {
+    const canPresent = () => !unloading && tabs.includes(tab) && presented === tab && !tab.closing && !tab.restarting && !tab.deleting && !tab.ended
+      && !settings.isOpen && !document.querySelector('dialog[open]:not(#command-palette)');
+    interaction = new CodexApprovalInteraction({
+      document, canPresent,
+      start: dismiss => canPresent() ? palette.startRetainedSelection('Codex approval', dismiss) : undefined,
+      changed: delta => { tab.inputCount += delta; if (tabs.includes(tab)) updateTab(tab); },
+      banner: (count, review) => {
+        const id = `${tab.id}:codex-approval`;
+        if (!count) { notices.resolve(id); return; }
+        notices.report({ id, owner: tab.id, operation: 'Codex approval', message: `Waiting for permission · ${count} ${count === 1 ? 'request' : 'requests'}`,
+          presentation: 'pending-action', severity: 'info', dismissible: false,
+          actions: [{ label: 'Review requests', enabled: canPresent, run: review }] });
+      },
+    });
+    codexApprovals.set(tab, interaction);
+  }
+  const result = interaction.request(request, signal), token = tab.token;
+  if (token) void notifySession('input', { valid: () => !signal.aborted && !unloading && tabs.includes(tab) && tab.token === token && !tab.closing && !tab.ended,
+    selected: () => presented === tab && !settings.isOpen, session: 'Codex', target: { session: tab.id, token } });
+  return result;
+}
+async function newCodexSession(): Promise<void> {
+  if (!ready || !codexReady || settings.isOpen || !await ensureWorkspace() || unloading || deletions.pending) return;
+  rememberCodex();
+  const tab = createTab('saved', undefined, 'Codex session', navigation.nextRecency(), { kind: 'codex' });
+  activate(tab); await tab.lifecycle.connect({ acceptedAction: true });
+}
+async function launchCodex(tab: Tab, acceptedAction = false): Promise<void> {
+  if (tab.backend.kind !== 'codex' || !ready || !codexReady || unloading || !workspace || !tabs.includes(tab)
+    || deletions.pending || tab.deleting || tab.starting || tab.closing || tab.restarting || tab.backend.session && !tab.ended || !acceptedAction && settings.isOpen) return;
+  const backend = tab.backend, project = workspace, savedId = backend.savedSessionId;
+  const conflict = (id: string) => tabs.some(other => other !== tab && other.backend.kind === 'codex' && other.lifecycle.identity?.sessionId === id);
+  if (savedId && conflict(savedId)) { showNotice(tab, 'This Codex thread is already open in this window.'); return; }
+  tab.awaitingSelection = false; tab.starting = true; updateTab(tab);
+  try { await tab.lifecycle.stop(); }
+  catch (error) { tab.starting = false; showNotice(tab, `Could not stop the previous Codex process: ${String(error)}`, !!savedId); return; }
+  if (unloading || workspace !== project || !tabs.includes(tab) || tab.closing) { tab.starting = false; return; }
+  tab.cancelPreference?.(); tab.lifecycle.disconnect('Reconnecting Codex');
+  tab.token = crypto.randomUUID(); tab.ended = false;
+  const token = tab.token, valid = () => !unloading && tabs.includes(tab) && tab.token === token;
+  const transport = nativeCodexTransport(project, () => ({ cli: runtime.current().codex, generation: codexGeneration }));
+  let signature = '';
+  const session = new CodexSession({ write: packet => transport.write(token, packet) }, {
+    transcriptLog: settingsSurface.transcriptLog,
+    publish: message => { if (valid()) tab.receive?.(message); },
+    identified: id => {
+      if (!valid() || savedId !== undefined && savedId !== id || conflict(id)) throw new Error('Codex returned a conflicting or retired identity');
+      tab.drafts.bindScope(codexScope(id)); backend.savedSessionId = id; persistTabs();
+    },
+    changed: () => {
+      if (!valid()) return;
+      const state = session.state;
+      if (state.sessionName) tab.title = state.sessionName;
+      else if (tab.title === 'Codex session') {
+        const user = state.messages.find(row => row.role === 'user');
+        const text = typeof user?.content === 'string' ? user.content : Array.isArray(user?.content) ? user.content.map(block => block.text || '').join('') : '';
+        if (text.trim()) tab.title = text.trim().replace(/\s+/g, ' ').slice(0, 70);
+      }
+      const next = JSON.stringify([state.busy, state.sessionUnavailable, tab.title]);
+      if (next !== signature) { signature = next; if (state.busy) tab.failed = false; updateTab(tab); if (tab.lifecycle.identity) persistTabs(); }
+    },
+    approval: (request, signal) => requestCodexApproval(tab, request, signal),
+    notice: message => { if (valid() && !tab.closing) notices.report({ id: `${tab.id}:codex:${++noticeSequence}`, owner: tab.id, operation: 'Codex', message }); },
+    disconnected: message => {
+      if (!valid()) return;
+      tab.ended = true; tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' });
+      if (!tab.closing && !tab.view.hasConnectionOutcome?.()) showNotice(tab, `${message}. Saved identity and draft remain; nothing was replayed.`, !!tab.lifecycle.identity);
+      void tab.lifecycle.stop().catch(error => { if (valid()) showNotice(tab, String(error), !!savedId); });
+      updateTab(tab);
+    },
+    completed: (failed, response) => {
+      if (!valid() || tab.closing || tab.deleting) return;
+      if (failed) tab.failed = true; else if (presented !== tab || settings.isOpen) tab.unread = true;
+      updateTab(tab);
+      void notifySession(failed ? 'failed' : 'completed', { valid: () => valid() && !tab.closing, selected: () => presented === tab && !settings.isOpen,
+        session: 'Codex', target: { session: tab.id, token }, preview: failed ? undefined : previewResponse(response) });
+    },
+  });
+  backend.session = session;
+  tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
+  tab.receive?.({ type: 'snapshot', state: session.state });
+  try {
+    const confirmed = await transport.start(token, packet => { if (valid()) session.receive(packet); }, message => { if (valid()) session.disconnect(message); });
+    if (!valid() || confirmed !== project) throw new Error('Native Codex host did not confirm the project');
+    await session.initialize(project, savedId);
+    if (valid()) notices.resolve(`${tab.id}:connection`);
+  } catch (error) { session.disconnect(error); try { await tab.lifecycle.stop(); } catch (stopError) { if (valid()) showNotice(tab, String(stopError), !!savedId); } }
+  finally { tab.starting = false; if (valid()) { updateTab(tab); controls(); } }
+}
 const copilotPermissions = new WeakMap<Tab, CopilotPermissionInteraction>();
 const copilotQuestions = new WeakMap<Tab, CopilotQuestionInteraction>();
 const copilotPlans = new WeakMap<Tab, CopilotPlanInteraction>();
@@ -1340,7 +1478,7 @@ async function requestCopilotDecision(tab: Tab, kind: 'permission' | 'input' | '
 async function newCopilotSession(): Promise<void> {
   if (!ready || !copilotReady || settings.isOpen || !await ensureWorkspace() || unloading || deletions.pending) return;
   rememberCopilot();
-  const tab = createTab('saved', undefined, 'Copilot session', navigation.nextRecency(), undefined, undefined, true);
+  const tab = createTab('saved', undefined, 'Copilot session', navigation.nextRecency(), { kind: 'copilot-sdk' });
   activate(tab);
   await tab.lifecycle.connect({ acceptedAction: true });
 }
@@ -1626,11 +1764,12 @@ async function openSavedSession(entry: SessionListEntry): Promise<void> {
   if (deletions.removed(sessionListItem(entry).id)) throw new Error('The selected session was deleted. Refresh history and choose another session.');
   if ('path' in reference) return openSession({ ...reference, name: entry.title, lastUserMessageAt: entry.timestamp });
   if (!ready || unloading || settings.isOpen || !workspace) return;
-  if (deletions.pending) throw new Error('Finish the deletion review before opening another Copilot connection.');
-  rememberCopilot();
-  const existing = tabs.find(tab => tab.backend.kind === 'copilot-sdk' && tab.lifecycle.identity?.sessionId === reference.sessionId);
+  if (deletions.pending) throw new Error('Finish the deletion review before opening another harness connection.');
+  const isCodex = reference.kind === 'codex';
+  if (isCodex) rememberCodex(); else rememberCopilot();
+  const existing = tabs.find(tab => tab.backend.kind === reference.kind && tab.lifecycle.identity?.sessionId === reference.sessionId);
   if (existing) { activate(existing); return; }
-  const tab = createTab('resume', undefined, entry.title, lastUsed(entry.timestamp), undefined, reference.sessionId, true);
+  const tab = createTab('resume', undefined, entry.title, lastUsed(entry.timestamp), { kind: reference.kind, sessionId: reference.sessionId });
   tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
   activate(tab);
 }
@@ -1727,6 +1866,7 @@ function disposeTab(tab: Tab): void {
   if (!tabs.includes(tab)) return;
   tab.closing = true;
   tab.root.dispatchEvent(new Event('nimrod-dispose-images'));
+  codexApprovals.get(tab)?.dispose();
   copilotPermissions.get(tab)?.dispose(); copilotQuestions.get(tab)?.dispose(); copilotPlans.get(tab)?.dispose();
   tab.notices.dispose(); notices.store.resolveOwner(tab.id);
   navigation.remove(tab);
@@ -1741,6 +1881,7 @@ function disposeTab(tab: Tab): void {
 function detachTab(tab: Tab): void {
   if (!tabs.includes(tab)) return;
   tab.closing = true;
+  codexApprovals.get(tab)?.dispose();
   copilotPermissions.get(tab)?.dispose(); copilotQuestions.get(tab)?.dispose(); copilotPlans.get(tab)?.dispose();
   tab.notices.dispose(); notices.store.resolveOwner(tab.id);
   if (tab.token) dialogs.cancel(tab.token);
@@ -1851,6 +1992,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
     if (!actionContextAvailable(id, { project: !!workspace, sessionActions: contributed })) return false;
     if (actionDefinition(id).context === 'application') return true;
     if (!ready) return false;
+    if (id === 'new-codex') return codexReady;
     if (id === 'new-copilot') return copilotReady;
     if (id === 'capture-performance') return preferences.performanceEnabled() && !settingsSurface.capturingPerformance;
     if (['mcp', 'model', 'thinking', 'mode', 'context-window', 'permissions', 'cancel-configuration'].includes(id)) return !!presented && sessionActions(presented).some(action => action.id === id);
@@ -1860,6 +2002,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
     switch (id) {
       case 'open-recent-project': return palette.projects();
       case 'new': return newSession();
+      case 'new-codex': return newCodexSession();
       case 'new-copilot': return newCopilotSession();
       case 'temporary': return newSession('temporary');
       case 'delete': return presented ? runSessionRowAction(presented, 'delete') : undefined;
@@ -1906,6 +2049,10 @@ async function boot(): Promise<void> {
     }).catch(error => {
       if (!unloading) notices.report({ id: 'copilot-startup', operation: 'Initialize Copilot', message: `Copilot is unavailable; Pi remains available. ${String(error)}` });
     });
+    void invoke<string>('stop_codex').then(generation => {
+      if (!generation) throw new Error('Native Codex host did not confirm a new generation');
+      if (!unloading) { codexGeneration = generation; codexReady = true; selectedConnection.barriersChanged(); startCodexHistory(); }
+    }).catch(error => { if (!unloading) notices.report({ id: 'codex-startup', operation: 'Initialize Codex', message: String(error) }); });
     await zoom.ready;
     const defaults = await invoke<{ pi: string; node: string; cwd: string; home?: string }>('runtime_defaults');
     homeDirectory = defaults.home;

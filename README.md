@@ -2,7 +2,7 @@
 
 A dedicated cross-platform app for directory-backed coding projects and agent sessions. Conversations belong here; files, searches and diffs stay in your editor.
 
-**One project directory per window, with bespoke harness integrations.** Pi is primary, using your installed Pi and its configuration, extensions, models and authentication. Built-in [Copilot](docs/copilot.md) uses the bundled official SDK with your installed/authenticated CLI. Generic ACP infrastructure is retained internally for possible future harnesses, without creation/options UI. SDK fixtures, packaging and real-agent/native acceptance are pending.
+**One project directory per window, with bespoke harness integrations.** Pi is primary, using your installed Pi and its configuration, extensions, models and authentication. Built-in [Copilot](docs/copilot.md) uses the bundled official SDK with your installed/authenticated CLI. [Codex](docs/codex.md) uses your installed CLI's native app-server; installed-runtime/native acceptance is pending. Generic ACP infrastructure is retained internally for possible future harnesses, without creation/options UI. SDK fixtures, packaging and real-agent/native acceptance are pending.
 
 ## Get started
 
@@ -43,6 +43,7 @@ Without installation, use `./bin/nimrod .`. The launcher opens or focuses a proj
 
 - [Projects](docs/projects.md) — directory-backed windows and recent-project navigation.
 - [Sessions](docs/sessions.md) — persistent and temporary conversations, resume, restart, close and deletion.
+- [Codex sessions](docs/codex.md) — native app-server, explicit create/Resume, project history, drafts, text steering/Stop, image input, approvals and result-confirmed model/effort controls; native acceptance pending.
 - [Copilot sessions](docs/copilot.md) — official SDK, separate saved identity/drafts, history/Resume, pasted images, permissions, model/thinking, estimated USD/AIC and compact context usage, supported permanent deletion and [harness-owned slash commands](docs/copilot.md#slash-commands) with argument suggestions and modal choices.
 - [Session sidebar](docs/session-sidebar.md) — pinning, native session-row menus, All/Unread/Working views, activity indicators and resizing.
 - [Drafts](docs/drafts.md) — native per-session storage, debounced saves and recovery.

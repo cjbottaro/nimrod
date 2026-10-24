@@ -63,7 +63,7 @@ This is **not a completed launch-controller extraction**. `main.ts::launchPi` an
 ## Shared ordered RPC mechanics
 
 ACP's connection mechanics now live in `src/json-rpc-connection.ts`, consumed by
-the existing ACP compatibility wrapper and the dormant Codex app-server client.
+the existing ACP compatibility wrapper and the Codex app-server client.
 This is a transport-mechanics extraction, not a new session/controller interface:
 the consumer needs correlation, synchronous ordered response application,
 bidirectional callback lifetime and disconnection, while concrete integrations
@@ -77,11 +77,13 @@ and process teardown remain outside this connection. Pi does not use it.
 
 The small `CodexWriter` interface supplies only ordered decoded-record writes.
 `CodexClientHooks` carries concrete identity/event/approval effects, not a
-universal harness host. There is no shell launch extraction or new saved encoding
-in this slice. Existing ACP fixtures remain the regression base;
+universal harness host. The integration adds the narrower project-bound
+`CodexTransport` for native conversation/catalog consumers and implements existing
+lifecycle/history/input/configuration ports. Shell launch extraction remains
+incomplete; tagged persistence is integration-owned. Existing ACP fixtures remain the regression base;
 `test/json-rpc-connection.test.ts` and `test/codex-client.test.ts` are authored
 but unrun. See the [Codex integration skill](../../codex-integration/SKILL.md)
-for staged scope and [verification](verification.md#codex-foundation) for evidence.
+for current mappings/scope and [verification](verification.md#codex-integration) for evidence.
 
 ## Candidate inventory
 

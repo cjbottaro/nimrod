@@ -2,18 +2,25 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
-## Codex foundation
+## Codex integration
 
-The dormant app-server client and shared ACP/Codex ordered RPC mechanics are
-source-implemented. `codex-cli 0.162.0` version/help and local
-`app-server generate-ts` output were inspected without connecting a server,
-authentication, opening/listing/loading a real thread or issuing provider work.
-New Codex/shared-RPC fixtures are authored **unrun**; existing ACP fixtures were
-not rerun. The required post-merge `mise run check` passed on `main` for the
-foundation merge (TypeScript and Rust compilation only); no test-suite, app
-build, packaging, app launch or native/platform acceptance is claimed. Codex is not yet wired into the native host, session
-presentation or creation/Resume UI. The [Codex integration skill](../../codex-integration/SKILL.md)
-owns scope, protocol anomalies, limitations and next steps.
+The native app-server host, shared consumer adapters, explicit create/Resume,
+history/drafts, streaming, text steering/Stop, image input, retained approvals
+and result-confirmed model/effort source paths are implemented. New RPC/client,
+session/approval and native-record fixtures are authored **unrun**; existing
+shell/runtime/draft/Copilot regressions have not been rerun. The required
+post-merge TypeScript/Rust compile check is pending for this integration
+checkpoint. Earlier foundation compilation passed; it does not establish the
+new integration's behavior.
+
+Only local CLI 0.162.0 version/help/schema generation and public documentation
+were inspected. No app-server connection, authentication change, real session
+catalog/load/delete, model request, compaction, app build/launch or native
+acceptance was performed. Installed-CLI loaded-thread configuration overrides,
+image/history acceptance, approval scope, process-group shutdown/reload and
+macOS/Linux native presentation remain unverified; Windows launch is unavailable.
+The [Codex integration skill](../../codex-integration/SKILL.md) owns the current
+capability matrix, limitations, policy questions and fixture locations.
 
 ## Skill disclosures
 

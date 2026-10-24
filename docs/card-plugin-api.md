@@ -74,6 +74,8 @@ Core always retains raw inputs. Optional `inputDisclosure: { label, field }` dis
 
 ## Harness targets and shared runtime
 
+Codex-native tool cards use `{ backend: 'codex', agent: 'codex' }` (or `{ backend: 'codex' }` for any Codex source). They expose native command/file/MCP/item metadata without masquerading as Pi or ACP tools. Bundled command/diff cards use the same public presentation runtime as external plugins; unknown items keep raw recovery. See [Codex sessions](codex.md) for acceptance status and integration limitations.
+
 Official SDK Copilot has an explicit target
 `{ backend: 'copilot-sdk', agent: 'copilot' }`; `{ backend: 'copilot-sdk' }`
 matches any SDK source. It is not an ACP alias. Unspecified targets and Pi

@@ -7,6 +7,7 @@
 
 - [Projects](projects.md) — open directories, recent projects and terminal launches.
 - [Sessions](sessions.md) — create, switch, resume, restart, close and delete conversations.
+- [Codex sessions](codex.md) — installed app-server, project history, streaming, steering, approvals and current limitations.
 - [Copilot sessions](copilot.md) — official SDK, installed CLI setup, saved history, decisions and integration limitations.
 - [Session sidebar](session-sidebar.md) — All, Unread and Working views, indicators and width.
 - [Drafts](drafts.md) — native storage, debounce, recovery and ignored legacy drafts.

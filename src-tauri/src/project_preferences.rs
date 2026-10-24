@@ -13,6 +13,7 @@ pub const KEYS: &[&str] = &[
     "runtime.piPath",
     "runtime.nodePath",
     "runtime.copilotPath",
+    "runtime.codexPath",
     "interaction.autocompleteAccept",
 ];
 

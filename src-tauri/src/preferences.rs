@@ -314,6 +314,7 @@ pub(crate) fn validate(text: &str) -> Result<(), String> {
         "runtime.piPath",
         "runtime.nodePath",
         "runtime.copilotPath",
+        "runtime.codexPath",
         "appearance.theme",
     ] {
         if let Some(value) = object.get(key) {

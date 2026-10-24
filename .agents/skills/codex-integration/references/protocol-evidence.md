@@ -34,6 +34,12 @@ No `--experimental` flag was used. The generator's help itself calls generation 
 
 App-server's JSON-RPC wire deliberately omits `jsonrpc: '2.0'`, unlike ACP. This dialect detail comes from the official [app-server documentation](https://developers.openai.com/codex/app-server/); generated request unions also omit the member. The shared connection is configured explicitly for each dialect and does not reinterpret Codex as ACP.
 
+## Implementation follow-up: recursive deletion and settings
+
+Official app-server documentation explicitly describes `thread/delete` as removing the persisted root **and spawned descendant threads**, rollout files and associated metadata before success. It does not establish a complete reviewable artifact scope, fork inclusion, handling of externally running descendants or partial-failure guarantees. Consequently the product exposes an explicit unsupported deletion reason and the native method allowlist excludes Delete; Copilot's single-session deletion adapter was not copied.
+
+Model/effort configuration uses `thread/resume`'s supported model/structured configuration overrides, constrained natively to `model_reasoning_effort` for the latter. Returned identity/cwd and effective values must match. Public documentation alone does not prove that an already-loaded idle thread applies those overrides; real installed-runtime acceptance is still pending. No global config-file mutation, prompt or automatic process restart is substituted. See the parent skill's policy questions.
+
 ## Distribution/authentication boundaries to revisit
 
 - The TypeScript automation SDK requires Node; using app-server directly should avoid adding that runtime to Codex. The native launcher and packaging behavior are not implemented or verified.

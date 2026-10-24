@@ -1,80 +1,101 @@
 ---
 name: codex-integration
-description: Implement, debug or review Nimrod's bespoke Codex app-server integration. Owns staged implementation, protocol evidence, anomalies, design decisions, limitations and the remaining native/session/UI work.
+description: Implement, debug or review Nimrod's bespoke Codex app-server integration. Owns interface mappings, protocol evidence, anomalies, design decisions, limitations, policy questions and remaining acceptance work.
 ---
 
 # Codex integration
 
-**Status: protocol/client foundation only. Codex is not yet selectable or usable in Nimrod.**
-Read the [features skill](../features/SKILL.md), [architecture](../features/references/architecture.md), [consumer interfaces](../features/references/consumer-interfaces.md) and this skill before continuing. For UI changes also load the [UI vocabulary](../nimrod-ui-vocabulary/SKILL.md). Follow repository `AGENTS.md`: task worktrees, local-only work, no automatic tests/builds/app launches or real model/session operations, and the required post-merge compile check. [Verification](../features/references/verification.md#codex-foundation) owns executed evidence and acceptance gaps.
+**Status: core desktop integration source-implemented; offline fixtures authored but unrun. Not verified native or full harness parity.** Read the [features skill](../features/SKILL.md), [architecture](../features/references/architecture.md) and [consumer interfaces](../features/references/consumer-interfaces.md). For UI also load [UI vocabulary](../nimrod-ui-vocabulary/SKILL.md). Repository `AGENTS.md` owns local-only work, task worktrees, validation/build authorization and mandatory post-merge checks. [Verification](../features/references/verification.md#codex-integration) owns executed evidence; [user guide](../../../docs/codex.md) owns visible behavior.
 
-## Decision
+## Decision and evidence
 
-Use the installed **`codex app-server` over local stdio**, not ACP and not the TypeScript automation SDK. OpenAI recommends app-server for custom rich clients with history, authentication, approvals and streamed events; the SDK is primarily an automation surface. Native stdio also avoids adding a Node SDK bridge just for Codex. This is a design choice, not an implemented launcher.
+Use the installed **`codex app-server --listen stdio://`**, not ACP or the TypeScript automation SDK. OpenAI recommends app-server for rich custom clients. Nimrod adds no Node bridge or Codex runtime dependency, never attaches to an existing user's server, and inherits Codex's authentication/configuration/policies. There is no in-app login/logout, token import or configuration-file rewriting.
 
-Sources: [SDK](https://developers.openai.com/codex/sdk/), [app-server](https://developers.openai.com/codex/app-server/), [upstream implementation](https://github.com/openai/codex/tree/main/codex-rs/app-server). Use installed/released protocol evidence before coding; live documentation may describe a newer release. The inspected local CLI is **`codex-cli 0.162.0`**. See [protocol evidence](references/protocol-evidence.md) for reproduction and differences from earlier assumptions. This is the reviewed baseline, not a runtime compatibility check or a promise of arbitrary-version compatibility.
+The reviewed local protocol is **Codex CLI 0.162.0**. [Protocol evidence](references/protocol-evidence.md) records generator inputs, inspected shapes and limitations. This is a reviewed baseline, **not a runtime semver gate or arbitrary-version compatibility promise**. The official [app-server reference](https://developers.openai.com/codex/app-server/) establishes that deletion is recursive and resume overrides exist; it does not establish acceptance of overrides on an already-loaded idle thread. Keep that distinction explicit.
 
-## Current code map
+## Capability map
 
-| Code | Responsibility |
+| Workflow | Current implementation / boundary |
 | --- | --- |
-| `src/json-rpc-connection.ts` | Shared ordered JSON-RPC request correlation, synchronous result application, bidirectional callbacks, cancellation and fail-closed disconnect. No harness/session semantics. |
-| `src/acp/connection.ts` | Thin existing-API compatibility wrapper enforcing ACP's mandatory `jsonrpc: '2.0'`; error exports remain constructor aliases. ACP remains separate. |
-| `src/codex/protocol.ts` | Hand-maintained, runtime-validated consumer subset of the inspected schema. Unknown item variants retain native payloads, not invented Pi/ACP equivalents. |
-| `src/codex/client.ts` | Concrete single-connection/single-thread owner: handshake, identity, turn start/steer/interrupt, explicit paginated discovery/history and basic approval callbacks. |
-| `test/json-rpc-connection.test.ts` | Authored shared-mechanics/dialect/cancellation fixtures; existing ACP connection/client fixtures remain regression coverage. |
-| `test/codex-client.test.ts` | Authored offline handshake, identity/order, limits, lifecycle/races, history, delivery failure and approval retirement fixtures. |
+| Create, explicit Resume, multiple live sessions | Native app-server process per conversation; exact project/thread identity. Pi remains default New session. |
+| Saved sidebar, pinning, recency, drafts | Tagged `codex` identity and `codex:<JSON-encoded thread ID>` scope; independent from Pi/Copilot even when IDs match. Restored rows await explicit selection. |
+| Discovery/history | Separate discovery process; project-scoped, non-archived, non-ephemeral top-level interactive threads. Turn/item/model pagination with cursor-cycle protection and cancellation of consumer waits. |
+| Streaming and history reconciliation | Native IDs, optimistic `clientUserMessageId` → `userMessage.clientId` adoption, dirty rows, stable controls and live-over-history precedence. No duplicated transcript/composer engine. |
+| Native items/cards | Assistant/reasoning, command console output, file diffs, generic tools/MCP/unknown items with raw recovery. Native turn failures render as error records. |
+| Send, steer, Stop | Idle start; active-ID text steering; actual turn interrupt. No follow-up queue, retry or replay. |
+| Images | Inline data URLs, shared byte/draft limits and model-advertised modality. Image-only idle input supported; no image steering or arbitrary history-path reads. |
+| Approvals | Command/file decisions, native request detail, retained FIFO picker, session-local banner, dismissal independent from settlement; terminal/server-resolved/disconnected callbacks abort. |
+| Model/effort | Advertised catalog, shared deferred configuration operations and exact result confirmation. Idle `thread/resume` overrides; installed-runtime application remains an acceptance gap. |
+| Status, alerts, diagnostics | Shared All/Unread/Working/input state, notices, notifications, pop-outs and native transcript logs. Token totals/last-turn window data only; no fabricated dollars/credits/current-context percent. |
+| Restart | Unavailable, like existing Copilot; Close then explicit Resume. |
+| Delete | Explicitly unavailable: native deletion also removes spawned descendants. No deletion request is allowed through Nimrod's native method allowlist. |
+| CLI slash commands | No advertised app-server catalog. Slash input rejects before draft clearing; never prompt-fallback or impersonate native CLI commands. |
+| Plan/Autopilot, questions, MCP elicitation, permission amendments | Not implemented; experimental API remains off. Unknown requests return explicit unsupported errors, never grants. |
+| Manual compaction, context-tier changes, live permission policy, MCP inspector | Not exposed. No guessed parity or extra provider work. |
 
-There is **no native Codex host, `CodexSession`, presentation projection, `SessionBackend` alternative, saved sidebar encoding, draft scope, settings control or creation action yet**. Do not expose an action that cannot provide correct ownership, approval presentation and delivery reconciliation. No new dependency is required by this slice. No user-facing changelog entry is warranted for a dormant foundation and an intended behavior-preserving RPC extraction; add one with the usable integration.
+This is **nearer to shared core-workflow parity**, not a claim of native acceptance, complete protocol coverage, Pi extension parity or Copilot mode parity. Adding a control/interface alone does not prove substitutability.
 
-## Interface boundaries
+## Interface and code map
 
-Extract from real consumers; do not build a universal `Harness` controller:
+| Code | Owner / boundary |
+| --- | --- |
+| `src/json-rpc-connection.ts`, `src/acp/connection.ts` | Aligned ordered RPC mechanics only. ACP requires a version member; Codex omits it. Pi stays independent. Single-use connections and synchronous response application precede later events. |
+| `src/codex/protocol.ts`, `client.ts` | Concrete schema subset/validation, one connection/thread, early-event limits, exact IDs/cwd, turn semantics, paginated APIs and basic approvals. Not a universal harness controller. |
+| `src/codex/native.ts::CodexTransport` | Narrow project-bound process port used by conversation and discovery consumers: start, ordered write, observed stop. Tauri wiring is separate from session projection. |
+| `src-tauri/src/codex.rs` | Dedicated window/token/generation ownership, fixed stdio launch, validated executable/cwd/operation allowlist, bounded records and retained failed-stop reservations. |
+| `src-tauri/src/owned_process.rs` | Shared Unix group termination/exit observation, extracted from Copilot. SDK graceful `stopped` acknowledgement remains Copilot-owned; Codex does not fabricate that acknowledgement. |
+| `src/codex/session.ts` | `SessionMessageInput`, `SessionConfigurationController`, shared view/status records, native-item projection, identity-based reconciliation and best-effort native logging. |
+| `src/codex/session-lifecycle.ts` | Existing `SessionPersistence`/`SessionConnectivity` consumer ports; stop is process teardown, not cancel-turn. |
+| `src/codex/session-history.ts` | Existing `SessionHistory` port, separate catalog lifetime, no conversation creation/prompting. |
+| `src/codex/session-deletion.ts` | Shared deletion UI gets an explicit unsupported reason instead of a fake single-thread deletion operation. |
+| `src/codex/approval-interaction.ts` | Concrete Codex decisions; shared `RetainedSelectionRequest` supplies modality, motion, keys and focus. No copied modal shell or universal permission enum. |
+| `src/codex/view-policy.ts`, `card-plugins.ts` | Concrete keyboard/actions and public card presentation components. Card target is `codex`, not Pi/ACP. |
+| `src/main.ts` | Composition, native effects, navigation, attention and publication. `SessionCreation` replaces the boolean SDK/positional-ID creation switch with explicit creation data. Concrete Codex launch is still shell-owned; a full connection-owner extraction is not claimed. |
+| `src/settings.ts` | Runtime form mechanics operate over a keyed field map; adding Codex does not add another parallel Save/reload implementation. |
 
-- ACP and Codex now share **only JSON-RPC mechanics**. Their version-member dialects remain explicit. Pi framing/correlation is untouched. Never send Codex events through ACP/Pi reducers.
-- `CodexWriter.write` is the client consumer's narrow ordered-record writer. It may finish at transport-write completion, **not** server acceptance or turn completion. The eventual native host must supply framing limits, ownership and process supervision separately.
-- `CodexClientHooks` binds concrete Codex effects. `identified` executes synchronously before event replay and must validate shell ownership and bind identity/drafts. `event` is synchronous native semantic ingestion; only waiting for an approval answer is asynchronous. Hooks must not navigate or replay work.
-- Existing `SessionMessageInput`, `SessionPersistence`, `SessionConnectivity`, `ConversationViewHost`, `SessionConfiguration`, Status-area and history consumer interfaces are the next integration targets, not replaced by this client. Reuse their documented lifecycle/optimistic guarantees. Add smaller ports only where a real consumer needs them.
-- Concrete launch responsibility is still partly in `main.ts`. Prefer a separate Codex connection owner with minimal shell effects instead of another large shell launch function or a catch-all host callback interface. Do not imply that the transport extraction has completed shell extraction.
+Future extraction must remove actual consumer knowledge or move responsibility. Do not introduce a giant `Harness` interface or translate Codex events into Pi/ACP events just to reuse types. Native supervision registries remain concrete; only the proven process-group exit primitive is shared in this change.
 
-## Client guarantees and non-guarantees
+## Invariants and anomalies
 
-### Connection and identity
+### Ownership, persistence and startup
 
-- Instances are single-use. Initialize exactly once, acknowledge with `initialized`, then create/resume explicitly. No fallback create after a failed resume, retry loop, reset, prompt replay or session-file editing.
-- The response callback applies authoritative state synchronously before later records. Early notifications during opening are bounded to **128 records / 1 MiB UTF-8 serialized params**, then released only after exact identity/project validation and shell binding. Over-limit input disconnects rather than silently dropping events. Native framing/record limits remain future work.
-- New threads request `ephemeral: false`. Both returned thread cwd and response cwd must equal the native-canonical project supplied by the caller; resumed IDs must match exactly. The TypeScript client does not canonicalize filesystem paths or prove native ownership.
-- `threadId` survives disconnect for reconciliation; it does not prove a durable Nimrod draft/sidebar record exists. Persistent namespaces must be added deliberately in the next slice, not inferred from the protocol client's field.
-- Child/foreign-thread notifications do not enter the bound conversation. Approval requests for another thread/turn receive a request-local error, never a grant. Bound-thread unknown notifications remain native events for future adapters.
+- One canonical directory per window. Both opened thread cwd and response cwd must match; resumed ID must match exactly. Native ownership is window/token scoped with reload generations and retired-token fencing. No OS-wide process scans or external-writer exclusion claims.
+- Stop waits for group exit; failures retain the owned child/reservation for explicit retry. A reaped leader never authorizes re-signaling a potentially recycled group ID. macOS/Linux share Unix implementation; Windows launch is blocked until process-tree ownership exists. Actual platform behavior remains unverified.
+- Native wire records cap at 16 MiB, stderr lines at 64 KiB, writer channel at 32 messages, writes at 5 seconds. Large single-item output can fail the record limit even with paginated history. Early events cap at 128 / 1 MiB serialized params and disconnect on overflow, never silently truncate semantic records.
+- Resume is user-triggered for restored Codex rows. History may be discovered on explicit Resume after project association; it never binds a conversation or issues a prompt. Catalog errors remain source-local and must not block Pi history.
+- Thread ID differs from Codex's tree-wide sessionId. Never key drafts by tree-wide sessionId. Saved identity persists through disconnect; no history migration, deletion or prompt replay occurs.
 
-### Turns and delivery
+### Ordering, rendering and delivery
 
-- `startTurn` is idle-only; steer explicitly uses `expectedTurnId`; interrupt explicitly uses the observed active ID. There is no fabricated queue or automatic steer fallback.
-- Prompt/steer text carries a caller-provided `clientUserMessageId`; use the native user item's `clientId` to reconcile the future optimistic preview. The current client does not render or clear drafts.
-- A start response acknowledges the request; it is not completion. The client does not project its older item snapshot over subsequent stream events. A completion before the response cannot resurrect a working turn. An interrupt acknowledgement leaves the turn working until its terminal event.
-- RPC rejections use `RpcResponseError`; malformed input, transport loss and acknowledgement timeout use `RpcConnectionError` (delivery may be unknown). No retry is safe merely because a method timed out. Default acknowledgement deadline is 20 seconds, not a turn-duration limit or an approval-answer deadline.
-- A live paginated resume can report active status without an active turn payload. It remains working but cannot steer/interrupt until a concrete turn event supplies identity. **Remaining limitation:** recover active-turn identity from the supported runtime/history surface in the session owner; do not pretend Stop works while the ID is unknown.
+- Apply response identity/lifecycle synchronously before subsequent records. A start acknowledgement must not resurrect a turn that already completed or overwrite newer streamed content.
+- History does not replace newer live rows **or their native delta bases**. Inspect `itemsView`; paginate items when not full. Retain cursors through empty filtered pages, reject repeated cursors. Unknown native items remain raw, not guessed equivalents.
+- Live-resume active status may lack a turn ID. Hydrated in-progress turns or a valid thread-scoped server approval can establish it. Stop/steer reject until identified; no invented turn ID or new-prompt fallback.
+- User previews reconcile only by native `clientId`, not content matching. Future image bytes/path recovery must not broaden file/network authority. Configuration/local previews never enter Codex history.
+- Dirty updates publish only changed rows; insertion/history/terminal lifecycle uses full fallback. Preserve keyed rows, disclosures, focus, hidden-session catch-up and independent output/reader scroll. Tool arguments retain owned immutable identity across output-only deltas. Shell title/sidebar persistence runs only on changed shell signatures, not every token.
+- RPC timeout/loss is uncertain delivery. A request-local rejection is distinct. Send never restores a newer draft, repeats recency/navigation or automatically retries. Interrupt acknowledgement is not completion. Interrupted tools/reasoning stop without claiming success.
+- Configuration choices refresh catalog/readiness/dependencies before dispatch. Newer settings events outrank older override responses. Only exact returned model/effort is shown effective; mismatch/malformed reconciliation disconnects conservatively. No host-generated prompt, global config write or process restart is used to force configuration.
 
-### History
+### Decisions and policy
 
-- Unbound initialized clients can discover exact-project, non-archived, non-ephemeral top-level threads. `modelProviders: []` includes all providers; omitted `sourceKinds` retains Codex's default interactive sources. Decide broader source visibility before promising all CLI/exec history.
-- Discovery rechecks each result's cwd and excludes subagents. It preserves cursors even when all rows on a page are filtered; the caller must continue pagination, not mistake an empty filtered page for end-of-history.
-- Resume requests `excludeTurns: true`. Explicit ascending turn pages request `itemsView: 'full'`; separate per-turn item pages remain necessary when the server reports incomplete items. No full-history hydration/orchestration, cancellation coordinator, cursor-cycle protection or live/history merge has been implemented yet. Consumers must inspect `itemsView` rather than treat `items` as complete.
-- Discovery/open/history calls never send prompts. No direct history-file parsing, destructive method, archive/delete shortcut or migration is implemented.
+- Command/file callbacks preserve native kind, approvalId, cwd, reason and proposed policy data. RPC request ID owns a reply; one item may own several callbacks.
+- Supported basic decisions are Codex `accept`, `acceptForSession`, `decline`, `cancel`. No policy-amendment objects are synthesized. Permissions additional to this subset, MCP elicitation, dynamic host tools, legacy approval methods and external-token refresh fail explicitly.
+- Escape hides only presentation. Pending queues, per-session banners, navigation suspension and explicit reopening use [dismiss-and-resume](../features/references/dismiss-and-resume.md). No background modal/focus/selection. Server resolution/terminal/disconnect retires stale answers.
+- Inherit configured Codex sandbox/approval policy; don't silently replace it with a Nimrod opinion or a permissive default. No new credential storage or auth ceremony is introduced.
 
-### Decisions
+## Policy questions for the user
 
-- Only command-execution and file-change approvals are currently dispatched. Preserve native fields including `kind`, `approvalId`, reason, proposed policies and command cwd; the command cwd is not necessarily the project root. The RPC request ID, not the tool/item ID, owns a callback.
-- Supported explicit responses: `accept`, `acceptForSession`, `decline`, `cancel`. Keep their Codex meanings; they are not universal permission modes. Policy-amendment objects, additional-permission requests, MCP elicitation, dynamic tools, legacy approval methods and external-token refresh are not implemented; unknown requests return method-not-supported errors, never fabricated success.
-- Approval promises may remain pending independently of modal visibility. Server resolution, terminal turn or disconnect aborts pending callback scopes; late answers do not write stale replies. The **UI is not implemented**. Add the shared [dismiss-and-resume](../features/references/dismiss-and-resume.md) flow before exposing sessions; no auto-grant, no cancellation just because Escape closed a picker.
-- Agent questions are described as experimental in the inspected schema. This slice opts out of experimental APIs and does not claim question/Plan support. Revisit deliberately with evidence; don't enable every experimental feature to obtain one request type.
+Safe defaults below are implemented; these are **not blockers silently waiting for an answer**:
 
-## Next implementation slices
+1. **Recursive deletion:** should Nimrod expose a distinctly named **Delete Codex thread tree** flow? Official docs say `thread/delete` removes persisted active/archived roots and spawned descendants, rollout files and associated metadata. They do not fully specify artifact scope, running/external descendants, partial failure or fork inclusion. **Current policy: unavailable**, with an explicit UI reason and no native delete permission. Future work needs authoritative descendant inventory/review and cross-project/open-session reconciliation; do not copy Copilot single-session deletion.
+2. **Experimental Plan/questions:** should we opt into selected experimental workflows once their acceptance is budgeted? The schema labels `requestUserInput` experimental. **Current policy: experimental API off**, no Copilot-style Plan/Autopilot emulation, explicit unsupported request errors.
+3. **History scope:** should Resume include archived and headless/exec threads, with explicit filters, or retain Codex's default interactive scope? **Current policy: non-archived interactive roots**, all providers, exact project. Closing all rows retains project association but does not promise every CLI source is visible.
+4. **Model/effort fallback:** if loaded-thread resume overrides aren't honored by a particular CLI, should we offer explicit reconnect-and-resume configuration or next-turn-only intent? **Current policy: require returned effective confirmation, fail rather than speculate**. Do not silently reconnect or send a prompt. Pin/review a runtime version once installed-CLI acceptance is authorized.
+5. **Approval ergonomics:** basic scopes are shown with complete native details, but proposed execution/network policy amendments are not actionable. **Current policy: no persistent-policy edits** until scope-labelled UX and exact request/response semantics are accepted.
 
-1. **Native host and runtime selection.** Resolve an installed Codex executable and reviewed version; use fixed app-server stdio arguments. Add narrow native request validation, exact-project checks, one ordered bounded channel, window/token/reload-generation ownership and process-tree teardown with observed exit. Failed stop must retain reservations. Reuse aligned native mechanics only after reviewing their actual guarantees; ACP's current host is not automatically sufficient. macOS first, Linux portable next; Windows remains unavailable until ownership is implemented.
-2. **Session projection and delivery.** Implement a concrete `CodexSession` against shared message-input/view/configuration ports. Preserve native IDs, unknown-item Raw details and reasoning/tool lifecycle. Reconcile live events and paginated history without overwriting newer output or duplicating user previews. Extend dirty-row and hidden-session fixtures; don't copy another transcript/composer engine.
-3. **Decisions and shell lifecycle.** Add retained approval UI/pending-action banners, notices and owner retirement, then saved identity/drafts, explicit create/Resume, history and bindable actions. Background results never select/navigate. Runtime Stop must never be confused with cancel-turn.
-4. **Capabilities.** Use supported advertised models/effort and real usage/configuration data; hide unsupported controls. Evaluate images, questions, compaction, slash commands and deletion separately. Do not submit slash text as plain prompts to emulate CLI commands.
-5. **Acceptance.** On explicit validation authorization run `mise run test`; add requested offline browser coverage for rendering/scroll changes. Live prompts, real saved-session operations and native app interaction need separate authorization. Building/packaging also requires an explicit request.
+## Fixtures and next acceptance work
 
-Update this skill's decisions/anomalies/limitations with implementation changes. Keep executed results in [verification](../features/references/verification.md#codex-foundation), shared contracts in their canonical feature references, and user guidance separate once there is a user-visible feature.
+Authored fixture locations: `test/codex-client.test.ts`, `test/json-rpc-connection.test.ts`, `test/codex-session.test.ts`, `test/codex-approval.test.ts`, `test/codex-history.test.ts`, `src-tauri/src/codex_tests.rs`; existing shell, history, runtime settings, draft, card and Copilot process fixtures remain regression targets. New native record tests are provider-free. These tests have **not been run**.
+
+Next useful work: explicit offline `mise run test` plus browser fixtures for real shared-renderer/history/approval layout and scroll; then separately authorized installed-CLI no-provider handshakes/catalog probes and controlled real model/native acceptance. Need to verify exact model/effort overrides, image acceptance/history bytes, approval scopes/cancellation, history/live races, repeated Stop/Close/reload, child process cleanup and macOS/Linux native focus/notifications. Do not claim acceptance from TypeScript/Rust compilation or jsdom. Build/package only on explicit request; never launch/quit the user's app automatically.
+
+Maintain design anomalies and policy questions here. Shared contract specifications remain in feature references; executed evidence remains in [verification](../features/references/verification.md#codex-integration).
