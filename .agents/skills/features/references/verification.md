@@ -9,8 +9,10 @@ Copilot/Codex retained question presentation, explicit unsupported-request
 notices and raw question/response/error capture are source-implemented. New
 parser/client/actual-palette/session-log fixtures are authored **unrun**;
 existing Copilot question fixtures were preserved but not rerun. The required
-post-merge TypeScript/Rust compile check is pending for this task. No tests,
-app builds/launches, runtime feature-flag writes, mode changes or live prompts
+post-merge `mise run check` passed on `main` after the extracted question UI's
+source-root import was corrected in a dedicated fix worktree. This checks
+TypeScript/Rust compilation only. No tests, app builds/launches, runtime
+feature-flag writes, mode changes or live prompts
 were performed. Installed-CLI question schema/default-versus-Plan availability,
 actual native focus/layout, cancellation timing and persisted capture remain
 unverified. The user plans to trigger and share their own interaction traces;
