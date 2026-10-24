@@ -2,6 +2,24 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
+## Codex startup draft binding
+
+The user's 2026-10-24 Codex log (CLI 0.164.0) shows two successful handshake
+and thread-creation responses, followed by thread/MCP-startup notifications,
+with no model-catalog request. Source inspection identifies the synchronous
+frontend draft whitelist rejecting `codex:` scopes before bound identity
+publication. The screenshot's bare EPERM could replace this primary error
+through cleanup reporting; the trace does not establish which native signal
+or exit probe failed. The frontend binding/deletion whitelist is fixed, original
+errors and cleanup details are separate, and native group failures now identify
+phase/group without weakening observed-exit/reservation semantics.
+
+New real-draft-store/startup/error-correlation fixtures are authored **unrun**.
+The required post-merge compile check is pending. Only the existing log and CLI
+version were inspected; no server connection, prompt, user-session mutation,
+build, app launch or actual shutdown was performed for this task. Post-fix
+startup and the native EPERM mechanism remain unverified. See [startup contract](../../codex-integration/references/startup.md).
+
 ## Codex questions
 
 Experimental protocol opt-in, reviewed non-secret question batches, shared

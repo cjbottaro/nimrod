@@ -4,6 +4,8 @@ export const SESSION_STORAGE_KEY = 'nimrod.sessions.v1';
 export interface LastSession { path: string; cwd: string; sessionId: string; }
 const record = (v: unknown): Record<string, unknown> => v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
 const ephemeral = (key: string): boolean => key.startsWith('temporary:') || key.startsWith('demo:');
+/** Match the saved namespaces supported by the native dirty-record store. */
+const savedScope = (key: string): boolean => key.startsWith('file:') || key.startsWith('copilot-sdk:') || key.startsWith('codex:');
 
 /** Purge confirmed-success file scopes, including closed project libraries. */
 export function purgeDeletedDrafts(storage: Pick<Storage, 'length' | 'key' | 'getItem' | 'setItem'>, files: string[]): void {
@@ -70,7 +72,7 @@ export class SessionDrafts {
     this.bindScope(`file:${path}`);
   }
   bindScope(key: string): void {
-    if (!key.startsWith('file:') && !key.startsWith('copilot-sdk:')) throw new Error('Invalid saved draft scope');
+    if (!savedScope(key)) throw new Error('Invalid saved draft scope');
     if (this.active === key) return;
     // Only promote a fresh session's provisional identity, never another session's draft.
     if (!this.active.startsWith('unassigned:')) throw new Error('Unexpected session file change');
@@ -89,7 +91,7 @@ export class SessionDrafts {
     this.deleteScope(`file:${path}`);
   }
   deleteScope(key: string): void {
-    if (!key.startsWith('file:') && !key.startsWith('copilot-sdk:')) throw new Error('Invalid saved draft scope');
+    if (!savedScope(key)) throw new Error('Invalid saved draft scope');
     if (this.last && key === `file:${this.last.path}`) this.last = undefined;
     delete this.drafts[key];
     this.changed?.(key, null);

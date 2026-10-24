@@ -73,6 +73,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Codex startup/Resume now accepts its saved draft namespace in the shared draft manager, and confirmed Codex deletion can clear that scope without touching Pi/Copilot drafts. Startup errors remain visible when owned-process cleanup also fails; cleanup Details and opt-in logs include the original cause and native signal/exit phase instead of replacing it with a bare permission error. Post-fix native acceptance remains pending.
+
 - Removed the dark strip beneath the last queued message or other bottom-pinned operation card, preserving spacing between cards.
 
 - Copilot Autopilot now clears Working after accepted task completion followed by idle, even when the selected mode stays Autopilot. Idle-only commands and queued configuration resume, completion is reported once, and the accepted task summary supplies notification text when no final assistant response follows. Intermediate pauses, rejected completion, Stop and errors retain their separate semantics.

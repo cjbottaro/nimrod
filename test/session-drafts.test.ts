@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { SessionDrafts } from '../src/pi/session-drafts';
 import { restoreComposerState } from '../src/pi/webview-state';
+import { codexScope } from '../src/codex/session-lifecycle';
 
 test('shared scope deletion also clears the matching legacy resume pointer', () => {
   const store = new SessionDrafts(null, null, () => {});
@@ -11,6 +12,35 @@ test('shared scope deletion also clears the matching legacy resume pointer', () 
   store.deleteScope(`file:${path}`);
   assert.equal(store.last, undefined);
   assert.equal(store.read(), undefined);
+});
+
+test('Codex promotion and confirmed deletion use the same saved namespace without aliasing Pi/Copilot', () => {
+  const staged: { key: string; value: unknown }[] = [];
+  const pi = 'file:/sessions/same', copilot = 'copilot-sdk:"same"', codex = codexScope('same');
+  const store = new SessionDrafts({ drafts: { [pi]: { draft: 'Pi' }, [copilot]: { draft: 'Copilot' } } }, undefined, () => {}, (key, value) => staged.push({ key, value }));
+  const current = store.fork(); current.select('unassigned:codex');
+  const draft = { draft: 'Keep this text', attachments: [{ id: 'image', mimeType: 'image/png', size: 10 }] };
+  current.write(draft); staged.length = 0;
+  current.bindScope(codex);
+  assert.equal(current.read(), draft);
+  assert.deepEqual(staged, [{ key: codex, value: draft }, { key: 'unassigned:codex', value: null }]);
+  current.bindScope(codex); assert.equal(staged.length, 2, 'same-identity Resume does not promote twice');
+  current.deleteScope(codex); assert.equal(current.read(), undefined);
+  assert.deepEqual(staged.at(-1), { key: codex, value: null });
+  assert.deepEqual(store.select(pi), { draft: 'Pi' }); assert.deepEqual(store.select(copilot), { draft: 'Copilot' });
+});
+
+test('Codex draft collisions preserve both identities, and unsupported scopes stay refused', () => {
+  const scope = codexScope('existing');
+  const store = new SessionDrafts({ drafts: { [scope]: { draft: 'Saved' } } }, undefined, () => {});
+  store.select('unassigned:fresh'); store.write({ draft: 'Provisional' });
+  assert.throws(() => store.bindScope(scope), /already has a local draft/);
+  assert.deepEqual(store.read(), { draft: 'Provisional' });
+  assert.deepEqual(store.select(scope), { draft: 'Saved' });
+  for (const invalid of ['acp:legacy', 'temporary:bad', 'unknown:bad']) {
+    assert.throws(() => store.bindScope(invalid), /Invalid saved draft scope/);
+    assert.throws(() => store.deleteScope(invalid), /Invalid saved draft scope/);
+  }
 });
 
 test('provisional drafts promote to exact files without importing legacy text', () => {

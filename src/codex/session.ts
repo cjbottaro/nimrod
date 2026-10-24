@@ -55,6 +55,7 @@ export class CodexSession {
         else ui.notice(`Codex interaction ${failure.method} could not be handled: ${failure.reason}. No answer or approval was supplied.`);
       },
       disconnected: error => {
+        this.capture('connection.disconnected', { error: error.message });
         this.ended = true; this.configuration?.dispose(error.message);
         this.finishRows(); this.state = { ...this.state, busy: false, sessionUnavailable: true, status: 'Disconnected' };
         this.publish(); ui.disconnected(error.message);
@@ -129,7 +130,11 @@ export class CodexSession {
     else if (message.type === 'renderError') this.ui.notice(string(message.error));
   }
   receive(packet: unknown): void { this.capture('receive', packet); this.client.receive(packet); }
-  disconnect(reason: unknown): void { this.client.disconnect(reason); }
+  disconnect(reason: unknown): void {
+    this.capture('connection.disconnect_requested', { error: reason instanceof Error ? reason.message : String(reason) });
+    this.client.disconnect(reason);
+  }
+  recordCleanupFailure(error: unknown): void { this.capture('connection.cleanup_failed', { error: error instanceof Error ? error.message : String(error) }); }
   async initialize(cwd: string, savedId?: string): Promise<void> {
     this.cwd = cwd;
     await this.client.initialize(); await this.client.open(cwd, savedId);

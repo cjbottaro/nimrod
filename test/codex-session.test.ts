@@ -8,6 +8,8 @@ import { codexScope, codexSessionLifecycle } from '../src/codex/session-lifecycl
 import { readSavedSidebarSession } from '../src/session-lifecycle';
 import { savedSessionKey } from '../src/session-list';
 import { pluginTargets } from '../src/card-plugin-targets';
+import { SessionDrafts } from '../src/pi/session-drafts';
+import { codexConnectionFailure } from '../src/codex/connection-failure';
 
 const cwd = '/fixture/codex';
 const thread = () => ({ id: 'thread', cwd, ephemeral: false, parentThreadId: null, turns: [], status: { type: 'idle' } });
@@ -42,6 +44,47 @@ function fixture(custom?: (packet: CodexPacket, reply: (result: unknown) => void
   });
   return { session, sent, publications, notices, completions, ids, event };
 }
+
+test('observed 0.164 startup binds the actual shared draft store before reading models', async () => {
+  const staged: string[] = [];
+  const drafts = new SessionDrafts(undefined, undefined, () => {}, key => staged.push(key));
+  drafts.select('unassigned:new-codex'); drafts.write({ draft: 'Do not send this draft' });
+  const f = fixture((packet, reply, session) => {
+    if (packet.method === 'initialize') { reply({ userAgent: 'nimrod/0.164.0 fixture', platformFamily: 'unix', platformOs: 'macos' }); return true; }
+    if (packet.method !== 'thread/start') return false;
+    const nativeThread = { ...thread(), cliVersion: '0.164.0', source: 'vscode', originator: 'nimrod', forkedFromId: null, canAcceptDirectInput: true };
+    reply({ cwd, thread: nativeThread, model: 'fixture-model', reasoningEffort: 'low', activePermissionProfile: { id: ':read-only', extends: null }, approvalPolicy: 'on-request', sandbox: { type: 'readOnly', networkAccess: false } });
+    session.receive({ method: 'thread/started', params: { thread: nativeThread } });
+    session.receive({ method: 'mcpServer/startupStatus/updated', params: { threadId: 'thread', name: 'fixture', status: 'starting', error: null } });
+    return true;
+  }, { identified: id => drafts.bindScope(codexScope(id)) });
+  await f.session.initialize(cwd);
+  assert.equal(f.session.state.sessionUnavailable, false); assert.equal(f.session.client.threadId, 'thread');
+  assert.deepEqual(drafts.read(), { draft: 'Do not send this draft' });
+  assert.ok(staged.includes(codexScope('thread'))); assert.ok(f.sent.some(packet => packet.method === 'model/list'));
+  assert.equal(f.sent.some(packet => packet.method === 'turn/start'), false);
+  assert.deepEqual(f.sent.find(packet => packet.method === 'thread/start')!.params, { cwd, ephemeral: false });
+  f.session.disconnect('done');
+});
+
+test('startup and cleanup diagnostics preserve the first failure and log both on the same connection', async () => {
+  const logs: TranscriptLogRecord[] = [];
+  const f = fixture(undefined, { identified: () => { throw new Error('Local identity binding failed'); },
+    transcriptLog: { enabled: true, append: record => logs.push(structuredClone(record)) } });
+  await assert.rejects(f.session.initialize(cwd), /Local identity binding failed/);
+  const cleanup = new Error('Could not send SIGTERM to owned process group 42: EPERM; reservation retained');
+  f.session.recordCleanupFailure(cleanup);
+  const first = logs.find(record => record.event === 'connection.disconnected')!;
+  const last = logs.find(record => record.event === 'connection.cleanup_failed')!;
+  assert.equal(first.connectionId, last.connectionId);
+  assert.deepEqual(first.payload, { error: 'Local identity binding failed' });
+  assert.deepEqual(last.payload, { error: cleanup.message });
+  const notice = codexConnectionFailure('Local identity binding failed', true, cleanup);
+  assert.match(notice.message, /startup failed: Local identity binding failed/); assert.doesNotMatch(notice.message, /EPERM/);
+  assert.match(notice.details!, /EPERM/); assert.match(notice.details!, /ownership remains reserved/);
+  assert.equal(f.sent.filter(packet => packet.method === 'thread/start').length, 1);
+  assert.equal(f.sent.some(packet => packet.method === 'turn/start'), false);
+});
 
 test('Codex creates without prompting, exposes advertised configuration/images and preserves tagged identity', async () => {
   const f = fixture(); await f.session.initialize(cwd);

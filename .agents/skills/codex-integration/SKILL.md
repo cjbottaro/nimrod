@@ -56,6 +56,10 @@ This is **nearer to shared core-workflow parity**, not a claim of native accepta
 
 Future extraction must remove actual consumer knowledge or move responsibility. Do not introduce a giant `Harness` interface or translate Codex events into Pi/ACP events just to reuse types. Native supervision registries remain concrete; only the proven process-group exit primitive is shared in this change.
 
+## Startup binding anomaly
+
+[Startup binding and cleanup diagnostics](references/startup.md) records the user's 0.164.0 successful native thread creation followed by a local draft-scope rejection, and a secondary cleanup error masking that cause. Codex scopes must be accepted by both the actual shared frontend draft store and native staging/deletion boundaries, not merely supplied by a lifecycle adapter. The fix preserves the first failure and adds scoped cleanup/phase diagnostics; the native EPERM mechanism and post-fix startup remain acceptance gaps. No history cleanup or sandbox-policy weakening is implied.
+
 ## Invariants and anomalies
 
 ### Ownership, persistence and startup
