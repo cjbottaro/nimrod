@@ -1,0 +1,42 @@
+# Reviewed Codex protocol evidence
+
+## Local source, not a live integration test
+
+The installed `/opt/homebrew/bin/codex` reports `codex-cli 0.162.0`.
+The implementation reviewed local generated types produced by:
+
+```sh
+codex --version
+codex app-server generate-ts --out <disposable-directory>
+```
+
+No `--experimental` flag was used. The generator's help itself calls generation experimental; generated presence is not proof that every described feature is enabled, production-stable or available on older CLIs. Only schema generation and help/version inspection were performed—no app-server connection, authentication change, thread open/list/load, prompt or user-data operation. Generated output was inspection material, not a new dependency or a vendored full protocol tree. `src/codex/protocol.ts` is explicitly a hand-maintained consumer subset, with runtime validation of identity/lifecycle/page shapes. Validate incoming item-specific fields in the future projector rather than trusting TypeScript casts.
+
+## Shapes that informed implementation
+
+| Generated file(s) | Observed shape / consequence |
+| --- | --- |
+| `InitializeParams.ts`, `InitializeCapabilities.ts`, `InitializeResponse.ts` | Client metadata plus explicit capabilities; response contains `userAgent` and platform/home metadata. Client opts out of experimental API and attestation, ignores unrelated metadata. No semver negotiation or exact runtime version check is implemented here. |
+| `v2/ThreadStartParams.ts`, `ThreadStartResponse.ts` | Optional cwd/ephemeral; response includes both thread and effective cwd/configuration. New threads explicitly request persistence and validate both cwd fields. Inherit Codex configuration rather than silently overriding approval/sandbox/model policy. |
+| `v2/ThreadResumeParams.ts`, `ThreadResumeResponse.ts` | Resume by `threadId`; alternate history/path mechanisms exist, but can supersede identity and are not used. `excludeTurns` supports explicit paginated hydration. Response also includes backwards cursors; current explicit ascending pagination does not consume them. |
+| `v2/Thread.ts`, `ThreadStatus.ts` | Thread ID is not the same as tree-wide `sessionId`. Fields include cwd, ephemeral, parentThreadId, status and turns. Never key drafts by tree-wide sessionId. Active status can exist without hydrated turn identity. |
+| `v2/TurnStartParams.ts`, `UserInput.ts`, `ThreadItem.ts` | `clientUserMessageId` correlates to `userMessage.clientId`; text input uses snake-case `text_elements`. Prompt acknowledgement is a turn snapshot, while subsequent events carry native item updates. |
+| `v2/TurnSteerParams.ts`, `TurnSteerResponse.ts` | `expectedTurnId` is required; response carries `turnId`. Do not treat steering as a queued follow-up or fall back to a new turn on precondition failure. |
+| `v2/TurnInterruptParams.ts`, `TurnInterruptResponse.ts` | Interrupt takes `threadId` and `turnId`, returns an empty object. Terminal turn status is separately authoritative. |
+| `v2/ThreadListParams.ts`, `ThreadListResponse.ts` | Exact cwd filter, provider/source filters, nullable next cursor. Default source scope is interactive. Empty modelProviders includes all providers. Result rows still require local project/subagent checks. |
+| `v2/ThreadTurnsListParams.ts`, `ThreadTurnsListResponse.ts`, `TurnItemsView.ts` | Explicit sort direction and items-view contract (`notLoaded`, `summary`, `full`). Default is summary; requesting full still does not replace checking the returned view. |
+| `v2/ThreadItemsListParams.ts`, `ThreadItemsListResponse.ts`, `ThreadItemEntry.ts` | Separate item pagination; entries include their owning `turnId`, native item and timing. Opaque cursors must be retained across filtered/empty pages. |
+| `ServerRequest.ts`, `v2/CommandExecutionRequestApprovalParams.ts` | Modern command/file approval requests are bidirectional. A command's `approvalId` can distinguish multiple callbacks for one item; transport request ID remains the actual reply key. Command kind/cwd/network-policy details must remain available to approval presentation. |
+| `v2/CommandExecutionApprovalDecision.ts`, `FileChangeApprovalDecision.ts` | Basic decisions are accept/session-accept/decline/cancel. Command decisions additionally permit structured policy amendments; these are deliberately unsupported in the first slice. |
+| `v2/ServerRequestResolvedNotification.ts` | `{threadId, requestId}` retires pending callbacks without a response. Modal lifetime must not be tied only to turn completion or callback resolution. |
+| `v2/ToolRequestUserInputParams.ts`, `ToolRequestUserInputResponse.ts` | Explicitly documented EXPERIMENTAL, with questions/answers and blocking semantics. Do not assume parity with Copilot's question or Plan flows. |
+| `ClientRequest.ts`, `v2/ThreadDeleteParams.ts` | This installed version has `thread/delete`, in addition to archive. Earlier advice to avoid assuming deletion remains sound, but deletion is not absent from the inspected schema. It is not implemented or authorized for probing; inspect exact supported semantics and shared deletion contracts separately. |
+
+App-server's JSON-RPC wire deliberately omits `jsonrpc: '2.0'`, unlike ACP. This dialect detail comes from the official [app-server documentation](https://developers.openai.com/codex/app-server/); generated request unions also omit the member. The shared connection is configured explicitly for each dialect and does not reinterpret Codex as ACP.
+
+## Distribution/authentication boundaries to revisit
+
+- The TypeScript automation SDK requires Node; using app-server directly should avoid adding that runtime to Codex. The native launcher and packaging behavior are not implemented or verified.
+- Prefer the user's installed/authenticated CLI and Codex-owned configuration. No credentials, OAuth tokens, configuration edits or automatic login/logout have been implemented.
+- Official app-server documentation distinguishes local/open-source authentication integrations from commercial/hosted usage and recommends Sign in with ChatGPT for newer integrations. Re-read current supported authentication guidance before introducing a hosted/commercial flow or host-managed tokens; do not generalize the local desktop design into those products.
+- WebSocket is not needed here and is documented as experimental. No listener, remote server attachment or network transport should be added to solve a local stdio requirement.

@@ -2,6 +2,19 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
+## Codex foundation
+
+The dormant app-server client and shared ACP/Codex ordered RPC mechanics are
+source-implemented. `codex-cli 0.162.0` version/help and local
+`app-server generate-ts` output were inspected without connecting a server,
+authentication, opening/listing/loading a real thread or issuing provider work.
+New Codex/shared-RPC fixtures are authored **unrun**; existing ACP fixtures were
+not rerun. The required post-merge TypeScript/Rust compile check is pending for
+this checkpoint; no test-suite, build, packaging, app launch or native/platform
+acceptance is claimed. Codex is not yet wired into the native host, session
+presentation or creation/Resume UI. The [Codex integration skill](../../codex-integration/SKILL.md)
+owns scope, protocol anomalies, limitations and next steps.
+
 ## Skill disclosures
 
 Pi and Copilot now share the lazy skill renderer and presentation interface.

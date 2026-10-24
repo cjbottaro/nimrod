@@ -60,6 +60,29 @@ Ordinary `connect` options carry only accepted-action context. Pi-only initial n
 
 This is **not a completed launch-controller extraction**. `main.ts::launchPi` and `launchAcp` still construct controllers, manage attempt state and wire many callbacks. `SessionLifecycleHost.connect` still delegates to these routines. Next, extract each concrete connection owner separately, using the existing startup helper where appropriate; do not relocate `main.ts` wholesale behind a giant host interface. Identify the minimal shell effects first (identity binding, presentation publication, notices/attention and ownership lifetime), retain exact ordering, and move one responsibility at a time.
 
+## Shared ordered RPC mechanics
+
+ACP's connection mechanics now live in `src/json-rpc-connection.ts`, consumed by
+the existing ACP compatibility wrapper and the dormant Codex app-server client.
+This is a transport-mechanics extraction, not a new session/controller interface:
+the consumer needs correlation, synchronous ordered response application,
+bidirectional callback lifetime and disconnection, while concrete integrations
+retain handshake, identity, history, permission and turn semantics.
+
+ACP requires the JSON-RPC version member; Codex omits it. Both retain
+single-use connections, request-local protocol errors versus uncertain delivery,
+and aborted late-reply suppression. Codex's server-resolved callbacks additionally
+use targeted incoming-request cancellation. Framing/byte limits, native ownership
+and process teardown remain outside this connection. Pi does not use it.
+
+The small `CodexWriter` interface supplies only ordered decoded-record writes.
+`CodexClientHooks` carries concrete identity/event/approval effects, not a
+universal harness host. There is no shell launch extraction or new saved encoding
+in this slice. Existing ACP fixtures remain the regression base;
+`test/json-rpc-connection.test.ts` and `test/codex-client.test.ts` are authored
+but unrun. See the [Codex integration skill](../../codex-integration/SKILL.md)
+for staged scope and [verification](verification.md#codex-foundation) for evidence.
+
 ## Candidate inventory
 
 Names below are working labels, not pre-approved exported interfaces. Extract only when the named consumer and implementation evidence justify it.
