@@ -193,7 +193,7 @@ test('a third source needs only registration: common operations, pending, cleanu
           available: () => true,
           async run() {
             context.lock([target], false);
-            if (!await context.review({ id: 'fixture', sessions: [{ file: target.key, title }] })) return;
+            if (!await context.review({ id: 'fixture', sessions: [{ key: target.key, title }] })) return;
             context.lock([target], true);
             await context.stop([target]);
             context.progress('deleting');

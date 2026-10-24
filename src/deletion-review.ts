@@ -1,8 +1,8 @@
 import { showModal, closeModal } from './modal-motion';
 import { confirmationKey, labelDialogAction } from './dialog-actions';
 
-export interface DeletionTreeSession { file: string; title: string; parent?: string | null; cwd?: string; }
-export interface DeletionReviewData { id: string; sessions: DeletionTreeSession[]; title?: string; description?: string; }
+export interface DeletionReviewNode { key: string; title: string; parentKey?: string | null; cwd?: string; }
+export interface DeletionReviewData { id: string; sessions: DeletionReviewNode[]; title?: string; description?: string; }
 
 function sessionIcon(doc: Document): SVGSVGElement {
   const icon = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -142,12 +142,14 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
       if (!data.sessions.length) { close(); return Promise.resolve(false); }
       const projects = new Set(data.sessions.map(session => session.cwd).filter(Boolean));
       const titles = new Map<string, number>();
-      const children = new Map<string | null, DeletionTreeSession[]>();
-      const files = new Set(data.sessions.map(session => session.file));
+      const children = new Map<string | null, DeletionReviewNode[]>();
+      const keys = new Set(data.sessions.map(session => session.key));
+      if (keys.size !== data.sessions.length || [...keys].some(key => typeof key !== 'string' || !key)) { close(); return Promise.resolve(false); }
       for (const session of data.sessions) {
         titles.set(session.title, (titles.get(session.title) || 0) + 1);
-        const parent = session.parent && files.has(session.parent) ? session.parent : null;
-        children.set(parent, [...children.get(parent) || [], session]);
+        const parent = session.parentKey && keys.has(session.parentKey) ? session.parentKey : null;
+        const siblings = children.get(parent);
+        if (siblings) siblings.push(session); else children.set(parent, [session]);
       }
       // Iterative rendering avoids recursive stack limits on deeply forked trees.
       const list = doc.createElement('ul'); list.setAttribute('role', 'list');
@@ -155,26 +157,26 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
       const seen = new Set<string>();
       while (stack.length) {
         const { session, list: target } = stack.pop()!;
-        if (seen.has(session.file)) continue;
-        seen.add(session.file);
+        if (seen.has(session.key)) continue;
+        seen.add(session.key);
         const item = doc.createElement('li'), row = doc.createElement('div'), text = doc.createElement('div'), name = doc.createElement('span');
         row.className = 'deletion-tree-row'; text.className = 'deletion-tree-text'; name.className = 'deletion-tree-name';
         if (target === list) row.classList.add('deletion-tree-root');
         name.textContent = session.title || 'Untitled session'; text.append(name);
         if ((titles.get(session.title) || 0) > 1) {
-          const detail = doc.createElement('small'); detail.textContent = session.file; text.append(detail);
+          const detail = doc.createElement('small'); detail.textContent = session.key; text.append(detail);
         }
         if (projects.size > 1 && session.cwd) {
           const project = doc.createElement('small'); project.textContent = `Project: ${session.cwd}`; text.append(project);
         }
         row.append(sessionIcon(doc), text); item.append(row); target.append(item);
-        const descendants = children.get(session.file) || [];
+        const descendants = children.get(session.key) || [];
         if (descendants.length) {
           const nested = doc.createElement('ul'); nested.setAttribute('role', 'list'); item.append(nested);
           for (const child of [...descendants].reverse()) stack.push({ session: child, list: nested });
         }
       }
-      if (seen.size !== files.size) { close(); return Promise.resolve(false); }
+      if (seen.size !== keys.size) { close(); return Promise.resolve(false); }
       preview = 'idle'; cancel.disabled = false; confirm.disabled = false;
       bodyProgressText = undefined; delete tree.dataset.executing;
       if (title) title.textContent = data.title || reviewTitle;

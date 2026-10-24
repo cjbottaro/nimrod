@@ -24,15 +24,15 @@ function fixture(canCover?: (other: HTMLDialogElement) => boolean) {
   return { dom, dialog, controller, advance, timers, doc: dom.window.document, dispose() { controller.dispose(); dom.window.close(); } };
 }
 const sessions = [
-  { file: '/store/root', title: 'Root' },
-  { file: '/store/child', title: 'Child', parent: '/store/root' },
-  { file: '/store/grandchild', title: '<script>unsafe</script>', parent: '/store/child' },
+  { key: '/store/root', title: 'Root' },
+  { key: '/store/child', title: 'Child', parentKey: '/store/root' },
+  { key: '/store/grandchild', title: '<script>unsafe</script>', parentKey: '/store/child' },
 ];
 
 test('single-session review uses integration wording and restores Pi tree wording on the next review', async () => {
   const f = fixture();
   try {
-    const copilot = f.controller.review({ id: 'saved', sessions: [{ file: 'saved', title: 'Copilot title' }],
+    const copilot = f.controller.review({ id: 'saved', sessions: [{ key: 'saved', title: 'Copilot title' }],
       title: 'Delete Copilot session', description: 'Delete only this saved session.' });
     assert.equal(f.doc.querySelector('#deletion-title')!.textContent, 'Delete Copilot session');
     assert.equal(f.doc.querySelector('#deletion-description')!.textContent, 'Delete only this saved session.');
@@ -190,7 +190,9 @@ test('review waits behind an existing modal and rejects disconnected/cyclic tree
     const answer = f.controller.review({ id: 'review', sessions });
     assert.equal(f.dialog.open, false); host.close(); assert.equal(f.dialog.open, true);
     f.dialog.close('cancel'); assert.equal(await answer, false);
-    assert.equal(await f.controller.review({ id: 'bad', sessions: [{ file: 'a', title: 'A', parent: 'b' }, { file: 'b', title: 'B', parent: 'a' }] }), false);
+    assert.equal(await f.controller.review({ id: 'bad', sessions: [{ key: 'a', title: 'A', parentKey: 'b' }, { key: 'b', title: 'B', parentKey: 'a' }] }), false);
+    assert.equal(await f.controller.review({ id: 'duplicate-key', sessions: [{ key: 'same', title: 'A' }, { key: 'same', title: 'B' }] }), false);
+    assert.equal(await f.controller.review({ id: 'empty-key', sessions: [{ key: '', title: 'A' }] }), false);
     assert.equal(f.dialog.open, false);
   } finally { f.dispose(); }
 });

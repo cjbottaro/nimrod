@@ -13,6 +13,8 @@ export class RpcResponseError extends Error {
 
 /** Delivery may have happened. Callers must not replay requests after this error. */
 export class RpcConnectionError extends Error {}
+/** Host proof that this record was rejected before any transport write. Never retry implicitly. */
+export class RpcWriteRejected extends Error {}
 
 interface Pending {
   resolve(value: unknown): void;
@@ -123,8 +125,17 @@ export class JsonRpcConnection {
     if (this.failure) return;
     try {
       const sent = this.send(packet);
-      if (sent) void sent.catch(error => this.disconnect(error));
-    } catch (error) { this.disconnect(error); }
+      if (sent) void sent.catch(error => this.writeFailed(packet, error));
+    } catch (error) { this.writeFailed(packet, error); }
+  }
+
+  private writeFailed(packet: RpcPacket, error: unknown): void {
+    if (error instanceof RpcWriteRejected && typeof packet.method === 'string' && isRpcId(packet.id)) {
+      const pending = this.pending.get(packet.id);
+      if (pending) { this.pending.delete(packet.id); pending.reject(new RpcResponseError(-32002, error.message, { source: 'nimrod', notWritten: true })); }
+      return;
+    }
+    this.disconnect(error);
   }
 
   private agentRequest(id: RpcId, method: string, params: unknown): void {

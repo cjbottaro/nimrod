@@ -52,7 +52,7 @@ Restart is unavailable for temporary sessions, before first save or during lifec
 
 Right-click a Session sidebar row and choose **Delete session tree…** to target it without switching to or resuming it. The Project bar trash icon and **Delete session tree…** / **⌘/Ctrl+Backspace** target the selected saved session.
 
-This section describes **Pi's tree deletion**. Built-in SDK Copilot uses the same controls and shortcut as **Delete session…**, reviewing only one saved session through the SDK deletion API; see [Copilot deletion](copilot.md#history-close-and-delete). Restart remains Pi-only and is independent of deletion.
+This section describes **Pi's tree deletion**. [Codex tree deletion](codex.md#delete-a-codex-thread-tree) reuses the same review/controls for spawned descendants through Codex's own API, with explicit cross-project/fork limitations. Built-in SDK Copilot uses the same controls and shortcut as **Delete session…**, reviewing only one saved session through the SDK deletion API; see [Copilot deletion](copilot.md#history-close-and-delete). Restart remains Pi-only and is independent of deletion.
 
 1. Open deletion review.
 2. Inspect the selected session and its descendants, including any in other projects.
@@ -75,7 +75,7 @@ Use **Delete sessions…** / **⌘/Ctrl+Shift+Backspace** to search supported sa
 
 Enter/click opens the integration's review above the still-visible picker without activating the session. Cancel leaves the filter, rows and reading position unchanged. Confirmed-deleted rows disappear in place; selection advances to the next match or previous row at the end. Failed/retained rows stay. The picker remains open, even when empty; Refresh explicitly reloads history. Accepting a deletion freezes any unfinished discovery to preserve the rows during execution; Refresh finishes loading remaining history. Escape from the picker closes it.
 
-Pi deletion includes descendants, not just the listed row. Copilot deletion includes only the named saved session.
+Pi deletion includes descendants, not just the listed row. Codex deletion includes its reviewed spawned subtree, including archived/non-interactive descendants. Copilot deletion includes only the named saved session.
 
 ## Drafts and recovery
 

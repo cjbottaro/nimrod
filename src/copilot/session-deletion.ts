@@ -21,7 +21,7 @@ export function copilotSessionDeletion(history: () => CopilotDeletionHistory | u
           context.lock([target], false);
           if (!await context.review({ id: sessionId, title: 'Delete Copilot session',
             description: 'Stops this session’s Nimrod-owned agent and permanently removes its Copilot history and artifacts, Nimrod draft and references. Other sessions are not included. This cannot be undone. External applications are not coordinated.',
-            sessions: [{ file: sessionId, title }] })) return;
+            sessions: [{ key: scope, title }] })) return;
           context.signal.throwIfAborted();
           await source.validateDeletion(sessionId);
           context.signal.throwIfAborted();

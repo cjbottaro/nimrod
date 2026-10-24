@@ -2,6 +2,20 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
+## Codex tree deletion
+
+The shared review now consumes opaque key/parentKey nodes; Pi's native wire
+shape stays behind its adapter. The Codex deletion source, exhaustive
+source/archive inventory, native affected-writer reservations, post-stop
+scope revalidation, one recursive API call and confirmed-only reconciliation
+are source-implemented. New planner/operation/client/native-gate and local
+not-written RPC fixtures are authored **unrun**; existing review/Pi/Copilot
+fixtures were updated but not rerun. The required post-merge TypeScript/Rust
+compile check is pending for this task. No tests, browser validation, builds,
+app launches, real catalog operations or user-session deletion occurred.
+Installed-CLI recursive/archived/fork/partial-failure and actual native
+window/process acceptance remain pending. See the [Codex deletion contract](../../codex-integration/references/deletion.md).
+
 ## Codex integration
 
 The native app-server host, shared consumer adapters, explicit create/Resume,
