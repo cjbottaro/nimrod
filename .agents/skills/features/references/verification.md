@@ -11,7 +11,7 @@ scope revalidation, one recursive API call and confirmed-only reconciliation
 are source-implemented. New planner/operation/client/native-gate and local
 not-written RPC fixtures are authored **unrun**; existing review/Pi/Copilot
 fixtures were updated but not rerun. The required post-merge TypeScript/Rust
-compile check is pending for this task. No tests, browser validation, builds,
+compile check (`mise run check`) passed on `main` for this task. No tests, browser validation, builds,
 app launches, real catalog operations or user-session deletion occurred.
 Installed-CLI recursive/archived/fork/partial-failure and actual native
 window/process acceptance remain pending. See the [Codex deletion contract](../../codex-integration/references/deletion.md).
