@@ -47,6 +47,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- Linux no longer shows a File/Edit/Window/Help menu bar. Open project, Quit, window actions and About are available in the command palette; Ctrl+O and Ctrl+Q are configurable, including in Settings and pop-outs. Quit uses the existing whole-app shutdown path. Native title-bar controls, context menus and macOS menus are unchanged.
+
 - Copilot skill invocations now use the same collapsed skill disclosure as Pi, with instructions and injected context inside and arguments visible below. Successful recognized invocations no longer leave a redundant command card; both integrations share lazy rendering and retained disclosure behavior.
 
 - Slash-command argument guidance now appears inline: muted placeholders stay out of the draft, and advertised choices support ghost-text prefix completion with Tab and Up/Down cycling. **Settings → Interaction → Accept autocomplete with** defaults to **Tab only**, so suggestions never hijack Enter; **Tab or Enter** also accepts partial/selected completions while exact matches submit directly. Global defaults and project overrides apply live to command names and arguments. Optional skills can be invoked bare; palette/modal selection and composer submission/newline bindings are unchanged. Native appearance verification is pending.
@@ -76,6 +78,18 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 - Codex startup/Resume now accepts its saved draft namespace in the shared draft manager, and confirmed Codex deletion can clear that scope without touching Pi/Copilot drafts. Startup errors remain visible when owned-process cleanup also fails; cleanup Details and opt-in logs include the original cause and native signal/exit phase instead of replacing it with a bare permission error. Post-fix native acceptance remains pending.
 
 - Removed the dark strip beneath the last queued message or other bottom-pinned operation card, preserving spacing between cards.
+
+- Linux's GTK title bar joins the app content without the desktop theme's bottom border; native window controls, the outer frame and the themed Project-bar separator are unchanged.
+
+- Session-switch and Project settings shortcuts recognize shifted brace/comma key events when the webview omits physical key codes; recording uses the same normalization, without changing typing, AltGr or saved bindings.
+
+- Transcript disclosure arrows now use SVG triangles instead of clipped squares to avoid transient vertical-edge artifacts reported on Linux. Native visual confirmation remains pending.
+
+- Linux GTK title-bar buttons now receive clicks instead of having them intercepted by the title-bar wrapper, restoring native Close, Minimize and Maximize actions, including in Settings.
+
+- Linux's GTK-drawn native title bar now follows each window's Nimrod theme and background opacity, including live previews, instead of staying desktop grey. Native window controls are retained; window-manager-drawn title bars remain desktop-controlled.
+
+- Local Linux builds now select an executable build instead of macOS app packaging and stage the compiler helper and runtime resources alongside it.
 
 - Copilot Autopilot now clears Working after accepted task completion followed by idle, even when the selected mode stays Autopilot. Idle-only commands and queued configuration resume, completion is reported once, and the accepted task summary supplies notification text when no final assistant response follows. Intermediate pauses, rejected completion, Stop and errors retain their separate semantics.
 
