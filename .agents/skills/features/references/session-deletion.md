@@ -70,7 +70,7 @@ Review a live descendants tree without launching Pi or activating the target, in
 | `src/session-deletion-operation.ts`, `src/session-deletion-coordinator.ts` | Shared operation/source/effect ports, pending/review/participant ownership and confirmed-success reconciliation |
 | `src/pi/session-deletion.ts`, `src/copilot/session-deletion.ts`, `src/codex/session-deletion.ts` | Concrete Pi, Copilot and Codex source implementations; shared consumer effects/review |
 | `src/pi/webview-client.ts` | Composer persistence/deletionLock handshake |
-| `src/pi/session-drafts.ts` | Confirmed-success file draft cleanup and matching last-session pointer |
+| `src/session-drafts.ts` | Confirmed-success file draft cleanup and matching last-session pointer |
 | `src-tauri/src/session_files.rs` | Bounded store scan, header lineage, fingerprints, revalidation and children-first unlink |
 | `src-tauri/src/session_deletion.rs` | Native transaction, affected-project reports, owner-scoped review, observed writer exit and quarantine |
 | `src-tauri/src/workspaces.rs` | Affected-file launch/write freeze, stale-file rejection and native owner enumeration |

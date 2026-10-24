@@ -56,17 +56,23 @@ export function sessionConnectionState(owner: Pick<SessionLifecycleOwner, 'start
   return owner.starting ? 'connecting' : !owner.ended && available ? 'connected' : 'disconnected';
 }
 
+/** Token-bound teardown also serves retired attempts: late cleanup must never stop a replacement.
+ * Keep completed work for this owner's lifetime; failed work permits an explicit retry.
+ */
+export function ownedProcessStop(stop: SessionLifecycleHost['stop']): (token: string) => Promise<void> {
+  const pending = new Map<string, Promise<void>>();
+  return async token => {
+    let task = pending.get(token);
+    if (!task) { task = (async () => stop(token))(); pending.set(token, task); }
+    try { await task; }
+    catch (error) { if (pending.get(token) === task) pending.delete(token); throw error; }
+  };
+}
+
 /** Keep the reservation after a failed stop; deduplicate repeated teardown for one owned token. */
 export function ownedSessionStop(owner: () => Pick<SessionLifecycleOwner, 'token'>, stop: SessionLifecycleHost['stop']): () => Promise<void> {
-  let pending: { token: string; task: Promise<void> } | undefined;
-  return async () => {
-    const token = owner().token;
-    if (!token) return;
-    if (!pending || pending.token !== token) pending = { token, task: stop(token) };
-    const current = pending;
-    try { await current.task; }
-    catch (error) { if (pending === current) pending = undefined; throw error; }
-  };
+  const stopToken = ownedProcessStop(stop);
+  return async () => { const token = owner().token; if (token) await stopToken(token); };
 }
 
 export function readSavedSidebarSession(value: unknown): SavedSidebarSession | undefined {

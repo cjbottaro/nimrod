@@ -1,6 +1,7 @@
 import type { CodexSession } from './session';
 import { ownedSessionStop, sessionConnectionState, type SessionLifecycle, type SessionLifecycleHost, type SessionLifecycleOwner } from '../session-lifecycle';
-export const codexScope = (sessionId: string) => `codex:${JSON.stringify(sessionId)}`;
+import { savedDraftScope } from '../draft-scope';
+export const codexScope = (sessionId: string) => savedDraftScope('codex', sessionId);
 export function codexSessionLifecycle(owner: () => SessionLifecycleOwner, backend: { session?: CodexSession; savedSessionId?: string }, host: SessionLifecycleHost): SessionLifecycle {
   return {
     label: 'Codex',

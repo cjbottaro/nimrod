@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { SessionDrafts } from '../src/pi/session-drafts';
+import { SessionDrafts } from '../src/session-drafts';
 import { restoreComposerState } from '../src/pi/webview-state';
 import { copilotSdkScope } from '../src/copilot/session-lifecycle';
 

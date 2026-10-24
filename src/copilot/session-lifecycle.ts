@@ -1,6 +1,7 @@
 import type { CopilotSession } from './session';
 import { ownedSessionStop, sessionConnectionState, type SessionLifecycle, type SessionLifecycleHost, type SessionLifecycleOwner } from '../session-lifecycle';
-export const copilotSdkScope = (sessionId: string) => `copilot-sdk:${JSON.stringify(sessionId)}`;
+import { savedDraftScope } from '../draft-scope';
+export const copilotSdkScope = (sessionId: string) => savedDraftScope('copilot-sdk', sessionId);
 export function copilotSessionLifecycle(owner: () => SessionLifecycleOwner, backend: { session?: CopilotSession; savedSessionId?: string }, host: SessionLifecycleHost): SessionLifecycle {
   return {
     label: 'Copilot',

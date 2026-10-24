@@ -5,7 +5,7 @@ import autopilotCompletion from './fixtures/copilot/autopilot-completion.json' w
 import { CopilotSession, type CopilotSessionUi, type CopilotDecision } from '../src/copilot/session';
 import { CopilotConnection, type BridgeRequest } from '../src/copilot/connection';
 import { copilotSdkScope } from '../src/copilot/session-lifecycle';
-import { SessionDrafts } from '../src/pi/session-drafts';
+import { SessionDrafts } from '../src/session-drafts';
 import { copilotSessionDeletion } from '../src/copilot/session-deletion';
 import type { SessionDeletionContext } from '../src/session-deletion-operation';
 import type { CopilotSessionHistory } from '../src/copilot/session-history';

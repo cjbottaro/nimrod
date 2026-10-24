@@ -12,6 +12,39 @@ use std::{
 };
 use tauri::{Emitter, Manager};
 
+// Same grammar as src/draft-scope.ts, exercised with shared fixture vectors.
+// Keys are hashed app-state identities, not filesystem paths or IPC privileges.
+fn saved_scope(key: &str) -> bool {
+    if key.len() > 32768 {
+        return false;
+    }
+    let Some((namespace, identity)) = key.split_once(':') else {
+        return false;
+    };
+    if namespace == "file" {
+        return !identity.is_empty();
+    }
+    if matches!(namespace, "unassigned" | "temporary" | "demo" | "legacy")
+        || !namespace
+            .as_bytes()
+            .first()
+            .is_some_and(u8::is_ascii_lowercase)
+        || !namespace
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+    {
+        return false;
+    }
+    serde_json::from_str::<String>(identity).is_ok_and(|identity| !identity.is_empty())
+}
+fn persistent_scope(key: &str) -> bool {
+    saved_scope(key)
+        || key.len() <= 32768
+            && key
+                .strip_prefix("unassigned:")
+                .is_some_and(|id| !id.is_empty())
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Record {
@@ -84,16 +117,7 @@ impl Drafts {
         Ok(records.into_values().collect())
     }
     pub fn stage(&self, project: &str, record: Record) -> Result<(), String> {
-        if !(record.key.starts_with("file:")
-            || record.key.starts_with("unassigned:")
-            || record
-                .key
-                .strip_prefix("copilot-sdk:")
-                .or_else(|| record.key.strip_prefix("codex:"))
-                .is_some_and(|id| !id.is_empty()))
-            || record.key.len() > 32768
-            || record.revision == 0
-        {
+        if !persistent_scope(&record.key) || record.revision == 0 {
             return Err("Invalid draft scope/revision".into());
         }
         if !record.value.is_null() && !record.value.is_object() {
@@ -344,6 +368,48 @@ pub fn watch(app: &tauri::AppHandle) {
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn draft_scope_contract_matches_frontend_vectors() {
+        let vectors: Vec<Value> =
+            serde_json::from_str(include_str!("../../test/fixtures/draft-scopes.json")).unwrap();
+        for vector in vectors {
+            let key = vector["key"].as_str().unwrap();
+            assert_eq!(saved_scope(key), vector["saved"].as_bool().unwrap(), "{key}");
+            assert_eq!(
+                persistent_scope(key),
+                vector["persistent"].as_bool().unwrap(),
+                "{key}"
+            );
+        }
+        assert!(!persistent_scope(&format!("file:{}", "☃".repeat(11000))));
+    }
+    #[test]
+    fn unknown_integration_drafts_stage_restore_and_tombstone_without_registration() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Drafts::new(dir.path().join("drafts"));
+        let key = "fixture-harness:\"opaque:/id:☃\"";
+        for (revision, value) in [(1, json!({"draft":"unsent"})), (2, Value::Null)] {
+            store
+                .stage(
+                    "/fixture",
+                    Record {
+                        key: key.into(),
+                        revision,
+                        value: value.clone(),
+                    },
+                )
+                .unwrap();
+            store.flush(None, false).unwrap();
+            let loaded = Drafts::new(store.root.clone()).load("/fixture").unwrap();
+            assert_eq!(loaded[0].key, key);
+            assert_eq!(loaded[0].revision, revision);
+            assert_eq!(loaded[0].value, value);
+        }
+        assert_ne!(
+            store.path("/fixture", key),
+            store.path("/fixture", "file:opaque:/id:☃")
+        );
+    }
     #[test]
     fn copilot_drafts_restore_by_project_and_do_not_alias_pi_file_scopes() {
         let dir = tempfile::tempdir().unwrap();

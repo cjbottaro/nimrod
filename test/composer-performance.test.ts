@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { webviewHtml, rendererBundle } from './view-fixture';
-import { SessionDrafts } from '../src/pi/session-drafts';
+import { SessionDrafts } from '../src/session-drafts';
 import { renderPrimaryAction } from '../src/pi/composer-dom';
 
 test('draft edits persist immediately but coalesce geometry and retain status/control DOM', () => {

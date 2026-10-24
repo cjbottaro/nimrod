@@ -38,4 +38,4 @@ User-supplied native reports during the subsequent investigation sampled compose
 
 Unsupported engines still require fallback layout measurement. Native sizing can involve engine layout outside the measured helper. Abrupt shutdown can lose undelivered/debounced draft changes; no guaranteed unload durability is claimed. Instrumented handler timing is not full input-to-screen latency.
 
-Code: `src/pi/composer-dom.ts`, `src/pi/webview-client.ts`, `src/pi/transcript.css`, `src/native-drafts.ts`, `src/pi/session-drafts.ts`, `src-tauri/src/drafts.rs`. Tests: composer-performance, native-drafts/storage, native-view and offline WebKit composer/native-drafts regressions. Broader native/platform evidence remains owned by [verification](../../features/references/verification.md).
+Code: `src/pi/composer-dom.ts`, `src/pi/webview-client.ts`, `src/pi/transcript.css`, `src/native-drafts.ts`, `src/session-drafts.ts`, `src-tauri/src/drafts.rs`. Tests: composer-performance, native-drafts/storage, native-view and offline WebKit composer/native-drafts regressions. Broader native/platform evidence remains owned by [verification](../../features/references/verification.md).

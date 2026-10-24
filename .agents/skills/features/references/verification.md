@@ -2,6 +2,25 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
+## Integration consumer boundaries
+
+Codex connection startup/identity/cleanup now resides in its concrete owner,
+consumed through the existing lifecycle port. Shared frontend/native draft
+consumers accept a structural namespaced-key contract rather than enumerating
+harnesses. New consumer-path fixtures use the real draft library and dirty-record
+writer, an unknown fixture integration through the connection coordinator,
+frontend/Rust grammar vectors, Codex startup/failure/retired-token cleanup and
+dependency enforcement. These fixtures are authored **unrun**. The required
+post-merge compile check is separate from behavioral evidence.
+
+This is the first completed extraction slice, not registration-only integration
+acceptance: remaining Pi/Copilot/ACP shell launch owners and other concrete
+consumer dependencies are documented in [consumer interfaces](consumer-interfaces.md#implemented-extraction-and-remaining-debt).
+No tests, builds, browser/app launch, live CLI handshake/model request or
+user-session operations were performed for this slice. Codex native startup,
+original EPERM diagnosis, replacement/Close races and macOS/Linux acceptance
+remain unverified.
+
 ## Codex startup draft binding
 
 The user's 2026-10-24 Codex log (CLI 0.164.0) shows two successful handshake

@@ -54,11 +54,62 @@ Ordinary `connect` options carry only accepted-action context. Pi-only initial n
 - `stop()` awaits observation of the owned child's exit through the native host. Calls share work per token, including completed stops. Failure retains ownership and permits a later explicit retry. A new token has independent work; no token is a no-op. This is process teardown, **not** the composer Stop/cancel-turn operation.
 - `disconnect(reason)` synchronously retires local protocol/pending operations. It does not itself await native exit; existing concrete disconnect observers may request `stop()`. It preserves saved identity and drafts. A replacement launch must still await owned stop.
 
+### Integration completion bar
+
+A required port is an application dependency, not an optional alternate route.
+Shared consumers must actually use it. A new integration should implement the
+required ports and register its factory/capabilities; changes to shared composer,
+draft-store, sidebar or connection algorithms are boundary failures, not routine
+integration work. Explicit composition, persisted-reference decoding, runtime
+packaging and narrow native transport registration may remain integration-aware.
+Unsupported optional capabilities are absent rather than simulated.
+
+Finish each consumer boundary end-to-end, including downstream native consumers,
+before calling it extracted. Consumer-path fixtures must exercise the actual
+shared stores/coordinators; adapter conformance and mocked identity callbacks
+alone do not establish integration. Static dependency fixtures prevent completed
+boundaries from importing concrete authority again. These are internal
+application ports, not a common wire protocol or a requirement to normalize
+Pi/Copilot/Codex semantics.
+
 ### Implemented extraction and remaining debt
 
 `src/pi/session-startup.ts` now owns Pi's pre-launch-result packet buffer, native launch identity checks, release of ordered packets after identity/draft binding, and initialization sequencing. The shell supplies native transport wiring and shell effects. ACP does not inherit this algorithm: its negotiated new/load and replay ordering stay concrete.
 
-This is **not a completed launch-controller extraction**. `main.ts::launchPi` and `launchAcp` still construct controllers, manage attempt state and wire many callbacks. `SessionLifecycleHost.connect` still delegates to these routines. Next, extract each concrete connection owner separately, using the existing startup helper where appropriate; do not relocate `main.ts` wholesale behind a giant host interface. Identify the minimal shell effects first (identity binding, presentation publication, notices/attention and ownership lifetime), retain exact ordering, and move one responsibility at a time.
+Codex now has a concrete connection owner in `src/codex/connection.ts`.
+The shell composes it; `SessionLifecycle.connect/stop/disconnect` route to its
+attempt guards, native-project confirmation, ordered protocol startup,
+synchronous draft binding before identity publication, retirement and cleanup.
+Its host supplies window gates, identity-conflict lookup, a project-bound
+transport, the draft consumer and explicit presentation/persistence/notice
+effects—not a callback into a shell launch routine. Cleanup captures the
+attempt's token; retired completion cannot stop or clear a replacement.
+`ownedProcessStop` retains completed work per token for the owner's lifetime
+and removes failed work only to permit an explicit retry.
+
+The shared draft library now lives in `src/session-drafts.ts`.
+[Draft scopes](native-drafts.md#draft-scope-contract) no longer enumerate
+harnesses in either frontend binding/deletion or native staging. A fixture
+integration unknown to the shared consumers exercises connection selection,
+promotion, the actual dirty-record writer, restore and deletion without adding
+a namespace to the application.
+
+This is **not a completed integration migration**. `main.ts::launchPi`,
+`launchCopilot` and `launchAcp` still construct controllers and own connection
+sequencing; their lifecycle adapters delegate back to those routines. Creation,
+restoration, configuration/action execution and presentation composition also
+retain concrete shell knowledge. The fixture integration does not yet prove
+registration-only mounted UI, history or complete harness substitutability.
+Next extract each remaining concrete connection owner separately, then complete
+those consumer boundaries. Use Pi's existing startup helper; do not relocate
+the shell wholesale behind a giant host interface.
+
+`test/integration-boundaries.test.ts` guards the extracted dependencies and
+Codex construction/native-transport boundary. `test/draft-scope.test.ts` uses
+the real draft library/writer with the unknown integration;
+`test/codex-connection.test.ts` exercises the concrete owner through the
+lifecycle/selection ports. [Verification](verification.md#integration-consumer-boundaries)
+owns execution status and acceptance gaps.
 
 ## Shared ordered RPC mechanics
 
@@ -79,8 +130,8 @@ The small `CodexWriter` interface supplies only ordered decoded-record writes.
 `CodexClientHooks` carries concrete identity/event/approval effects, not a
 universal harness host. The integration adds the narrower project-bound
 `CodexTransport` for native conversation/catalog consumers and implements existing
-lifecycle/history/input/configuration ports. Shell launch extraction remains
-incomplete; tagged persistence is integration-owned. Existing ACP fixtures remain the regression base;
+lifecycle/history/input/configuration ports. Codex connection ownership is extracted
+as described above; other shell launch extraction remains incomplete. Tagged persistence is integration-owned. Existing ACP fixtures remain the regression base;
 `test/json-rpc-connection.test.ts` and `test/codex-client.test.ts` are authored
 but unrun. See the [Codex integration skill](../../codex-integration/SKILL.md)
 for current mappings/scope and [verification](verification.md#codex-integration) for evidence.
@@ -96,7 +147,7 @@ Names below are working labels, not pre-approved exported interfaces. Extract on
 | Candidate / current boundary | Consumer and need | Exclusions / next decision |
 | --- | --- | --- |
 | Persistence / connectivity — implemented above | Layout/drafts and connection/teardown | Keep composition convenient; split further only for a real narrower consumer. |
-| Concrete connection owner — next extraction | Composition root needs a session-bound launch/teardown owner | Separate Pi/ACP implementations, not common initialization or a universal session state machine. Inventory shell effects before moving functions. |
+| Concrete connection owner — Codex extracted; Pi/Copilot/ACP remain | Composition root needs a session-bound launch/teardown owner | Separate concrete implementations, not common initialization or a universal session state machine. Codex owns attempts, binding and token-bound cleanup; inventory shell effects before moving each remaining owner. |
 | Conversation presentation — already exists in `conversation-view-host.ts` | Shared mounted view consumes incremental transcript/status/control projections | Preserve lazy history, reference stability and synchronous publication. No wire-event translation into Pi events; do not invent a second presentation model. |
 | Message input — implemented, fixtures unrun | Shared composer needs live image support/limits and typed submission without inspecting a backend or encoding SDK/RPC payloads | `SessionMessageInput` has live `capabilities()` and `submit(OutgoingMessage)`; all controllers implement it, while the shell binds session lifetime and unexpected errors. Shared `AttachmentHost` owns local bytes separately. Pi keeps steer/queue; Copilot maps SDK blobs and idle-only sends; ACP stays text-only. Promise settlement is not common delivery/turn completion. [Image input](image-paste.md#message-input-interface) owns full contract, mappings and evidence. |
 | Interaction policy — already exists in `pi/view-policy.ts` and `acp/view-policy.ts` | Composer needs intent validation, supported submission behavior and controls | Pi steer/queue and ACP busy rejection remain concrete. Reuse existing policies before proposing another interface. |

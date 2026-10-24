@@ -40,7 +40,7 @@ One canonical directory per window with independently owned sessions. New is per
 | `src/pi/session.ts` | Pi startup/history/identity, authoritative RPC semantics and disconnect handling |
 | `src/pi/transport.ts` | Ordered response callbacks, uncertain acknowledgements, disconnected transport invalidation |
 | `src/conversation-view.ts` | Shared mounted renderer; explicit sessionReset; send-local preparation cancellation and receipt error reporting (Pi's `webview-client.ts` supplies a compatibility adapter) |
-| `src/pi/session-drafts.ts` | Shared project-local library, per-session selection, provisional promotion and recovery |
+| `src/session-drafts.ts` | Shared project-local library, per-session selection, provisional promotion and recovery |
 | `src-tauri/src/native_menu.rs`, `application_actions.rs` | Directory chooser and native macOS menus/Quit; Linux palette/app-action replacements per [Keybindings](keybindings.md#linux-app-menu-replacement) |
 | `src-tauri/src/main.rs` | Native menu dispatch, launch validation, close/quit serialization |
 | `src-tauri/src/cli.rs` | Startup-gated ordered directory requests; menu/CLI reuse the same queue |
