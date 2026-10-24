@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
+import type { ToolCardData } from '../src/card-plugin-api';
 import { createCardSummary, createToolDetails } from '../src/pi/card-shell';
 import { renderToolCard, updateToolCard } from '../src/pi/tool-card';
 import { renderReasoningCard, updateReasoningCard } from '../src/pi/reasoning-card';
@@ -70,7 +71,7 @@ test('input and output disclosure labels update without removing SVG arrows', ()
   const block = { name: 'custom', arguments: { code: 'return 1' }, toolStatus: 'running' as const, executionOutput: 'one' };
   const tool = renderToolCard(doc, block, createToolDetails(doc, new Map(), 'tool'), {
     id: 'disclosure-fixture', supports: () => true, mount: () => ({
-      update: data => ({ title: 'Custom', inputDisclosure: { label: 'Script', field: 'code' },
+      update: (data: Readonly<ToolCardData>) => ({ title: 'Custom', inputDisclosure: { label: 'Script', field: 'code' },
         outputDisclosure: data.toolStatus === 'result' ? 'Final output' : 'Output',
         sections: [{ key: 'execution', label: 'Output', text: data.executionOutput || '' }] }),
       dispose() {},
