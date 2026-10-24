@@ -12,6 +12,8 @@ export interface CodexClientHooks {
   /** Identity validation and draft binding must finish synchronously before replay/publication. */
   identified?(thread: CodexThread, settings: Readonly<RpcRecord>): void;
   event?(event: CodexEvent): void;
+  /** Catalog deletion notifications are authoritative even without a bound conversation. */
+  deleted?(threadId: string): void;
   /** Remains pending on modal dismissal. Owner retirement/resolution aborts the signal. */
   approval?(request: CodexApproval, signal: AbortSignal): Promise<CodexApprovalDecision>;
   disconnected?(error: RpcConnectionError): void;
@@ -142,12 +144,29 @@ export class CodexClient {
     if (this.state !== 'ready') throw new Error('Codex discovery requires an unbound initialized connection');
     nonempty(cwd, 'project cwd'); if (cursor !== undefined) nonempty(cursor, 'history cursor');
     let result!: CodexPage<CodexThread>;
-    await this.rpc('thread/list', { cwd, ...(cursor === undefined ? {} : { cursor }), limit: 100, sortKey: 'updated_at', sortDirection: 'desc', modelProviders: [], archived: false }, value => {
+    await this.rpc('thread/list', { cwd, ...(cursor === undefined ? {} : { cursor }), limit: 100, sortKey: 'updated_at', sortDirection: 'desc', modelProviders: [], sourceKinds: ['cli', 'vscode', 'appServer'], archived: false }, value => {
       const decoded = page(value, thread);
       // Server filtering is not an authorization boundary. Never return another project.
       result = { ...decoded, data: decoded.data.filter(entry => entry.cwd === cwd && !entry.ephemeral && entry.parentThreadId == null) };
     });
     return result;
+  }
+
+  /** Complete source/archive inventory for deletion only; no project filtering can hide descendants. */
+  async deletionInventory(archived: boolean, cursor?: string): Promise<CodexPage<CodexThread>> {
+    if (this.state !== 'ready') throw new Error('Codex deletion discovery requires an unbound catalog');
+    if (cursor !== undefined) nonempty(cursor, 'deletion cursor');
+    let result!: CodexPage<CodexThread>;
+    await this.rpc('thread/list', { archived, sourceKinds: ['cli', 'vscode', 'exec', 'appServer', 'subAgent', 'subAgentReview', 'subAgentCompact', 'subAgentThreadSpawn', 'subAgentOther', 'unknown'],
+      modelProviders: [], limit: 100, sortKey: 'created_at', sortDirection: 'asc', ...(cursor === undefined ? {} : { cursor }) }, value => { result = page(value, thread); });
+    return result;
+  }
+  async deleteThread(rootId: string): Promise<void> {
+    if (this.state !== 'ready') throw new Error('Codex deletion requires an unbound catalog');
+    nonempty(rootId, 'deletion root');
+    await this.rpc('thread/delete', { threadId: rootId }, value => {
+      if (Object.keys(record(value, 'deletion acknowledgement')).length) throw new Error('Invalid Codex deletion acknowledgement');
+    });
   }
 
   /** Separate pages are deliberate: a resume response is not a complete transcript. */
@@ -220,6 +239,7 @@ export class CodexClient {
       if (this.early.length >= MAX_EARLY_EVENTS || this.earlyBytes + bytes > MAX_EARLY_BYTES) throw new Error('Codex pre-identity event buffer exceeded');
       this.early.push({ method, params }); this.earlyBytes += bytes; return;
     }
+    if (method === 'thread/deleted') this.hooks.deleted?.(nonempty(params.threadId, 'deleted thread ID'));
     // App-server may report child-agent threads. They are not this conversation.
     const threadId = params.threadId ?? (isRecord(params.thread) ? params.thread.id : undefined);
     if (!this.bound || threadId !== this.bound.id) return;

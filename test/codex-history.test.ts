@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { CodexSessionHistory } from '../src/codex/session-history';
 import { loadSessionHistory } from '../src/session-history';
-import { codexSessionDeletion } from '../src/codex/session-deletion';
 import type { CodexPacket } from '../src/codex/protocol';
 const cwd = '/fixture/codex-history';
 const thread = (id: string, directory = cwd) => ({ id, cwd: directory, ephemeral: false, parentThreadId: null, turns: [], status: { type: 'notLoaded' }, name: id, updatedAt: 100 });
@@ -35,17 +34,39 @@ test('Codex project catalog continues past a filtered empty page and never creat
   await f.history.dispose(); assert.equal(f.stopped.length, 1);
 });
 
+test('Codex deletion inventory includes archived descendants and retires an uncertain catalog before guard release', async () => {
+  const events: string[] = [], sent: CodexPacket[] = [];
+  let receive!: (packet: unknown) => void;
+  const row = (id: string, parentThreadId: string | null) => ({ ...thread(id), parentThreadId, forkedFromId: null });
+  const history = new CodexSessionHistory(cwd, {
+    start: async (_token, listener) => { receive = listener; return cwd; },
+    write: async (_token, packet) => {
+      sent.push(packet);
+      if (packet.method === 'initialize') receive({ id: packet.id, result: { userAgent: 'fixture' } });
+      else if (packet.method === 'thread/list') {
+        const params = packet.params as Record<string, unknown>;
+        assert.equal(params.cwd, undefined); assert.equal((params.sourceKinds as string[]).length, 10);
+        receive({ id: packet.id, result: { data: params.archived ? [row('archived-child', 'root')] : [row('root', null), row('exec-child', 'root')], nextCursor: null } });
+      } else if (packet.method === 'thread/delete') receive({ id: packet.id, error: { code: -32000, message: 'Partial failure' } });
+    },
+    stop: async () => { events.push('catalog-exited'); },
+    deletion: {
+      reserve: async () => { events.push('reserve'); }, stop: async () => { events.push('writers-exited'); },
+      release: async () => { assert.ok(events.includes('catalog-exited')); events.push('release'); },
+    },
+  }, () => { events.push('duplicate-discovery-error'); });
+  const tree = await history.previewTree('root', new AbortController().signal);
+  assert.deepEqual(new Set(tree.ids), new Set(['root', 'exec-child', 'archived-child']));
+  await history.reserveDeletion('operation', 'root', tree.ids); await history.stopDeletionOwners('operation');
+  await assert.rejects(history.deleteTree('root', () => {})); await history.finishDeletion('operation', true);
+  assert.ok(events.indexOf('catalog-exited') < events.indexOf('release')); assert.equal(events.includes('duplicate-discovery-error'), false);
+  assert.equal(sent.some(packet => ['thread/start', 'thread/resume', 'turn/start'].includes(String(packet.method))), false);
+  await history.dispose();
+});
+
 test('aborted Codex catalog consumer does not spawn work, disposal does not delete sessions', async () => {
   const f = fixture(), signal = new AbortController(); signal.abort();
   await assert.rejects(f.history.list({ signal: signal.signal }));
   assert.equal(f.sent.length, 0); await f.history.dispose(); assert.equal(f.stopped.length, 0);
 });
 
-test('recursive Codex deletion is explicitly unavailable rather than pretending to remove one session', async () => {
-  const source = codexSessionDeletion();
-  assert.equal(source.operation({ kind: 'copilot-sdk', sessionId: 'same' }, 'Same'), undefined);
-  const operation = source.operation({ kind: 'codex', sessionId: 'same' }, 'Same')!;
-  assert.equal(operation.supported, false); assert.equal(operation.available(), false);
-  assert.match(operation.unavailableReason!, /descendant/);
-  await assert.rejects(operation.run(), /descendant/);
-});

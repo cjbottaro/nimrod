@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { JsonRpcConnection, RpcConnectionError, RpcResponseError, type RpcPacket } from '../src/json-rpc-connection';
+import { JsonRpcConnection, RpcConnectionError, RpcResponseError, RpcWriteRejected, type RpcPacket } from '../src/json-rpc-connection';
 import { AcpConnection, AcpConnectionError, AcpResponseError } from '../src/acp/connection';
 
 const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
@@ -29,6 +29,15 @@ test('RPC dialects preserve ordered apply-before-event and malformed-packet reti
     connection.receive({ ...header, id: 2, result: {}, error: { code: -1, message: 'bad' } }); await failed;
     assert.equal(connection.connected, false);
   }
+});
+
+test('proven not-written rejection fails one request without disconnecting or replaying other work', async () => {
+  const sent: RpcPacket[] = [];
+  const connection = new JsonRpcConnection(packet => { sent.push(packet); if (packet.method === 'blocked') return Promise.reject(new RpcWriteRejected('Reserved for deletion')); }, {}, { label: 'Fixture', versionMember: false });
+  await assert.rejects(connection.request('blocked', {}), error => error instanceof RpcResponseError && error.data !== undefined);
+  assert.equal(connection.connected, true);
+  const next = connection.request('read', {}); connection.receive({ id: sent.at(-1)!.id, result: {} }); await next;
+  assert.equal(sent.filter(packet => packet.method === 'blocked').length, 1); connection.disconnect();
 });
 
 test('headerless RPC rejects versioned packets instead of silently becoming another dialect', async () => {

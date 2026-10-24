@@ -300,7 +300,7 @@ const piDeletion = deletions.register(context => piSessionDeletion({
   confirm: (id, confirmed) => invoke('confirm_session_deletion', { id, confirmed }),
 }, context));
 const deletion = piDeletion.transaction;
-deletions.register(() => codexSessionDeletion());
+deletions.register(context => codexSessionDeletion(() => startCodexHistory(), context));
 deletions.register(context => copilotSessionDeletion(() => copilotHistory, context));
 function tabDeletion(tab: Tab | undefined): SessionDeletionOperation | undefined {
   const reference = tab?.lifecycle.identity;
@@ -654,7 +654,7 @@ function startCodexHistory(): CodexSessionHistory | undefined {
   if (!workspace || unloading || !codexReady || stored(codexHistoryKey(workspace)) !== true) return;
   if (!codexHistory) {
     const project = workspace;
-    codexHistory = new CodexSessionHistory(project, nativeCodexTransport(project, () => ({ cli: runtime.current().codex, generation: codexGeneration })), error => historyError('codex', 'Codex', String(error)));
+    codexHistory = new CodexSessionHistory(project, nativeCodexTransport(project, () => ({ cli: runtime.current().codex, generation: codexGeneration }), true), error => historyError('codex', 'Codex', String(error)));
   }
   return codexHistory;
 }
@@ -1346,7 +1346,7 @@ async function launchCodex(tab: Tab, acceptedAction = false): Promise<void> {
     disconnected: message => {
       if (!valid()) return;
       tab.ended = true; tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' });
-      if (!tab.closing && !tab.view.hasConnectionOutcome?.()) showNotice(tab, `${message}. Saved identity and draft remain; nothing was replayed.`, !!tab.lifecycle.identity);
+      if (!tab.closing && !tab.deleting && !tab.view.hasConnectionOutcome?.()) showNotice(tab, `${message}. Saved identity and draft remain; nothing was replayed.`, !!tab.lifecycle.identity);
       void tab.lifecycle.stop().catch(error => { if (valid()) showNotice(tab, String(error), !!savedId); });
       updateTab(tab);
     },
@@ -2051,7 +2051,7 @@ async function boot(): Promise<void> {
     });
     void invoke<string>('stop_codex').then(generation => {
       if (!generation) throw new Error('Native Codex host did not confirm a new generation');
-      if (!unloading) { codexGeneration = generation; codexReady = true; selectedConnection.barriersChanged(); startCodexHistory(); }
+      if (!unloading) { codexGeneration = generation; codexReady = true; selectedConnection.barriersChanged(); startCodexHistory(); for (const tab of tabs) updateTab(tab); controls(); }
     }).catch(error => { if (!unloading) notices.report({ id: 'codex-startup', operation: 'Initialize Codex', message: String(error) }); });
     await zoom.ready;
     const defaults = await invoke<{ pi: string; node: string; cwd: string; home?: string }>('runtime_defaults');

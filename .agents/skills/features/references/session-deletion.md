@@ -1,6 +1,6 @@
 # Session deletion: implementation reference
 
-**Status: Pi tree deletion and Copilot SDK deletion implemented; latest fixtures unrun. Copilot-specific ACP deletion removed.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#session-deletion) retain prior execution records.
+**Status: Pi tree deletion, Copilot SDK deletion and guarded Codex spawned-tree deletion implemented; latest fixtures unrun. Copilot-specific ACP deletion removed.** This reference owns current specifications and implementation details. [Verification status](verification.md) separates fixture evidence from native acceptance; [historical records](history/feature-records.md#session-deletion) retain prior execution records.
 
 Read the [user guide](../../../../docs/sessions.md#delete-session-tree),
 [shared vocabulary](../../nimrod-ui-vocabulary/SKILL.md) and
@@ -9,6 +9,8 @@ and conversation writes; Nimrod owns permanent file deletion. No Pi worker,
 installed extension, runtime executable or chat command participates in deletion.
 
 ## Consumer interface and Copilot deletion
+
+The shared review model is now `DeletionReviewNode { key, title, parentKey?, cwd? }`, with opaque cleanup keys rather than file identifiers. The renderer rejects empty/duplicate keys and cyclic topology, preserves iterative rendering and reuses the existing retained modal/focus/progress behavior. Pi's native `file`/`parent` fields remain a concrete wire compatibility shape (`PiDeletionTreeSession`) mapped by `src/pi/session-deletion.ts`; Copilot and Codex publish their own namespaced keys. Deletion remains independent from `SessionLifecycle`.
 
 New built-in Copilot uses `src/copilot/session-deletion.ts`, the existing shared
 coordinator and supported SDK `client.deleteSession(id)`. It requires review,
@@ -22,6 +24,7 @@ cleanup. [SDK deletion](copilot-sdk.md#close-and-delete) owns concrete semantics
 - `src/session-deletion-coordinator.ts::SessionDeletionCoordinator` registers sources, serializes local deletion, incorporates integration-owned external pending state, revalidates generic window/mounted-session gates, and owns one confirmed-success ledger. Its scoped context owns dialog presentation/progress, review ownership, mounted participant locks/observed stop, project-lifetime cancellation and application error routing. A Pi release/snapshot cannot dismiss another source's review. Locks are captured once per target, and all owned stops settle before failure releases them. Authoritative success effects deduplicate batches before the shared reconciliation callback; recovery explicitly retires a tombstone. Resolving `run()` is not an acknowledgement of successful deletion.
 - `src/pi/session-deletion.ts::piSessionDeletion` constructs/adapts the existing `SessionDeletion` native transaction. It maps native files to cleanup targets and routes review/progress/errors and confirmed event/IPC/snapshot successes through its scoped context. The transaction retains ordered event processing, native writer coordination, partial results, persisted quarantine and recovery. Its native tombstone deduplication remains integration bookkeeping, not a separate UI deletion ledger.
 - `src/copilot/session-deletion.ts::copilotSessionDeletion` supplies capability/readiness information, review content and the concrete validate/stop/delete sequence through the same context. It owns no separate UI pending flag, modal cleanup, participants or tombstone store. It depends on a narrow `CopilotDeletionHistory` port, not a conversation controller. `CopilotSessionHistory` implements that port through the project-owned discovery connection; no conversation is created/loaded or prompted to delete closed history. Request-owned disconnect errors are reported by the deletion operation, not duplicated as discovery errors.
+- `src/codex/session-deletion.ts` implements the same operation/source/context ports through a narrow `CodexDeletionHistory` dependency. It uses the shared review, locks, stopping/deleting progress and confirmed-success reconciliation; Codex owns exhaustive spawned-tree discovery and its guarded recursive API. See [Codex tree deletion](../../codex-integration/references/deletion.md) for native reservations, archive/source coverage, uncertainty and explicit cross-project/fork limitations.
 - `main.ts` registers integrations and supplies one lifecycle-keyed participant adapter and one target-based cleanup callback. The latter disposes all confirmed-deleted mounted rows before choosing a replacement once, deletes exact draft scopes, retires matching recency/legacy last-session references, and updates layout/pop-outs. Delete controls, picker IDs/filtering/pruning and stale saved-history checks consume the coordinator; there is no Pi/Copilot pending OR or separate Copilot cleanup function. Pi-specific native event/recovery gates remain concrete. Adding deletion for an otherwise integrated harness requires a source implementation and registration, not another UI branch; its saved identity/layout/draft encoding remains a separate concrete persistence responsibility.
 
 Copilot deletion requires a ready SDK history connection and a durable SDK identity.
@@ -39,7 +42,7 @@ automatic retry or reconnect. Unknown/failed removal retains local identity/draf
 and reports through the deletion operation. Refresh verifies history before another
 explicit attempt; missing history never falls back to creating a session.
 
-Delete sessions aggregates Pi/Copilot with the same incremental isolation and
+Delete sessions aggregates Pi/Copilot/Codex with the same incremental isolation and
 cancellation as Resume. Accepting a review retires unfinished listing to preserve
 survivor DOM/query/highlight during execution; Refresh explicitly finishes discovery.
 Readiness/history publication refreshes controls, not content-stream events.
@@ -65,7 +68,7 @@ Review a live descendants tree without launching Pi or activating the target, in
 | `src/main.ts` | Saved-row eligibility, window-targeted event subscription, reports, renderer locks, reconciliation and recovery |
 | `src/session-deletion.ts` | Ordered frontend events, synchronous ownership acknowledgement without Pi RPC, progress, partial-result reconciliation and quarantine |
 | `src/session-deletion-operation.ts`, `src/session-deletion-coordinator.ts` | Shared operation/source/effect ports, pending/review/participant ownership and confirmed-success reconciliation |
-| `src/pi/session-deletion.ts`, `src/copilot/session-deletion.ts` | Concrete native Pi and Copilot SDK source implementations |
+| `src/pi/session-deletion.ts`, `src/copilot/session-deletion.ts`, `src/codex/session-deletion.ts` | Concrete Pi, Copilot and Codex source implementations; shared consumer effects/review |
 | `src/pi/webview-client.ts` | Composer persistence/deletionLock handshake |
 | `src/pi/session-drafts.ts` | Confirmed-success file draft cleanup and matching last-session pointer |
 | `src-tauri/src/session_files.rs` | Bounded store scan, header lineage, fingerprints, revalidation and children-first unlink |

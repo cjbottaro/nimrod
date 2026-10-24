@@ -1,7 +1,8 @@
-import type { DeletionTreeSession } from './deletion-review';
+/** Pi native wire compatibility shape; mapped to opaque review nodes by its adapter. */
+export interface PiDeletionTreeSession { file: string; title: string; parent?: string | null; cwd?: string; }
 // Pi-specific frontend half of the native app-wide deletion transaction.
 export interface DeleteResult { file: string; deleted: boolean; error?: string | null; }
-export interface DeletionEvent { id: string; phase: 'begin' | 'lock' | 'check' | 'review' | 'quarantine' | 'removing' | 'complete' | 'release'; files: string[]; results: DeleteResult[]; tree?: DeletionTreeSession[] | null; message?: string | null; pending: boolean; }
+export interface DeletionEvent { id: string; phase: 'begin' | 'lock' | 'check' | 'review' | 'quarantine' | 'removing' | 'complete' | 'release'; files: string[]; results: DeleteResult[]; tree?: PiDeletionTreeSession[] | null; message?: string | null; pending: boolean; }
 export interface DeletionSnapshot { pending: boolean; quarantine: string[]; files: string[]; deleted?: string[]; error?: string | null; }
 export interface SessionDeletionReport { file: string; token?: string; title: string; busy: boolean; hasDraft: boolean; }
 export interface DeletionPanel {
@@ -22,7 +23,7 @@ export interface SessionDeletionDependencies {
   deleted?(files: string[]): void;
   recovered?(file: string): void;
   loadingReview?(): void;
-  review?(id: string, tree: DeletionTreeSession[]): Promise<boolean>;
+  review?(id: string, tree: PiDeletionTreeSession[]): Promise<boolean>;
   confirm?(id: string, confirmed: boolean): Promise<void>;
   cancelReview?(): void;
   progressReview?(phase: 'stopping' | 'deleting'): void;

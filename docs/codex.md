@@ -27,11 +27,21 @@ Image paste and image-only messages are enabled only when the connected model ad
 
 ## History, drafts and Close
 
-Codex threads have their own saved identity and draft namespace; an identical Pi/Copilot ID does not alias them. **Resume session…** includes project-local top-level Codex history after the project has used Codex. History is paginated and does not require sending a prompt. The default Codex catalog includes interactive, non-archived threads; it is not a promise to list every headless/exec or archived thread.
+Codex threads have their own saved identity and draft namespace; an identical Pi/Copilot ID does not alias them. **Resume session…** includes project-local top-level Codex history after the project has used Codex. History is paginated and does not require sending a prompt. Nimrod's catalog explicitly includes CLI, VS Code and app-server roots, including Nimrod-created history, and excludes archived threads; it is not a promise to list every headless/exec or archived thread.
 
 Restored Codex rows stay disconnected until you explicitly select or Resume one. Resume uses the exact thread ID and project; a failure never creates a replacement session. Background sessions remain independently live once connected. Closing stops only Nimrod's owned process and keeps saved Codex history and your draft. No background-process continuity or coordination with external writers is promised.
 
-Restart is currently unavailable for Codex; use Close and explicit Resume. **Delete is also unavailable:** Codex's deletion API removes spawned descendant threads as well as the selected thread, and Nimrod does not yet provide a complete descendant-scope review. Close is not deletion.
+Restart is currently unavailable for Codex; use Close and explicit Resume. Close is not deletion.
+
+## Delete a Codex thread tree
+
+Use the session-row menu, Project bar trash control or **Delete sessions…** to review **Delete Codex thread tree…**. The existing shared review shows the root and its spawned descendants, including archived and non-interactive descendants. Confirmation authorizes the current spawned subtree, including descendants created during review or shutdown; Nimrod rescans after stopping affected owned agents before submitting one recursive deletion request.
+
+Cancel releases the review without deliberately stopping established agents or deleting history/drafts. Unrelated sessions stay usable. Late affected mutations or new attachments can be rejected while reviewed; nothing is automatically replayed.
+
+Only confirmed removals clean the corresponding Nimrod sidebar entries, drafts and references. If the result is uncertain or partial, unconfirmed identities/drafts remain; refresh history to inspect the outcome before another explicit attempt. Native cleanup failures retain reservations rather than pretending the operation safely finished.
+
+Codex removes rollout history and associated metadata through its supported API. Nimrod does not remove arbitrary project files/worktrees or coordinate external writers. Cross-project descendants, missing/cyclic ancestry and forks with unverified deletion scope are refused explicitly. Deletion fixtures are authored but unrun; real installed-CLI and native acceptance remain pending.
 
 ## Approvals
 
@@ -49,6 +59,6 @@ Usage shows Codex-reported token totals and the last-turn token amount against t
 
 ## Current differences
 
-Codex app-server does not advertise the CLI's slash-command catalog, so slash text is rejected rather than submitted as a model prompt. Plan/Autopilot controls, experimental questions, a context-tier picker, live permission-policy editing, manual compaction, MCP inspection and destructive deletion are not provided by this integration yet. Unknown native item types keep raw details; command output and file changes have dedicated shared-component presentations.
+Codex app-server does not advertise the CLI's slash-command catalog, so slash text is rejected rather than submitted as a model prompt. Plan/Autopilot controls, experimental questions, a context-tier picker, live permission-policy editing, manual compaction and MCP inspection are not provided by this integration yet. Unknown native item types keep raw details; command output and file changes have dedicated shared-component presentations.
 
 See [Sessions](sessions.md), [Drafts](drafts.md), [Reading conversations](reading-conversations.md) and [Error messages](error-messages.md) for the shared workspace behavior.

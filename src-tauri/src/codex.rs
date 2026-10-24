@@ -17,7 +17,7 @@ use tauri::{Manager, ipc::Channel};
 use tokio::{
     io::AsyncWriteExt,
     process::{Child, Command},
-    sync::{Mutex, mpsc, oneshot},
+    sync::{Mutex, RwLock, mpsc, oneshot},
     task::JoinHandle,
     time::timeout,
 };
@@ -25,7 +25,7 @@ use tokio_util::codec::{FramedRead, LinesCodec};
 
 // Codex history is paginated; cap each wire record independently.
 const MAX_RECORD: usize = 16 * 1024 * 1024;
-type Write = (Value, oneshot::Sender<Result<(), String>>);
+type Write = (Value, oneshot::Sender<Result<Option<String>, String>>);
 struct FailedStop {
     child: Child,
     group: u32,
@@ -38,8 +38,15 @@ struct StopState {
     failed: Option<FailedStop>,
     poison: Option<String>,
 }
+#[path = "codex_deletion.rs"]
+pub(crate) mod deletion;
+struct CatalogThread { cwd: PathBuf, parent: Option<String>, fork: Option<String>, ephemeral: bool }
 struct Owned {
     window: String,
+    catalog: bool,
+    binding: Arc<Mutex<Option<String>>>,
+    metadata: Arc<Mutex<HashMap<String, CatalogThread>>>,
+    delete_request: Arc<Mutex<Option<Value>>>,
     cwd: PathBuf,
     writer: mpsc::Sender<Write>,
     stop: Mutex<StopState>,
@@ -54,6 +61,7 @@ struct Windows {
 pub struct CodexHost {
     sessions: Mutex<HashMap<String, Arc<Owned>>>,
     windows: Mutex<Windows>,
+    deletion: Arc<RwLock<deletion::Gate>>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -61,6 +69,8 @@ pub struct Config {
     cwd: PathBuf,
     cli: Option<PathBuf>,
     generation: String,
+    #[serde(default)]
+    catalog: bool,
 }
 
 impl CodexHost {
@@ -84,8 +94,9 @@ impl CodexHost {
         }
         self.stop_matching(|id, owner| {
             owner.window == window && token.is_none_or(|token| id == token)
-        })
-        .await
+        }).await?;
+        if closing { self.release_window_deletion(window).await; }
+        Ok(())
     }
     async fn reset_window(&self, window: &str) -> Result<String, String> {
         let generation = uuid::Uuid::new_v4().to_string();
@@ -96,6 +107,7 @@ impl CodexHost {
         }
         self.stop_matching(|_, owner| owner.window == window)
             .await?;
+        self.release_window_deletion(window).await;
         Ok(generation)
     }
     pub async fn shutdown(&self) -> Result<(), String> {
@@ -173,10 +185,10 @@ fn validate_message(value: &Value) -> Result<(), String> {
             Some("initialized") if value.get("id").is_none() => {},
             Some("initialize" | "thread/start" | "thread/resume" | "thread/list"
                 | "thread/turns/list" | "thread/items/list"
-                | "turn/start" | "turn/steer" | "turn/interrupt" | "model/list") if valid_id(&value["id"]) => {},
+                | "turn/start" | "turn/steer" | "turn/interrupt" | "model/list" | "thread/delete") if valid_id(&value["id"]) => {},
             _ => return Err("Unsupported Codex operation".into()),
         }
-        if matches!(method.as_str(), Some("thread/resume" | "thread/turns/list" | "thread/items/list" | "turn/start" | "turn/steer" | "turn/interrupt"))
+        if matches!(method.as_str(), Some("thread/resume" | "thread/turns/list" | "thread/items/list" | "turn/start" | "turn/steer" | "turn/interrupt" | "thread/delete"))
             && value["params"]["threadId"].as_str().is_none_or(|id| id.is_empty() || id.len() > 128) {
             return Err("Codex operation requires a thread ID".into());
         }
@@ -330,14 +342,20 @@ pub async fn start_codex(
         let (writer, writes) = mpsc::channel(32);
         let (stop, stopped) = oneshot::channel();
         let output = Output::channel(on_event);
+        let binding = Arc::new(Mutex::new(None));
+        let metadata = Arc::new(Mutex::new(HashMap::new()));
+        let delete_request = Arc::new(Mutex::new(None));
+        let wire_owner = WireOwner { catalog: config.catalog, token: token.clone(), cwd: cwd.clone(),
+            binding: binding.clone(), metadata: metadata.clone(), delete_request: delete_request.clone(), gate: host.deletion.clone() };
         let task = tokio::spawn(supervise(
-            child, stdin, stdout, stderr, writes, stopped, output,
+            child, stdin, stdout, stderr, writes, stopped, output, wire_owner,
         ));
         sessions.insert(
             token,
             Arc::new(Owned {
                 window: window.label().into(),
                 cwd: cwd.clone(),
+                catalog: config.catalog, binding, metadata, delete_request,
                 writer,
                 stop: Mutex::new(StopState {
                     task: Some((stop, task)),
@@ -354,7 +372,7 @@ pub async fn write_codex(
     window: tauri::Window,
     token: String,
     message: Value,
-) -> Result<(), String> {
+) -> Result<Option<String>, String> {
     validate_message(&message)?;
     let windows = host.windows.lock().await;
     if windows.closing.contains(window.label())
@@ -376,9 +394,16 @@ pub async fn write_codex(
     if let Some(cwd) = message["params"].get("cwd") {
         if cwd.as_str() != owner.cwd.to_str() { return Err("Codex cwd must match its project".into()); }
     }
-    if matches!(message["method"].as_str(), Some("thread/start" | "thread/resume" | "thread/list"))
+    if matches!(message["method"].as_str(), Some("thread/start" | "thread/resume"))
         && message["params"]["cwd"].as_str() != owner.cwd.to_str() {
         return Err("Codex opening/discovery requires its exact project".into());
+    }
+    if message["method"] == "thread/list" && message["params"].get("cwd").is_none() {
+        let kinds = message["params"]["sourceKinds"].as_array().ok_or("Unscoped Codex catalog requires all source kinds")?;
+        let expected = ["cli", "vscode", "exec", "appServer", "subAgent", "subAgentReview", "subAgentCompact", "subAgentThreadSpawn", "subAgentOther", "unknown"];
+        if !owner.catalog || kinds.len() != expected.len() || expected.iter().any(|kind| !kinds.iter().any(|value| value.as_str() == Some(kind))) || !message["params"]["archived"].is_boolean() {
+            return Err("Unscoped Codex inventory requires a catalog and complete source/archive filters".into());
+        }
     }
     let (reply, result) = oneshot::channel();
     drop(windows);
@@ -404,6 +429,14 @@ pub async fn stop_codex(
         .await?;
     Ok(String::new())
 }
+#[derive(Clone)]
+struct WireOwner {
+    catalog: bool, token: String, cwd: PathBuf,
+    binding: Arc<Mutex<Option<String>>>,
+    metadata: Arc<Mutex<HashMap<String, CatalogThread>>>,
+    delete_request: Arc<Mutex<Option<Value>>>,
+    gate: Arc<RwLock<deletion::Gate>>,
+}
 async fn supervise(
     mut child: Child,
     stdin: tokio::process::ChildStdin,
@@ -412,6 +445,7 @@ async fn supervise(
     writes: mpsc::Receiver<Write>,
     mut stop: oneshot::Receiver<()>,
     output: Output,
+    owner: WireOwner,
 ) -> Result<(), FailedStop> {
     let group = child.id().expect("newly spawned owned child has a PID");
     let mut records = FramedRead::new(stdout, LinesCodec::new_with_max_length(MAX_RECORD));
@@ -419,7 +453,7 @@ async fn supervise(
     let mut stderr_open = true;
     let mut tail = String::new();
     let reason = {
-        let writer = write_records(stdin, writes);
+        let writer = write_records(stdin, writes, owner.clone());
         tokio::pin!(writer);
         loop {
             tokio::select! {
@@ -429,6 +463,12 @@ async fn supervise(
                     Some(Ok(line)) if line.trim().is_empty() => {},
                     Some(Ok(line)) => match serde_json::from_str::<Value>(&line) {
                         Ok(value) if value.is_object() && value.get("jsonrpc").is_none() => {
+                            let observed = tokio::select! {
+                                _ = &mut stop => break "Codex connection stopped by Nimrod".to_owned(),
+                                reason = &mut writer => break reason,
+                                result = observe_record(&owner, &value) => result,
+                            };
+                            if let Err(error) = observed { break error; }
                             tokio::select! {
                                 _ = &mut stop => break "Codex connection stopped by Nimrod".to_owned(),
                                 result = output.send(Packet::Rpc { value }) => if result.is_err() { break "Codex frontend disconnected".into(); },
@@ -477,15 +517,82 @@ async fn supervise(
         error,
     })
 }
+async fn observe_record(owner: &WireOwner, value: &Value) -> Result<(), String> {
+    if value.get("result").is_some() || value.get("error").is_some() {
+        let mut pending = owner.delete_request.lock().await;
+        if pending.as_ref().is_some_and(|id| value.get("id") == Some(id)) { *pending = None; }
+    }
+    if owner.catalog {
+        if let Some(rows) = value["result"]["data"].as_array() {
+            let mut metadata = owner.metadata.lock().await;
+            for row in rows {
+                if let (Some(id), Some(cwd)) = (row["id"].as_str(), row["cwd"].as_str()) {
+                    if id.is_empty() || id.len() > 128 || cwd.is_empty() || cwd.len() > 32768 { return Err("Invalid Codex catalog identity".into()); }
+                    let lineage = |field: &str| -> Result<Option<String>, String> {
+                        match row.get(field) {
+                            Some(Value::Null) => Ok(None),
+                            Some(Value::String(id)) if !id.is_empty() && id.len() <= 128 => Ok(Some(id.clone())),
+                            _ => Err("Codex catalog omitted stable spawned/fork lineage".into()),
+                        }
+                    };
+                    let parent = lineage("parentThreadId")?;
+                    let fork = lineage("forkedFromId")?;
+                    let ephemeral = row["ephemeral"].as_bool().ok_or("Codex catalog omitted persistence state")?;
+                    metadata.insert(id.into(), CatalogThread { cwd: PathBuf::from(cwd), parent, fork, ephemeral });
+                    if metadata.len() > 100_000 { return Err("Codex catalog identity inventory exceeds 100,000 threads".into()); }
+                }
+            }
+        }
+    } else if let Some(id) = value["result"]["thread"]["id"].as_str() {
+        if id.is_empty() || id.len() > 128 || value["result"]["thread"]["cwd"].as_str() != owner.cwd.to_str() {
+            return Err("Codex returned a conflicting native thread/project".into());
+        }
+        let gate = owner.gate.read().await;
+        let mut bound = owner.binding.lock().await;
+        if bound.as_ref().is_some_and(|current| current != id) || bound.is_none() && gate.blocks(id) {
+            return Err("Codex identity is conflicting or reserved for deletion".into());
+        }
+        *bound = Some(id.into());
+    }
+    Ok(())
+}
 async fn write_records(
     mut stdin: tokio::process::ChildStdin,
     mut writes: mpsc::Receiver<Write>,
+    owner: WireOwner,
 ) -> String {
     while let Some((value, reply)) = writes.recv().await {
+        // Recheck at actual write, not merely when enqueuing. The read lease
+        // excludes scope changes until this bounded pipe write completes.
+        let gate = owner.gate.read().await;
+        let mut binding = owner.binding.lock().await;
+        let validation = gate.check(owner.catalog, binding.as_deref(), &owner.token, &value);
+        if let Err(error) = validation { let _ = reply.send(Ok(Some(error))); continue; }
+        if value["method"] == "thread/delete" {
+            let metadata = owner.metadata.lock().await;
+            if let Err(error) = gate.validate_deletion(&metadata, &owner.cwd) { let _ = reply.send(Ok(Some(error))); continue; }
+        }
+        if !owner.catalog {
+            if let Some(id) = value["params"]["threadId"].as_str() {
+                if binding.as_ref().is_some_and(|current| current != id) { let error = "Codex writer changed its bound thread".to_owned(); let _ = reply.send(Err(error.clone())); return error; }
+                *binding = Some(id.into());
+            }
+        }
+        drop(binding);
+        if owner.catalog && value["method"] == "thread/list" && value["params"]["archived"] == false
+            && value["params"]["sourceKinds"].as_array().is_some_and(|kinds| kinds.len() == 10)
+            && value["params"].get("cwd").is_none() && value["params"].get("cursor").is_none() {
+            owner.metadata.lock().await.clear();
+        }
+        if value["method"] == "thread/delete" {
+            let mut pending = owner.delete_request.lock().await;
+            if pending.is_some() { let error = "A Codex deletion is already in flight".to_owned(); let _ = reply.send(Err(error.clone())); return error; }
+            *pending = Some(value["id"].clone());
+        }
         let mut bytes = serde_json::to_vec(&value).expect("JSON value serializes");
         bytes.push(b'\n');
         let result = match timeout(Duration::from_secs(5), stdin.write_all(&bytes)).await {
-            Ok(Ok(())) => Ok(()),
+            Ok(Ok(())) => Ok(None),
             Ok(Err(error)) => Err(format!(
                 "Codex app-server write failed; delivery is unknown: {error}"
             )),
