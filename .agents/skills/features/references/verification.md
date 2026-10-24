@@ -11,7 +11,9 @@ harnesses. New consumer-path fixtures use the real draft library and dirty-recor
 writer, an unknown fixture integration through the connection coordinator,
 frontend/Rust grammar vectors, Codex startup/failure/retired-token cleanup and
 dependency enforcement. These fixtures are authored **unrun**. The required
-post-merge compile check is separate from behavioral evidence.
+post-merge `mise run check` passed on `main` after narrowing the optional project
+capture in a dedicated fix worktree (TypeScript and Rust compilation only). This
+is not behavioral evidence.
 
 This is the first completed extraction slice, not registration-only integration
 acceptance: remaining Pi/Copilot/ACP shell launch owners and other concrete
