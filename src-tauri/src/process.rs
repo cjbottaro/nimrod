@@ -429,7 +429,7 @@ mod tests {
             command,
             std::env::temp_dir(),
             "test".into(),
-            Arc::new(move |p| tx.send(p).map_err(|e| e.to_string())),
+            Output::new(move |p| tx.send(p).map_err(|e| e.to_string())),
         )
         .await
         .unwrap();

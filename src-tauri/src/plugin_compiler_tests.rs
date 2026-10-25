@@ -216,13 +216,19 @@ async fn app_shutdown_stops_only_its_owned_compiler_and_observes_exit() {
     let task_root = root.clone();
     let task = tokio::spawn(async move { task_compiler.compile(&task_root, "entry.ts").await });
     let marker = root.join("started.pid");
+    let mut published_pid = None;
     for _ in 0..200 {
-        if marker.is_file() {
+        // File creation precedes echo's write; wait for the published PID,
+        // not merely the transient empty marker file.
+        published_pid = fs::read_to_string(&marker)
+            .ok()
+            .and_then(|value| value.trim().parse::<i32>().ok());
+        if published_pid.is_some() {
             break;
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
-    let pid: i32 = fs::read_to_string(marker).unwrap().trim().parse().unwrap();
+    let pid = published_pid.expect("compiler helper did not publish its PID");
     compiler.shutdown().await;
     assert!(task.await.unwrap().unwrap_err().contains("shutdown"));
     assert!(nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), None).is_err());
