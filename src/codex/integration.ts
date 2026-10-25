@@ -8,7 +8,7 @@ import { codexInteraction, codexSessionActions } from './view-policy';
 import { codexIntegrationUi } from './integration-ui';
 import { codexToolPlugin } from './card-plugins';
 import { defineHarness } from '../harness-registry';
-import { configurationActions, explicitSelection, noReferences, savedClose, taggedSavedSessions, unsupportedRestart } from '../harness-defaults';
+import { configurationActions, noProjectActions, explicitSelection, noReferences, savedClose, taggedSavedSessions, unsupportedRestart } from '../harness-defaults';
 import { conversationPort } from '../harness-conversation';
 import type { HarnessProject, HarnessSession, SessionRequest } from '../harness-contract';
 import type { HarnessProjectHost, HarnessSessionHost } from '../harness-host';
@@ -30,7 +30,7 @@ function createCodexProject(projectHost: HarnessProjectHost): HarnessProject {
   };
   return {
     id: 'codex', label: 'Codex',
-    creation,
+    creation, actions: noProjectActions,
     initialization: { blocking: false, ready: () => ready, async run() {
       try { const result = await invoke<string>('stop_codex'); if (!result) throw new Error('Native Codex host did not confirm a new generation');
         if (projectHost.current()) { generation = result; ready = true; source(); projectHost.changed(); } }

@@ -20,6 +20,12 @@ export type HarnessAction = HarnessActionMetadata & (
   | { run(): Promise<void>; configurationSetting?: never }
   | { configurationSetting: string; run?: never }
 );
+/** Project operations have no selected-session dependency and must be explicitly executable. */
+export interface HarnessProjectAction extends Omit<HarnessActionMetadata, 'id'> {
+  id: `harness-${string}`;
+  available(): boolean;
+  run(): Promise<void>;
+}
 export interface SessionPresentation {
   harnessLabel: string; badge: string; badgeTitle: string;
   busy: boolean; working: boolean; pending: boolean; compacting: boolean;
@@ -90,6 +96,7 @@ export interface HarnessProject {
   readonly id: string;
   readonly label: string;
   readonly creation: HarnessCreation;
+  readonly actions: { current(): readonly HarnessProjectAction[] };
   readonly initialization: { readonly blocking: boolean; run(): Promise<void>; ready(): boolean };
   readonly saved: HarnessSavedSessions;
   readonly history: HarnessHistory;
@@ -102,6 +109,9 @@ export interface HarnessRegistration {
   readonly label: string;
   readonly creation: HarnessCreation;
   readonly cards: import('./card-renderers').HarnessCardRenderer;
-  readonly actions: readonly (HarnessActionMetadata & { context: 'project' | 'session' })[];
+  readonly actions: readonly (
+    | (HarnessActionMetadata & { context: 'session' })
+    | (Omit<HarnessActionMetadata, 'id'> & { id: HarnessProjectAction['id']; context: 'project' })
+  )[];
   create(host: HarnessProjectHost): HarnessProject;
 }

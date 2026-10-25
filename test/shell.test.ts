@@ -19,6 +19,7 @@ import { copilotSdkScope } from '../src/copilot/session-lifecycle';
 // Real shell/renderer/controller bundle, mocked native boundary—not native WebKit acceptance.
 interface ShellOptions {
   fixtureHarness?: boolean;
+  fixtureProjectActions?: boolean;
   platform?: string;
   menuError?: string;
   menuGate?: Promise<void>;
@@ -94,7 +95,9 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
           `import { HarnessRegistry, registerHarnessMetadata } from ${JSON.stringify(path.resolve('src/harness-registry.ts'))};`,
           `import { piHarness } from ${JSON.stringify(path.resolve('src/pi/integration.ts'))};`,
           `import { fixtureHarness } from ${JSON.stringify(path.resolve('test/fixtures/fixture-harness.ts'))};`,
-          'const registrations = [piHarness, fixtureHarness]; registerHarnessMetadata(registrations);',
+          `import { noProjectActions } from ${JSON.stringify(path.resolve('src/harness-defaults.ts'))};`,
+          `const fixture = ${options.fixtureProjectActions === false ? '{ ...fixtureHarness, create: host => ({ ...fixtureHarness.create(host), actions: noProjectActions }) }' : 'fixtureHarness'};`,
+          'const registrations = [piHarness, fixture]; registerHarnessMetadata(registrations);',
           'export function createBundledHarnessRegistry(host) { return new HarnessRegistry(registrations, host, "pi"); }',
         ].join('\n') }));
       }
@@ -404,6 +407,51 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   };
 }
 
+test('mounting an explicitly disconnected saved session does not report a connection attempt failure', async () => {
+  const scope = 'codex:"waiting"';
+  const f = await fixture(undefined, { windowWorkspace: '/project', appState: {
+    'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'waiting', name: 'Waiting Codex' }], active: scope },
+  } });
+  try {
+    await f.tick(); assert.equal(f.rows().length, 1);
+    assert.equal(f.calls.some(call => call.command === 'start_codex'), false);
+    assert.doesNotMatch(f.win.document.querySelector('.session-view')!.textContent!, /Session is not connected|Unsupported.*operation/);
+    assert.equal(f.win.document.querySelectorAll('.session-view .notice-item').length, 0);
+  } finally { f.win.close(); }
+});
+
+test('registered project actions execute from palette and shortcuts without an open session', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', fixtureHarness: true,
+    appState: { keybindings: {} } });
+  const search = (text: string) => { const input = f.element<HTMLInputElement>('palette-input'); input.value = text; input.dispatchEvent(new f.win.Event('input')); };
+  try {
+    assert.equal(f.rows().length, 0);
+    f.openPalette(); search('Fixture project action');
+    f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.equal(f.preferences.value.state['fixture-project-runs'], 1);
+    f.preferences.external('{"keybindings":{"harness-fixture-project":["primary+shift+j"]}}'); await f.tick();
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'j', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.equal(f.preferences.value.state['fixture-project-runs'], 2); assert.equal(f.rows().length, 0);
+    assert.equal(f.calls.some(call => ['start_pi', 'start_copilot', 'start_codex'].includes(call.command)), false);
+  } finally { f.win.close(); }
+});
+
+test('registered project metadata without a live handler stays unavailable instead of consuming an enabled no-op', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', fixtureHarness: true, fixtureProjectActions: false });
+  try {
+    f.openPalette(); const input = f.element<HTMLInputElement>('palette-input'); input.value = 'Fixture project action'; input.dispatchEvent(new f.win.Event('input'));
+    assert.doesNotMatch(f.element('palette-list').textContent!, /Fixture project action/);
+    f.element<HTMLDialogElement>('command-palette').close('cancel'); await f.tick();
+    f.preferences.external('{"keybindings":{"harness-fixture-project":["primary+shift+j"]}}'); await f.tick();
+    const event = new f.win.KeyboardEvent('keydown', { key: 'j', metaKey: true, shiftKey: true, bubbles: true, cancelable: true });
+    f.win.dispatchEvent(event); await f.tick();
+    assert.equal(event.defaultPrevented, true, 'configured shortcuts remain consumed while unavailable');
+    assert.equal(f.preferences.value.state['fixture-project-runs'], undefined); assert.equal(f.rows().length, 0);
+  } finally { f.win.close(); }
+});
+
 test('a registration unknown to the shell creates, sends, displays fallback questions, closes, resumes and deletes through unchanged consumers', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project', fixtureHarness: true });
   const enter = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
@@ -411,6 +459,7 @@ test('a registration unknown to the shell creates, sends, displays fallback ques
   try {
     f.openPalette(); search('New fixture session'); enter(); await f.tick(); await f.tick();
     assert.equal(f.rows().length, 1); assert.equal(f.element('mode-badge').textContent, 'Fixture');
+    assert.doesNotMatch(f.win.document.querySelector('.session-view:not([hidden])')!.textContent!, /Session is not connected|Unsupported fixture operation/);
     const layout = f.preferences.value.state['nimrod.tabs.v1:/project'] as { tabs: { kind: string; sessionId: string }[] };
     assert.equal(layout.tabs[0].kind, 'fixture-harness');
     const sessionId = layout.tabs[0].sessionId, scope = `fixture-harness:${JSON.stringify(sessionId)}`;

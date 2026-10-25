@@ -8,7 +8,7 @@ import { copilotTransport } from './native';
 import { copilotIntegrationUi } from './integration-ui';
 import { bundledCopilotPlugin } from './card-plugins';
 import { defineHarness } from '../harness-registry';
-import { configurationActions, noReferences, ordinarySelection, savedClose, taggedSavedSessions, unsupportedRestart } from '../harness-defaults';
+import { configurationActions, noProjectActions, noReferences, ordinarySelection, savedClose, taggedSavedSessions, unsupportedRestart } from '../harness-defaults';
 import { conversationPort } from '../harness-conversation';
 import { ownedProcessStop } from '../session-lifecycle';
 import type { HarnessProject, HarnessSession, SessionRequest } from '../harness-contract';
@@ -30,7 +30,7 @@ function createCopilotProject(projectHost: HarnessProjectHost): HarnessProject {
   };
   return {
     id: 'copilot-sdk', label: 'Copilot',
-    creation,
+    creation, actions: noProjectActions,
     initialization: { blocking: false, ready: () => ready, async run() {
       try {
         const result = await invoke<string>('stop_copilot');

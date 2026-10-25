@@ -60,7 +60,7 @@ test('session action contributions expose only the owning integration operations
   assert.deepEqual(acpSessionActions(undefined), []);
 });
 
-function fixture(interaction: ConversationViewHost['interaction'] = acpInteraction('Fixture', () => undefined)) {
+function fixture(interaction: ConversationViewHost['interaction'] = acpInteraction('Fixture', () => undefined), options: Pick<ConversationViewHost, 'cardSource' | 'cardRenderer'> = {}) {
   const dom = new JSDOM(webviewHtml(), { runScripts: 'outside-only', pretendToBeVisual: true });
   const win = dom.window;
   const frames = new Map<number, FrameRequestCallback>(); let frameId = 0;
@@ -69,7 +69,7 @@ function fixture(interaction: ConversationViewHost['interaction'] = acpInteracti
   let receive: (message: ConversationViewMessage) => void = () => {};
   const sent: Record<string, unknown>[] = [];
   const host: ConversationViewHost = {
-    interaction,
+    ...options, interaction,
     messageInput: { capabilities: () => ({}), submit: async message => { sent.push({ ...message, type: 'prompt' }); } },
     getState: () => undefined, setState() {}, postMessage: message => sent.push(message),
     onMessage: listener => { receive = listener; },
@@ -82,6 +82,37 @@ function fixture(interaction: ConversationViewHost['interaction'] = acpInteracti
   const view = (win as unknown as { testView: ConversationView }).testView;
   return { dom, win, sent, snapshot, receive, view, flush };
 }
+
+for (const embedded of [false, true]) for (const dirty of [false, true]) test(`owning card source survives retained ${embedded ? 'embedded' : 'standalone'} tool updates (${dirty ? 'dirty' : 'full'})`, () => {
+  let mounts = 0, disposals = 0;
+  const sources: (string | undefined)[] = [];
+  const renderer: import('../src/pi/card-renderer').CardRenderer<import('../src/card-plugin-api').ToolCardData> = {
+    id: 'fixture.owned', supports(data) { sources.push(data.source?.backend); return data.source?.backend === 'fixture-harness'; },
+    mount() { mounts++; return { update: data => ({ title: 'Rich fixture', sections: [{ key: 'out', label: 'Output', text: data.executionOutput || '' }] }), dispose() { disposals++; } }; },
+  };
+  const f = fixture(undefined, { cardSource: { backend: 'fixture-harness' }, cardRenderer: () => renderer });
+  let revision = 0;
+  const publish = (output: string) => {
+    const row = embedded ? { key: 'row', role: 'assistant', content: [{ type: 'toolCall', id: 'owned-tool', name: 'sample', executionOutput: output, toolStatus: 'running' as const }] }
+      : { key: 'row', role: 'tool', toolCallId: 'owned-tool', toolName: 'sample', output, toolStatus: 'running' as const };
+    const incremental = dirty && revision > 0;
+    f.receive({ type: 'snapshot', state: { get messages() { assert.equal(incremental, false, 'dirty tool updates must not materialize history'); return [row]; } },
+      transcript: { base: revision, revision: ++revision, ...(incremental ? { rows: [row] } : {}) } });
+    f.flush();
+  };
+  try {
+    publish('first'); const card = f.win.document.querySelector<HTMLDetailsElement>('.tool-card')!; card.open = true;
+    const prompt = f.win.document.querySelector<HTMLTextAreaElement>('#prompt')!; prompt.focus();
+    publish('first second');
+    assert.equal(f.win.document.querySelector('.tool-card'), card); assert.equal(card.open, true);
+    assert.equal(f.win.document.activeElement, prompt); assert.equal(disposals, 0);
+    f.view.setActive(false); publish('first second third'); f.view.setActive(true); f.flush();
+    assert.equal(f.win.document.querySelector('.tool-card'), card); assert.equal(mounts, 1); assert.equal(disposals, 0);
+    assert.ok(sources.length >= 3); assert.ok(sources.every(source => source === 'fixture-harness'));
+    assert.match(card.textContent!, /Rich fixture/); assert.match(card.textContent!, /first second third/);
+    assert.equal(f.sent.some(message => message.type === 'renderError'), false);
+  } finally { f.view.dispose(); f.dom.window.close(); }
+});
 
 test('all integration policies use shared modifier hints without changing submission or draft state', () => {
   for (const interaction of [piInteraction, copilotInteraction(() => undefined), acpInteraction('Fixture', () => undefined)]) {

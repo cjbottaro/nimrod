@@ -2,7 +2,7 @@ import { savedDraftScope } from './draft-scope';
 import { registerCardRenderer } from './card-renderers';
 import { registerHarnessAction } from './keybindings';
 import type { HarnessProjectHost, HarnessSessionHost } from './harness-host';
-import type { HarnessProject, HarnessRegistration, HarnessSession, SessionRequest } from './harness-contract';
+import type { HarnessProject, HarnessProjectAction, HarnessRegistration, HarnessSession, SessionRequest } from './harness-contract';
 import type { SavedSessionIdentity } from './session-lifecycle';
 
 /** A registration's factory return is contextually checked all the way to every required port. */
@@ -45,6 +45,16 @@ export class HarnessRegistry {
     const project = this.projects.find(project => project.id === id);
     if (!project) throw new Error(`Harness is not registered: ${id}`);
     return project;
+  }
+  projectActions(): readonly HarnessProjectAction[] {
+    const ids = new Set(this.projects.flatMap(project => project.creation.action ? [project.creation.action.id] : []));
+    const actions = this.projects.flatMap(project => project.actions.current());
+    for (const action of actions) {
+      if (ids.has(action.id)) throw new Error(`Ambiguous harness project action: ${action.id}`);
+      ids.add(action.id);
+      registerHarnessAction({ ...action, context: 'project', defaults: [] });
+    }
+    return actions;
   }
   forReference(reference: SavedSessionIdentity): HarnessProject {
     const matches = this.projects.filter(project => project.saved.accepts(reference));

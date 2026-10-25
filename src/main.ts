@@ -668,6 +668,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     { id: 'resume', label: 'Resume session…', detail: 'Open a saved conversation in this project', next: true, run: () => palette.sessions() },
     { id: 'delete-sessions', label: 'Delete sessions…', detail: 'Repeatedly review and delete supported saved sessions in this project', next: true, run: () => palette.deleteSessions() },
     ...harnesses.projects.flatMap(project => project.creation.action && project.initialization.ready() ? [{ ...project.creation.action, run: () => newHarnessSession(project) }] : []),
+    ...harnesses.projectActions().filter(action => action.available()).map(action => ({ ...action, run: () => runProjectAction(action.id) })),
     ...(harnesses.get(harnesses.defaultId).creation.named ? [{ id: 'new-named', label: 'New named session…', detail: 'Choose a name before starting', next: true, run: newNamedSession }] : []),
     ...(tabs.length ? [{ id: 'switch-session', label: 'Switch session…', detail: 'All open sessions, regardless of sidebar view', next: true, run: () => palette.openSessions() }] : []),
     ...(active ? sessionCommands(active) : []),
@@ -897,7 +898,9 @@ function createTab(request: SessionRequest, project = harnesses.get(harnesses.de
       if (!unloading && tabs.includes(tab) && tab.integration.conversation.state && !tab.ended && !tab.closing && !tab.restarting && !tab.deleting) touchTab(tab);
     },
     postMessage: message => {
-      if (message.type === 'deletionState') return;
+      // Mount readiness is local view bookkeeping, not a harness operation.
+      // The shell supplies its initial snapshot before any controller exists.
+      if (message.type === 'ready' || message.type === 'deletionState') return;
       if (tab.deleting) return;
       if (message.type === 'popOutCode') {
         if (typeof message.text === 'string' && typeof message.language === 'string') {
@@ -1016,6 +1019,12 @@ async function pickConfigurationCancellation(tab: Tab): Promise<void> {
     if (key && tab.cancelPreference === request.cancel && sessionConfiguration(tab) === configuration) cancelConfiguration(tab, key);
   } finally { request.finish(); if (tab.cancelPreference === request.cancel) tab.cancelPreference = undefined; }
 }
+async function runProjectAction(id: `harness-${string}`): Promise<void> {
+  if (!ready || unloading || !workspace || settings.isOpen) return;
+  const action = harnesses.projectActions().find(action => action.id === id);
+  if (!action?.available()) throw new Error('This project action is no longer available');
+  await action.run();
+}
 function sessionConfiguration(tab: Tab) { return tab.integration.configuration.current(); }
 function sessionActions(tab: Tab): readonly SessionAction[] {
   return availableSessionActions(tab.integration, () => pickConfigurationCancellation(tab));
@@ -1079,7 +1088,11 @@ async function openSavedReference(reference: SavedSessionIdentity, title = 'Sess
     activate(tab);
   };
   project.history.associate();
-  const open = existing(); if (open) { selectExisting(open); return; }
+  const open = existing();
+  if (open && (!open.lifecycle.identity || savedSessionKey(open.lifecycle.identity) !== savedSessionKey(reference)))
+    throw new Error('This session is open with a different saved session identity. Close it and refresh history before resuming it.');
+  // Explicit Resume must cross the integration's validation/recovery boundary
+  // even when its mounted row can be reused (e.g. Pi quarantine recovery).
   const prepared = await project.saved.prepare(reference, { title, lastUsed: timestamp }, false);
   if (!ready || unloading || settings.isOpen) return;
   const concurrent = existing(); if (concurrent) { selectExisting(concurrent); return; }
@@ -1270,6 +1283,11 @@ const keybindingDispatch = installKeybindingDispatch(window, {
     if (!ready) return false;
     const creation = harnesses.projects.find(project => project.creation.action?.id === id);
     if (creation) return creation.initialization.ready();
+    const projectAction = harnesses.projectActions().find(action => action.id === id);
+    if (projectAction) return projectAction.available();
+    // Static integration metadata is bindable before capabilities are ready,
+    // but an absent live contribution is unavailable, not an enabled no-op.
+    if (id.startsWith('harness-') && actionDefinition(id).context === 'project') return false;
     if (id === 'new-named') return harnesses.get(harnesses.defaultId).creation.named;
     if (id === 'temporary') return harnesses.get(harnesses.defaultId).creation.modes.includes('temporary');
     if (id === 'capture-performance') return preferences.performanceEnabled() && !settingsSurface.capturingPerformance;
@@ -1280,6 +1298,8 @@ const keybindingDispatch = installKeybindingDispatch(window, {
     if (isApplicationAction(window, id)) return runApplication(id);
     const creation = harnesses.projects.find(project => project.creation.action?.id === id);
     if (creation) return newHarnessSession(creation);
+    const projectAction = harnesses.projectActions().find(action => action.id === id);
+    if (projectAction) return runProjectAction(projectAction.id);
     if (presented && sessionActions(presented).some(action => action.id === id)) return runSessionAction(presented, id);
     switch (id) {
       case 'open-recent-project': return palette.projects();

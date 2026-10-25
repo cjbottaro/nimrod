@@ -7,7 +7,7 @@ import { renderPermissionDetails } from './tool-state';
 import type { AcpPermissionRequest } from './client';
 import { acpToolPlugin } from './card-plugins';
 import { defineHarness } from '../harness-registry';
-import { configurationActions, noHistory, noDeletion, noReferences, noSavedSessions, ordinarySelection, unsupportedRestart } from '../harness-defaults';
+import { configurationActions, noProjectActions, noHistory, noDeletion, noReferences, noSavedSessions, ordinarySelection, unsupportedRestart } from '../harness-defaults';
 import { conversationPort } from '../harness-conversation';
 import { ownedProcessStop } from '../session-lifecycle';
 import type { HarnessProjectHost, HarnessSessionHost } from '../harness-host';
@@ -19,7 +19,7 @@ export function createAcpHarness(profile: AcpProfile) {
   return defineHarness({ creation, cards: () => acpToolPlugin, id: 'acp', label: profile.name, actions: [{ id: 'harness-acp-options', label: 'ACP session options…', detail: 'Configuration selectors advertised by this ACP agent', context: 'session' }], create(project: HarnessProjectHost) {
     let ready = false;
     return { id: 'acp', label: profile.name,
-      creation,
+      creation, actions: noProjectActions,
       initialization: { blocking: false, ready: () => ready, async run() { try { await invoke('stop_acp'); if (project.current()) { ready = true; project.changed(); } }
         catch (error) { project.notice({ id: 'acp-startup', operation: 'Clean up agents', message: String(error) }); } } },
       saved: noSavedSessions('ACP Resume is not exposed; its drafts are memory-only'),

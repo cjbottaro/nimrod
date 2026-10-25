@@ -100,7 +100,7 @@ adding product creation/options UI. `src/session-backend.ts` and all shell
 identity, protocol ordering, title/activity projection, permission/question UI,
 history and deletion effects live in their integration modules. Pi retains its
 ordered startup helper and native file/tree semantics; SDK and app-server
-handshakes remain separate.
+handshakes remain separate. Explicit Resume always crosses saved preparation/recovery before an existing row is activated; ordinary selection never implicitly recovers quarantined history. View `ready` is a local mount handshake consumed by the shell, not a required harness operation or a failed connection attempt.
 
 `HarnessRegistration` (`src/harness-contract.ts`) is the required entry point.
 `defineHarness` contextually checks the registration/project/session factory
@@ -123,13 +123,15 @@ native-event translation is required.
 
 Every slot is mandatory, including unsupported feature slots.
 `src/harness-defaults.ts` supplies explicit absent configuration/history/deletion,
-unsupported saved history/restart, no retained interactions/references, safe
+unsupported saved history/restart, no project actions, no retained interactions/references, safe
 selection/close policies and a generic idle text interaction. Core connect,
 submission, protocol response and owned-stop implementations are not replaced
 with successful no-ops. `displayUnsupportedInteraction` displays literal
 question/request details and returns an explicit unsupported outcome; it does
 not answer, approve or settle a native request. The concrete adapter retains
 pending/error/cancellation semantics. Existing richer Codex/Copilot UI is retained.
+
+Project ports include required `actions.current()` with executable, availability-checked `HarnessProjectAction` contributions (or explicit `noProjectActions`). Static action metadata only registers discoverability/shortcuts; it never substitutes for a live runner. Project actions have a shared palette/shortcut execution path independent of selected-session membership and revalidate availability at invocation.
 
 Project ports own runtime initialization, saved-reference acceptance/keying and
 preparation, history association/discovery, deletion-source registration and
@@ -151,7 +153,7 @@ identity/key/draft-scope projections fail explicitly.
 
 Cards are another registration contribution (`genericCards` is the default).
 Shared catalog/tool-card code dispatches by registered source, not a harness
-switch. Unknown sources get literal/raw recovery (including native details), never a Pi-specialized card. The mounted view supplies its owning registration as the default source when a generic item omits one, retaining explicit native sources and immutable tool inputs.
+switch. Unknown sources get literal/raw recovery (including native details), never a Pi-specialized card. The mounted view supplies its owning registration as the default source when a generic item omits one, retaining explicit native sources and immutable tool inputs. The same projection applies at initial mount and both retained standalone/embedded tool update paths, including dirty updates and hidden-session catch-up.
 Standalone presentation fixtures install `src/bundled-card-renderers.ts`;
 the legacy Pi view entry installs only its own renderer. Card plugins remain
 presentation-only and source targets are structurally validated identifiers.
@@ -178,8 +180,7 @@ action/deletion consumers and prototype-based implementations. The mounted
 shell fixture changes only the composition import to register that fixture,
 then creates, sends, displays a fallback question, closes, resumes and deletes
 through unchanged application logic. Source/dependency, draft-scope and concrete
-connection fixtures remain in place. These are authored evidence, not executed
-acceptance; [verification](verification.md#registered-harness-application-contract)
+connection fixtures remain in place. Core registration and review-regression fixtures have executed, while whole-suite and native acceptance remain incomplete; [verification](verification.md#registered-harness-application-contract)
 owns current execution status. Compilation proves structural completeness and
 dependency discipline, not wire compatibility or native behavior.
 
@@ -250,6 +251,6 @@ Accept an extraction when the consumer no longer interprets backend-specific sta
 
 ## Evidence and documentation
 
-`test/session-lifecycle.test.ts` covers shared persistence/connectivity, concrete identities, token-scoped stop/retry, and ACP ownership without Pi fields. `test/pi-session-startup.test.ts` adds packet-order/bind-before-replay, live-generation filtering, identity rejection and initialization-failure fixtures. **These additions have not been run.** Existing shell/Pi/ACP fixtures remain the regression base; no native/platform acceptance is claimed.
+`test/session-lifecycle.test.ts` covers shared persistence/connectivity, concrete identities, token-scoped stop/retry, and ACP ownership without Pi fields. `test/pi-session-startup.test.ts` adds packet-order/bind-before-replay, live-generation filtering, identity rejection and initialization-failure fixtures. These fixtures were executed during registered-harness validation. Existing shell/Pi/ACP fixtures remain the regression base; [verification](verification.md#registered-harness-application-contract) owns the executed results and remaining baseline failures. No native/platform acceptance is claimed.
 
-The lifecycle extraction changed internal organization only. The subsequent [session-history implementation](session-history.md) adds Copilot Resume behavior and updates its user guides/changelog; its new fixtures have not been run. Validation still requires explicit authorization; use `mise run test`, and include offline browser tests when changing scrolling behavior.
+The lifecycle extraction changed internal organization only. The subsequent [session-history implementation](session-history.md) adds Copilot Resume behavior and updates its user guides/changelog; its current execution status is recorded in verification. Validation still requires explicit authorization; use `mise run test`, and include offline browser tests when changing scrolling behavior.

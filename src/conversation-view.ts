@@ -341,8 +341,11 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     };
   }
 
+  function owningToolSource(block: ContentBlock): ContentBlock {
+    return !block.source && host.cardSource ? { ...block, source: host.cardSource } : block;
+  }
   function renderToolCard(block: ContentBlock, detailKey: string, recorded = false): HTMLDetailsElement {
-    if (!block.source && host.cardSource) block = { ...block, source: host.cardSource };
+    block = owningToolSource(block);
     // Identity belongs to the invocation, not its current message/placement.
     const key = safeText(block.id) ? `tool:${safeText(block.id)}` : detailKey;
     let details = toolCards.get(key);
@@ -497,7 +500,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       if (!tool) return false;
       const label = transcriptRolePresentation("tool", safeText(message.toolName)).ariaLabel!;
       node.setAttribute("aria-label", message.originLabel ? `${message.originLabel} · ${label}` : label);
-      const block = toolMessageBlock(message);
+      const block = owningToolSource(toolMessageBlock(message));
       updateToolCard(document, tool, block);
       tool.classList.remove('codemode-recorded-call');
       applyToolDetailsLifecycle(tool, block);
@@ -519,6 +522,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     const existing = new Map(blockChildren().map((child) => [child.dataset.blockKey!, child]));
     let visibleIndex = 0;
     message.content.forEach((block, index) => {
+      if (safeText(block.type) === 'toolCall') block = owningToolSource(block);
       const key = contentBlockKey(block, index);
       const previous = existing.get(key);
       const blockNode = safeText(block.type) === "toolCall" && previous instanceof HTMLDetailsElement

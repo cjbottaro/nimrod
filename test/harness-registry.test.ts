@@ -74,6 +74,17 @@ test('registration alone connects an unknown harness through real input, draft, 
   assert.deepEqual(errors, []); f.dom.window.close(); restored.dom.window.close();
 });
 
+test('project registrations expose executable actions before any session exists and preserve live availability', async () => {
+  const f = harnessHostFixture(), registry = new HarnessRegistry([fixtureHarness], f.project, fixtureHarness.id);
+  assert.equal(registry.projectActions()[0].available(), false);
+  await registry.initialize();
+  const action = registry.projectActions().find(action => action.id === 'harness-fixture-project')!;
+  assert.equal(action.available(), true); assert.equal(actionContextAvailable(action.id, { project: true }), true);
+  await action.run();
+  assert.equal(f.project.store.read('fixture-project-runs'), 1); assert.equal(f.publications.length, 0);
+  f.retire(); assert.equal(action.available(), false); registry.dispose(); f.dom.window.close();
+});
+
 test('generic card defaults retain literal native metadata without trusting mutable caller identity', () => {
   const native = { question: 'Original' }, renderer = genericCards({});
   assert.ok(!('apiVersion' in renderer));
