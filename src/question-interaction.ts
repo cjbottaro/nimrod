@@ -18,6 +18,8 @@ export interface QuestionPrompt {
   choices: readonly { label: string; detail?: string }[];
   freeform: boolean;
   maxAnswerLength?: number;
+  /** Concrete adapter opt-in: settle locally without supplying an answer. Escape still only dismisses. */
+  allowIgnore?: boolean;
 }
 interface Pending {
   maxAnswerLength?: number;
@@ -25,6 +27,7 @@ interface Pending {
   preview: HTMLElement;
   choices: readonly { label: string; detail?: string }[];
   freeform: boolean;
+  allowIgnore?: boolean;
   signal: AbortSignal;
   finish(value?: QuestionAnswer): void;
 }
@@ -50,7 +53,7 @@ export class QuestionInteraction {
       if (request.header) { const heading = this.ui.document.createElement('h3'); heading.textContent = request.header; preview.prepend(heading); }
       const entry: Pending = {
         question, preview, choices: request.choices,
-        freeform: request.freeform, maxAnswerLength: request.maxAnswerLength, signal,
+        freeform: request.freeform, maxAnswerLength: request.maxAnswerLength, allowIgnore: request.allowIgnore, signal,
         finish: value => {
           if (settled) return;
           settled = true; signal.removeEventListener('abort', abort);
@@ -98,6 +101,7 @@ export class QuestionInteraction {
       ...entry.choices.map((choice, index) => ({ id: String(index), label: choice.label, ...(choice.detail === undefined ? {} : { detail: choice.detail }),
         run: () => { if (this.canChoose(entry)) entry.finish({ answer: choice.label, wasFreeform: false }); } })),
       ...(entry.freeform ? [{ id: 'freeform', label: 'Enter your own answer…', run: () => this.enterAnswer(entry) }] : []),
+      ...(entry.allowIgnore ? [{ id: 'ignore', label: 'Ignore question', run: () => { if (this.canChoose(entry)) entry.finish(); } }] : []),
     ] }, entry.preview);
   }
   private async enterAnswer(entry: Pending): Promise<void> {

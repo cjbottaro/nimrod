@@ -1,3 +1,6 @@
+import { CodexAsyncQuestions, codexAsyncDisplay, codexAsyncReplies, type CodexAsyncQuestion } from './async-questions';
+import type { QuestionAnswer } from '../question-interaction';
+import type { OutgoingMessage } from '../session-message-input';
 import { CodexClient, type CodexClientHooks, type CodexWriter } from './client';
 import { item, nonempty, record, type CodexEvent, type CodexItem } from './protocol';
 import { isRecord, RpcConnectionError, type RpcRecord } from '../json-rpc-connection';
@@ -14,6 +17,7 @@ export interface CodexSessionUi {
   identified(id: string): void;
   approval: NonNullable<CodexClientHooks['approval']>;
   question?: CodexClientHooks['question'];
+  asyncQuestion?(question: CodexAsyncQuestion, signal: AbortSignal): Promise<QuestionAnswer | undefined>;
   interactionFailure?: CodexClientHooks['interactionFailure'];
   disconnected(message: string): void;
   completed(failed: boolean, response?: string): void;
@@ -42,7 +46,14 @@ export class CodexSession {
   private live = new Set<string>();
   private aliases = new Map<string, string>();
   private readonly connectionId = crypto.randomUUID();
+  private readonly asyncQuestions: CodexAsyncQuestions;
+  private readonly deferredAsyncItems = new Map<string, CodexItem>();
   constructor(writer: CodexWriter, private ui: CodexSessionUi) {
+    this.asyncQuestions = new CodexAsyncQuestions({
+      request: (question, signal) => ui.asyncQuestion ? ui.asyncQuestion(question, signal) : Promise.resolve(undefined),
+      send: text => this.submitMessage({ id: `codex-answer:${crypto.randomUUID()}`, text, mode: 'normal' }, true),
+      error: message => ui.notice(message),
+    });
     this.client = new CodexClient({ write: packet => { this.capture(typeof packet.method === 'string' ? 'request' : 'response', packet); return writer.write(packet); } }, {
       identified: (thread, settings) => {
         ui.identified(thread.id); this.applySettings(settings);
@@ -56,7 +67,7 @@ export class CodexSession {
       },
       disconnected: error => {
         this.capture('connection.disconnected', { error: error.message });
-        this.ended = true; this.configuration?.dispose(error.message);
+        this.ended = true; this.asyncQuestions.clear(); this.deferredAsyncItems.clear(); this.configuration?.dispose(error.message);
         this.finishRows(); this.state = { ...this.state, busy: false, sessionUnavailable: true, status: 'Disconnected' };
         this.publish(); ui.disconnected(error.message);
       },
@@ -102,31 +113,35 @@ export class CodexSession {
       return !this.ended && !this.hydrating && Array.isArray(model?.inputModalities) && model.inputModalities.includes('image')
         ? { images: DEFAULT_IMAGE_INPUT } : { imageUnavailableReason: 'The connected Codex model has not advertised image input.' };
     },
-    submit: async message => {
-      const invalid = this.validatePrompt(message.text);
-      let images;
-      try { images = validateMessageImages(message.images ?? [], this.messageInput.capabilities()); }
-      catch (error) { this.receipt(message.id, 'rejected', String(error)); return; }
-      if (invalid || !message.text.trim() && !images.length || message.mode === 'followUp' || this.state.busy && images.length) {
-        this.receipt(message.id, 'rejected', invalid || 'Codex supports text steering, not a follow-up queue or image steering.'); return;
-      }
-      const key = `codex:local:${message.id}`; this.aliases.set(message.id, key);
-      this.ui.publish({ type: 'submissionMessage', id: message.id, key });
-      this.replace({ key, role: 'user', content: images.length ? [...(message.text ? [{ type: 'text', text: message.text }] : []), ...images] : message.text });
-      this.submitting++; this.state = { ...this.state, busy: true, status: 'Working…' }; this.publish([]);
-      try {
-        if (this.client.phase === 'working') await this.client.steer(message.text, message.id);
-        else await this.client.startTurn(message.text, message.id, images);
-        this.receipt(message.id, 'accepted');
-      } catch (error) { this.receipt(message.id, error instanceof RpcConnectionError ? 'unknown' : 'rejected', String(error)); }
-      finally {
-        this.submitting--;
-        if (!this.ended) { this.state = { ...this.state, busy: this.client.phase === 'working', status: this.client.phase === 'working' ? 'Working…' : this.state.status === 'Stopped' ? 'Stopped' : 'Idle' }; this.publish([]); }
-      }
-    },
+    submit: message => this.submitMessage(message),
   };
+  private async submitMessage(message: OutgoingMessage, questionAnswer = false): Promise<void> {
+    const invalid = this.validatePrompt(message.text);
+    let images;
+    try { images = validateMessageImages(message.images ?? [], this.messageInput.capabilities()); }
+    catch (error) { this.receipt(message.id, 'rejected', String(error)); return; }
+    if (invalid || !message.text.trim() && !images.length || message.mode === 'followUp' || this.state.busy && images.length) {
+      this.receipt(message.id, 'rejected', invalid || 'Codex supports text steering, not a follow-up queue or image steering.'); return;
+    }
+    // Ordinary follow-ups supersede optional questions; answering one preserves the others.
+    if (!questionAnswer) { this.asyncQuestions.clear(); this.deferredAsyncItems.clear(); }
+    const key = `codex:local:${message.id}`; this.aliases.set(message.id, key);
+    this.ui.publish({ type: 'submissionMessage', id: message.id, key });
+    const displayText = codexAsyncDisplay(message.text);
+    this.replace({ key, role: 'user', content: images.length ? [...(displayText ? [{ type: 'text', text: displayText }] : []), ...images] : displayText });
+    this.submitting++; this.state = { ...this.state, busy: true, status: 'Working…' }; this.publish([]);
+    try {
+      if (this.client.phase === 'working') await this.client.steer(message.text, message.id);
+      else await this.client.startTurn(message.text, message.id, images);
+      this.receipt(message.id, 'accepted');
+    } catch (error) { this.receipt(message.id, error instanceof RpcConnectionError ? 'unknown' : 'rejected', String(error)); }
+    finally {
+      this.submitting--;
+      if (!this.ended) { this.state = { ...this.state, busy: this.client.phase === 'working', status: this.client.phase === 'working' ? 'Working…' : this.state.status === 'Stopped' ? 'Stopped' : 'Idle' }; this.publish([]); }
+    }
+  }
   async handle(message: RpcRecord): Promise<void> {
-    if (message.type === 'stop') await this.client.interrupt();
+    if (message.type === 'stop') { this.asyncQuestions.clear(); this.deferredAsyncItems.clear(); await this.client.interrupt(); }
     else if (message.type === 'renderError') this.ui.notice(string(message.error));
   }
   receive(packet: unknown): void { this.capture('receive', packet); this.client.receive(packet); }
@@ -174,6 +189,8 @@ export class CodexSession {
     // Catalog failure must not make an otherwise valid conversation unavailable.
     try { await this.refreshModels(); } catch (error) { if (!this.ended) this.ui.notice(`Codex model catalog unavailable: ${String(error)}`); }
     if (this.ended) throw new Error('Codex initialization was disconnected');
+    for (const native of this.deferredAsyncItems.values()) this.asyncQuestions.offer(native);
+    this.deferredAsyncItems.clear();
     this.publish();
   }
   private async refreshModels(): Promise<void> {
@@ -200,7 +217,15 @@ export class CodexSession {
   private event({ method, params }: CodexEvent): void {
     if (method === 'item/started' || method === 'item/completed') {
       const native = item(params.item); const turnId = nonempty(params.turnId, 'item turn ID');
-      this.replace(this.project(native, turnId, method === 'item/completed')); return;
+      this.replace(this.project(native, turnId, method === 'item/completed'));
+      if (method === 'item/completed') this.offerAsyncQuestions(native);
+      if (native.type === 'userMessage' && Array.isArray(native.content)) for (const input of native.content) {
+        if (isRecord(input) && input.type === 'text' && typeof input.text === 'string') {
+          if (codexAsyncReplies(input.text)) this.asyncQuestions.reconcile(input.text);
+          else { this.asyncQuestions.clear(); this.deferredAsyncItems.clear(); }
+        }
+      }
+      return;
     }
     if (method.startsWith('item/') && typeof params.delta === 'string' && typeof params.itemId === 'string') {
       const key = `codex:${nonempty(params.turnId, 'delta turn ID')}:${params.itemId}`;
@@ -228,7 +253,11 @@ export class CodexSession {
     else if (method === 'turn/completed') {
       const turn = record(params.turn, 'completed turn');
       // Terminal item snapshots settle tool/reasoning lifecycle without replacing newer content mid-stream.
-      if (Array.isArray(turn.items)) for (const entry of turn.items) this.replace(this.project(item(entry), string(turn.id), true));
+      if (Array.isArray(turn.items)) for (const entry of turn.items) {
+        const native = item(entry); this.replace(this.project(native, string(turn.id), true));
+        if (turn.status === 'completed') this.offerAsyncQuestions(native);
+      }
+      if (turn.status !== 'completed') { this.asyncQuestions.clear(); this.deferredAsyncItems.clear(); }
       this.finishRows(turn.status === 'interrupted' || turn.status === 'failed');
       if (turn.error) this.replace({ key: `codex:error:${string(turn.id)}`, role: 'error', content: [{ type: 'raw', text: json(turn.error) }], isError: true });
       this.state = { ...this.state, busy: false, status: turn.status === 'interrupted' ? 'Stopped' : 'Idle' };
@@ -239,6 +268,12 @@ export class CodexSession {
     }
     this.publish([]);
   }
+  private offerAsyncQuestions(native: CodexItem): void {
+    if (!this.ui.asyncQuestion || native.type !== 'agentMessage' || native.delivery !== 'async' || native.questions == null) return;
+    // Only live events reach this path. Do not prompt while Resume is still hydrating.
+    if (this.hydrating) this.deferredAsyncItems.set(native.id, native);
+    else this.asyncQuestions.offer(native);
+  }
   private project(value: CodexItem, turnId: string, completed: boolean, history = false): DisplayMessage {
     const identity = `codex:${turnId}:${value.id}`;
     const key = value.type === 'userMessage' && typeof value.clientId === 'string' ? this.aliases.get(value.clientId) || identity : identity;
@@ -248,7 +283,10 @@ export class CodexSession {
     this.native.set(identity, value);
     const base = { key, streaming: !completed };
     if (value.type === 'userMessage') {
-      const content = Array.isArray(value.content) ? value.content.filter(isRecord).map(input => input.type === 'text' ? { type: 'text', text: string(input.text) } : input.type === 'image' && typeof input.url === 'string' && /^data:image\/(png|jpeg|webp|gif);base64,/.test(input.url) ? { type: 'image', mimeType: input.url.slice(5, input.url.indexOf(';')), data: input.url.slice(input.url.indexOf(',') + 1) } : { type: 'raw', text: json(input) }) : [];
+      if (history && Array.isArray(value.content)) for (const input of value.content) {
+        if (isRecord(input) && input.type === 'text' && typeof input.text === 'string') this.asyncQuestions.reconcile(input.text);
+      }
+      const content = Array.isArray(value.content) ? value.content.filter(isRecord).map(input => input.type === 'text' ? { type: 'text', text: codexAsyncDisplay(string(input.text)) } : input.type === 'image' && typeof input.url === 'string' && /^data:image\/(png|jpeg|webp|gif);base64,/.test(input.url) ? { type: 'image', mimeType: input.url.slice(5, input.url.indexOf(';')), data: input.url.slice(input.url.indexOf(',') + 1) } : { type: 'raw', text: json(input) }) : [];
       return { ...base, role: 'user', content };
     }
     if (value.type === 'agentMessage' || value.type === 'plan') return { ...base, role: 'assistant', content: [{ type: 'text', text: string(value.text) }] };

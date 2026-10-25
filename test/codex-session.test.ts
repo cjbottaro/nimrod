@@ -45,6 +45,73 @@ function fixture(custom?: (packet: CodexPacket, reply: (result: unknown) => void
   return { session, sent, publications, notices, completions, ids, event };
 }
 
+const asyncItem = (id = 'async-question') => ({ type: 'agentMessage', id, delivery: 'async', text: 'Which?\n- A\n- B', questions: [{ title: 'Which?', options: ['A', 'B'] }] });
+
+test('Codex async questions survive completion, deduplicate terminal snapshots, and answer through idle turn/start', async () => {
+  let answer!: (value: { answer: string; wasFreeform: boolean }) => void;
+  let signal!: AbortSignal, calls = 0;
+  const f = fixture(undefined, { asyncQuestion: (_question, owner) => { calls++; signal = owner; return new Promise(resolve => { answer = resolve; }); } });
+  await f.session.initialize(cwd); await f.session.messageInput.submit({ id: 'start', text: 'Ask me', mode: 'normal' });
+  f.event('item/completed', { turnId: 'turn', item: asyncItem() });
+  f.event('turn/completed', { turn: { ...turn('completed'), items: [asyncItem()] } }); await flush();
+  assert.equal(calls, 1); assert.equal(signal.aborted, false); assert.equal(f.session.state.busy, false);
+  answer({ answer: 'B', wasFreeform: false }); await flush();
+  const starts = f.sent.filter(packet => packet.method === 'turn/start'); assert.equal(starts.length, 2);
+  const text = ((starts[1].params as any).input[0].text) as string;
+  assert.match(text, /<send_user_message_question_reply>/); assert.match(text, /request_user_input_async/); assert.match(text, /"answer":"B"/);
+  assert.equal(f.sent.some(packet => packet.method === 'turn/steer'), false);
+  const latestUser = f.session.state.messages.filter(row => row.role === 'user').at(-1)!;
+  assert.doesNotMatch(JSON.stringify(latestUser.content), /send_user_message_question_reply/);
+  assert.match(JSON.stringify(latestUser.content), /Which\?/); f.session.disconnect('done');
+});
+
+test('Codex async answers steer active turns, while Ignore and ordinary follow-ups never send a fabricated answer', async () => {
+  const pending: { signal: AbortSignal; resolve(value?: { answer: string; wasFreeform: boolean }): void }[] = [];
+  const f = fixture(undefined, { asyncQuestion: (_question, signal) => new Promise(resolve => pending.push({ signal, resolve })) });
+  await f.session.initialize(cwd); await f.session.messageInput.submit({ id: 'start', text: 'Ask me', mode: 'normal' });
+  f.event('item/completed', { turnId: 'turn', item: asyncItem('steer') }); await flush();
+  pending[0].resolve({ answer: 'A', wasFreeform: false }); await flush();
+  assert.equal(f.sent.filter(packet => packet.method === 'turn/steer').length, 1);
+  f.event('item/completed', { turnId: 'turn', item: asyncItem('ignore') }); await flush();
+  const before = f.sent.length; pending[1].resolve(); await flush(); assert.equal(f.sent.length, before);
+  f.event('item/completed', { turnId: 'turn', item: asyncItem('superseded') }); await flush();
+  // A locally rejected slash command does not supersede an optional question.
+  await f.session.messageInput.submit({ id: 'slash', text: '/nope', mode: 'normal' }); assert.equal(pending[2].signal.aborted, false);
+  await f.session.messageInput.submit({ id: 'different', text: 'Never mind, do something else', mode: 'normal' });
+  assert.equal(pending[2].signal.aborted, true);
+  const after = f.sent.length; pending[2].resolve({ answer: 'late', wasFreeform: true }); await flush(); assert.equal(f.sent.length, after);
+  f.event('item/completed', { turnId: 'turn', item: asyncItem('disconnected') }); await flush(); f.session.disconnect('done');
+  assert.equal(pending[3].signal.aborted, true); pending[3].resolve({ answer: 'late', wasFreeform: true }); await flush(); assert.equal(f.sent.length, after);
+});
+
+test('Codex async answer delivery errors do not retry or invent a replacement turn', async () => {
+  for (const outcome of ['rejected', 'unknown'] as const) {
+    let starts = 0;
+    const f = fixture((packet, _reply, session) => {
+      if (packet.method !== 'turn/start' || ++starts !== 2) return false;
+      if (outcome === 'rejected') session.receive({ id: packet.id, error: { code: -32000, message: 'fixture rejection' } });
+      else session.disconnect('fixture lost answer connection');
+      return true;
+    }, { asyncQuestion: async () => ({ answer: 'A', wasFreeform: false }) });
+    await f.session.initialize(cwd); await f.session.messageInput.submit({ id: 'start', text: 'Ask me', mode: 'normal' });
+    f.event('item/completed', { turnId: 'turn', item: asyncItem() });
+    f.event('turn/completed', { turn: turn('completed') }); await flush();
+    assert.equal(starts, 2); assert.equal(f.sent.some(packet => packet.method === 'turn/steer'), false);
+    assert.ok(f.publications.some(message => message.id?.startsWith('codex-answer:') && message.outcome === outcome));
+    f.session.disconnect('done');
+  }
+});
+
+test('Codex historical async questions render as history without reopening a stale picker', async () => {
+  let calls = 0;
+  const f = fixture((packet, reply) => {
+    if (packet.method !== 'thread/turns/list') return false;
+    reply({ data: [{ ...turn('completed'), items: [asyncItem()] }], nextCursor: null }); return true;
+  }, { asyncQuestion: async () => { calls++; return undefined; } });
+  await f.session.initialize(cwd, 'thread'); await flush(); assert.equal(calls, 0);
+  assert.match(JSON.stringify(f.session.state.messages), /Which\?/); f.session.disconnect('done');
+});
+
 test('observed 0.164 startup binds the actual shared draft store before reading models', async () => {
   const staged: string[] = [];
   const drafts = new SessionDrafts(undefined, undefined, () => {}, key => staged.push(key));

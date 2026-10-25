@@ -2,7 +2,7 @@
 
 ## Local source, not a live integration test
 
-The installed `/opt/homebrew/bin/codex` reports `codex-cli 0.162.0`.
+The initial review used `/opt/homebrew/bin/codex` reporting `codex-cli 0.162.0`; the subsequent async-question review below used installed `0.164.0`.
 The implementation reviewed local generated types produced by:
 
 ```sh
@@ -39,6 +39,18 @@ App-server's JSON-RPC wire deliberately omits `jsonrpc: '2.0'`, unlike ACP. This
 Official app-server documentation explicitly describes `thread/delete` as removing the persisted root **and spawned descendant threads**, rollout files and associated metadata before success. It does not establish a complete reviewable artifact scope, fork inclusion, handling of externally running descendants or partial-failure guarantees. The product now uses the existing shared tree review and a guarded Codex adapter, not Copilot's single-session deletion flow. [Codex deletion](deletion.md) owns exhaustive source/archive discovery, spawned-parent validation and explicit refusal of cross-project/incomplete/ambiguous-fork scope. Experimental ancestor filters are not used; real CLI removal has not been exercised.
 
 Model/effort configuration uses `thread/resume`'s supported model/structured configuration overrides, constrained natively to `model_reasoning_effort` for the latter. Returned identity/cwd and effective values must match. Public documentation alone does not prove that an already-loaded idle thread applies those overrides; real installed-runtime acceptance is still pending. No global config-file mutation, prompt or automatic process restart is substituted. See the parent skill's policy questions.
+
+## Async-question source review (0.164.0)
+
+Read-only investigation used installed `codex-cli 0.164.0`, `codex app-server generate-ts --experimental --out <disposable-directory>`, and the matching official [`rust-v0.164.0` source](https://github.com/openai/codex/tree/rust-v0.164.0). No server connection, model request, configuration change or user-session mutation was performed. User-driven existing logs showed the async item in Default mode; they do not prove Nimrod's new answer-delivery path works natively.
+
+- [`core/src/tools/handlers/request_user_input_async.rs`](https://github.com/openai/codex/blob/rust-v0.164.0/codex-rs/core/src/tools/handlers/request_user_input_async.rs) emits completed `AgentMessage` items with async delivery/questions and returns `{accepted:true}` immediately; it does not await a callback answer.
+- Generated `v2/ThreadItem.ts`, `AsyncUserInputQuestion.ts`, `AgentMessageDelivery.ts` expose `{title,options}` on an `agentMessage`. This path is distinct from the RPC request schema reviewed above.
+- [`tui/src/bottom_pane/async_questions/state.rs`](https://github.com/openai/codex/blob/rust-v0.164.0/codex-rs/tui/src/bottom_pane/async_questions/state.rs) constructs per-question IDs from `["request_user_input_async", sourceItemId, questionIndex]`, accepts labels or free text, and recognizes individual/legacy whole-item replies. Its auto-expiration and turn-end cleanup are client UX policies, not a blocking server request.
+- [`context-fragments/src/answered_question.rs`](https://github.com/openai/codex/blob/rust-v0.164.0/codex-rs/context-fragments/src/answered_question.rs) serializes the native `<send_user_message_question_reply>` JSON envelope; [`tui/src/async_question_reply.rs`](https://github.com/openai/codex/blob/rust-v0.164.0/codex-rs/tui/src/async_question_reply.rs) recognizes it for display/dismissal.
+- [`tui/src/chatwidget/questions.rs`](https://github.com/openai/codex/blob/rust-v0.164.0/codex-rs/tui/src/chatwidget/questions.rs) uses ordinary input submission. [`tui/src/app/user_turn_submission.rs`](https://github.com/openai/codex/blob/rust-v0.164.0/codex-rs/tui/src/app/user_turn_submission.rs) selects active-turn steering versus idle turn start. Nimrod preserves its own no-retry/no-replay policy instead of adopting the native client's steer-race retry behavior.
+
+This is reviewed native-client behavior pinned to one version, not a promise that the envelope is a stable public API. [Question contract](questions.md#async-follow-up-questions) owns Nimrod's deliberate retained-until-answered/ignored/superseded UX and remaining limitations.
 
 ## Distribution/authentication boundaries to revisit
 
