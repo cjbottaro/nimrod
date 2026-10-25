@@ -61,7 +61,7 @@ test('Codex async questions survive completion, deduplicate terminal snapshots, 
   assert.match(text, /<send_user_message_question_reply>/); assert.match(text, /request_user_input_async/); assert.match(text, /"answer":"B"/);
   assert.equal(f.sent.some(packet => packet.method === 'turn/steer'), false);
   const latestUser = f.session.state.messages.filter(row => row.role === 'user').at(-1)!;
-  assert.doesNotMatch(JSON.stringify(latestUser.content), /send_user_message_question_reply/);
+  assert.match(JSON.stringify(latestUser.content), /send_user_message_question_reply/, 'retain native structure for the integration-owned question/answer card');
   assert.match(JSON.stringify(latestUser.content), /Which\?/); f.session.disconnect('done');
 });
 

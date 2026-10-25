@@ -38,9 +38,6 @@ export function codexAsyncReplies(text: string): readonly Reply[] | undefined {
     return replies as Reply[];
   } catch { return; }
 }
-export function codexAsyncDisplay(text: string): string {
-  return codexAsyncReplies(text)?.map(reply => `> ${reply.question}\n\n${reply.answer}`).join('\n\n') ?? text;
-}
 
 /** Session-owned optional follow-ups. Turn completion is deliberately not a retirement boundary. */
 export class CodexAsyncQuestions {

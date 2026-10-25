@@ -54,6 +54,12 @@ After Copilot reports an answer, its question card shows just the question with 
 
 Expand the disclosure to see the offered options as a numbered list in conversation typography (not a code block), **Raw inputs** and the original **Raw output**. Older schema-based questions retain their labelled answers. Pending, cancelled, interrupted, failed or unrecognized results retain the ordinary tool presentation rather than inventing an answer. This read-only transcript card is separate from the [Question picker](copilot.md#answer-agent-questions) and never submits a decision.
 
+### Codex question/answer cards
+
+Answers to Codex async questions use the same speech-bubble question and inset, accent-lined reply as Copilot. Questions and answers stay literal, including multiline text. Expand the card for the original **Raw message**; the offered choices remain in Codex's earlier question message. This presentation applies to both live answers and saved conversation history.
+
+These remain your messages, not tool results or proof that Codex accepted delivery. Existing delivery errors and uncertainty are reported normally. Ignore sends no message and creates no answer card; the interactive [Question picker](codex.md#structured-questions-and-experimental-protocol) is unchanged.
+
 ### Copilot plan review cards
 
 After an exit-plan tool call completes, **Plan review** shows Copilot's reported

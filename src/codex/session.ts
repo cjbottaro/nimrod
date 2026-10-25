@@ -1,4 +1,4 @@
-import { CodexAsyncQuestions, codexAsyncDisplay, codexAsyncReplies, type CodexAsyncQuestion } from './async-questions';
+import { CodexAsyncQuestions, codexAsyncReplies, type CodexAsyncQuestion } from './async-questions';
 import type { QuestionAnswer } from '../question-interaction';
 import type { OutgoingMessage } from '../session-message-input';
 import { CodexClient, type CodexClientHooks, type CodexWriter } from './client';
@@ -127,8 +127,7 @@ export class CodexSession {
     if (!questionAnswer) { this.asyncQuestions.clear(); this.deferredAsyncItems.clear(); }
     const key = `codex:local:${message.id}`; this.aliases.set(message.id, key);
     this.ui.publish({ type: 'submissionMessage', id: message.id, key });
-    const displayText = codexAsyncDisplay(message.text);
-    this.replace({ key, role: 'user', content: images.length ? [...(displayText ? [{ type: 'text', text: displayText }] : []), ...images] : displayText });
+    this.replace({ key, role: 'user', content: images.length ? [...(message.text ? [{ type: 'text', text: message.text }] : []), ...images] : message.text });
     this.submitting++; this.state = { ...this.state, busy: true, status: 'Working…' }; this.publish([]);
     try {
       if (this.client.phase === 'working') await this.client.steer(message.text, message.id);
@@ -286,7 +285,7 @@ export class CodexSession {
       if (history && Array.isArray(value.content)) for (const input of value.content) {
         if (isRecord(input) && input.type === 'text' && typeof input.text === 'string') this.asyncQuestions.reconcile(input.text);
       }
-      const content = Array.isArray(value.content) ? value.content.filter(isRecord).map(input => input.type === 'text' ? { type: 'text', text: codexAsyncDisplay(string(input.text)) } : input.type === 'image' && typeof input.url === 'string' && /^data:image\/(png|jpeg|webp|gif);base64,/.test(input.url) ? { type: 'image', mimeType: input.url.slice(5, input.url.indexOf(';')), data: input.url.slice(input.url.indexOf(',') + 1) } : { type: 'raw', text: json(input) }) : [];
+      const content = Array.isArray(value.content) ? value.content.filter(isRecord).map(input => input.type === 'text' ? { type: 'text', text: string(input.text) } : input.type === 'image' && typeof input.url === 'string' && /^data:image\/(png|jpeg|webp|gif);base64,/.test(input.url) ? { type: 'image', mimeType: input.url.slice(5, input.url.indexOf(';')), data: input.url.slice(input.url.indexOf(',') + 1) } : { type: 'raw', text: json(input) }) : [];
       return { ...base, role: 'user', content };
     }
     if (value.type === 'agentMessage' || value.type === 'plan') return { ...base, role: 'assistant', content: [{ type: 'text', text: string(value.text) }] };

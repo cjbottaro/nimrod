@@ -27,6 +27,10 @@ One mounted card per invocation survives placement/lifecycle updates, preserving
 
 Each Pi built-in selects its own metadata-matched mounted plugin; [card plugins](card-plugins.md#built-in-tool-dogfooding) owns the IDs, matching and implementation map. Read summaries can show requested line ranges, and write bodies show literal input-backed **Requested content** alongside Pi output, not a claim of successful execution. File/search/list output remains literal. The shared generic fallback/override remains available for unknown/custom tools.
 
+## Codex answer messages
+
+Codex contributes read-only async question/answer disclosures through `ConversationInteraction.userText`; they remain native user messages rather than tool calls. The shared [card presentation contract](card-plugins.md#codex-async-questionanswer-messages) owns summary reuse with Copilot, retained disclosure/raw recovery and test boundaries.
+
 ## Skill disclosures
 
 `src/skill-invocation.ts` owns the shared presentation-only `SkillInvocation`
