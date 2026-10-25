@@ -46,6 +46,12 @@ the top modal handles Escape; cancellation returns to the mounted picker, submit
 advances it. Owner-generation/AbortSignal guards retire both on cancellation.
 Existing one-shot selections and post-close application actions are unchanged.
 
+### Question row presentation
+
+The shared `src/question-interaction.ts` marks offered answers with a typographic bullet, **Enter your own answer…** with a pencil, and the adapter-opted-in **Ignore question** with a circle-slash. All use the same muted 14px leading gutter; selected markers inherit the selection foreground. Offered answers and utility actions have distinct `PaletteItem.group` values. `command-palette.ts` computes spacing between adjacent visible groups after filtering, so utility-only/free-text-only lists have no leading gap and Ignore does not acquire a second divider when custom input is filtered out. No headings, extra listbox options, destructive colors or numeric shortcuts are added.
+
+`PaletteItem.marker` is opt-in decorative presentation rendered by `src/palette-item-marker.ts`: markers are aria-hidden, SVGs are non-focusable, and labels, native answer payloads, search text and existing model/current markers remain unchanged. Copilot and both Codex question paths share this presentation; Ignore availability stays adapter-owned. Existing retained page, nested input, focus, dismissal and count-only update behavior is unchanged. `test/copilot-questions.test.ts` and `test/codex-questions.test.ts` cover markers, literal answers, filtering/group boundaries and conditional Ignore. [Verification](verification.md#shared-question-picker-presentation) owns execution and visual acceptance status.
+
 ## Copilot harness choices
 
 [Copilot SDK slash commands](copilot-commands.md) can request modal choices through

@@ -101,6 +101,10 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor:col-resize !important; u
 #palette-list .palette-item-label { flex:1; min-width:0; }
 #palette-list .palette-item-shortcut { flex:none; margin-left:auto; color:var(--vscode-descriptionForeground); font:11px var(--vscode-font-family); white-space:nowrap; }
 #command-palette[data-mode=commands] #palette-list [aria-selected=true] :is(.palette-item-description, .palette-item-shortcut) { color:color-mix(in srgb, var(--vscode-list-activeSelectionForeground) 75%, var(--vscode-list-activeSelectionBackground)); }
+#palette-list [role=option].palette-group-start { margin-top:6px; }
+#palette-list .palette-item-marker { flex:0 0 14px; height:14px; display:inline-flex; align-items:center; justify-content:center; color:var(--vscode-descriptionForeground); font-size:1.1em; line-height:1; user-select:none; }
+#palette-list .palette-item-marker svg { width:14px; height:14px; }
+#palette-list [aria-selected=true] .palette-item-marker { color:inherit; opacity:.75; }
 #palette-list .palette-selection-marker { flex:0 0 14px; text-align:center; font-size:1.1em; line-height:1; color:var(--vscode-descriptionForeground); user-select:none; }
 #command-palette[data-mode=selection] #palette-list .palette-item-description { margin-left:22px; }
 /* Live theme preview keeps the conversation visible; native modality still owns focus. */

@@ -33,6 +33,10 @@ Some commands open a picker or name field:
 
 Nested dialogs are different: a key recorder, Pi dialog or deletion review owns its own Escape. Deletion review leaves its picker visible underneath; Cancel returns unchanged, and Escape from the picker then closes it.
 
+### Question pickers
+
+[Copilot](copilot.md#answer-agent-questions) and [Codex](codex.md#structured-questions-and-experimental-protocol) share the same visual distinction: offered answers have **•** bullets, **Enter your own answer…** has a pencil icon, and supported **Ignore question** actions have a circle-slash icon. Utility actions are spaced slightly apart from the offered answers. These are visual markers, not keyboard shortcuts; filtering and arrows/Enter work as usual. Escape hides a pending question without answering it; its session banner lets you reopen it.
+
 ## Ordering
 
 Commands accepted through the palette appear most recently used first next time. Unused commands follow alphabetically. Filtering retains that order, rather than ranking by match strength or frequency.

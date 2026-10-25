@@ -50,6 +50,24 @@ function fixture() {
   };
 }
 
+test('Copilot questions share decorative choice bullets and a separated custom-answer pencil', async () => {
+  const f = fixture(), owner = new AbortController();
+  try {
+    const pending = f.interaction.request({ question: 'Scope?', choices: ['Conversation only', 'Include interface'] }, owner.signal);
+    const rows = [...f.document.querySelectorAll<HTMLElement>('#palette-list > [role=option]')];
+    assert.deepEqual(rows.map(row => row.querySelector<HTMLElement>('.palette-item-marker')?.dataset.marker), ['bullet', 'bullet', 'pencil']);
+    assert.deepEqual(rows.map(row => row.querySelector('.palette-item-label')!.textContent), ['Conversation only', 'Include interface', 'Enter your own answer…']);
+    assert.equal(rows[0].querySelector('.palette-item-marker')!.getAttribute('aria-hidden'), 'true');
+    assert.equal(rows[2].querySelector('svg')!.getAttribute('focusable'), 'false');
+    assert.equal(rows[2].classList.contains('palette-group-start'), true);
+    assert.equal(f.document.querySelector('[data-marker=circle-slash]'), null);
+    f.query('own'); assert.equal(f.document.querySelectorAll('.palette-group-start').length, 0);
+    f.query('Conversation'); f.click('Conversation only');
+    assert.deepEqual(await pending, { answer: 'Conversation only', wasFreeform: false });
+    assert.equal(f.draft.value, 'keep draft');
+  } finally { owner.abort(); f.dispose(); }
+});
+
 test('question choices retain exact answers, advance in one picker and Escape never answers', async () => {
   const f = fixture(), owner = new AbortController();
   try {

@@ -1,4 +1,4 @@
-import type { RetainedSelectionRequest } from './command-palette';
+import type { PaletteItem, RetainedSelectionRequest } from './command-palette';
 
 export interface QuestionAnswer { answer: string; wasFreeform: boolean; }
 export interface QuestionUi {
@@ -98,10 +98,10 @@ export class QuestionInteraction {
     if (this.shown === entry) return;
     this.shown = entry;
     page.show({ items: [
-      ...entry.choices.map((choice, index) => ({ id: String(index), label: choice.label, ...(choice.detail === undefined ? {} : { detail: choice.detail }),
+      ...entry.choices.map((choice, index): PaletteItem => ({ id: String(index), label: choice.label, marker: 'bullet', group: 'answers', ...(choice.detail === undefined ? {} : { detail: choice.detail }),
         run: () => { if (this.canChoose(entry)) entry.finish({ answer: choice.label, wasFreeform: false }); } })),
-      ...(entry.freeform ? [{ id: 'freeform', label: 'Enter your own answer…', run: () => this.enterAnswer(entry) }] : []),
-      ...(entry.allowIgnore ? [{ id: 'ignore', label: 'Ignore question', run: () => { if (this.canChoose(entry)) entry.finish(); } }] : []),
+      ...(entry.freeform ? [{ id: 'freeform', label: 'Enter your own answer…', marker: 'pencil' as const, group: 'actions', run: () => this.enterAnswer(entry) }] : []),
+      ...(entry.allowIgnore ? [{ id: 'ignore', label: 'Ignore question', marker: 'circle-slash' as const, group: 'actions', run: () => { if (this.canChoose(entry)) entry.finish(); } }] : []),
     ] }, entry.preview);
   }
   private async enterAnswer(entry: Pending): Promise<void> {

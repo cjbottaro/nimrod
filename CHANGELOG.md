@@ -47,6 +47,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- Codex and Copilot Question pickers distinguish offered answers with bullets, custom answers with a pencil, and supported Ignore actions with a circle-slash, with a small gap before utility actions. Labels, filtering, keyboard controls and dismiss-and-resume behavior are unchanged.
+
 - Card-plugin targets accept explicit integration identifiers. Unrecognized tool sources keep generic/raw rendering instead of inheriting Pi-specific cards; existing bundled presentations remain available through integration registration. Owning sources persist through retained/hidden tool updates, preserving rich renderers instead of incorrectly latching to raw fallback.
 - Harness-contributed project commands use project-bound handlers through the command palette and shortcuts without requiring an open session; metadata without an available handler remains unavailable.
 

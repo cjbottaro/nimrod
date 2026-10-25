@@ -31,7 +31,7 @@ A request contains `threadId`, `turnId`, `itemId`, `questions`, `isBlocking`, an
 
 ## Presentation and lifetime
 
-Each question uses the existing retained palette; free text uses the shared `Dialogs` child modal. Escape at the child returns to the parent; Escape at the picker dismisses only presentation. The session's **Waiting for input · N questions** / **Answer question** banner remains, including across navigation and new arrivals. Composer drafts, transcript reading/follow intent and unrelated dialogs are unchanged.
+Choice/utility markers follow the shared [question row presentation](../../features/references/command-interactions.md#question-row-presentation), equally for RPC batches and optional async questions. Each question uses the existing retained palette; free text uses the shared `Dialogs` child modal. Escape at the child returns to the parent; Escape at the picker dismisses only presentation. The session's **Waiting for input · N questions** / **Answer question** banner remains, including across navigation and new arrivals. Composer drafts, transcript reading/follow intent and unrelated dialogs are unchanged.
 
 A batch is queued synchronously so another RPC cannot interleave between its questions. Completed answers are held while remaining questions are presented; there is no Back/edit-previous-answer UI yet. Dismissing retains the remaining batch. Abort/Stop/Close/disconnect/server resolution retires it without sending partial answers. Background arrivals do not summon a modal, select a session or steal focus. Approval and question queues/banners remain separate.
 
