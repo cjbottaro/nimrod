@@ -4,7 +4,7 @@
 
 ## Specification and acceptance criteria
 
-Ordinary dialogs share a shell, not identical content. Confirmation labels remain plain, arrow keys navigate enabled footer actions, Enter follows focused action/Cancel, Escape cancels, and loading review retains Cancel focus after late population.
+Ordinary dialogs share a shell, not identical content. Confirmation labels remain plain, arrow keys navigate enabled footer actions, Enter follows focused action/Cancel, Escape cancels, and deletion-review loading-to-ready focus follows the [session-deletion contract](session-deletion.md#sidebar-action-and-review-ui).
 
 ## Contract and code map
 
@@ -57,7 +57,7 @@ Apply this to every new or modified ordinary modal, including previews and dynam
 
 Host confirmations, populated deletion reviews and eligible keybinding resets focus the confirmation action. Enter honors Cancel focus (including descendant nodes), otherwise activates the enabled confirmation; Escape cancels. Repeated/composing/keyCode-229 Enter is consumed without activation. Native form return values/request correlation and close-time focus restoration remain unchanged. Key recording still captures shortcuts rather than treating Enter as Save. During async reset saving the existing click guards prevent duplicate save/cancel.
 
-Deletion loading disables Delete, clears its Enter shortcut metadata and focuses Cancel. A visible loading-to-review transition preserves focus rather than moving it after the user has begun interacting; Enter on Cancel cancels both loading and populated review. Fresh ready-only reviews focus Delete. See session-deletion reference.
+Deletion loading disables Delete, clears its Enter shortcut metadata and focuses Cancel. An untouched loading-to-review transition defaults to Delete; once the user has begun keyboard/pointer interaction it preserves focus instead. Enter on Cancel cancels both loading and populated review. Fresh ready-only reviews focus Delete. See session-deletion reference.
 
 Unit fixtures cover all four arrow directions/wrapping, reversed DOM order, disabled/hidden/inert actions, modifiers, IME/repeats, editing controls, default/Cancel focus, plain labels/shortcut metadata and cleanup before input. Offline WebKit fixtures cover arrow navigation followed by Enter in temporary Close, deletion review and keybinding reset dialogs, default focus, absence of button hints, close restoration and retained drafts. The arrow-navigation additions have not been executed yet. Native visual acceptance and Linux verification remain pending.
 

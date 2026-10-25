@@ -35,6 +35,7 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
   let preview: 'idle' | 'loading' | 'cancelled' = 'idle';
   let loadingTimer: number | undefined;
   let executing = false;
+  let loadingInteracted = false;
   let progressText: HTMLSpanElement | undefined;
   let bodyProgressText: HTMLSpanElement | undefined;
 
@@ -107,7 +108,9 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
     if (preview === 'loading') preview = 'cancelled';
     finish(false);
   };
+  const onLoadingInteraction = () => { if (preview === 'loading' && dialog.open) loadingInteracted = true; };
   const onKey = (event: KeyboardEvent) => {
+    onLoadingInteraction();
     confirmationKey(event, dialog, cancel, confirm, activate);
   };
   const onCancel = (event: Event) => { event.preventDefault(); if (!executing) activate(cancel); };
@@ -116,12 +119,13 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
   dialog.addEventListener('close', onClose);
   dialog.addEventListener('cancel', onCancel);
   dialog.addEventListener('keydown', onKey);
+  dialog.addEventListener('pointerdown', onLoadingInteraction, true);
   cancel.addEventListener('click', onClick); confirm.addEventListener('click', onClick);
   form.addEventListener('submit', onSubmit);
   return {
     loading(): void {
       if (disposed || pending || executing || preview === 'loading') return;
-      preview = 'loading';
+      preview = 'loading'; loadingInteracted = false;
       if (title) title.textContent = reviewTitle;
       progressText = undefined; bodyProgressText = undefined;
       delete tree.dataset.executing;
@@ -177,6 +181,7 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
         }
       }
       if (seen.size !== keys.size) { close(); return Promise.resolve(false); }
+      const focusReadyAction = preview === 'loading' && dialog.open && !loadingInteracted && doc.activeElement === cancel;
       preview = 'idle'; cancel.disabled = false; confirm.disabled = false;
       bodyProgressText = undefined; delete tree.dataset.executing;
       if (title) title.textContent = data.title || reviewTitle;
@@ -185,16 +190,19 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
       tree.setAttribute('aria-busy', 'false');
       tree.replaceChildren(list); tree.scrollTop = 0;
       labelDialogAction(confirm, `Delete ${data.sessions.length} ${data.sessions.length === 1 ? 'session' : 'sessions'}`, 'Enter');
-      // A visible loading dialog keeps its user's focus when review arrives.
+      // Loading's automatic Cancel focus is not a user choice. Give untouched
+      // reviews the same default as fast previews, but preserve active interaction.
       // Fresh populated reviews focus Delete in tryShow().
       return new Promise(resolve => {
         pending = { resolve }; doc.addEventListener('close', onOtherClose, true); tryShow();
+        if (focusReadyAction) confirm.focus({ preventScroll: true });
       });
     },
     progress,
     cancel: close,
     dispose() {
       disposed = true; close(); dialog.removeEventListener('close', onClose); dialog.removeEventListener('cancel', onCancel); dialog.removeEventListener('keydown', onKey);
+      dialog.removeEventListener('pointerdown', onLoadingInteraction, true);
       cancel.removeEventListener('click', onClick); confirm.removeEventListener('click', onClick); form.removeEventListener('submit', onSubmit);
     },
   };

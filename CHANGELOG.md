@@ -78,6 +78,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Session deletion now defaults to Delete after a slower preview becomes ready, just as fast previews do, instead of leaving automatic focus on Cancel and making Enter silently cancel. Keyboard/pointer interaction during loading still preserves the chosen focus.
+
 - Explicit Resume validates and recovers the selected identity before reusing an open row, including quarantined Pi sessions. Restoring deliberately disconnected sessions no longer creates a false connection-error notice from the view's local mount handshake.
 
 - Retired Pi startup attempts are rejected before identity binding, buffered packet replay or initialization, with cleanup scoped to the original child. Native acceptance remains pending.

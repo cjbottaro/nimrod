@@ -274,7 +274,9 @@ opens with loading only if preparation takes at least **150 ms**. Fast previews
 cancel that timer and open the populated review directly, avoiding a loading/tree
 flash. The themed reduced-motion-aware spinner has `role=status`; tree has
 `aria-busy=true` and Delete is disabled. If loading was already shown, correlated
-review replaces tree contents in place, preserving Cancel focus. Cross-project trees label each row's project;
+review replaces tree contents in place. An untouched loading dialog transfers its
+automatic Cancel focus to Delete when ready; keyboard or pointer interaction during
+loading preserves the user's focus instead. Cross-project trees label each row's project;
 file paths are shown additionally for duplicate names. Existing modals keep
 priority. Footer buttons stay visible while only the indented tree scrolls.
 
@@ -303,7 +305,7 @@ The review and palette share `.workspace-modal`: themed background/foreground,
 panel border, radius, shadow, padding, backdrop and top placement. Content sizing
 is separate. The capture-phase document `close` listener must ignore the review's
 own close: re-showing there resets returnValue and can turn Delete into Cancel.
-Populated reviews initially focus Delete; loading reviews focus Cancel and retain that focus when populated. Shared `dialog-actions.ts` provides plain labels, non-visual shortcut metadata and focus-aware shortcuts: Enter on Cancel cancels, otherwise Enter confirms only enabled Delete. Escape cancels before confirmation only. Confirmation resolves its correlated answer without closing the dialog; click/form-submit/keyboard activation share one guarded path, avoiding native `method=dialog` dismissal. Execution disables Cancel/Delete and suppresses native `cancel` events and repeated submissions. Repeated/composing/keyCode-229 Enter cannot activate either action. Enter on Cancel during loading latches cancellation just like Escape.
+Populated reviews initially focus Delete; loading reviews focus Cancel, then default to Delete when populated unless the user has interacted with the loading dialog. Shared `dialog-actions.ts` provides plain labels, non-visual shortcut metadata and focus-aware shortcuts: Enter on Cancel cancels, otherwise Enter confirms only enabled Delete. Escape cancels before confirmation only. Confirmation resolves its correlated answer without closing the dialog; click/form-submit/keyboard activation share one guarded path, avoiding native `method=dialog` dismissal. Execution disables Cancel/Delete and suppresses native `cancel` events and repeated submissions. Repeated/composing/keyCode-229 Enter cannot activate either action. Enter on Cancel during loading latches cancellation just like Escape.
 Native HTML focus restoration stays authoritative; replacement activation does
 not focus through another modal.
 
@@ -373,7 +375,7 @@ Snapshots reconcile locks and missed completion as well as guards.
 - `test/deletion-review.test.ts`, `test/session-deletion.test.ts` and
   `test/deleted-drafts.test.ts` retain safe labels/focus, local cancellation,
   partial/unknown reconciliation, pending-state guards and file-scoped cleanup.
-  Keyboard tests cover Enter confirmation from Delete focus, Enter cancellation from Cancel focus, Escape from Delete focus, composing/repeated/keyCode-229 Enter suppression, and Enter/Escape during loading. Offline WebKit checks Enter yields one correlated true answer and Escape one false answer.
+  Keyboard tests cover slow-preview default focus and immediate Enter/spinner feedback, preserved Cancel focus after loading keyboard/pointer interaction, per-operation interaction reset, Enter confirmation from Delete focus, Enter cancellation from Cancel focus, Escape from Delete focus, composing/repeated/keyCode-229 Enter suppression, and Enter/Escape during loading. Offline WebKit checks Enter yields one correlated true answer and Escape one false answer.
   A deterministic window timer in modal tests verifies the 149/150 ms boundary,
   fast ready-only opening, slow in-place replacement and timer cleanup on failure,
   cancellation, disposal and existing-modal transitions. Execution fixtures cover
