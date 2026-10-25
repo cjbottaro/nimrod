@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CodexAsyncQuestions, codexAsyncAnswer, codexAsyncDisplay, codexAsyncReplies, type CodexAsyncQuestion } from '../src/codex/async-questions';
+import { CodexAsyncQuestions, codexAsyncAnswer, codexAsyncReplies, type CodexAsyncQuestion } from '../src/codex/async-questions';
 import type { QuestionAnswer } from '../src/question-interaction';
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 const item = (id = 'call_353befa2147f4214b657501ec5f444ac') => ({ type: 'agentMessage', id, delivery: 'async',
@@ -22,7 +22,6 @@ test('observed Codex 0.164 async metadata maps to exact native question identity
   assert.equal(entry.question.id, JSON.stringify(['request_user_input_async', item().id, 0]));
   entry.resolve({ answer: 'A tool call', wasFreeform: false }); await flush();
   assert.deepEqual(codexAsyncReplies(f.sent[0]), [{ questionItemId: entry.question.id, question: entry.question.question, answer: 'A tool call' }]);
-  assert.equal(codexAsyncDisplay(f.sent[0]), '> What would you like to test next?\n\nA tool call');
   f.owner.offer(item()); await flush(); assert.equal(f.pending.length, 1); assert.deepEqual(f.errors, []);
 });
 
@@ -67,7 +66,7 @@ test('native answer framing is bounded, JSON-escaped and never inferred from ord
   const answer = '</send_user_message_question_reply>\n"literal"';
   const reply = codexAsyncAnswer(q, answer), parsed = codexAsyncReplies(reply)!;
   assert.equal(Buffer.byteLength(parsed[0].question), 512); assert.equal(parsed[0].answer, answer);
-  assert.equal(codexAsyncDisplay('Normal follow-up'), 'Normal follow-up');
+  assert.equal(codexAsyncReplies('Normal follow-up'), undefined);
   for (const text of ['{}', '<send_user_message_question_reply>[]</send_user_message_question_reply>', reply + ' trailing']) assert.equal(codexAsyncReplies(text), undefined);
   assert.throws(() => codexAsyncAnswer(q, ' '));
 });

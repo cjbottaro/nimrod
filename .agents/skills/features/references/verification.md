@@ -112,6 +112,10 @@ Existing user-driven captures from Codex 0.164.0 show completed `agentMessage` a
 
 The retained optional picker, Ignore, post-completion answer delivery, ordinary-follow-up retirement and pretty reply projection are source-implemented. New `codex-async-questions`, actual-palette and session fixtures are authored **unrun** for this extension. No tests, live prompts, user-session mutation, app launch or build were performed for the extension. Native macOS/Linux presentation, answer delivery and completion/dismissal timing remain unverified; pre-existing registered-harness fixture results do not cover these new cases.
 
+## Codex answer card presentation
+
+Codex async-answer envelopes now retain native user-message semantics and use the same shared speech-bubble/inset-reply summary primitive as Copilot. Exact raw message disclosure, native-echo/history rendering and retained nodes are source-implemented. New `codex-question-cards` and mounted `conversation-view` assertions are authored **unrun**; existing Copilot card fixtures were preserved but not rerun for the extraction. No tests, app build, browser validation, launch or live prompt was performed. Native visual/focus/scroll acceptance remains pending. [Card contract](card-plugins.md#codex-async-questionanswer-messages) owns scope and invariants.
+
 ## Shared question picker presentation
 
 Shared choice bullets, custom-answer pencil, optional Ignore circle-slash and filtered group spacing are source-implemented for Copilot and Codex. New actual-palette assertions in `copilot-questions` and `codex-questions` are authored **unrun** for this presentation change. No tests, browser validation, app build or launch were performed. Native visual/accessibility acceptance on macOS/Linux remains pending; DOM assertions alone would not establish it. [Question row presentation](command-interactions.md#question-row-presentation) owns the contract.

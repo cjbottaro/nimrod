@@ -6,6 +6,8 @@ import { webviewHtml } from './view-fixture';
 import { createPiViewProjection, piInteraction, piSessionActions } from '../src/pi/view-policy';
 import { acpInteraction, acpSessionActions } from '../src/acp/view-policy';
 import { copilotInteraction } from '../src/copilot/view-policy';
+import { codexInteraction } from '../src/codex/view-policy';
+import { codexAsyncAnswer } from '../src/codex/async-questions';
 import type { ConversationView, ConversationViewHost, ConversationViewMessage, ConversationViewState } from '../src/conversation-view-host';
 
 const enter = { key: 'Enter', shiftKey: false, altKey: false, isComposing: false, keyCode: 13 };
@@ -111,6 +113,37 @@ for (const embedded of [false, true]) for (const dirty of [false, true]) test(`o
     assert.ok(sources.length >= 3); assert.ok(sources.every(source => source === 'fixture-harness'));
     assert.match(card.textContent!, /Rich fixture/); assert.match(card.textContent!, /first second third/);
     assert.equal(f.sent.some(message => message.type === 'renderError'), false);
+  } finally { f.view.dispose(); f.dom.window.close(); }
+});
+
+test('Codex native answer cards retain user identity, disclosure and focus across optimistic echoes and hidden catch-up', () => {
+  const f = fixture(codexInteraction(() => undefined));
+  const text = codexAsyncAnswer({ id: 'question-id', question: 'Which scope?', options: [] }, 'Keep **this** literal');
+  const row = (content: string | { type: string; text: string }[]) => ({ key: 'answer', role: 'user', content });
+  try {
+    const prompt = f.win.document.querySelector<HTMLTextAreaElement>('#prompt')!;
+    prompt.value = 'Newer draft'; prompt.dispatchEvent(new f.win.Event('input'));
+    f.snapshot({ messages: [row(text)] });
+    const article = f.win.document.querySelector<HTMLElement>('.message.user')!;
+    const card = article.querySelector<HTMLDetailsElement>('.codex-answer-card')!;
+    assert.ok(card); assert.equal(card.open, false);
+    assert.equal(card.querySelector('.card-question-reply')!.textContent, 'Keep **this** literal');
+    assert.equal(card.querySelector('strong'), null);
+    const summary = card.querySelector('summary')!, reply = card.querySelector('.card-question-reply'), icon = card.querySelector('.card-question-icon');
+    const raw = card.querySelector('pre')!; assert.equal(raw.textContent, text);
+    card.open = true; raw.focus(); raw.scrollTop = 23;
+    f.snapshot({ messages: [row([{ type: 'text', text }])] });
+    assert.equal(f.win.document.querySelector('.message.user'), article);
+    assert.equal(f.win.document.querySelector('.codex-answer-card'), card);
+    assert.equal(card.querySelector('summary'), summary); assert.equal(card.querySelector('.card-question-reply'), reply);
+    assert.equal(card.querySelector('.card-question-icon'), icon); assert.equal(card.open, true);
+    assert.equal(f.win.document.activeElement, raw); assert.equal(raw.scrollTop, 23);
+    f.view.setActive(false);
+    f.snapshot({ messages: [row([{ type: 'text', text }]), { key: 'next', role: 'assistant', content: 'Continuing' }] });
+    f.view.setActive(true); f.flush();
+    assert.equal(f.win.document.querySelector('.codex-answer-card'), card); assert.equal(card.open, true);
+    assert.equal(prompt.value, 'Newer draft');
+    assert.equal(f.sent.some(message => message.type === 'prompt'), false);
   } finally { f.view.dispose(); f.dom.window.close(); }
 });
 

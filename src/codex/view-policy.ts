@@ -1,3 +1,4 @@
+import { renderCodexAnswerCards } from './answer-card';
 import type { ConversationInteraction } from '../conversation-view-host';
 import { keyboardSubmissionMode } from '../pi/composer-dom';
 import { newlineHint, sendHint } from '../composer-hints';
@@ -12,6 +13,7 @@ export function codexSessionActions(session?: CodexSession): readonly SessionAct
 export function codexInteraction(validate: (text: string) => string | undefined): ConversationInteraction {
   return {
     label: 'Codex', commands: () => [],
+    userText: (document, text, key, expanded, _markdown, previous) => renderCodexAnswerCards(document, text, key, expanded, previous),
     keyboardMode: (event, busy) => {
       const mode = keyboardSubmissionMode(event, busy);
       return mode === 'followUp' ? undefined : mode;

@@ -72,7 +72,7 @@ Mounted IDs are unique per session; anchors above are semantic template names wi
 ## Transcript elements
 
 - **Turn** — visible user/assistant entry. Assistant turn includes reasoning/tools/text; not necessarily one RPC turn interval.
-- **Question/answer card** — read-only completed Copilot question and answer in the transcript: a speech-bubble icon, question and inset reply with an accent line. Disclosure reveals options/raw details. Distinct from the interactive **Question picker** and custom-answer modal.
+- **Question/answer card** — read-only Copilot question/result or Codex async-answer message in the transcript: a speech-bubble icon, question and inset reply with an accent line. Disclosure reveals options/raw details. Distinct from the interactive **Question picker** and custom-answer modal.
 - **Reasoning card** — disclosure for thinking supplied by Pi.
 - **Tool card** — invocation and output. Its **summary row** contains a **disclosure arrow**, **input preview** and state indicator; the **expanded body** contains details, **raw inputs** and an independently scrolling **output viewport**.
 - **Code block** — formatted source with language label and Pop out/Copy controls.
