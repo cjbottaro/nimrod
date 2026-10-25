@@ -82,6 +82,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Settings dropdown fields use the app's theme colors instead of Linux's native grey select surface, with a matching arrow and preserved native keyboard controls.
+
 - Session deletion now defaults to Delete after a slower preview becomes ready, just as fast previews do, instead of leaving automatic focus on Cancel and making Enter silently cancel. Keyboard/pointer interaction during loading still preserves the chosen focus.
 
 - Explicit Resume validates and recovers the selected identity before reusing an open row, including quarantined Pi sessions. Restoring deliberately disconnected sessions no longer creates a false connection-error notice from the view's local mount handshake.

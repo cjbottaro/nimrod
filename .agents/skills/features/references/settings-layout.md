@@ -12,6 +12,10 @@ Each project control shows its effective value and source (`Global default` / `P
 
 Settings categories remain mounted with independent reading/dirty-control state. Its app-wide sidebar width is independent of project widths; browser modality and resize guards preserve the underlying conversation and nested-dialog focus.
 
+## Select inputs
+
+Settings native selects use `appearance:none` and a CSS arrow in `src/theme.css` so WebKitGTK's native grey chrome cannot override themed field surfaces. Native select semantics, keyboard handling and option popups remain browser-owned. Forced-colors restores native appearance. Native macOS/Linux visual acceptance remains pending.
+
 ## Range inputs
 
 [Typography](typography.md) owns the global-only `#settings-typography` group: conversation/monospace family and size controls, shared-shell installed-font picker, live sample and reset. It is hidden completely in Project settings. Both window boot paths apply typography before first presentation without waiting for font enumeration.
