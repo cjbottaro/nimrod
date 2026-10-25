@@ -82,6 +82,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Selecting a session with a pending question or permission request now restores conversation focus before opening its picker, avoiding a stranded sidebar focus outline after answering or dismissing it. Keyboard-focus indicators remain available.
+
 - Settings dropdown fields use the app's theme colors instead of Linux's native grey select surface, with a matching arrow and preserved native keyboard controls.
 
 - Session deletion now defaults to Delete after a slower preview becomes ready, just as fast previews do, instead of leaving automatic focus on Cancel and making Enter silently cancel. Keyboard/pointer interaction during loading still preserves the chosen focus.

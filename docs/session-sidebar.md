@@ -30,6 +30,8 @@ Pinning never selects, connects or restarts a session, marks it read, or changes
 
 ## Ordering and navigation
 
+Selecting a session restores your last focused control in its conversation, or the composer. If selection opens a pending Question or Permission picker, answering or dismissing it returns there rather than leaving focus on the sidebar row. An already-open dialog keeps focus priority.
+
 When a project opens, the sidebar starts at the top if the remembered selected session's entire row is visible there. Otherwise, it scrolls only far enough from the top to reveal the full row—not to center it. This rule starts from the top of the list, not a previous scroll position. It preserves your chosen view: a session excluded by Unread or Working stays hidden without changing filters or scrolling, and a collapsed sidebar stays collapsed. Later activity updates do not repeat this startup scroll. Ordinary session switching keeps its existing scroll behavior.
 
 New sessions start at the top of the unpinned group. Resumed Pi sessions insert using remembered recency or their latest saved user-message time; closed Copilot history uses the agent's reported update time when available. Already-open history entries reuse their sidebar time and status. Sending a message immediately moves its session to the top of its pin group—including Pi steering, queued follow-ups and image-only messages—without waiting for the agent. A later send error does not undo that ordering. Selecting, reading, renaming, changing models, compaction and background output do not reorder All.

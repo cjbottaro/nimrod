@@ -424,8 +424,9 @@ function selectSidebarView(view: SessionView): void {
   controls();
   if (returningToAll && target) revealSidebarRow(required('sidebar-session-panel'), target.rowNode);
 }
-function presentConversation(tab: Tab | undefined): void {
-  if (presented !== tab) {
+function presentConversation(tab: Tab | undefined, focus = false): void {
+  const changed = presented !== tab;
+  if (changed) {
     if (presented) {
       presented.integration.interactions.setActive(false);
       const focused = document.activeElement;
@@ -437,7 +438,7 @@ function presentConversation(tab: Tab | undefined): void {
     }
     presented = tab;
     conversation.hidden = !tab;
-    if (tab) { tab.root.hidden = false; tab.integration.interactions.setActive(true); tab.view.setActive(true); tab.notices.setActive(true); }
+    if (tab) { tab.root.hidden = false; tab.view.setActive(true); tab.notices.setActive(true); }
     syncPopouts();
   }
   for (const item of tabs) {
@@ -453,6 +454,10 @@ function presentConversation(tab: Tab | undefined): void {
   badge.textContent = tab?.integration.presentation.snapshot().badge ?? '';
   badge.title = tab?.integration.presentation.snapshot().badgeTitle ?? '';
   restartControl();
+  // Restore navigation focus after reveal/catch-up and inert reconciliation, but
+  // before a pending decision opens a picker and captures its return target.
+  if (focus && tab && !document.querySelector('dialog[open]')) (tab.focus?.isConnected ? tab.focus : tab.root.querySelector<HTMLElement>('[data-pi-id="prompt"]'))?.focus({ preventScroll: true });
+  if (changed && tab) tab.integration.interactions.setActive(true);
 }
 function promptPending(tab: Tab): boolean { return tab.integration.presentation.snapshot().pending; }
 function deletionBusy(tab: Tab): boolean {
@@ -939,13 +944,12 @@ function activate(tab: Tab, intent: SelectionIntent = 'explicit'): void {
     if (workspace) save(`nimrod.sidebar.view:${workspace}`, sidebarView);
   }
   active = plan.target;
-  presentConversation(navigation.presented(navigationSnapshot()));
+  presentConversation(navigation.presented(navigationSnapshot()), plan.focus);
   if (presented === tab) tab.unread = false;
   // Effects live at this one boundary; the model never touches Pi or drafts.
   for (const item of tabs) updateTab(item);
   persistTabs(); controls(); syncPopouts();
   if (plan.reveal && presented === tab) revealSidebarRow(required('sidebar-session-panel'), tab.rowNode, intent === 'startup' ? 'prefer-top' : 'nearest');
-  if (plan.focus && presented === tab && !document.querySelector('dialog[open]')) (tab.focus?.isConnected ? tab.focus : tab.root.querySelector<HTMLElement>('[data-pi-id="prompt"]'))?.focus({ preventScroll: true });
   selectedConnection.request();
 }
 function refreshTime(tab: Tab): void {
