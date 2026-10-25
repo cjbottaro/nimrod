@@ -95,6 +95,29 @@ test('Codex async picker retains Escape dismissal, opts into Ignore, and preserv
   } finally { owner.abort(); f.dispose(); }
 });
 
+test('Codex async questions distinguish choices, custom answers and Ignore without changing filtering or answers', async () => {
+  const f = fixture(), owner = new AbortController(), win = f.document.defaultView!;
+  try {
+    const pending = f.interaction.requestAsync({ id: 'markers', question: 'Which?', options: ['A', 'Ignore this alternative'] }, owner.signal);
+    const rows = [...f.document.querySelectorAll<HTMLElement>('#palette-list > [role=option]')];
+    assert.deepEqual(rows.map(row => row.querySelector<HTMLElement>('.palette-item-marker')?.dataset.marker), ['bullet', 'bullet', 'pencil', 'circle-slash']);
+    assert.equal(rows[2].classList.contains('palette-group-start'), true);
+    assert.equal(rows[3].classList.contains('palette-group-start'), false);
+    assert.equal(rows[3].querySelector('svg circle')?.getAttribute('r'), '9');
+    assert.equal(rows[3].querySelector('.palette-item-label')!.textContent, 'Ignore question');
+    f.input.value = 'Ignore'; f.input.dispatchEvent(new win.Event('input'));
+    assert.equal(f.document.querySelectorAll('#palette-list > [role=option]').length, 2);
+    assert.equal(f.document.querySelector('#palette-list > [role=option]:last-child')!.classList.contains('palette-group-start'), true);
+    f.input.value = 'Ignore question'; f.input.dispatchEvent(new win.Event('input'));
+    assert.equal(f.document.querySelectorAll('.palette-group-start').length, 0);
+    f.click('Ignore question'); assert.equal(await pending, undefined);
+    const free = f.interaction.requestAsync({ id: 'free', question: 'Details?', options: [] }, owner.signal);
+    assert.equal(f.document.querySelectorAll('.palette-group-start').length, 0);
+    assert.equal(f.document.querySelectorAll('[data-marker=bullet]').length, 0);
+    f.click('Ignore question'); await free;
+  } finally { owner.abort(); f.dispose(); }
+});
+
 test('Codex async custom answers cancel only the child and keep exact free text', async () => {
   const f = fixture(), owner = new AbortController();
   try {

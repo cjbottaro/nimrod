@@ -112,6 +112,10 @@ Existing user-driven captures from Codex 0.164.0 show completed `agentMessage` a
 
 The retained optional picker, Ignore, post-completion answer delivery, ordinary-follow-up retirement and pretty reply projection are source-implemented. New `codex-async-questions`, actual-palette and session fixtures are authored **unrun** for this extension. No tests, live prompts, user-session mutation, app launch or build were performed for the extension. Native macOS/Linux presentation, answer delivery and completion/dismissal timing remain unverified; pre-existing registered-harness fixture results do not cover these new cases.
 
+## Shared question picker presentation
+
+Shared choice bullets, custom-answer pencil, optional Ignore circle-slash and filtered group spacing are source-implemented for Copilot and Codex. New actual-palette assertions in `copilot-questions` and `codex-questions` are authored **unrun** for this presentation change. No tests, browser validation, app build or launch were performed. Native visual/accessibility acceptance on macOS/Linux remains pending; DOM assertions alone would not establish it. [Question row presentation](command-interactions.md#question-row-presentation) owns the contract.
+
 ## Codex tree deletion
 
 The shared review now consumes opaque key/parentKey nodes; Pi's native wire

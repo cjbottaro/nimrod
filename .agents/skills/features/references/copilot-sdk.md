@@ -259,7 +259,7 @@ session-bound presentation FIFO in `src/question-interaction.ts`, also used by
 Codex without sharing response semantics. The **Question picker** uses `startRetainedSelection`, the
 same shared palette lifecycle as permissions, not an inline form above the
 composer. The question is the context above searchable literal SDK choices;
-choosing one returns `{answer: choice, wasFreeform:false}` without rewriting it.
+choosing one returns `{answer: choice, wasFreeform:false}` without rewriting it. Visual markers/grouping follow the shared [question row presentation](command-interactions.md#question-row-presentation); Ignore is not contributed by Copilot.
 When `allowFreeform !== false`, **Enter your own answer…** opens `Dialogs.input`
 above the unchanged picker, with the question as title and **Submit answer**.
 Submitting non-whitespace text returns the exact input with `wasFreeform:true`.

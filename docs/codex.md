@@ -57,7 +57,7 @@ Additional-permission requests, policy-amendment responses and MCP elicitation a
 
 Nimrod now connects with Codex's experimental **protocol API** enabled. This does not enable every runtime experiment, change your feature flags or select native Plan mode.
 
-When Codex sends a supported structured question request, the **Codex question** picker shows its offered choices/descriptions. **Enter your own answer…** appears for free-text questions or when Codex allows an alternative. Batches of up to three questions are answered in order; one native reply is sent only when all are answered. Responses are not extra prompts.
+When Codex sends a supported structured question request, the **Codex question** picker shows its offered choices/descriptions, using the shared [question-picker markers](command-palette.md#question-pickers). **Enter your own answer…** appears for free-text questions or when Codex allows an alternative. Batches of up to three questions are answered in order; one native reply is sent only when all are answered. Responses are not extra prompts.
 
 Escape dismisses the picker without answering. The session-local **Waiting for input** banner offers **Answer question** to reopen it. Escape in a nested text dialog returns to the picker. Switching sessions keeps unanswered questions; Stop, server resolution and disconnection retire them without stale replies or partial batch answers. There is no automatic timeout answer.
 

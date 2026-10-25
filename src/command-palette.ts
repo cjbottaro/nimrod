@@ -1,6 +1,7 @@
 import { showModal, closeModal } from './modal-motion';
 import { vscodeMruRanking, type CommandRanking } from './command-ranking';
 import { createPickerEnterHint } from './picker-hints';
+import { createPaletteItemMarker, type PaletteItemMarker } from './palette-item-marker';
 import { createSessionRowContent, updateSessionRowContent, sessionStatusPresentation } from './session-sidebar';
 import type { SessionListEntry } from './session-list';
 
@@ -9,6 +10,9 @@ export interface PaletteItem {
   label: string;
   detail?: string;
   badge?: string;
+  marker?: PaletteItemMarker;
+  /** Adjacent visible groups get spacing, not an extra focusable/listbox entry. */
+  group?: string;
   current?: boolean;
   projectOpen?: boolean;
   projectParent?: string;
@@ -171,6 +175,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     selected = Math.max(0, matches.findIndex(item => item.id === previous));
     list.replaceChildren(...matches.map((item, index) => {
       const row = doc.createElement('div'); row.id = `palette-option-${index}`; row.setAttribute('role', 'option'); row.dataset.index = String(index);
+      if (index > 0 && item.group !== undefined && item.group !== matches[index - 1].group) row.classList.add('palette-group-start');
       if (item.sessionRow) {
         const content = createSessionRowContent(row, `${row.id}-time`);
         content.rowLabel.classList.add('palette-item-label');
@@ -180,12 +185,15 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       }
       const heading = doc.createElement('div'); heading.className = 'palette-item-heading';
       const label = doc.createElement('span'); label.className = 'palette-item-label'; label.textContent = item.label;
-      if (mode === 'selection' || mode === 'projects') {
+      if (mode === 'selection' && item.current) row.setAttribute('aria-current', 'true');
+      if (item.marker) {
+        if (preview) heading.append(label);
+        heading.append(createPaletteItemMarker(doc, item.marker));
+      } else if (mode === 'selection' || mode === 'projects') {
         const marker = doc.createElement('span'); marker.className = 'palette-selection-marker';
         marker.setAttribute('aria-hidden', 'true'); marker.textContent = (mode === 'projects' ? item.projectOpen : item.current) ? '•' : '';
         if (preview) heading.append(label, marker);
         else heading.append(marker);
-        if (mode === 'selection' && item.current) row.setAttribute('aria-current', 'true');
         if (mode === 'projects') row.setAttribute('aria-label', `${item.label} — ${item.detail || item.id}${item.projectOpen ? ' — Open project window' : ''}`);
       }
       if (!preview) heading.append(label);
