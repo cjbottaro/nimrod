@@ -16,14 +16,38 @@ worktree are retained for review and incremental follow-ups. The required
 post-merge `mise run check` passed: the architectural dependency gate,
 TypeScript (including negative contract assertions) and Rust compilation.
 
-New registry/prototype/default, boundary-gate unit, generic recency, retired Pi
-launch and mounted-shell unknown-registration runtime fixtures are authored
-**unrun**. Existing concrete/shell/card runtime fixtures were adapted but not
-rerun. Behavioral testing is user-led and incremental. No test suite, build,
-browser/app launch, native process handshake or user-session operation was
-performed for this migration. The source-level integration
-goal is not a claim of verified wire compatibility, full feature parity or
-macOS/Linux native acceptance. [Consumer interfaces](consumer-interfaces.md#enforcement-and-acceptance)
+User-authorized offline validation compared the migration to `c7573e6`:
+- Docs checks pass (107 Markdown files); the architectural gate and TypeScript,
+  including required/negative contract assertions, pass.
+- Baseline Node run: **1,373 passed / 45 failed**. Initial migration run:
+  **1,429 passed / 45 failed**, with 44 shared failure names and one new
+  quarantine-Resume regression. The baseline-only applicability failure was a
+  stale error-wording assertion, now aligned with generic target validation.
+- After fixes, the full Node rerun has **1,438 passed / 44 failed**; every
+  remaining failure name also occurs on the baseline. The aggregate
+  `mise run test` remains red and stops at Node; it is not a whole-suite pass.
+- Independent review found four P2 issues: existing-row Resume bypassing
+  preparation/recovery, a false connection notice from local mount `ready`,
+  missing owning sources on retained standalone/embedded tool updates, and
+  project-action metadata without an execution port. All four have source fixes
+  and targeted regressions; the original eight regression cases fail before
+  fixes and pass afterward. The expanded targeted group has nine passing cases,
+  and the focused registry/view/dependency group passes 33 tests.
+- Rust stages were run separately despite the aggregate's early stop. A stale
+  `Output` callback fixture prevented test compilation; a shutdown fixture also
+  read an empty PID marker before its contents were published. Test-only repairs
+  permit **195 Rust tests passed / 2 explicit installed-Pi smokes ignored**.
+  No real provider/installed-agent smoke was enabled.
+- Formatting remains red in the same 14 source files as the baseline; the
+  migration's new draft-fixture formatting delta was fixed. Clippy remains red
+  on three unchanged baseline diagnostics (`result_large_err` in SDK/Codex
+  supervision and `too_many_arguments` in Codex supervision). No unrelated
+  production refactor or warning suppression was made to claim a green gate.
+
+User-led installed-runtime testing remains incremental. No app build/restart,
+interactive browser, live CLI/provider request or user-session operation was
+performed. Node/jsdom and fixture-process Rust results do not establish wire
+compatibility, full feature parity or macOS/Linux native acceptance. [Consumer interfaces](consumer-interfaces.md#enforcement-and-acceptance)
 owns the contracts and enforcement scope.
 
 ## Integration consumer boundaries

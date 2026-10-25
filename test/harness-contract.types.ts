@@ -21,6 +21,9 @@ function compileAssertions(session: HarnessSession, project: HarnessProject, reg
   const { interactions, ...withoutInteractions } = session;
   // @ts-expect-error Even an integration without rich decisions must explicitly choose noInteractions.
   const missingInteractions: HarnessSession = withoutInteractions;
+  const { actions, ...withoutProjectActions } = project;
+  // @ts-expect-error Project contributions must choose an executable port or explicit noProjectActions.
+  defineHarness({ ...registration, create: () => withoutProjectActions });
   const { cards, ...withoutCards } = registration;
   // @ts-expect-error A registration must choose specialized or generic card presentation.
   defineHarness(withoutCards);
@@ -28,6 +31,6 @@ function compileAssertions(session: HarnessSession, project: HarnessProject, reg
   const emptyAction: HarnessAction = { id: 'model', label: 'Model', detail: 'Missing implementation' };
   // @ts-expect-error Completion/receipt semantics require the asynchronous submission contract.
   const incorrectInput: HarnessSession['conversation']['messageInput'] = { capabilities: () => ({}), submit() {} };
-  void [lifecycle, conversation, interactions, cards, missingConversation, missingInteractions, emptyAction, incorrectInput];
+  void [lifecycle, conversation, interactions, actions, cards, missingConversation, missingInteractions, emptyAction, incorrectInput];
 }
 void compileAssertions;

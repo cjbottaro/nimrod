@@ -13,11 +13,14 @@ import type { SavedSessionIdentity } from '../../src/session-lifecycle';
 const id = 'fixture-harness';
 const creation = { action: { id: 'harness-new-fixture', label: 'New fixture session', detail: 'Offline contract integration' }, defaultMode: 'saved', modes: ['saved'], named: false, title: 'Fixture session' } satisfies HarnessCreation;
 export const fixtureHarness = defineHarness({ id, label: 'Fixture', creation, cards: genericCards,
-  actions: [{ id: 'harness-fixture-question', label: 'Display fixture question', detail: 'Display-only unsupported interaction', context: 'session' }], create: project });
+  actions: [{ id: 'harness-fixture-project', label: 'Fixture project action', detail: 'Project-bound offline operation', context: 'project' }, { id: 'harness-fixture-question', label: 'Display fixture question', detail: 'Display-only unsupported interaction', context: 'session' }], create: project });
 function project(projectHost: HarnessProjectHost): HarnessProject {
   let ready = false, associated = false, pending = false;
   const saved = new Map<string, string>([['saved-fixture', 'Saved fixture session']]);
   return { id, label: 'Fixture', creation,
+    actions: { current: () => [{ id: 'harness-fixture-project', label: 'Fixture project action', detail: 'Project-bound offline operation',
+      available: () => ready && projectHost.current() && projectHost.applicationReady() && !!projectHost.project(),
+      async run() { const key = 'fixture-project-runs'; projectHost.store.save(key, Number(projectHost.store.read(key) ?? 0) + 1); } }] },
     initialization: { blocking: false, ready: () => ready, async run() { ready = true; projectHost.changed(); } },
     saved: taggedSavedSessions(id),
     history: { associate() { associated = true; }, source: () => !associated ? undefined : { id, label: 'Fixture',

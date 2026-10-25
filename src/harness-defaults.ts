@@ -7,6 +7,7 @@ import { keyboardSubmissionMode } from './pi/composer-dom';
 import { newlineHint, sendHint } from './composer-hints';
 
 export const noInteractions: SessionInteractions = Object.freeze({ setActive() {}, dispose() {} });
+export const noProjectActions: import('./harness-contract').HarnessProject['actions'] = Object.freeze({ current: () => [] });
 export const noConfiguration = Object.freeze({ current: () => undefined });
 export const noReferences = Object.freeze({ file: () => undefined });
 export const noHistory = (): HarnessHistory => ({ source: () => undefined, associate() {}, async dispose() {} });

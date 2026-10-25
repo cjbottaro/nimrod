@@ -18,7 +18,7 @@ import type { SessionDeletion, DeletionSnapshot, DeletionEvent } from '../sessio
 import { bundledToolRenderer } from './card-plugins/registry';
 import { defineHarness } from '../harness-registry';
 import { conversationPort } from '../harness-conversation';
-import { configurationActions, ordinarySelection, savedClose, temporaryClose } from '../harness-defaults';
+import { configurationActions, noProjectActions, ordinarySelection, savedClose, temporaryClose } from '../harness-defaults';
 import type { HarnessProject, HarnessSession, SessionRequest } from '../harness-contract';
 import type { HarnessProjectHost, HarnessSessionHost } from '../harness-host';
 import { ownedProcessStop } from '../session-lifecycle';
@@ -63,7 +63,7 @@ function createPiProject(host: HarnessProjectHost): HarnessProject {
     },
   };
   return {
-    id: 'pi', label: 'Pi', creation,
+    id: 'pi', label: 'Pi', creation, actions: noProjectActions,
     initialization: { blocking: true, ready: () => ready, async run() { await invoke('stop_pi'); transaction?.load(await invoke<DeletionSnapshot>('deletion_snapshot')); ready = true; } },
     saved, history: { source: () => history, associate() {}, async dispose() { await history.dispose(); } },
     deletion(context) {

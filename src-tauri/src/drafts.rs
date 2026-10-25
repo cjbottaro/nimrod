@@ -374,7 +374,11 @@ mod tests {
             serde_json::from_str(include_str!("../../test/fixtures/draft-scopes.json")).unwrap();
         for vector in vectors {
             let key = vector["key"].as_str().unwrap();
-            assert_eq!(saved_scope(key), vector["saved"].as_bool().unwrap(), "{key}");
+            assert_eq!(
+                saved_scope(key),
+                vector["saved"].as_bool().unwrap(),
+                "{key}"
+            );
             assert_eq!(
                 persistent_scope(key),
                 vector["persistent"].as_bool().unwrap(),
