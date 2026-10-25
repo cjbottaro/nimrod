@@ -47,6 +47,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- Subtle modal animations keep background blur steady while fading the dimming and panel, avoiding full-window blur opacity animation with translucency. Linux smoothness confirmation is pending.
+
 - Codex async-question answers now use the same speech-bubble question and inset, accent-lined reply as Copilot question/answer cards, with the exact original message behind a disclosure. Native user-message identity and delivery behavior are unchanged across live answers and saved history.
 
 - Codex and Copilot Question pickers distinguish offered answers with bullets, custom answers with a pencil, and supported Ignore actions with a circle-slash, with a small gap before utility actions. Labels, filtering, keyboard controls and dismiss-and-resume behavior are unchanged.

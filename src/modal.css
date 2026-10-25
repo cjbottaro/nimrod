@@ -77,6 +77,15 @@ dialog.nimrod-modal:not([open]), dialog.nimrod-modal:not([open])::backdrop,
 dialog.nimrod-modal[open]::backdrop, .modal-overlay.open::before {
   animation:modal-backdrop-enter var(--modal-scrim-duration, var(--modal-enter-duration)) ease-out;
 }
+/* Keep the filtered surface at full opacity: fading that full-window surface
+ * can force expensive intermediate compositing with translucent webviews.
+ * Animate only its tint; the panel keeps its independent fade/transform.
+ */
+:root[data-translucency=window]:is(:not([data-modal-animation]), [data-modal-animation="subtle"]) dialog.nimrod-modal[open]::backdrop,
+:root[data-translucency=window]:is(:not([data-modal-animation]), [data-modal-animation="subtle"]) .modal-overlay.open::before {
+  animation-name:modal-backdrop-tint-enter;
+}
+@keyframes modal-backdrop-tint-enter { from { background-color:transparent; } }
 @keyframes modal-subtle-enter {
   from { opacity:0; transform:translateY(4px) scale(.98); }
   to { opacity:1; transform:none; }
