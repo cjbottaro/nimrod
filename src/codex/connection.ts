@@ -79,6 +79,7 @@ export function createCodexConnection(readOwner: () => SessionLifecycleOwner, ba
       changed: () => { if (valid()) host.ui.changed(session.state); },
       approval: (request, signal) => valid() ? host.ui.approval(request, signal) : Promise.resolve('cancel'),
       question: host.ui.question ? (request, signal) => valid() ? host.ui.question!(request, signal) : Promise.resolve(undefined) : undefined,
+      asyncQuestion: host.ui.asyncQuestion ? (request, signal) => valid() ? host.ui.asyncQuestion!(request, signal) : Promise.resolve(undefined) : undefined,
       interactionFailure: host.ui.interactionFailure ? failure => { if (valid()) host.ui.interactionFailure!(failure); } : undefined,
       notice: message => { if (valid()) host.ui.notice(message); },
       disconnected: message => {

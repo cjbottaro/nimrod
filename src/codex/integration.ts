@@ -72,7 +72,7 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
         const next = JSON.stringify([state.busy, state.sessionUnavailable, title]);
         if (next !== signature) { signature = next; effects.changed({ title, clearFailed: state.busy, persist: !!lifecycle.identity }); }
       },
-      approval: ui.approval, question: ui.question,
+      approval: ui.approval, question: ui.question, asyncQuestion: ui.asyncQuestion,
       interactionFailure: failure => {
         if (lifetime.closing()) return;
         const guidance = host.transcriptLog.enabled ? 'Transcript debug logging is enabled; inspect it for the raw request.' : 'Enable Transcript debug logs before another attempt to capture the raw request.';

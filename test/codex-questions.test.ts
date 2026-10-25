@@ -80,6 +80,32 @@ test('Codex background and server-aborted batches do not steal focus or transmit
   } finally { owner.abort(); newer.abort(); f.dispose(); }
 });
 
+test('Codex async picker retains Escape dismissal, opts into Ignore, and preserves drafts', async () => {
+  const f = fixture(), owner = new AbortController(); let settled = false;
+  try {
+    const pending = f.interaction.requestAsync({ id: 'async', question: 'Which?', options: ['A'] }, owner.signal)
+      .then(value => { settled = true; return value; });
+    f.dismiss(); await tick(); assert.equal(settled, false); assert.equal(f.count(), 1);
+    f.selected(false); f.selected(true); assert.equal(f.dialog.open, false);
+    f.review(); f.click('Ignore question'); assert.equal(await pending, undefined);
+    assert.equal(f.count(), 0); assert.equal(f.inputs(), 0); assert.equal(f.draft.value, 'newer draft');
+    const next = f.interaction.request(request(), owner.signal);
+    assert.doesNotMatch(f.document.querySelector('#palette-list')!.textContent!, /Ignore question/);
+    f.click('A'); await next;
+  } finally { owner.abort(); f.dispose(); }
+});
+
+test('Codex async custom answers cancel only the child and keep exact free text', async () => {
+  const f = fixture(), owner = new AbortController();
+  try {
+    const pending = f.interaction.requestAsync({ id: 'async', question: 'Which?', options: [] }, owner.signal);
+    f.click('Enter your own answer…'); f.child.close('cancel'); await tick();
+    assert.equal(f.count(), 1); assert.equal(f.dialog.open, true);
+    f.click('Enter your own answer…'); f.answer.value = '  Exact answer  '; f.child.close('ok');
+    assert.deepEqual(await pending, { answer: '  Exact answer  ', wasFreeform: true });
+  } finally { owner.abort(); f.dispose(); }
+});
+
 test('Codex question parsing rejects secret, malformed, duplicate and unknown semantic fields explicitly', () => {
   const valid = request(); assert.deepEqual(codexQuestionAnswers(valid, { scope: { answers: ['A'] } }), { scope: { answers: ['A'] } });
   for (const questions of [[], [question('duplicate'), question('duplicate')], [{ ...question('secret'), isSecret: true }], [{ ...question('future'), multiSelect: true }], [{ ...question('invalid'), options: [] }]]) {

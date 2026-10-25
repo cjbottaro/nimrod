@@ -11,7 +11,7 @@ description: Implement, debug or review Nimrod's bespoke Codex app-server integr
 
 Use the installed **`codex app-server --listen stdio://`**, not ACP or the TypeScript automation SDK. OpenAI recommends app-server for rich custom clients. Nimrod adds no Node bridge or Codex runtime dependency, never attaches to an existing user's server, and inherits Codex's authentication/configuration/policies. There is no in-app login/logout, token import or configuration-file rewriting.
 
-The reviewed local protocol is **Codex CLI 0.162.0**. [Protocol evidence](references/protocol-evidence.md) records generator inputs, inspected shapes and limitations. This is a reviewed baseline, **not a runtime semver gate or arbitrary-version compatibility promise**. The official [app-server reference](https://developers.openai.com/codex/app-server/) establishes that deletion is recursive and resume overrides exist; it does not establish acceptance of overrides on an already-loaded idle thread. Keep that distinction explicit.
+The initial reviewed local protocol is **Codex CLI 0.162.0**, with the async-question path additionally reviewed against installed **0.164.0** and its matching native-client source. [Protocol evidence](references/protocol-evidence.md) records generator inputs, inspected shapes and limitations. This is a reviewed baseline, **not a runtime semver gate or arbitrary-version compatibility promise**. The official [app-server reference](https://developers.openai.com/codex/app-server/) establishes that deletion is recursive and resume overrides exist; it does not establish acceptance of overrides on an already-loaded idle thread. Keep that distinction explicit.
 
 ## Capability map
 
@@ -30,7 +30,7 @@ The reviewed local protocol is **Codex CLI 0.162.0**. [Protocol evidence](refere
 | Restart | Unavailable, like existing Copilot; Close then explicit Resume. |
 | Delete | Shared reviewed spawned-thread tree deletion through a guarded catalog; see [Codex deletion](references/deletion.md). Cross-project, incomplete-lineage and ambiguous-fork trees fail explicitly. |
 | CLI slash commands | No advertised app-server catalog. Slash input rejects before draft clearing; never prompt-fallback or impersonate native CLI commands. |
-| Structured questions / protocol opt-in | `experimentalApi: true` permits experimental protocol fields without enabling runtime feature flags. Reviewed non-secret question batches use the shared retained UI and exact keyed replies; unsupported interactions are visible and logged. [Contract/capture guide](references/questions.md). |
+| Structured questions / protocol opt-in | `experimentalApi: true` permits experimental protocol fields without enabling runtime feature flags. Reviewed non-secret RPC question batches use exact keyed replies. Async assistant questions use the same retained UI with optional Ignore and native-framed ordinary input; they survive completion until answered, ignored or superseded. Unsupported interactions are visible and logged. [Contract/capture guide](references/questions.md). |
 | Plan/Autopilot controls, MCP elicitation, permission amendments | Not implemented. Protocol opt-in does not select a mode or supply invented runtime semantics; unsupported requests return explicit errors, never grants. |
 | Manual compaction, context-tier changes, live permission policy, MCP inspector | Not exposed. No guessed parity or extra provider work. |
 
@@ -50,7 +50,7 @@ This is **nearer to shared core-workflow parity**, not a claim of native accepta
 | `src/codex/session-lifecycle.ts` | Existing `SessionPersistence`/`SessionConnectivity` consumer ports; stop is process teardown, not cancel-turn. |
 | `src/codex/session-history.ts` | Existing `SessionHistory` port, separate catalog lifetime, no conversation creation/prompting. |
 | `src/codex/session-deletion.ts`, `deletion-tree.ts`, `src-tauri/src/codex_deletion.rs` | Existing deletion ports/review, exhaustive spawned inventory, native affected-writer reservations, one recursive API call and confirmed-only reconciliation. [Contract and policies](references/deletion.md). |
-| `src/codex/approval-interaction.ts`, `questions.ts`, `question-interaction.ts`, `src/question-interaction.ts` | Concrete Codex approvals/question schemas; shared retained palette and extracted Copilot/Codex question presentation own modality/FIFO/child input, not harness responses. [Question contract](references/questions.md). |
+| `src/codex/approval-interaction.ts`, `questions.ts`, `async-questions.ts`, `question-interaction.ts`, `src/question-interaction.ts` | Concrete Codex approvals/question schemas; shared retained palette and extracted Copilot/Codex question presentation own modality/FIFO/child input, not harness responses. [Question contract](references/questions.md). |
 | `src/codex/view-policy.ts`, `card-plugins.ts` | Concrete keyboard/actions and public card presentation components. Card target is `codex`, not Pi/ACP. |
 | `src/codex/integration.ts`, `integration-ui.ts` | Required registration/project/session ports, window-generation initialization, history association, lifecycle composition, activity/title/action projection and retained Codex approval/question UI. No shell Codex branches or launch callbacks. |
 | `src/main.ts` | Shared registered-consumer composition, native window effects, navigation, attention and publication. Typed `SessionRequest` replaces concrete creation unions; all supported integrations use [registered consumer ports](../features/references/consumer-interfaces.md#implemented-extraction-and-registration-boundary). |
@@ -84,6 +84,7 @@ Future extraction must remove actual consumer knowledge or move responsibility. 
 
 ### Decisions and policy
 
+- Optional async questions retain native item/index identity and submit native-framed ordinary input, never RPC replies. Ignore is local-only; completion does not expire them. See [async question contract](references/questions.md#async-follow-up-questions).
 - Native question batches preserve IDs, offered labels/free-text rules and blocking metadata; responses are one keyed RPC result, not prompts. No timeout-generated answer, partial batch, secret plaintext collection or automatic mode/feature selection. Unsupported interactions have session-local diagnostics plus opt-in raw capture.
 - Command/file callbacks preserve native kind, approvalId, cwd, reason and proposed policy data. RPC request ID owns a reply; one item may own several callbacks.
 - Supported basic decisions are Codex `accept`, `acceptForSession`, `decline`, `cancel`. No policy-amendment objects are synthesized. Permissions additional to this subset, MCP elicitation, dynamic host tools, legacy approval methods and external-token refresh fail explicitly.

@@ -106,6 +106,12 @@ unverified. The user plans to trigger and share their own interaction traces;
 that intent is not acceptance evidence. [Codex questions](../../codex-integration/references/questions.md)
 owns capture instructions, scope and policies.
 
+### Async question follow-up extension
+
+Existing user-driven captures from Codex 0.164.0 show completed `agentMessage` async questions followed by normal turn completion. Read-only installed version/help/experimental type generation and matching official source review establish native-client identity/envelope and ordinary-input delivery semantics, not acceptance of Nimrod's new implementation. See [protocol evidence](../../codex-integration/references/protocol-evidence.md#async-question-source-review-01640).
+
+The retained optional picker, Ignore, post-completion answer delivery, ordinary-follow-up retirement and pretty reply projection are source-implemented. New `codex-async-questions`, actual-palette and session fixtures are authored **unrun** for this extension. No tests, live prompts, user-session mutation, app launch or build were performed for the extension. Native macOS/Linux presentation, answer delivery and completion/dismissal timing remain unverified; pre-existing registered-harness fixture results do not cover these new cases.
+
 ## Codex tree deletion
 
 The shared review now consumes opaque key/parentKey nodes; Pi's native wire

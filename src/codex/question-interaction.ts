@@ -1,4 +1,5 @@
 import { QuestionInteraction, type QuestionUi } from '../question-interaction';
+import type { CodexAsyncQuestion } from './async-questions';
 import { CODEX_ANSWER_LIMIT, type CodexQuestionRequest, type CodexQuestionAnswers } from './questions';
 /** Codex batches are one RPC response; question presentation/retention is shared with Copilot. */
 export class CodexQuestionInteraction {
@@ -14,6 +15,10 @@ export class CodexQuestionInteraction {
     }, signal));
     return Promise.all(answers).then(values => values.some(value => value === undefined) ? undefined
       : Object.fromEntries(request.questions.map((question, index) => [question.id, { answers: [values[index]!.answer] }])));
+  }
+  requestAsync(question: CodexAsyncQuestion, signal: AbortSignal) {
+    return this.interaction.request({ question: question.question, choices: question.options.map(label => ({ label })),
+      freeform: true, maxAnswerLength: CODEX_ANSWER_LIMIT, allowIgnore: true }, signal);
   }
   setActive(active: boolean): void { this.interaction.setActive(active); }
   review(): void { this.interaction.review(); }

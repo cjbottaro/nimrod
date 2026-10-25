@@ -8,8 +8,7 @@ export function codexIntegrationUi(host: HarnessSessionHost) {
   let questions: CodexQuestionInteraction | undefined, approvals: CodexApprovalInteraction | undefined, sequence = 0;
   const canPresent = () => lifetime.current() && !lifetime.closing() && ui.canPresent();
   const attention = (signal: AbortSignal) => { if (host.ownership.token) effects.attention('input', host.ownership.token, 'Codex', undefined, signal); };
-  const question: NonNullable<CodexSessionUi['question']> = (request, signal) => {
-    if (signal.aborted || !lifetime.current() || lifetime.closing()) return Promise.resolve(undefined);
+  const questionInteraction = () => {
     const owner = `${host.id}:codex-question-input`;
     questions ??= new CodexQuestionInteraction({ document: ui.document, canPresent,
       start: dismiss => canPresent() ? ui.palette.startRetainedSelection('Codex question', dismiss) : undefined,
@@ -20,7 +19,15 @@ export function codexIntegrationUi(host: HarnessSessionHost) {
         effects.notice({ id: 'codex-question', operation: 'Codex questions', message: `Waiting for input · ${count} ${count === 1 ? 'question' : 'questions'}`,
           presentation: 'pending-action', severity: 'info', dismissible: false, actions: [{ label: 'Answer question', enabled: canPresent, run: review }] });
       }, error: message => { if (lifetime.current() && !lifetime.closing()) effects.notice({ id: `codex-question-error:${++sequence}`, operation: 'Answer Codex question', message }); } });
-    const result = questions.request(request, signal); attention(signal); return result;
+    return questions;
+  };
+  const question: NonNullable<CodexSessionUi['question']> = (request, signal) => {
+    if (signal.aborted || !lifetime.current() || lifetime.closing()) return Promise.resolve(undefined);
+    const result = questionInteraction().request(request, signal); attention(signal); return result;
+  };
+  const asyncQuestion: NonNullable<CodexSessionUi['asyncQuestion']> = (request, signal) => {
+    if (signal.aborted || !lifetime.current() || lifetime.closing()) return Promise.resolve(undefined);
+    const result = questionInteraction().requestAsync(request, signal); attention(signal); return result;
   };
   const approval: CodexSessionUi['approval'] = (request, signal) => {
     if (signal.aborted || !lifetime.current() || lifetime.closing()) return Promise.resolve('cancel');
@@ -34,7 +41,7 @@ export function codexIntegrationUi(host: HarnessSessionHost) {
       } });
     const result = approvals.request(request, signal); attention(signal); return result;
   };
-  return { question, approval,
+  return { question, asyncQuestion, approval,
     setActive(active: boolean) { questions?.setActive(active); approvals?.setActive(active); },
     dispose() { questions?.dispose(); approvals?.dispose(); } };
 }

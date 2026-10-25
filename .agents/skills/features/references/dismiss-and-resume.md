@@ -27,6 +27,7 @@ Use the shared retained palette and modal helpers; [command interactions](comman
 | --- | --- | --- | --- | --- |
 | Copilot permission request | **Permission picker**; optional nested **Denial-feedback modal** | **Waiting for permission · N requests** (**Pending-permission banner**) | **Review requests** | [Permission choices and interaction](copilot-sdk.md#permission-choices-and-interaction) |
 | Copilot agent question (harness-owned user-input request) | **Question picker**; optional nested **Custom-answer modal** | **Waiting for input · N questions** (**Pending-question banner**) | **Answer question** | [Questions and custom answers](copilot-sdk.md#questions-and-custom-answers) |
+| Codex optional async question | **Codex question** picker with **Ignore question**; optional nested **Custom-answer modal** | **Waiting for input · N questions** (agent may continue) | **Answer question** | [Codex async questions](../../codex-integration/references/questions.md#async-follow-up-questions) |
 | Codex structured question batch | **Codex question** picker; optional nested **Custom-answer modal** | **Waiting for input · N questions** | **Answer question** | [Codex questions](../../codex-integration/references/questions.md) |
 | Copilot exit-plan request | **Plan review picker**; nested plan feedback | **Waiting for plan review** (**Pending-plan banner**) | **Review plan** | [Plan review interaction](copilot-sdk.md#plan-review-interaction) |
 
