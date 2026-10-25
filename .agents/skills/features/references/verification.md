@@ -31,7 +31,9 @@ User-authorized offline validation compared the migration to `c7573e6`:
   missing owning sources on retained standalone/embedded tool updates, and
   project-action metadata without an execution port. All four have source fixes
   and targeted regressions; the original eight regression cases fail before
-  fixes and pass afterward. The expanded targeted group has nine passing cases,
+  fixes and pass afterward. A follow-up read-only review confirmed all four
+  causal fixes and found no concrete follow-up regression within the inspected
+  patches. The expanded targeted group has nine passing cases,
   and the focused registry/view/dependency group passes 33 tests.
 - Rust stages were run separately despite the aggregate's early stop. A stale
   `Output` callback fixture prevented test compilation; a shutdown fixture also
