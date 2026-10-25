@@ -63,7 +63,7 @@ Deletion is permanent, not a move to OS trash. No Pi deletion plugin is required
 
 Saved-history pickers can contain a stale row if its file is deleted after discovery. Choosing it shows an error; Nimrod never substitutes a new conversation. A session in the active deletion tree cannot attach a new agent until review is canceled or deletion finishes. The reviewing window retains normal modal focus and shortcut priority.
 
-Slower previews show **Loading session tree…** with Delete disabled. Cancel during loading prevents deletion even if preparation finishes later. Enter respects the focused action; Enter on Cancel cancels.
+Slower previews show **Loading session tree…** with Delete disabled. When ready, Delete receives focus unless you have already used the keyboard or pointer in the loading dialog. Cancel during loading prevents deletion even if preparation finishes later. Enter respects the focused action; Enter on Cancel cancels.
 
 Confirmed successes remove their history files, drafts, recovery items and saved references. A failed descendant retains its ancestors; other branches can succeed. Review-time conversation or draft changes do not require another attempt. Invalid history, shutdown failures, late external file changes and uncertain outcomes still show explicit errors without automatic retry. **Recovery needed** sessions require explicit **Resume session…** after the transaction finishes; row selection or Restart cannot bypass that guard.
 

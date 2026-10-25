@@ -56,7 +56,7 @@ test('review can cover only the authorized deletion picker, with loading and hig
     assert.equal(picker.open, true); assert.equal(f.dialog.open, true);
     assert.equal(f.doc.activeElement?.id, 'deletion-cancel');
     const answer = f.controller.review({ id: 'nested', sessions });
-    assert.equal(f.doc.activeElement?.id, 'deletion-cancel');
+    assert.equal(f.doc.activeElement?.id, 'deletion-confirm');
     f.dialog.close('cancel'); assert.equal(await answer, false);
     assert.equal(picker.open, true); assert.equal(f.doc.activeElement?.id, 'palette-input');
     host.showModal();
@@ -86,7 +86,7 @@ test('fast previews open the populated review directly and cancel the delayed lo
   } finally { f.dispose(); }
 });
 
-test('slow previews show loading after 150ms and update the same modal without changing Cancel focus', async () => {
+test('slow previews show loading after 150ms and default untouched ready reviews to Delete', async () => {
   const f = fixture();
   try {
     f.controller.loading();
@@ -105,12 +105,41 @@ test('slow previews show loading after 150ms and update the same modal without c
     assert.equal(f.dialog.open, true);
     const answer = f.controller.review({ id: 'next', sessions });
     assert.equal(f.dialog.open, true);
-    assert.equal(f.doc.activeElement?.id, 'deletion-cancel');
+    assert.equal(f.doc.activeElement?.id, 'deletion-confirm');
     assert.equal(f.doc.querySelector<HTMLButtonElement>('#deletion-confirm')!.disabled, false);
     assert.equal(f.doc.querySelector('#deletion-tree')!.getAttribute('aria-busy'), 'false');
-    f.doc.querySelector<HTMLButtonElement>('#deletion-confirm')!.click(); assert.equal(await answer, true);
+    f.doc.activeElement!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    assert.equal(await answer, true);
+    assert.equal(f.doc.querySelector('.deletion-execution span:last-child')!.textContent, 'Stopping sessions…');
     assert.equal(f.dialog.open, true);
   } finally { f.dispose(); }
+});
+
+test('loading interactions preserve Cancel focus when review becomes ready', async () => {
+  for (const interaction of ['keyboard', 'pointer']) {
+    const f = fixture();
+    try {
+      f.controller.loading(); f.advance(150);
+      assert.equal(f.doc.activeElement?.id, 'deletion-cancel');
+      const cancel = f.doc.querySelector<HTMLButtonElement>('#deletion-cancel')!;
+      if (interaction === 'keyboard') {
+        cancel.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+      } else {
+        cancel.dispatchEvent(new f.dom.window.Event('pointerdown', { bubbles: true }));
+      }
+      const answer = f.controller.review({ id: interaction, sessions });
+      assert.equal(f.doc.activeElement, cancel);
+      cancel.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      assert.equal(await answer, false);
+      assert.equal(f.dialog.open, false);
+      assert.equal(f.doc.querySelector('.deletion-execution'), null);
+      // A later operation must not inherit the earlier interaction flag.
+      f.controller.cancel(); f.controller.loading(); f.advance(150);
+      const next = f.controller.review({ id: 'next', sessions });
+      assert.equal(f.doc.activeElement?.id, 'deletion-confirm');
+      f.controller.cancel(); assert.equal(await next, false);
+    } finally { f.dispose(); }
+  }
 });
 
 test('loading cancellation prevents late review from reopening and cleanup closes a queued preview', async () => {
