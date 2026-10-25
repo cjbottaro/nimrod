@@ -47,7 +47,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
-- Subtle modal animations keep background blur steady while fading the dimming and panel, avoiding full-window blur opacity animation with translucency. Linux smoothness confirmation is pending.
+- Subtle modal opening keeps background blur steady while fading the dimming and panel, improving Linux entrance smoothness with translucency. Closing retains its blur fade; the attempted steady-blur exit was reverted after a reported regression.
 
 - Codex async-question answers now use the same speech-bubble question and inset, accent-lined reply as Copilot question/answer cards, with the exact original message behind a disclosure. Native user-message identity and delivery behavior are unchanged across live answers and saved history.
 

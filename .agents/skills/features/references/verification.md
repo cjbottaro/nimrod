@@ -476,3 +476,7 @@ Use current [user guides](../../../../docs/README.md) for available actions. The
 Repository-required merge validation is owned by `AGENTS.md`. Requested broader validation uses `mise run test`; scrolling validation also includes offline `npm run test:browser`. Build only when explicitly requested, following [publication policy](build-cache.md). Do not launch/quit/restart the user's app automatically.
 
 Keep current test coverage and outstanding acceptance in the relevant feature reference. Update this matrix only when native evidence changes. Significant regression investigations may be archived under `history/` with source revision/platform, actual scope and explicit supersession; avoid adding every intermediate run/test count to living specifications.
+
+## Translucent Subtle motion feedback
+
+Linux user feedback on the steady-blur experiment (`b0ca96a`): opening became smooth, but closing appeared worse. The follow-up preserves the entrance CSS and restores the previous exit opacity fade instead of fading backdrop color with full-strength blur until cleanup. Follow-up native closing acceptance remains pending; this is user visual feedback, not measured renderer attribution or macOS acceptance.

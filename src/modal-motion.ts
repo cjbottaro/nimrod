@@ -302,18 +302,12 @@ function createModalMotion(document: Document) {
       else scan(layer, snapshot.shell, style, snapshot.motion.scanSpeed, true, snapshot.clip, backdrop, box);
       return;
     } else {
-      if (snapshot.backdropFilter && snapshot.backdropFilter !== 'none') {
-        // The blur must not sit inside a fading ancestor. Keep it on a sibling
-        // surface and fade only the scrim tint, independently of the panel.
-        const backdrop = document.createElement('div'); backdrop.dataset.modalMotionBackdrop = '';
-        backdrop.style.cssText = 'position:absolute;inset:0;pointer-events:none;';
-        backdrop.style.background = snapshot.backdrop; layer.node.prepend(backdrop);
-        applyBackdropFilter(backdrop, snapshot.backdropFilter);
-        animate(layer, backdrop, [{ backgroundColor: snapshot.backdrop }, { backgroundColor: 'transparent' }], duration);
-      } else {
-        layer.node.style.background = snapshot.backdrop;
-        animate(layer, layer.node, [{ opacity: 1 }, { opacity: 0 }], duration);
-      }
+      // Unlike entrance, the exit backdrop is newly mounted after native close.
+      // Fade its filtered surface away so blur does not disappear abruptly at
+      // cleanup; keep the steady-blur/tint entrance optimization in modal.css.
+      layer.node.style.background = snapshot.backdrop;
+      applyBackdropFilter(layer.node, snapshot.backdropFilter);
+      animate(layer, layer.node, [{ opacity: 1 }, { opacity: 0 }], duration);
       animate(layer, snapshot.shell, [{ opacity: snapshot.opacity, transform: 'none' }, { opacity: 0, transform: 'translateY(4px) scale(.98)' }], duration, 'ease-in');
     }
     finish(layer);
