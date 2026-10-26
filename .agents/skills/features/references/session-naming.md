@@ -19,7 +19,10 @@ Nimrod-only alias. This is a naming consumer interface, not a harness protocol.
   Disconnected targets report **Resume this session before renaming it** in their
   session notice; this action never launches a runtime or changes selection.
 - Reuse `Dialogs.input`, its shared modal shell/motion, current title prefill and
-  **Rename session** submit label. Cancel/Escape does nothing. Accepted input is
+  **Rename session** submit label. Opt into `selectPrefill` so the focused input
+  selects the entire current name on open; typing replaces it immediately.
+  This is actual editable text, not a placeholder; other input dialogs retain
+  their existing selection behavior. Cancel/Escape does nothing. Accepted input is
   trimmed; blank, multiline and ASCII-control-containing values reject locally.
   Submitting the prefilled title still sets an explicit harness name, even if the
   title was originally inferred from a message.

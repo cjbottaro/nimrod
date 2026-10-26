@@ -547,6 +547,8 @@ test('Rename session targets a connected background row without navigation, rece
     const time = target.querySelector('time')!.getAttribute('datetime'), before = f.calls.length;
     (await f.rowMenu(target)).rename.click(); await f.tick(); await f.tick();
     assert.equal(f.element<HTMLDialogElement>('host-dialog').open, true);
+    const name = f.element<HTMLTextAreaElement>('host-dialog-input');
+    assert.equal(name.selectionStart, 0); assert.equal(name.selectionEnd, name.value.length);
     f.element<HTMLTextAreaElement>('host-dialog-input').value = '  Background name  '; await f.confirm();
     assert.match(target.textContent!, /Background name/);
     assert.equal(selected.getAttribute('aria-current'), 'true');
@@ -573,7 +575,10 @@ test('Rename session palette action is bindable, prefilled, cancellable and vali
     };
     assert.deepEqual(ACTIONS.find(action => action.id === 'rename')!.defaults, ['primary+shift+r']);
     await open();
-    assert.equal(f.element<HTMLTextAreaElement>('host-dialog-input').value, f.element('project-session-name').textContent);
+    const name = f.element<HTMLTextAreaElement>('host-dialog-input');
+    assert.equal(name.value, f.element('project-session-name').textContent);
+    assert.equal(f.win.document.activeElement, name);
+    assert.equal(name.selectionStart, 0); assert.equal(name.selectionEnd, name.value.length);
     f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
     assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'set_session_name'), false);
     await open(); f.element<HTMLTextAreaElement>('host-dialog-input').value = 'two\nlines'; await f.confirm();

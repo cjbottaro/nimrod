@@ -70,8 +70,17 @@ test('confirmation focus, labels and Enter agree; Cancel focus and Escape cancel
     assert.equal(confirm.textContent, 'Send denial'); assert.equal(document.activeElement, field);
     dialogs.cancel('permission-owner'); assert.equal(await feedback, undefined);
     assert.equal(parent.open, true); assert.equal(document.activeElement, parentInput);
+    const rename = dialogs.input('Rename session', 'Current name', 'rename-owner', 'Rename session', true);
+    await Promise.resolve();
+    assert.equal(document.activeElement, field);
+    assert.equal(field.value, 'Current name');
+    assert.equal(field.selectionStart, 0); assert.equal(field.selectionEnd, field.value.length);
+    field.setRangeText('Replacement', field.selectionStart, field.selectionEnd, 'end');
+    key('Enter'); assert.equal(await rename, 'Replacement');
     const ordinary = dialogs.input('Ordinary input', 'No stale label');
     await Promise.resolve(); assert.equal(confirm.textContent, 'Confirm');
+    assert.equal(field.selectionStart, field.value.length, 'select-prefill is opt-in, not inherited by later inputs');
+    assert.equal(field.selectionEnd, field.value.length);
     dialogs.cancel(); assert.equal(await ordinary, undefined);
     const custom = dialogs.input('Question', undefined, 'question-owner', 'Submit answer');
     await Promise.resolve();

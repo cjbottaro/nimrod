@@ -17,7 +17,7 @@ export class Dialogs {
     if (this.dialog.open && (!owner || this.activeOwner === owner)) closeModal(this.dialog, 'cancel');
   }
 
-  private show(title: string, options?: string[], prefill?: string, message?: string, owner?: string, action = 'Confirm'): Promise<string | undefined> {
+  private show(title: string, options?: string[], prefill?: string, message?: string, owner?: string, action = 'Confirm', selectPrefill = false): Promise<string | undefined> {
     const generation = this.generation;
     const ownerGeneration = owner ? this.owners.get(owner) : undefined;
     const result = this.queue.then(() => new Promise<string | undefined>(resolve => {
@@ -69,12 +69,16 @@ export class Dialogs {
       this.inputNode.style.overflowY = '';
       showModal(this.dialog);
       if (!this.inputNode.hidden) resizeComposer(this.inputNode);
-      if (options) this.select.focus(); else if (message === undefined) this.inputNode.focus(); else confirm.focus();
+      if (options) this.select.focus();
+      else if (message === undefined) {
+        this.inputNode.focus();
+        if (selectPrefill) this.inputNode.select();
+      } else confirm.focus();
     }));
     this.queue = result.then(() => {}, () => {});
     return result;
   }
   choose(title: string, options: string[], owner?: string): Promise<string | undefined> { return this.show(title, options, undefined, undefined, owner); }
-  input(title: string, prefill?: string, owner?: string, action = 'Confirm'): Promise<string | undefined> { return this.show(title, undefined, prefill, undefined, owner, action); }
+  input(title: string, prefill?: string, owner?: string, action = 'Confirm', selectPrefill = false): Promise<string | undefined> { return this.show(title, undefined, prefill, undefined, owner, action, selectPrefill); }
   async confirm(title: string, message: string, owner?: string, action = 'Confirm'): Promise<boolean> { return (await this.show(title, undefined, undefined, message, owner, action)) !== undefined; }
 }

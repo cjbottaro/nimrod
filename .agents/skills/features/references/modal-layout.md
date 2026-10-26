@@ -78,6 +78,12 @@ still controls native button activation; Escape/Cancel retains the existing
 nested-dialog dismissal and owner-cancellation semantics. The Pi editor overlay
 is a separate editing interaction and keeps its existing behavior.
 
+`Dialogs.input` accepts an optional final `selectPrefill` flag (default false).
+Rename session opts in: after opening and focusing the input, select its full
+value so typing replaces the current name. This is native text selection, not
+placeholder styling; it is applied once on open, never reapplied during edits,
+resizing or animation. Other callers retain their existing selection behavior.
+
 Sizing uses native CSS `field-sizing:content` where available. Other engines
 reuse `resizeComposer` on open/prefill and coalesce input/window-resize work to
 one animation frame; closing removes listeners and cancels pending sizing. No

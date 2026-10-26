@@ -1129,7 +1129,7 @@ async function renameSession(tab: Tab): Promise<void> {
   const token = tab.token;
   try {
     if (!isConnected(tab)) throw new Error('Resume this session before renaming it.');
-    const value = await dialogs.input('Rename session', tab.title, token, 'Rename session');
+    const value = await dialogs.input('Rename session', tab.title, token, 'Rename session', true);
     if (value === undefined) return;
     if (!canClose(tab) || blocked(tab) || settings.isOpen) return;
     if (tab.token !== token || !isConnected(tab)) throw new Error('The session connection changed. Open Rename session again; nothing was retried.');
