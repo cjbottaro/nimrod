@@ -18,7 +18,7 @@ export function codexInteraction(validate: (text: string) => string | undefined)
       const mode = keyboardSubmissionMode(event, busy);
       return mode === 'followUp' ? undefined : mode;
     },
-    composer: state => ({ hint: [state.busy ? { text: 'Enter to steer · Stop to cancel' } : sendHint, newlineHint], stopLabel: 'Stop Codex' }),
+    composer: state => ({ hint: state.inputLocked ? 'Compacting context… · Stop to cancel' : [state.busy ? { text: 'Enter to steer · Stop to cancel' } : sendHint, newlineHint], stopLabel: 'Stop Codex' }),
     prepare(text) {
       const error = validate(text);
       return error ? { kind: 'reject', error } : { kind: 'request', message: { type: 'prompt' }, preview: true, navigate: true };

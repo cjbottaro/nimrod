@@ -99,7 +99,7 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
     configuration: { current: () => backend.session?.configuration },
     actions: { current: () => configurationActions(codexSessionActions(backend.session), { model: 'model', thinking: 'effort' }), async control() { throw new Error('This Codex control is no longer available'); } },
     presentation: { snapshot: () => ({ harnessLabel: 'Codex', badge: 'Codex', badgeTitle: '', busy: backend.session?.state.busy === true,
-      working: backend.session?.state.busy === true, pending: backend.session?.state.busy === true, compacting: false, queuePending: false, destructiveBusy: backend.session?.hasPendingWork === true }) },
+      working: backend.session?.state.busy === true, pending: backend.session?.state.busy === true, compacting: backend.session?.state.compacting === true, queuePending: false, destructiveBusy: backend.session?.hasPendingWork === true }) },
     deletion: { current: () => {
       const reference = lifecycle.identity;
       return reference ? { kind: 'saved', reference } : { kind: 'close' };

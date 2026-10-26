@@ -22,6 +22,30 @@ fn only_codex_dialect_and_implemented_operations_cross_the_native_boundary() {
     assert!(validate_message(&serde_json::json!({"id":"request","result":{"decision":"decline"}})).is_ok());
 }
 #[test]
+fn command_operations_have_narrow_reviewed_parameters() {
+    for (method, params) in [
+        ("thread/compact/start", serde_json::json!({"threadId":"thread"})),
+        ("thread/read", serde_json::json!({"threadId":"thread","includeTurns":false})),
+        ("mcpServerStatus/list", serde_json::json!({"threadId":"thread","limit":100,"detail":"toolsAndAuthOnly"})),
+        ("thread/backgroundTerminals/list", serde_json::json!({"threadId":"thread","limit":100})),
+        ("skills/list", serde_json::json!({"cwds":["/fixture"]})),
+        ("hooks/list", serde_json::json!({"cwds":["/fixture"]})),
+    ] {
+        assert!(validate_message(&serde_json::json!({"id":1,"method":method,"params":params})).is_ok());
+        let mut extra = params.clone(); extra["arbitrary"] = serde_json::json!(true);
+        assert!(validate_message(&serde_json::json!({"id":1,"method":method,"params":extra})).is_err());
+    }
+    for (method, params) in [
+        ("thread/read", serde_json::json!({"threadId":"thread","includeTurns":true})),
+        ("thread/compact/start", serde_json::json!({})),
+        ("mcpServerStatus/list", serde_json::json!({"threadId":"thread","limit":100,"detail":"unknown"})),
+        ("thread/backgroundTerminals/list", serde_json::json!({"threadId":"thread","limit":100,"cursor":""})),
+        ("skills/list", serde_json::json!({"cwds":["/one","/two"]})),
+    ] {
+        assert!(validate_message(&serde_json::json!({"id":1,"method":method,"params":params})).is_err());
+    }
+}
+#[test]
 fn resume_allows_only_the_reviewed_effort_override_not_arbitrary_configuration() {
     assert!(validate_message(&serde_json::json!({"id":1,"method":"thread/resume","params":{"threadId":"thread","config":{"model_reasoning_effort":"high"}}})).is_ok());
     for config in [serde_json::json!({"approval_policy":"never"}), serde_json::json!({"model_reasoning_effort":"high","arbitrary":true}), serde_json::json!({"model_reasoning_effort":{}})] {

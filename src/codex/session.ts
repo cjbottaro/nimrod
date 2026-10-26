@@ -4,7 +4,8 @@ import type { ConfigurationAdapter, ConfigurationOperation } from '../session-co
 import { CodexAsyncQuestions, codexAsyncReplies, type CodexAsyncQuestion } from './async-questions';
 import type { QuestionAnswer } from '../question-interaction';
 import type { OutgoingMessage } from '../session-message-input';
-import { CodexClient, type CodexClientHooks, type CodexWriter } from './client';
+import { mcpReport, terminalReport, skillReport, hookReport } from './command-reports';
+import { CodexClient, CodexCompactionUncertain, type CodexClientHooks, type CodexWriter } from './client';
 import { item, nonempty, record, type CodexEvent, type CodexItem } from './protocol';
 import { isRecord, RpcConnectionError, type RpcRecord } from '../json-rpc-connection';
 import type { DisplayMessage } from '../conversation-model';
@@ -27,7 +28,7 @@ export interface CodexSessionUi {
   commandInteraction?: CommandInteraction;
   transcriptLog?: TranscriptLogSink;
 }
-export interface CodexSessionState extends ConversationViewState { messages: DisplayMessage[]; busy: boolean; status: string; sessionName?: string; }
+export interface CodexSessionState extends ConversationViewState { compacting?: boolean; messages: DisplayMessage[]; busy: boolean; status: string; sessionName?: string; }
 const string = (value: unknown) => typeof value === 'string' ? value : '';
 const json = (value: unknown) => typeof value === 'string' ? value : JSON.stringify(value, null, 2) ?? '';
 /** Native Codex items project directly into the shared mounted conversation engine. */
@@ -117,7 +118,12 @@ export class CodexSession {
     };
     this.configuration = new SessionConfigurationController(this.configurationAdapter, () => this.publish([]));
     this.commandQueue = new SessionCommandQueue(
-      () => this.idle && !this.renaming && !this.configuration.operations.some(operation => operation.phase === 'queued' || operation.phase === 'applying'),
+      text => {
+        const invocation = parseCommand(text), command = invocation && findCommand(this.commandCatalog(), invocation.name);
+        return !this.ended && !this.hydrating && !this.configuring && !this.submitting && !this.renaming
+          && !this.configuration.operations.some(operation => operation.phase === 'queued' || operation.phase === 'applying')
+          && (this.idle || command?.allowDuringAgentExecution === true && this.client.phase === 'working' && !this.client.compacting);
+      },
       (_id, text, signal, dispatched) => this.runCommand(text, signal, dispatched), () => this.publish([]), 'Codex');
     const session = this;
     this.slashCommands = {
@@ -139,6 +145,14 @@ export class CodexSession {
       ...(this.models.length ? [{ name: 'model', description: 'Select the Codex model', source: 'Agent' as const,
         input: { hint: 'model', choices: this.models.map(model => ({ name: string(model.model), description: string(model.displayName) })) } }] : []),
       { name: 'rename', description: 'Rename this Codex session', source: 'Agent', input: { hint: 'name' } },
+      { name: 'compact', description: 'Compact this conversation using Codex (may use the model)', source: 'Agent' },
+      { name: 'mcp', description: 'Report Codex MCP servers and tools (read-only)', source: 'Agent', allowDuringAgentExecution: true,
+        input: { hint: 'verbose', choices: [{ name: 'verbose', description: 'Include tool descriptions and resources' }] } },
+      { name: 'status', description: 'Report Codex thread, model and last reported token usage', source: 'Agent', allowDuringAgentExecution: true },
+      { name: 'pwd', aliases: ['cwd'], description: 'Show the Codex thread working directory', source: 'Agent', allowDuringAgentExecution: true },
+      { name: 'ps', description: 'List this Codex thread’s background terminals (read-only)', source: 'Agent', allowDuringAgentExecution: true },
+      { name: 'skills', description: 'List Codex skills (read-only; no invocation or configuration)', source: 'Agent', allowDuringAgentExecution: true },
+      { name: 'hooks', description: 'List Codex hooks (read-only; no editing or trust changes)', source: 'Agent', allowDuringAgentExecution: true },
     ] : [];
   }
   private validateCommand(text: string): string | undefined {
@@ -148,14 +162,51 @@ export class CodexSession {
     if (invocation!.input?.trim()) {
       if (command.name === 'model' && !this.models.some(model => model.model === invocation!.input!.trim())) return 'Choose an exact advertised Codex model ID. Your draft was kept.';
       if (command.name === 'rename') { try { sessionName(invocation!.input!); } catch (error) { return String(error); } }
+      if (command.name === 'mcp' && invocation!.input!.trim().toLowerCase() !== 'verbose') return 'Supported Codex syntax: /mcp [verbose]. OAuth/login is not supported here. Your draft was kept.';
+      if (!['model', 'rename', 'mcp'].includes(command.name)) return `/${command.name} does not accept arguments. Your draft was kept.`;
     }
   }
   private async runCommand(text: string, signal: AbortSignal, dispatched: () => void): Promise<void | boolean> {
     const error = this.validateCommand(text); if (error) throw new Error(error);
     const invocation = parseCommand(text)!;
+    const command = findCommand(this.commandCatalog(), invocation.name)!;
     let input = invocation.input;
     this.commandRunning = true;
     try {
+      if (command.name === 'compact') {
+        if (!this.idle || signal.aborted) return false;
+        this.state = { ...this.state, compacting: true, busy: true, inputLocked: true, status: 'Compacting context…' }; this.publish([]);
+        try { dispatched(); await this.client.compact(); this.commandQueue.output('Codex confirmed context compaction.'); }
+        finally { this.state = { ...this.state, compacting: false, inputLocked: false, busy: this.client.phase === 'working', status: this.ended ? 'Disconnected' : this.client.phase === 'working' ? 'Working…' : 'Idle' }; }
+        return;
+      }
+      if (!['model', 'rename'].includes(command.name)) {
+        if (signal.aborted) return false;
+        dispatched();
+        let output: string;
+        if (command.name === 'mcp') {
+          const verbose = input?.trim().toLowerCase() === 'verbose';
+          const servers = await this.commandPages(cursor => this.client.mcpServers(verbose, cursor), signal);
+          if (!servers) return false; output = mcpReport(servers, verbose);
+        } else if (command.name === 'ps') {
+          const terminals = await this.commandPages(cursor => this.client.backgroundTerminals(cursor), signal);
+          if (!terminals) return false; output = terminalReport(terminals);
+        } else if (command.name === 'skills' || command.name === 'hooks') {
+          const entry = await this.client.projectCatalog(command.name);
+          output = command.name === 'skills' ? skillReport(entry) : hookReport(entry);
+        } else if (command.name === 'pwd' || command.name === 'status') {
+          const thread = await this.client.readBoundThread();
+          output = command.name === 'pwd' ? thread.cwd : [
+            `Thread: ${thread.id}`, `Name: ${thread.name ?? '(unnamed)'}`, `Working directory: ${thread.cwd}`,
+            `Status: ${thread.status.type}`, `Model: ${thread.model ?? (this.selected.model ? `${this.selected.model} (last confirmed)` : 'Not reported')}`,
+            `Thinking level: ${thread.reasoningEffort ?? (this.selected.effort ? `${this.selected.effort} (last confirmed)` : 'Not reported')}`,
+            `Last reported usage: ${this.state.statusArea?.metrics || 'Not reported'}`,
+            'Account quotas and full permission/configuration details are not included in this report.',
+          ].join('\n');
+        } else throw new Error('Unsupported Codex command report. Nothing was inferred from its name.');
+        if (signal.aborted || this.ended) return false;
+        this.commandQueue.output(output); return;
+      }
       if (!input?.trim()) {
         if (!this.ui.commandInteraction) throw new Error('Codex command interaction is unavailable.');
         if (invocation.name.toLowerCase() === 'model') {
@@ -177,9 +228,19 @@ export class CodexSession {
         if (this.state.sessionName !== name) throw new CommandUncertain('A newer Codex name superseded this command. The requested name was not confirmed.');
       }
     } catch (error) {
-      if (error instanceof RpcConnectionError) throw new CommandUncertain(String(error));
+      if (error instanceof RpcConnectionError || error instanceof CodexCompactionUncertain) throw new CommandUncertain(String(error));
       throw error;
     } finally { this.commandRunning = false; this.publish([]); }
+  }
+  private async commandPages(read: (cursor?: string) => Promise<{ data: RpcRecord[]; nextCursor: string | null }>, signal: AbortSignal): Promise<RpcRecord[] | undefined> {
+    const result: RpcRecord[] = [], cursors = new Set<string>(); let cursor: string | undefined;
+    do {
+      if (signal.aborted || this.ended) return;
+      const page = await read(cursor); result.push(...page.data); cursor = page.nextCursor ?? undefined;
+      if (cursor && cursors.has(cursor)) throw new Error('Codex command report repeated a pagination cursor. No complete report was produced.');
+      if (cursor) cursors.add(cursor);
+    } while (cursor);
+    return signal.aborted || this.ended ? undefined : result;
   }
   get hasPendingWork(): boolean {
     return this.state.busy || this.renaming || this.submitting > 0 || this.configuring || this.commandQueue.occupied
@@ -314,6 +375,7 @@ export class CodexSession {
   private event({ method, params }: CodexEvent): void {
     if (method === 'item/started' || method === 'item/completed') {
       const native = item(params.item); const turnId = nonempty(params.turnId, 'item turn ID');
+      if (this.client.compacting && native.type === 'contextCompaction') return;
       this.replace(this.project(native, turnId, method === 'item/completed'));
       if (method === 'item/completed') this.offerAsyncQuestions(native);
       if (native.type === 'userMessage' && Array.isArray(native.content)) for (const input of native.content) {
@@ -346,21 +408,23 @@ export class CodexSession {
       const tokens = Number(last.totalTokens), window = Number(usage.modelContextWindow), lifetime = Number(total.totalTokens);
       const metrics = [Number.isFinite(lifetime) ? `${lifetime.toLocaleString()} tokens` : '', Number.isFinite(tokens) && window > 0 ? `${tokens.toLocaleString()} last turn / ${window.toLocaleString()} window` : ''].filter(Boolean).join(' · ');
       if (metrics !== this.state.statusArea?.metrics) this.state = { ...this.state, statusArea: { ...this.state.statusArea!, metrics } };
-    } else if (method === 'turn/started') this.state = { ...this.state, busy: true, status: 'Working…' };
+    } else if (method === 'turn/started') this.state = { ...this.state, busy: true, status: this.client.compacting ? 'Compacting context…' : 'Working…' };
     else if (method === 'turn/completed') {
       const turn = record(params.turn, 'completed turn');
       // Terminal item snapshots settle tool/reasoning lifecycle without replacing newer content mid-stream.
       if (Array.isArray(turn.items)) for (const entry of turn.items) {
-        const native = item(entry); this.replace(this.project(native, string(turn.id), true));
+        const native = item(entry); if (this.client.compacting && native.type === 'contextCompaction') continue;
+        this.replace(this.project(native, string(turn.id), true));
         if (turn.status === 'completed') this.offerAsyncQuestions(native);
       }
       if (turn.status !== 'completed') { this.asyncQuestions.clear(); this.deferredAsyncItems.clear(); }
       this.finishRows(turn.status === 'interrupted' || turn.status === 'failed');
-      if (turn.error) this.replace({ key: `codex:error:${string(turn.id)}`, role: 'error', content: [{ type: 'raw', text: json(turn.error) }], isError: true });
+      if (turn.error && !this.client.compacting) this.replace({ key: `codex:error:${string(turn.id)}`, role: 'error', content: [{ type: 'raw', text: json(turn.error) }], isError: true });
       this.state = { ...this.state, busy: false, status: turn.status === 'interrupted' ? 'Stopped' : 'Idle' };
-      if (turn.status !== 'interrupted') this.ui.completed(turn.status === 'failed', this.response());
+      if (!this.client.compacting && turn.status !== 'interrupted') this.ui.completed(turn.status === 'failed', this.response());
       this.publish(); return;
     } else if (method === 'error' && params.willRetry !== true) {
+      if (this.client.compacting) return;
       this.replace({ key: `codex:error:${string(params.turnId)}`, role: 'error', content: [{ type: 'raw', text: json(params.error) }], isError: true }); return;
     }
     this.publish([]);

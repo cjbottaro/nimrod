@@ -1,3 +1,4 @@
+import { mcpServer, terminal, projectEntry } from './command-reports';
 import { codexQuestionRequest, codexQuestionAnswers, type CodexQuestionRequest, type CodexQuestionAnswers } from './questions';
 import type { ImageContent } from '../image-attachments';
 import packageInfo from '../../package.json';
@@ -22,6 +23,11 @@ export interface CodexClientHooks {
   interactionFailure?(failure: CodexInteractionFailure): void;
   disconnected?(error: RpcConnectionError): void;
 }
+interface CompactAttempt {
+  turnId?: string; compacted: boolean; error?: string;
+  finish(outcome: { error?: Error }): void;
+}
+export class CodexCompactionUncertain extends Error {}
 interface StartingTurn { observedId?: string; completed?: boolean; }
 const MAX_EARLY_EVENTS = 128;
 const MAX_EARLY_BYTES = 1024 * 1024;
@@ -35,6 +41,7 @@ export class CodexClient {
   private bound?: CodexThread;
   private currentTurn?: { id: string; completed: boolean };
   private startingTurn?: StartingTurn;
+  private compactAttempt?: CompactAttempt;
   private early: CodexEvent[] = [];
   private earlyBytes = 0;
   private timers = new Set<ReturnType<typeof setTimeout>>();
@@ -46,6 +53,7 @@ export class CodexClient {
       notification: (method, params) => this.notification(method, params),
       request: (method, params, signal, id) => this.request(method, params, signal, id),
       disconnected: error => {
+        this.compactAttempt?.finish({ error });
         this.state = 'disconnected'; this.early = []; this.earlyBytes = 0;
         for (const timer of this.timers) clearTimeout(timer);
         this.timers.clear();
@@ -58,6 +66,7 @@ export class CodexClient {
   get phase(): CodexPhase { return this.state; }
   get threadId(): string | undefined { return this.bound?.id; }
   get activeTurnId(): string | undefined { return this.state !== 'working' || this.currentTurn?.completed ? undefined : this.currentTurn?.id; }
+  get compacting(): boolean { return !!this.compactAttempt; }
   receive(packet: unknown): void { this.connection.receive(packet); }
   disconnect(reason?: unknown): void { this.connection.disconnect(reason); }
 
@@ -66,6 +75,54 @@ export class CodexClient {
     await this.rpc('thread/name/set', { threadId, name }, value => {
       record(value, 'rename response'); applied();
     });
+  }
+
+  async readBoundThread(): Promise<CodexThread> {
+    const threadId = this.requireBound(); let result!: CodexThread;
+    await this.rpc('thread/read', { threadId, includeTurns: false }, value => {
+      result = thread(record(value, 'thread read').thread);
+      if (result.id !== threadId || result.cwd !== this.bound?.cwd) throw new Error('Codex report returned a conflicting thread or project');
+      for (const field of ['name', 'model', 'reasoningEffort']) if (result[field] != null && typeof result[field] !== 'string') throw new Error(`Invalid Codex thread report ${field}`);
+    });
+    return result;
+  }
+  async mcpServers(verbose: boolean, cursor?: string): Promise<CodexPage<RpcRecord>> {
+    const threadId = this.requireBound(); let result!: CodexPage<RpcRecord>;
+    await this.rpc('mcpServerStatus/list', { threadId, limit: 100, detail: verbose ? 'full' : 'toolsAndAuthOnly', ...(cursor ? { cursor } : {}) }, value => { result = page(value, mcpServer); });
+    return result;
+  }
+  async backgroundTerminals(cursor?: string): Promise<CodexPage<RpcRecord>> {
+    const threadId = this.requireBound(); let result!: CodexPage<RpcRecord>;
+    await this.rpc('thread/backgroundTerminals/list', { threadId, limit: 100, ...(cursor ? { cursor } : {}) }, value => { result = page(value, terminal); });
+    return result;
+  }
+  async projectCatalog(kind: 'skills' | 'hooks'): Promise<RpcRecord> {
+    this.requireBound(); const cwd = this.bound!.cwd; let result!: RpcRecord;
+    await this.rpc(`${kind}/list`, { cwds: [cwd] }, value => { result = projectEntry(value, cwd, kind); });
+    return result;
+  }
+  /** Compact acknowledgement only enqueues Op::Compact. Wait for its native
+   * turn, a canonical contextCompaction item and terminal outcome, in either
+   * response/event order. No hidden turn/start, polling or compaction replay.
+   */
+  async compact(): Promise<void> {
+    if (this.state !== 'idle' || !this.bound || this.compactAttempt) throw new Error('Codex compaction requires an idle thread');
+    let finish!: CompactAttempt['finish'];
+    const completion = new Promise<{ error?: Error }>(resolve => { finish = resolve; });
+    const attempt: CompactAttempt = { compacted: false, finish };
+    this.compactAttempt = attempt; this.state = 'working'; this.currentTurn = undefined;
+    try {
+      await this.rpc('thread/compact/start', { threadId: this.bound.id }, value => { record(value, 'compact response'); });
+      const outcome = await completion;
+      if (outcome.error) throw outcome.error;
+    } catch (error) {
+      if (error instanceof RpcResponseError && !attempt.turnId && this.phase !== 'disconnected') this.state = 'idle';
+      else if (error instanceof RpcResponseError && attempt.turnId) {
+        const uncertain = new CodexCompactionUncertain('Codex rejected compaction after reporting its turn. Its outcome is inconsistent; nothing was retried.');
+        this.disconnect(uncertain); throw uncertain;
+      } else if (error instanceof CodexCompactionUncertain) this.disconnect(error);
+      throw error;
+    } finally { if (this.compactAttempt === attempt) this.compactAttempt = undefined; }
   }
 
   async initialize(): Promise<void> {
@@ -255,6 +312,28 @@ export class CodexClient {
     const threadId = params.threadId ?? (isRecord(params.thread) ? params.thread.id : undefined);
     if (!this.bound || threadId !== this.bound.id) return;
     if (['thread/closed', 'thread/deleted', 'thread/archived'].includes(method)) { this.disconnect(`Codex reported ${method}. Saved identity and draft were retained.`); return; }
+    const compact = this.compactAttempt;
+    if (compact) {
+      if (method === 'turn/started') {
+        const native = turn(params.turn);
+        if (compact.turnId && compact.turnId !== native.id) throw new Error('Codex compaction observed conflicting turns');
+        compact.turnId = native.id;
+      } else if (method === 'item/completed') {
+        const native = item(params.item);
+        if (native.type === 'contextCompaction' && params.turnId === compact.turnId) compact.compacted = true;
+      } else if (method === 'error' && params.turnId === compact.turnId && params.willRetry !== true) {
+        const error = record(params.error, 'compaction error');
+        compact.error = typeof error.message === 'string' ? error.message : 'Codex reported a compaction error';
+      } else if (method === 'turn/completed') {
+        const native = turn(params.turn);
+        if (native.id !== compact.turnId) throw new Error('Codex compaction completed an unidentified turn');
+        if (native.items.some(entry => entry.type === 'contextCompaction')) compact.compacted = true;
+        const terminalError = isRecord(native.error) && typeof native.error.message === 'string' ? native.error.message : undefined;
+        const failure = compact.error || terminalError || (native.status === 'failed' ? 'Codex compaction failed' : native.status === 'interrupted' ? 'Codex compaction was interrupted' : undefined);
+        compact.finish({ error: failure ? new Error(failure) : !compact.compacted
+          ? new CodexCompactionUncertain('Codex completed a turn without confirming context compaction. Nothing was retried.') : undefined });
+      }
+    }
     if (method === 'serverRequest/resolved') {
       if (!isRpcId(params.requestId)) throw new Error('Invalid Codex resolved request ID');
       this.connection.cancelIncoming(params.requestId);

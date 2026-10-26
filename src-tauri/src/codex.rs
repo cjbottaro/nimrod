@@ -185,12 +185,36 @@ fn validate_message(value: &Value) -> Result<(), String> {
             Some("initialized") if value.get("id").is_none() => {},
             Some("initialize" | "thread/start" | "thread/resume" | "thread/list"
                 | "thread/turns/list" | "thread/items/list"
-                | "turn/start" | "turn/steer" | "turn/interrupt" | "model/list" | "thread/delete" | "thread/name/set") if valid_id(&value["id"]) => {},
+                | "turn/start" | "turn/steer" | "turn/interrupt" | "model/list" | "thread/delete" | "thread/name/set"
+                | "thread/compact/start" | "thread/read" | "mcpServerStatus/list" | "thread/backgroundTerminals/list" | "skills/list" | "hooks/list") if valid_id(&value["id"]) => {},
             _ => return Err("Unsupported Codex operation".into()),
         }
-        if matches!(method.as_str(), Some("thread/resume" | "thread/turns/list" | "thread/items/list" | "turn/start" | "turn/steer" | "turn/interrupt" | "thread/delete" | "thread/name/set"))
+        if matches!(method.as_str(), Some("thread/resume" | "thread/turns/list" | "thread/items/list" | "turn/start" | "turn/steer" | "turn/interrupt" | "thread/delete" | "thread/name/set"
+            | "thread/compact/start" | "thread/read" | "mcpServerStatus/list" | "thread/backgroundTerminals/list"))
             && value["params"]["threadId"].as_str().is_none_or(|id| id.is_empty() || id.len() > 128) {
             return Err("Codex operation requires a thread ID".into());
+        }
+        if matches!(method.as_str(), Some("thread/compact/start" | "thread/read" | "mcpServerStatus/list" | "thread/backgroundTerminals/list" | "skills/list" | "hooks/list")) {
+            let params = value["params"].as_object().ok_or("Invalid Codex command parameters")?;
+            let allowed: &[&str] = match method.as_str() {
+                Some("thread/compact/start") => &["threadId"],
+                Some("thread/read") => &["threadId", "includeTurns"],
+                Some("mcpServerStatus/list") => &["threadId", "cursor", "limit", "detail"],
+                Some("thread/backgroundTerminals/list") => &["threadId", "cursor", "limit"],
+                _ => &["cwds"],
+            };
+            if params.keys().any(|key| !allowed.contains(&key.as_str())) { return Err("Unsupported Codex command parameter".into()); }
+            if method.as_str() == Some("thread/read") && value["params"]["includeTurns"] != false { return Err("Command reports require metadata-only thread reads".into()); }
+            if matches!(method.as_str(), Some("skills/list" | "hooks/list")) && value["params"]["cwds"].as_array().is_none_or(|cwds|
+                cwds.len() != 1 || cwds[0].as_str().is_none_or(|cwd| cwd.is_empty())) { return Err("Codex catalog report requires one project".into()); }
+            if matches!(method.as_str(), Some("mcpServerStatus/list" | "thread/backgroundTerminals/list")) {
+                if value["params"]["limit"] != 100 || value["params"].get("cursor").is_some_and(|cursor| cursor.as_str().is_none_or(|cursor| cursor.is_empty())) {
+                    return Err("Invalid Codex command pagination".into());
+                }
+                if method.as_str() == Some("mcpServerStatus/list") && !matches!(value["params"]["detail"].as_str(), Some("full" | "toolsAndAuthOnly")) {
+                    return Err("Invalid Codex MCP detail".into());
+                }
+            }
         }
         if method.as_str() == Some("thread/name/set") && value["params"]["name"].as_str().is_none_or(|name|
             name.trim().is_empty() || name.chars().any(char::is_control)) {
@@ -397,6 +421,10 @@ pub async fn write_codex(
         .ok_or("Unknown Codex connection or wrong window")?;
     if let Some(cwd) = message["params"].get("cwd") {
         if cwd.as_str() != owner.cwd.to_str() { return Err("Codex cwd must match its project".into()); }
+    }
+    if matches!(message["method"].as_str(), Some("skills/list" | "hooks/list"))
+        && message["params"]["cwds"].as_array().is_none_or(|cwds| cwds.len() != 1 || cwds[0].as_str() != owner.cwd.to_str()) {
+        return Err("Codex command catalog must match its project".into());
     }
     if matches!(message["method"].as_str(), Some("thread/start" | "thread/resume"))
         && message["params"]["cwd"].as_str() != owner.cwd.to_str() {

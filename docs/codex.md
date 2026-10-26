@@ -79,21 +79,30 @@ Type `/` for the commands supported by the connected Codex integration:
 
 - `/model` opens the Codex model picker; `/model <model-id>` selects an exact advertised ID.
 - `/rename` asks for a session name; `/rename <name>` renames the connected thread.
+- `/compact` asks Codex to compact the conversation. It may use the model; the card waits for native compaction completion, not just request acknowledgement. There is no optional focus argument. The composer locks while it runs, and Stop targets the identified compaction turn.
+- `/mcp` reports Codex's MCP servers, tools and authentication state; `/mcp verbose` adds descriptions and resources. Discovery may contact configured MCP servers. MCP login/configuration changes are not supported here.
+- `/status` reports thread/model details and last reported token usage—not account quotas or a complete configuration dump.
+- `/pwd` (also `/cwd`) shows the verified thread working directory; it never changes the project.
+- `/ps` lists the thread's background terminals without stopping them or scanning OS processes.
+- `/skills` and `/hooks` show read-only catalogs and reported diagnostics. Skill invocation/toggles and hook editing/trust changes are not implemented.
 
-Each accepted command gets one Command card immediately. Commands submitted while
-Codex works wait for idle; the card stays pending through any picker and native
-confirmation. Output/errors stay on that card, without an ordinary chat message,
+Each accepted command gets one Command card immediately. Model, rename and
+compaction commands wait for idle; report commands can run during work, while
+preserving accepted FIFO order. The card stays pending through any picker and
+native confirmation. Output/errors stay on that card, without an ordinary chat message,
 sidebar-recency bump or forced transcript navigation. Cancellation before dispatch
 invokes nothing; uncertain delivery is never retried. Switching away cancels
 pending command interactions without changing a newer draft.
 
 These are Codex-owned client adapters backed by native app-server APIs, not a
-copy of the CLI command catalog. Model changes require effective-state confirmation;
+copy of the complete CLI command catalog. Some are deliberately read-only subsets
+of a richer terminal workflow. Native `/stop` (alias `/clean`) stops background
+terminals; it is **not** Nimrod's Stop button and is not exposed as a slash command. Model changes require effective-state confirmation;
 installed-runtime acceptance remains pending. Other commands are rejected with
 the draft intact, never submitted as a model prompt.
 
 ## Current differences
 
-Codex app-server does not advertise the CLI's complete slash-command catalog. Plan/Autopilot controls, a context-tier picker, live permission-policy editing, manual compaction and MCP inspection are not provided by this integration yet. Unknown native item types keep raw details; command output and file changes have dedicated shared-component presentations.
+Codex app-server does not advertise the CLI's complete slash-command catalog. Plan/Autopilot controls, a context-tier picker, live permission-policy editing and Pi's MCP inspector are not provided by this integration yet. Native compaction and the MCP slash report are available as described above. Unknown native item types keep raw details; command output and file changes have dedicated shared-component presentations.
 
 See [Sessions](sessions.md), [Drafts](drafts.md), [Reading conversations](reading-conversations.md) and [Error messages](error-messages.md) for the shared workspace behavior.

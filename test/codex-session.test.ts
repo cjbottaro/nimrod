@@ -30,6 +30,10 @@ function fixture(custom?: (packet: CodexPacket, reply: (result: unknown) => void
       case 'thread/start': case 'thread/resume': reply({ cwd, thread: thread(), model: params.model ?? 'fixture-model', reasoningEffort: (params.config as Record<string, unknown> | undefined)?.model_reasoning_effort ?? 'low' }); break;
       case 'thread/turns/list': reply({ data: [], nextCursor: null }); break;
       case 'model/list': reply({ data: [model], nextCursor: null }); break;
+      case 'thread/read': reply({ thread: { ...thread(), name: 'Fixture thread', model: 'fixture-model', reasoningEffort: 'low' } }); break;
+      case 'mcpServerStatus/list': case 'thread/backgroundTerminals/list': reply({ data: [], nextCursor: null }); break;
+      case 'skills/list': reply({ data: [{ cwd, skills: [], errors: [] }] }); break;
+      case 'hooks/list': reply({ data: [{ cwd, hooks: [], warnings: [], errors: [] }] }); break;
       case 'turn/start':
         event('turn/started', { turn: turn() });
         event('item/started', { turnId: 'turn', item: { type: 'userMessage', id: 'user', clientId: params.clientUserMessageId, content: params.input } });
@@ -75,7 +79,7 @@ test('Codex command catalog and model picker use native configuration, not promp
   } });
   try {
     await f.session.initialize(cwd);
-    assert.deepEqual(f.session.slashCommands.catalog().commands.map(command => command.name), ['model', 'rename']);
+    assert.deepEqual(f.session.slashCommands.catalog().commands.map(command => command.name), ['model', 'rename', 'compact', 'mcp', 'status', 'pwd', 'ps', 'skills', 'hooks']);
     const commands = f.session.slashCommands;
     await commands.invoke({ id: 'model', text: '/model' });
     assert.equal(commands.operations.at(-1)?.phase, 'completed');
@@ -84,7 +88,8 @@ test('Codex command catalog and model picker use native configuration, not promp
     assert.equal(f.sent.some(packet => ['turn/start', 'turn/steer'].includes(String(packet.method))), false);
     assert.equal(f.session.state.messages.length, 0);
     assert.match(commands.validate('/model nonexistent')!, /advertised/);
-    assert.match(commands.validate('/compact')!, /not supported/);
+    assert.match(commands.validate('/compact focus')!, /does not accept arguments/);
+    assert.match(commands.validate('/permissions')!, /not supported/);
     assert.equal(commands.validate('/model fixture-model '), undefined, 'Tab completion adds a trailing space');
   } finally { f.session.disconnect('done'); }
 });
@@ -123,6 +128,95 @@ test('Codex command disconnect after mutation dispatch reports uncertainty and n
   await f.session.initialize(cwd); await f.session.slashCommands.invoke({ id: 'unknown', text: '/rename Unconfirmed' });
   assert.equal(f.session.slashCommands.operations.at(-1)?.phase, 'unknown');
   assert.equal(f.sent.filter(packet => packet.method === 'thread/name/set').length, 1);
+});
+
+for (const command of ['status', 'pwd', 'cwd', 'ps', 'mcp', 'mcp verbose', 'skills', 'hooks']) test(`Codex /${command} uses scoped read-only native APIs and one Command card during work`, async () => {
+  const f = fixture();
+  try {
+    await f.session.initialize(cwd); f.event('turn/started', { turn: turn() });
+    const before = f.session.state.messages;
+    await f.session.slashCommands.invoke({ id: command, text: `/${command}` });
+    const operation = f.session.slashCommands.operations.at(-1)!;
+    assert.equal(operation.phase, 'completed'); assert.ok(operation.commandOutput?.length);
+    assert.equal(f.session.state.busy, true); assert.equal(f.session.state.messages, before);
+    assert.equal(f.sent.some(packet => ['turn/start', 'turn/steer', 'thread/compact/start'].includes(String(packet.method))), false);
+    if (command === 'skills' || command === 'hooks') assert.deepEqual(f.sent.at(-1)!.params, { cwds: [cwd] });
+    else assert.equal((f.sent.at(-1)!.params as Record<string, unknown>).threadId, 'thread');
+    if (command === 'cwd' || command === 'pwd') assert.equal(operation.commandOutput![0].text, cwd);
+    assert.deepEqual(f.completions, []); assert.deepEqual(f.notices, []);
+  } finally { f.session.disconnect('done'); }
+});
+test('Codex rejects unsupported report arguments and mutation variants before invocation', async () => {
+  const f = fixture();
+  try {
+    await f.session.initialize(cwd); const count = f.sent.length;
+    for (const text of ['/mcp login secret-server', '/skills enable all', '/hooks trust all', '/pwd elsewhere', '/compact focus', '/stop']) {
+      assert.ok(f.session.slashCommands.validate(text));
+      await assert.rejects(f.session.slashCommands.invoke({ id: text, text }));
+    }
+    assert.equal(f.sent.length, count);
+  } finally { f.session.disconnect('done'); }
+});
+test('Codex report pagination rejects repeated cursors rather than settling a partial report', async () => {
+  const f = fixture((packet, reply) => {
+    if (packet.method !== 'mcpServerStatus/list') return false;
+    reply({ data: [], nextCursor: 'repeat' }); return true;
+  });
+  try {
+    await f.session.initialize(cwd); await f.session.slashCommands.invoke({ id: 'mcp', text: '/mcp' });
+    const operation = f.session.slashCommands.operations.at(-1)!;
+    assert.equal(operation.phase, 'failed'); assert.match(operation.inlineError!, /pagination cursor/);
+    assert.equal(operation.commandOutput, undefined);
+    assert.equal(f.sent.filter(packet => packet.method === 'mcpServerStatus/list').length, 2);
+  } finally { f.session.disconnect('done'); }
+});
+test('Codex project catalog reports reject cross-project native responses', async () => {
+  const f = fixture((packet, reply) => {
+    if (packet.method !== 'skills/list') return false;
+    reply({ data: [{ cwd: '/another-project', skills: [], errors: [] }] }); return true;
+  });
+  try {
+    await f.session.initialize(cwd); await f.session.slashCommands.invoke({ id: 'skills', text: '/skills' });
+    assert.equal(f.session.slashCommands.operations.at(-1)?.phase, 'failed');
+    assert.match(f.session.slashCommands.operations.at(-1)?.inlineError!, /different project/);
+    assert.equal(f.notices.length, 0);
+  } finally { f.session.disconnect('done'); }
+});
+for (const early of [false, true]) test(`Codex compaction waits for its canonical item and terminal turn, not RPC acknowledgement (early=${early})`, async () => {
+  let acknowledge!: (value: unknown) => void;
+  const f = fixture((packet, reply) => { if (packet.method !== 'thread/compact/start') return false; acknowledge = reply; return true; });
+  try {
+    await f.session.initialize(cwd);
+    const running = f.session.slashCommands.invoke({ id: 'compact', text: '/compact' });
+    const key = f.session.slashCommands.operations.at(-1)!.key;
+    if (!early) { acknowledge({}); await flush(); }
+    assert.equal(f.session.slashCommands.operations.at(-1)?.phase, 'applying');
+    assert.equal(f.session.state.inputLocked, true);
+    f.event('turn/started', { turn: turn() });
+    f.event('item/completed', { turnId: 'turn', item: { id: 'compact-marker', type: 'contextCompaction' } });
+    assert.equal(f.session.slashCommands.operations.at(-1)?.phase, 'applying');
+    f.event('turn/completed', { turn: turn('completed') });
+    if (early) acknowledge({}); await running;
+    assert.equal(f.session.slashCommands.operations.at(-1)?.phase, 'completed');
+    assert.equal(f.session.slashCommands.operations.at(-1)?.key, key);
+    assert.equal(f.session.state.inputLocked, false); assert.equal(f.session.client.compacting, false);
+    assert.equal(f.sent.filter(packet => packet.method === 'thread/compact/start').length, 1);
+    assert.equal(f.sent.some(packet => packet.method === 'turn/start'), false);
+    assert.equal(f.session.state.messages.length, 0); assert.deepEqual(f.completions, []);
+  } finally { f.session.disconnect('done'); }
+});
+for (const outcome of ['failed', 'missing-marker', 'disconnected']) test(`Codex compaction ${outcome} retains an honest command outcome without replay`, async () => {
+  const f = fixture((packet, reply) => { if (packet.method !== 'thread/compact/start') return false; reply({}); return true; });
+  try {
+    await f.session.initialize(cwd); const running = f.session.slashCommands.invoke({ id: 'compact', text: '/compact' });
+    f.event('turn/started', { turn: turn() });
+    if (outcome === 'disconnected') f.session.disconnect('Lost compaction connection');
+    else f.event('turn/completed', { turn: { ...turn(outcome === 'failed' ? 'failed' : 'completed'), error: outcome === 'failed' ? { message: 'Fixture compaction failed' } : null } });
+    await running;
+    assert.equal(f.session.slashCommands.operations.at(-1)?.phase, outcome === 'failed' ? 'failed' : 'unknown');
+    assert.equal(f.sent.filter(packet => packet.method === 'thread/compact/start').length, 1);
+    assert.equal(f.session.state.messages.length, 0); assert.deepEqual(f.notices, []);
+  } finally { f.session.disconnect('done'); }
 });
 
 const asyncItem = (id = 'async-question') => ({ type: 'agentMessage', id, delivery: 'async', text: 'Which?\n- A\n- B', questions: [{ title: 'Which?', options: ['A', 'B'] }] });

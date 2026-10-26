@@ -43,7 +43,7 @@ and known built-ins; do not pretend a snapshot is exhaustive forever.
 | --- | --- | --- |
 | Pi | [Pi slash commands](references/pi.md) | Current flagship integration |
 | Copilot | [Copilot slash commands](references/copilot.md) | Current built-in SDK integration |
-| Codex | [Codex client commands](references/codex.md) | Bounded app-server-backed client catalog |
+| Codex | [Codex client commands](references/codex.md), [complete inventory and upgrade audit](references/codex-audit.md) | Bounded app-server-backed client catalog |
 | Generic ACP | [Generic ACP command baseline](references/generic-acp.md) | Retained internal baseline; no current product entry point |
 
 When adding another supported harness, create `references/<harness>.md` and add
@@ -257,6 +257,20 @@ command only when public harness APIs can provide authoritative discovery,
 validation, mutation and confirmation. Document the pinned compatibility
 catalog separately from dynamic metadata. Never parse terminal screen output at
 runtime or route the adapter through an unrelated Nimrod action.
+
+## Codex upgrade and new-command audit
+
+Codex requires a source/schema audit because its app-server does not advertise
+its terminal command catalog. **On every Codex version/protocol upgrade, command
+anomaly, or request for broader command coverage**, follow the
+[Codex audit procedure](references/codex-audit.md). Inventory the complete native
+enum/aliases and dynamic families, diff source and generated APIs against the
+pinned snapshot, then reclassify newly possible adapters—even when command names
+have not changed. Record explicit blockers and next steps for unsupported rows.
+Do not treat the current Nimrod catalog as the entire Codex catalog, confuse
+native `/stop` with active-turn Stop, or promote source evidence to native
+acceptance. The procedure includes the source-only audit/diff script and rules
+for safely authorized probes; it never grants blanket command invocation.
 
 ## Compatibility audit
 

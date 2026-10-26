@@ -63,6 +63,34 @@ server connection or user-session mutation was needed. The [shared naming
 contract](../../features/references/session-naming.md) owns the concrete
 implementation, native binding/deletion guards and remaining runtime acceptance.
 
+## Slash-command source/schema audit (0.164.0)
+
+The [complete command audit](../../slash-commands/references/codex-audit.md)
+reused the existing matching official source and generated experimental types,
+without launching Codex or a server, reading user sessions, running commands or
+making model requests. It records all 65 enum commands, serialization aliases,
+feature/platform/busy rules, dynamic command families and 178 schema methods.
+The development-only fingerprint snapshot/script supports future upgrade diffs;
+it is not a runtime catalog or API allowlist.
+
+New consumed report schemas: `ThreadReadParams/Response` (metadata only),
+`ListMcpServerStatusParams/Response`, `McpServerStatus/Detail`,
+`ThreadBackgroundTerminalsListParams/Response`, `SkillsListParams/Response/Entry`,
+`SkillMetadata`, `HooksListParams/Response/Entry` and `HookMetadata`. Cwd and
+thread identity remain exact, pagination must complete or fail, and skill/hook
+reports deliberately omit native use/configuration/trust interactions.
+
+`ThreadCompactStartParams` accepts only `threadId`; its empty response means
+`Op::Compact` was submitted, not completed. Matching native
+`app-server/src/request_processors/thread_processor.rs` and
+`core/src/tasks/compact.rs` establish that manual compaction emits a native turn
+and may use provider work. V2 emits a canonical `contextCompaction` item; the
+legacy context-compacted notification is not used for confirmation. Nimrod waits
+for that item's identified turn and its terminal outcome in either RPC/event
+order, fails on native errors/interruption, and reports missing confirmation as
+unknown without replay. Native execution/stop/usage behavior remains unaccepted;
+no live compaction was performed.
+
 ## Distribution/authentication boundaries to revisit
 
 - The TypeScript automation SDK requires Node; using app-server directly should avoid adding that runtime to Codex. The native launcher is source-implemented; installed launch and packaging behavior remain unverified.

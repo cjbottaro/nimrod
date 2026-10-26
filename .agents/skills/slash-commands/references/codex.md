@@ -1,51 +1,79 @@
 # Codex slash-command compatibility
 
-**Status: bounded client adapters source-implemented; new offline fixtures authored,
+**Status: source-implemented bounded client adapters; new offline fixtures authored,
 not run; installed-CLI/native acceptance pending.**
 
 ## Provenance and boundary
 
 The reviewed app-server has no CLI command catalog or generic command-invoke API.
-Nimrod therefore advertises a small **Codex integration-owned client catalog**
-backed by existing reviewed native APIs. It does not copy terminal screen output,
-claim the complete CLI catalog or send unknown slash text as agent input.
+Nimrod advertises a **Codex integration-owned client catalog** backed by reviewed
+native APIs, not copied terminal output or unknown slash text sent as chat.
 
-[Codex integration](../../codex-integration/SKILL.md) owns pinned protocol evidence
-and effective-model limitations. The [required consumer
-port](../../features/references/session-commands.md) owns shared routing/lifetime.
+The [0.164.0 source audit](codex-audit.md) inventories all **65 native enum
+commands**, aliases, dynamic families, API candidates and exclusions. It also owns
+the repeatable upgrade procedure and source/schema fingerprint snapshot. Re-audit
+on CLI upgrades and protocol/command anomalies; two implemented commands were
+never an exhaustive Codex catalog. [Codex integration](../../codex-integration/SKILL.md)
+owns protocol evidence; [session commands](../../features/references/session-commands.md)
+owns the required consumer contract. No runtime semver gate or all-version promise
+is implied: unsupported native APIs fail explicitly on their Command card.
 
-| Command | Discovery / arguments | Execution / confirmation | Host behavior / limitation |
+## Implemented catalog
+
+| Command | Discovery / arguments | Execution / confirmation | Scope and remaining limitation |
 | --- | --- | --- | --- |
-| `/model [model-id]` | Integration entry appears only with a connected advertised model catalog; literal ID completion; bare invocation opens shared model picker | Refresh `model/list`, validate exact current model ID, native `thread/resume` override through Codex's concrete configuration adapter; require returned effective model and selected projection to match | One Command card, no ordinary prompt or separate Nimrod configuration operation. Loaded-thread overrides remain installed-runtime acceptance work; failure/uncertainty is explicit. Outer argument whitespace is ignored for the single model-ID grammar. |
-| `/rename [name]` | Connected-thread integration entry; bare invocation opens shared text input | Validate a nonempty single-line name; exact-thread `thread/name/set`; ordered response/name events reconcile title, followed by requested-name confirmation | One Command card; a newer conflicting native name is not overwritten or claimed as this command's success. |
-| Other CLI commands, including `/compact`, `/mcp`, `/skills` | Not advertised | Rejected before draft clearing; no prompt fallback | Require separately reviewed native discovery/mutation/completion semantics before adding adapters. No guessed CLI parity. |
+| `/model [model-id]` | Connected advertised model catalog; literal ID completion and bare picker | Refresh `model/list`, validate exact ID, `thread/resume` override through concrete configuration adapter; require effective returned/selected model | Model selection only; native combined effort picker/richer syntax remains partial. Loaded-thread runtime acceptance pending. Outer token whitespace ignored. |
+| `/rename [name]` | Connected-thread entry, bare text input | Nonempty single-line name; exact-thread `thread/name/set`, ordered name reconciliation and requested-name confirmation | Conflicting newer name is not overwritten or claimed as this command's success. No generated-name model request. |
+| `/compact` | No arguments; accepted during work, dispatched at native idle | `thread/compact/start` only acknowledges enqueued work. Wait for the identified native turn, canonical `contextCompaction` item and terminal result; failed/interrupted/missing-marker outcomes are not success | May use the model when explicitly invoked by the user. No `turn/start`, hidden prompt, optional focus grammar, polling or automatic retry. Composer locks during compaction; Stop uses the actual identified turn. |
+| `/mcp [verbose]` | Read-only metadata; native `verbose` literal only | Exact-thread `mcpServerStatus/list`, native `toolsAndAuthOnly` or `full`, complete pagination with cursor-cycle detection | Tools/auth/runtime report; verbose adds descriptions/resources. Discovery can contact configured MCP servers. OAuth `login` is rejected before draft clearing. Not the Pi MCP inspector. |
+| `/status` | No arguments | Metadata-only `thread/read`, exact bound identity/cwd, native model/name/status and last reported usage | Partial native status report: no account quotas, monetary estimate or full permission/configuration parity. Does not hydrate or replace history. |
+| `/pwd` (alias `/cwd`) | No arguments; native enum alias | Same exact-thread metadata-only read, return verified cwd | Never changes the project/window directory. |
+| `/ps` | No arguments | Exact-thread `thread/backgroundTerminals/list`, complete pagination | Read-only process-ID/command/cwd report; no OS scan, termination, or resource-metric parity claim. Native `/stop` is a different background-terminal mutation, not Nimrod Stop. |
+| `/skills` | Explicitly labelled read-only catalog subset | `skills/list {cwds:[exactProject]}`, require one matching project entry; show enabled/disabled catalog and native diagnostics | Partial: no skill invocation, draft insertion, enable/disable, guessed subcommand syntax or reading skill files. Native menu has additional workflows. |
+| `/hooks` | Explicitly labelled read-only catalog subset | `hooks/list {cwds:[exactProject]}`, matching project entry; show native handler/event/trust/enabled state and diagnostics | Partial: no hook execution, editor or trust/configuration mutation. |
 
-Both supported commands accept intent while working and wait for authoritative
-native idle plus configuration readiness. The card remains pinned/shimmering
-through queued work, picker/input and native invocation. Fresh catalog/choice
-validation precedes dispatch. Cancellation before dispatch invokes nothing;
-after possible delivery the card retains uncertainty without replay. Background
-results never replace drafts, navigate or open modals in another session.
+## Readiness, ownership and outcomes
+
+Model/rename/compact wait for native idle plus configuration readiness. Report
+commands advertise supported live-use, following the native source's busy rules;
+they may run during work but do not bypass an earlier FIFO command or active
+configuration/compaction. All share one retained Command card through queue,
+interaction, invocation and settlement. Output stays in the card, not fabricated
+harness history. Fresh catalogs/choices are revalidated before mutation.
+
+Read-only results validate the fields they consume and never become executable
+choices by parsing prose. Paginated reports are complete or fail explicitly;
+unknown/malformed/cross-project results are not success. No partial output is
+silently settled after a repeated cursor. Native guards restrict new methods,
+parameters, thread binding and catalog cwd; discovery-only connections cannot
+use conversation commands. Compaction also respects deletion reservations.
+
+Cancellation before dispatch invokes nothing. Stop/hiding/disposal aborts command
+interactions; possible dispatch retains uncertainty rather than rollback/replay.
+Compaction continues native lifecycle tracking even if its presentation was
+cancelled. A missing terminal event leaves it pending until explicit Stop or
+connection teardown; an empty RPC response never settles it. Background results
+never replace a draft, navigate or open another session's modal.
 
 ## Adapter rationale and removal condition
 
 The terminal command UI is client-owned and absent from app-server command
-metadata. These adapters are justified by the already-reviewed `model/list`,
-`thread/resume` and `thread/name/set` APIs, not by an invented command RPC.
-Remove or migrate them if Codex exposes an authoritative command catalog and
-typed invocation/result lifecycle that covers these semantics. Do not route
-through Nimrod's **Select model…** or **Rename session…** actions.
+metadata. These adapters use reviewed `model/list`, `thread/resume`, naming,
+compaction and read-only report APIs—not an invented command RPC or a Nimrod
+action redirect. Migrate to authoritative native command metadata/typed results
+if Codex adds them. Unsupported variants remain rejected, not guessed.
 
 ## Evidence and gaps
 
-`test/codex-session.test.ts` includes provider-free fixtures for catalog/picker,
-exact model confirmation, trailing-space completion, queued rename at terminal
-idle, cancellation, stale model choices, no extra prompt/configuration card and
-post-dispatch disconnect without retry. Existing native configuration/naming
-fixtures remain regression targets. Current executed evidence belongs to
-[verification](../../features/references/verification.md#session-command-port).
+`test/codex-session.test.ts` contains provider-free fixtures for model/name,
+all report commands and `/cwd`, read-only execution during work, exact scope,
+invalid mutation variants, cursor cycles, compaction event-before/after-response,
+canonical marker/terminal confirmation, failures, disconnect and no replay.
+`test/codex-command-reports.test.ts` covers report validation and the source-only
+audit diff using synthetic source. Rust fixtures cover parameter allowlists,
+exact native ownership and deletion gates. They are authored **unrun**.
+[Verification](../../features/references/verification.md#codex-command-audit) owns
+executed evidence and remaining installed-runtime/macOS/Linux acceptance.
 
-Still needed when authorized: fixture execution; installed-runtime model override
-confirmation; native picker cancellation, visual/focus/scroll acceptance; actual
-macOS and Linux acceptance. No model request, live compaction, app launch or
-installed-CLI probe was performed for this implementation.
+No app-server connection, live compaction, model request, user configuration
+change or installed command invocation was performed for this source audit.

@@ -2,13 +2,29 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
+## Codex command audit
+
+Source-only audit of existing official `rust-v0.164.0` source/generated types
+inventoried 65 built-ins and 178 app-server methods. The source-only extractor was
+executed to create the pinned metadata/fingerprint snapshot; it did not launch
+Codex. This is catalog/protocol evidence, not executed command acceptance.
+Native-backed compaction and read-only report adapters are source implemented;
+new report, lifecycle/order/error/pagination, audit-extractor and native
+ownership/deletion-gate fixtures are authored **unrun**. The mandatory post-merge
+TypeScript/Rust compile check is pending. No tests, builds, app launches,
+app-server probes, user-session/configuration mutation, live compaction or model
+requests were run. Installed-runtime and macOS/Linux focus/scroll/Stop/usage
+acceptance remain pending. The [compatibility matrix](../../slash-commands/references/codex.md)
+and [audit procedure/inventory](../../slash-commands/references/codex-audit.md)
+own behavior, scope and future audit triggers.
+
 ## Session command port
 
 Required `HarnessSession.commands` registration/registry forwarding, shared
 composer validation/invocation/card cancellation, retained command output and
-Pi/Copilot/Codex/retained-ACP adapters are source-implemented. Codex exposes only
-reviewed native-API-backed `/model` and `/rename` client commands, not full CLI
-parity. New/updated shared, composer, type/registry, Pi, Codex and Copilot offline
+Pi/Copilot/Codex/retained-ACP adapters are source-implemented. Codex's bounded
+native-API-backed catalog is recorded in its compatibility matrix; the command
+audit above extends the initial model/name baseline without claiming full CLI parity. New/updated shared, composer, type/registry, Pi, Codex and Copilot offline
 fixtures are authored **unrun**. The mandatory post-merge `mise run check` passed:
 architectural dependency gate, TypeScript (including required-port/negative type
 assertions) and Rust compilation. This is compile evidence, not behavioral acceptance.

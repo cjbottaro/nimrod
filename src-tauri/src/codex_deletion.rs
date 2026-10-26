@@ -31,11 +31,14 @@ impl Gate {
             }
         } else {
             if method == Some("thread/delete") { return Err("Only an owned Codex catalog can delete a reviewed tree".into()); }
-            if method == Some("thread/name/set") && (bound.is_none() || value["params"]["threadId"].as_str() != bound) {
-                return Err("Rename requires this writer's bound Codex thread".into());
+            if matches!(method, Some("thread/name/set" | "thread/compact/start" | "thread/read" | "mcpServerStatus/list" | "thread/backgroundTerminals/list")) && (bound.is_none() || value["params"]["threadId"].as_str() != bound) {
+                return Err("Command requires this writer's bound Codex thread".into());
+            }
+            if matches!(method, Some("skills/list" | "hooks/list")) && (bound.is_none() || bound.is_some_and(|id| self.blocks(id))) {
+                return Err("Command catalog requires an available bound Codex thread".into());
             }
             let target_blocked = value["params"]["threadId"].as_str().is_some_and(|id| self.blocks(id));
-            if (matches!(method, Some("thread/start" | "thread/resume" | "turn/start" | "turn/steer" | "thread/name/set"))
+            if (matches!(method, Some("thread/start" | "thread/resume" | "turn/start" | "turn/steer" | "thread/name/set" | "thread/compact/start" | "thread/read" | "mcpServerStatus/list" | "thread/backgroundTerminals/list"))
                 && (bound.is_some_and(|id| self.blocks(id)) || target_blocked)) || bound.is_none() && target_blocked {
                 return Err("This Codex thread is reserved for deletion".into());
             }
@@ -184,6 +187,24 @@ mod tests {
         assert!(Gate::default().check(true, None, "catalog", &message).is_err());
         let blocked = serde_json::json!({"method":"thread/name/set","params":{"threadId":"root","name":"Name"}});
         assert!(gate(false).check(false, Some("root"), "writer", &blocked).is_err());
+    }
+    #[test]
+    fn command_adapters_require_the_owned_thread_and_respect_reservations() {
+        for method in ["thread/compact/start", "thread/read", "mcpServerStatus/list", "thread/backgroundTerminals/list"] {
+            let message = serde_json::json!({"method":method,"params":{"threadId":"root"}});
+            assert!(Gate::default().check(false, Some("root"), "writer", &message).is_ok());
+            assert!(Gate::default().check(false, Some("other"), "writer", &message).is_err());
+            assert!(Gate::default().check(false, None, "writer", &message).is_err());
+            assert!(Gate::default().check(true, None, "catalog", &message).is_err());
+            assert!(gate(false).check(false, Some("root"), "writer", &message).is_err());
+        }
+        for method in ["skills/list", "hooks/list"] {
+            let message = serde_json::json!({"method":method,"params":{"cwds":["/fixture"]}});
+            assert!(Gate::default().check(false, Some("other"), "writer", &message).is_ok());
+            assert!(Gate::default().check(false, None, "writer", &message).is_err());
+            assert!(Gate::default().check(true, None, "catalog", &message).is_err());
+            assert!(gate(false).check(false, Some("root"), "writer", &message).is_err());
+        }
     }
     #[test]
     fn native_scope_requires_exact_observed_lineage_and_same_project() {
