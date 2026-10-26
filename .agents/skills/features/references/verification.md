@@ -11,7 +11,9 @@ Codex. This is catalog/protocol evidence, not executed command acceptance.
 Native-backed compaction and read-only report adapters are source implemented;
 new report, lifecycle/order/error/pagination, audit-extractor and native
 ownership/deletion-gate fixtures are authored **unrun**. The mandatory post-merge
-TypeScript/Rust compile check is pending. No tests, builds, app launches,
+`mise run check` passed: architectural dependency gate, TypeScript (including
+negative registration assertions) and Rust compilation. This is not behavioral
+or native acceptance. No tests, builds, app launches,
 app-server probes, user-session/configuration mutation, live compaction or model
 requests were run. Installed-runtime and macOS/Linux focus/scroll/Stop/usage
 acceptance remain pending. The [compatibility matrix](../../slash-commands/references/codex.md)
