@@ -17,7 +17,7 @@ export function codexSessionDeletion(history: () => CodexDeletionHistory | undef
       if (!('kind' in reference) || reference.kind !== 'codex') return;
       const rootId = reference.sessionId, scope = codexScope(rootId);
       return {
-        target: { key: scope, draftScope: scope }, label: 'Delete Codex thread tree…', detail: 'Review this persisted thread and its spawned descendants',
+        target: { key: scope, draftScope: scope }, label: 'Delete session…', detail: 'Review this persisted thread and its spawned descendants',
         get supported() { return !!history()?.supportsDeletion; },
         get unavailableReason() { return history()?.supportsDeletion ? undefined : 'Codex deletion requires its project catalog and native ownership guards. A failed cleanup must be resolved before another deletion.'; },
         available: () => !!history()?.supportsDeletion,

@@ -96,6 +96,7 @@ function createAcpSession(host: HarnessSessionHost, _request: SessionRequest, pr
     presentation: { snapshot: () => ({ harnessLabel: `${profile.name} ACP`, badge: `${profile.name} · ACP POC`, badgeTitle: '', busy: backend.session?.state.busy === true,
       working: backend.session?.state.busy === true, pending: backend.session?.client.phase === 'working', compacting: false, queuePending: false, destructiveBusy: backend.session?.state.busy === true }) },
     // This dormant adapter has no saved-identity/Resume implementation.
+    deletion: { current: () => undefined },
     reload: { available: () => false, reason: () => 'Reload session — ACP saved-session Resume is not implemented',
       detail: 'Reload requires an exact saved session', confirmation: '', needsConfirmation: () => false,
       async run() { throw new Error('ACP saved-session Resume is not implemented'); } },

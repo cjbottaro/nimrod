@@ -117,6 +117,7 @@ native-event translation is required.
 | `presentation` | Sidebar activity, badge, pending work and destructive-operation review |
 | `configuration` / `actions` | Shared picker, operation cards, command palette and shortcut dispatcher |
 | `reload` / `close` | Required reload behavior, live availability and interruption/close confirmation policy |
+| `deletion` | Live local-Close versus saved-deletion intent for shared Delete controls; [deletion contract](session-deletion.md#consumer-interface-and-copilot-deletion) |
 | `drafts` | Persistent versus memory-only draft/attachment lifetime |
 | `selection` | Explicit versus restored-selection connection policy |
 | `interactions` | Session activation/suspension and disposal of retained decisions |

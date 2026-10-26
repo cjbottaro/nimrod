@@ -90,6 +90,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- **Delete session…** now works for brand-new unsaved Pi sessions and temporary sessions by closing them normally. The action uses the same label across Pi, Copilot and Codex; sessions already saved at creation still use their harness's reviewed deletion operation, even before the first message.
+
 - The Delete sessions picker now sorts saved sessions newest first, matching Resume session across harnesses instead of retaining source discovery order.
 
 - Session deletion now defaults to Delete after a slower preview becomes ready, just as fast previews do, instead of leaving automatic focus on Cancel and making Enter silently cancel. Keyboard/pointer interaction during loading still preserves the chosen focus.

@@ -136,6 +136,7 @@ class PrototypeSession implements HarnessSession {
   get lifecycle() { return this.inner.lifecycle; } get conversation() { return this.inner.conversation; }
   get presentation() { return this.inner.presentation; } get configuration() { return this.inner.configuration; }
   get actions() { return this.inner.actions; } get reload() { return this.inner.reload; }
+  get deletion() { return this.inner.deletion; }
   get close() { return this.inner.close; } get drafts() { return this.inner.drafts; }
   get selection() { return this.inner.selection; } get interactions() { return this.inner.interactions; }
   get references() { return this.inner.references; }
@@ -148,7 +149,9 @@ test('class/prototype implementations retain their live ports across registry bi
   } });
   const registry = new HarnessRegistry([registration], f.project, registration.id);
   await registry.initialize(); const session = registry.create(registry.get(registration.id), f.host, { mode: 'saved' });
+  assert.equal(session.deletion.current()?.kind, 'close');
   assert.equal(session.lifecycle.connection, 'disconnected'); await session.lifecycle.connect(); assert.equal(session.lifecycle.connection, 'connected');
+  assert.deepEqual(session.deletion.current(), { kind: 'saved', reference: session.lifecycle.identity });
   f.dom.window.close();
 });
 

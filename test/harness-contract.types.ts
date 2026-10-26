@@ -18,6 +18,9 @@ function compileAssertions(session: HarnessSession, project: HarnessProject, reg
   const { conversation, ...withoutConversation } = session;
   // @ts-expect-error Core input/output cannot be omitted or supplied by the project shell.
   const missingConversation: HarnessSession = withoutConversation;
+  const { deletion, ...withoutDeletion } = session;
+  // @ts-expect-error Every factory must explicitly declare mounted-session removal semantics.
+  const missingDeletion: HarnessSession = withoutDeletion;
   const { reload, ...withoutReload } = session;
   // @ts-expect-error Every factory must supply the reload consumer port.
   defineHarness({ ...registration, create: () => ({ ...project, create: () => withoutReload }) });

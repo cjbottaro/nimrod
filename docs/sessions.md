@@ -52,7 +52,9 @@ Reload is unavailable for temporary sessions, before a saved identity exists (Pi
 
 ## Delete session tree
 
-Right-click a Session sidebar row and choose **Delete session tree…** to target it without switching to or resuming it. The Project bar trash icon and **Delete session tree…** / **⌘/Ctrl+Backspace** target the selected saved session.
+Right-click a Session sidebar row and choose **Delete session…** to target it without switching to or resuming it. The Project bar trash icon and **Delete session…** / **⌘/Ctrl+Backspace** target the selected session. The action has the same name across Pi, Copilot and Codex.
+
+For a brand-new Pi session that has not saved history, Delete simply closes it. Temporary sessions also close, with the usual confirmation and temporary-state disposal. Active work still asks for Close confirmation; a failed shutdown keeps the session open. A session that gains saved history during confirmation/shutdown uses the saved deletion review instead. Copilot and Codex can save a session at creation, before its first message; Delete then uses their actual deletion operation, not just Close.
 
 This section describes **Pi's tree deletion**. [Codex tree deletion](codex.md#delete-a-codex-thread-tree) reuses the same review/controls for spawned descendants through Codex's own API, with explicit cross-project/fork limitations. Built-in SDK Copilot uses the same controls and shortcut as **Delete session…**, reviewing only one saved session through the SDK deletion API; see [Copilot deletion](copilot.md#history-close-and-delete). Reload is independent of deletion.
 
@@ -61,7 +63,7 @@ This section describes **Pi's tree deletion**. [Codex tree deletion](codex.md#de
 3. Choose **Delete N sessions** to stop affected agents and permanently remove the tree, or Cancel/Escape to retain everything without stopping work.
 4. Confirmation immediately disables the actions and replaces the tree with a spinner and **Stopping sessions…**, without waiting for a response. The review stays open at the same size and advances to **Deleting sessions…** during removal, with the Delete label unchanged. It closes with the configured modal animation when deletion and reconciliation finish.
 
-Deletion is permanent, not a move to OS trash. No Pi deletion plugin is required. Working sessions can be deleted; temporary/unsaved sessions cannot. Nimrod stops affected owned Pi processes and waits for exit before removing files. Confirmation covers the current tree, including descendants created during review or shutdown, without a second review. Review locks only affected sessions. New sessions and unrelated Resume, Reload and Close actions remain available in other project windows, without stopping unrelated work.
+Deletion is permanent, not a move to OS trash. No Pi deletion plugin is required. Working saved sessions can be deleted; temporary/unsaved Pi sessions use Close as described above. Nimrod stops affected owned Pi processes and waits for exit before removing files. Confirmation covers the current tree, including descendants created during review or shutdown, without a second review. Review locks only affected sessions. New sessions and unrelated Resume, Reload and Close actions remain available in other project windows, without stopping unrelated work.
 
 Saved-history pickers can contain a stale row if its file is deleted after discovery. Choosing it shows an error; Nimrod never substitutes a new conversation. A session in the active deletion tree cannot attach a new agent until review is canceled or deletion finishes. The reviewing window retains normal modal focus and shortcut priority.
 

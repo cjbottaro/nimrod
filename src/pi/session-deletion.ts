@@ -28,7 +28,7 @@ export function piSessionDeletion(
       return {
         target: target(path),
         supported: true,
-        label: 'Delete session tree…',
+        label: 'Delete session…',
         detail: 'Review removal of this saved session and its descendants',
         get unavailableReason() {
           return deletion.blocked(path) ? 'recover through Resume session first'

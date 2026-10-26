@@ -23,7 +23,7 @@ test('sidebar sessions keep independent drafts and a background agent live witho
     await expect(page.locator('#open-workspace, #open-palette, #disconnect')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Reload session', exact: true })).toBeVisible();
     await expect(page.locator('#reload-session')).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Delete session tree', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Delete session', exact: true })).toBeVisible();
     await expect(page.locator('#delete-session')).toBeDisabled();
     await demo.turn(1);
     const firstPanel = await page.locator('.session-view').getAttribute('id');

@@ -252,9 +252,19 @@ const deletions = new SessionDeletionCoordinator({
 });
 deletionCoordinatorReady = true;
 for (const project of harnesses.projects) deletions.register(context => project.deletion(context));
-function tabDeletion(tab: Tab | undefined): SessionDeletionOperation | undefined {
-  const reference = tab?.lifecycle.identity;
-  return reference && tab ? deletions.operation(reference, tab.title) : undefined;
+type SessionDeleteAction = Pick<SessionDeletionOperation, 'label' | 'detail' | 'unavailableReason' | 'available' | 'run'>;
+function tabDeletion(tab: Tab | undefined): SessionDeleteAction | undefined {
+  if (!tab) return;
+  const intent = tab.integration.deletion.current();
+  if (!intent) return;
+  if (intent.kind === 'saved') return deletions.operation(intent.reference, tab.title);
+  return {
+    label: 'Delete session…', detail: 'Close this session; it has no saved history to delete',
+    available: () => ready && !unloading && !settings.isOpen && !deletions.pending && tabs.includes(tab)
+      && !tab.deleting && !tab.starting && !tab.closing && !tab.reloading
+      && tab.integration.deletion.current()?.kind === 'close',
+    run: () => closeTab(tab, true),
+  };
 }
 // A global (Any-target) listener also receives emit_to events for OTHER windows.
 let notificationNavigation = 0;
@@ -1179,18 +1189,25 @@ function detachTab(tab: Tab): void {
   for (const item of tabs) updateTab(item);
   controls(); persistTabs(); syncPopouts();
 }
-async function closeTab(tab: Tab): Promise<void> {
+async function closeTab(tab: Tab, deletingUnsaved = false): Promise<void> {
   if (tab.deleting || locked(tab) || tab.closing || tab.starting || tab.reloading || settings.isOpen) return;
   const snapshot = tab.integration.presentation.snapshot(), policy = tab.integration.close;
   const running = !!tab.integration.conversation.state && !tab.ended;
   if ((policy.alwaysConfirm || running && (snapshot.busy || snapshot.pending || tab.inputCount || snapshot.queuePending))
     && !await dialogs.confirm(`Close ${tab.title}?`, policy.message, undefined, policy.label)) return;
   if (tab.closing || !tabs.includes(tab)) return;
+  // A first save while confirming Close must cross the saved-deletion review instead.
+  if (deletingUnsaved && tab.integration.deletion.current()?.kind !== 'close') return deleteSession(tab);
   tab.closing = true; updateTab(tab);
   try {
     await nativeDrafts?.flush();
     await tab.lifecycle.stop();
     tab.receive?.({ type: 'sessionDisconnected' }); tab.lifecycle.disconnect('Disconnected');
+    // Shutdown can finish a first save. Do not silently leave that history behind.
+    if (deletingUnsaved && tab.integration.deletion.current()?.kind === 'saved') {
+      tab.closing = false; updateTab(tab);
+      return deleteSession(tab);
+    }
     await nativeDrafts?.flush();
     if (tab.token) dialogs.cancel(tab.token);
     detachTab(tab);
