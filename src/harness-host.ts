@@ -50,6 +50,8 @@ export interface HarnessSessionEffects {
   title(): string;
   changed(change?: { title?: string; clearFailed?: boolean; persist?: boolean }): void;
   identified(): void;
+  /** Persist current layout evidence before a history-producing dispatch. Does not gate local Send feedback. */
+  checkpoint(): Promise<void>;
   retire(): void;
   input(delta: number): void;
   attention(kind: 'completed' | 'failed' | 'input', token: string, label: string, response?: string, signal?: AbortSignal): void;

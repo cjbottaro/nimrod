@@ -85,6 +85,18 @@ export class SessionDrafts {
     this.changed?.(previous, null);
     if (!this.changed) this.flush();
   }
+  /** Replace only this empty local conversation's obsolete runtime scope. */
+  replaceScope(previous: string, key: string): void {
+    if (this.active !== previous || !isSavedDraftScope(previous) || !isSavedDraftScope(key)) throw new Error('Unexpected session draft scope replacement');
+    if (previous === key) return;
+    if (Object.hasOwn(this.drafts, key)) throw new Error('Session already has a local draft; resume it explicitly');
+    const value = this.read();
+    if (value !== undefined) this.drafts[key] = value;
+    delete this.drafts[previous]; this.active = key;
+    if (value !== undefined) this.changed?.(key, value);
+    this.changed?.(previous, null);
+    if (!this.changed) this.flush();
+  }
   remember(last: LastSession): void { this.last = last; this.flush(); }
   deleteFile(path: string): void {
     this.deleteScope(`file:${path}`);

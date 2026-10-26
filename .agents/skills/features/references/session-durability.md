@@ -1,6 +1,6 @@
 # Session durability and untouched-session continuity
 
-**Status: accepted cross-harness product policy; implementation convergence pending.**
+**Status: accepted cross-harness product policy; Codex untouched-session continuity source-implemented, broader adapter convergence pending.**
 This reference owns the distinction between local session continuity, runtime
 identity and saved harness history. It applies to future integrations and reviews
 of existing ones; it does not claim that current ports or adapters implement it.
@@ -91,7 +91,7 @@ history; legacy records without evidence; explicit Temporary disposal; failed
 owned shutdown; and isolation from siblings, newer drafts and background focus.
 Fixture authoring/execution and native acceptance must be reported separately.
 
-## Codex motivating case and implementation gap
+## Codex motivating case and implementation
 
 Read-only investigation of Codex CLI 0.164.0 found `thread/start` can return
 `ephemeral: false`, an ID and a future rollout pathname before creating a durable
@@ -100,9 +100,13 @@ rollout and idle shutdown leaving no stored thread record. The affected Nimrod
 trace showed creation, no `turn/start`, then a later `thread/resume` rejection:
 `no rollout found for thread id …`.
 
-Current `src/codex/connection.ts` immediately sets `savedSessionId` in the identity
-callback; `src/codex/client.ts::open` treats non-ephemeral creation as durable.
-These are implementation gaps, not exceptions to this policy. The
-[Codex integration skill](../../codex-integration/SKILL.md) owns the concrete
-mapping and follow-up. No runtime fix, migration, live reproduction or acceptance
-is implied by recording this decision.
+The [Codex integration skill](../../codex-integration/SKILL.md#untouched-session-persistence-anomaly)
+owns its implemented evidence/checkpoint mapping and conservative legacy policy.
+The compatibility encoding retains `kind: codex` / runtime `sessionId` for layout
+and draft routing, adding validated versioned `codexContinuity` evidence; such a
+layout identity is not itself a saved-history capability. Fresh replacement
+preserves the mounted local owner and promotes its scoped draft to the new runtime
+ID through an explicit collision-checked operation. Other harness encodings remain
+unchanged. Old Codex records without evidence are never inferred to be untouched.
+No live reproduction, migration of legacy empty rows or native acceptance is
+implied by source implementation.

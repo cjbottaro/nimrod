@@ -18,7 +18,8 @@ import type { TranscriptLogSink } from '../transcript-logs';
 export interface CodexSessionUi {
   publish(message: ConversationViewMessage): void;
   changed(): void; notice(message: string): void;
-  identified(id: string): void;
+  identified(id: string, empty?: boolean): void;
+  workObserved?(): void;
   approval: NonNullable<CodexClientHooks['approval']>;
   question?: CodexClientHooks['question'];
   asyncQuestion?(question: CodexAsyncQuestion, signal: AbortSignal): Promise<QuestionAnswer | undefined>;
@@ -72,10 +73,10 @@ export class CodexSession {
     });
     this.client = new CodexClient({ write: packet => { this.capture(typeof packet.method === 'string' ? 'request' : 'response', packet); return writer.write(packet); } }, {
       identified: (thread, settings) => {
-        ui.identified(thread.id); this.applySettings(settings);
+        ui.identified(thread.id, thread.status.type === 'idle' && thread.turns.length === 0); this.applySettings(settings);
         this.state = { ...this.state, sessionName: string(thread.name) || undefined };
       },
-      event: event => this.event(event), approval: ui.approval, question: ui.question,
+      event: event => { if (/^(turn|item)\//.test(event.method)) ui.workObserved?.(); this.event(event); }, approval: ui.approval, question: ui.question,
       interactionFailure: failure => {
         this.capture('interaction.rejected', failure);
         if (ui.interactionFailure) ui.interactionFailure(failure);

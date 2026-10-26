@@ -64,7 +64,7 @@ export class HarnessRegistry {
   assertIdentity(project: HarnessProject, session: HarnessSession): void {
     const { identity, key, draftScope } = session.lifecycle;
     if (!identity) {
-      if (key !== undefined || draftScope !== undefined) throw new Error('An integration published persistence keys without a durable identity');
+      if (key !== undefined || draftScope !== undefined) throw new Error('An integration published persistence keys without a layout identity');
       return;
     }
     if (!project.saved.accepts(identity) || project.saved.key(identity) !== key || project.saved.draftScope(identity) !== draftScope)

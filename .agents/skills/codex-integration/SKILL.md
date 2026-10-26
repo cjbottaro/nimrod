@@ -64,13 +64,24 @@ Future extraction must remove actual consumer knowledge or move responsibility. 
 The accepted shared [session durability policy](../features/references/session-durability.md)
 owns uniform local continuity, durability evidence and safe replacement rules for
 all harnesses. Codex 0.164.0 can return a non-ephemeral ID before saving a thread;
-Nimrod currently promotes it to `savedSessionId` immediately. An observed
-create-without-Send → restart → reconnect failed with `no rollout found`.
-This remains an implementation gap: distinguish runtime identity from saved
-history, preserve local drafts, and only create a fresh thread for a session
-positively known to be untouched. Do not recover arbitrary missing saved threads
-by silently starting replacements. The policy record is not a runtime fix or
-native acceptance claim.
+the reported create-without-Send → restart → reconnect failure was `no rollout found`.
+The concrete connection adapter now persists versioned `codexContinuity` layout
+evidence alongside the runtime ID: `untouched` permits fresh creation on selection,
+whereas `saved` requires a successful exact Resume in a fresh owned process. A
+returned start ID/path or non-ephemeral flag is not durability evidence.
+
+Before first potentially history-producing dispatch (turn/steer, compaction,
+rename or configuration resume), the adapter clears untouched evidence and awaits
+a layout checkpoint. Failure prevents wire delivery, not optimistic local Send
+feedback. Native turn/item observations also clear untouched evidence, including
+buffered startup events. Recreating an untouched thread promotes only the current
+draft scope, rejects target collisions, preserves the mounted local session/title/
+pin/recency, and waits for observed owned shutdown. It sends no synthetic input
+and reapplies no unsupported configuration. Legacy or possibly-used rows always
+use exact Resume; failure never falls back to creation. Reload/saved deletion are
+unavailable for unconfirmed new history; untouched rows have local Close.
+Fixture authoring is separate from execution and native acceptance; see
+[verification](../features/references/verification.md#registered-harness-application-contract).
 
 ## Startup binding anomaly
 

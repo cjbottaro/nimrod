@@ -3,7 +3,6 @@ import { createCodexConnection } from './connection';
 import { nativeCodexTransport } from './native';
 import { CodexSessionHistory, codexHistoryKey } from './session-history';
 import { codexSessionDeletion } from './session-deletion';
-import type { CodexSession } from './session';
 import { codexInteraction, codexSessionActions } from './view-policy';
 import { codexIntegrationUi } from './integration-ui';
 import { codexToolPlugin } from './card-plugins';
@@ -55,7 +54,9 @@ function createCodexProject(projectHost: HarnessProjectHost): HarnessProject {
   };
 }
 function createCodexSession(host: HarnessSessionHost, request: SessionRequest, project: HarnessProjectHost, ready: () => boolean, generation: () => string): HarnessSession {
-  const backend: { session?: CodexSession; savedSessionId?: string } = { savedSessionId: request.mode === 'resume' ? request.reference.sessionId : undefined };
+  const reference = request.mode === 'resume' ? request.reference : undefined;
+  const backend: import('./connection').CodexBackend = { savedSessionId: reference?.sessionId,
+    continuity: reference && 'kind' in reference ? reference.codexContinuity : undefined };
   const { lifetime, effects, ownership: owner } = host, ui = codexIntegrationUi(host);
   let signature = '', sequence = 0, retiring = false;
   const lifecycle = createCodexConnection(() => owner, backend, {
@@ -64,7 +65,7 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
     tearingDown: () => lifetime.closing() || lifetime.deleting() || lifetime.reloading(),
     gate: () => ready() && !project.deletionPending() && !lifetime.deleting() ? 'ready' : 'blocked',
     conflicts: id => lifetime.conflicts({ kind: 'codex', sessionId: id }), drafts: host.drafts,
-    effects: { changed: effects.changed, identified: effects.identified, retire: effects.retire,
+    effects: { changed: effects.changed, identified: effects.identified, checkpoint: effects.checkpoint, retire: effects.retire,
       resolved: issue => effects.resolve(issue === 'cleanup' ? 'codex-cleanup' : 'connection'), hasConnectionOutcome: effects.hasConnectionOutcome,
       failure: failure => {
         if (retiring || lifetime.closing() || lifetime.deleting()) return;
@@ -102,16 +103,17 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
       working: backend.session?.state.busy === true, pending: backend.session?.state.busy === true, compacting: backend.session?.state.compacting === true, queuePending: false, destructiveBusy: backend.session?.hasPendingWork === true }) },
     deletion: { current: () => {
       const reference = lifecycle.identity;
-      return reference ? { kind: 'saved', reference } : { kind: 'close' };
+      if (!reference || backend.continuity?.untouched === true) return { kind: 'close' };
+      return backend.continuity?.saved === false ? undefined : { kind: 'saved', reference };
     } },
     reload: {
-      available: () => !!lifecycle.identity,
-      reason: () => !lifecycle.identity ? 'Reload session — available after Codex assigns a saved identity' : lifetime.reloading() ? 'Reloading session…' : 'Reload session',
+      available: () => !!lifecycle.identity && backend.continuity?.saved !== false,
+      reason: () => !lifecycle.identity || backend.continuity?.saved === false ? 'Reload session — available after saved Codex history is confirmed' : lifetime.reloading() ? 'Reloading session…' : 'Reload session',
       detail: 'Reload this conversation with a fresh Codex process',
       confirmation: 'This interrupts this session’s agent and resumes its saved history. Your draft stays; in-flight work will not continue. Nothing is sent again automatically.',
       needsConfirmation: inputPending => inputPending || !owner.ended && !!backend.session?.hasPendingWork,
       async run() {
-        if (!lifecycle.identity) throw new Error('Reload requires a saved Codex identity');
+        if (!lifecycle.identity || backend.continuity?.saved === false) throw new Error('Reload requires confirmed saved Codex history');
         retiring = true;
         try {
           await lifecycle.stop();

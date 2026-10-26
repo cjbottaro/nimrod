@@ -138,7 +138,7 @@ export class CodexClient {
     } catch (error) { this.disconnect(error); throw error; }
   }
 
-  /** Creates only a durable, exact-project thread; never starts provider work. */
+  /** Opens an exact-project, non-ephemeral thread. A start ID is not durable-save evidence. Never starts provider work. */
   async open(cwd: string, savedThreadId?: string): Promise<CodexThread> {
     if (this.state !== 'ready') throw new Error('Codex thread opening is unavailable');
     nonempty(cwd, 'project cwd');

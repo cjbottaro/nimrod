@@ -4,7 +4,7 @@ import { codexConnectionFailure } from './connection-failure';
 import type { CodexTransport } from './native';
 import { ownedProcessStop, type ConnectSessionOptions, type SessionLifecycle, type SessionLifecycleHost, type SessionLifecycleOwner } from '../session-lifecycle';
 
-interface CodexBackend { session?: CodexSession; savedSessionId?: string; }
+export interface CodexBackend { session?: CodexSession; savedSessionId?: string; continuity?: import('../session-lifecycle').CodexContinuity; }
 export interface CodexConnectionHost {
   readonly project: string;
   readonly transport: CodexTransport;
@@ -14,11 +14,12 @@ export interface CodexConnectionHost {
   tearingDown(): boolean;
   gate: SessionLifecycleHost['gate'];
   conflicts(identity: string): boolean;
-  drafts: { read(): unknown; bindScope(scope: string): void; };
-  ui: Omit<CodexSessionUi, 'identified' | 'disconnected' | 'changed'> & { changed(state: CodexSessionState): void; };
+  drafts: { read(): unknown; bindScope(scope: string): void; replaceScope(previous: string, scope: string): void; };
+  ui: Omit<CodexSessionUi, 'identified' | 'disconnected' | 'changed' | 'workObserved'> & { changed(state: CodexSessionState): void; };
   effects: {
     changed(): void;
     identified(): void;
+    checkpoint(): Promise<void>;
     retire(): void;
     resolved(issue: 'connection' | 'cleanup'): void;
     hasConnectionOutcome(): boolean;
@@ -37,7 +38,10 @@ export function createCodexConnection(readOwner: () => SessionLifecycleOwner, ba
   async function connect(options: ConnectSessionOptions): Promise<void> {
     const owner = readOwner();
     if (!host.current() || !host.available(options) || owner.starting || backend.session && !owner.ended) return;
-    const savedId = backend.savedSessionId;
+    const previousId = backend.savedSessionId;
+    // Never infer untouched from empty history, a missing catalog row or a resume error.
+    const replaceUntouched = backend.continuity?.untouched === true && backend.continuity.saved === false;
+    const savedId = replaceUntouched ? undefined : previousId;
     if (savedId && host.conflicts(savedId)) {
       host.effects.failure({ kind: 'connection', message: 'This Codex thread is already open in this window.', resumable: false });
       return;
@@ -68,14 +72,33 @@ export function createCodexConnection(readOwner: () => SessionLifecycleOwner, ba
       }
       host.effects.failure({ kind: 'connection', ...failure, resumable: !!lifecycle.identity });
     };
-    const session = new CodexSession({ write: packet => host.transport.write(token, packet) }, {
+    const markWork = (): void => {
+      if (!valid() || !backend.continuity?.untouched) return;
+      backend.continuity = { ...backend.continuity, untouched: false }; host.effects.identified();
+    };
+    let checkpointed = false;
+    const session = new CodexSession({ write: async packet => {
+      if (['turn/start', 'turn/steer', 'thread/compact/start', 'thread/name/set', 'thread/resume'].includes(String(packet.method)) && backend.continuity?.saved === false) {
+        markWork();
+        // Persist uncertainty BEFORE delivery. Failure blocks wire work, never local Send feedback.
+        if (!checkpointed) { await host.effects.checkpoint(); checkpointed = true; }
+        if (!valid() || owner.ended || host.tearingDown()) throw new Error('Codex dispatch was retired before delivery');
+      }
+      return host.transport.write(token, packet);
+    } }, {
       transcriptLog: host.ui.transcriptLog,
       publish: message => { if (valid()) host.ui.publish(message); },
-      identified: id => {
+      identified: (id, empty) => {
         if (!valid() || savedId !== undefined && savedId !== id || host.conflicts(id)) throw new Error('Codex returned a conflicting or retired identity');
         // Bind synchronously before publishing identity or applying later packets.
-        host.drafts.bindScope(codexScope(id)); backend.savedSessionId = id; host.effects.identified();
+        if (replaceUntouched && previousId !== undefined && previousId !== id) host.drafts.replaceScope(codexScope(previousId), codexScope(id));
+        else host.drafts.bindScope(codexScope(id));
+        backend.savedSessionId = id;
+        if (savedId === undefined) backend.continuity = { version: 1, untouched: empty === true, saved: false };
+        else if (backend.continuity) backend.continuity = { version: 1, untouched: false, saved: true };
+        host.effects.identified();
       },
+      workObserved: markWork,
       changed: () => { if (valid()) host.ui.changed(session.state); },
       approval: (request, signal) => valid() ? host.ui.approval(request, signal) : Promise.resolve('cancel'),
       question: host.ui.question ? (request, signal) => valid() ? host.ui.question!(request, signal) : Promise.resolve(undefined) : undefined,

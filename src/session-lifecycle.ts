@@ -3,9 +3,11 @@ import { savedDraftScope } from './draft-scope';
 import { lastUsed } from './session-recency';
 
 export type LaunchMode = 'saved' | 'temporary' | 'resume';
+/** Codex layout evidence, not a harness-history identity or submission journal. */
+export interface CodexContinuity { version: 1; untouched: boolean; saved: boolean; }
 export type SavedSessionIdentity =
   | { path: string; sessionId: string }
-  | { kind: string; sessionId: string };
+  | { kind: string; sessionId: string; codexContinuity?: CodexContinuity };
 export type SavedSidebarSession = SavedSessionIdentity & { name: string; lastUsed: number; pinned?: boolean };
 /** A previously accepted user action may outlive the palette/settings surface that accepted it. */
 export interface ConnectSessionOptions { acceptedAction?: boolean; }
@@ -84,7 +86,14 @@ export function readSavedSidebarSession(value: unknown): SavedSidebarSession | u
     lastUsed: lastUsed(entry.lastUsed), ...(entry.pinned === true ? { pinned: true } : {}) };
   if (typeof entry.kind === 'string') {
     try { savedDraftScope(entry.kind, entry.sessionId); } catch { return; }
-    return { kind: entry.kind, sessionId: entry.sessionId, ...metadata };
+    let codexContinuity: CodexContinuity | undefined;
+    if (entry.kind === 'codex' && entry.codexContinuity !== undefined) {
+      const evidence = entry.codexContinuity as Partial<CodexContinuity> | null;
+      // Reject malformed evidence rather than ever infer safe replacement.
+      if (!evidence || evidence.version !== 1 || typeof evidence.untouched !== 'boolean' || typeof evidence.saved !== 'boolean' || evidence.saved && evidence.untouched) return;
+      codexContinuity = { version: 1, untouched: evidence.untouched, saved: evidence.saved };
+    }
+    return { kind: entry.kind, sessionId: entry.sessionId, ...(codexContinuity ? { codexContinuity } : {}), ...metadata };
   }
   if (entry.kind === undefined && typeof entry.path === 'string') {
     return { path: entry.path, sessionId: entry.sessionId, ...metadata };

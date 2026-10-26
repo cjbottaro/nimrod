@@ -94,6 +94,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Newly created untouched Codex sessions can reconnect after restarting Nimrod even when Codex has not written a rollout yet. Their local drafts and sidebar metadata survive replacement of the empty runtime thread; no prompt is sent. Possible input or history-producing work is checkpointed before delivery, and missing saved/legacy threads never silently become new conversations. Native restart acceptance remains pending.
+
 - Reload session clears its old-runtime notices when the replacement starts, preventing recurring errors from accumulating duplicate banners. Cancellation and failed shutdown retain existing errors; other sessions and application notices are untouched.
 
 - **Delete session…** now works for brand-new unsaved Pi sessions and temporary sessions by closing them normally. The action uses the same label across Pi, Copilot and Codex; sessions already saved at creation still use their harness's reviewed deletion operation, even before the first message.
