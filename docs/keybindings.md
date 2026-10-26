@@ -42,6 +42,7 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 | Project settings… | Cmd/Ctrl+Shift+, |
 | Edit keybindings… | Unbound |
 | Reload session | Cmd/Ctrl+R |
+| Rename session… | Cmd/Ctrl+Shift+R |
 | Zoom in / out / reset to 100% | Cmd/Ctrl+Plus / Minus / 0 |
 
 **Switch session** searches only open sessions, including temporary sessions and sessions hidden by the sidebar view. **Resume session** searches saved project history, including closed sessions; choosing an already-open entry focuses it. **New named session** opens the name field first; type a name and press Enter to create it. Cmd/Ctrl+P has no Nimrod default binding.

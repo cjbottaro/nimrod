@@ -4,7 +4,7 @@
 
 ## Consumer contract
 
-The selected-session palette action, configurable `rename` keybinding (no default),
+The selected-session palette action, configurable `rename` keybinding (`primary+shift+r` by default),
 and native session-row menu share `runSessionRowAction` / `renameSession` in
 `src/main.ts`. A row action captures that row, never the later selected session.
 Every `HarnessSession` must supply `naming: SessionNaming`

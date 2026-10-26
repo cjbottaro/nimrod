@@ -35,8 +35,8 @@ See [Session sidebar](session-sidebar.md) for ordering and filtered navigation.
 
 Choose **Rename session…** in the command palette or right-click a Session sidebar
 row and choose **Rename session…**. Edit the prefilled name and choose **Rename
-session**; Cancel/Escape leaves it unchanged. You can assign a shortcut in
-Keybindings (none by default).
+session**; Cancel/Escape leaves it unchanged. **⌘/Ctrl+Shift+R** opens Rename
+for the selected session; you can change or unbind it in Keybindings.
 
 Pi, Copilot and Codex use their native naming APIs, not a Nimrod-only label.
 Names must be non-empty and single-line; Copilot allows up to 100 characters.

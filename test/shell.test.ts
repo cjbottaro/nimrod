@@ -571,7 +571,7 @@ test('Rename session palette action is bindable, prefilled, cancellable and vali
       input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
       await f.tick(); await f.tick();
     };
-    assert.deepEqual(ACTIONS.find(action => action.id === 'rename')!.defaults, []);
+    assert.deepEqual(ACTIONS.find(action => action.id === 'rename')!.defaults, ['primary+shift+r']);
     await open();
     assert.equal(f.element<HTMLTextAreaElement>('host-dialog-input').value, f.element('project-session-name').textContent);
     f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
@@ -582,6 +582,10 @@ test('Rename session palette action is bindable, prefilled, cancellable and vali
     await open(); f.element<HTMLTextAreaElement>('host-dialog-input').value = 'Palette name'; await f.confirm();
     assert.equal(f.element('project-session-name').textContent, 'Palette name');
     assert.doesNotMatch(f.element('session-notices').textContent!, /single-line/);
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'R', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('host-dialog').open, true);
+    f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
     f.preferences.external('{"keybindings":{"rename":["primary+shift+y"]}}'); await f.tick();
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'y', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
     await f.tick(); await f.tick();

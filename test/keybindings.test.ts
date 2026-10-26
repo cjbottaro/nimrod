@@ -48,6 +48,9 @@ test('defaults distinguish creation, named creation, open-session switching and 
   assert.equal(ACTIONS.some(action => action.defaults.some(binding => String(binding) === 'primary+p')), false);
   assert.deepEqual(bindingsFor('resume', {}), ['primary+k']);
   assert.deepEqual(bindingsFor('reload', {}), ['primary+r']);
+  assert.deepEqual(bindingsFor('rename', {}), ['primary+shift+r']);
+  assert.deepEqual(bindingsFor('rename', { rename: ['primary+shift+y'] }), ['primary+shift+y']);
+  assert.deepEqual(bindingsFor('rename', { rename: [] }), []);
   const legacy = readKeyOverrides({ restart: ['primary+j'] });
   assert.deepEqual(bindingsFor('reload', legacy), ['primary+j']);
   assert.deepEqual(bindingsFor('reload', readKeyOverrides({ restart: ['primary+j'], reload: [] })), []);
@@ -84,6 +87,18 @@ test('defaults distinguish creation, named creation, open-session switching and 
   for (const action of ACTIONS) for (const binding of action.defaults) assert.equal(validateBinding(binding), binding);
   assert.deepEqual(readKeyOverrides({ 'future-action': ['primary+j'] }), { 'future-action': ['primary+j'] });
   for (const value of [null, [], { new: 'primary+n' }, { new: ['primary+n', 'primary+n'] }, { new: ['n'] }, { new: ['primary+v'] }, { new: ['primary+='] }, { new: ['primary+shift+plus'] }, { new: ['primary+cmd+n'] }, { new: ['primary+\u0000'] }]) assert.throws(() => readKeyOverrides(value));
+});
+
+for (const platform of ['MacIntel', 'Linux x86_64']) test(`Reload and Rename defaults remain distinct on ${platform}`, () => {
+  const f = fixture(platform), ran: ActionId[] = [];
+  const dispatch = installKeybindingDispatch(f.win, { read: () => ({}), enabled: () => true, run: id => { ran.push(id); }, error: error => { throw error; } });
+  try {
+    const primary = platform === 'MacIntel' ? { metaKey: true } : { ctrlKey: true };
+    const reload = f.event('r', primary), rename = f.event('R', { ...primary, shiftKey: true });
+    f.win.dispatchEvent(reload); f.win.dispatchEvent(rename);
+    assert.deepEqual(ran, ['reload', 'rename']);
+    assert.equal(reload.defaultPrevented, true); assert.equal(rename.defaultPrevented, true);
+  } finally { dispatch.dispose(); f.dom.window.close(); }
 });
 
 test('Linux app shortcuts rebind/unbind, preserve editing and obey modal/repeat/IME guards', () => {
