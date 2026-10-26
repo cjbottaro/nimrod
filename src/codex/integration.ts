@@ -18,10 +18,23 @@ export const codexHarness = defineHarness({ creation, cards: () => codexToolPlug
 function createCodexProject(projectHost: HarnessProjectHost): HarnessProject {
   let ready = false, generation = '', history: CodexSessionHistory | undefined;
   const historyError = (error: unknown) => { if (projectHost.current()) projectHost.notice({ id: 'history:codex', operation: 'Read Codex history', message: String(error) }); };
-  const source = () => {
+  let initializing: Promise<void> | undefined;
+  const initialize = (): Promise<void> => initializing ??= (async () => {
+    try {
+      const result = await invoke<string>('stop_codex');
+      if (!result) throw new Error('Native Codex host did not confirm a new generation');
+      if (projectHost.current()) { generation = result; ready = true; source(); projectHost.changed(); }
+    } catch (error) { if (projectHost.current()) projectHost.notice({ id: 'codex-startup', operation: 'Initialize Codex', message: String(error) }); }
+  })();
+  const source = ({ discover = false } = {}): CodexSessionHistory | undefined => {
     const project = projectHost.project();
-    if (!project || !ready || !projectHost.current() || projectHost.store.read(codexHistoryKey(project)) !== true) return;
-    history ??= new CodexSessionHistory(project, nativeCodexTransport(project, () => ({ cli: projectHost.runtime().codex, generation }), true), historyError, {
+    if (!project || !projectHost.current() || !discover && !history && (!ready || projectHost.store.read(codexHistoryKey(project)) !== true)) return;
+    const transport = nativeCodexTransport(project, () => ({ cli: projectHost.runtime().codex, generation }), true);
+    history ??= new CodexSessionHistory(project, { ...transport, async start(...args) {
+      await initialize();
+      if (!ready || !projectHost.current()) throw new Error('Codex history host is unavailable');
+      return transport.start(...args);
+    } }, historyError, {
       transcriptLog: projectHost.transcriptLog,
       interactionFailure: failure => { if (projectHost.current()) projectHost.notice({ id: `history:codex-interaction:${failure.requestId}`, operation: 'Codex catalog interaction',
         message: `Codex catalog requested an interaction Nimrod could not handle (${failure.method}). No answer or approval was supplied.`, details: JSON.stringify(failure, null, 2) }); },
@@ -31,11 +44,7 @@ function createCodexProject(projectHost: HarnessProjectHost): HarnessProject {
   return {
     id: 'codex', label: 'Codex',
     creation, actions: noProjectActions,
-    initialization: { blocking: false, ready: () => ready, async run() {
-      try { const result = await invoke<string>('stop_codex'); if (!result) throw new Error('Native Codex host did not confirm a new generation');
-        if (projectHost.current()) { generation = result; ready = true; source(); projectHost.changed(); } }
-      catch (error) { if (projectHost.current()) projectHost.notice({ id: 'codex-startup', operation: 'Initialize Codex', message: String(error) }); }
-    } },
+    initialization: { blocking: false, ready: () => ready, run: initialize },
     saved: taggedSavedSessions('codex'),
     history: { source, associate() { const project = projectHost.project(); if (project) { projectHost.store.save(codexHistoryKey(project), true); source(); } }, async dispose() { await history?.dispose(); } },
     deletion: context => codexSessionDeletion(source, context),

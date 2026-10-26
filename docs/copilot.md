@@ -421,8 +421,9 @@ last selected Copilot row automatically. Other restored rows stay disconnected
 until selected. Reconnection uses the exact ID without sending a prompt or
 continuing pending work.
 
-After using built-in Copilot in a project, **Resume session… / ⌘/Ctrl+K** queries
-project-owned SDK discovery alongside Pi. Discovery does not create/load a
+**Resume session… / ⌘/Ctrl+K** and **Delete sessions…** query
+project-owned SDK discovery alongside other available harnesses, even if you have
+not previously used Copilot in Nimrod for that directory. Discovery does not create/load a
 conversation. Only exact project-directory, local sessions are included.
 Refresh requests a fresh list; one unavailable source does not hide the others.
 Selecting closed history immediately restores its SDK draft and then resumes

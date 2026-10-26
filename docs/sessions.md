@@ -23,6 +23,8 @@ Resume orders all harnesses together by the displayed time, newest first, using 
 
 Choosing an already-open entry reuses it. Selecting an inactive saved session loads its history and connects its owning agent without sending a prompt. Reopening a project restores its remembered sidebar entries and reconnects the last selected session, including Copilot; other restored Copilot rows stay disconnected until selected. Discovery remains independent and never loads a conversation.
 
+Resume and Delete sessions query every available supported harness for the project directory, including history created outside Nimrod; no prior use in Nimrod is required. Sources load independently, with results sorted newest first as batches arrive. Listing does not create/resume a conversation or send a prompt. An unavailable source does not hide other results.
+
 Pi discovery lists the configured Pi session store. There is no arbitrary session-file chooser. Pi child sessions recorded as subagents or forks/branches are excluded from saved-history pickers; closed Pi children have no opening UI. Copilot supplies its own exact project-directory catalog. Custom ACP history is not included.
 
 Missing, malformed, replaced or wrong-project history shows an error without creating a replacement conversation. Resume restores Pi's active context, not an in-flight process, pending queues or every abandoned/pre-compaction branch. Stop other terminal/editor processes using that file first; Nimrod only coordinates its own writers.
@@ -71,9 +73,9 @@ Deletion supports Pi's session-directory environment override, not arbitrary loc
 
 ## Delete several conversations
 
-Use **Delete sessions…** / **⌘/Ctrl+Shift+Backspace** to search supported saved project history, including open and closed sessions. Pi lists top-level trees; associated Copilot history uses supported SDK deletion.
+Use **Delete sessions…** / **⌘/Ctrl+Shift+Backspace** to search supported saved project history, including open and closed sessions. Pi and Codex list supported top-level trees; Copilot history uses supported SDK deletion. The same [project-history discovery](#switch-or-resume) is used as Resume session.
 
-Enter/click opens the integration's review above the still-visible picker without activating the session. Cancel leaves the filter, rows and reading position unchanged. Confirmed-deleted rows disappear in place; selection advances to the next match or previous row at the end. Failed/retained rows stay. The picker remains open, even when empty; Refresh explicitly reloads history. Accepting a deletion freezes any unfinished discovery to preserve the rows during execution; Refresh finishes loading remaining history. Escape from the picker closes it.
+Enter/click opens the integration's review above the still-visible picker without activating the session. Discovery keeps running, but new results are held until review closes so the covered list does not move. On return, newly discovered sessions appear in sorted order while the filter, highlighted session and reading position are preserved. Confirmed-deleted rows disappear in place; if the highlighted session was deleted, selection advances to its next surviving match from before review, or the previous match at the end—not a newly arrived row. Failed/retained rows stay. The picker remains open, even when empty; Refresh explicitly reloads history. Escape from the picker closes it.
 
 Pi deletion includes descendants, not just the listed row. Codex deletion includes its reviewed spawned subtree, including archived/non-interactive descendants. Copilot deletion includes only the named saved session.
 

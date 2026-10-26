@@ -103,7 +103,10 @@ recency/selection and its separate draft. Discovery association is
 
 Opening/restoring a project never prompts a conversation. Its restored selected
 Copilot row reconnects automatically; restored background rows remain disconnected.
-Associated projects can also start one **discovery-only** SDK client. `listSessions`
+Associated projects can also warm up one **discovery-only** SDK client. Explicit
+Resume/Delete pickers discover Copilot even without that association; the
+[shared history contract](session-history.md) owns source eligibility, independent
+loading and stable picker updates. `listSessions`
 does not load history; exact `context.workingDirectory` and nonremote membership
 are checked independently of the server filter. Dates are serialized SDK Dates,
 not invented user-message timestamps. Pi/Copilot sources publish independently

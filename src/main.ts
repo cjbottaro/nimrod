@@ -585,7 +585,7 @@ function sessionListItem(entry: SessionListEntry) {
 }
 async function paletteSessions(signal: AbortSignal, publish: (page: PalettePage) => void, kind: 'resume' | 'delete' = 'resume'): Promise<PalettePage> {
   if (!workspace) return { items: [], notice: 'Open a project first.' };
-  const sources = harnesses.projects.flatMap(project => { const source = project.history.source(); return source ? [source] : []; });
+  const sources = harnesses.projects.flatMap(project => { const source = project.history.source({ discover: true }); return source ? [source] : []; });
   const project = workspace;
   const page = (snapshot: SessionHistorySnapshot): PalettePage => {
     const open = tabs.map(sessionRow);

@@ -19,25 +19,32 @@ export const copilotHarness = defineHarness({ creation, cards: bundledCopilotPlu
 function createCopilotProject(projectHost: HarnessProjectHost): HarnessProject {
   let ready = false, generation = '', history: CopilotSessionHistory | undefined;
   const historyError = (error: unknown) => { if (projectHost.current()) projectHost.notice({ id: 'history:copilot-sdk', operation: 'Read Copilot history', message: String(error) }); };
-  const source = () => {
+  let initializing: Promise<void> | undefined;
+  const initialize = (): Promise<void> => initializing ??= (async () => {
+    try {
+      const result = await invoke<string>('stop_copilot');
+      if (!result) throw new Error('Native Copilot host did not confirm a new window generation');
+      if (projectHost.current()) { generation = result; ready = true; source(); projectHost.changed(); }
+    } catch (error) { if (projectHost.current()) projectHost.notice({ id: 'copilot-startup', operation: 'Initialize Copilot', message: `Copilot is unavailable; other harnesses remain available. ${String(error)}` }); }
+  })();
+  const source = ({ discover = false } = {}): CopilotSessionHistory | undefined => {
     const project = projectHost.project();
-    if (!project || !ready || !projectHost.current() || projectHost.store.read(copilotHistoryKey(project)) !== true) return;
+    if (!project || !projectHost.current() || !discover && !history && (!ready || projectHost.store.read(copilotHistoryKey(project)) !== true)) return;
     if (!history) {
-      history = new CopilotSessionHistory(project, { ...copilotTransport(project, projectHost.runtime, () => generation), error: error => { historyError(error); projectHost.changed(); } });
-      void history.initialize().then(projectHost.changed).catch(historyError);
+      const transport = copilotTransport(project, projectHost.runtime, () => generation);
+      history = new CopilotSessionHistory(project, { ...transport, async start(...args) {
+        await initialize();
+        if (!ready || !projectHost.current()) throw new Error('Copilot history host is unavailable');
+        return transport.start(...args);
+      }, error: error => { historyError(error); projectHost.changed(); } });
+      if (!discover) void history.initialize().then(projectHost.changed).catch(historyError);
     }
     return history;
   };
   return {
     id: 'copilot-sdk', label: 'Copilot',
     creation, actions: noProjectActions,
-    initialization: { blocking: false, ready: () => ready, async run() {
-      try {
-        const result = await invoke<string>('stop_copilot');
-        if (!result) throw new Error('Native Copilot host did not confirm a new window generation');
-        if (projectHost.current()) { generation = result; ready = true; source(); projectHost.changed(); }
-      } catch (error) { if (projectHost.current()) projectHost.notice({ id: 'copilot-startup', operation: 'Initialize Copilot', message: `Copilot is unavailable; other harnesses remain available. ${String(error)}` }); }
-    } },
+    initialization: { blocking: false, ready: () => ready, run: initialize },
     saved: taggedSavedSessions('copilot-sdk'),
     history: { source, associate() { const project = projectHost.project(); if (project) { projectHost.store.save(copilotHistoryKey(project), true); source(); } }, async dispose() { await history?.dispose(); } },
     deletion: context => copilotSessionDeletion(() => history, context),

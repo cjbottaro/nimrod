@@ -80,7 +80,8 @@ export interface HarnessSavedSessions {
   last(): { project: string; reference: SavedSessionIdentity } | undefined;
 }
 export interface HarnessHistory {
-  source(): SessionHistory | undefined;
+  /** Explicit history pickers discover even without prior Nimrod project association. */
+  source(options?: { discover?: boolean }): SessionHistory | undefined;
   /** Mark project association on explicit use/restored membership, never start a conversation. */
   associate(): void;
   dispose(): Promise<void>;

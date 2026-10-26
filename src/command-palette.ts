@@ -4,6 +4,7 @@ import { createPickerEnterHint } from './picker-hints';
 import { createPaletteItemMarker, type PaletteItemMarker } from './palette-item-marker';
 import { createSessionRowContent, updateSessionRowContent, sessionStatusPresentation } from './session-sidebar';
 import type { SessionListEntry } from './session-list';
+import { captureSidebarScroll } from './session-recency';
 
 export interface PaletteItem {
   id: string;
@@ -94,6 +95,9 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   let selected = 0;
   let generation = 0;
   let historyRequest: AbortController | undefined;
+  let bufferedHistory: PalettePage | undefined;
+  let sessionRowSequence = 0;
+  const sessionContent = new WeakMap<HTMLElement, ReturnType<typeof createSessionRowContent>>();
   let commandQuery = '';
   let notice = '';
   let loading = false;
@@ -132,6 +136,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
 
   function deletionControls(pending: boolean): void {
     deleting = pending;
+    if (!pending) bufferedHistory = undefined;
     input.readOnly = pending; back.disabled = pending; retry.disabled = pending;
     list.setAttribute('aria-busy', String(pending));
   }
@@ -143,6 +148,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   function closeInteraction(action?: () => void | Promise<void>): void {
     if (!dialog.open) return;
     afterClose = action;
+    bufferedHistory = undefined;
     endRetained();
     endPreview(!!action);
     cancelChoice(); createNamed = undefined; retryAction = undefined; generation++;
@@ -151,7 +157,14 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     closeModal(dialog);
   }
   function validName(): boolean { return !!input.value.trim() && !/[\r\n\0]/.test(input.value); }
-  function draw(): void {
+  function filterItems(values: PaletteItem[]): PaletteItem[] {
+    const words = input.value.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
+    return values.filter(item => words.every(word => `${item.label} ${item.badge || ''} ${item.detail || ''} ${item.sessionRow ? sessionStatusPresentation(item.sessionRow.status).label : ''} ${item.sessionRow?.harnessLabel || ''} ${item.sessionRow?.open ? 'Open' : ''} ${item.projectOpen ? 'Open' : ''} ${item.keywords || ''}`.toLocaleLowerCase().includes(word)));
+  }
+  function draw(preserveScroll = false, preferredId = matches[selected]?.id): void {
+    const oldRows = [...list.children] as HTMLElement[];
+    const preferredRow = oldRows.find(row => row.dataset.key === preferredId);
+    const restoreScroll = preserveScroll ? captureSidebarScroll(list, preferredRow ? [preferredRow, ...oldRows.filter(row => row !== preferredRow)] : oldRows) : undefined;
     const naming = mode === 'name';
     dialog.dataset.mode = mode;
     list.hidden = naming; create.hidden = !naming; hint.hidden = naming;
@@ -168,21 +181,30 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     }
     input.setAttribute('role', 'combobox'); input.setAttribute('aria-expanded', 'true');
     input.setAttribute('aria-controls', 'palette-list'); input.setAttribute('aria-autocomplete', 'list');
-    const previous = matches[selected]?.id;
-    const words = input.value.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
-    matches = items.filter(item => words.every(word => `${item.label} ${item.badge || ''} ${item.detail || ''} ${item.sessionRow ? sessionStatusPresentation(item.sessionRow.status).label : ''} ${item.sessionRow?.harnessLabel || ''} ${item.sessionRow?.open ? 'Open' : ''} ${item.projectOpen ? 'Open' : ''} ${item.keywords || ''}`.toLocaleLowerCase().includes(word)));
+    const previous = preferredId;
+    matches = filterItems(items);
     if (mode === 'commands') matches = (options.ranking?.strategy ?? vscodeMruRanking).rank(matches, { query: input.value, usage: options.ranking?.usage() ?? [] });
     selected = Math.max(0, matches.findIndex(item => item.id === previous));
-    list.replaceChildren(...matches.map((item, index) => {
-      const row = doc.createElement('div'); row.id = `palette-option-${index}`; row.setAttribute('role', 'option'); row.dataset.index = String(index);
+    const existing = mode === 'sessions' ? new Map(oldRows.map(row => [row.dataset.key, row])) : new Map<string, HTMLElement>();
+    const rows = matches.map((item, index) => {
+      const row = existing.get(item.id) || doc.createElement('div');
+      row.dataset.key = item.id;
+      if (mode !== 'sessions') row.id = `palette-option-${index}`;
+      else if (!row.id) row.id = `palette-session-option-${++sessionRowSequence}`;
+      row.setAttribute('role', 'option'); row.dataset.index = String(index);
       if (index > 0 && item.group !== undefined && item.group !== matches[index - 1].group) row.classList.add('palette-group-start');
       if (item.sessionRow) {
-        const content = createSessionRowContent(row, `${row.id}-time`);
-        content.rowLabel.classList.add('palette-item-label');
+        let content = sessionContent.get(row);
+        if (!content) {
+          content = createSessionRowContent(row, `${row.id}-time`);
+          sessionContent.set(row, content);
+          content.rowLabel.classList.add('palette-item-label');
+          content.rowLabel.parentElement!.append(createPickerEnterHint(doc));
+        }
         updateSessionRowContent(content, item.sessionRow);
-        content.rowLabel.parentElement!.append(createPickerEnterHint(doc));
         return row;
       }
+      row.replaceChildren();
       const heading = doc.createElement('div'); heading.className = 'palette-item-heading';
       const label = doc.createElement('span'); label.className = 'palette-item-label'; label.textContent = item.label;
       if (mode === 'selection' && item.current) row.setAttribute('aria-current', 'true');
@@ -213,22 +235,30 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       if (mode !== 'selection' || item.detail) row.append(detail);
       row.title = item.keywords || item.detail || item.label;
       return row;
-    }));
+    });
+    if (mode === 'sessions') {
+      const retained = new Set(rows);
+      for (const row of oldRows) if (!retained.has(row)) row.remove();
+      for (const [index, row] of rows.entries()) if (list.children[index] !== row) list.insertBefore(row, list.children[index] || null);
+    } else list.replaceChildren(...rows);
     updateStatus();
-    selection();
+    selection(!preserveScroll);
+    restoreScroll?.();
   }
   function updateStatus(): void {
     const noun = mode === 'commands' ? 'commands' : mode === 'sessions' ? 'sessions' : mode === 'projects' ? 'projects' : mode === 'inspection' ? 'servers' : 'options';
     status.textContent = loading ? `Loading ${noun}…` : notice || (matches.length ? `${matches.length} ${noun}` : items.length || mode === 'commands' ? `No matching ${noun}.` : mode === 'sessions' ? 'No sessions yet.' : mode === 'projects' ? 'No recent projects. Use Open project… (Cmd/Ctrl+O by default) to open a folder.' : 'No options available.');
     input.setAttribute('aria-busy', String(loading));
   }
-  function selection(): void {
+  function selection(reveal = true): void {
     for (const [index, row] of [...list.children].entries()) row.setAttribute('aria-selected', String(index === selected));
     const row = list.children[selected] as HTMLElement | undefined;
     if (row) {
       input.setAttribute('aria-activedescendant', row.id);
-      if (row.offsetTop < list.scrollTop) list.scrollTop = row.offsetTop;
-      else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight;
+      if (reveal) {
+        if (row.offsetTop < list.scrollTop) list.scrollTop = row.offsetTop;
+        else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight;
+      }
     } else input.removeAttribute('aria-activedescendant');
     const item = matches[selected];
     if (mode === 'inspection') {
@@ -282,17 +312,20 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     const history = historyRequest = new realm.AbortController();
     const publish = (page: PalettePage) => {
       if (history.signal.aborted || !dialog.open || generation !== request) return;
-      items = page.items; notice = page.notice || ''; loading = false; draw();
+      if (deleting) { bufferedHistory = page; return; }
+      items = page.items.filter(item => kind !== 'delete' || !options.sessionDeleted?.(item.id));
+      notice = page.notice || ''; loading = false; draw(true);
     };
     try {
       const page = kind === 'delete' ? await options.deleteSessions!(history.signal, publish) : kind === 'resume' ? await options.sessions(history.signal, publish) : options.openSessions();
       if (history.signal.aborted || !dialog.open || generation !== request) return;
-      items = page.items; notice = page.notice || '';
+      publish(page);
     } catch (error) {
       if (history.signal.aborted || !dialog.open || generation !== request) return;
       failure(`Could not load sessions: ${error}. Use Refresh to retry.`);
+      if (deleting) bufferedHistory = { items: bufferedHistory?.items || items, notice };
+      else { loading = false; draw(true); }
     }
-    if (dialog.open && generation === request) { loading = false; draw(); }
   }
   async function projects(refresh = false): Promise<void> {
     if (!options.projects || doc.querySelector('dialog[open]:not(#command-palette)')) return;
@@ -401,6 +434,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     if (doc.querySelector('dialog[open]:not(#command-palette)')) return;
     if (!dialog.open && !open()) return;
     historyRequest?.abort(); historyRequest = undefined;
+    deletionControls(false);
     if (mode === 'commands') commandQuery = input.value;
     endRetained(); endPreview(); cancelChoice(); generation++; mode = 'name'; createNamed = onCreate; composing = false;
     title.textContent = 'New named session'; input.placeholder = 'Session name…'; input.setAttribute('aria-label', 'Session name');
@@ -431,30 +465,23 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     }
     if (mode === 'sessions' && sessionKind === 'delete') {
       if (selected !== index) { selected = index; selection(); }
-      const request = generation, selectedId = matches[selected]?.id, previousIndex = selected;
-      historyRequest?.abort();
-      if (notice.startsWith('Loading ')) notice = 'Refresh to finish loading history.';
+      const request = generation, selectedId = matches[selected]?.id;
+      const neighbors = [...matches.slice(selected + 1), ...matches.slice(0, selected).reverse()].map(item => item.id);
       deletionControls(true);
-      // Only deletion nests a review over this retained page. Never reload the
-      // catalog or rebuild surviving rows after an accepted/cancelled transaction.
+      // Discovery continues while review owns focus. Buffer the latest complete
+      // snapshot, then reconcile once using pre-review selection/neighbors.
       void (async () => {
         let failure = '';
         try { await item.run(); } catch (error) { failure = String(error); }
         if (disposed || !dialog.open || generation !== request) return;
+        const buffered = bufferedHistory;
         deletionControls(false);
-        const removed = new Set(items.filter(item => options.sessionDeleted?.(item.id)).map(item => item.id));
-        if (removed.size) {
-          const rows = [...list.children];
-          for (let i = 0; i < matches.length; i++) if (removed.has(matches[i].id)) rows[i].remove();
-          items = items.filter(item => !removed.has(item.id));
-          matches = matches.filter(item => !removed.has(item.id));
-          for (const [index, row] of [...list.children].entries()) (row as HTMLElement).dataset.index = String(index);
-          const same = matches.findIndex(item => item.id === selectedId);
-          selected = same >= 0 ? same : Math.max(0, Math.min(previousIndex, matches.length - 1));
-          selection();
-        }
+        items = (buffered?.items || items).filter(item => !options.sessionDeleted?.(item.id));
+        if (buffered) { notice = buffered.notice || ''; loading = false; }
+        const survivors = new Set(filterItems(items).map(item => item.id));
+        const preferred = selectedId && survivors.has(selectedId) ? selectedId : neighbors.find(id => survivors.has(id));
         if (failure) { if (options.error) options.error(failure, 'Delete sessions'); else notice = [failure, notice].filter(Boolean).join(' '); }
-        updateStatus();
+        draw(true, preferred);
         if (!doc.querySelector('dialog[open]:not(#command-palette)')) input.focus({ preventScroll: true });
       })();
       return;
@@ -480,6 +507,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   dialog.addEventListener('cancel', event => { event.preventDefault(); if (!doc.querySelector('dialog[open]:not(#command-palette)')) closeInteraction(); }, { signal });
   dialog.addEventListener('close', () => {
     historyRequest?.abort(); historyRequest = undefined;
+    bufferedHistory = undefined;
     closing = false;
     endRetained(); endPreview();
     cancelChoice(); createNamed = undefined; retryAction = undefined; generation++;
@@ -509,5 +537,5 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     if (dialog.open) { event.preventDefault(); return; }
     if (open()) event.preventDefault();
   }, { signal });
-  return { get isDeleting() { return dialog.open && mode === 'sessions' && sessionKind === 'delete' && deleting; }, open, projects, close: () => closeInteraction(), sessions: () => sessions('resume'), openSessions: () => sessions('open'), deleteSessions: () => sessions('delete'), namedSession, startSelection, startRetainedSelection, startInspection, startPreviewSelection, dispose: () => { disposed = true; historyRequest?.abort(); endRetained(); endPreview(); cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
+  return { get isDeleting() { return dialog.open && mode === 'sessions' && sessionKind === 'delete' && deleting; }, open, projects, close: () => closeInteraction(), sessions: () => sessions('resume'), openSessions: () => sessions('open'), deleteSessions: () => sessions('delete'), namedSession, startSelection, startRetainedSelection, startInspection, startPreviewSelection, dispose: () => { disposed = true; historyRequest?.abort(); bufferedHistory = undefined; endRetained(); endPreview(); cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
 }

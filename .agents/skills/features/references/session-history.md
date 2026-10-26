@@ -28,11 +28,29 @@ cursors and retains completed pages after later failure. No persistent catalog,
 polling or transcript copy.
 
 `loadSessionHistory` queries sources concurrently and publishes incrementally.
+Explicit Resume and Delete pickers request `history.source({ discover: true })` from
+every registered harness, independent of prior Nimrod use/association. Concrete
+sources wait for their coalesced native-owner initialization before launching a
+catalog connection; a slow, missing or failed runtime remains source-local and
+does not block other results. Existing associations still control startup
+warm-up, not explicit discovery. Listing itself never creates an association,
+opens a sidebar row, creates/resumes a conversation or sends a prompt.
+
 Pi remains usable while Copilot is slow/failed and vice versa. Resume and Delete
 overlay open rows before stable `sortByRecency`, newest displayed timestamp first;
 unknown times last, ties in collector order. Pi uses message/local-use recency;
 Copilot uses SDK-reported modification time, not invented user-message time.
 No rendering/discovery stamps recency or changes query/highlight.
+
+Session-picker publications reconcile keyed row/content nodes with stable ARIA
+IDs rather than rebuilding survivors. The visible highlighted row is the preferred
+scroll anchor; if manually scrolled out of view, the first surviving visible row
+anchors instead, within the available scroll range. Reuse `captureSidebarScroll`
+for zoom-normalized geometry. A
+publication never reveals an offscreen highlight; explicit keyboard/pointer
+navigation retains its reveal behavior. Deletion review buffers the latest
+accumulated page without cancelling discovery; settlement is specified by
+[repeated deletion](session-deletion.md#repeated-deletion-picker).
 
 Rows show title above muted time/date/harness. Harness is a retained span after
 `<time>`; minute/foreground refresh only updates time. The Copilot harness label is
@@ -50,11 +68,16 @@ Project teardown owns source disposal; stop failure propagates and retains owner
   of otherwise unlisted open files; child/deleted filtering, identity-bound recency,
   native ordering. No Pi process starts for listing.
 - `src/copilot/session-history.ts`: one discovery-only SDK connection/token per
-  associated project, `listSessions` with independently validated exact
+  project, `listSessions` with independently validated exact
   `context.workingDirectory` and nonremote filtering. `nimrod.history.copilot-sdk.v1:<cwd>`
-  stores the association independently of membership. New Copilot creation or restored
-  SDK rows establish it; closing all rows retains it. Pi-only projects launch no
-  discovery process. Discovery never calls connect/create/resume/prompt.
+  stores the startup association independently of membership. New Copilot creation
+  or restored SDK rows establish it; closing all rows retains it. Unassociated
+  projects launch no catalog on opening, but explicit history pickers discover
+  Copilot regardless of that flag. Discovery never calls connect/create/resume/prompt.
+- `src/codex/session-history.ts`: a separate catalog app-server uses paginated
+  project-scoped thread listing, regardless of prior association when explicitly
+  requested. Existing source/archive/parent filtering is unchanged; see the
+  [Codex integration](../../codex-integration/SKILL.md).
 - Shell wiring owns literal runtime/native launch parameters. Source initialization
   is coalesced; explicit Refresh can reconnect after failure, never an automatic loop.
   Dispose waits for in-flight launch and observed owned stop. Conversations have
@@ -87,5 +110,8 @@ exact-ID Resume, drafts, open-row reuse, Close and supported deletion to SDK fix
 `test/copilot-sdk.test.ts`, bridge fixtures and
 `test/browser/copilot-sdk.spec.ts` cover SDK behavior; generic ACP low-level
 list/load tests remain separate; ACP creation/options are not exposed in the UI. Copilot ACP-specific discovery fixtures are removed.
-Updated fixtures have not been run. No checks/builds/app launch, live providers or
-user-session mutations were performed; native macOS/Linux acceptance remains pending.
+Discovery/anchor/buffering follow-up fixtures in the palette, shell and isolated
+offline WebKit picker tests are authored but unrun. They cover unassociated
+histories, slow native-owner initialization, isolated unavailable runtimes,
+keyed/ARIA identity, screen anchoring and review settlement. Native macOS/Linux
+acceptance remains pending; compilation is not platform acceptance.

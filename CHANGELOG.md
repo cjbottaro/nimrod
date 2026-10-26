@@ -47,6 +47,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- Resume and Delete sessions now discover project history from every supported available harness, including sessions created outside Nimrod without prior project association. Sources load independently; unavailable harnesses do not block other results. Discovery continues during deletion review, buffering new results until return while preserving keyed rows, highlighted identity and reading position. Deleting the highlighted row selects an existing neighbor rather than a newly arrived session.
+
 - Modal action footers no longer have a separator line. Custom-answer and other host text-input dialogs now start at one line, grow with their content, and use Enter to submit / Shift+Enter for a newline, like the composer.
 
 - Codex async-question answers now use the same speech-bubble question and inset, accent-lined reply as Copilot question/answer cards, with the exact original message behind a disclosure. Native user-message identity and delivery behavior are unchanged across live answers and saved history.

@@ -88,31 +88,94 @@ test('retained selections update one open shell, retain context on count changes
   } finally { f.dispose(); }
 });
 
-test('accepting incremental deletion freezes discovery without rebuilding survivor rows on late pages', async () => {
+for (const outcome of ['cancel', 'delete', 'partial', 'error'] as const) test(`deletion buffers ongoing discovery during ${outcome}, retains rows and chooses an old neighbor`, async () => {
   let request!: { signal: AbortSignal; publish(page: PalettePage): void; resolve(page: PalettePage): void };
   let finish!: () => void;
   const removing = new Promise<void>(resolve => { finish = resolve; });
-  const page: PalettePage = { items: [
-    { id: 'copilot', label: 'Copilot saved', async run() { await removing; f.deleted.add('copilot'); } },
-    { id: 'pi', label: 'Pi survivor', run() {} },
-  ], notice: 'Loading Copilot history…' };
+  const target = { id: 'target', label: 'Saved target', async run() {
+    await removing;
+    if (outcome === 'delete') f.deleted.add('target');
+    if (outcome === 'partial') f.deleted.add('hidden');
+    if (outcome === 'error') throw new Error('Review failed');
+  } };
+  const survivor = { id: 'survivor', label: 'Saved survivor', run() {} };
+  const hidden = { id: 'hidden', label: 'Other child', run() {} };
+  const initial: PalettePage = { items: [target, survivor, hidden], notice: 'Loading Codex history…' };
+  const final: PalettePage = { items: [
+    { id: 'newest', label: 'Saved newest', run() {} }, target,
+    { id: 'between', label: 'Saved between', run() {} }, survivor, hidden,
+  ] };
   const f = fixture(undefined, undefined, undefined, undefined,
     (signal, publish) => new Promise(resolve => { request = { signal, publish, resolve }; }));
   try {
-    const listing = f.palette.deleteSessions();
-    request.publish(page);
-    const survivor = f.list().children[1];
-    f.key('Enter');
-    assert.equal(request.signal.aborted, true);
-    request.publish({ items: [] }); request.resolve(page);
-    await listing;
-    assert.equal(f.list().children[1], survivor);
+    const listing = f.palette.deleteSessions(); request.publish(initial); f.query('Saved');
+    const original = [...f.list().children];
+    f.key('Enter'); f.key('Enter');
+    assert.equal(request.signal.aborted, false);
+    assert.equal(f.input.readOnly, true);
+    request.publish({ ...final, notice: 'Loading Codex history…' });
+    request.resolve(final); await listing;
+    assert.deepEqual([...f.list().children], original, 'all updates stay buffered through review');
+    assert.equal(f.input.value, 'Saved');
     finish(); await tick();
-    assert.equal(f.list().firstElementChild, survivor);
-    assert.equal(f.list().children.length, 1);
+    assert.equal(f.input.readOnly, false);
     assert.equal(f.dialog.open, true);
-    assert.match(f.status()!, /Refresh to finish/);
+    assert.equal(f.list().querySelector('[data-key="survivor"]'), original[1]);
+    assert.equal(f.list().querySelector('[aria-selected="true"]')!.getAttribute('data-key'), outcome === 'delete' ? 'survivor' : 'target');
+    if (outcome !== 'delete') assert.equal(f.list().querySelector('[data-key="target"]'), original[0]);
+    if (outcome === 'error') assert.match(f.status()!, /Review failed/);
+    else assert.doesNotMatch(f.status()!, /Loading|Refresh to finish/);
+    f.query(''); assert.equal(!!f.list().querySelector('[data-key="hidden"]'), outcome !== 'partial');
+    // An old snapshot arriving after settlement cannot resurrect a tombstone.
+    request.publish(final);
+    assert.equal(!!f.list().querySelector('[data-key="target"]'), outcome !== 'delete');
+    assert.equal(!!f.list().querySelector('[data-key="hidden"]'), outcome !== 'partial');
+    f.key('Escape'); assert.equal(request.signal.aborted, true);
   } finally { finish(); f.dispose(); }
+});
+
+for (const picker of ['resume', 'delete'] as const) test(`${picker} anchors incremental history by identity and retains keyed row contents and accessible IDs`, async () => {
+  let publish!: (page: PalettePage) => void;
+  let resolve!: (page: PalettePage) => void;
+  const load: PaletteOptions['sessions'] = (_signal, update) => new Promise(done => { publish = update; resolve = done; });
+  const f = fixture(undefined, undefined, undefined, load, load);
+  const entry = (id: string) => ({ id, label: id, run() {}, sessionRow: {
+    key: id, title: id, harnessLabel: 'Pi', status: 'closed' as const, open: false, timestamp: 100,
+  } });
+  const first = { items: ['a', 'b', 'c', 'd', 'e'].map(entry) };
+  const list = f.list() as HTMLElement;
+  const rect = (top: number, height: number) => ({ top, bottom: top + height, height, x: 0, y: top, left: 0, right: 100, width: 100, toJSON() {} });
+  Object.defineProperty(list, 'offsetHeight', { value: 60 });
+  list.getBoundingClientRect = () => rect(0, 60);
+  const geometry = () => {
+    for (const row of [...list.children] as HTMLElement[]) {
+      row.getBoundingClientRect = () => rect([...list.children].indexOf(row) * 20 - list.scrollTop, 20);
+    }
+  };
+  try {
+    const listing = picker === 'resume' ? f.palette.sessions() : f.palette.deleteSessions();
+    publish(first); geometry();
+    f.key('ArrowDown'); f.key('ArrowDown');
+    list.scrollTop = 20;
+    const selected = list.children[2] as HTMLElement, content = selected.querySelector('.session-row-label');
+    const activeId = f.input.getAttribute('aria-activedescendant');
+    const second = { items: [entry('new'), ...first.items] };
+    publish(second); geometry();
+    assert.equal(list.querySelector('[aria-selected="true"]'), selected);
+    assert.equal(selected.querySelector('.session-row-label'), content);
+    assert.equal(f.input.getAttribute('aria-activedescendant'), activeId);
+    assert.equal(list.scrollTop, 40, 'insertion above the highlighted row keeps its viewport offset');
+    const ids = [...list.querySelectorAll('[id]')].map(node => node.id);
+    assert.equal(new Set(ids).size, ids.length);
+    for (const row of list.children) for (const id of row.getAttribute('aria-describedby')!.split(' ')) assert.ok(row.querySelector(`[id="${id}"]`));
+    // Manual scrolling away from the highlight anchors a visible row instead.
+    list.scrollTop = 80;
+    const third = { items: [entry('newer'), ...second.items] };
+    publish(third); geometry();
+    assert.equal(list.scrollTop, 100);
+    resolve(third); await listing;
+    assert.equal(list.scrollTop, 100);
+  } finally { f.dispose(); }
 });
 
 test('incremental history obeys query selection, refresh cancellation and stale-page guards', async () => {
@@ -203,6 +266,26 @@ test('preview selection shares cancellation lifecycle, mouse/arrow highlight and
     f.key('Enter'); f.key('Enter'); await tick();
     assert.equal(restored, 0); assert.equal(accepted, 1); assert.equal(f.dialog.open, false);
   } finally { f.dispose(); }
+});
+
+for (const cancel of ['close', 'new', 'dispose'] as const) test(`buffered history cannot update a ${cancel}d deletion interaction`, async () => {
+  let publish!: (page: PalettePage) => void, resolve!: (page: PalettePage) => void, finish!: () => void;
+  let signal!: AbortSignal;
+  const f = fixture(undefined, undefined, undefined, undefined, (request, update) => {
+    signal = request; publish = update; return new Promise(done => { resolve = done; });
+  });
+  const page: PalettePage = { items: [{ id: 'target', label: 'Target', run: () => new Promise<void>(done => { finish = done; }) }] };
+  try {
+    const listing = f.palette.deleteSessions(); publish(page); f.key('Enter');
+    publish({ items: [{ id: 'late', label: 'Buffered', run() {} }, ...page.items] });
+    if (cancel === 'dispose') f.palette.dispose();
+    else { f.palette.close(); if (cancel === 'new') f.palette.open(); }
+    assert.equal(signal.aborted, true);
+    resolve(page); await listing; finish(); await tick();
+    if (cancel === 'new') assert.equal(f.win.document.querySelector('#palette-title')!.textContent, 'Commands');
+    else if (cancel === 'close') assert.equal(f.dialog.open, false);
+    assert.doesNotMatch(f.list().textContent!, /Buffered/);
+  } finally { finish?.(); f.dispose(); }
 });
 
 test('delete picker retains its dialog and surviving DOM, prunes confirmed rows without catalog refresh', async () => {

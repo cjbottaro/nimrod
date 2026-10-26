@@ -33,6 +33,9 @@ interface ShellOptions {
   copilotDeleteError?: string;
   copilotDeleteGate?: Promise<void>;
   copilotHistory?: JsonRecord[];
+  codexHistory?: JsonRecord[];
+  codexStartError?: string;
+  harnessInitializationGate?: Promise<void>;
   catalogError?: string;
   globalSettings?: boolean;
   appearanceCapabilities?: import('../src/window-appearance').AppearanceCapabilities;
@@ -127,6 +130,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   const sessions = new Map<string, { channel: typeof channel; config: JsonRecord; file: string; name?: string }>();
   const acpSessions = new Map<string, { channel: typeof channel; promptId?: unknown; sessionId?: string }>();
   const sdkSessions = new Map<string, { channel: typeof channel; sessionId?: string }>();
+  const codexSessions = new Map<string, { channel: typeof channel }>();
   let workspace = options.windowWorkspace;
   let selectedModel: JsonRecord | null = null;
   let thinkingLevel = 'medium';
@@ -276,7 +280,28 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         sdkSessions.set(String(args.token), { channel: args.onEvent as typeof channel });
         return (args.config as JsonRecord).cwd;
       }
-      if (command === 'stop_copilot') { sdkSessions.delete(String(args.token)); return 'sdk-generation'; }
+      if (command === 'stop_copilot') {
+        if (!args.token) await options.harnessInitializationGate;
+        sdkSessions.delete(String(args.token)); return 'sdk-generation';
+      }
+      if (command === 'stop_codex') {
+        if (!args.token) await options.harnessInitializationGate;
+        codexSessions.delete(String(args.token)); return 'codex-generation';
+      }
+      if (command === 'start_codex') {
+        if (options.codexStartError) throw new Error(options.codexStartError);
+        codexSessions.set(String(args.token), { channel: args.onEvent as typeof channel });
+        return (args.config as JsonRecord).cwd;
+      }
+      if (command === 'write_codex') {
+        const target = codexSessions.get(String(args.token)); assert.ok(target);
+        const request = args.message as JsonRecord;
+        const send = (value: JsonRecord) => target.channel.onmessage({ kind: 'rpc', value });
+        if (request.method === 'initialize') send({ id: request.id, result: { userAgent: 'offline-codex' } });
+        else if (request.method === 'thread/list') send({ id: request.id, result: { data: options.codexHistory || [], nextCursor: null } });
+        else assert.equal(request.method, 'initialized', 'history must not create/resume a thread or start a turn');
+        return;
+      }
       if (command === 'write_copilot') {
         const target = sdkSessions.get(String(args.token)); assert.ok(target);
         const request = args.message as JsonRecord;
@@ -1002,6 +1027,48 @@ test('Resume discovers closed Copilot history, restores its draft and reuses the
     assert.equal(reopened.calls.filter(call => call.command === 'start_copilot').length, 1, 'project association survives closing the last conversation');
     assert.equal(reopened.calls.some(call => call.command === 'write_copilot' && ['session/new', 'connect', 'prompt'].includes(String((call.args.message as JsonRecord).method))), false);
   } finally { reopened.win.close(); }
+});
+
+for (const picker of ['Resume', 'Delete sessions'] as const) test(`${picker} discovers all harnesses without association, including while native owners initialize`, async () => {
+  let release!: () => void;
+  const f = await fixture(undefined, { windowWorkspace: '/project',
+    harnessInitializationGate: new Promise<void>(resolve => { release = resolve; }),
+    catalog: [{ path: '/sessions/pi.jsonl', sessionId: 'pi', name: 'Saved Pi', preview: '', modified: 100, lastUserMessageAt: 100 }],
+    copilotHistory: [{ sessionId: 'copilot', context: { workingDirectory: '/project' }, isRemote: false, summary: 'External Copilot', modifiedTime: new Date(200).toISOString() }],
+    codexHistory: [{ id: 'codex', cwd: '/project', ephemeral: false, turns: [], status: { type: 'notLoaded' }, name: 'External Codex', updatedAt: 1 }],
+  });
+  try {
+    assert.equal(f.calls.some(call => ['start_pi', 'start_copilot', 'start_codex'].includes(call.command)), false, 'opening a project does not start discovery or conversations without association');
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: picker === 'Resume' ? 'k' : 'Backspace', shiftKey: picker === 'Delete sessions', metaKey: true, bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.match(f.element('palette-list').textContent!, /Saved Pi/);
+    release(); await f.tick(); await f.tick();
+    assert.deepEqual([...f.element('palette-list').querySelectorAll('.session-row-label')].map(row => row.textContent), ['External Codex', 'External Copilot', 'Saved Pi']);
+    for (const command of ['start_copilot', 'start_codex']) assert.equal(f.calls.filter(call => call.command === command).length, 1);
+    assert.equal(f.calls.filter(call => call.command === 'stop_copilot' && !call.args.token).length, 1, 'native generation initialization is coalesced');
+    assert.equal(f.calls.filter(call => call.command === 'stop_codex' && !call.args.token).length, 1);
+    assert.equal(f.rows().length, 0, 'discovery does not open sidebar sessions');
+    assert.equal(f.calls.some(call => call.command === 'start_pi'), false);
+    assert.equal(f.calls.some(call => call.command === 'write_copilot' && ['connect', 'prompt'].includes(String((call.args.message as JsonRecord).method))), false);
+    assert.equal(f.preferences.value.state[copilotHistoryKey('/project')], undefined, 'listing is not explicit conversation use');
+  } finally { release(); f.win.close(); }
+});
+
+test('unavailable unassociated harnesses fail independently and never retry until explicit Refresh', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', copilotStartError: 'Copilot not installed', codexStartError: 'Codex not installed',
+    catalog: [{ path: '/sessions/pi.jsonl', sessionId: 'pi', name: 'Saved Pi', preview: '', modified: 1 }] });
+  try {
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Backspace', shiftKey: true, metaKey: true, bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.match(f.element('palette-list').textContent!, /Saved Pi/);
+    assert.match(f.win.document.body.textContent!, /Copilot not installed/);
+    assert.match(f.win.document.body.textContent!, /Codex not installed/);
+    await f.tick();
+    for (const command of ['start_copilot', 'start_codex']) assert.equal(f.calls.filter(call => call.command === command).length, 1);
+    f.element<HTMLButtonElement>('palette-refresh').click(); await f.tick(); await f.tick();
+    for (const command of ['start_copilot', 'start_codex']) assert.equal(f.calls.filter(call => call.command === command).length, 2);
+    assert.equal(f.rows().length, 0);
+  } finally { f.win.close(); }
 });
 
 for (const picker of ['Resume', 'Delete sessions'] as const) test(`${picker} sorts incremental mixed-harness history by displayed recency after overlaying open rows`, async () => {

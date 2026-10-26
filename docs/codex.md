@@ -27,7 +27,7 @@ Image paste and image-only messages are enabled only when the connected model ad
 
 ## History, drafts and Close
 
-Codex threads have their own saved identity and draft namespace; an identical Pi/Copilot ID does not alias them. **Resume session…** includes project-local top-level Codex history after the project has used Codex. History is paginated and does not require sending a prompt. Nimrod's catalog explicitly includes CLI, VS Code and app-server roots, including Nimrod-created history, and excludes archived threads; it is not a promise to list every headless/exec or archived thread.
+Codex threads have their own saved identity and draft namespace; an identical Pi/Copilot ID does not alias them. **Resume session…** and **Delete sessions…** discover project-local top-level Codex history even if the project has not used Codex in Nimrod. History is paginated and does not require sending a prompt. Nimrod's catalog explicitly includes CLI, VS Code and app-server roots, including Nimrod-created history, and excludes archived threads; it is not a promise to list every headless/exec or archived thread.
 
 Restored Codex rows stay disconnected until you explicitly select or Resume one. Resume uses the exact thread ID and project; a failure never creates a replacement session. Background sessions remain independently live once connected. Closing stops only Nimrod's owned process and keeps saved Codex history and your draft. No background-process continuity or coordination with external writers is promised.
 
