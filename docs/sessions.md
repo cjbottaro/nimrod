@@ -11,7 +11,7 @@ Each session has its own conversation, draft and agent process. Switching sessio
 | **New named session…** / **⌘+Option+N**, **Ctrl+Alt+N** | Enter a single-line name, then press Enter or Create. Escape cancels. Requires Pi's native `--name` support. |
 | **New temporary session** / **⌘/Ctrl+Shift+N** | Start without saved conversation history. Closing, quitting or reloading discards its drafts, recovery items and pop-outs. |
 
-Pi writes persistent history. Until the first verified save, the Project bar shows **Pi · awaiting first save** and Restart is disabled. Naming an empty session alone may not save it. Once saved, the badge becomes **Pi**; hover for its file path.
+Pi writes persistent history. The Project bar shows **Pi** from the start. Restart is disabled until the first verified save; its tooltip explains why. Naming an empty session alone may not save it. Hover over the Pi badge for its file path when available.
 
 ## Switch or resume
 

@@ -3379,7 +3379,7 @@ test('new named session passes its name at launch without a rename RPC and waits
     release(); await f.tick(); await f.tick();
     assert.match(f.win.document.querySelector('.session-row')!.textContent!, /Planned work/);
     assert.equal(f.element<HTMLButtonElement>('send').disabled, false);
-    assert.equal(f.element('mode-badge').textContent, 'Pi · awaiting first save');
+    assert.equal(f.element('mode-badge').textContent, 'Pi');
     assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
     f.disconnect();
   } finally { f.dom.window.close(); }
@@ -3698,7 +3698,7 @@ test('saved launch waits for a written Pi file before remembering exact resume i
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
     const config = f.calls.find(c => c.command === 'start_pi')!.args.config as JsonRecord;
     assert.equal(config.mode, 'saved'); assert.equal('demo' in config, false);
-    assert.equal(f.element('mode-badge').textContent, 'Pi · awaiting first save');
+    assert.equal(f.element('mode-badge').textContent, 'Pi');
     assert.equal(f.saved().last, undefined);
     assert.equal((f.calls.filter(c => c.command === 'sync_popout_sessions').at(-1)!.args.sessions as JsonRecord[])[0].pi, null);
     const prompt = f.element<HTMLTextAreaElement>('prompt');
@@ -3824,7 +3824,7 @@ test('new saved session remains persistent when startup identity is absent', asy
   try {
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
     assert.equal(f.element('conversation').hidden, false);
-    assert.equal(f.element('mode-badge').textContent, 'Pi · awaiting first save');
+    assert.equal(f.element('mode-badge').textContent, 'Pi');
     assert.equal(f.saved().last, undefined);
     assert.equal(f.calls.some(c => c.command === 'session_file_info'), false);
     f.disconnect();
@@ -3903,7 +3903,7 @@ test('Project bar restart stays disabled for no session, temporary sessions and 
     }
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
     assert.equal(restart.disabled, true); assert.match(restart.title, /first save/);
-    assert.match(f.element('mode-badge').textContent!, /awaiting first save/);
+    assert.equal(f.element('mode-badge').textContent, 'Pi');
     saved = true;
     const now = f.win.Date.now(); f.win.Date.now = () => now + 4000;
     f.emit({ type: 'agent_settled' }); await f.tick(); await f.tick();
@@ -4349,7 +4349,7 @@ test('brand-new unwritten session can select its first model and effort through 
   try {
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Unsent draft'; prompt.dispatchEvent(new f.win.Event('input'));
-    assert.equal(f.element('mode-badge').textContent, 'Pi · awaiting first save');
+    assert.equal(f.element('mode-badge').textContent, 'Pi');
     f.element<HTMLButtonElement>('thinking').click(); await f.tick();
     assert.equal(f.element<HTMLDialogElement>('command-palette').open, false, 'failed session picker returns to its owning conversation');
     assert.match(f.element('session-notices').textContent!, /Select a model/);

@@ -200,7 +200,7 @@ function createPiSession(host: HarnessSessionHost, request: SessionRequest, proj
   const snapshot = () => {
     const state = backend.session?.state, subagents = !!state && !!presentActivity(false, '', state.extensionStatuses).subagents;
     const pending = backend.session?.rpc.hasPendingRequest('prompt', 'set_session_name') ?? false;
-    return { harnessLabel: 'Pi', badge: owner.mode === 'temporary' ? 'Pi · temporary' : owner.file?.exists ? 'Pi' : 'Pi · awaiting first save', badgeTitle: owner.file?.path || '',
+    return { harnessLabel: 'Pi', badge: owner.mode === 'temporary' ? 'Pi · temporary' : 'Pi', badgeTitle: owner.file?.path || '',
       busy: !!state?.busy, working: !!state?.busy || subagents, pending, compacting: !!state?.compacting, queuePending: !!state?.queue.pendingCount,
       destructiveBusy: pending || !!state && !owner.ended && (!!state.busy || state.compacting || state.modelControls.changing || state.sessionUnavailable || !!state.queue.pendingCount || !!state.queue.steering.length || !!state.queue.followUp.length || subagents) };
   };

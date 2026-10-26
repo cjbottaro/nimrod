@@ -150,7 +150,7 @@ New saved launch omits `--no-session`; temporary launch is explicit and independ
 
 Resume passes a canonical absolute `--session` file, never `-c`, partial ID or latest lookup. Headers v1–3 are supported within 256 MiB/file and 16 MiB/record bounds. Remembered session ID is checked before launch to detect replaced files; Pi's returned `get_state` path/ID/cwd must match before enabling submission. Failure never substitutes a new session.
 
-A reported path isn't proof of persistence. Pi 0.86.1 was observed delaying an empty/rename-only save until assistant content existed. Keep the awaiting-first-save badge and provisional draft identity until native inspection confirms matching file/ID/cwd. Coalesced metadata refresh after completion discovers first write without polling and promotes drafts/pop-outs, including background sessions.
+A reported path isn't proof of persistence. Pi 0.86.1 was observed delaying an empty/rename-only save until assistant content existed. Show the ordinary **Pi** badge before and after first save; only explicit temporary sessions show **Pi · temporary**. Keep provisional draft identity and the first-save Restart guard until native inspection confirms matching file/ID/cwd; explain that guard in the disabled Restart tooltip rather than the badge. Coalesced metadata refresh after completion discovers first write without polling and promotes drafts/pop-outs, including background sessions.
 
 History `get_messages` response applies synchronously before later channel events; it is Pi's active context, not every stored branch. Routine snapshots preserve live presentation; explicit launch/resume resets at its existing boundary. See [transport/results](pi-transport.md) for canonical ordering and receipt contracts.
 
