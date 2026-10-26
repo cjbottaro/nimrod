@@ -80,6 +80,11 @@ disappear. Later unrelated success does not clear an earlier issue. One failure
 should appear once, even if it propagates through several layers. For example,
 unknown delivery takes precedence over a connection error from the same cause.
 
+[Reload session](sessions.md#reload-session) clears that session's old notices when
+the replacement agent runtime starts. Recurring problems can report again without
+accumulating old banners. Cancelling Reload or a failed shutdown retains the
+existing notices; other sessions and application notices are unaffected.
+
 Dismissal only hides the notice. It does not retry an operation, reconnect Pi or
 confirm that a message was received. An unchanged repeated report of a dismissed
 issue does not immediately bring it back; a new or changed failure can. Notices do

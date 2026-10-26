@@ -4189,13 +4189,16 @@ test('reload confirmation can cancel, serializes shutdown, preserves newer draft
     const oldChannel = f.captureChannel();
     const oldRequest = f.calls.find(c => (c.args.message as JsonRecord)?.type === 'prompt')!.args.message as JsonRecord;
     prompt.value = 'Newer draft'; prompt.dispatchEvent(new f.win.Event('input'));
+    f.emit({ type: 'extension_ui_request', method: 'notify', id: 'retain-on-cancel', notifyType: 'error', message: 'Retain until runtime replacement' }); await f.tick();
     const reload = f.element<HTMLButtonElement>('reload-session'); reload.click(); await f.tick();
     assert.match(f.element('host-dialog-title').textContent!, /Reload/);
     assert.match(f.element('host-dialog-description').textContent!, /Nothing is sent again automatically/);
     f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
     assert.equal(reload.disabled, false);
+    assert.match(f.element('session-notices').textContent!, /Retain until runtime replacement/, 'cancellation retains prior notices');
     assert.equal(f.calls.filter(c => c.command === 'stop_pi' && c.args.token).length, 0);
     reload.click(); await f.confirm();
+    assert.match(f.element('session-notices').textContent!, /Retain until runtime replacement/, 'pending shutdown retains prior notices');
     assert.equal(reload.disabled, true);
     assert.equal(f.win.document.querySelector<HTMLButtonElement>('.session-close')!.disabled, true);
     reload.click();
@@ -4255,19 +4258,54 @@ test('a disconnected saved session can reload from the Project bar or command pa
   } finally { f.dom.window.close(); }
 });
 
+test('reload retires only its old-runtime notices and recurring errors do not accumulate', async () => {
+  const f = await fixture();
+  try {
+    f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
+    const sibling = f.captureChannel();
+    const report = (target: typeof sibling, message: string) => target.onmessage({ kind: 'rpc', value: {
+      type: 'extension_ui_request', method: 'notify', id: 'error', notifyType: 'error', message,
+    } });
+    report(sibling, 'Sibling error'); await f.tick();
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const old = f.captureChannel();
+    report(old, 'Recurring session error'); report(old, 'Dismissed error'); await f.tick();
+    const root = f.element('prompt').closest('.session-view')!;
+    const rows = () => [...root.querySelectorAll<HTMLElement>('.notice-list > .application-notice')];
+    rows()[1].querySelector<HTMLButtonElement>('[data-dismiss]')!.click();
+    assert.equal(rows().length, 1);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      f.element<HTMLButtonElement>('reload-session').click(); await f.tick(); await f.tick();
+      assert.equal(rows().length, 0, 'replacement runtime retires old notices');
+      const replacement = f.captureChannel();
+      report(old, 'Retired runtime error');
+      report(replacement, 'Recurring session error'); report(replacement, 'Recurring session error');
+      report(replacement, 'Dismissed error'); await f.tick();
+      assert.equal(rows().length, 3, 'independent identical issues remain distinct and dismissal does not carry over');
+      assert.doesNotMatch(root.textContent!, /Retired runtime error/);
+    }
+    f.rows()[0].click(); await f.tick();
+    assert.match(f.element('session-notices').textContent!, /Sibling error/);
+    assert.equal(f.element('application-notices').hidden, true);
+  } finally { f.win.close(); }
+});
+
 test('failed reload shutdown never launches a replacement and a second attempt retries native stop', async () => {
   let stopError: string | undefined = 'fixture shutdown failure';
   const f = await fixture(undefined, { stopError: () => stopError });
   try {
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
+    f.emit({ type: 'extension_ui_request', method: 'notify', id: 'old-error', notifyType: 'error', message: 'Keep until replacement starts' }); await f.tick();
     const reload = f.element<HTMLButtonElement>('reload-session'); reload.click(); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
+    assert.match(f.element('session-notices').textContent!, /Keep until replacement starts/);
     assert.equal(f.win.document.querySelectorAll('.session-row').length, 1);
     assert.match(f.element('session-notices').textContent!, /Could not reload Pi.*fixture shutdown failure/);
     assert.equal(reload.disabled, false);
     stopError = undefined; reload.click(); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'stop_pi' && c.args.token).length, 2);
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 2);
+    assert.equal(f.element('session-notices').hidden, true, 'successful replacement retires old errors and failed-stop feedback');
     f.disconnect();
   } finally { f.dom.window.close(); }
 });

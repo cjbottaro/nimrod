@@ -90,6 +90,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Reload session clears its old-runtime notices when the replacement starts, preventing recurring errors from accumulating duplicate banners. Cancellation and failed shutdown retain existing errors; other sessions and application notices are untouched.
+
 - **Delete session…** now works for brand-new unsaved Pi sessions and temporary sessions by closing them normally. The action uses the same label across Pi, Copilot and Codex; sessions already saved at creation still use their harness's reviewed deletion operation, even before the first message.
 
 - The Delete sessions picker now sorts saved sessions newest first, matching Resume session across harnesses instead of retaining source discovery order.
