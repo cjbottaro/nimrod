@@ -28,11 +28,11 @@ cursors and retains completed pages after later failure. No persistent catalog,
 polling or transcript copy.
 
 `loadSessionHistory` queries sources concurrently and publishes incrementally.
-Pi remains usable while Copilot is slow/failed and vice versa. Resume overlays open
-rows before stable `sortByRecency`, newest displayed timestamp first; unknown times
-last, ties in collector order. Pi uses message/local-use recency; Copilot uses
-SDK-reported modification time, not invented user-message time. Delete retains
-source ordering. No rendering/discovery stamps recency or changes query/highlight.
+Pi remains usable while Copilot is slow/failed and vice versa. Resume and Delete
+overlay open rows before stable `sortByRecency`, newest displayed timestamp first;
+unknown times last, ties in collector order. Pi uses message/local-use recency;
+Copilot uses SDK-reported modification time, not invented user-message time.
+No rendering/discovery stamps recency or changes query/highlight.
 
 Rows show title above muted time/date/harness. Harness is a retained span after
 `<time>`; minute/foreground refresh only updates time. The Copilot harness label is

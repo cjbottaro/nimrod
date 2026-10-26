@@ -1004,7 +1004,7 @@ test('Resume discovers closed Copilot history, restores its draft and reuses the
   } finally { reopened.win.close(); }
 });
 
-test('Resume sorts incremental mixed-harness history by displayed recency after overlaying open rows', async () => {
+for (const picker of ['Resume', 'Delete sessions'] as const) test(`${picker} sorts incremental mixed-harness history by displayed recency after overlaying open rows`, async () => {
   let release!: () => void;
   const f = await fixture(undefined, { windowWorkspace: '/project',
     appState: {
@@ -1027,7 +1027,7 @@ test('Resume sorts incremental mixed-harness history by displayed recency after 
   });
   const titles = () => [...f.element('palette-list').querySelectorAll('.session-row-label')].map(row => row.textContent);
   try {
-    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true, cancelable: true }));
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: picker === 'Resume' ? 'k' : 'Backspace', shiftKey: picker === 'Delete sessions', metaKey: true, bubbles: true, cancelable: true }));
     await f.tick(); await f.tick();
     assert.deepEqual(titles(), ['Open Pi', 'Closed Pi', 'Unknown Pi']);
     release(); await f.tick(); await f.tick();

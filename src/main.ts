@@ -594,7 +594,7 @@ async function paletteSessions(signal: AbortSignal, publish: (page: PalettePage)
       .filter(entry => kind !== 'delete' || !!entry.reference && !!deletions.operation(entry.reference, entry.title)?.supported);
     return {
       notice: snapshot.pending.length ? `Loading ${snapshot.pending.join(' and ')} history…` : undefined,
-      items: (kind === 'resume' ? sortByRecency(entries, entry => entry.timestamp) : entries).map(entry => ({
+      items: sortByRecency(entries, entry => entry.timestamp).map(entry => ({
         ...sessionListItem(entry),
         run: () => {
           if (workspace !== project || unloading) throw new Error('The history project is no longer open');
