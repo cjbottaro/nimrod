@@ -748,6 +748,7 @@ function sessionHost(tab: Tab, owner: SessionLifecycleOwner): HarnessSessionHost
   const project = workspace ?? '';
   const current = () => !unloading && workspace === project && tabs.includes(tab);
   const selected = () => presented === tab;
+  let noticeResetToken: string | undefined;
   const focusComposer = () => {
     if (current() && selected() && !settings.isOpen && !tab.closing && !tab.reloading && !document.querySelector('dialog[open]'))
       tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true });
@@ -762,7 +763,15 @@ function sessionHost(tab: Tab, owner: SessionLifecycleOwner): HarnessSessionHost
       conflicts: reference => tabs.some(other => other !== tab && other.lifecycle.identity && savedSessionKey(other.lifecycle.identity) === savedSessionKey(reference)),
     },
     effects: {
-      publish: message => tab.receive?.(message), title: () => tab.title,
+      publish: message => {
+        if (current() && message.type === 'sessionReset' && tab.token !== noticeResetToken) {
+          noticeResetToken = tab.token;
+          // Reload retires old-runtime notices only once replacement starts.
+          // Pi can reset again during identity validation; retain new notices.
+          if (tab.reloading) notices.store.resolveOwner(tab.id);
+        }
+        tab.receive?.(message);
+      }, title: () => tab.title,
       changed: change => {
         if (!current()) return;
         if (change?.title !== undefined) tab.title = change.title;
