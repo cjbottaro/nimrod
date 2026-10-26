@@ -24,6 +24,9 @@ function compileAssertions(session: HarnessSession, project: HarnessProject, reg
   // @ts-expect-error An unsupported flag cannot replace an explicit rejecting implementation.
   const unsupportedNaming: HarnessSession['naming'] = { supported: false };
   void naming; void unsupportedNaming;
+  const { deletion, ...withoutDeletion } = session;
+  // @ts-expect-error Every factory must explicitly declare mounted-session removal semantics.
+  const missingDeletion: HarnessSession = withoutDeletion;
   const { reload, ...withoutReload } = session;
   // @ts-expect-error Every factory must supply the reload consumer port.
   defineHarness({ ...registration, create: () => ({ ...project, create: () => withoutReload }) });

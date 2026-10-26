@@ -7,6 +7,11 @@ export interface SessionDeletionTarget {
   readonly draftScope: string;
 }
 
+/** A mounted session declares removal semantics; missing history is not a UI capability gate. */
+export type SessionDeletionIntent =
+  | { readonly kind: 'close' }
+  | { readonly kind: 'saved'; readonly reference: SavedSessionIdentity };
+
 /** Delete controls consume a target-bound operation, not a connection lifecycle. */
 export interface SessionDeletionOperation {
   readonly target: SessionDeletionTarget;

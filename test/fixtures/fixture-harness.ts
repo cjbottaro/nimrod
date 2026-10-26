@@ -80,6 +80,7 @@ function session(host: HarnessSessionHost, request: SessionRequest, remember: (r
       displayUnsupportedInteraction(host, { id: 'fixture-question', title: 'Fixture question', text: 'Which option should the agent use?', raw: { choices: ['A', 'B'] } });
     } }], async control() { throw new Error('No fixture configuration controls'); } },
     naming: { async rename(name) { host.effects.changed({ title: name, persist: !!reference }); } },
+    deletion: { current: () => reference ? { kind: 'saved', reference } : { kind: 'close' } },
     reload: {
       available: () => !!reference, reason: () => reference ? 'Reload session' : 'Reload session — no saved identity',
       detail: 'Reload the offline fixture conversation', confirmation: 'Reload this fixture session?', needsConfirmation: () => false,

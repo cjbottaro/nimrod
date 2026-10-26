@@ -37,7 +37,7 @@ Startup failures preserve your local draft and do not replay a prompt. If cleanu
 
 ## Delete a Codex thread tree
 
-Use the session-row menu, Project bar trash control or **Delete sessions…** to review **Delete Codex thread tree…**. The existing shared review shows the root and its spawned descendants, including archived and non-interactive descendants. Confirmation authorizes the current spawned subtree, including descendants created during review or shutdown; Nimrod rescans after stopping affected owned agents before submitting one recursive deletion request.
+Use **Delete session…** in the session-row menu or command palette, the Project bar trash control, or **Delete sessions…** to review a Codex thread tree. The existing shared review shows the root and its spawned descendants, including archived and non-interactive descendants. Confirmation authorizes the current spawned subtree, including descendants created during review or shutdown; Nimrod rescans after stopping affected owned agents before submitting one recursive deletion request.
 
 Cancel releases the review without deliberately stopping established agents or deleting history/drafts. Unrelated sessions stay usable. Late affected mutations or new attachments can be rejected while reviewed; nothing is automatically replayed.
 

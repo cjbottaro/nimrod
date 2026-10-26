@@ -208,6 +208,10 @@ function createPiSession(host: HarnessSessionHost, request: SessionRequest, proj
   return {
     lifecycle, drafts: { durability: request.mode === 'temporary' ? 'memory' : 'persistent' }, conversation: conversationPort(host, readView, piInteraction), presentation: { snapshot }, configuration: { current: () => backend.session?.configuration },
     actions: { current: () => configurationActions(piSessionActions.map(action => action.id === 'mcp' ? { ...action, run: inspection.run } : action), { model: 'model', thinking: 'effort' }), async control() { throw new Error('This Pi control is no longer available'); } },
+    deletion: { current: () => {
+      const reference = lifecycle.identity;
+      return reference ? { kind: 'saved', reference } : { kind: 'close' };
+    } },
     reload: { available: () => !!owner.file?.exists && owner.mode !== 'temporary',
       reason: () => saved.blocked(owner.file?.path) ? 'Reload session — recover through Resume session first' : owner.mode === 'temporary' ? 'Reload session — unavailable for temporary sessions' : !owner.file?.exists ? 'Reload session — available after the first save' : lifetime.reloading() ? 'Reloading session…' : 'Reload session',
       detail: 'Reload this conversation with a fresh Pi process', confirmation: 'This interrupts this session’s agent and resumes its saved history. Your draft stays; queued and in-flight work will not continue. Nothing is sent again automatically.',

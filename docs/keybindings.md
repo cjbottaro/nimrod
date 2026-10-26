@@ -24,7 +24,7 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 | New Copilot session | Unbound by default |
 | New named session… | Cmd+Option+N / Ctrl+Alt+N |
 | New temporary session | Cmd/Ctrl+Shift+N |
-| Delete session / Pi session tree… | Cmd/Ctrl+Backspace |
+| Delete session… | Cmd/Ctrl+Backspace |
 | Delete sessions… | Cmd/Ctrl+Shift+Backspace |
 | Select theme… | Unbound by default |
 | MCP servers… | Unbound by default |

@@ -5,7 +5,7 @@ import type { SessionConfiguration } from './session-configuration';
 import type { SessionReload } from './session-reload';
 import type { SessionNaming } from './session-naming';
 import type { SessionHistory } from './session-history';
-import type { SessionDeletionContext, SessionDeletionSource } from './session-deletion-operation';
+import type { SessionDeletionContext, SessionDeletionSource, SessionDeletionIntent } from './session-deletion-operation';
 import type { ActionId } from './keybindings';
 import type { HarnessProjectHost, HarnessSessionHost } from './harness-host';
 
@@ -62,6 +62,8 @@ export interface HarnessSession {
   /** Required behavior, not an optional capability or an unsupported default. */
   readonly reload: SessionReload;
   readonly naming: SessionNaming;
+  /** Live integration-owned removal intent. Undefined explicitly means unsupported. */
+  readonly deletion: { current(): SessionDeletionIntent | undefined };
   readonly close: SessionClosePolicy;
   readonly drafts: { readonly durability: 'persistent' | 'memory' };
   readonly selection: SessionSelectionPolicy;

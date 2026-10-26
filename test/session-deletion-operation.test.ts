@@ -127,7 +127,7 @@ test('Pi operation preserves native IPC, snapshot tombstones and external-event 
   }, context));
   assert.equal(source.operation(reference, 'Copilot'), undefined);
   const operation = f.coordinator.operation({ path: '/pi', sessionId: 'saved' }, 'Pi')!;
-  assert.equal(operation.label, 'Delete session tree…');
+  assert.equal(operation.label, 'Delete session…');
   await operation.run();
   assert.deepEqual(calls, ['/pi:saved']);
   assert.equal(operation.available(), false);

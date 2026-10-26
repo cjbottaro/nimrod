@@ -1835,7 +1835,9 @@ test('customizable requested shortcuts use normal session/model/effort actions w
     key('N', { shiftKey: true }); await f.tick(); await f.tick();
     assert.equal((f.calls.filter(call => call.command === 'start_pi').at(-1)!.args.config as JsonRecord).mode, 'temporary');
     assert.equal(prompt.value, 'Retain this draft'); assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
-    key('Backspace'); await f.tick(); assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false, 'temporary session is not deletable');
+    key('Backspace'); await f.tick(); assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false, 'temporary deletion uses Close, not a saved-tree transaction');
+    assert.equal(f.element<HTMLDialogElement>('host-dialog').open, true);
+    f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
     f.openSettings(); key('n'); await f.tick(); assert.equal(f.calls.filter(call => call.command === 'start_pi').length, before + 1);
     f.back();
     f.preferences.external('{"keybindings":{"new":[],"temporary":["primary+j"],"palette":["primary+l"]}}');
@@ -2496,7 +2498,7 @@ test('attention blanks filtered conversations, preserves mounted state and treat
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'w', metaKey: true, bubbles: true }));
     f.openPalette();
     const commands = f.element('palette-list').textContent!;
-    assert.doesNotMatch(commands, /Reload session|Delete session tree|Close session|Select model|Select thinking level/);
+    assert.doesNotMatch(commands, /Reload session|Delete session|Close session|Select model|Select thinking level/);
     f.element<HTMLDialogElement>('command-palette').close(); await f.tick();
     f.element<HTMLButtonElement>('sidebar-all').click();
     assert.equal(root.hidden, false); assert.equal(root.inert, false);
@@ -2845,7 +2847,7 @@ test('sidebar menu deletion targets a background row without selecting/resuming 
       const rows = f.rows(), prompt = f.element<HTMLTextAreaElement>('prompt');
       const trash = (await f.rowMenu(rows[0])).delete;
       assert.equal(rows[0].parentElement!.querySelector('.session-delete'), null);
-      assert.equal(trash.label, 'Delete session tree…');
+      assert.equal(trash.label, 'Delete session…');
       assert.equal(trash.disabled, false); assert.equal(rows[2].getAttribute('aria-current'), 'true');
       const starts = f.calls.filter(call => call.command === 'start_pi').length;
       trash.click(); trash.click();
@@ -2873,12 +2875,95 @@ test('sidebar menu deletion targets a background row without selecting/resuming 
   }
 });
 
-test('sidebar menu deletion allows working and pending sessions but guards unsaved, temporary and quarantined sessions', async () => {
+for (const entry of ['button', 'shortcut', 'palette', 'row'] as const) test(`Delete closes an unwritten Pi session through ${entry} without filesystem deletion`, async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', fileExists: () => false });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const target = f.rows()[0], token = f.calls.find(call => call.command === 'start_pi')!.args.token;
+    let sibling: HTMLTextAreaElement | undefined;
+    if (entry === 'row') {
+      f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+      sibling = f.element<HTMLTextAreaElement>('prompt'); sibling.value = 'Keep selected sibling'; sibling.dispatchEvent(new f.win.Event('input')); sibling.focus();
+    }
+    const before = f.calls.length;
+    assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
+    assert.equal(f.element('delete-session').getAttribute('aria-label'), 'Delete session');
+    if (entry === 'button') f.element<HTMLButtonElement>('delete-session').click();
+    else if (entry === 'shortcut') f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Backspace', metaKey: true, bubbles: true, cancelable: true }));
+    else if (entry === 'palette') {
+      f.openPalette(); const input = f.element<HTMLInputElement>('palette-input');
+      input.value = 'Delete session'; input.dispatchEvent(new f.win.Event('input'));
+      input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    } else {
+      const action = (await f.rowMenu(target)).delete;
+      assert.equal(action.label, 'Delete session…'); assert.equal(action.disabled, false); action.click();
+    }
+    await f.tick(); await f.tick();
+    assert.equal(f.rows().length, sibling ? 1 : 0);
+    assert.equal(f.calls.slice(before).some(call => call.command === 'delete_session_tree' || call.command === 'start_pi'), false);
+    assert.deepEqual(f.calls.slice(before).filter(call => call.command === 'stop_pi').map(call => call.args.token), [token]);
+    assert.equal(f.element<HTMLDialogElement>('deletion-review').open, false);
+    if (sibling) { assert.equal(f.element('prompt'), sibling); assert.equal(sibling.value, 'Keep selected sibling'); assert.equal(f.win.document.activeElement, sibling); }
+  } finally { f.win.close(); }
+});
+
+test('Delete on a temporary Pi session follows Close confirmation, cancellation and draft disposal', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Temporary draft'; prompt.dispatchEvent(new f.win.Event('input'));
+    const before = f.calls.length;
+    f.element<HTMLButtonElement>('delete-session').click(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('host-dialog').open, true);
+    f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
+    assert.equal(f.rows().length, 1); assert.equal(prompt.value, 'Temporary draft');
+    assert.equal(f.calls.slice(before).some(call => call.command === 'stop_pi'), false);
+    f.element<HTMLButtonElement>('delete-session').click(); await f.tick();
+    f.element<HTMLDialogElement>('host-dialog').close('ok'); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 0);
+    assert.equal(f.calls.slice(before).filter(call => call.command === 'stop_pi').length, 1);
+    assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false);
+    assert.equal(Object.keys(f.saved().drafts).some(key => key.startsWith('temporary:')), false);
+  } finally { f.win.close(); }
+});
+
+test('a first Pi save during unsaved Delete confirmation switches to the saved deletion operation', async () => {
+  let saved = false;
+  const f = await fixture(undefined, { windowWorkspace: '/project', fileExists: () => saved });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    f.emit({ type: 'agent_start' }); await f.tick();
+    f.element<HTMLButtonElement>('delete-session').click(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('host-dialog').open, true);
+    saved = true;
+    const now = f.win.Date.now(); f.win.Date.now = () => now + 4000;
+    f.emit({ type: 'agent_settled' }); await f.tick(); await f.tick();
+    f.element<HTMLDialogElement>('host-dialog').close('ok'); await f.tick(); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'delete_session_tree').length, 1);
+    assert.equal(f.calls.filter(call => call.command === 'stop_pi').length, 0, 'saved transaction owns shutdown, not the provisional Close');
+    assert.equal(f.rows().length, 1, 'no authoritative removal was returned by the fixture');
+  } finally { f.win.close(); }
+});
+
+test('unsaved Delete preserves the mounted Pi session and draft when owned shutdown fails', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', fileExists: () => false, stopError: () => 'Fixture stop refused' });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Retain on failed Close'; prompt.dispatchEvent(new f.win.Event('input'));
+    f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 1); assert.equal(f.element('prompt'), prompt); assert.equal(prompt.value, 'Retain on failed Close');
+    assert.match(f.element('session-notices').textContent!, /Could not stop Pi.*Fixture stop refused/);
+    assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
+    assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false);
+  } finally { f.win.close(); }
+});
+
+test('sidebar menu deletion allows unsaved, temporary, working and pending sessions but guards quarantine', async () => {
   let exists = false;
   const f = await fixture(undefined, { windowWorkspace: '/project', fileExists: () => exists, holdPrompts: true });
   try {
     f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
-    assert.equal((await f.rowMenu(f.rows()[0])).delete.disabled, true, 'unwritten saved sessions cannot be deleted');
+    assert.equal((await f.rowMenu(f.rows()[0])).delete.disabled, false, 'unwritten saved sessions can be closed through Delete');
     exists = true; f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
     const trash = () => f.rowMenu(f.rows()[1]).then(menu => menu.delete);
     assert.equal((await trash()).disabled, false);
@@ -2894,7 +2979,7 @@ test('sidebar menu deletion allows working and pending sessions but guards unsav
     assert.equal((await trash()).disabled, false, 'receipt settlement refreshes eligibility without an activity event');
     assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
     f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
-    assert.equal((await f.rowMenu(f.rows()[2])).delete.disabled, true);
+    assert.equal((await f.rowMenu(f.rows()[2])).delete.disabled, false);
     assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false);
   } finally { f.win.close(); }
   const quarantined = await fixture(undefined, { windowWorkspace: '/project', deletionSnapshot: { pending: false, quarantine: ['/sessions/root'], files: [] }, appState: {
@@ -2944,7 +3029,7 @@ test('delete-tree icon delegates a verified saved session to native filesystem d
   const f = await fixture(undefined, options);
   try {
     const trash = f.element<HTMLButtonElement>('delete-session'); assert.equal(trash.disabled, true);
-    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick(); assert.equal(trash.disabled, true);
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick(); assert.equal(trash.disabled, false);
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick(); assert.equal(trash.disabled, false);
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Discard only after success'; prompt.dispatchEvent(new f.win.Event('input'));
     trash.click(); trash.click(); await f.tick(); await f.tick(); await f.tick();
@@ -3993,6 +4078,32 @@ for (const harness of ['copilot', 'codex'] as const) {
   const markBusy = (f: Awaited<ReturnType<typeof fixture>>, target: ReturnType<typeof channel>) => target.onmessage({ kind: 'rpc', value: harness === 'copilot'
     ? { kind: 'event', event: { id: 'working', type: 'assistant.turn_start', data: {} } }
     : { method: 'turn/started', params: { threadId: 'codex-fixture', turn: { id: 'working', status: 'inProgress', items: [] } } } });
+
+  test(`${label} new sessions expose saved deletion before the first prompt with the common Delete label`, async () => {
+    const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true,
+      copilotHistory: [{ sessionId: 'sdk-fixture', context: { workingDirectory: '/project' }, isRemote: false, summary: 'Empty Copilot' }] });
+    try {
+      await create(f);
+      assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
+      assert.equal(f.element('delete-session').getAttribute('aria-label'), 'Delete session');
+      const action = (await f.rowMenu(f.rows()[0])).delete;
+      assert.equal(action.label, 'Delete session…'); assert.equal(action.disabled, false);
+      if (harness === 'copilot') {
+        action.click(); await f.tick();
+        assert.equal(f.element('deletion-title').textContent, 'Delete Copilot session');
+        f.element<HTMLButtonElement>('deletion-confirm').click(); await f.tick(); await f.tick();
+        assert.equal(writes(f).filter(request => request.method === 'delete').length, 1);
+        assert.equal(f.rows().length, 0);
+      } else {
+        f.openPalette(); const input = f.element<HTMLInputElement>('palette-input');
+        input.value = 'Delete session'; input.dispatchEvent(new f.win.Event('input'));
+        assert.match(f.element('palette-list').textContent!, /Review this persisted thread and its spawned descendants/);
+        assert.doesNotMatch(f.element('palette-list').textContent!, /no saved history to delete/);
+      }
+      assert.equal(writes(f).some(request => ['prompt', 'turn/start'].includes(String(request.method))), false);
+      assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false);
+    } finally { f.win.close(); }
+  });
 
   test(`${label} reload waits for owned exit, resumes exact identity and preserves mounted drafts without replay or sibling focus theft`, async () => {
     let release!: () => void;

@@ -11,7 +11,7 @@ const BUILTIN_ACTIONS = [
   { id: 'new-codex', label: 'New Codex session', scope: 'project', context: 'project', defaults: [] },
   { id: 'new-copilot', label: 'New Copilot session', scope: 'project', context: 'project', defaults: [] },
   { id: 'temporary', label: 'New temporary session', scope: 'project', context: 'project', defaults: ['primary+shift+n'] },
-  { id: 'delete', label: 'Delete session / Pi session tree…', scope: 'project', context: 'session', defaults: ['primary+backspace'] },
+  { id: 'delete', label: 'Delete session…', scope: 'project', context: 'session', defaults: ['primary+backspace'] },
   { id: 'delete-sessions', label: 'Delete sessions…', scope: 'project', context: 'project', defaults: ['primary+shift+backspace'] },
   { id: 'capture-performance', label: 'Capture performance report', scope: 'project', context: 'project', defaults: [] },
   { id: 'reload-card-plugins', label: 'Reload card plugins', scope: 'project', context: 'project', defaults: [] },

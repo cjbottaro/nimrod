@@ -128,6 +128,10 @@ function createCopilotSession(host: HarnessSessionHost, request: SessionRequest,
       await backend.session.rename(name);
     } },
     close: savedClose,
+    deletion: { current: () => {
+      const reference = lifecycle.identity;
+      return reference ? { kind: 'saved', reference } : { kind: 'close' };
+    } },
     reload: {
       available: () => !!lifecycle.identity,
       reason: () => !lifecycle.identity ? 'Reload session — available after Copilot assigns a saved identity' : lifetime.reloading() ? 'Reloading session…' : 'Reload session',

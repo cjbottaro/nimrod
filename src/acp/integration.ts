@@ -97,6 +97,7 @@ function createAcpSession(host: HarnessSessionHost, _request: SessionRequest, pr
       working: backend.session?.state.busy === true, pending: backend.session?.client.phase === 'working', compacting: false, queuePending: false, destructiveBusy: backend.session?.state.busy === true }) },
     naming: { async rename() { throw new Error('Rename session is not supported by this ACP integration.'); } },
     // This dormant adapter has no saved-identity/Resume implementation.
+    deletion: { current: () => undefined },
     reload: { available: () => false, reason: () => 'Reload session — ACP saved-session Resume is not implemented',
       detail: 'Reload requires an exact saved session', confirmation: '', needsConfirmation: () => false,
       async run() { throw new Error('ACP saved-session Resume is not implemented'); } },

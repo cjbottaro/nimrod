@@ -118,6 +118,7 @@ native-event translation is required.
 | `configuration` / `actions` | Shared picker, operation cards, command palette and shortcut dispatcher |
 | `naming` | Required native rename operation for the palette, shortcuts and row menu; explicit unsupported rejection. [Session naming](session-naming.md) owns semantics. |
 | `reload` / `close` | Required reload behavior, live availability and interruption/close confirmation policy |
+| `deletion` | Live local-Close versus saved-deletion intent for shared Delete controls; [deletion contract](session-deletion.md#consumer-interface-and-copilot-deletion) |
 | `drafts` | Persistent versus memory-only draft/attachment lifetime |
 | `selection` | Explicit versus restored-selection connection policy |
 | `interactions` | Session activation/suspension and disposal of retained decisions |
