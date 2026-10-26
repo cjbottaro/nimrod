@@ -1,4 +1,5 @@
 import { showModal, closeModal } from './modal-motion';
+import { resizeComposer } from './pi/composer-dom';
 import { confirmationKey, labelDialogAction, navigateDialogActions } from './dialog-actions';
 
 export class Dialogs {
@@ -34,18 +35,40 @@ export class Dialogs {
       const confirm = this.dialog.querySelector<HTMLButtonElement>('button[value="ok"]')!;
       labelDialogAction(cancel, 'Cancel', message !== undefined ? 'Escape' : undefined);
       labelDialogAction(confirm, action, message !== undefined ? 'Enter' : undefined);
+      const view = this.dialog.ownerDocument.defaultView!;
+      let resizeFrame: number | undefined;
+      const scheduleResize = () => {
+        if (this.inputNode.hidden || view.CSS?.supports('field-sizing', 'content') || resizeFrame !== undefined) return;
+        resizeFrame = view.requestAnimationFrame(() => {
+          resizeFrame = undefined;
+          if (this.dialog.open) resizeComposer(this.inputNode);
+        });
+      };
       const onKey = (event: KeyboardEvent) => {
         // Editing/selection controls keep arrows; footer buttons share navigation.
         if (!this.dialog.open) return;
         if (message !== undefined) confirmationKey(event, this.dialog, cancel, confirm);
-        else navigateDialogActions(event, cancel, confirm);
+        else if (event.target === this.inputNode && event.key === 'Enter' && !event.shiftKey) {
+          // Match composer delivery without sending partial IME text or repeats.
+          if (event.isComposing || event.keyCode === 229) return;
+          event.preventDefault(); event.stopPropagation();
+          if (!event.repeat && !confirm.disabled) closeModal(this.dialog, confirm.value);
+        } else navigateDialogActions(event, cancel, confirm);
       };
       this.dialog.addEventListener('keydown', onKey);
+      this.inputNode.addEventListener('input', scheduleResize);
+      view.addEventListener('resize', scheduleResize);
       this.dialog.addEventListener('close', () => {
         this.dialog.removeEventListener('keydown', onKey);
+        this.inputNode.removeEventListener('input', scheduleResize);
+        view.removeEventListener('resize', scheduleResize);
+        if (resizeFrame !== undefined) view.cancelAnimationFrame(resizeFrame);
         resolve(this.dialog.returnValue !== 'ok' ? undefined : options ? this.select.value : message !== undefined ? 'confirmed' : this.inputNode.value);
       }, { once: true });
+      this.inputNode.style.height = '';
+      this.inputNode.style.overflowY = '';
       showModal(this.dialog);
+      if (!this.inputNode.hidden) resizeComposer(this.inputNode);
       if (options) this.select.focus(); else if (message === undefined) this.inputNode.focus(); else confirm.focus();
     }));
     this.queue = result.then(() => {}, () => {});
