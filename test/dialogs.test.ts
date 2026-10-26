@@ -47,7 +47,7 @@ test('confirmation focus, labels and Enter agree; Cancel focus and Escape cancel
     assert.equal(dialog.querySelector('button[value="ok"]')!.getAttribute('aria-keyshortcuts'), null);
     assert.equal(cancel.getAttribute('aria-keyshortcuts'), null);
     assert.equal(dialog.querySelector('button[value="ok"]')!.textContent, 'Confirm');
-    const enter = new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    const enter = new dom.window.KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true });
     document.querySelector('#host-dialog-input')!.dispatchEvent(enter);
     assert.equal(enter.defaultPrevented, false); assert.equal(dialog.open, true);
     const field = document.querySelector<HTMLTextAreaElement>('#host-dialog-input')!;
@@ -55,7 +55,12 @@ test('confirmation focus, labels and Enter agree; Cancel focus and Escape cancel
     assert.equal(document.activeElement, field);
     cancel.focus(); assert.equal(key('ArrowRight').defaultPrevented, true);
     assert.equal(document.activeElement, confirm);
-    dialog.close('ok'); assert.equal(await input, 'Keep multiline behavior');
+    field.focus();
+    for (const extra of [{ isComposing: true }, { keyCode: 229 }, { repeat: true }]) {
+      key('Enter', extra); assert.equal(dialog.open, true);
+    }
+    assert.equal(key('Enter').defaultPrevented, true);
+    assert.equal(await input, 'Keep multiline behavior');
     const parent = document.querySelector<HTMLDialogElement>('#command-palette')!;
     const parentInput = document.querySelector<HTMLInputElement>('#palette-input')!;
     parent.showModal(); parentInput.focus();
@@ -67,7 +72,15 @@ test('confirmation focus, labels and Enter agree; Cancel focus and Escape cancel
     assert.equal(parent.open, true); assert.equal(document.activeElement, parentInput);
     const ordinary = dialogs.input('Ordinary input', 'No stale label');
     await Promise.resolve(); assert.equal(confirm.textContent, 'Confirm');
-    dialog.close('ok'); assert.equal(await ordinary, 'No stale label');
+    dialogs.cancel(); assert.equal(await ordinary, undefined);
+    const custom = dialogs.input('Question', undefined, 'question-owner', 'Submit answer');
+    await Promise.resolve();
+    assert.equal(field.rows, 1); assert.equal(confirm.textContent, 'Submit answer');
+    field.value = 'First line\nSecond line';
+    field.dispatchEvent(new dom.window.Event('input'));
+    assert.equal(key('Enter').defaultPrevented, true);
+    assert.equal(await custom, 'First line\nSecond line');
+    assert.equal(parent.open, true); assert.equal(document.activeElement, parentInput);
     parent.close();
   } finally { globalThis.document = previous; dom.window.close(); }
 });

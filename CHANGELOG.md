@@ -47,6 +47,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- Modal action footers no longer have a separator line. Custom-answer and other host text-input dialogs now start at one line, grow with their content, and use Enter to submit / Shift+Enter for a newline, like the composer.
+
 - Codex async-question answers now use the same speech-bubble question and inset, accent-lined reply as Copilot question/answer cards, with the exact original message behind a disclosure. Native user-message identity and delivery behavior are unchanged across live answers and saved history.
 
 - Codex and Copilot Question pickers distinguish offered answers with bullets, custom answers with a pencil, and supported Ignore actions with a circle-slash, with a small gap before utility actions. Labels, filtering, keyboard controls and dismiss-and-resume behavior are unchanged.
