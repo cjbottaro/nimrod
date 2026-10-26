@@ -428,6 +428,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     }
     return {
       pin: item('pin', String(current.options.pinLabel), current.options.pinEnabled === true),
+      rename: item('rename', 'Rename session…', current.options.renameEnabled === true),
       close: item('close', 'Close session', current.options.closeEnabled === true),
       delete: item('delete', String(current.options.deleteLabel), current.options.deleteEnabled === true),
     };
@@ -492,7 +493,7 @@ test('registered project metadata without a live handler stays unavailable inste
   } finally { f.win.close(); }
 });
 
-test('a registration unknown to the shell creates, sends, reloads, displays fallback questions, closes, resumes and deletes through unchanged consumers', async () => {
+test('a registration unknown to the shell creates, sends, renames, reloads, displays fallback questions, closes, resumes and deletes through unchanged consumers', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project', fixtureHarness: true });
   const enter = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
   const search = (text: string) => { const input = f.element<HTMLInputElement>('palette-input'); input.value = text; input.dispatchEvent(new f.win.Event('input')); };
@@ -511,6 +512,10 @@ test('a registration unknown to the shell creates, sends, reloads, displays fall
     assert.match(f.win.document.querySelector('.session-view:not([hidden])')!.textContent!, /unknown fixture item/);
     prompt.value = 'Preserve newer draft'; prompt.dispatchEvent(new f.win.Event('input')); await f.tick();
     const root = prompt.closest('.session-view');
+    f.openPalette(); search('Rename session'); enter(); await f.tick(); await f.tick();
+    f.element<HTMLTextAreaElement>('host-dialog-input').value = 'Fixture renamed'; await f.confirm();
+    assert.equal(f.element('project-session-name').textContent, 'Fixture renamed');
+    assert.equal(prompt.value, 'Preserve newer draft');
     f.openPalette(); search('Reload session'); enter(); await f.tick(); await f.tick();
     assert.equal(f.element('prompt'), prompt); assert.equal(prompt.closest('.session-view'), root);
     assert.equal(prompt.value, 'Preserve newer draft'); assert.equal(f.rows().length, 1);
@@ -529,6 +534,73 @@ test('a registration unknown to the shell creates, sends, reloads, displays fall
     f.element<HTMLButtonElement>('deletion-confirm').click(); await f.tick(); await f.tick();
     assert.equal(f.rows().length, 0); assert.equal(f.saved().drafts[scope], undefined);
     assert.equal(f.calls.some(call => ['start_pi', 'write_pi', 'start_copilot', 'write_copilot', 'start_codex', 'write_codex', 'delete_session_tree'].includes(call.command)), false);
+  } finally { f.win.close(); }
+});
+
+test('Rename session targets a connected background row without navigation, recency or draft changes', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const [target, selected] = f.rows(), prompt = f.element<HTMLTextAreaElement>('prompt');
+    prompt.value = 'Keep draft'; prompt.dispatchEvent(new f.win.Event('input'));
+    const time = target.querySelector('time')!.getAttribute('datetime'), before = f.calls.length;
+    (await f.rowMenu(target)).rename.click(); await f.tick(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('host-dialog').open, true);
+    f.element<HTMLTextAreaElement>('host-dialog-input').value = '  Background name  '; await f.confirm();
+    assert.match(target.textContent!, /Background name/);
+    assert.equal(selected.getAttribute('aria-current'), 'true');
+    assert.equal(target.querySelector('time')!.getAttribute('datetime'), time);
+    assert.equal(prompt.value, 'Keep draft');
+    const requests = f.calls.slice(before).filter(call => call.command === 'write_pi');
+    assert.equal(requests.filter(call => (call.args.message as JsonRecord).type === 'set_session_name').length, 1);
+    assert.equal(requests.some(call => (call.args.message as JsonRecord).type === 'prompt'), false);
+    assert.equal(f.calls.slice(before).some(call => ['start_pi', 'stop_pi'].includes(call.command)), false);
+    f.disconnect();
+  } finally { f.win.close(); }
+});
+
+test('Rename session palette action is bindable, prefilled, cancellable and validates before dispatch', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const open = async () => {
+      f.openPalette();
+      const input = f.element<HTMLInputElement>('palette-input'); input.value = 'Rename session';
+      input.dispatchEvent(new f.win.Event('input'));
+      input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      await f.tick(); await f.tick();
+    };
+    assert.deepEqual(ACTIONS.find(action => action.id === 'rename')!.defaults, []);
+    await open();
+    assert.equal(f.element<HTMLTextAreaElement>('host-dialog-input').value, f.element('project-session-name').textContent);
+    f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
+    assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'set_session_name'), false);
+    await open(); f.element<HTMLTextAreaElement>('host-dialog-input').value = 'two\nlines'; await f.confirm();
+    assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'set_session_name'), false);
+    assert.match(f.element('session-notices').textContent!, /single-line/);
+    await open(); f.element<HTMLTextAreaElement>('host-dialog-input').value = 'Palette name'; await f.confirm();
+    assert.equal(f.element('project-session-name').textContent, 'Palette name');
+    assert.doesNotMatch(f.element('session-notices').textContent!, /single-line/);
+    f.preferences.external('{"keybindings":{"rename":["primary+shift+y"]}}'); await f.tick();
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'y', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('host-dialog').open, true);
+    f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
+    f.disconnect();
+  } finally { f.win.close(); }
+});
+
+test('Rename session on a disconnected row reports a session notice without starting a runtime', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    f.disconnect(); await f.tick(); await f.tick();
+    const before = f.calls.length;
+    (await f.rowMenu(f.rows()[0])).rename.click(); await f.tick(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('host-dialog').open, false);
+    assert.match(f.element('session-notices').textContent!, /Resume this session/);
+    assert.equal(f.calls.slice(before).some(call => ['start_pi', 'write_pi'].includes(call.command)), false);
   } finally { f.win.close(); }
 });
 

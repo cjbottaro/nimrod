@@ -138,7 +138,7 @@ class PrototypeSession implements HarnessSession {
   get actions() { return this.inner.actions; } get reload() { return this.inner.reload; }
   get close() { return this.inner.close; } get drafts() { return this.inner.drafts; }
   get selection() { return this.inner.selection; } get interactions() { return this.inner.interactions; }
-  get references() { return this.inner.references; }
+  get references() { return this.inner.references; } get naming() { return this.inner.naming; }
 }
 test('class/prototype implementations retain their live ports across registry binding', async () => {
   const f = harnessHostFixture();
@@ -149,6 +149,7 @@ test('class/prototype implementations retain their live ports across registry bi
   const registry = new HarnessRegistry([registration], f.project, registration.id);
   await registry.initialize(); const session = registry.create(registry.get(registration.id), f.host, { mode: 'saved' });
   assert.equal(session.lifecycle.connection, 'disconnected'); await session.lifecycle.connect(); assert.equal(session.lifecycle.connection, 'connected');
+  const changes = f.changes(); await session.naming.rename('Prototype name'); assert.ok(f.changes() > changes);
   f.dom.window.close();
 });
 

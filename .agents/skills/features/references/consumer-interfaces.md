@@ -116,6 +116,7 @@ native-event translation is required.
 | `conversation` | Mounted transcript/composer, typed message input and view intents |
 | `presentation` | Sidebar activity, badge, pending work and destructive-operation review |
 | `configuration` / `actions` | Shared picker, operation cards, command palette and shortcut dispatcher |
+| `naming` | Required native rename operation for the palette, shortcuts and row menu; explicit unsupported rejection. [Session naming](session-naming.md) owns semantics. |
 | `reload` / `close` | Required reload behavior, live availability and interruption/close confirmation policy |
 | `drafts` | Persistent versus memory-only draft/attachment lifetime |
 | `selection` | Explicit versus restored-selection connection policy |

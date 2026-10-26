@@ -1,3 +1,4 @@
+import { sessionName } from '../session-naming';
 import { validateMessageImages, type SessionMessageInput } from '../session-message-input';
 import type { ImageContent } from '../image-attachments';
 import { copilotImageCapabilities, copilotUserContent, type CopilotImageModel } from './image-input';
@@ -90,6 +91,8 @@ export class CopilotSession {
   private waitingStatus?: string;
   private captureConnectionId = crypto.randomUUID();
   private runtimeVersion?: string;
+  private nameRevision = 0;
+  private renaming = false;
   constructor(send: (message: BridgeRequest) => Promise<void>, private ui: CopilotSessionUi) {
     this.connection = new CopilotConnection(async message => {
       this.capture(`request.${message.method}`, message);
@@ -124,7 +127,7 @@ export class CopilotSession {
     this.updateStatusArea();
   }
   get hasPendingWork(): boolean {
-    return this.state.busy || this.configuring || this.commandQueue.occupied || this.pendingDecisions.size > 0
+    return this.state.busy || this.renaming || this.configuring || this.commandQueue.occupied || this.pendingDecisions.size > 0
       || this.configuration.operations.some(operation => operation.phase === 'queued' || operation.phase === 'applying');
   }
   get canSubmit(): boolean { return !this.ended && !this.state.sessionUnavailable && !this.state.busy && !this.configuring && !this.commandOperation && !this.commandQueue?.occupied; }
@@ -152,6 +155,22 @@ export class CopilotSession {
     this.connection.receive(packet);
   }
   disconnect(reason: string): void { this.connection.disconnect(reason); }
+  async rename(value: string): Promise<void> {
+    const name = sessionName(value);
+    if ([...name].length > 100) throw new Error('Copilot session names must be at most 100 characters.');
+    if (this.ended || this.state.sessionUnavailable) throw new Error('Resume this Copilot session before renaming it.');
+    if (this.renaming) throw new Error('A session rename is already in progress.');
+    const revision = this.nameRevision;
+    this.renaming = true; this.publish([]);
+    try {
+      await this.connection.request('rename', { name }, 'disconnect', result => {
+        if (!record(result) || typeof result.name !== 'string' || !result.name.trim()) throw new Error('Copilot did not confirm a session name.');
+        if (revision !== this.nameRevision) return;
+        this.state = { ...this.state, sessionName: result.name }; this.publish([]);
+      });
+    } finally { this.renaming = false; this.publish([]); }
+  }
+
   async initialize(sessionId?: string): Promise<void> {
     this.initialUsage = initialCopilotUsage(sessionId === undefined);
     const status = await this.connection.request('initialize');
@@ -588,7 +607,7 @@ export class CopilotSession {
       const mode = string('newMode');
       if (!['interactive', 'plan', 'autopilot'].includes(mode)) { this.disconnect(`Copilot changed to unknown mode "${mode}".`); return; }
       this.mode = mode; this.configurationVersion++; this.publish([]);
-    } else if (type === 'session.title_changed' && !raw.agentId) { this.state = { ...this.state, sessionName: string('title') }; this.publish([]); }
+    } else if (type === 'session.title_changed' && !raw.agentId) { this.nameRevision++; this.state = { ...this.state, sessionName: string('title') }; this.publish([]); }
     else if (type === 'session.task_complete' && !raw.agentId && !this.replaying) {
       this.acceptedCompletion = data.success === true && this.state.busy && !this.stopped && !this.failed
         ? { summary: typeof data.summary === 'string' && data.summary.trim() ? data.summary : undefined } : undefined;

@@ -85,7 +85,8 @@ function createCopilotSession(host: HarnessSessionHost, request: SessionRequest,
       changed: () => {
         if (!valid()) return;
         const state = session.state, first = state.messages.find(message => message.role === 'user' && !message.originLabel);
-        const name = state.sessionName === 'Copilot session' ? undefined : state.sessionName;
+        // Native names are authoritative, even when they match the creation placeholder.
+        const name = state.sessionName;
         const title = name || (typeof first?.content === 'string' ? first.content.trim().replace(/\s+/g, ' ').slice(0, 70) : '') || effects.title();
         const next = JSON.stringify([state.busy, state.sessionUnavailable, title]);
         if (next !== signature) { signature = next; effects.changed({ title, clearFailed: !!state.busy, persist: !!lifecycle.identity }); }
@@ -122,6 +123,10 @@ function createCopilotSession(host: HarnessSessionHost, request: SessionRequest,
     actions: { current: () => configurationActions(copilotSessionActions(backend.session), { model: 'model', thinking: 'effort', mode: 'mode', 'context-window': 'context-tier' }), async control() { throw new Error('This Copilot control is no longer available'); } },
     presentation: { snapshot: () => ({ harnessLabel: 'Copilot', badge: 'Copilot', badgeTitle: '', busy: backend.session?.state.busy === true,
       working: backend.session?.state.busy === true, pending: backend.session?.state.busy === true, compacting: false, queuePending: false, destructiveBusy: backend.session?.hasPendingWork === true }) },
+    naming: { async rename(name) {
+      if (lifecycle.connection !== 'connected' || !backend.session) throw new Error('Resume this Copilot session before renaming it.');
+      await backend.session.rename(name);
+    } },
     close: savedClose,
     reload: {
       available: () => !!lifecycle.identity,

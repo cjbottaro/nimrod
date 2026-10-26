@@ -23,6 +23,7 @@ import type { HarnessProject, HarnessSession, SessionRequest } from '../harness-
 import type { HarnessProjectHost, HarnessSessionHost } from '../harness-host';
 import { ownedProcessStop } from '../session-lifecycle';
 import { lastUsed } from '../session-recency';
+import { sessionName } from '../session-naming';
 
 const lastKey = 'nimrod.last-session.v1';
 const creation = { action: { id: 'new', label: 'New session', detail: 'Pi · persistent conversation (default harness)' }, defaultMode: 'saved', modes: ['saved', 'temporary'], named: true, title: 'Session' } satisfies import('../harness-contract').HarnessCreation;
@@ -212,6 +213,10 @@ function createPiSession(host: HarnessSessionHost, request: SessionRequest, proj
       detail: 'Reload this conversation with a fresh Pi process', confirmation: 'This interrupts this session’s agent and resumes its saved history. Your draft stays; queued and in-flight work will not continue. Nothing is sent again automatically.',
       needsConfirmation: inputPending => inputPending || !!backend.session && !owner.ended && snapshot().destructiveBusy,
       async run() { if (!owner.file?.exists || owner.mode === 'temporary') throw new Error('Reload requires saved Pi history'); await lifecycle.stop(); inspection.cancel(); effects.retire(); effects.publish({ type: 'sessionDisconnected' }); lifecycle.disconnect('Session reloaded'); owner.ended = true; await lifecycle.connect({ acceptedAction: true }); } },
+    naming: { async rename(name) {
+      if (lifecycle.connection !== 'connected' || !backend.session || backend.session.state.sessionUnavailable) throw new Error('Resume this Pi session before renaming it.');
+      await backend.session.rename(sessionName(name));
+    } },
     close: request.mode === 'temporary' ? temporaryClose : savedClose, selection: ordinarySelection,
     interactions: { setActive() {}, dispose: inspection.cancel }, references: { file: () => owner.mode !== 'temporary' && owner.file?.exists ? { path: owner.file.path, sessionId: owner.file.sessionId } : undefined },
   };

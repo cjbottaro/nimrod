@@ -61,6 +61,13 @@ export class CodexClient {
   receive(packet: unknown): void { this.connection.receive(packet); }
   disconnect(reason?: unknown): void { this.connection.disconnect(reason); }
 
+  async rename(name: string, applied: () => void): Promise<void> {
+    const threadId = this.requireBound();
+    await this.rpc('thread/name/set', { threadId, name }, value => {
+      record(value, 'rename response'); applied();
+    });
+  }
+
   async initialize(): Promise<void> {
     if (this.state !== 'new') throw new Error('Codex initialization is unavailable');
     this.state = 'initializing';

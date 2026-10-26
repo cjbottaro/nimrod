@@ -6,10 +6,10 @@ export interface BridgeRequest { id: string; method: string; [key: string]: unkn
 
 /** Correlation for Nimrod's bridge, not a client for the SDK's wire protocol. */
 export class CopilotConnection {
-  private pending = new Map<string, { resolve(value: unknown): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }>();
+  private pending = new Map<string, { resolve(value: unknown): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout>; apply?: (value: unknown) => void }>();
   private closed = false;
   constructor(private send: (message: BridgeRequest) => Promise<void>, private event: (message: Record<string, unknown>) => void, private ended: (reason: string) => void) {}
-  request(method: string, params: Record<string, unknown> = {}, timeoutPolicy: 'disconnect' | 'reject' = 'disconnect'): Promise<unknown> {
+  request(method: string, params: Record<string, unknown> = {}, timeoutPolicy: 'disconnect' | 'reject' = 'disconnect', apply?: (value: unknown) => void): Promise<unknown> {
     if (this.closed) return Promise.reject(new CopilotConnectionError('Copilot SDK bridge is disconnected'));
     const id = crypto.randomUUID();
     return new Promise((resolve, reject) => {
@@ -19,7 +19,7 @@ export class CopilotConnection {
         if (timeoutPolicy === 'reject') { this.pending.delete(id); reject(new Error('Optional Copilot metadata request timed out.')); }
         else this.disconnect('Copilot request timed out; its outcome is unknown. Nothing was retried.');
       }, 20_000);
-      this.pending.set(id, { resolve, reject, timer });
+      this.pending.set(id, { resolve, reject, timer, apply });
       void this.send({ ...params, id, method }).catch(error => this.disconnect(`Copilot write failed; delivery is unknown: ${String(error)}`));
     });
   }
@@ -36,7 +36,10 @@ export class CopilotConnection {
         if (!pending) return;
         clearTimeout(pending.timer); this.pending.delete(value.id);
         if (typeof value.error === 'string') pending.reject(new CopilotResponseError(value.error));
-        else pending.resolve(value.result);
+        else {
+          try { pending.apply?.(value.result); pending.resolve(value.result); }
+          catch (error) { pending.reject(error instanceof Error ? error : new Error(String(error))); throw error; }
+        }
       } else if (value.kind === 'fatal') throw new Error(String(value.error));
       else this.event(value);
     } catch (error) { this.disconnect(`Copilot SDK event processing failed: ${String(error)}`); }

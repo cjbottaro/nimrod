@@ -16,6 +16,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { notificationPreview, sessionNotifications, type NotificationDispatch, type NotificationClick } from './notifications';
 import { SessionNavigation, SESSION_VIEWS, type SessionView, type SelectionIntent, type NavigationSnapshot } from './session-navigation';
 import { SessionConnection } from './session-connection';
+import { sessionName } from './session-naming';
 import { installSessionContextMenu } from './session-context-menu';
 import { installSidebarResize, sidebarWidthKey } from './sidebar-resize';
 import { lastUsed, sortByRecency, captureSidebarScroll, revealSidebarRow, SessionRecency } from './session-recency';
@@ -344,7 +345,7 @@ function canPin(tab: Tab): boolean {
 function canClose(tab: Tab): boolean {
   return canPin(tab) && !tab.starting;
 }
-async function runSessionRowAction(tab: Tab, action: 'pin' | 'close' | 'delete', pinned = !tab.pinned): Promise<void> {
+async function runSessionRowAction(tab: Tab, action: 'pin' | 'close' | 'delete' | 'rename', pinned = !tab.pinned): Promise<void> {
   if (!ready || unloading || !tabs.includes(tab) || settings.isOpen) return;
   if (action === 'pin') {
     if (!canPin(tab) || tab.pinned === pinned) return;
@@ -355,7 +356,8 @@ async function runSessionRowAction(tab: Tab, action: 'pin' | 'close' | 'delete',
     persistTabs();
   } else if (action === 'close') {
     if (canClose(tab)) await closeTab(tab);
-  } else await deleteSession(tab);
+  } else if (action === 'rename') await renameSession(tab);
+  else await deleteSession(tab);
 }
 async function showSessionContextMenu(tab: Tab, position: { x: number; y: number }): Promise<void> {
   if (!ready || unloading || settings.isOpen || document.querySelector('dialog[open]') || !tabs.includes(tab)) return;
@@ -363,6 +365,7 @@ async function showSessionContextMenu(tab: Tab, position: { x: number; y: number
   await sessionContextMenu.show({
     valid: () => !unloading && tabs.includes(tab) && !settings.isOpen && !document.querySelector('dialog[open]'),
     pin: { label: pinned ? 'Pin session' : 'Unpin session', enabled: canPin(tab), run: () => runSessionRowAction(tab, 'pin', pinned) },
+    rename: { label: 'Rename session…', enabled: canClose(tab) && !blocked(tab), run: () => runSessionRowAction(tab, 'rename') },
     close: { label: 'Close session', enabled: canClose(tab), run: () => runSessionRowAction(tab, 'close') },
     delete: { label: tabDeletion(tab)?.label || 'Delete session…', enabled: deletable(tab), run: () => runSessionRowAction(tab, 'delete') },
     error: error => notices.report({ id: `session-menu:${++noticeSequence}`, owner: tab.id, operation: 'Session menu', message: String(error) }),
@@ -679,6 +682,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     }] : []),
     ...(harnesses.get(harnesses.defaultId).creation.modes.includes('temporary') ? [{ id: 'temporary', label: 'New temporary session', detail: 'Conversation without saved history', run: () => newSession('temporary') }] : []),
     ...(active ? [
+      { id: 'rename', label: 'Rename session…', detail: 'Change this conversation’s harness-owned name', run: () => runSessionRowAction(active, 'rename') },
       { id: 'pin', label: active.pinned ? 'Unpin session' : 'Pin session', detail: 'Keep this session above unpinned sessions in the sidebar', run: () => runSessionRowAction(active, 'pin') },
       { id: 'close', label: 'Close session', detail: 'Stop its agent and remove it from the sidebar; saved history stays', run: () => runSessionRowAction(active, 'close') },
     ] : []),
@@ -1099,6 +1103,24 @@ async function openSavedReference(reference: SavedSessionIdentity, title = 'Sess
   tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
   activate(tab); await tab.lifecycle.connect({ acceptedAction: true });
 }
+const renamingSessions = new WeakSet<Tab>();
+async function renameSession(tab: Tab): Promise<void> {
+  if (!canClose(tab) || blocked(tab) || renamingSessions.has(tab)) return;
+  renamingSessions.add(tab);
+  const token = tab.token;
+  try {
+    if (!isConnected(tab)) throw new Error('Resume this session before renaming it.');
+    const value = await dialogs.input('Rename session', tab.title, token, 'Rename session');
+    if (value === undefined) return;
+    if (!canClose(tab) || blocked(tab) || settings.isOpen) return;
+    if (tab.token !== token || !isConnected(tab)) throw new Error('The session connection changed. Open Rename session again; nothing was retried.');
+    const name = sessionName(value);
+    await tab.integration.naming.rename(name);
+    notices.resolve(`${tab.id}:rename`);
+  } catch (error) {
+    if (tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:rename`, owner: tab.id, operation: 'Rename session', message: String(error) });
+  } finally { renamingSessions.delete(tab); }
+}
 async function reloadSession(tab: Tab): Promise<void> {
   if (!ready || tab.deleting || locked(tab) || blocked(tab) || !tabs.includes(tab) || !reloadable(tab) || tab.starting || tab.closing || tab.reloading || settings.isOpen) return;
   const reload = tab.integration.reload;
@@ -1273,6 +1295,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       for (const action of sessionActions(presented)) contributed.add(action.id);
       contributed.add('close');
       if (canPin(presented)) contributed.add('pin');
+      if (canClose(presented) && !blocked(presented)) contributed.add('rename');
       if (reloadable(presented)) contributed.add('reload');
       if (tabDeletion(presented)?.available()) contributed.add('delete');
     }
@@ -1289,7 +1312,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
     if (id === 'new-named') return harnesses.get(harnesses.defaultId).creation.named;
     if (id === 'temporary') return harnesses.get(harnesses.defaultId).creation.modes.includes('temporary');
     if (id === 'capture-performance') return preferences.performanceEnabled() && !settingsSurface.capturingPerformance;
-    if (actionDefinition(id).context === 'session' && !['pin', 'close', 'delete', 'reload'].includes(id)) return !!presented && sessionActions(presented).some(action => action.id === id);
+    if (actionDefinition(id).context === 'session' && !['pin', 'close', 'delete', 'reload', 'rename'].includes(id)) return !!presented && sessionActions(presented).some(action => action.id === id);
     return true;
   },
   run: (id: ActionId) => {
@@ -1304,6 +1327,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'new': return newSession();
       case 'temporary': return newSession('temporary');
       case 'delete': return presented ? runSessionRowAction(presented, 'delete') : undefined;
+      case 'rename': return presented ? runSessionRowAction(presented, 'rename') : undefined;
       case 'pin': return presented ? runSessionRowAction(presented, 'pin') : undefined;
       case 'delete-sessions': return palette.deleteSessions();
       case 'capture-performance': return capturePerformance(true);

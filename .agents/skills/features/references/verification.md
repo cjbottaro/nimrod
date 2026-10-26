@@ -4,6 +4,8 @@ This is the current evidence/acceptance map, not a chronological test log. Featu
 
 ## Registered harness application contract
 
+**Rename session follow-up:** required `SessionNaming` port, palette/configurable shortcut/native row menu, Pi/Copilot/Codex native mutations and explicit ACP rejection are source-implemented. New normalization, registry/type, shell, native-operation/order/error, offline bridge and Rust validation/deletion-gate fixtures are authored **unrun**. The mandatory post-merge compile check is the only automatic validation; no build, app launch, live session mutation or native/platform acceptance is implied. [Session naming](session-naming.md) owns the behavior and fixture map.
+
 **Reload session follow-up:** the required `SessionReload` port replaces the optional-support Restart contract; Pi, Copilot and Codex implement exact-identity fresh-runtime reload. New/updated offline registry, shell, shortcut-compatibility and MRU fixtures are authored **unrun**. Only the mandatory post-merge TypeScript/Rust compile check is automatic for this task; compilation is not behavioral evidence. No build, app launch, installed-runtime probe or native acceptance was performed. Copilot/Codex owned-process reload and macOS/Linux focus/decision cancellation remain native acceptance work. [Reload lifecycle](projects-and-sessions.md#reload-session-lifecycle) owns the contract.
 
 The review-branch migration is source-implemented: required typed registration/

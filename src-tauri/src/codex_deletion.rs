@@ -31,8 +31,11 @@ impl Gate {
             }
         } else {
             if method == Some("thread/delete") { return Err("Only an owned Codex catalog can delete a reviewed tree".into()); }
+            if method == Some("thread/name/set") && (bound.is_none() || value["params"]["threadId"].as_str() != bound) {
+                return Err("Rename requires this writer's bound Codex thread".into());
+            }
             let target_blocked = value["params"]["threadId"].as_str().is_some_and(|id| self.blocks(id));
-            if (matches!(method, Some("thread/start" | "thread/resume" | "turn/start" | "turn/steer"))
+            if (matches!(method, Some("thread/start" | "thread/resume" | "turn/start" | "turn/steer" | "thread/name/set"))
                 && (bound.is_some_and(|id| self.blocks(id)) || target_blocked)) || bound.is_none() && target_blocked {
                 return Err("This Codex thread is reserved for deletion".into());
             }
@@ -171,6 +174,16 @@ mod tests {
         assert!(gate.check(false, None, "session", &serde_json::json!({"method":"thread/resume","params":{"threadId":"child"}})).is_err());
         assert!(gate.check(false, Some("other"), "other", &serde_json::json!({"method":"turn/start","params":{"threadId":"other"}})).is_ok());
         assert!(gate.check(true, None, "catalog", &serde_json::json!({"method":"thread/list","params":{}})).is_ok());
+    }
+    #[test]
+    fn rename_is_bound_to_the_owned_thread_and_respects_deletion() {
+        let message = serde_json::json!({"method":"thread/name/set","params":{"threadId":"other","name":"Name"}});
+        assert!(Gate::default().check(false, Some("other"), "writer", &message).is_ok());
+        assert!(Gate::default().check(false, Some("different"), "writer", &message).is_err());
+        assert!(Gate::default().check(false, None, "writer", &message).is_err());
+        assert!(Gate::default().check(true, None, "catalog", &message).is_err());
+        let blocked = serde_json::json!({"method":"thread/name/set","params":{"threadId":"root","name":"Name"}});
+        assert!(gate(false).check(false, Some("root"), "writer", &blocked).is_err());
     }
     #[test]
     fn native_scope_requires_exact_observed_lineage_and_same_project() {

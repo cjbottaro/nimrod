@@ -185,12 +185,16 @@ fn validate_message(value: &Value) -> Result<(), String> {
             Some("initialized") if value.get("id").is_none() => {},
             Some("initialize" | "thread/start" | "thread/resume" | "thread/list"
                 | "thread/turns/list" | "thread/items/list"
-                | "turn/start" | "turn/steer" | "turn/interrupt" | "model/list" | "thread/delete") if valid_id(&value["id"]) => {},
+                | "turn/start" | "turn/steer" | "turn/interrupt" | "model/list" | "thread/delete" | "thread/name/set") if valid_id(&value["id"]) => {},
             _ => return Err("Unsupported Codex operation".into()),
         }
-        if matches!(method.as_str(), Some("thread/resume" | "thread/turns/list" | "thread/items/list" | "turn/start" | "turn/steer" | "turn/interrupt" | "thread/delete"))
+        if matches!(method.as_str(), Some("thread/resume" | "thread/turns/list" | "thread/items/list" | "turn/start" | "turn/steer" | "turn/interrupt" | "thread/delete" | "thread/name/set"))
             && value["params"]["threadId"].as_str().is_none_or(|id| id.is_empty() || id.len() > 128) {
             return Err("Codex operation requires a thread ID".into());
+        }
+        if method.as_str() == Some("thread/name/set") && value["params"]["name"].as_str().is_none_or(|name|
+            name.trim().is_empty() || name.chars().any(char::is_control)) {
+            return Err("Invalid Codex session name".into());
         }
         if matches!(method.as_str(), Some("turn/start" | "turn/steer")) {
             let params = &value["params"];

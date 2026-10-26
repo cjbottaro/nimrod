@@ -349,12 +349,12 @@ export class PiSession {
     } catch (error) { receipt(error instanceof RpcResponseError ? 'rejected' : 'unknown', errorText(error)); }
   }
 
-  private async rename(name: string): Promise<void> {
+  async rename(name: string): Promise<void> {
     if (/[\r\n]/.test(name)) throw new Error('Session names must be a single line.');
     if (this.disconnected) throw new Error('Pi disconnected before renaming.');
-    await this.rpc.request('set_session_name', { name: name.trim() });
-    if (this.disconnected) return;
-    this.state = { ...this.state, sessionName: name.trim() || undefined }; this.publish();
+    await this.rpc.request('set_session_name', { name: name.trim() }, undefined, () => {
+      this.state = { ...this.state, sessionName: name.trim() || undefined }; this.publish();
+    });
   }
 
   private async compact(message: JsonRecord): Promise<void> {

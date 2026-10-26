@@ -111,6 +111,18 @@ for (const boundary of ['agent_end', 'agent_settled', 'another-started-prompt', 
   f.rpc.disconnect('done');
 });
 
+test('application rename applies its response synchronously and never sends a prompt', async () => {
+  const f = fixture();
+  try {
+    const renaming = f.session.rename('Application name');
+    assert.equal(f.sent[0].type, 'set_session_name');
+    f.rpc.receive({ kind: 'rpc', value: { type: 'response', id: f.sent[0].id, success: true } });
+    assert.equal(f.session.state.sessionName, 'Application name');
+    await renaming;
+    assert.equal(f.sent.some(message => message.type === 'prompt'), false);
+  } finally { f.rpc.disconnect('done'); }
+});
+
 test('rename results update the name and report the result', async () => {
   for (const text of ['/name Inline name', '/name']) {
     const f = fixture();

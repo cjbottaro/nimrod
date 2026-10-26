@@ -45,6 +45,30 @@ function fixture(custom?: (packet: CodexPacket, reply: (result: unknown) => void
   return { session, sent, publications, notices, completions, ids, event };
 }
 
+test('native Codex rename is exact-thread, ordered and does not overwrite newer title events', async () => {
+  let reply!: (result: unknown) => void;
+  const f = fixture((packet, respond) => {
+    if (packet.method !== 'thread/name/set') return false;
+    reply = respond; return true;
+  });
+  try {
+    await f.session.initialize(cwd);
+    const renaming = f.session.rename('  Named thread  ');
+    assert.deepEqual(f.sent.at(-1)!.params, { threadId: 'thread', name: 'Named thread' });
+    reply({}); assert.equal(f.session.state.sessionName, 'Named thread');
+    f.event('thread/name/updated', { threadName: 'Newer name' });
+    await renaming; assert.equal(f.session.state.sessionName, 'Newer name');
+    const again = f.session.rename('Another name');
+    f.event('thread/name/updated', { threadName: 'Authoritative event' }); reply({}); await again;
+    assert.equal(f.session.state.sessionName, 'Authoritative event');
+    const failed = f.session.rename('Rejected');
+    f.session.receive({ id: f.sent.at(-1)!.id, error: { code: -32601, message: 'Rename unsupported' } });
+    await assert.rejects(failed, /Rename unsupported/);
+    assert.equal(f.session.state.sessionName, 'Authoritative event');
+    assert.equal(f.sent.some(packet => ['turn/start', 'turn/steer'].includes(String(packet.method))), false);
+  } finally { f.session.disconnect('done'); }
+});
+
 const asyncItem = (id = 'async-question') => ({ type: 'agentMessage', id, delivery: 'async', text: 'Which?\n- A\n- B', questions: [{ title: 'Which?', options: ['A', 'B'] }] });
 
 test('Codex async questions survive completion, deduplicate terminal snapshots, and answer through idle turn/start', async () => {

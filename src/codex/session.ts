@@ -1,3 +1,4 @@
+import { sessionName } from '../session-naming';
 import { CodexAsyncQuestions, codexAsyncReplies, type CodexAsyncQuestion } from './async-questions';
 import type { QuestionAnswer } from '../question-interaction';
 import type { OutgoingMessage } from '../session-message-input';
@@ -38,6 +39,8 @@ export class CodexSession {
   private submitting = 0;
   private configuring = false;
   private revision = 0;
+  private nameRevision = 0;
+  private renaming = false;
   private models: RpcRecord[] = [];
   private selected: Record<string, string | undefined> = {};
   private settingsRevision = 0;
@@ -102,7 +105,7 @@ export class CodexSession {
     }, () => this.publish([]));
   }
   get hasPendingWork(): boolean {
-    return this.state.busy || this.submitting > 0 || this.configuring
+    return this.state.busy || this.renaming || this.submitting > 0 || this.configuring
       || this.configuration.operations.some(operation => operation.phase === 'queued' || operation.phase === 'applying');
   }
   get idle(): boolean { return !this.ended && !this.hydrating && !this.submitting && !this.configuring && this.client.phase === 'idle'; }
@@ -153,6 +156,19 @@ export class CodexSession {
     this.client.disconnect(reason);
   }
   recordCleanupFailure(error: unknown): void { this.capture('connection.cleanup_failed', { error: error instanceof Error ? error.message : String(error) }); }
+  async rename(value: string): Promise<void> {
+    const name = sessionName(value), revision = this.nameRevision;
+    if (this.ended || this.state.sessionUnavailable) throw new Error('Resume this Codex session before renaming it.');
+    if (this.renaming) throw new Error('A session rename is already in progress.');
+    this.renaming = true; this.publish([]);
+    try {
+      await this.client.rename(name, () => {
+        if (revision !== this.nameRevision) return;
+        this.state = { ...this.state, sessionName: name }; this.publish([]);
+      });
+    } finally { this.renaming = false; this.publish([]); }
+  }
+
   async initialize(cwd: string, savedId?: string): Promise<void> {
     this.cwd = cwd;
     await this.client.initialize(); await this.client.open(cwd, savedId);
@@ -245,7 +261,7 @@ export class CodexSession {
       } else return;
       this.replace(this.project(native, string(params.turnId), false)); return;
     }
-    if (method === 'thread/name/updated') this.state = { ...this.state, sessionName: string(params.threadName) || undefined };
+    if (method === 'thread/name/updated') { this.nameRevision++; this.state = { ...this.state, sessionName: string(params.threadName) || undefined }; }
     else if (method === 'thread/settings/updated') { this.settingsRevision++; this.applySettings(record(params.threadSettings, 'thread settings')); }
     else if (method === 'thread/tokenUsage/updated') {
       const usage = record(params.tokenUsage, 'usage'), last = record(usage.last, 'last usage'), total = record(usage.total, 'total usage');

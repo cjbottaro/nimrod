@@ -115,6 +115,10 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
         await lifecycle.connect({ acceptedAction: true });
       },
     },
+    naming: { async rename(name) {
+      if (lifecycle.connection !== 'connected' || !backend.session) throw new Error('Resume this Codex session before renaming it.');
+      await backend.session.rename(name);
+    } },
     close: savedClose, selection: explicitSelection, interactions: ui, references: noReferences,
   };
 }

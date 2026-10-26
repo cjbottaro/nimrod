@@ -18,6 +18,12 @@ function compileAssertions(session: HarnessSession, project: HarnessProject, reg
   const { conversation, ...withoutConversation } = session;
   // @ts-expect-error Core input/output cannot be omitted or supplied by the project shell.
   const missingConversation: HarnessSession = withoutConversation;
+  const { naming, ...withoutNaming } = session;
+  // @ts-expect-error Every factory must supply an executable naming consumer port.
+  defineHarness({ ...registration, create: () => ({ ...project, create: () => withoutNaming }) });
+  // @ts-expect-error An unsupported flag cannot replace an explicit rejecting implementation.
+  const unsupportedNaming: HarnessSession['naming'] = { supported: false };
+  void naming; void unsupportedNaming;
   const { reload, ...withoutReload } = session;
   // @ts-expect-error Every factory must supply the reload consumer port.
   defineHarness({ ...registration, create: () => ({ ...project, create: () => withoutReload }) });

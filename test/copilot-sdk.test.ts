@@ -38,6 +38,28 @@ async function fixture(events: unknown[] = [], decision: CopilotSessionUi['decis
   return { session, sent, published, completed, responses, captured, last, reply, event };
 }
 
+test('native Copilot rename confirms its name in channel order without a prompt or slash command', async () => {
+  const f = await fixture();
+  try {
+    const renaming = f.session.rename('  Named session  ');
+    assert.equal(f.last('rename').name, 'Named session');
+    f.reply('rename', { name: 'Named session' });
+    assert.equal(f.session.state.sessionName, 'Named session', 'apply synchronously before later events');
+    f.event('session.title_changed', { title: 'Newer event' });
+    await renaming; assert.equal(f.session.state.sessionName, 'Newer event');
+    const again = f.session.rename('Another');
+    f.event('session.title_changed', { title: 'Authoritative event' });
+    f.reply('rename', { name: 'Stale result' }); await again;
+    assert.equal(f.session.state.sessionName, 'Authoritative event');
+    assert.equal(f.sent.some(request => ['prompt', 'command'].includes(request.method)), false);
+    await assert.rejects(f.session.rename('x'.repeat(101)), /100 characters/);
+    const failed = f.session.rename('Rejected');
+    f.session.receive({ kind: 'result', id: f.last('rename').id, error: 'Rename unavailable' });
+    await assert.rejects(failed, /Rename unavailable/);
+    assert.equal(f.session.state.sessionName, 'Authoritative event');
+  } finally { f.session.disconnect('done'); }
+});
+
 for (const caption of ['', 'Image caption']) test(`image input sends bytes and reconciles the SDK echo (${caption || 'image only'})`, async () => {
   const f = await fixture();
   try {

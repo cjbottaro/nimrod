@@ -118,6 +118,12 @@ then verifies fresh project membership and calls `resumeSession` on that **exact
 ID**, with `allowTranscriptRecovery:false` and `continuePendingWork:false`.
 There is no automatic repair, pending-work continuation, new-session fallback,
 prompt replay, replay alert or selection/result-driven recency update.
+[Rename session](session-naming.md) uses the pinned SDK's experimental native
+`session.rpc.name.set/get` API through a narrow bridge operation; it is separate
+from the harness-owned `/session rename` command. Reported native names always
+win over inferred message titles, including a deliberate `Copilot session` name.
+Missing runtime support rejects visibly; no local label or prompt fallback.
+
 Creation uses `createSession({name:'Copilot session',...})`, making the identity
 durable without sending a paid prompt.
 The bridge publishes the authoritative identity before reading mode, transcript

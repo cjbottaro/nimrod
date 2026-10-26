@@ -79,6 +79,7 @@ function session(host: HarnessSessionHost, request: SessionRequest, remember: (r
     actions: { current: () => [{ id: 'harness-fixture-question', label: 'Display fixture question', detail: 'Display-only unsupported interaction', async run() {
       displayUnsupportedInteraction(host, { id: 'fixture-question', title: 'Fixture question', text: 'Which option should the agent use?', raw: { choices: ['A', 'B'] } });
     } }], async control() { throw new Error('No fixture configuration controls'); } },
+    naming: { async rename(name) { host.effects.changed({ title: name, persist: !!reference }); } },
     reload: {
       available: () => !!reference, reason: () => reference ? 'Reload session' : 'Reload session — no saved identity',
       detail: 'Reload the offline fixture conversation', confirmation: 'Reload this fixture session?', needsConfirmation: () => false,

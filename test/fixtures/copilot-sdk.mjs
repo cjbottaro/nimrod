@@ -79,7 +79,12 @@ class Session {
     { ...permissionCommand, aliases: ['perms'] },
     { name: 'discover-fixture', description: 'Add a new fixture command', kind: 'builtin', allowDuringAgentExecution: false },
   ];
+  sessionName = null;
   rpc = {
+    name: {
+      set: async ({ name }) => { this.sessionName = name; this.emit('session.title_changed', { title: name }); },
+      get: async () => ({ name: this.sessionName }),
+    },
     permissions: { getMode: async () => ({ mode: this.permissionMode }) },
     skills: { list: async () => ({ skills: [
       { name: 'fixture-skill', description: 'Fixture skill details', enabled: true },

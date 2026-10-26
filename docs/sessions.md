@@ -31,6 +31,24 @@ Missing, malformed, replaced or wrong-project history shows an error without cre
 
 See [Session sidebar](session-sidebar.md) for ordering and filtered navigation.
 
+## Rename a session
+
+Choose **Rename session…** in the command palette or right-click a Session sidebar
+row and choose **Rename session…**. Edit the prefilled name and choose **Rename
+session**; Cancel/Escape leaves it unchanged. You can assign a shortcut in
+Keybindings (none by default).
+
+Pi, Copilot and Codex use their native naming APIs, not a Nimrod-only label.
+Names must be non-empty and single-line; Copilot allows up to 100 characters.
+The displayed name follows the harness's confirmed result or title event.
+A temporary Pi session's name remains temporary; naming an empty Pi session
+does not necessarily save it.
+
+Renaming a background row does not select it, send a prompt, change its message
+time or touch drafts. Resume a disconnected session before renaming it. Unsupported
+runtime APIs and failures appear in that session's notices; Nimrod never retries
+automatically. Installed-runtime and native macOS/Linux acceptance remain pending.
+
 ## Close a session
 
 Click its row's **Close** button or use **⌘/Ctrl+W**. Closing waits for that agent to stop.

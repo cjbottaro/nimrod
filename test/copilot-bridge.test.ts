@@ -45,6 +45,17 @@ function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) =>
     },
   };
 }
+test('SDK bridge renames through the native name API and reads back the authoritative name', { timeout: 5000 }, async () => {
+  const f = bridge();
+  try {
+    await f.request('initialize'); await f.request('connect');
+    assert.deepEqual(await f.request('rename', { name: '  Friendly name  ' }), { name: 'Friendly name' });
+    assert.ok(f.packets.some(packet => packet.kind === 'event' && packet.event.type === 'session.title_changed' && packet.event.data.title === 'Friendly name'));
+    for (const name of ['', 'two\nlines', 'x'.repeat(101)]) await assert.rejects(f.request('rename', { name }), /1–100 characters/);
+    assert.equal(f.packets.some(packet => packet.kind === 'event' && packet.event.type === 'user.message'), false);
+  } finally { await f.close(); }
+});
+
 for (const text of ['', 'Image caption']) test(`SDK bridge maps inline images to blob attachments (${text || 'image only'})`, { timeout: 5000 }, async () => {
   const f = bridge();
   try {

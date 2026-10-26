@@ -52,6 +52,17 @@ Read-only investigation used installed `codex-cli 0.164.0`, `codex app-server ge
 
 This is reviewed native-client behavior pinned to one version, not a promise that the envelope is a stable public API. [Question contract](questions.md#async-follow-up-questions) owns Nimrod's deliberate retained-until-answered/ignored/superseded UX and remaining limitations.
 
+## Rename protocol review (0.164.0)
+
+The Rename session implementation additionally read the existing local 0.164.0
+generated `ClientRequest.ts`, `v2/ThreadSetNameParams.ts`,
+`ThreadSetNameResponse.ts` and `ThreadNameUpdatedNotification.ts` from the
+async-question review. They expose `thread/name/set {threadId,name}`, an empty
+object result, and `thread/name/updated {threadId,threadName}`. No new generator,
+server connection or user-session mutation was needed. The [shared naming
+contract](../../features/references/session-naming.md) owns the concrete
+implementation, native binding/deletion guards and remaining runtime acceptance.
+
 ## Distribution/authentication boundaries to revisit
 
 - The TypeScript automation SDK requires Node; using app-server directly should avoid adding that runtime to Codex. The native launcher is source-implemented; installed launch and packaging behavior remain unverified.

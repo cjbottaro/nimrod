@@ -202,6 +202,13 @@ async function dispatch(message) {
         return { name: skill.name, description: skill.description, enabled: skill.enabled };
       }) };
     }
+    case 'rename': {
+      if (!session) throw new Error('No connected Copilot session');
+      if (typeof message.name !== 'string' || !message.name.trim() || /[\u0000-\u001f\u007f]/.test(message.name) || [...message.name.trim()].length > 100)
+        throw new Error('Copilot session names must be a single line of 1–100 characters.');
+      await session.rpc.name.set({ name: message.name.trim() });
+      return await session.rpc.name.get();
+    }
     case 'command': {
       if (!session) throw new Error('No connected Copilot session');
       if (commandExecuting) throw new Error('A Copilot command is already executing');

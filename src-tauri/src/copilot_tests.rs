@@ -2,6 +2,14 @@ use super::*;
 use serde_json::json;
 
 #[test]
+fn rename_validates_the_sdk_name_limits() {
+    assert!(validate_message(&json!({"id":"one","method":"rename","name":"Friendly name"})).is_ok());
+    for name in ["".to_string(), " ".into(), "two\nlines".into(), "x".repeat(101)] {
+        assert!(validate_message(&json!({"id":"one","method":"rename","name":name})).is_err());
+    }
+}
+
+#[test]
 fn bridge_records_are_not_acp_or_pi_packets() {
     assert!(validate_message(&json!({"id":"one","method":"prompt","text":"fixture"})).is_ok());
     assert!(validate_message(&json!({"id":"one","method":"connect","sessionId":"exact"})).is_ok());

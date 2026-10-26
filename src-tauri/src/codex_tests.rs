@@ -1,5 +1,12 @@
 use super::*;
 #[test]
+fn rename_requires_a_thread_and_valid_name() {
+    assert!(validate_message(&serde_json::json!({"id":1,"method":"thread/name/set","params":{"threadId":"thread","name":"Friendly name"}})).is_ok());
+    for params in [serde_json::json!({"name":"Friendly name"}), serde_json::json!({"threadId":"thread","name":""}), serde_json::json!({"threadId":"thread","name":"two\nlines"})] {
+        assert!(validate_message(&serde_json::json!({"id":1,"method":"thread/name/set","params":params})).is_err());
+    }
+}
+#[test]
 fn only_codex_dialect_and_implemented_operations_cross_the_native_boundary() {
     for method in ["initialize", "thread/start", "thread/resume", "thread/list", "thread/turns/list", "thread/items/list", "turn/start", "turn/steer", "turn/interrupt", "model/list", "thread/delete"] {
         let params = if matches!(method, "turn/start" | "turn/steer") {
