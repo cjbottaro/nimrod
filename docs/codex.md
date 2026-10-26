@@ -73,8 +73,27 @@ Advertised model/effort choices use the shared Status-area controls and pickers.
 
 Usage shows Codex-reported token totals and the last-turn token amount against the reported model window. This is not a guaranteed current-context measurement or a monetary estimate. No inferred dollar cost, Copilot credit conversion or fabricated context metric is shown.
 
+## Slash commands
+
+Type `/` for the commands supported by the connected Codex integration:
+
+- `/model` opens the Codex model picker; `/model <model-id>` selects an exact advertised ID.
+- `/rename` asks for a session name; `/rename <name>` renames the connected thread.
+
+Each accepted command gets one Command card immediately. Commands submitted while
+Codex works wait for idle; the card stays pending through any picker and native
+confirmation. Output/errors stay on that card, without an ordinary chat message,
+sidebar-recency bump or forced transcript navigation. Cancellation before dispatch
+invokes nothing; uncertain delivery is never retried. Switching away cancels
+pending command interactions without changing a newer draft.
+
+These are Codex-owned client adapters backed by native app-server APIs, not a
+copy of the CLI command catalog. Model changes require effective-state confirmation;
+installed-runtime acceptance remains pending. Other commands are rejected with
+the draft intact, never submitted as a model prompt.
+
 ## Current differences
 
-Codex app-server does not advertise the CLI's slash-command catalog, so slash text is rejected rather than submitted as a model prompt. Plan/Autopilot controls, a context-tier picker, live permission-policy editing, manual compaction and MCP inspection are not provided by this integration yet. Unknown native item types keep raw details; command output and file changes have dedicated shared-component presentations.
+Codex app-server does not advertise the CLI's complete slash-command catalog. Plan/Autopilot controls, a context-tier picker, live permission-policy editing, manual compaction and MCP inspection are not provided by this integration yet. Unknown native item types keep raw details; command output and file changes have dedicated shared-component presentations.
 
 See [Sessions](sessions.md), [Drafts](drafts.md), [Reading conversations](reading-conversations.md) and [Error messages](error-messages.md) for the shared workspace behavior.

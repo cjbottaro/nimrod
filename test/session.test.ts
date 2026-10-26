@@ -17,6 +17,36 @@ function fixture() {
   return { session, rpc, sent, published, respond, attention, previews, ui };
 }
 
+test('Pi slash port creates one rename card, confirms state and never submits a prompt', async () => {
+  const f = fixture();
+  const pending = f.session.slashCommands.invoke({ id: 'command-name', text: '/name Command name' });
+  assert.equal(f.sent[0].type, 'set_session_name');
+  const key = f.session.slashCommands.operations[0].key;
+  f.respond(true); await pending;
+  assert.equal(f.session.state.sessionName, 'Command name');
+  assert.equal(f.session.slashCommands.operations[0].key, key);
+  assert.equal(f.session.slashCommands.operations[0].phase, 'completed');
+  assert.equal(f.sent.some(request => request.type === 'prompt'), false);
+  assert.match(f.session.slashCommands.validate('/not-advertised')!, /not advertised/);
+  assert.match(f.session.slashCommands.validate('/reload')!, /session controls/);
+  f.rpc.disconnect('done');
+});
+test('Pi command picker cancellation withdraws intent and retains no fabricated outcome', async () => {
+  const f = fixture();
+  f.ui.commandInteraction = { choice: async () => undefined, input: async () => undefined };
+  await f.session.slashCommands.invoke({ id: 'cancel-name', text: '/name' });
+  assert.equal(f.sent.length, 0); assert.equal(f.session.slashCommands.operations.length, 0);
+  f.rpc.disconnect('done');
+});
+test('Pi queued commands withdraw before dispatch on disconnect', async () => {
+  const f = fixture(); f.session.state.busy = true;
+  const pending = f.session.slashCommands.invoke({ id: 'queued-name', text: '/name Later' });
+  assert.equal(f.session.slashCommands.operations[0].phase, 'queued');
+  f.rpc.disconnect('done'); await pending;
+  assert.equal(f.session.slashCommands.operations[0].phase, 'not-applied');
+  assert.equal(f.sent.length, 0);
+});
+
 test('performance scopes observe ordered reduction/projection/delivery without changing session semantics', () => {
   const f = fixture();
   const scopes: string[] = [];

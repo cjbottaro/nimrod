@@ -1,4 +1,6 @@
 import { sessionName } from '../session-naming';
+import { commandCatalog, findCommand, parseCommand, SessionCommandQueue, CommandUncertain, type SessionCommands, type CommandInteraction, type SlashCommand } from '../session-commands';
+import type { ConfigurationAdapter, ConfigurationOperation } from '../session-configuration';
 import { CodexAsyncQuestions, codexAsyncReplies, type CodexAsyncQuestion } from './async-questions';
 import type { QuestionAnswer } from '../question-interaction';
 import type { OutgoingMessage } from '../session-message-input';
@@ -22,6 +24,7 @@ export interface CodexSessionUi {
   interactionFailure?: CodexClientHooks['interactionFailure'];
   disconnected(message: string): void;
   completed(failed: boolean, response?: string): void;
+  commandInteraction?: CommandInteraction;
   transcriptLog?: TranscriptLogSink;
 }
 export interface CodexSessionState extends ConversationViewState { messages: DisplayMessage[]; busy: boolean; status: string; sessionName?: string; }
@@ -31,6 +34,12 @@ const json = (value: unknown) => typeof value === 'string' ? value : JSON.string
 export class CodexSession {
   readonly client: CodexClient;
   readonly configuration: SessionConfigurationController;
+  readonly slashCommands: SessionCommands;
+  private readonly configurationAdapter: ConfigurationAdapter;
+  private readonly commandQueue: SessionCommandQueue;
+  private commandRunning = false;
+  private configurationSource?: readonly ConfigurationOperation[];
+  private commandSource?: readonly ConfigurationOperation[];
   state: CodexSessionState = { messages: [], busy: false, status: 'Connecting Codex…', sessionUnavailable: true,
     statusArea: { capabilities: { metrics: { label: 'Codex-reported tokens and context' }, information: true }, controlsLabel: 'Codex session configuration', controls: [] } };
   private cwd = '';
@@ -42,6 +51,9 @@ export class CodexSession {
   private nameRevision = 0;
   private renaming = false;
   private models: RpcRecord[] = [];
+  private commandModels?: RpcRecord[];
+  private commandConnected = false;
+  private commandEntries: SlashCommand[] = [];
   private selected: Record<string, string | undefined> = {};
   private settingsRevision = 0;
   private positions = new Map<string, number>();
@@ -70,14 +82,14 @@ export class CodexSession {
       },
       disconnected: error => {
         this.capture('connection.disconnected', { error: error.message });
-        this.ended = true; this.asyncQuestions.clear(); this.deferredAsyncItems.clear(); this.configuration?.dispose(error.message);
+        this.ended = true; this.asyncQuestions.clear(); this.deferredAsyncItems.clear(); this.commandQueue?.cancel(error.message); this.configuration?.dispose(error.message);
         this.finishRows(); this.state = { ...this.state, busy: false, sessionUnavailable: true, status: 'Disconnected' };
         this.publish(); ui.disconnected(error.message);
       },
     });
-    this.configuration = new SessionConfigurationController({
+    this.configurationAdapter = {
       capabilities: desired => {
-        const availability = this.ended || this.state.sessionUnavailable ? 'unavailable' as const : this.idle ? 'ready' as const : 'deferred' as const;
+        const availability = this.ended || this.state.sessionUnavailable ? 'unavailable' as const : this.idle && !this.commandRunning ? 'ready' as const : 'deferred' as const;
         const model = this.models.find(model => model.model === (desired.model ?? this.selected.model));
         return [...(this.models.length ? [{ id: 'model', label: 'Model', availability }] : []),
           ...(model && Array.isArray(model.supportedReasoningEfforts) && model.supportedReasoningEfforts.length ? [{ id: 'effort', label: 'Thinking level', availability, dependsOn: ['model'] }] : [])];
@@ -102,16 +114,82 @@ export class CodexSession {
         try { dispatched(); const result = await this.client.configure(this.cwd, setting, value); if (!this.ended && revision === this.settingsRevision) { this.applySettings(result); this.publish([]); } }
         finally { this.configuring = false; this.publish([]); }
       },
-    }, () => this.publish([]));
+    };
+    this.configuration = new SessionConfigurationController(this.configurationAdapter, () => this.publish([]));
+    this.commandQueue = new SessionCommandQueue(
+      () => this.idle && !this.renaming && !this.configuration.operations.some(operation => operation.phase === 'queued' || operation.phase === 'applying'),
+      (_id, text, signal, dispatched) => this.runCommand(text, signal, dispatched), () => this.publish([]), 'Codex');
+    const session = this;
+    this.slashCommands = {
+      catalog: commandCatalog(() => this.commandCatalog()),
+      validate: text => this.validateCommand(text),
+      invoke: ({ id, text }) => {
+        const error = this.validateCommand(text); if (error) return Promise.reject(new Error(error));
+        return this.commandQueue.enqueue(id, text, this.state.messages.at(-1)?.key ?? null);
+      },
+      get operations() { return session.commandQueue.operations; },
+      cancel: key => this.commandQueue.cancel(undefined, key),
+    };
+  }
+  private commandCatalog(): SlashCommand[] {
+    const connected = !this.ended && !this.hydrating && !this.state.sessionUnavailable;
+    if (this.commandConnected === connected && this.commandModels === this.models) return this.commandEntries;
+    this.commandConnected = connected; this.commandModels = this.models;
+    return this.commandEntries = connected ? [
+      ...(this.models.length ? [{ name: 'model', description: 'Select the Codex model', source: 'Agent' as const,
+        input: { hint: 'model', choices: this.models.map(model => ({ name: string(model.model), description: string(model.displayName) })) } }] : []),
+      { name: 'rename', description: 'Rename this Codex session', source: 'Agent', input: { hint: 'name' } },
+    ] : [];
+  }
+  private validateCommand(text: string): string | undefined {
+    if (this.ended || this.hydrating || this.state.sessionUnavailable) return 'Connect Codex before invoking commands. Your draft was kept.';
+    const invocation = parseCommand(text), command = invocation && findCommand(this.commandCatalog(), invocation.name);
+    if (!command) return 'This command is not supported by the Codex integration. Nothing was invoked; your draft was kept.';
+    if (invocation!.input?.trim()) {
+      if (command.name === 'model' && !this.models.some(model => model.model === invocation!.input!.trim())) return 'Choose an exact advertised Codex model ID. Your draft was kept.';
+      if (command.name === 'rename') { try { sessionName(invocation!.input!); } catch (error) { return String(error); } }
+    }
+  }
+  private async runCommand(text: string, signal: AbortSignal, dispatched: () => void): Promise<void | boolean> {
+    const error = this.validateCommand(text); if (error) throw new Error(error);
+    const invocation = parseCommand(text)!;
+    let input = invocation.input;
+    this.commandRunning = true;
+    try {
+      if (!input?.trim()) {
+        if (!this.ui.commandInteraction) throw new Error('Codex command interaction is unavailable.');
+        if (invocation.name.toLowerCase() === 'model') {
+          const choices = await this.configurationAdapter.choices('model', {});
+          if (signal.aborted || this.ended) return false;
+          input = await this.ui.commandInteraction.choice('Codex /model', choices.map(choice => ({ id: choice.value, label: choice.label, detail: choice.detail })), signal);
+        } else input = await this.ui.commandInteraction.input('Codex /rename', signal);
+        if (input === undefined || signal.aborted || this.ended) return false;
+      }
+      if (!this.idle || this.renaming) throw new Error('Codex readiness changed while collecting command input. Nothing was invoked.');
+      if (invocation.name.toLowerCase() === 'model') {
+        input = input.trim();
+        await this.configurationAdapter.apply('model', input, () => !signal.aborted && !this.ended, dispatched);
+        if (this.selected.model !== input) throw new CommandUncertain('Codex did not confirm the requested model. Nothing was retried.');
+      } else {
+        const name = sessionName(input);
+        if (signal.aborted || this.ended) return false;
+        dispatched(); await this.rename(name);
+        if (this.state.sessionName !== name) throw new CommandUncertain('A newer Codex name superseded this command. The requested name was not confirmed.');
+      }
+    } catch (error) {
+      if (error instanceof RpcConnectionError) throw new CommandUncertain(String(error));
+      throw error;
+    } finally { this.commandRunning = false; this.publish([]); }
   }
   get hasPendingWork(): boolean {
-    return this.state.busy || this.renaming || this.submitting > 0 || this.configuring
+    return this.state.busy || this.renaming || this.submitting > 0 || this.configuring || this.commandQueue.occupied
       || this.configuration.operations.some(operation => operation.phase === 'queued' || operation.phase === 'applying');
   }
   get idle(): boolean { return !this.ended && !this.hydrating && !this.submitting && !this.configuring && this.client.phase === 'idle'; }
   validatePrompt(text: string): string | undefined {
     if (this.ended || this.hydrating || this.configuring || this.state.sessionUnavailable) return 'Codex is not ready. Your draft was kept.';
-    if (text.trimStart().startsWith('/')) return 'Codex app-server does not advertise CLI slash commands. Nothing was sent; your draft was kept.';
+    if (text.trimStart().startsWith('/')) return 'Use the Codex command interface for slash commands. Nothing was sent; your draft was kept.';
+    if (this.commandQueue.occupied) return 'A Codex command is pending. Your draft was kept.';
     if (this.state.busy && !this.client.activeTurnId) return 'Codex has not identified the active turn yet. Your draft was kept.';
   }
   readonly messageInput: SessionMessageInput = {
@@ -147,7 +225,7 @@ export class CodexSession {
     }
   }
   async handle(message: RpcRecord): Promise<void> {
-    if (message.type === 'stop') { this.asyncQuestions.clear(); this.deferredAsyncItems.clear(); await this.client.interrupt(); }
+    if (message.type === 'stop') { this.commandQueue.cancel(); this.asyncQuestions.clear(); this.deferredAsyncItems.clear(); await this.client.interrupt(); }
     else if (message.type === 'renderError') this.ui.notice(string(message.error));
   }
   receive(packet: unknown): void { this.capture('receive', packet); this.client.receive(packet); }
@@ -329,9 +407,12 @@ export class CodexSession {
   private response(): string | undefined { for (let i = this.state.messages.length - 1; i >= 0; i--) { const row = this.state.messages[i]; if (row.role === 'assistant' && Array.isArray(row.content)) { const text = row.content.map(block => block.text || '').join(''); if (text) return text; } } }
   private receipt(id: string, outcome: 'accepted' | 'rejected' | 'unknown', error?: string): void { this.ui.publish({ type: 'submissionReceipt', id, outcome, error }); }
   private publish(rows?: DisplayMessage[]): void {
-    this.state = { ...this.state, configurationOperations: this.configuration?.operations };
-    const base = this.revision++; this.ui.publish({ type: 'snapshot', state: this.state, commands: [], transcript: { base, revision: this.revision, ...(rows ? { rows } : {}) } });
-    this.ui.changed(); this.configuration?.update();
+    if (this.configurationSource !== this.configuration?.operations || this.commandSource !== this.commandQueue?.operations) {
+      this.configurationSource = this.configuration?.operations; this.commandSource = this.commandQueue?.operations;
+      this.state = { ...this.state, configurationOperations: [...(this.configurationSource ?? []), ...(this.commandSource ?? [])] };
+    }
+    const base = this.revision++; this.ui.publish({ type: 'snapshot', state: this.state, commands: this.commandCatalog(), transcript: { base, revision: this.revision, ...(rows ? { rows } : {}) } });
+    this.ui.changed(); this.configuration?.update(); this.commandQueue?.update();
   }
   private capture(event: string, payload: unknown): void { if (this.ui.transcriptLog?.enabled) this.ui.transcriptLog.append({ source: { backend: 'codex', agent: 'codex' }, sessionId: this.client?.threadId || `connecting:${this.connectionId}`, connectionId: this.connectionId, event, payload }); }
 }

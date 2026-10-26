@@ -1,4 +1,7 @@
 import type { TranscriptLogSink } from '../transcript-logs';
+import { commandCatalog, findCommand, parseCommand, SessionCommandQueue, CommandUncertain, type SessionCommands, type CommandInteraction, type SlashCommand } from '../session-commands';
+import { slashCommands } from './slash-completion';
+import type { ConfigurationOperation } from '../session-configuration';
 import { PiTranscriptLog } from './transcript-logs';
 import { measureWork, type PerformanceProbe, type WorkKind } from '../performance-diagnostics';
 import { DEFAULT_IMAGE_INPUT, validateMessageImages, type SessionMessageInput } from '../session-message-input';
@@ -21,6 +24,8 @@ export interface PreferencePicker {
 }
 
 export interface SessionUi {
+  commandInteraction?: CommandInteraction;
+  inspectMcpCommand?(signal: AbortSignal): Promise<void>;
   transcriptLog?: TranscriptLogSink;
   performance?: PerformanceProbe;
   active?(): boolean;
@@ -44,12 +49,19 @@ const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 export class PiSession {
   state: ConversationState = { ...initialConversationState(), sessionUnavailable: true, temporary: true };
   private commands: unknown[] = [];
+  readonly slashCommands: SessionCommands;
+  private readonly commandQueue: SessionCommandQueue;
+  private configurationSource?: readonly ConfigurationOperation[];
+  private commandSource?: readonly ConfigurationOperation[];
+  private commandRunning = false;
   private transcript = new TranscriptUpdates();
   private mcpTask?: Promise<McpStatusReport>;
   private mcpCapture?: { report?: McpStatusReport };
   private mcpUncertain = false;
   private scope?: ModelReference[];
   private compactionRequest = false;
+  private commandCompacting = false;
+  private compactionFailure?: string;
   private compactionNoticeId?: string;
   private disconnected = false;
   private initialized = false;
@@ -81,7 +93,7 @@ export class PiSession {
     });
     this.configuration = createPiConfiguration(this.model, {
       unavailable: () => this.disconnected || !!this.state.sessionUnavailable,
-      blocked: () => rpc.hasPendingRequest('prompt', 'set_session_name'),
+      blocked: () => this.commandRunning || rpc.hasPendingRequest('prompt', 'set_session_name'),
       scoped: models => scopedModels(models, this.scope),
       changed: () => this.publish(), error: message => this.notice(message),
     });
@@ -93,6 +105,79 @@ export class PiSession {
         if (!this.disconnected) { this.state = { ...this.state, sessionStats }; this.publish(); }
       },
     });
+    this.commandQueue = new SessionCommandQueue(
+      () => !this.disconnected && !this.state.sessionUnavailable && !this.state.busy && !this.state.compacting
+        && !this.state.modelControls.changing && !rpc.hasPendingRequest('prompt', 'set_session_name', 'compact')
+        && !this.configuration.operations.some(operation => operation.phase === 'queued' || operation.phase === 'applying'),
+      (id, text, signal, dispatched) => this.runCommand(id, text, signal, dispatched), () => this.publish(), 'Pi');
+    const session = this;
+    let source: unknown, entries: SlashCommand[] = [];
+    this.slashCommands = {
+      catalog: commandCatalog(() => {
+        const raw = this.disconnected || this.state.sessionUnavailable ? undefined : this.commands;
+        if (source !== raw) { source = raw; entries = raw ? slashCommands(raw) : []; }
+        return entries;
+      }),
+      validate: text => this.validateCommand(text),
+      invoke: ({ id, text }) => {
+        const error = this.validateCommand(text); if (error) return Promise.reject(new Error(error));
+        return this.commandQueue.enqueue(id, text, this.state.messages.at(-1)?.key ?? null);
+      },
+      get operations() { return session.commandQueue.operations; },
+      cancel: key => this.commandQueue.cancel(undefined, key),
+    };
+  }
+  private validateCommand(text: string): string | undefined {
+    if (this.disconnected || this.state.sessionUnavailable) return 'Connect Pi before invoking commands. Your draft was kept.';
+    const invocation = parseCommand(text);
+    if (!invocation || /^(resume|delete|new|fork|clone|tree|reload|quit)$/i.test(invocation.name)) return 'Use the project session controls for session management. Nothing was invoked; your draft was kept.';
+    if (!findCommand(this.slashCommands.catalog().commands, invocation.name)) return 'This command is not advertised by Pi. Nothing was invoked; your draft was kept.';
+  }
+  private async runCommand(id: string, text: string, signal: AbortSignal, dispatched: () => void): Promise<void | boolean> {
+    const error = this.validateCommand(text); if (error) throw new Error(error);
+    const invocation = parseCommand(text)!;
+    this.commandRunning = true;
+    let invoked = false;
+    const dispatch = () => { invoked = true; dispatched(); };
+    try {
+      if (invocation.name.toLowerCase() === 'name') {
+        const name = invocation.input ?? (this.ui.commandInteraction
+          ? await this.ui.commandInteraction.input('Pi /name (blank clears it)', signal)
+          : await this.ui.input('Session name (blank clears it)', this.state.sessionName));
+        if (name === undefined || signal.aborted || this.disconnected) return false;
+        if (/[\r\n]/.test(name)) throw new Error('Session names must be a single line.');
+        dispatch(); await this.rename(name);
+        if ((this.state.sessionName ?? '') !== name.trim()) throw new CommandUncertain('Pi did not confirm the requested session name.');
+      } else if (invocation.name.toLowerCase() === 'compact') {
+        if (signal.aborted) return false;
+        dispatch(); await this.compact({ id, customInstructions: invocation.input }, true);
+      } else if (invocation.name.toLowerCase() === 'mcp' && !invocation.input?.trim()) {
+        if (signal.aborted) return false;
+        dispatch();
+        if (this.ui.inspectMcpCommand) await this.ui.inspectMcpCommand(signal);
+        else this.commandQueue.output(JSON.stringify(await this.inspectMcp(), null, 2));
+      } else {
+        // Refresh advertisement before native command dispatch. Pi's command entry
+        // point is prompt RPC; this is not an unknown-command chat fallback.
+        const catalog = await this.rpc.request('get_commands');
+        const commands = record(catalog.data).commands;
+        if (!Array.isArray(commands)) throw new Error('Pi did not provide its command catalog.');
+        this.commands = commands;
+        if (signal.aborted || this.disconnected) return false;
+        if (!findCommand(slashCommands(commands), invocation.name)) throw new Error('This command is no longer advertised by Pi. Nothing was invoked.');
+        dispatch();
+        const response = await this.rpc.request('prompt', { message: text, streamingBehavior: 'steer' });
+        const disposition = record(response.data).disposition;
+        if (!['handled', 'started', 'queued'].includes(String(disposition))) throw new CommandUncertain('Pi did not report a recognized command disposition. No invocation was replayed.');
+        this.commandQueue.output(disposition === 'handled' ? 'Pi handled the command. Extension-specific effects remain Pi-owned.' : 'Pi accepted the command as agent work. Its conversation continues separately.');
+        let state: JsonRecord = {};
+        await this.rpc.request('get_state', {}, undefined, response => { state = record(response.data); this.applyState(state); });
+        await this.model.initialize(state); this.stats.refresh();
+      }
+    } catch (error) {
+      if (invoked && !(error instanceof RpcResponseError)) throw new CommandUncertain(errorText(error));
+      throw error;
+    } finally { this.commandRunning = false; this.publish(); }
   }
 
   private async chooseModel(models: ModelIdentity[], current: ModelIdentity | null, choose: PreferencePicker['choose']): Promise<ModelIdentity | undefined> {
@@ -182,15 +267,17 @@ export class PiSession {
   }
 
   publish(): void {
-    if (this.configuration && this.state.configurationOperations !== this.configuration.operations) {
-      this.transcriptLog.capture('ui.configuration', { operations: this.configuration.operations }, this.captureSessionId);
-      this.state = { ...this.state, configurationOperations: this.configuration.operations };
+    if (this.configurationSource !== this.configuration?.operations || this.commandSource !== this.commandQueue?.operations) {
+      this.configurationSource = this.configuration?.operations; this.commandSource = this.commandQueue?.operations;
+      const operations = [...(this.configurationSource ?? []), ...(this.commandSource ?? [])];
+      this.transcriptLog.capture('ui.configuration', { operations }, this.captureSessionId);
+      this.state = { ...this.state, configurationOperations: operations };
     }
     const snapshot = this.measure('timeline-projection', () => this.transcript.snapshot(this.state));
     this.measure('snapshot-delivery', () => this.ui.publish({ type: 'snapshot', build: 'Nimrod PoC', commands: this.commands,
       ...snapshot }));
     this.measure('shell-session-update', () => this.ui.changed(this.state));
-    this.configuration?.update();
+    this.configuration?.update(); this.commandQueue?.update();
   }
 
   private async identify(data: JsonRecord): Promise<void> {
@@ -233,13 +320,17 @@ export class PiSession {
       // Model disconnection publishes synchronously. Mark availability first so
       // that intermediate control snapshots cannot resolve a connection notice.
       this.state = { ...this.state, sessionUnavailable: true, extensionStatuses: {}, extensionWidgets: {} };
+      this.commandQueue.cancel(errorText(event.error || 'Pi disconnected'));
       this.configuration.dispose(errorText(event.error || 'Pi disconnected'));
       this.ui.disconnected?.(errorText(event.error || 'Pi disconnected'));
       this.stats.dispose();
       this.model.disconnect();
     }
     if (event.type === 'extension_error') this.notice(`Extension error: ${errorText(event.error)}`);
-    if (event.type === 'compaction_end' && typeof event.errorMessage === 'string') this.notice(`Compaction: ${event.errorMessage}`, 'error', this.compactionNoticeId);
+    if (event.type === 'compaction_end' && typeof event.errorMessage === 'string') {
+      this.compactionFailure = event.errorMessage;
+      if (!this.commandCompacting) this.notice(`Compaction: ${event.errorMessage}`, 'error', this.compactionNoticeId);
+    }
     this.state = this.measure('state-reduction', () => reduceRpcEvent(this.state, event));
     // Pi's prompt preflight emits disposition=started before its first live user
     // event, after image normalization. Correlate by that ordered boundary, never
@@ -291,6 +382,7 @@ export class PiSession {
         case 'prompt': await this.submit(message); break;
         case 'compact': await this.compact(message); break;
         case 'stop':
+          this.commandQueue.cancel();
           this.notificationOutcome = 'aborted';
           if (!this.state.compacting) {
             const response = await this.rpc.request('clear_queue');
@@ -321,7 +413,7 @@ export class PiSession {
     let images;
     try { images = validateMessageImages(message.images, this.messageInput.capabilities()); } catch (error) { receipt('rejected', String(error)); return; }
     if (images.length && text.trim().startsWith('/')) { receipt('rejected', 'Image attachments cannot be sent with slash commands.'); return; }
-    if (!id || (!text.trim() && !images.length) || text.length > 1_000_000 || this.state.sessionUnavailable || this.state.compacting || this.state.modelControls.changing) {
+    if (!id || (!text.trim() && !images.length) || text.length > 1_000_000 || this.commandRunning || this.state.sessionUnavailable || this.state.compacting || this.state.modelControls.changing) {
       receipt('rejected', 'Pi is not ready for this submission. Nothing was sent.'); return;
     }
     if (/^\/(?:resume|delete|new|fork|clone|tree|reload|quit)(?:\s|$)/.test(text.trim())) {
@@ -357,26 +449,29 @@ export class PiSession {
     });
   }
 
-  private async compact(message: JsonRecord): Promise<void> {
+  private async compact(message: JsonRecord, commandOwned = false): Promise<void> {
     const id = typeof message.id === 'string' ? message.id : '';
     const customInstructions = typeof message.customInstructions === 'string' ? message.customInstructions.trim() : undefined;
-    const receipt = (outcome: 'accepted' | 'rejected' | 'unknown', error?: string) => this.ui.publish({ type: 'submissionReceipt', id, outcome, error, noticeCause: `compaction:${id}`, operation: 'Compact context' });
+    const receipt = (outcome: 'accepted' | 'rejected' | 'unknown', error?: string) => { if (!commandOwned) this.ui.publish({ type: 'submissionReceipt', id, outcome, error, noticeCause: `compaction:${id}`, operation: 'Compact context' }); };
     if (!id || (message.customInstructions !== undefined && typeof message.customInstructions !== 'string') || (customInstructions?.length ?? 0) > 1_000_000 || this.compactionRequest || this.rpc.hasPendingRequest('prompt', 'set_session_name') || this.state.sessionUnavailable || this.state.busy || this.state.compacting) {
+      if (commandOwned) throw new Error('Manual compaction is available only while Pi is idle. Nothing was sent.');
       receipt('rejected', 'Manual compaction is available only while Pi is idle. Nothing was sent.'); return;
     }
-    this.compactionRequest = true; this.compactionNoticeId = `compaction:${id}`;
+    this.compactionRequest = true; this.commandCompacting = commandOwned; this.compactionFailure = undefined; this.compactionNoticeId = `compaction:${id}`;
     this.state = { ...this.state, busy: true, compacting: true, status: 'Compacting context…' };
     this.publish();
     try {
       // Compaction can require a provider round-trip; only Pi's explicit response resolves its acceptance.
       await this.rpc.request('compact', customInstructions ? { customInstructions } : {}, 0);
+      if (commandOwned && this.compactionFailure) throw new RpcResponseError(this.compactionFailure);
       this.contextRefreshNeeded = true;
       receipt('accepted');
       if (!this.state.busy && !this.state.compacting) void this.refreshContext();
     } catch (error) {
       if (this.state.compacting) this.state = { ...this.state, busy: false, compacting: false };
+      if (commandOwned) throw error;
       receipt(error instanceof RpcResponseError ? 'rejected' : 'unknown', errorText(error));
-    } finally { this.compactionRequest = false; this.compactionNoticeId = undefined; }
+    } finally { this.compactionRequest = false; this.commandCompacting = false; this.compactionNoticeId = undefined; }
   }
 
   private notice(text: string, severity: 'error' | 'warning' | 'info' = 'error', cause?: string): void {

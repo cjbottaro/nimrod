@@ -62,7 +62,7 @@ test('session action contributions expose only the owning integration operations
   assert.deepEqual(acpSessionActions(undefined), []);
 });
 
-function fixture(interaction: ConversationViewHost['interaction'] = acpInteraction('Fixture', () => undefined), options: Pick<ConversationViewHost, 'cardSource' | 'cardRenderer'> = {}) {
+function fixture(interaction: ConversationViewHost['interaction'] = acpInteraction('Fixture', () => undefined), options: Pick<ConversationViewHost, 'cardSource' | 'cardRenderer' | 'commands' | 'promptSubmitted'> = {}) {
   const dom = new JSDOM(webviewHtml(), { runScripts: 'outside-only', pretendToBeVisual: true });
   const win = dom.window;
   const frames = new Map<number, FrameRequestCallback>(); let frameId = 0;
@@ -84,6 +84,36 @@ function fixture(interaction: ConversationViewHost['interaction'] = acpInteracti
   const view = (win as unknown as { testView: ConversationView }).testView;
   return { dom, win, sent, snapshot, receive, view, flush };
 }
+
+test('registered slash consumer bypasses legacy policy and ordinary Send effects, retaining its card and newer draft', async () => {
+  let submissions = 0, text = '', accept = true;
+  const commands: import('../src/session-commands').SessionCommands = {
+    catalog: () => ({ revision: 1, commands: [{ name: 'report', source: 'Agent', description: 'Report' }] }),
+    validate: () => accept ? undefined : 'Not advertised', operations: [], cancel() {},
+    async invoke(invocation) { text = invocation.text; },
+  };
+  const interaction = { ...acpInteraction('Fixture', () => undefined), prepare(): never { throw new Error('Slash commands must not use legacy submission policy'); } };
+  const f = fixture(interaction, { commands, promptSubmitted: () => { submissions++; } });
+  try {
+    f.snapshot({ sessionUnavailable: false, messages: [] });
+    const prompt = f.win.document.querySelector<HTMLTextAreaElement>('#prompt')!;
+    const type = (value: string) => { prompt.value = value; prompt.dispatchEvent(new f.win.Event('input')); };
+    prompt.focus(); type('/report literal  arguments ');
+    prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    assert.equal(text, '/report literal  arguments '); assert.equal(prompt.value, '');
+    assert.equal(submissions, 0); assert.equal(f.sent.some(message => message.type === 'prompt'), false);
+    type('Newer draft');
+    const operation = { key: 'command', title: 'Fixture command', text, phase: 'applying' as const };
+    f.snapshot({ messages: [], configurationOperations: [operation] });
+    const card = f.win.document.querySelector('.message.configuration')!;
+    f.snapshot({ messages: [], configurationOperations: [{ ...operation, phase: 'completed', commandOutput: [{ text: '**Report**', markdown: true }] }] });
+    assert.equal(f.win.document.querySelector('.message.configuration'), card);
+    assert.equal(card.querySelector('.command-output strong')?.textContent, 'Report');
+    assert.equal(prompt.value, 'Newer draft'); assert.equal(f.win.document.activeElement, prompt);
+    accept = false; type('/report'); prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    assert.equal(prompt.value, '/report');
+  } finally { f.view.dispose(); f.dom.window.close(); }
+});
 
 for (const embedded of [false, true]) for (const dirty of [false, true]) test(`owning card source survives retained ${embedded ? 'embedded' : 'standalone'} tool updates (${dirty ? 'dirty' : 'full'})`, () => {
   let mounts = 0, disposals = 0;

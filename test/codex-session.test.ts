@@ -69,6 +69,62 @@ test('native Codex rename is exact-thread, ordered and does not overwrite newer 
   } finally { f.session.disconnect('done'); }
 });
 
+test('Codex command catalog and model picker use native configuration, not prompts or Nimrod actions', async () => {
+  const f = fixture(undefined, { commandInteraction: {
+    async choice(title, choices) { assert.equal(title, 'Codex /model'); return choices[0].id; }, async input() { return undefined; },
+  } });
+  try {
+    await f.session.initialize(cwd);
+    assert.deepEqual(f.session.slashCommands.catalog().commands.map(command => command.name), ['model', 'rename']);
+    const commands = f.session.slashCommands;
+    await commands.invoke({ id: 'model', text: '/model' });
+    assert.equal(commands.operations.at(-1)?.phase, 'completed');
+    assert.equal(f.session.configuration.get('model'), 'fixture-model');
+    assert.equal(f.sent.filter(packet => packet.method === 'thread/resume').length, 1);
+    assert.equal(f.sent.some(packet => ['turn/start', 'turn/steer'].includes(String(packet.method))), false);
+    assert.equal(f.session.state.messages.length, 0);
+    assert.match(commands.validate('/model nonexistent')!, /advertised/);
+    assert.match(commands.validate('/compact')!, /not supported/);
+    assert.equal(commands.validate('/model fixture-model '), undefined, 'Tab completion adds a trailing space');
+  } finally { f.session.disconnect('done'); }
+});
+test('Codex rename command waits for terminal idle, confirms its native name and keeps one card', async () => {
+  const f = fixture((packet, reply) => { if (packet.method !== 'thread/name/set') return false; reply({}); return true; });
+  try {
+    await f.session.initialize(cwd); f.event('turn/started', { turn: turn() });
+    const running = f.session.slashCommands.invoke({ id: 'rename', text: '/rename Command name' });
+    const key = f.session.slashCommands.operations.at(-1)!.key;
+    assert.equal(f.session.slashCommands.operations.at(-1)?.phase, 'queued');
+    assert.equal(f.sent.some(packet => packet.method === 'thread/name/set'), false);
+    f.event('turn/completed', { turn: turn('completed') }); await running;
+    assert.equal(f.session.state.sessionName, 'Command name');
+    assert.equal(f.session.slashCommands.operations.at(-1)?.key, key);
+    assert.equal(f.session.slashCommands.operations.at(-1)?.phase, 'completed');
+    assert.equal(f.sent.filter(packet => packet.method === 'thread/name/set').length, 1);
+    assert.equal(f.sent.some(packet => ['turn/start', 'turn/steer'].includes(String(packet.method))), false);
+  } finally { f.session.disconnect('done'); }
+});
+test('Codex command picker cancellation and stale model choice never dispatch a mutation', async () => {
+  for (const selection of [undefined, 'revoked-model']) {
+    const f = fixture(undefined, { commandInteraction: { choice: async () => selection, input: async () => undefined } });
+    try {
+      await f.session.initialize(cwd); await f.session.slashCommands.invoke({ id: 'cancel', text: '/model' });
+      assert.equal(f.sent.some(packet => packet.method === 'thread/resume'), false);
+      assert.equal(f.session.slashCommands.operations.at(-1)?.phase, selection === undefined ? undefined : 'failed');
+      assert.equal(f.notices.length, 0, 'the command card owns errors');
+    } finally { f.session.disconnect('done'); }
+  }
+});
+test('Codex command disconnect after mutation dispatch reports uncertainty and never retries', async () => {
+  const f = fixture((packet, _reply, session) => {
+    if (packet.method !== 'thread/name/set') return false;
+    queueMicrotask(() => session.disconnect('Lost command response')); return true;
+  });
+  await f.session.initialize(cwd); await f.session.slashCommands.invoke({ id: 'unknown', text: '/rename Unconfirmed' });
+  assert.equal(f.session.slashCommands.operations.at(-1)?.phase, 'unknown');
+  assert.equal(f.sent.filter(packet => packet.method === 'thread/name/set').length, 1);
+});
+
 const asyncItem = (id = 'async-question') => ({ type: 'agentMessage', id, delivery: 'async', text: 'Which?\n- A\n- B', questions: [{ title: 'Which?', options: ['A', 'B'] }] });
 
 test('Codex async questions survive completion, deduplicate terminal snapshots, and answer through idle turn/start', async () => {

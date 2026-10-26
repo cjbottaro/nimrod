@@ -62,9 +62,11 @@ finalize the harness command rather than redirecting to a similar Nimrod action.
 Unknown or ambiguous operations fail explicitly without prompt fallback,
 automatic replay or invented parity.
 
-This policy applies equally to Pi, Copilot, curated future integrations and
-generic ACP agents. It does not require every harness to expose slash commands
-or identical command capabilities. Concrete references own documented
+This policy applies equally to Pi, Copilot, Codex, curated future integrations and
+generic ACP agents. Every registration must implement the [required command
+consumer port](session-commands.md), with an explicitly rejecting empty catalog
+when unsupported. It does not require identical command capabilities or a common
+native command protocol. Concrete references own documented
 exceptions and verification evidence; for example, [Copilot slash
 commands](copilot-commands.md) records the pinned CLI's missing bare `/model`
 picker projection and its narrow adapter.

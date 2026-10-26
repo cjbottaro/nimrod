@@ -2,20 +2,18 @@ import { DEFAULT_AUTOCOMPLETE_ACCEPT, type AutocompleteAccept } from '../autocom
 import { matchSlashCommands } from "./slash-matching";
 import { installInlineCompletion } from './inline-completion';
 
-export interface SlashCommand {
-  name: string; description: string; source: "GUI" | "Extension" | "Template" | "Skill" | "Agent";
-  input?: { hint: string; required?: boolean; choices?: { name: string; description: string }[]; valueHint?: string };
-}
+import type { SlashCommand } from '../session-commands';
+export type { SlashCommand } from '../session-commands';
 
 export function slashCommands(raw: unknown): SlashCommand[] {
   const commands = new Map<string, SlashCommand>([
-    ["name", { name: "name", description: "Rename this Pi session", source: "GUI" }],
-    ["compact", { name: "compact", description: "Compact the active context", source: "GUI" }],
+    ["name", { name: "name", description: "Rename this Pi session", source: "GUI", input: { hint: "name" } }],
+    ["compact", { name: "compact", description: "Compact the active context", source: "GUI", input: { hint: "focus" } }],
   ]);
   if (Array.isArray(raw)) for (const value of raw) {
     if (!value || typeof value !== "object") continue;
     const { name, description, source } = value as Record<string, unknown>;
-    if (typeof name !== "string" || !name || /[\s\u0000-\u001f]/.test(name) || name.startsWith("/") || commands.has(name)) continue;
+    if (typeof name !== "string" || !name || /[\s\u0000-\u001f]/.test(name) || name.startsWith("/") || /^(resume|delete|new|fork|clone|tree|reload|quit)$/.test(name) || commands.has(name)) continue;
     commands.set(name, { name, description: typeof description === "string" ? description : "Pi command", source: source === "skill" ? "Skill" : source === "prompt" ? "Template" : "Extension" });
   }
   return [...commands.values()];

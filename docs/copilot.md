@@ -361,8 +361,9 @@ stay within the current connection and are not restored on Close/Resume.
 Invoked skills appear as one [skill disclosure](reading-conversations.md): the
 skill command is collapsed by default, with any arguments visible below it.
 Expand it to read the injected skill instructions and related-file context.
-Successful recognized skill invocations replace their temporary command card
-with that user turn; failed or unconfirmed commands retain their outcome card.
+The Command card retains the invocation's transition/outcome separately from
+that native user turn; it does not duplicate the injected skill body. Text and
+Markdown command reports stay inside their original Command card.
 Resumed expanded skill turns use the same presentation.
 
 New commands work automatically when they use supported SDK metadata and

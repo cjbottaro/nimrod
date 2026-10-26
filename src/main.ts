@@ -866,6 +866,7 @@ function createTab(request: SessionRequest, project = harnesses.get(harnesses.de
     projectDirectory: workspace,
     interaction: integration.conversation.interaction,
     messageInput: integration.conversation.messageInput,
+    commands: integration.commands,
     sendAutoFollow: () => preferences.sendAutoFollow(),
     autocompleteAccept: () => preferences.autocompleteAccept(),
     performance: settingsSurface.performanceProbe,
@@ -1027,7 +1028,10 @@ function cancelConfiguration(tab: Tab, key?: string): void {
   if (!tabs.includes(tab) || tab.ended || tab.closing || tab.reloading || tab.deleting || blocked(tab)) return;
   const configuration = sessionConfiguration(tab);
   const target = key ?? configuration?.operations.find(operation => operation.cancellable)?.key;
-  if (target) configuration?.cancel?.(target);
+  if (target) {
+    if (tab.integration.commands.operations.some(operation => operation.key === target)) tab.integration.commands.cancel(target);
+    else configuration?.cancel?.(target);
+  }
 }
 async function pickConfigurationCancellation(tab: Tab): Promise<void> {
   const configuration = sessionConfiguration(tab);

@@ -10,6 +10,7 @@ import { bundledCopilotPlugin } from './card-plugins';
 import { defineHarness } from '../harness-registry';
 import { configurationActions, noProjectActions, noReferences, ordinarySelection, savedClose, taggedSavedSessions } from '../harness-defaults';
 import { conversationPort } from '../harness-conversation';
+import { bindSessionCommands } from '../session-commands';
 import { ownedProcessStop } from '../session-lifecycle';
 import type { HarnessProject, HarnessSession, SessionRequest } from '../harness-contract';
 import type { HarnessProjectHost, HarnessSessionHost } from '../harness-host';
@@ -123,6 +124,7 @@ function createCopilotSession(host: HarnessSessionHost, request: SessionRequest,
     actions: { current: () => configurationActions(copilotSessionActions(backend.session), { model: 'model', thinking: 'effort', mode: 'mode', 'context-window': 'context-tier' }), async control() { throw new Error('This Copilot control is no longer available'); } },
     presentation: { snapshot: () => ({ harnessLabel: 'Copilot', badge: 'Copilot', badgeTitle: '', busy: backend.session?.state.busy === true,
       working: backend.session?.state.busy === true, pending: backend.session?.state.busy === true, compacting: false, queuePending: false, destructiveBusy: backend.session?.hasPendingWork === true }) },
+    commands: bindSessionCommands(() => backend.session?.slashCommands, () => lifetime.current() && !owner.starting && !owner.ended && !lifetime.closing() && !lifetime.reloading() && !lifetime.deleting()),
     naming: { async rename(name) {
       if (lifecycle.connection !== 'connected' || !backend.session) throw new Error('Resume this Copilot session before renaming it.');
       await backend.session.rename(name);

@@ -19,6 +19,7 @@ Pi is primary; curated integrations are bespoke-first: Pi native RPC and the pin
 | Pi coordinator/transport | Ordered RPC, identity and result correlation | [Pi transport](pi-transport.md) |
 | Experimental ACP integration | Separate native ownership/JSON-RPC/session semantics; shared presentation, not Pi events | [ACP POC](acp-harnesses.md) |
 | Shared view / harness UI contributions | Presentation mechanics with integration-owned interaction policies, controls and actions | [Harness presentation and rationale](harness-presentation.md) |
+| Harness commands | Required consumer port, shared command presentation and concrete native execution | [Session commands](session-commands.md) |
 | Transcript/composer | Incremental presentation and user intent | [Cards](transcript-cards.md), [scroll/focus](transcript-interaction.md), [composer](composer.md) |
 | Rust host | Window/token ownership, pipes, shutdown and file validation | [Projects/sessions](projects-and-sessions.md), [Pi transport](pi-transport.md) |
 | Settings/state | JSONC preferences and separate app-managed bookkeeping | [Preferences](preferences.md) |

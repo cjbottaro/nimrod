@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { commandInteraction } from '../command-interaction';
 import { CopilotPermissionInteraction } from './permission-interaction';
 import { CopilotQuestionInteraction } from './question-interaction';
 import { CopilotPlanInteraction } from './plan-interaction';
@@ -51,23 +52,11 @@ export function copilotIntegrationUi(host: HarnessSessionHost) {
       changed: effects.input, banner: (count, review) => banner('plan', count, review), error: message => error('Plan feedback', message) });
     const choice = plans.request(request, signal); attention(signal); return choice;
   }
-  const commandCurrent = (signal: AbortSignal) => valid() && lifetime.selected() && !lifetime.settingsOpen() && !lifetime.deleting() && !signal.aborted;
+  const commands = commandInteraction(host);
   return {
     decision,
-    async commandChoice(title: string, choices: readonly import('./commands').CommandChoice[], signal: AbortSignal) {
-      if (!commandCurrent(signal) || ui.document.querySelector('dialog[open]')) return;
-      const request = ui.palette.startSelection(title, () => {}, undefined, true); if (!request) return;
-      const cancel = () => request.cancel(); signal.addEventListener('abort', cancel, { once: true });
-      try { const selected = await request.chooseItems(choices); return commandCurrent(signal) ? selected : undefined; }
-      finally { signal.removeEventListener('abort', cancel); request.finish(); }
-    },
-    async commandInput(title: string, signal: AbortSignal) {
-      const owner = `${host.id}:copilot-command-input`;
-      if (!commandCurrent(signal) || ui.document.querySelector('dialog[open]')) return;
-      const cancel = () => ui.dialogs.cancel(owner); signal.addEventListener('abort', cancel, { once: true });
-      try { const value = await ui.dialogs.input(title, undefined, owner, 'Run command'); return commandCurrent(signal) ? value : undefined; }
-      finally { signal.removeEventListener('abort', cancel); }
-    },
+    commandChoice: commands.choice,
+    commandInput: commands.input,
     setActive(active: boolean) { permissions?.setActive(active); questions?.setActive(active); plans?.setActive(active); },
     dispose() { permissions?.dispose(); questions?.dispose(); plans?.dispose(); },
   };

@@ -1,4 +1,5 @@
 import { sessionName } from '../session-naming';
+import { commandCatalog, type SessionCommands } from '../session-commands';
 import { validateMessageImages, type SessionMessageInput } from '../session-message-input';
 import type { ImageContent } from '../image-attachments';
 import { copilotImageCapabilities, copilotUserContent, type CopilotImageModel } from './image-input';
@@ -121,9 +122,17 @@ export class CopilotSession {
         return !this.ended && !this.state.sessionUnavailable && !this.configuring && !this.commandOperation
           && (!this.state.busy || command?.allowDuringAgentExecution === true);
       },
-      (id, text, signal, dispatched) => this.runCommand(id, text, { signal }, dispatched), () => this.publish([]));
+      (id, text, signal, dispatched) => this.runCommand(id, text, { signal }, dispatched), () => this.publish([]), 'Copilot');
     this.usage = new CopilotUsageController(() => this.connection.request('usage', {}, 'reject'), () => this.publish([]),
       () => this.configuring ? Promise.resolve(null) : this.connection.request('context', {}, 'reject'));
+    const session = this;
+    this.slashCommands = {
+      catalog: commandCatalog(() => this.ended || this.state.sessionUnavailable ? [] : this.commands),
+      validate: text => this.validatePrompt(text) || (!parseCopilotCommand(text) ? 'A harness slash command is required.' : undefined),
+      invoke: ({ id, text }) => this.handle({ type: 'command', id, text }),
+      get operations() { return session.commandQueue.operations; },
+      cancel: key => this.commandQueue.cancel(undefined, key),
+    };
     this.updateStatusArea();
   }
   get hasPendingWork(): boolean {
@@ -182,6 +191,7 @@ export class CopilotSession {
     capabilities: () => copilotImageCapabilities(this.models.find(model => model.id === this.model)),
     submit: message => this.handle({ ...message, type: 'prompt' }),
   };
+  readonly slashCommands: SessionCommands;
   invokeCommand(text: string): Promise<void> {
     const error = this.validatePrompt(text);
     if (error || !text.trimStart().startsWith('/')) return Promise.reject(new Error(error || 'A harness slash command is required.'));
@@ -231,10 +241,8 @@ export class CopilotSession {
       this.disconnect(`Copilot delivery was not confirmed: ${String(error)}`);
     }
   }
-  private commandOutput(text: string, command: string, markdown = false, error = false): void {
-    const key = `copilot:command:${crypto.randomUUID()}`;
-    this.replace(key, { key, role: 'command', originLabel: `Copilot command · /${command}`, isError: error,
-      content: [{ type: markdown ? 'text' : 'raw', text }] });
+  private commandOutput(text: string, _command: string, markdown = false): void {
+    this.commandQueue.output(text, markdown);
   }
   private async runCommand(id: string, text: string, operation: { signal: AbortSignal }, dispatched: () => void): Promise<void | boolean> {
     const invocation = parseCopilotCommand(text)!;
@@ -376,9 +384,7 @@ export class CopilotSession {
           const skill = command.kind === 'skill' ? parseCopilotSkillInvocation(result.prompt) : undefined;
           const skillTurn = skill?.label === `/${command.name}`;
           await this.sendPrompt(id, result.prompt, skillTurn ? result.prompt : result.displayPrompt);
-          // The recognized expanded user turn now owns the skill presentation.
-          // Keep the command's unknown-outcome card if delivery disconnected.
-          if (skillTurn && !this.ended && !operation.signal.aborted) return false;
+          // The command transition keeps its card; native turns own agent work.
           return;
         } else if (result.kind === 'set-model') {
           if (result.commandApplied !== true || !record(result.configuration)) throw new Error('Copilot returned an incomplete applied model command.');

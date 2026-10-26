@@ -90,9 +90,10 @@ test('text commands invoke the SDK once, render labelled output, and never becom
     assert.equal(f.session.validatePrompt('Newer draft') !== undefined, true);
     f.reply({ kind: 'text', text: '<literal> permission report', markdown: false }); await handling;
     assert.equal(f.session.state.configurationOperations?.[0].settlementAnchor, null);
-    const output = f.session.state.messages[0];
-    assert.equal(output.role, 'command'); assert.match(output.originLabel!, /Copilot command/);
-    assert.deepEqual(output.content, [{ type: 'raw', text: '<literal> permission report' }]);
+    const output = f.session.slashCommands.operations[0];
+    assert.equal(output.title, 'Copilot command');
+    assert.deepEqual(output.commandOutput, [{ text: '<literal> permission report', markdown: false }]);
+    assert.deepEqual(f.session.state.messages, [], 'output stays inside the retained Command card');
     assert.equal(f.sent.some(request => request.method === 'prompt'), false);
     assert.equal(f.session.canSubmit, true);
     assert.equal(f.published.some(message => message.type === 'submissionMessage'), false);
@@ -109,9 +110,11 @@ for (const captured of readOnlyCommands) test(`captured read-only /${captured.na
     assert.equal(f.sent.at(-1)?.name, captured.command.name);
     assert.equal(f.sent.at(-1)?.input, captured.input);
     f.reply(captured.result); await handling;
-    const output = f.session.state.messages.at(-1)!;
-    assert.equal(output.role, 'command');
-    assert.equal(output.originLabel, `Copilot command · /${captured.command.name}`);
+    const output = f.session.slashCommands.operations.at(-1)!;
+    assert.equal(output.phase, 'completed');
+    assert.equal(output.text, text);
+    assert.ok(output.commandOutput?.length);
+    assert.equal(f.session.state.messages.length, 0);
     assert.equal(f.sent.some(request => request.method === 'prompt' || request.method === 'configure'), false);
     assert.deepEqual(f.completions, []);
   } finally { f.session.disconnect('fixture complete'); }
@@ -124,7 +127,7 @@ for (const captured of localStateCommands) test(`captured local-state /${capture
     const handling = f.session.handle({ type: 'command', id: captured.name, text });
     if (captured.event) f.session.receive({ kind: 'event', event: { id: `event-${captured.name}`, ...captured.event } });
     f.reply(captured.result); await handling;
-    assert.equal(f.session.state.messages.at(-1)?.role, 'command');
+    assert.ok(f.session.slashCommands.operations.at(-1)?.commandOutput?.length);
     assert.equal(f.sent.some(request => request.method === 'prompt' || request.method === 'configure'), false);
     if (captured.event?.type === 'session.title_changed') assert.equal(f.session.state.sessionName, 'Renamed fixture');
   } finally { f.session.disconnect('fixture complete'); }
@@ -217,7 +220,7 @@ test('bare commands with advertised arguments open a picker before invoking, eve
     assert.equal(f.sent.at(-1)!.name, 'perms'); assert.equal(f.sent.at(-1)!.input, 'show');
     f.reply({ kind: 'text', text: 'Permission report' }); await handling;
     assert.equal(f.sent.filter(request => request.method === 'command').length, 1);
-    assert.equal(f.session.state.messages[0].role, 'command');
+    assert.equal(f.session.slashCommands.operations[0].commandOutput?.[0].text, 'Permission report');
     const explicit = f.session.handle({ type: 'command', id: 'explicit', text: '/permissions show' });
     f.reply({ kind: 'text', text: 'Explicit report' }); await explicit;
     assert.equal(f.sent.filter(request => request.method === 'command').length, 2);
@@ -344,7 +347,7 @@ test('harness subcommand choices invoke only the explicitly selected argument', 
     f.reply({ kind: 'select-subcommand', command: 'permissions', title: 'Permissions', options: catalog[0].input.choices }); await flush();
     assert.equal(f.sent.at(-1)!.input, 'show');
     f.reply({ kind: 'text', text: '**Permissions**', markdown: true }); await handling;
-    assert.deepEqual(f.session.state.messages[0].content, [{ type: 'text', text: '**Permissions**' }]);
+    assert.deepEqual(f.session.slashCommands.operations[0].commandOutput, [{ text: '**Permissions**', markdown: true }]);
     assert.equal(f.sent.filter(request => request.method === 'command').length, 2);
   } finally { f.session.disconnect('fixture complete'); }
 });
@@ -393,7 +396,7 @@ test('new catalog commands work mechanically; unknown, malformed and unsupported
     assert.equal(f.sent.some(request => ['prompt', 'configure'].includes(request.method)), false);
     const done = f.session.handle({ type: 'command', id: 'done', text: '/future' });
     f.reply({ kind: 'completed', message: 'Completed without model work' }); await done;
-    assert.equal(f.session.state.messages.at(-1)?.role, 'command');
+    assert.ok(f.session.slashCommands.operations.at(-1)?.commandOutput?.length);
     f.session.receive({ kind: 'command-error', error: 'Discovery unavailable' });
     assert.deepEqual(f.session.commands, []); assert.equal(f.session.canSubmit, true);
   } finally { f.session.disconnect('fixture complete'); }
@@ -441,7 +444,7 @@ test('only an explicit interactive agent-prompt result sends model work', async 
   } finally { f.session.disconnect('fixture complete'); }
 });
 
-for (const withArguments of [false, true]) test(`recognized skill prompt replaces the command card and survives user echo (${withArguments ? 'arguments' : 'no arguments'})`, async () => {
+for (const withArguments of [false, true]) test(`recognized skill prompt retains the command transition and survives user echo (${withArguments ? 'arguments' : 'no arguments'})`, async () => {
   const f = await fixture(undefined, [{ name: 'review-pr', aliases: ['review'], kind: 'skill' }]);
   try {
     const body = 'The user explicitly invoked the "/review-pr" skill. Follow its instructions now.\n\nBase directory for this skill: /fixture/review-pr\n\n# Review\n\nRead the diff.';
@@ -456,7 +459,8 @@ for (const withArguments of [false, true]) test(`recognized skill prompt replace
     assert.equal(f.sent.filter(request => request.method === 'prompt').length, 1);
     f.session.receive({ kind: 'event', event: { id: 'skill-echo', type: 'user.message', data: { content: prompt } } });
     f.reply({ messageId: 'accepted' }, 'prompt'); await handling;
-    assert.equal(f.session.state.configurationOperations!.length, 0, 'successful recognized skills have one user turn, not a duplicate command card');
+    assert.equal(f.session.state.configurationOperations!.length, 1, 'the command transition remains separate from its native user turn');
+    assert.equal(f.session.slashCommands.operations[0].phase, 'completed');
     assert.equal(f.session.state.messages.length, 1);
     assert.equal(f.session.state.messages[0].key, user.key);
     assert.equal(f.session.state.messages[0].content, prompt);

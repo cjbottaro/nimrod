@@ -10,6 +10,8 @@ import { codexToolPlugin } from './card-plugins';
 import { defineHarness } from '../harness-registry';
 import { configurationActions, noProjectActions, explicitSelection, noReferences, savedClose, taggedSavedSessions } from '../harness-defaults';
 import { conversationPort } from '../harness-conversation';
+import { bindSessionCommands } from '../session-commands';
+import { commandInteraction } from '../command-interaction';
 import type { HarnessProject, HarnessSession, SessionRequest } from '../harness-contract';
 import type { HarnessProjectHost, HarnessSessionHost } from '../harness-host';
 
@@ -69,7 +71,7 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
         if (failure.kind === 'cleanup') effects.notice({ id: 'codex-cleanup', operation: 'Stop Codex', message: failure.message, details: failure.details });
         else effects.connection(failure.message, failure.resumable, failure.details);
       } },
-    ui: { transcriptLog: host.transcriptLog, publish: effects.publish,
+    ui: { transcriptLog: host.transcriptLog, publish: effects.publish, commandInteraction: commandInteraction(host),
       changed: state => {
         let title = effects.title();
         if (state.sessionName) title = state.sessionName;
@@ -119,10 +121,11 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
         await lifecycle.connect({ acceptedAction: true });
       },
     },
+    commands: bindSessionCommands(() => backend.session?.slashCommands, () => lifetime.current() && !owner.starting && !owner.ended && !lifetime.closing() && !lifetime.reloading() && !lifetime.deleting()),
     naming: { async rename(name) {
       if (lifecycle.connection !== 'connected' || !backend.session) throw new Error('Resume this Codex session before renaming it.');
       await backend.session.rename(name);
     } },
-    close: savedClose, selection: explicitSelection, interactions: ui, references: noReferences,
+    close: savedClose, selection: explicitSelection, interactions: { setActive(active) { if (!active) backend.session?.slashCommands.cancel(); ui.setActive(active); }, dispose() { backend.session?.slashCommands.cancel(); ui.dispose(); } }, references: noReferences,
   };
 }

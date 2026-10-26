@@ -16,6 +16,7 @@ Read repository `AGENTS.md`, `README.md`, the
 [features skill](../features/SKILL.md), and:
 
 - [Architecture](../features/references/architecture.md)
+- [Required session command port](../features/references/session-commands.md)
 - [Harness command ownership](../features/references/harness-presentation.md#harness-command-ownership)
 - [Composer](../features/references/composer.md)
 - [Operation cards](../features/references/operation-cards.md)
@@ -42,11 +43,23 @@ and known built-ins; do not pretend a snapshot is exhaustive forever.
 | --- | --- | --- |
 | Pi | [Pi slash commands](references/pi.md) | Current flagship integration |
 | Copilot | [Copilot slash commands](references/copilot.md) | Current built-in SDK integration |
+| Codex | [Codex client commands](references/codex.md) | Bounded app-server-backed client catalog |
 | Generic ACP | [Generic ACP command baseline](references/generic-acp.md) | Retained internal baseline; no current product entry point |
 
 When adding another supported harness, create `references/<harness>.md` and add
 it to this table. Concrete feature references continue to own protocol details;
 the matrix links them rather than duplicating full lifecycle specifications.
+
+## Required integration contract
+
+Every `HarnessSession` must implement `SessionCommands` through its required
+`commands` slot. The [consumer-port reference](../features/references/session-commands.md)
+owns API/lifetime, concrete mappings, code map and fixture locations. Registered
+composers use that port for catalog, validation, invocation and cancellation;
+`ConversationInteraction.prepare/commands` remains a legacy standalone-view
+compatibility path, not a way to bypass the required product-session port.
+Extract shared UI/queue mechanics, not a universal native result protocol.
+Use an explicit rejecting empty-catalog implementation when unsupported.
 
 ## Non-negotiable ownership
 

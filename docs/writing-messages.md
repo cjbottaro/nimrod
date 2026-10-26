@@ -60,11 +60,17 @@ Stop keeps the process alive. Use [Reload session](sessions.md#reload-session) f
 
 ## Slash commands and compaction
 
-Type `/` for suggestions discovered from Pi.
+Type `/` for suggestions discovered from Pi. Supported commands use one retained
+Command card, without an ordinary Send preview, sidebar-recency bump or forced
+transcript navigation. Accepted commands wait for Pi's main agent to become idle;
+Escape in a command picker cancels before invocation. Unknown commands keep the
+draft and are not sent as chat. [Codex](codex.md#slash-commands) and
+[Copilot](copilot.md#slash-commands) use the same command presentation with their
+own catalogs and native execution semantics.
 
 - `/name` names the session.
 - Bare `/mcp` opens the read-only [MCP inspector](mcp.md), without a model request, conversation turn, sidebar-recency bump or transcript navigation. Explicit subcommands still go to Pi.
-- `/compact` is available only while idle and may include optional instructions.
+- `/compact` executes at idle and may include optional instructions. If submitted during work, its Command card waits for idle.
 - Automatic and manual compaction are visible and lock the composer until complete.
 - Session-management commands such as `/resume` and Pi's `/reload` are unavailable; use Nimrod's session actions instead. Unsupported commands are rejected rather than silently sent as chat.
 - Images cannot be combined with slash commands; the draft remains intact.

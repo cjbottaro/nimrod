@@ -2,6 +2,19 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
+## Session command port
+
+Required `HarnessSession.commands` registration/registry forwarding, shared
+composer validation/invocation/card cancellation, retained command output and
+Pi/Copilot/Codex/retained-ACP adapters are source-implemented. Codex exposes only
+reviewed native-API-backed `/model` and `/rename` client commands, not full CLI
+parity. New/updated shared, composer, type/registry, Pi, Codex and Copilot offline
+fixtures are authored **unrun**. The mandatory post-merge compile check is pending.
+No tests, builds, app launches, installed-CLI probes, live compaction or model
+requests were run for this task. Native model override confirmation and
+macOS/Linux interaction/focus/scroll acceptance remain outstanding.
+[Session commands](session-commands.md) owns the contract/code/fixture map.
+
 ## Registered harness application contract
 
 **Rename session follow-up:** required `SessionNaming` port, palette/configurable shortcut/native row menu, Pi/Copilot/Codex native mutations and explicit ACP rejection are source-implemented. New normalization, registry/type, shell, native-operation/order/error, offline bridge and Rust validation/deletion-gate fixtures are authored **unrun**. The mandatory post-merge compile check is the only automatic validation; no build, app launch, live session mutation or native/platform acceptance is implied. [Session naming](session-naming.md) owns the behavior and fixture map.

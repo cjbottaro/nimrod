@@ -38,6 +38,8 @@ button { color:var(--nimrod-button-foreground, var(--vscode-button-foreground));
 .transcript-image img { display:block; max-width:100%; max-height:360px; width:auto; height:auto; border-radius:6px; }
 .steering-status { font-size:.78em; color:var(--vscode-descriptionForeground); margin-bottom:6px; }
 .configuration-text { white-space:pre-wrap; overflow-wrap:anywhere; }
+.command-output { margin-top:8px; min-width:0; }
+.command-output-text { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; margin:0; }
 .delivery-status-text { display:inline-block; font:inherit; font-weight:normal; text-transform:uppercase; letter-spacing:.05em; }
 .operation-header { display:flex; align-items:baseline; gap:12px; margin-bottom:6px; }
 .operation-header > .steering-status { margin-bottom:0; }

@@ -136,7 +136,7 @@ class PrototypeSession implements HarnessSession {
   get lifecycle() { return this.inner.lifecycle; } get conversation() { return this.inner.conversation; }
   get presentation() { return this.inner.presentation; } get configuration() { return this.inner.configuration; }
   get actions() { return this.inner.actions; } get reload() { return this.inner.reload; }
-  get deletion() { return this.inner.deletion; }
+  get deletion() { return this.inner.deletion; } get commands() { return this.inner.commands; }
   get close() { return this.inner.close; } get drafts() { return this.inner.drafts; }
   get selection() { return this.inner.selection; } get interactions() { return this.inner.interactions; }
   get references() { return this.inner.references; } get naming() { return this.inner.naming; }

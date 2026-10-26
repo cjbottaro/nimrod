@@ -62,6 +62,7 @@ export interface HarnessSession {
   /** Required behavior, not an optional capability or an unsupported default. */
   readonly reload: SessionReload;
   readonly naming: SessionNaming;
+  readonly commands: import('./session-commands').SessionCommands;
   /** Live integration-owned removal intent. Undefined explicitly means unsupported. */
   readonly deletion: { current(): SessionDeletionIntent | undefined };
   readonly close: SessionClosePolicy;

@@ -18,6 +18,12 @@ function compileAssertions(session: HarnessSession, project: HarnessProject, reg
   const { conversation, ...withoutConversation } = session;
   // @ts-expect-error Core input/output cannot be omitted or supplied by the project shell.
   const missingConversation: HarnessSession = withoutConversation;
+  const { commands, ...withoutCommands } = session;
+  // @ts-expect-error Commands are a required consumer port, even for an empty catalog.
+  defineHarness({ ...registration, create: () => ({ ...project, create: () => withoutCommands }) });
+  // @ts-expect-error Discovery alone cannot stand in for invocation/lifetime handling.
+  const incompleteCommands: HarnessSession['commands'] = { catalog: commands.catalog };
+  void incompleteCommands;
   const { naming, ...withoutNaming } = session;
   // @ts-expect-error Every factory must supply an executable naming consumer port.
   defineHarness({ ...registration, create: () => ({ ...project, create: () => withoutNaming }) });

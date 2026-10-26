@@ -64,6 +64,13 @@ Canonical protocol/lifecycle: [Copilot commands](../../features/references/copil
 | `/session rename` | Metadata advertises `rename`, but omits the required second free-form `<name>` argument; direct invocation returns a usage error | Present the shared input modal as a Copilot-owned interaction, revalidate the command, then invoke exact `/session rename <name>` | Remove when command metadata/results expose the nested free-form input |
 | `/config` | Terminal TUI command is absent from `commands.list()` and direct invocation returns unknown-command; SDK settings metadata omits nested paths and UI schema | Synthesize a Copilot-owned client command from `user.settings.get/set`, public model metadata and a pinned path-only nested-key supplement; validate/confirm every write | Replace the supplement and curated choices when Copilot exposes its structured settings registry through the SDK |
 
+The [required session command port](../../features/references/session-commands.md)
+now carries registered composer discovery/validation/invocation/cancellation.
+Generic text/Markdown output stays inside the same retained Command card;
+agent-prompt transitions retain their card separately from native user/assistant
+history. Shared queue/modal mechanics are extracted; SDK results and adapters
+remain Copilot-owned. New/updated fixtures are authored, not run.
+
 ## Presentation compatibility
 
 All advertised command classes use the shared [inline argument completion](../../features/references/composer.md#shared-slash-completion): native hints remain placeholders, literal choices support prefix/Tab completion and arrow cycling, and command-name suggestions remain a menu. Acceptance follows the global/project composer preference: Tab only is the default, leaving Enter to submission; Tab or Enter also accepts partial/arrow-selected completions, with exact typed matches submitting directly. No command-specific argument grammar or skill-body parsing is introduced. Source/fixtures are implemented; latest native acceptance is pending.

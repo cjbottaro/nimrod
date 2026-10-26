@@ -9,6 +9,7 @@ import { acpToolPlugin } from './card-plugins';
 import { defineHarness } from '../harness-registry';
 import { configurationActions, noProjectActions, noHistory, noDeletion, noReferences, noSavedSessions, ordinarySelection } from '../harness-defaults';
 import { conversationPort } from '../harness-conversation';
+import { bindSessionCommands } from '../session-commands';
 import { ownedProcessStop } from '../session-lifecycle';
 import type { HarnessProjectHost, HarnessSessionHost } from '../harness-host';
 import type { HarnessSession, SessionRequest } from '../harness-contract';
@@ -95,6 +96,7 @@ function createAcpSession(host: HarnessSessionHost, _request: SessionRequest, pr
       async control(id) { const option = backend.session?.controlOption(id); if (!option) throw new Error('This ACP option is no longer available'); await pick(option); } },
     presentation: { snapshot: () => ({ harnessLabel: `${profile.name} ACP`, badge: `${profile.name} · ACP POC`, badgeTitle: '', busy: backend.session?.state.busy === true,
       working: backend.session?.state.busy === true, pending: backend.session?.client.phase === 'working', compacting: false, queuePending: false, destructiveBusy: backend.session?.state.busy === true }) },
+    commands: bindSessionCommands(() => backend.session?.slashCommands, () => lifetime.current() && !owner.starting && !owner.ended && !lifetime.closing() && !lifetime.reloading() && !lifetime.deleting()),
     naming: { async rename() { throw new Error('Rename session is not supported by this ACP integration.'); } },
     // This dormant adapter has no saved-identity/Resume implementation.
     deletion: { current: () => undefined },
@@ -102,7 +104,7 @@ function createAcpSession(host: HarnessSessionHost, _request: SessionRequest, pr
       detail: 'Reload requires an exact saved session', confirmation: '', needsConfirmation: () => false,
       async run() { throw new Error('ACP saved-session Resume is not implemented'); } },
     close: { alwaysConfirm: true, label: 'Close ACP session', message: 'This stops this ACP agent and discards Nimrod’s in-memory transcript, draft and pop-outs. Nimrod cannot resume it in this POC. The agent may keep its own saved history; this does not delete it.' },
-    selection: ordinarySelection, references: noReferences, interactions: { setActive() {}, dispose() { cancelOption?.(); } }, drafts: { durability: 'memory' },
+    selection: ordinarySelection, references: noReferences, interactions: { setActive(active) { if (!active) backend.session?.slashCommands.cancel(); }, dispose() { backend.session?.slashCommands.cancel(); cancelOption?.(); } }, drafts: { durability: 'memory' },
   };
 }
 function permission(host: HarnessSessionHost, label: string, request: AcpPermissionRequest, signal: AbortSignal): Promise<string | undefined> {
