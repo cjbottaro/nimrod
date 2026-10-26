@@ -24,6 +24,14 @@ Shared shell, mounted views and optimistic Send are unchanged. Updated fixtures
 are unrun; native acceptance remains pending. [Harness presentation](harness-presentation.md)
 owns the integration boundary.
 
+## Session durability policy
+
+[Session durability and untouched-session continuity](session-durability.md) owns
+the accepted cross-harness policy for runtime IDs versus saved history, local
+session/draft continuity before first persistence, and conservative replacement
+rules. Implementation convergence is pending; the current saved-identity mechanics
+below do not establish that every adapter meets that policy.
+
 ## Specification and acceptance criteria
 
 One canonical directory per window with independently owned sessions. New is persistent by default, saved identity gates submission/Reload, exact-file resume never falls back, and temporary disposal never leaks drafts into persistence.

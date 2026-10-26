@@ -46,6 +46,12 @@ Ordinary `connect` options carry only accepted-action context. Pi-only initial n
 
 ### Lifecycle guarantees
 
+[Session durability](session-durability.md) defines the accepted product policy
+and the pending distinction between local continuity, runtime identity and a
+confirmed saved-history reference. The current port guarantees below are not
+proof that every adapter has identified its actual durable-save boundary; future
+interface changes must preserve that distinction and compatibility explicitly.
+
 - `identity`, `key` and `draftScope` are unavailable until the integration has a durable identity; disconnection does not erase them. Keys are scoped to the project. Saved Pi and tagged Copilot records keep their existing encoding; no history migration.
 - `connection` is a projection: starting takes precedence, then a non-ended available controller is connected. It is not inferred from sidebar membership or native token presence.
 - `eligibility()` is selection/reconnection policy, not general permission to create a session. The shell adds window/membership/selection gates; implementations retain their concrete availability/deletion gates.

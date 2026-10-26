@@ -59,6 +59,19 @@ This is **nearer to shared core-workflow parity**, not a claim of native accepta
 
 Future extraction must remove actual consumer knowledge or move responsibility. Do not introduce a giant `Harness` interface or translate Codex events into Pi/ACP events just to reuse types. Native supervision registries remain concrete; only the proven process-group exit primitive is shared in this change.
 
+## Untouched-session persistence anomaly
+
+The accepted shared [session durability policy](../features/references/session-durability.md)
+owns uniform local continuity, durability evidence and safe replacement rules for
+all harnesses. Codex 0.164.0 can return a non-ephemeral ID before saving a thread;
+Nimrod currently promotes it to `savedSessionId` immediately. An observed
+create-without-Send → restart → reconnect failed with `no rollout found`.
+This remains an implementation gap: distinguish runtime identity from saved
+history, preserve local drafts, and only create a fresh thread for a session
+positively known to be untouched. Do not recover arbitrary missing saved threads
+by silently starting replacements. The policy record is not a runtime fix or
+native acceptance claim.
+
 ## Startup binding anomaly
 
 [Startup binding and cleanup diagnostics](references/startup.md) records the user's 0.164.0 successful native thread creation followed by a local draft-scope rejection, and a secondary cleanup error masking that cause. Codex scopes must be accepted by both the actual shared frontend draft store and native staging/deletion boundaries, not merely supplied by a lifecycle adapter. The fix preserves the first failure and adds scoped cleanup/phase diagnostics; the native EPERM mechanism and post-fix startup remain acceptance gaps. No history cleanup or sandbox-policy weakening is implied.

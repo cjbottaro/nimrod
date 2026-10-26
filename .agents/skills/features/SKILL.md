@@ -33,6 +33,12 @@ Generic ACP is not the ceiling or mandatory route for curated harnesses. Use sup
 
 Each bespoke backend is an alternative controller for that harness, not a second concurrent controller of the same live session. Do not promise seamless ACP/SDK switching until session identity, history, configuration and ownership interoperability are verified. Harnesses remain authoritative, and controls must reflect actual capabilities rather than approximating Pi semantics.
 
+For session creation, persistence, reconnect, Resume, Reload or new harness work,
+read [session durability and untouched-session continuity](references/session-durability.md).
+It records the accepted cross-harness policy: uniform local continuity without
+confusing a runtime ID with durable saved history. Existing adapters must be
+reviewed against it; implementation convergence remains pending.
+
 ## Changelog and release policy
 
 For requests to generate, prepare, cut, ship, publish or retry a release, load the dedicated [release skill](../release/SKILL.md). It requires a concrete version/source/changelog/platform/validation preview and a subsequent explicit approval before release metadata edits, tags or publication. Ordinary task commit/merge authorization does not bypass that gate.
@@ -61,6 +67,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Required cross-harness command port, registration enforcement and shared composer/card mechanics | [Session commands](references/session-commands.md) | [Writing messages](../../../docs/writing-messages.md#slash-commands-and-compaction), [Codex commands](../../../docs/codex.md#slash-commands) |
 | Slash-command ownership, lifecycle, generic result handling, reconciliation, audits and adapter criteria | [Slash commands skill](../slash-commands/SKILL.md), [shared ownership](references/harness-presentation.md#harness-command-ownership) | Integration-specific user guides |
 | Copilot command discovery, argument suggestions, harness-owned modal choices and command output | [Copilot slash commands](references/copilot-commands.md) | [Copilot commands](../../../docs/copilot.md#slash-commands) |
+| Cross-harness session durability, untouched-session restart continuity and safe replacement policy | [Session durability](references/session-durability.md) | — (internal policy; implementation pending) |
 | Project identity, recent projects, required cross-harness Reload session lifecycle and draft storage | [Projects/sessions](references/projects-and-sessions.md) | [Projects](../../../docs/projects.md), [Sessions](../../../docs/sessions.md) |
 | Ordering, pinning, native row menus, activation, connection and cleanup selection | [Session navigation](references/session-navigation.md) | [Sidebar navigation](../../../docs/session-sidebar.md#ordering-and-navigation) |
 | Required Rename session action, native naming APIs and target-bound errors | [Session naming](references/session-naming.md) | [Rename a session](../../../docs/sessions.md#rename-a-session) |
