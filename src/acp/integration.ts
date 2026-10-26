@@ -7,7 +7,7 @@ import { renderPermissionDetails } from './tool-state';
 import type { AcpPermissionRequest } from './client';
 import { acpToolPlugin } from './card-plugins';
 import { defineHarness } from '../harness-registry';
-import { configurationActions, noProjectActions, noHistory, noDeletion, noReferences, noSavedSessions, ordinarySelection, unsupportedRestart } from '../harness-defaults';
+import { configurationActions, noProjectActions, noHistory, noDeletion, noReferences, noSavedSessions, ordinarySelection } from '../harness-defaults';
 import { conversationPort } from '../harness-conversation';
 import { ownedProcessStop } from '../session-lifecycle';
 import type { HarnessProjectHost, HarnessSessionHost } from '../harness-host';
@@ -33,7 +33,7 @@ function createAcpSession(host: HarnessSessionHost, _request: SessionRequest, pr
   const stopToken = ownedProcessStop(token => invoke('stop_acp', { token }));
   const lifecycle = acpSessionLifecycle(() => owner, backend, { connect, stop: stopToken, gate: () => ready() && !project.deletionPending() && !lifetime.deleting() ? 'ready' : 'blocked' });
   async function connect(options: import('../session-lifecycle').ConnectSessionOptions) {
-    if (!ready() || project.deletionPending() || !lifetime.current() || !lifetime.available(options) || lifetime.restarting() || owner.starting || backend.session && !owner.ended) return;
+    if (!ready() || project.deletionPending() || !lifetime.current() || !lifetime.available(options) || lifetime.reloading() || owner.starting || backend.session && !owner.ended) return;
     owner.starting = true; effects.changed();
     try { await lifecycle.stop(); } catch (error) { owner.starting = false; effects.connection(`Could not stop the previous ACP process: ${error}`); effects.changed(); return; }
     if (!lifetime.current() || lifetime.closing()) { owner.starting = false; return; }
@@ -95,7 +95,10 @@ function createAcpSession(host: HarnessSessionHost, _request: SessionRequest, pr
       async control(id) { const option = backend.session?.controlOption(id); if (!option) throw new Error('This ACP option is no longer available'); await pick(option); } },
     presentation: { snapshot: () => ({ harnessLabel: `${profile.name} ACP`, badge: `${profile.name} · ACP POC`, badgeTitle: '', busy: backend.session?.state.busy === true,
       working: backend.session?.state.busy === true, pending: backend.session?.client.phase === 'working', compacting: false, queuePending: false, destructiveBusy: backend.session?.state.busy === true }) },
-    restart: unsupportedRestart('Restart session — unavailable in the ACP POC'),
+    // This dormant adapter has no saved-identity/Resume implementation.
+    reload: { available: () => false, reason: () => 'Reload session — ACP saved-session Resume is not implemented',
+      detail: 'Reload requires an exact saved session', confirmation: '', needsConfirmation: () => false,
+      async run() { throw new Error('ACP saved-session Resume is not implemented'); } },
     close: { alwaysConfirm: true, label: 'Close ACP session', message: 'This stops this ACP agent and discards Nimrod’s in-memory transcript, draft and pop-outs. Nimrod cannot resume it in this POC. The agent may keep its own saved history; this does not delete it.' },
     selection: ordinarySelection, references: noReferences, interactions: { setActive() {}, dispose() { cancelOption?.(); } }, drafts: { durability: 'memory' },
   };

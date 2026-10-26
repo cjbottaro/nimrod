@@ -1,5 +1,5 @@
 import type { ConversationInteraction } from './conversation-view-host';
-import type { HarnessAction, HarnessActionMetadata, HarnessHistory, HarnessSavedSessions, SessionClosePolicy, SessionInteractions, SessionRestart, SessionSelectionPolicy } from './harness-contract';
+import type { HarnessAction, HarnessActionMetadata, HarnessHistory, HarnessSavedSessions, SessionClosePolicy, SessionInteractions, SessionSelectionPolicy } from './harness-contract';
 import type { HarnessSessionHost } from './harness-host';
 import type { SessionDeletionSource } from './session-deletion-operation';
 import { savedDraftScope } from './draft-scope';
@@ -12,7 +12,6 @@ export const noConfiguration = Object.freeze({ current: () => undefined });
 export const noReferences = Object.freeze({ file: () => undefined });
 export const noHistory = (): HarnessHistory => ({ source: () => undefined, associate() {}, async dispose() {} });
 export const noDeletion = (): SessionDeletionSource => ({ pending: false, operation: () => undefined });
-export const unsupportedRestart = (reason: string): SessionRestart => ({ supported: false, reason });
 export const explicitSelection: SessionSelectionPolicy = { deferRestored: true,
   releasesDeferral: intent => intent === 'explicit' || intent === 'row' || intent === 'notification' };
 export const ordinarySelection: SessionSelectionPolicy = { deferRestored: false, releasesDeferral: intent => intent !== 'startup' };

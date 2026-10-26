@@ -51,7 +51,7 @@ Apply this to every new or modified ordinary modal, including previews and dynam
 
 ## Confirmation actions
 
-`src/dialog-actions.ts` shares plain action labels and non-visual `aria-keyshortcuts`. Buttons contain label text only; no Enter SVG, Esc text or hint-specific styling. Picker-row hints are unchanged. `Dialogs.confirm` accepts an optional action label after owner; shell Close/Restart provide explicit labels, Pi retains Confirm. Input/select calls clear shortcut metadata and reset the generic label.
+`src/dialog-actions.ts` shares plain action labels and non-visual `aria-keyshortcuts`. Buttons contain label text only; no Enter SVG, Esc text or hint-specific styling. Picker-row hints are unchanged. `Dialogs.confirm` accepts an optional action label after owner; shell Close/Reload provide explicit labels, Pi retains Confirm. Input/select calls clear shortcut metadata and reset the generic label.
 
 `navigateDialogActions` shares footer-button navigation across host input/select/confirm dialogs, deletion review, keybinding recorder/reset dialogs and Pi's editor overlay. Unmodified Left/Up move backward and Right/Down move forward in DOM order, wrapping between enabled, non-hidden/non-inert Cancel and accept buttons. Navigation changes focus only, with no activation or scrolling; disabled Delete is skipped during loading. Repeated arrows can move focus; composing/keyCode-229 arrows are consumed without movement. Arrows from text fields, selects, the shortcut-recording input and other content retain their existing behavior; modified arrows are untouched. Palette pickers retain their existing list navigation (they have no Cancel/accept footer pair).
 

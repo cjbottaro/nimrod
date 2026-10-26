@@ -1,5 +1,5 @@
 import { defineHarness } from '../../src/harness-registry';
-import { explicitSelection, noConfiguration, noInteractions, noReferences, savedClose, taggedSavedSessions, unsupportedRestart, displayUnsupportedInteraction } from '../../src/harness-defaults';
+import { explicitSelection, noConfiguration, noInteractions, noReferences, savedClose, taggedSavedSessions, displayUnsupportedInteraction } from '../../src/harness-defaults';
 import { genericInteraction } from '../../src/harness-defaults';
 import { genericCards } from '../../src/card-renderers';
 import { savedDraftScope } from '../../src/draft-scope';
@@ -79,7 +79,18 @@ function session(host: HarnessSessionHost, request: SessionRequest, remember: (r
     actions: { current: () => [{ id: 'harness-fixture-question', label: 'Display fixture question', detail: 'Display-only unsupported interaction', async run() {
       displayUnsupportedInteraction(host, { id: 'fixture-question', title: 'Fixture question', text: 'Which option should the agent use?', raw: { choices: ['A', 'B'] } });
     } }], async control() { throw new Error('No fixture configuration controls'); } },
-    restart: unsupportedRestart('Fixture restart is unsupported'), close: savedClose, selection: explicitSelection,
+    reload: {
+      available: () => !!reference, reason: () => reference ? 'Reload session' : 'Reload session — no saved identity',
+      detail: 'Reload the offline fixture conversation', confirmation: 'Reload this fixture session?', needsConfirmation: () => false,
+      async run() {
+        if (!reference) throw new Error('No fixture saved identity');
+        await lifecycle.stop(); host.effects.retire(); host.effects.publish({ type: 'sessionDisconnected' });
+        lifecycle.disconnect('Session reloaded');
+        host.effects.publish({ type: 'sessionReset', composerState: host.drafts.read() });
+        await lifecycle.connect({ acceptedAction: true });
+      },
+    },
+    close: savedClose, selection: explicitSelection,
     interactions: noInteractions, references: noReferences, drafts: { durability: 'persistent' },
   };
 }

@@ -64,7 +64,7 @@ Authored **unrun** regressions: `test/session-recency.test.ts` covers zero-origi
 - Final run/process failures use existing `attention('failed')`. Startup/resume/stop/restart notices also flag the session through `showNotice`. Generic extension notifications and isolated tool errors are not failures.
 - A new non-compacting, available busy run clears a prior failure. Explicit relaunch clears it at its start; a failed launch/stop restores it. Merely reading never clears it. There is no manual dismiss in this first pass.
 - Desktop notification settings/focus suppression do not govern sidebar membership. No new OS alerts are emitted by the sidebar itself.
-- Existing token, close/restart and unload guards remain authoritative; do not derive failure from arbitrary status strings or infer semantics from historical messages.
+- Existing token, close/reload and unload guards remain authoritative; do not derive failure from arbitrary status strings or infer semantics from historical messages.
 
 ## Stable ordering and selection
 
@@ -109,7 +109,7 @@ is measured in the shown pane.
   inbox contains other rows but none is selected.
 - An empty Unread view has no conversation, empty-project buttons or
   prompts. Keep the Project bar and sidebar (including its working/idle status).
-  Clear the session-mode badge; disable Restart/Delete; omit selected-session
+  Clear the session-mode badge; disable Reload/Delete; omit selected-session
   palette actions and ignore Cmd/Ctrl+W when no conversation is presented.
 - Hide, never unload: suspend renderer geometry through `setActive(false)` and
   retain DOM, drafts, disclosures, follow intent/reader position and live children.

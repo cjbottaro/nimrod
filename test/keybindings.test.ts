@@ -47,7 +47,12 @@ test('defaults distinguish creation, named creation, open-session switching and 
   assert.deepEqual(bindingsFor('switch-session', {}), ['primary+t']);
   assert.equal(ACTIONS.some(action => action.defaults.some(binding => String(binding) === 'primary+p')), false);
   assert.deepEqual(bindingsFor('resume', {}), ['primary+k']);
-  assert.deepEqual(bindingsFor('restart', {}), ['primary+r']);
+  assert.deepEqual(bindingsFor('reload', {}), ['primary+r']);
+  const legacy = readKeyOverrides({ restart: ['primary+j'] });
+  assert.deepEqual(bindingsFor('reload', legacy), ['primary+j']);
+  assert.deepEqual(bindingsFor('reload', readKeyOverrides({ restart: ['primary+j'], reload: [] })), []);
+  assert.deepEqual(changeBinding(legacy, 'reload', undefined, false, true), { reload: undefined, restart: undefined });
+  assert.deepEqual(changeBinding(legacy, 'reload', [], false, true), { reload: [], restart: undefined });
   assert.deepEqual(bindingsFor('keybindings', {}), []);
   assert.deepEqual(bindingsFor('project-settings', {}), ['primary+shift+,']);
   assert.deepEqual(bindingsFor('settings', {}), ['primary+,']);
@@ -63,7 +68,7 @@ test('defaults distinguish creation, named creation, open-session switching and 
   assert.deepEqual(bindingsFor('select-theme', { 'select-theme': ['primary+j'] }), ['primary+j']);
   assert.deepEqual(bindingsFor('select-theme', { 'select-theme': [] }), []);
   assert.equal(ACTIONS.some(action => ['demo', 'file', 'new-acp', 'acp-options'].includes(action.id)), false);
-  for (const id of ['restart', 'keybindings', 'new-copilot'] as const) {
+  for (const id of ['reload', 'keybindings', 'new-copilot'] as const) {
     assert.deepEqual(bindingsFor(id, { [id]: [] }), []);
     assert.deepEqual(bindingsFor(id, { [id]: ['primary+j'] }), ['primary+j']);
   }
@@ -254,6 +259,21 @@ test('preferences save per-action JSONC patches against fresh snapshots, retain 
     await p.saveKeybinding('new', undefined, false, true); assert.equal(p.keybindings().new, undefined);
     await p.saveKeybinding('model', ['primary+n'], true, true); assert.deepEqual(p.keybindings().new, []);
     await p.resetKeybindings(); assert.deepEqual(p.keybindings(), {}); assert.equal(parseSettings(host.value.text).future, true); assert.match(host.value.text, /preserve/);
+  } finally { p.dispose(); dom.window.close(); }
+});
+
+test('Reload reads legacy shortcut overrides and retires the legacy key on individual reset without rewriting other JSONC', async () => {
+  const dom = new JSDOM('', { url: 'http://fixture' }), host = new MemoryPreferences();
+  const original = '{ // keep comment\n "keybindings": {"restart":["primary+j"], "future-action":[]}, "future": true }';
+  host.value.text = original; host.value.state.legacyMigrated = true;
+  const p = await installPreferences(host, dom.window.localStorage, () => {});
+  try {
+    assert.deepEqual(bindingsFor('reload', p.keybindings()), ['primary+j']);
+    assert.equal(host.value.text, original, 'read is not a settings migration');
+    await p.saveKeybinding('reload', undefined, false, true);
+    assert.deepEqual(bindingsFor('reload', p.keybindings()), ['primary+r']);
+    assert.equal(p.keybindings().restart, undefined); assert.equal(p.keybindings().reload, undefined);
+    assert.deepEqual(p.keybindings()['future-action'], []); assert.match(host.value.text, /keep comment/);
   } finally { p.dispose(); dom.window.close(); }
 });
 

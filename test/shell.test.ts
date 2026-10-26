@@ -35,6 +35,9 @@ interface ShellOptions {
   copilotHistory?: JsonRecord[];
   codexHistory?: JsonRecord[];
   codexStartError?: string;
+  codexConversation?: boolean;
+  harnessStop?: (harness: 'copilot' | 'codex', token: string) => Promise<void>;
+  harnessResumeError?: string;
   harnessInitializationGate?: Promise<void>;
   catalogError?: string;
   globalSettings?: boolean;
@@ -282,10 +285,12 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       }
       if (command === 'stop_copilot') {
         if (!args.token) await options.harnessInitializationGate;
+        if (args.token) await options.harnessStop?.('copilot', String(args.token));
         sdkSessions.delete(String(args.token)); return 'sdk-generation';
       }
       if (command === 'stop_codex') {
         if (!args.token) await options.harnessInitializationGate;
+        if (args.token) await options.harnessStop?.('codex', String(args.token));
         codexSessions.delete(String(args.token)); return 'codex-generation';
       }
       if (command === 'start_codex') {
@@ -299,7 +304,16 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         const send = (value: JsonRecord) => target.channel.onmessage({ kind: 'rpc', value });
         if (request.method === 'initialize') send({ id: request.id, result: { userAgent: 'offline-codex' } });
         else if (request.method === 'thread/list') send({ id: request.id, result: { data: options.codexHistory || [], nextCursor: null } });
-        else assert.equal(request.method, 'initialized', 'history must not create/resume a thread or start a turn');
+        else if (options.codexConversation && ['thread/start', 'thread/resume'].includes(String(request.method))) {
+          if (request.method === 'thread/resume' && options.harnessResumeError) {
+            send({ id: request.id, error: { code: -32000, message: options.harnessResumeError } }); return;
+          }
+          const params = request.params as JsonRecord;
+          send({ id: request.id, result: { cwd: workspace, thread: { id: params.threadId ?? 'codex-fixture', cwd: workspace,
+            ephemeral: false, parentThreadId: null, turns: [], status: { type: 'idle' } }, model: 'fixture', reasoningEffort: 'low' } });
+        } else if (options.codexConversation && ['model/list', 'thread/turns/list'].includes(String(request.method))) {
+          send({ id: request.id, result: { data: [], nextCursor: null } });
+        } else assert.equal(request.method, 'initialized', 'history must not create/resume a thread or start a turn');
         return;
       }
       if (command === 'write_copilot') {
@@ -317,6 +331,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
           options.copilotHistory = options.copilotHistory?.filter(session => session.sessionId !== request.sessionId);
         } else if (request.method === 'connect') {
           await options.copilotLoadGate;
+          if (request.sessionId && options.harnessResumeError) { send({ kind: 'result', id: request.id, error: options.harnessResumeError }); return; }
           target.sessionId = String(request.sessionId ?? 'sdk-fixture');
           send({ kind: 'connected', sessionId: target.sessionId, model: { modelId: 'fixture' }, models: [],
             events: request.sessionId ? [
@@ -420,7 +435,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   return { dom, win, tick, calls, element, openSettings, back, preferences, openPalette, rows, rowMenu,
     confirm: async () => { await tick(); element<HTMLDialogElement>('host-dialog').close('ok'); await tick(); await tick(); },
     saved: (): { drafts: Record<string, any>; last: unknown } => ({ drafts: Object.fromEntries([...nativeDrafts].filter(([, record]) => record.value !== null).map(([key, record]) => [key, record.value])), last: preferences.value.state['nimrod.last-session.v1'] }),
-    sessions, acpSessions, sdkSessions,
+    sessions, acpSessions, sdkSessions, codexSessions,
     deletionEvent: (event: DeletionEvent, target?: string) => deletionEvent?.(event, target),
     projectPicker: (target?: string) => projectPicker?.(target),
     linkError: (message: string, target?: string) => linkError?.(message, target),
@@ -477,7 +492,7 @@ test('registered project metadata without a live handler stays unavailable inste
   } finally { f.win.close(); }
 });
 
-test('a registration unknown to the shell creates, sends, displays fallback questions, closes, resumes and deletes through unchanged consumers', async () => {
+test('a registration unknown to the shell creates, sends, reloads, displays fallback questions, closes, resumes and deletes through unchanged consumers', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project', fixtureHarness: true });
   const enter = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
   const search = (text: string) => { const input = f.element<HTMLInputElement>('palette-input'); input.value = text; input.dispatchEvent(new f.win.Event('input')); };
@@ -495,6 +510,12 @@ test('a registration unknown to the shell creates, sends, displays fallback ques
     assert.match(f.win.document.querySelector('.session-view:not([hidden])')!.textContent!, /Fixture tool/);
     assert.match(f.win.document.querySelector('.session-view:not([hidden])')!.textContent!, /unknown fixture item/);
     prompt.value = 'Preserve newer draft'; prompt.dispatchEvent(new f.win.Event('input')); await f.tick();
+    const root = prompt.closest('.session-view');
+    f.openPalette(); search('Reload session'); enter(); await f.tick(); await f.tick();
+    assert.equal(f.element('prompt'), prompt); assert.equal(prompt.closest('.session-view'), root);
+    assert.equal(prompt.value, 'Preserve newer draft'); assert.equal(f.rows().length, 1);
+    assert.equal(f.win.document.querySelectorAll('.message.user').length, 1, 'reload never resubmits input');
+    assert.equal((f.preferences.value.state['nimrod.tabs.v1:/project'] as typeof layout).tabs[0].sessionId, sessionId);
     f.openPalette(); search('Display fixture question'); enter(); await f.tick(); await f.tick();
     assert.match(f.win.document.querySelector('.session-view:not([hidden])')!.textContent!, /Which option should the agent use/);
     assert.equal(prompt.value, 'Preserve newer draft');
@@ -733,7 +754,7 @@ test('SDK sidebar identity, title, recency and draft survive reopening with sele
     prompt.dispatchEvent(new first.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await first.tick();
     first.element<HTMLButtonElement>('send').click(); await first.tick(); await first.tick();
-    prompt.value = 'Draft after restart'; prompt.dispatchEvent(new first.win.Event('input'));
+    prompt.value = 'Draft after reload'; prompt.dispatchEvent(new first.win.Event('input'));
     await first.tick(); await first.tick();
     appState = structuredClone(first.preferences.value.state);
     nativeDrafts = structuredClone(first.saved().drafts);
@@ -746,13 +767,13 @@ test('SDK sidebar identity, title, recency and draft survive reopening with sele
     assert.equal(layout.tabs[0].name, 'Copilot sidebar title');
     assert.equal('path' in layout.tabs[0], false, 'Copilot identity is not a Pi path');
     assert.equal('env' in layout.tabs[0], false, 'launch environment is not persisted');
-    assert.equal((nativeDrafts[scope] as { draft: string }).draft, 'Draft after restart');
+    assert.equal((nativeDrafts[scope] as { draft: string }).draft, 'Draft after reload');
   } finally { first.win.close(); }
   const f = await fixture(undefined, { windowWorkspace: '/project', appState, nativeDrafts });
   try {
     assert.equal(f.rows().length, 1);
     assert.match(f.rows()[0].textContent!, /Copilot sidebar title.*Copilot/);
-    assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Draft after restart');
+    assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Draft after reload');
     assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, 2, 'project discovery and the selected conversation start independently');
     const messages = () => f.calls.filter(call => call.command === 'write_copilot').map(call => call.args.message as JsonRecord);
     assert.equal(messages().find(message => message.method === 'connect')?.sessionId, 'sdk-fixture');
@@ -760,7 +781,7 @@ test('SDK sidebar identity, title, recency and draft survive reopening with sele
     const used = (f.preferences.value.state[key] as { tabs: { lastUsed: number }[] }).tabs[0].lastUsed;
     assert.equal(messages().some(message => message.method === 'prompt'), false);
     assert.match(f.element('messages').textContent!, /Saved Copilot question.*Saved Copilot answer/s);
-    assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Draft after restart');
+    assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Draft after reload');
     assert.equal((f.preferences.value.state[key] as { tabs: { lastUsed: number }[] }).tabs[0].lastUsed, used, 'replay is not local use');
     assert.equal(f.calls.some(call => call.command === 'notify_session'), false);
     const writes = f.calls.filter(call => call.command === 'preferences_state').length;
@@ -818,7 +839,7 @@ test('missing Copilot executable retains the sidebar identity and draft and supp
   } finally { f.win.close(); }
 });
 
-test('shared lifecycle preserves mixed sidebar membership independently of connection and Pi-only Restart', async () => {
+test('shared lifecycle preserves mixed sidebar membership independently of connection and reload availability', async () => {
   const key = 'nimrod.tabs.v1:/project', path = '/sessions/pi.jsonl', scope = copilotSdkScope('fixture-id');
   const f = await fixture(undefined, { windowWorkspace: '/project', appState: { [key]: {
     tabs: [
@@ -832,12 +853,12 @@ test('shared lifecycle preserves mixed sidebar membership independently of conne
     assert.equal(f.calls.filter(call => call.command === 'start_pi').length, 1);
     assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, 1);
     assert.equal(layout().tabs.length, 2);
-    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, false);
+    assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, false);
     f.rows()[1].click(); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, 2);
-    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, true);
+    assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, false);
     assert.equal(layout().active, scope);
-    assert.equal(layout().tabs.length, 2, 'disabling Restart cannot remove Copilot persistence');
+    assert.equal(layout().tabs.length, 2, 'reload availability cannot remove Copilot persistence');
     const target = [...f.sdkSessions.values()].find(session => session.sessionId === 'fixture-id')!;
     target.channel.onmessage({ kind: 'disconnected', message: 'Offline agent exited' }); await f.tick();
     assert.equal(f.rows().length, 2, 'disconnect cannot close the sidebar entry');
@@ -1618,7 +1639,7 @@ test('performance capture is opt-in, bindable, timing-only and preserves the mou
   } finally { f.win.close(); }
 });
 
-test('personal compilation does not gate shell/session boot and Reload card plugins is bindable without Pi restart', async () => {
+test('personal compilation does not gate shell/session boot and Reload card plugins is bindable without Pi reload', async () => {
   let release!: (value: import('../src/pi/card-plugins/catalog').PersonalBundles) => void;
   const gate = new Promise<import('../src/pi/card-plugins/catalog').PersonalBundles>(resolve => { release = resolve; });
   const f = await fixture(undefined, { windowWorkspace: '/project', personalGate: gate });
@@ -1641,7 +1662,7 @@ test('personal compilation does not gate shell/session boot and Reload card plug
   } finally { f.win.close(); }
 });
 
-test('Cmd-R restarts the selected saved session, preserves its draft and honors modality, repeats and overrides', async () => {
+test('Cmd-R reloads the selected saved session, preserves its draft and honors modality, repeats and overrides', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   const key = (name = 'r', extra: KeyboardEventInit = {}) => {
     const event = new f.win.KeyboardEvent('keydown', { key: name, metaKey: true, bubbles: true, cancelable: true, ...extra });
@@ -1653,7 +1674,7 @@ test('Cmd-R restarts the selected saved session, preserves its draft and honors 
     key(); await f.tick(); assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
     f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
     const root = f.win.document.querySelector('.session-view:not([hidden])');
-    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Retained restart draft'; prompt.dispatchEvent(new f.win.Event('input'));
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Retained reload draft'; prompt.dispatchEvent(new f.win.Event('input'));
     f.openPalette(); key(); await f.tick(); assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 2);
     f.element<HTMLDialogElement>('command-palette').close(); await f.tick();
     key('r', { repeat: true }); key('r', { isComposing: true }); key('r', { shiftKey: true });
@@ -1663,11 +1684,11 @@ test('Cmd-R restarts the selected saved session, preserves its draft and honors 
     const config = f.calls.filter(c => c.command === 'start_pi').at(-1)!.args.config as JsonRecord;
     assert.equal(config.mode, 'resume'); assert.equal(config.sessionFile, '/sessions/new.jsonl');
     assert.equal(f.win.document.querySelector('.session-view:not([hidden])'), root);
-    assert.equal(f.element('prompt'), prompt); assert.equal(prompt.value, 'Retained restart draft');
-    f.preferences.external('{"keybindings":{"restart":["primary+j"]}}'); await f.tick();
+    assert.equal(f.element('prompt'), prompt); assert.equal(prompt.value, 'Retained reload draft');
+    f.preferences.external('{"keybindings":{"reload":["primary+j"]}}'); await f.tick();
     assert.equal(key().defaultPrevented, false);
     key('j'); await f.tick(); await f.tick(); assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 4);
-    f.preferences.external('{"keybindings":{"restart":[]}}'); await f.tick();
+    f.preferences.external('{"keybindings":{"reload":[]}}'); await f.tick();
     assert.equal(key().defaultPrevented, false); assert.equal(key('j').defaultPrevented, false);
     assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
   } finally { f.win.close(); }
@@ -2334,7 +2355,7 @@ test('restored Working and Unread views stay blank without launching historical 
   }
 });
 
-test('empty attention view reports live working counts without restarting dots or altering membership', async () => {
+test('empty attention view reports live working counts without reloading dots or altering membership', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   try {
     for (let i = 0; i < 2; i++) { f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick(); }
@@ -2396,20 +2417,20 @@ test('attention blanks filtered conversations, preserves mounted state and treat
     assert.equal(f.element('conversation').hidden, true);
     assert.equal(f.element('workspace-empty').hidden, true);
     assert.equal(f.element('mode-badge').textContent, '');
-    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, true);
+    assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, true);
     assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, true);
     assert.equal(f.win.document.activeElement, f.element('sidebar-unread'));
     // Session commands must not act on the remembered but hidden selection.
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'w', metaKey: true, bubbles: true }));
     f.openPalette();
     const commands = f.element('palette-list').textContent!;
-    assert.doesNotMatch(commands, /Restart session|Delete session tree|Close session|Select model|Select thinking level/);
+    assert.doesNotMatch(commands, /Reload session|Delete session tree|Close session|Select model|Select thinking level/);
     f.element<HTMLDialogElement>('command-palette').close(); await f.tick();
     f.element<HTMLButtonElement>('sidebar-all').click();
     assert.equal(root.hidden, false); assert.equal(root.inert, false);
     assert.equal(f.element<HTMLTextAreaElement>('prompt'), prompt);
     assert.equal(prompt.value, 'Keep this draft'); assert.equal(pane.scrollTop, 42);
-    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, false);
+    assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, false);
     f.element<HTMLButtonElement>('sidebar-unread').click();
     f.emit({ type: 'agent_start' }); f.emit({ type: 'agent_settled' }); await f.tick();
     assert.equal(f.element('sidebar-unread-count').textContent, '1');
@@ -2888,14 +2909,14 @@ test('failed file preview and cancelled confirmation keep the conversation and d
   }
 });
 
-test('restored deletion quarantine blocks implicit launch/restart and explicit Resume validates before recovery', async () => {
+test('restored deletion quarantine blocks implicit launch/reload and explicit Resume validates before recovery', async () => {
   const file = '/sessions/retained.jsonl';
   const f = await fixture(undefined, { windowWorkspace: '/project', deletionSnapshot: { pending: false, quarantine: [file], files: [] }, appState: {
     'nimrod.tabs.v1:/project': { tabs: [{ path: file, sessionId: 'fixture-id', name: 'Retained draft' }], active: file },
   }, nativeDrafts: { [`file:${file}`]: { draft: 'Preserved after unknown deletion' } } });
   try {
     assert.equal(f.calls.some(c => c.command === 'start_pi'), false);
-    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, true);
+    assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, true);
     assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, true);
     f.win.document.querySelector<HTMLButtonElement>('.session-row')!.click(); await f.tick(); assert.equal(f.calls.some(c => c.command === 'start_pi'), false);
     f.openPalette(); const input = f.element<HTMLInputElement>('palette-input'); input.value = 'resume'; input.dispatchEvent(new f.win.Event('input'));
@@ -3211,7 +3232,7 @@ test('native notification timeouts can be dismissed in Settings without retrying
   } finally { f.dom.window.close(); }
 });
 
-test('global auto-follow saves and synchronizes without moving readers or restarting sessions', async () => {
+test('global auto-follow saves and synchronizes without moving readers or reloading sessions', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   const global = await fixture(undefined, { globalSettings: true });
   try {
@@ -3337,7 +3358,7 @@ test('pending deletion leaves unrelated Resume, Restart and Close available', as
     f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
     assert.equal((f.calls.find(c => c.command === 'start_pi')!.args.config as JsonRecord).sessionFile, file);
-    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, false);
+    assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, false);
     key('r'); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 2);
     key('w'); await f.tick(); await f.tick();
@@ -3886,33 +3907,139 @@ test('sibling launch can proceed during shutdown and late old receipts cannot cl
   } finally { release(); f.dom.window.close(); }
 });
 
-test('Project bar restart stays disabled for no session, temporary sessions and an unverified first save', async () => {
+for (const harness of ['copilot', 'codex'] as const) {
+  const label = harness === 'copilot' ? 'Copilot' : 'Codex';
+  const create = async (f: Awaited<ReturnType<typeof fixture>>) => {
+    f.openPalette(); const input = f.element<HTMLInputElement>('palette-input');
+    input.value = `New ${label} session`; input.dispatchEvent(new f.win.Event('input'));
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.equal(f.element('mode-badge').textContent, label);
+  };
+  const writes = (f: Awaited<ReturnType<typeof fixture>>) => f.calls.filter(call => call.command === `write_${harness}`).map(call => call.args.message as JsonRecord);
+  const channel = (f: Awaited<ReturnType<typeof fixture>>, token: string) => (harness === 'copilot' ? f.sdkSessions : f.codexSessions).get(token)!.channel;
+  const markBusy = (f: Awaited<ReturnType<typeof fixture>>, target: ReturnType<typeof channel>) => target.onmessage({ kind: 'rpc', value: harness === 'copilot'
+    ? { kind: 'event', event: { id: 'working', type: 'assistant.turn_start', data: {} } }
+    : { method: 'turn/started', params: { threadId: 'codex-fixture', turn: { id: 'working', status: 'inProgress', items: [] } } } });
+
+  test(`${label} reload waits for owned exit, resumes exact identity and preserves mounted drafts without replay or sibling focus theft`, async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true, harnessStop: async () => gate });
+    try {
+      f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+      const sibling = f.element<HTMLTextAreaElement>('prompt'); sibling.value = 'Pi sibling draft'; sibling.dispatchEvent(new f.win.Event('input'));
+      await create(f);
+      const prompt = f.element<HTMLTextAreaElement>('prompt'), root = prompt.closest('.session-view');
+      prompt.value = 'Retained draft'; prompt.dispatchEvent(new f.win.Event('input'));
+      const starts = f.calls.filter(call => call.command === `start_${harness}`), token = String(starts.at(-1)!.args.token);
+      const old = channel(f, token), before = f.calls.length;
+      const reference = (f.preferences.value.state['nimrod.tabs.v1:/project'] as { tabs: JsonRecord[] }).tabs[1];
+      assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, false);
+      f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'r', metaKey: true, bubbles: true, cancelable: true })); await f.tick();
+      assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, true);
+      assert.match(f.rows()[1].getAttribute('aria-label')!, /Reloading/);
+      f.element<HTMLButtonElement>('reload-session').click();
+      f.rows()[0].click(); await f.tick(); f.rows()[1].click(); await f.tick();
+      assert.equal(f.calls.filter(call => call.command === `start_${harness}`).length, starts.length, 'reselection cannot launch before owned exit');
+      prompt.value = 'Newer draft during reload'; prompt.dispatchEvent(new f.win.Event('input'));
+      f.rows()[0].click(); sibling.focus();
+      release(); await f.tick(); await f.tick();
+      const replacement = f.calls.filter(call => call.command === `start_${harness}`).at(-1)!;
+      assert.notEqual(replacement.args.token, token);
+      assert.equal(f.calls.filter(call => call.command === `start_${harness}`).length, starts.length + 1);
+      const stops = f.calls.slice(before).filter(call => call.command === `stop_${harness}`);
+      assert.deepEqual(stops.map(call => call.args.token), [token], 'only the old conversation child stops, not discovery');
+      assert.ok(f.calls.indexOf(stops[0]) < f.calls.indexOf(replacement));
+      assert.equal(f.calls.slice(before).some(call => call.command === 'stop_pi'), false);
+      assert.equal(f.win.document.activeElement, sibling); assert.equal(sibling.value, 'Pi sibling draft');
+      markBusy(f, old); await f.tick();
+      f.rows()[1].click(); await f.tick();
+      assert.equal(f.element('prompt'), prompt); assert.equal(prompt.closest('.session-view'), root);
+      assert.equal(prompt.value, 'Newer draft during reload'); assert.equal(f.rows().length, 2);
+      assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, false);
+      assert.doesNotMatch(f.rows()[1].getAttribute('aria-label')!, /Working|Reloading/);
+      const resumed = writes(f).filter(request => request.method === (harness === 'copilot' ? 'connect' : 'thread/resume')).at(-1)!;
+      assert.equal(harness === 'copilot' ? resumed.sessionId : (resumed.params as JsonRecord).threadId, reference.sessionId);
+      assert.equal(writes(f).some(request => ['prompt', 'turn/start', 'turn/steer'].includes(String(request.method))), false);
+      assert.equal(f.element('session-notices').textContent, '', 'intentional teardown is not a connection failure');
+    } finally { release(); f.win.close(); }
+  });
+
+  test(`${label} reload confirms active work and cancellation leaves its agent untouched`, async () => {
+    const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true });
+    try {
+      await create(f);
+      const token = String(f.calls.filter(call => call.command === `start_${harness}`).at(-1)!.args.token);
+      markBusy(f, channel(f, token)); await f.tick();
+      const before = f.calls.length;
+      f.element<HTMLButtonElement>('reload-session').click(); await f.tick();
+      assert.match(f.element('host-dialog-title').textContent!, /Reload/);
+      assert.equal(f.element('host-dialog').querySelector('[value="ok"]')?.textContent, 'Reload session');
+      f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
+      assert.equal(f.calls.slice(before).some(call => call.command === `stop_${harness}` || call.command === `start_${harness}`), false);
+      assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, false);
+    } finally { f.win.close(); }
+  });
+
+  test(`${label} reload retries failed shutdown explicitly and retains identity/draft after rejected resume without a fresh-session fallback`, async () => {
+    let stopError = true;
+    const options: ShellOptions = { windowWorkspace: '/project', codexConversation: true,
+      harnessStop: async () => { if (stopError) throw new Error('Fixture stop refused'); } };
+    const f = await fixture(undefined, options);
+    try {
+      await create(f);
+      const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Keep on failure'; prompt.dispatchEvent(new f.win.Event('input'));
+      const count = () => f.calls.filter(call => call.command === `start_${harness}`).length, initial = count();
+      f.element<HTMLButtonElement>('reload-session').click(); await f.tick(); await f.tick();
+      assert.equal(count(), initial); assert.match(f.element('session-notices').textContent!, /Could not reload.*Fixture stop refused/);
+      stopError = false; options.harnessResumeError = 'Fixture resume refused';
+      f.openPalette(); const input = f.element<HTMLInputElement>('palette-input');
+      input.value = 'Reload session'; input.dispatchEvent(new f.win.Event('input'));
+      input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      await f.tick(); await f.tick();
+      assert.equal(count(), initial + 1); assert.equal(prompt.value, 'Keep on failure'); assert.equal(f.rows().length, 1);
+      assert.match(f.element('session-notices').textContent!, /Fixture resume refused/);
+      assert.equal(f.element<HTMLButtonElement>('send').disabled, true);
+      const opens = writes(f).filter(request => ['connect', 'thread/start', 'thread/resume'].includes(String(request.method)));
+      assert.equal(opens.length, 2);
+      assert.ok(harness === 'copilot' ? opens[1].sessionId : opens[1].method === 'thread/resume');
+      options.harnessResumeError = undefined;
+      f.element<HTMLButtonElement>('reload-session').click(); await f.tick(); await f.tick();
+      assert.equal(count(), initial + 2); assert.equal(prompt.value, 'Keep on failure');
+      assert.equal(f.element<HTMLButtonElement>('send').disabled, false);
+      assert.equal(writes(f).some(request => ['prompt', 'turn/start'].includes(String(request.method))), false);
+    } finally { stopError = false; f.win.close(); }
+  });
+}
+
+test('Project bar reload stays disabled for no session, temporary sessions and an unverified first save', async () => {
   let saved = false;
   const f = await fixture(undefined, { fileExists: () => saved });
   try {
-    const restart = f.element<HTMLButtonElement>('restart-session');
-    assert.equal(restart.disabled, true);
-    assert.equal(restart.getAttribute('aria-label'), 'Restart session');
-    assert.equal(restart.querySelector('svg')?.getAttribute('aria-hidden'), 'true');
-    assert.equal(restart.textContent, '');
+    const reload = f.element<HTMLButtonElement>('reload-session');
+    assert.equal(reload.disabled, true);
+    assert.equal(reload.getAttribute('aria-label'), 'Reload session');
+    assert.equal(reload.querySelector('svg')?.getAttribute('aria-hidden'), 'true');
+    assert.equal(reload.textContent, '');
     for (const id of ['start-temporary']) {
       f.element<HTMLButtonElement>(id).click(); await f.tick(); await f.tick();
-      assert.equal(restart.disabled, true); assert.match(restart.title, /temporary/);
+      assert.equal(reload.disabled, true); assert.match(reload.title, /temporary/);
       const count = f.calls.filter(c => c.command === 'start_pi').length;
-      restart.click(); await f.tick(); assert.equal(f.calls.filter(c => c.command === 'start_pi').length, count);
+      reload.click(); await f.tick(); assert.equal(f.calls.filter(c => c.command === 'start_pi').length, count);
     }
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
-    assert.equal(restart.disabled, true); assert.match(restart.title, /first save/);
+    assert.equal(reload.disabled, true); assert.match(reload.title, /first save/);
     assert.equal(f.element('mode-badge').textContent, 'Pi');
     saved = true;
     const now = f.win.Date.now(); f.win.Date.now = () => now + 4000;
     f.emit({ type: 'agent_settled' }); await f.tick(); await f.tick();
-    assert.equal(restart.disabled, false); assert.equal(restart.title, 'Restart session');
+    assert.equal(reload.disabled, false); assert.equal(reload.title, 'Reload session');
     for (const s of f.sessions.values()) s.channel.onmessage({ kind: 'disconnected', message: 'done' });
   } finally { f.dom.window.close(); }
 });
 
-test('restart reaps only the selected child and resumes the exact file in the same mounted conversation with its draft', async () => {
+test('reload reaps only the selected child and resumes the exact file in the same mounted conversation with its draft', async () => {
   const f = await fixture();
   try {
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
@@ -3922,7 +4049,7 @@ test('restart reaps only the selected child and resumes the exact file in the sa
     const root = f.win.document.querySelector('.session-view:not([hidden])');
     const row = f.win.document.querySelectorAll('.session-row')[1];
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Keep my unsent draft'; prompt.dispatchEvent(new f.win.Event('input'));
-    f.element<HTMLButtonElement>('restart-session').click(); await f.tick(); await f.tick();
+    f.element<HTMLButtonElement>('reload-session').click(); await f.tick(); await f.tick();
     const launches = f.calls.filter(c => c.command === 'start_pi');
     assert.equal(launches.length, 3);
     assert.deepEqual({ ...(launches[2].args.config as JsonRecord) }, { cwd: '/project', pi: '/bin/pi', node: '/bin/node', mode: 'resume', sessionName: undefined, sessionFile: '/sessions/new-1.jsonl', sessionId: 'fixture-id' });
@@ -3936,12 +4063,12 @@ test('restart reaps only the selected child and resumes the exact file in the sa
     assert.equal(f.win.document.querySelectorAll('.session-row').length, 2);
     assert.equal(f.calls.some(c => c.command === 'stop_pi' && c.args.token === first), false);
     assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
-    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, false);
+    assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, false);
     for (const s of f.sessions.values()) s.channel.onmessage({ kind: 'disconnected', message: 'done' });
   } finally { f.dom.window.close(); }
 });
 
-test('restart confirmation can cancel, serializes shutdown, preserves newer draft and ignores late old receipts', async () => {
+test('reload confirmation can cancel, serializes shutdown, preserves newer draft and ignores late old receipts', async () => {
   let release!: () => void;
   const f = await fixture(undefined, { holdPrompts: true, stopGate: new Promise<void>(resolve => { release = resolve; }) });
   try {
@@ -3951,16 +4078,16 @@ test('restart confirmation can cancel, serializes shutdown, preserves newer draf
     const oldChannel = f.captureChannel();
     const oldRequest = f.calls.find(c => (c.args.message as JsonRecord)?.type === 'prompt')!.args.message as JsonRecord;
     prompt.value = 'Newer draft'; prompt.dispatchEvent(new f.win.Event('input'));
-    const restart = f.element<HTMLButtonElement>('restart-session'); restart.click(); await f.tick();
-    assert.match(f.element('host-dialog-title').textContent!, /Restart/);
+    const reload = f.element<HTMLButtonElement>('reload-session'); reload.click(); await f.tick();
+    assert.match(f.element('host-dialog-title').textContent!, /Reload/);
     assert.match(f.element('host-dialog-description').textContent!, /Nothing is sent again automatically/);
     f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
-    assert.equal(restart.disabled, false);
+    assert.equal(reload.disabled, false);
     assert.equal(f.calls.filter(c => c.command === 'stop_pi' && c.args.token).length, 0);
-    restart.click(); await f.confirm();
-    assert.equal(restart.disabled, true);
+    reload.click(); await f.confirm();
+    assert.equal(reload.disabled, true);
     assert.equal(f.win.document.querySelector<HTMLButtonElement>('.session-close')!.disabled, true);
-    restart.click();
+    reload.click();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
     assert.equal(f.calls.filter(c => c.command === 'stop_pi' && c.args.token).length, 1);
     release(); await f.tick(); await f.tick();
@@ -3978,7 +4105,7 @@ test('restart confirmation can cancel, serializes shutdown, preserves newer draf
   } finally { release(); f.dom.window.close(); }
 });
 
-test('switching away and back during restart cannot launch early or steal a sibling composer focus', async () => {
+test('switching away and back during reload cannot launch early or steal a sibling composer focus', async () => {
   let release!: () => void;
   const f = await fixture(undefined, { stopGate: new Promise<void>(resolve => { release = resolve; }) });
   try {
@@ -3986,10 +4113,10 @@ test('switching away and back during restart cannot launch early or steal a sibl
     const firstPrompt = f.element<HTMLTextAreaElement>('prompt'); firstPrompt.value = 'Sibling draft'; firstPrompt.dispatchEvent(new f.win.Event('input'));
     f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
     const rows = f.rows();
-    f.element<HTMLButtonElement>('restart-session').click(); await f.tick();
+    f.element<HTMLButtonElement>('reload-session').click(); await f.tick();
     rows[0].click(); rows[1].click(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 2);
-    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, true);
+    assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, true);
     rows[0].click(); firstPrompt.focus();
     release(); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 3);
@@ -4000,14 +4127,14 @@ test('switching away and back during restart cannot launch early or steal a sibl
   } finally { release(); f.dom.window.close(); }
 });
 
-test('a disconnected saved session can restart from the Project bar or command palette', async () => {
+test('a disconnected saved session can reload from the Project bar or command palette', async () => {
   const f = await fixture();
   try {
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
     f.disconnect(); await f.tick();
-    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, false);
+    assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, false);
     f.openPalette(); const input = f.element<HTMLInputElement>('palette-input');
-    input.value = 'restart session'; input.dispatchEvent(new f.win.Event('input'));
+    input.value = 'reload session'; input.dispatchEvent(new f.win.Event('input'));
     assert.equal(f.element('palette-list').children.length, 1);
     input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 2);
@@ -4017,31 +4144,31 @@ test('a disconnected saved session can restart from the Project bar or command p
   } finally { f.dom.window.close(); }
 });
 
-test('failed restart shutdown never launches a replacement and a second attempt retries native stop', async () => {
+test('failed reload shutdown never launches a replacement and a second attempt retries native stop', async () => {
   let stopError: string | undefined = 'fixture shutdown failure';
   const f = await fixture(undefined, { stopError: () => stopError });
   try {
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
-    const restart = f.element<HTMLButtonElement>('restart-session'); restart.click(); await f.tick(); await f.tick();
+    const reload = f.element<HTMLButtonElement>('reload-session'); reload.click(); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
     assert.equal(f.win.document.querySelectorAll('.session-row').length, 1);
-    assert.match(f.element('session-notices').textContent!, /Could not restart Pi.*fixture shutdown failure/);
-    assert.equal(restart.disabled, false);
-    stopError = undefined; restart.click(); await f.tick(); await f.tick();
+    assert.match(f.element('session-notices').textContent!, /Could not reload Pi.*fixture shutdown failure/);
+    assert.equal(reload.disabled, false);
+    stopError = undefined; reload.click(); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'stop_pi' && c.args.token).length, 2);
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 2);
     f.disconnect();
   } finally { f.dom.window.close(); }
 });
 
-test('restart resume failure keeps the saved session and draft without falling back to a new session', async () => {
+test('reload resume failure keeps the saved session and draft without falling back to a new session', async () => {
   const options: ShellOptions = {};
   const f = await fixture(undefined, options);
   try {
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Retained after failed resume'; prompt.dispatchEvent(new f.win.Event('input'));
     options.startError = 'Session file unavailable';
-    f.element<HTMLButtonElement>('restart-session').click(); await f.tick(); await f.tick();
+    f.element<HTMLButtonElement>('reload-session').click(); await f.tick(); await f.tick();
     const starts = f.calls.filter(c => c.command === 'start_pi');
     assert.equal(starts.length, 2); assert.equal((starts[1].args.config as JsonRecord).mode, 'resume');
     assert.equal(f.win.document.querySelectorAll('.session-row').length, 1);

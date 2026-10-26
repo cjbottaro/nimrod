@@ -18,6 +18,14 @@ function compileAssertions(session: HarnessSession, project: HarnessProject, reg
   const { conversation, ...withoutConversation } = session;
   // @ts-expect-error Core input/output cannot be omitted or supplied by the project shell.
   const missingConversation: HarnessSession = withoutConversation;
+  const { reload, ...withoutReload } = session;
+  // @ts-expect-error Every factory must supply the reload consumer port.
+  defineHarness({ ...registration, create: () => ({ ...project, create: () => withoutReload }) });
+  // @ts-expect-error A silent unsupported flag cannot stand in for reload behavior.
+  const unsupportedReload: HarnessSession['reload'] = { supported: false, reason: 'Forgot reload' };
+  const { run, ...withoutRun } = reload;
+  // @ts-expect-error Even unavailable states require an explicit execution contract.
+  const missingReloadRun: HarnessSession['reload'] = withoutRun;
   const { interactions, ...withoutInteractions } = session;
   // @ts-expect-error Even an integration without rich decisions must explicitly choose noInteractions.
   const missingInteractions: HarnessSession = withoutInteractions;
@@ -31,6 +39,6 @@ function compileAssertions(session: HarnessSession, project: HarnessProject, reg
   const emptyAction: HarnessAction = { id: 'model', label: 'Model', detail: 'Missing implementation' };
   // @ts-expect-error Completion/receipt semantics require the asynchronous submission contract.
   const incorrectInput: HarnessSession['conversation']['messageInput'] = { capabilities: () => ({}), submit() {} };
-  void [lifecycle, conversation, interactions, actions, cards, missingConversation, missingInteractions, emptyAction, incorrectInput];
+  void [lifecycle, conversation, reload, run, unsupportedReload, missingReloadRun, interactions, actions, cards, missingConversation, missingInteractions, emptyAction, incorrectInput];
 }
 void compileAssertions;

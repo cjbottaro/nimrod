@@ -213,7 +213,7 @@ there is no durable queue or replay. Idle-only `setModel` and
 the pinned release's experimental `session.rpc.model.getCurrent()` read actual
 model/effort state; later native events outrank older results. Failed configuration
 disconnects instead of continuing with unconfirmed settings. No synthetic Pi
-slash aliases to Nimrod actions, ACP mode selectors, Restart,
+slash aliases to Nimrod actions, ACP mode selectors,
 MCP inspector or other unsupported controls. [Copilot slash commands](copilot-commands.md)
 use the released SDK's public experimental command discovery/invocation APIs,
 argument metadata and typed results; authored fixtures are unrun. Returned choices
@@ -706,6 +706,8 @@ been run**; real CLI accounting, resumed totals and macOS/Linux visuals remain
 unverified. Source documentation is API/rate evidence, not runtime acceptance.
 
 ## Close and Delete
+
+**Reload session** implements the required `SessionReload` port through the integration's existing owned-stop and exact-ID Resume paths. It retires pending decisions/commands/configuration, preserves mounted identity/drafts and does not continue pending work. See the canonical [reload lifecycle](projects-and-sessions.md#reload-session-lifecycle) for ordering, interruption confirmation, failure and no-replay contracts. New shell fixtures are authored but unrun; installed-runtime/native acceptance remains pending.
 
 Close awaits owned stop and SDK `session.disconnect()`/`client.stop()`; it never
 calls `deleteSession`, and keeps history/draft. Resume can reopen it explicitly.

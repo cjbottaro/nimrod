@@ -9,9 +9,9 @@ Each session has its own conversation, draft and agent process. Switching sessio
 | **New session** / **⌘/Ctrl+N** | Start a normal persistent Pi conversation, regardless of the selected session's backend. |
 | **New Copilot session** | Start built-in official-SDK Copilot (no default shortcut). |
 | **New named session…** / **⌘+Option+N**, **Ctrl+Alt+N** | Enter a single-line name, then press Enter or Create. Escape cancels. Requires Pi's native `--name` support. |
-| **New temporary session** / **⌘/Ctrl+Shift+N** | Start without saved conversation history. Closing, quitting or reloading discards its drafts, recovery items and pop-outs. |
+| **New temporary session** / **⌘/Ctrl+Shift+N** | Start without saved conversation history. Closing, quitting or reloading the app window discards its drafts, recovery items and pop-outs. |
 
-Pi writes persistent history. The Project bar shows **Pi** from the start. Restart is disabled until the first verified save; its tooltip explains why. Naming an empty session alone may not save it. Hover over the Pi badge for its file path when available.
+Pi writes persistent history. The Project bar shows **Pi** from the start. Reload is disabled until the first verified save; its tooltip explains why. Naming an empty session alone may not save it. Hover over the Pi badge for its file path when available.
 
 ## Switch or resume
 
@@ -42,32 +42,32 @@ Click its row's **Close** button or use **⌘/Ctrl+W**. Closing waits for that a
 
 After closing or deleting the selected session, Nimrod prefers the most recently used connected session in the current view, then across All. With none connected, it chooses the most recently used remaining session in the current view, then across All if the view is empty. This uses message/creation recency, not row adjacency—even in Unread's arrival-ordered view. Deleting a background session leaves the current selection unchanged. An inactive saved replacement loads and connects immediately unless that specific session is still locked for deletion. Removing the last session never creates one.
 
-## Restart session
+## Reload session
 
-Use the Project bar's reload-style icon, **Restart session** in the palette, or **⌘/Ctrl+R**.
+Use the Project bar's reload-style icon, **Reload session** in the palette, or **⌘/Ctrl+R**.
 
-Restart stops only the selected saved session's process, then resumes its exact file in the same conversation area. The draft remains; saved history reloads and disclosure state resets. Active/pending work requires confirmation. Queues and in-flight work do not continue, and prompts are never replayed.
+Reload works with Pi, Copilot and Codex. It stops only the selected session's agent process, then reopens the same saved conversation in the same conversation area. It does not reload the whole window. The draft remains; saved history reloads and disclosure state resets. Active/pending work requires confirmation. Queues and in-flight work do not continue, and prompts are never replayed.
 
-Restart is unavailable for temporary sessions, before first save or during lifecycle transitions. Failed shutdown or resume leaves a visible error; retry is explicit. Use [Stop](writing-messages.md#stop-and-recover) to interrupt work without ending its process; Restart is the escape hatch for a stuck saved session.
+Reload is unavailable for temporary sessions, before a saved identity exists (Pi's first verified save), or during lifecycle transitions. Failed shutdown or resume leaves a visible error; retry is explicit. Use [Stop](writing-messages.md#stop-and-recover) to interrupt work without ending its process; Reload is the escape hatch for a stuck saved session.
 
 ## Delete session tree
 
 Right-click a Session sidebar row and choose **Delete session tree…** to target it without switching to or resuming it. The Project bar trash icon and **Delete session tree…** / **⌘/Ctrl+Backspace** target the selected saved session.
 
-This section describes **Pi's tree deletion**. [Codex tree deletion](codex.md#delete-a-codex-thread-tree) reuses the same review/controls for spawned descendants through Codex's own API, with explicit cross-project/fork limitations. Built-in SDK Copilot uses the same controls and shortcut as **Delete session…**, reviewing only one saved session through the SDK deletion API; see [Copilot deletion](copilot.md#history-close-and-delete). Restart remains Pi-only and is independent of deletion.
+This section describes **Pi's tree deletion**. [Codex tree deletion](codex.md#delete-a-codex-thread-tree) reuses the same review/controls for spawned descendants through Codex's own API, with explicit cross-project/fork limitations. Built-in SDK Copilot uses the same controls and shortcut as **Delete session…**, reviewing only one saved session through the SDK deletion API; see [Copilot deletion](copilot.md#history-close-and-delete). Reload is independent of deletion.
 
 1. Open deletion review.
 2. Inspect the selected session and its descendants, including any in other projects.
 3. Choose **Delete N sessions** to stop affected agents and permanently remove the tree, or Cancel/Escape to retain everything without stopping work.
 4. Confirmation immediately disables the actions and replaces the tree with a spinner and **Stopping sessions…**, without waiting for a response. The review stays open at the same size and advances to **Deleting sessions…** during removal, with the Delete label unchanged. It closes with the configured modal animation when deletion and reconciliation finish.
 
-Deletion is permanent, not a move to OS trash. No Pi deletion plugin is required. Working sessions can be deleted; temporary/unsaved sessions cannot. Nimrod stops affected owned Pi processes and waits for exit before removing files. Confirmation covers the current tree, including descendants created during review or shutdown, without a second review. Review locks only affected sessions. New sessions and unrelated Resume, Restart and Close actions remain available in other project windows, without stopping unrelated work.
+Deletion is permanent, not a move to OS trash. No Pi deletion plugin is required. Working sessions can be deleted; temporary/unsaved sessions cannot. Nimrod stops affected owned Pi processes and waits for exit before removing files. Confirmation covers the current tree, including descendants created during review or shutdown, without a second review. Review locks only affected sessions. New sessions and unrelated Resume, Reload and Close actions remain available in other project windows, without stopping unrelated work.
 
 Saved-history pickers can contain a stale row if its file is deleted after discovery. Choosing it shows an error; Nimrod never substitutes a new conversation. A session in the active deletion tree cannot attach a new agent until review is canceled or deletion finishes. The reviewing window retains normal modal focus and shortcut priority.
 
 Slower previews show **Loading session tree…** with Delete disabled. When ready, Delete receives focus unless you have already used the keyboard or pointer in the loading dialog. Cancel during loading prevents deletion even if preparation finishes later. Enter respects the focused action; Enter on Cancel cancels.
 
-Confirmed successes remove their history files, drafts, recovery items and saved references. A failed descendant retains its ancestors; other branches can succeed. Review-time conversation or draft changes do not require another attempt. Invalid history, shutdown failures, late external file changes and uncertain outcomes still show explicit errors without automatic retry. **Recovery needed** sessions require explicit **Resume session…** after the transaction finishes; row selection or Restart cannot bypass that guard.
+Confirmed successes remove their history files, drafts, recovery items and saved references. A failed descendant retains its ancestors; other branches can succeed. Review-time conversation or draft changes do not require another attempt. Invalid history, shutdown failures, late external file changes and uncertain outcomes still show explicit errors without automatic retry. **Recovery needed** sessions require explicit **Resume session…** after the transaction finishes; row selection or Reload cannot bypass that guard.
 
 Deletion supports Pi's session-directory environment override, not arbitrary locations outside the selected store. Unreadable/invalid headers, symlinks or hard-linked sessions can prevent tree discovery rather than silently omit descendants. External writers are not coordinated.
 

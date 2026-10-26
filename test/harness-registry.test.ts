@@ -59,6 +59,17 @@ test('registration alone connects an unknown harness through real input, draft, 
   assert.equal(reopened.selection.deferRestored, true); assert.equal(reopened.lifecycle.connection, 'disconnected');
   assert.deepEqual(restored.host.drafts.read(), { draft: 'Preserved before identity exists' });
   assert.equal(restored.publications.length, 0, 'restoration alone never connects or prompts');
+  const messages = session.conversation.state?.messages;
+  const publications = f.publications.length;
+  assert.equal(session.reload.available(), true);
+  await session.reload.run();
+  assert.equal(session.lifecycle.connection, 'connected');
+  assert.deepEqual(session.lifecycle.identity, reference);
+  assert.equal(session.lifecycle.draftScope, scope);
+  assert.deepEqual(f.host.drafts.read(), { draft: 'Preserved before identity exists' });
+  assert.equal(session.conversation.state?.messages, messages, 'fixture reload reopens its authoritative history');
+  assert.equal(f.publications.slice(publications).some(message => message.type === 'submissionReceipt'), false, 'reload never sends');
+  assert.ok(f.publications.slice(publications).some(message => message.type === 'sessionReset'));
   const removed: string[] = [];
   const deletion = new SessionDeletionCoordinator({ canRun: () => true,
     participants: () => [{ lock() {}, stop: () => session.lifecycle.stop() }],
@@ -69,7 +80,7 @@ test('registration alone connects an unknown harness through real input, draft, 
   deletion.register(context => project.deletion(context));
   await deletion.operation(reference, 'Fixture session')!.run(); await writer.flush();
   assert.deepEqual(removed, [scope]); assert.equal(records.get(scope)?.value, null);
-  assert.equal(session.restart.supported, false); assert.equal(session.configuration.current(), undefined);
+  assert.equal(session.configuration.current(), undefined);
   session.interactions.dispose(); reopened.interactions.dispose(); deletion.dispose(); registry.dispose();
   assert.deepEqual(errors, []); f.dom.window.close(); restored.dom.window.close();
 });
@@ -124,7 +135,7 @@ class PrototypeSession implements HarnessSession {
   constructor(private readonly inner: HarnessSession) {}
   get lifecycle() { return this.inner.lifecycle; } get conversation() { return this.inner.conversation; }
   get presentation() { return this.inner.presentation; } get configuration() { return this.inner.configuration; }
-  get actions() { return this.inner.actions; } get restart() { return this.inner.restart; }
+  get actions() { return this.inner.actions; } get reload() { return this.inner.reload; }
   get close() { return this.inner.close; } get drafts() { return this.inner.drafts; }
   get selection() { return this.inner.selection; } get interactions() { return this.inner.interactions; }
   get references() { return this.inner.references; }

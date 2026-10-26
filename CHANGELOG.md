@@ -47,7 +47,9 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
-- New persistent Pi sessions show **Pi** immediately instead of **Pi · awaiting first save**. Restart still waits for verified saved history, with the reason in its tooltip; temporary sessions remain explicitly labelled.
+- **Reload session** replaces **Restart session** and now supports Pi, Copilot and Codex through a required integration interface. The Project bar, palette and ⌘/Ctrl+R reopen the same saved conversation with a fresh agent process, retaining drafts without replaying work or affecting other sessions. Existing custom shortcuts remain effective. Copilot/Codex installed-runtime and native acceptance remain pending.
+
+- New persistent Pi sessions show **Pi** immediately instead of **Pi · awaiting first save**. Reload still waits for verified saved history, with the reason in its tooltip; temporary sessions remain explicitly labelled.
 
 - Resume and Delete sessions now discover project history from every supported available harness, including sessions created outside Nimrod without prior project association. Sources load independently; unavailable harnesses do not block other results. Discovery continues during deletion review, buffering new results until return while preserving keyed rows, highlighted identity and reading position. Deleting the highlighted row selects an existing neighbor rather than a newly arrived session.
 

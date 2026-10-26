@@ -17,7 +17,7 @@ export function conversationPort(host: HarnessSessionHost, read: () => Conversat
       capabilities: () => read()?.messageInput.capabilities() ?? { imageUnavailableReason: 'Connect this session before attaching images.' },
       async submit(message) {
         const owner = read();
-        if (!owner || !host.lifetime.current() || host.lifetime.closing() || host.lifetime.restarting() || host.lifetime.deleting()) {
+        if (!owner || !host.lifetime.current() || host.lifetime.closing() || host.lifetime.reloading() || host.lifetime.deleting()) {
           host.effects.publish({ type: 'submissionReceipt', id: message.id, outcome: 'rejected', error: 'Session is no longer available. Nothing was sent.' }); return;
         }
         try { const submitted = owner.messageInput.submit(message); host.effects.changed(); await submitted; }

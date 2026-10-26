@@ -156,7 +156,7 @@ export class PiSession {
 
   private async readMcpStatus(): Promise<McpStatusReport> {
     if (this.disconnected || this.state.sessionUnavailable) throw new Error('Connect this session before inspecting MCP servers.');
-    if (this.mcpUncertain) throw new Error('The previous MCP status request did not finish reliably. Restart this session before requesting status again.');
+    if (this.mcpUncertain) throw new Error('The previous MCP status request did not finish reliably. Reload this session before requesting status again.');
     const response = await this.rpc.request('get_commands');
     if (!Array.isArray(record(response.data).commands)) throw new Error('Pi did not provide its commands.');
     if (!(record(response.data).commands as unknown[]).some(isBuiltinMcpCommand)) {

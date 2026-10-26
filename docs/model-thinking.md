@@ -63,6 +63,6 @@ through the normal composer Stop action.
 
 Models and efforts come from the harness. Pi models stay inside Pi's configured scope; Copilot uses its reported catalog. Nimrod never guesses unknown selections, stops/restarts work to apply a change, or automatically retries an uncertain mutation.
 
-Startup/disconnected sessions do not accept deferred changes; resume a disconnected session first. Changing sessions leaves accepted intent with its originating session. Close, Restart or disconnect retires pending intent with its known or uncertain outcome; it is not restored or replayed on another connection. Escape cancels an open picker without submitting your draft. Configuration progress never forces transcript navigation or replaces a newer draft.
+Startup/disconnected sessions do not accept deferred changes; resume a disconnected session first. Changing sessions leaves accepted intent with its originating session. Close, Reload or disconnect retires pending intent with its known or uncertain outcome; it is not restored or replayed on another connection. Escape cancels an open picker without submitting your draft. Configuration progress never forces transcript navigation or replaces a newer draft.
 
 Generic ACP adapters remain internal, without product session actions. New configuration-interface, deferred-change and transcript fixtures are authored but **unrun**; native Pi/Copilot visual/live-run behavior and Linux/possible Windows verification remain pending.

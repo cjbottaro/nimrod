@@ -275,6 +275,6 @@ mod tests {
     fn project_navigation_has_a_distinct_native_action() {
         assert!(is_open_project(OPEN_PROJECT_ID));
         assert!(!is_open_project(QUIT_ID));
-        assert!(!is_open_project("nimrod.restart-session"));
+        assert!(!is_open_project("nimrod.reload-session"));
     }
 }

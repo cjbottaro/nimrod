@@ -426,7 +426,7 @@ test('late project discovery is discarded and empty picker directs users to nati
 
 test('session row options share indicators and muted timestamps without visible status text', async () => {
   const states: SidebarState[] = [{}, { inactive: true }, { busy: true }, { compacting: true }, { pending: true },
-    { unread: true }, { inputCount: 1 }, { failed: true }, { starting: true }, { restarting: true },
+    { unread: true }, { inputCount: 1 }, { failed: true }, { starting: true }, { reloading: true },
     { closing: true }, { deleting: true }, { blocked: true }];
   const timestamp = Date.now() - 120_000;
   const f = fixture(async () => ({ items: states.map((state, index) => ({

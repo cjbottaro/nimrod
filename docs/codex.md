@@ -33,7 +33,7 @@ Restored Codex rows stay disconnected until you explicitly select or Resume one.
 
 Startup failures preserve your local draft and do not replay a prompt. If cleanup also fails, the original startup error remains visible with cleanup diagnostics in Details. Late startup cleanup targets only its original process, not a replacement connection.
 
-Restart is currently unavailable for Codex; use Close and explicit Resume. Close is not deletion.
+[Reload session](sessions.md#reload-session) reopens this same thread with a fresh Codex agent while keeping your draft. Installed-runtime/native reload acceptance remains pending. Close is not deletion.
 
 ## Delete a Codex thread tree
 

@@ -101,6 +101,10 @@ export class CodexSession {
       },
     }, () => this.publish([]));
   }
+  get hasPendingWork(): boolean {
+    return this.state.busy || this.submitting > 0 || this.configuring
+      || this.configuration.operations.some(operation => operation.phase === 'queued' || operation.phase === 'applying');
+  }
   get idle(): boolean { return !this.ended && !this.hydrating && !this.submitting && !this.configuring && this.client.phase === 'idle'; }
   validatePrompt(text: string): string | undefined {
     if (this.ended || this.hydrating || this.configuring || this.state.sessionUnavailable) return 'Codex is not ready. Your draft was kept.';

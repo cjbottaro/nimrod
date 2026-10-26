@@ -19,7 +19,7 @@ Unknown results retain SDK identity/draft; no retries or private-directory
 removal. Old draft files from the removed integration are never purged by SDK
 cleanup. [SDK deletion](copilot-sdk.md#close-and-delete) owns concrete semantics.
 
-`src/session-deletion-operation.ts` owns the consumer-oriented `SessionDeletionOperation`, `SessionDeletionSource` and source-scoped `SessionDeletionContext` interfaces. The named consumers are the Session sidebar native row menus, Project bar trash control, selected-session palette/shortcut and repeated Delete sessions picker. A source binds a saved reference/title to an operation, returning `undefined` only for identities it does not own. Operations supply a cleanup target (`key`, `draftScope`), integration-specific `label`/`detail`, live `supported` and `available()` projections, an optional `unavailableReason`, and reviewed execution. An owned but unsupported identity can still explain its disabled controls; Delete discovery includes only supported operations. Completion also includes cancellation or a reported failure; only authoritative tombstones prove removal. This port is separate from `SessionLifecycle`: persistence, connectivity, discovery, Restart and deletion are independent capabilities.
+`src/session-deletion-operation.ts` owns the consumer-oriented `SessionDeletionOperation`, `SessionDeletionSource` and source-scoped `SessionDeletionContext` interfaces. The named consumers are the Session sidebar native row menus, Project bar trash control, selected-session palette/shortcut and repeated Delete sessions picker. A source binds a saved reference/title to an operation, returning `undefined` only for identities it does not own. Operations supply a cleanup target (`key`, `draftScope`), integration-specific `label`/`detail`, live `supported` and `available()` projections, an optional `unavailableReason`, and reviewed execution. An owned but unsupported identity can still explain its disabled controls; Delete discovery includes only supported operations. Completion also includes cancellation or a reported failure; only authoritative tombstones prove removal. This port is separate from `SessionLifecycle`: persistence, connectivity, discovery, Reload and deletion are independent capabilities.
 
 - `src/session-deletion-coordinator.ts::SessionDeletionCoordinator` registers sources, serializes local deletion, incorporates integration-owned external pending state, revalidates generic window/mounted-session gates, and owns one confirmed-success ledger. Its scoped context owns dialog presentation/progress, review ownership, mounted participant locks/observed stop, project-lifetime cancellation and application error routing. A Pi release/snapshot cannot dismiss another source's review. Locks are captured once per target, and all owned stops settle before failure releases them. Authoritative success effects deduplicate batches before the shared reconciliation callback; recovery explicitly retires a tombstone. Resolving `run()` is not an acknowledgement of successful deletion.
 - `src/pi/session-deletion.ts::piSessionDeletion` constructs/adapts the existing `SessionDeletion` native transaction. It maps native files to cleanup targets and routes review/progress/errors and confirmed event/IPC/snapshot successes through its scoped context. The transaction retains ordered event processing, native writer coordination, partial results, persisted quarantine and recovery. Its native tombstone deduplication remains integration bookkeeping, not a separate UI deletion ledger.
@@ -175,7 +175,7 @@ One native transaction per app process:
 `SessionDeletion.pending` reserves deletion itself, not all session lifecycle
 operations. `locked(file)` tracks only the active reviewed set; `blocked(file)`
 tracks persisted quarantine (or invalid persisted safety state for saved paths).
-New/New named/Temporary session, unrelated Resume/Restart/Close and notification
+New/New named/Temporary session, unrelated Resume/Reload/Close and notification
 navigation stay available while another window reviews or executes deletion.
 Normal dialog priority still applies within the reviewing window. There is no
 launch queue, implicit review cancellation or command replay.
@@ -215,7 +215,7 @@ persisted deletion state blocks saved resumes/recovery, but not fresh sessions.
   sessions have no saved target to recover, so that error must not block them.
 
 Shell tests cover another window's begin, all creation variants and naming races,
-unrelated Resume/Restart/Close, immediate unrelated cleanup reconnection and
+unrelated Resume/Reload/Close, immediate unrelated cleanup reconnection and
 stale cached Resume rows. Coordinator tests cover file-scoped locks/recovery;
 Rust ownership fixtures cover fresh/unrelated launches, affected attachment
 rejection and missing-file rejection after release. Fixture coverage is not
@@ -334,7 +334,7 @@ pop-outs; deletion uses `popouts::delete_sessions`. Quarantine rejects late pop-
 opens; serialized geometry/update-existing writes prevent resurrection.
 
 Failed/missing/unknown results after shutdown begins retain inactive draft-bearing
-entries as **Recovery needed**. Row selection, Retry and Restart cannot launch
+entries as **Recovery needed**. Row selection, Retry and Reload cannot launch
 them. Explicit Resume/exact-file open calls `recover_deletion_session`, validates
 saved ID/cwd after the transaction finishes, removes quarantine/tombstones and
 reuses the mounted conversation. Missing/replaced files remain unavailable.

@@ -207,7 +207,9 @@ commands. Failed/uncertain sends do not restore or replay images or alter a newe
 draft. New offline image fixtures are authored but unrun; installed-CLI/model and
 native clipboard/history acceptance remain pending.
 
-Current limits: no Restart, steering, queue, Pi MCP inspector
+[Reload session](sessions.md#reload-session) reopens the same saved conversation with a fresh Copilot agent while keeping your draft. Installed-runtime/native reload acceptance remains pending.
+
+Current limits: no steering, queue, Pi MCP inspector
 or in-place harness switching. Slash commands use the SDK's supported interface,
 not full terminal-UI emulation; see below.
 Interactive, Plan and Autopilot sessions are supported through the SDK. Generic

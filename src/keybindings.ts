@@ -38,7 +38,7 @@ const BUILTIN_ACTIONS = [
   { id: 'resume', label: 'Resume session…', scope: 'project', context: 'project', defaults: ['primary+k'] },
   { id: 'switch-session', label: 'Switch session…', scope: 'project', context: 'project', defaults: ['primary+t'] },
   { id: 'new-named', label: 'New named session…', scope: 'project', context: 'project', defaults: ['primary+alt+n'] },
-  { id: 'restart', label: 'Restart session', scope: 'project', context: 'session', defaults: ['primary+r'] },
+  { id: 'reload', label: 'Reload session', scope: 'project', context: 'session', defaults: ['primary+r'] },
 ] as const;
 export type BuiltinActionDefinition = typeof BUILTIN_ACTIONS[number];
 export type ActionId = BuiltinActionDefinition['id'] | `harness-${string}`;
@@ -95,10 +95,12 @@ export function readKeyOverrides(value: unknown): KeyOverrides {
     result[id] = bindings.map(validateBinding);
     if (new Set(result[id]).size !== bindings.length) throw new Error(`Duplicate shortcut for ${id}.`);
   }
+  // Read compatibility only; do not rewrite settings until this action is edited.
+  if (result.reload === undefined && result.restart !== undefined) result.reload = [...result.restart];
   return result;
 }
 export function bindingsFor(id: ActionId, overrides: KeyOverrides): readonly string[] {
-  return overrides[id] ?? actionDefinition(id).defaults;
+  return overrides[id] ?? (id === 'reload' ? overrides.restart : undefined) ?? actionDefinition(id).defaults;
 }
 export function isMac(window: Window): boolean { return /Mac|iPhone|iPad/i.test(window.navigator.platform); }
 export function shortcutLabel(binding: string, mac: boolean): string {
@@ -164,6 +166,8 @@ export function changeBinding(overrides: KeyOverrides, id: ActionId, bindings: r
   if (conflicts.length && !reassign) throw new Error(`Conflicts with ${[...new Set(conflicts.map(conflict => ACTIONS.find(action => action.id === conflict.id)!.label))].join(', ')}. Choose Reassign to remove the competing bindings.`);
   const changes: KeyChanges = { [id]: bindings === undefined ? undefined : [...bindings] };
   for (const conflict of conflicts) changes[conflict.id] = bindingsFor(conflict.id, overrides).filter(binding => !next.some(candidate => equivalent(candidate, binding, mac)));
+  // Editing/resetting Reload retires its legacy key so Reset cannot revive it.
+  if ('reload' in changes && overrides.restart !== undefined) changes.restart = undefined;
   return changes;
 }
 

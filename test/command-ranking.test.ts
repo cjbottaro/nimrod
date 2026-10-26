@@ -23,6 +23,12 @@ test('usage validates version, fields, duplicates and bounds', () => {
   assert.equal(result.length, 50);
   assert.equal(new Set(result.map(e => e.id)).size, 50);
 });
+test('persisted Restart usage follows Reload without duplicate command identities', () => {
+  const usage = readCommandUsage({ version: 1, entries: [
+    { id: 'restart', lastUsedAt: 20, useCount: 3 }, { id: 'reload', lastUsedAt: 10, useCount: 1 },
+  ] });
+  assert.deepEqual(usage, [{ id: 'reload', lastUsedAt: 20, useCount: 3 }]);
+});
 test('shared persistence records repeated use and survives a fresh snapshot', async () => {
   const host = new MemoryPreferences();
   await host.commandUsage('a'); await host.commandUsage('a'); await host.commandUsage('b');

@@ -8,7 +8,7 @@ export function piInspection(host: HarnessSessionHost, read: () => PiSession | u
     if (!request) return;
     cancel = request.cancel;
     const session = read();
-    const valid = () => host.lifetime.current() && read() === session && !host.ownership.ended && !host.lifetime.closing() && !host.lifetime.restarting() && !host.lifetime.deleting();
+    const valid = () => host.lifetime.current() && read() === session && !host.ownership.ended && !host.lifetime.closing() && !host.lifetime.reloading() && !host.lifetime.deleting();
     if (!session || !valid()) {
       request.cancel();
       if (host.lifetime.current() && !host.lifetime.closing()) host.effects.notice({ id: 'mcp-inspection', operation: 'Inspect MCP servers', message: 'Connect this session before inspecting MCP servers.' });

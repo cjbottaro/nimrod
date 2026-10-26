@@ -133,7 +133,7 @@ function createPiSession(host: HarnessSessionHost, request: SessionRequest, proj
     const current = new PiSession(rpc, {
       transcriptLog: host.transcriptLog, performance: host.performance, active: lifetime.selected,
       publish: message => { if (currentToken()) publish(message); },
-      notice: (message, severity, cause) => { if (currentToken() && !lifetime.closing() && !lifetime.restarting() && !lifetime.deleting()) effects.notice({ id: `pi:${++sequence}`, cause, operation: 'Pi operation', message, severity }); },
+      notice: (message, severity, cause) => { if (currentToken() && !lifetime.closing() && !lifetime.reloading() && !lifetime.deleting()) effects.notice({ id: `pi:${++sequence}`, cause, operation: 'Pi operation', message, severity }); },
       attention: (kind, response) => { if (currentToken()) effects.attention(kind, token, backend.session?.state.sessionName || 'Session', response); },
       choose: (title, options) => host.ui.withDialog(label => host.ui.dialogs.choose(label, options, token), title),
       input: (title, prefill) => host.ui.withDialog(label => host.ui.dialogs.input(label, prefill, token), title),
@@ -143,7 +143,7 @@ function createPiSession(host: HarnessSessionHost, request: SessionRequest, proj
         if (!currentToken()) return;
         owner.ended = true; inspection.cancel(); effects.retire(); effects.publish({ type: 'sessionDisconnected' });
         if (initialized && !lifetime.closing() && !lifetime.deleting()) void stopToken(token).catch(error => { if (currentToken()) effects.connection(`Could not stop Pi: ${error}`); });
-        if (!lifetime.closing() && !lifetime.restarting() && !lifetime.deleting() && !effects.hasConnectionOutcome()) effects.connection(`${reason || 'Session disconnected'}. Nothing will be sent automatically.`, !!owner.file?.exists);
+        if (!lifetime.closing() && !lifetime.reloading() && !lifetime.deleting() && !effects.hasConnectionOutcome()) effects.connection(`${reason || 'Session disconnected'}. Nothing will be sent automatically.`, !!owner.file?.exists);
         effects.changed();
       },
       identity: async (file, id) => {
@@ -186,7 +186,7 @@ function createPiSession(host: HarnessSessionHost, request: SessionRequest, proj
         validated: info => { launchInfo = info; if (info.session) { owner.file = info.session; effects.publish({ type: 'sessionReset', composerState: host.drafts.select(`file:${info.session.path}`) }); } },
         initialize: () => current.initialize(attemptName),
       });
-      if (currentToken()) { initialized = true; if (!lifetime.restarting()) host.ui.focusComposer(); }
+      if (currentToken()) { initialized = true; if (!lifetime.reloading()) host.ui.focusComposer(); }
     } catch (error) {
       rpc.disconnect(String(error));
       try { await stopToken(token); } catch (stopError) { if (currentToken()) effects.notice({ id: `stop:${++sequence}`, operation: 'Stop Pi', message: String(stopError) }); }
@@ -207,11 +207,11 @@ function createPiSession(host: HarnessSessionHost, request: SessionRequest, proj
   return {
     lifecycle, drafts: { durability: request.mode === 'temporary' ? 'memory' : 'persistent' }, conversation: conversationPort(host, readView, piInteraction), presentation: { snapshot }, configuration: { current: () => backend.session?.configuration },
     actions: { current: () => configurationActions(piSessionActions.map(action => action.id === 'mcp' ? { ...action, run: inspection.run } : action), { model: 'model', thinking: 'effort' }), async control() { throw new Error('This Pi control is no longer available'); } },
-    restart: { supported: true, available: () => !!owner.file?.exists && owner.mode !== 'temporary',
-      reason: () => saved.blocked(owner.file?.path) ? 'Restart session — recover through Resume session first' : owner.mode === 'temporary' ? 'Restart session — unavailable for temporary sessions' : !owner.file?.exists ? 'Restart session — available after the first save' : lifetime.restarting() ? 'Restarting session…' : 'Restart session',
-      detail: 'Restart Pi and retain this conversation', confirmation: 'This interrupts this session’s agent and resumes its saved history. Your draft stays; queued and in-flight work will not continue. Nothing is sent again automatically.',
-      needsConfirmation: inputPending => !!backend.session && !owner.ended && (snapshot().busy || snapshot().pending || snapshot().queuePending || inputPending),
-      async run() { await lifecycle.stop(); inspection.cancel(); effects.retire(); effects.publish({ type: 'sessionDisconnected' }); lifecycle.disconnect('Session restarted'); owner.ended = true; await lifecycle.connect({ acceptedAction: true }); } },
+    reload: { available: () => !!owner.file?.exists && owner.mode !== 'temporary',
+      reason: () => saved.blocked(owner.file?.path) ? 'Reload session — recover through Resume session first' : owner.mode === 'temporary' ? 'Reload session — unavailable for temporary sessions' : !owner.file?.exists ? 'Reload session — available after the first save' : lifetime.reloading() ? 'Reloading session…' : 'Reload session',
+      detail: 'Reload this conversation with a fresh Pi process', confirmation: 'This interrupts this session’s agent and resumes its saved history. Your draft stays; queued and in-flight work will not continue. Nothing is sent again automatically.',
+      needsConfirmation: inputPending => inputPending || !!backend.session && !owner.ended && snapshot().destructiveBusy,
+      async run() { if (!owner.file?.exists || owner.mode === 'temporary') throw new Error('Reload requires saved Pi history'); await lifecycle.stop(); inspection.cancel(); effects.retire(); effects.publish({ type: 'sessionDisconnected' }); lifecycle.disconnect('Session reloaded'); owner.ended = true; await lifecycle.connect({ acceptedAction: true }); } },
     close: request.mode === 'temporary' ? temporaryClose : savedClose, selection: ordinarySelection,
     interactions: { setActive() {}, dispose: inspection.cancel }, references: { file: () => owner.mode !== 'temporary' && owner.file?.exists ? { path: owner.file.path, sessionId: owner.file.sessionId } : undefined },
   };

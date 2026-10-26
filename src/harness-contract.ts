@@ -2,6 +2,7 @@ import type { ConversationInteraction, ConversationViewState } from './conversat
 import type { SessionLifecycle, SavedSessionIdentity, LaunchMode } from './session-lifecycle';
 import type { SessionMessageInput } from './session-message-input';
 import type { SessionConfiguration } from './session-configuration';
+import type { SessionReload } from './session-reload';
 import type { SessionHistory } from './session-history';
 import type { SessionDeletionContext, SessionDeletionSource } from './session-deletion-operation';
 import type { ActionId } from './keybindings';
@@ -37,9 +38,6 @@ export interface SessionConversation {
   readonly state: ConversationViewState | undefined;
   handle(message: Record<string, unknown>): Promise<void>;
 }
-export type SessionRestart =
-  | { supported: false; reason: string }
-  | { supported: true; available(): boolean; reason(): string; detail: string; confirmation: string; needsConfirmation(inputPending: boolean): boolean; run(): Promise<void> };
 export interface SessionClosePolicy {
   readonly alwaysConfirm: boolean;
   readonly label: string;
@@ -60,7 +58,8 @@ export interface HarnessSession {
   readonly presentation: { snapshot(): SessionPresentation };
   readonly configuration: { current(): SessionConfiguration | undefined };
   readonly actions: { current(): readonly HarnessAction[]; control(id: string): Promise<void> };
-  readonly restart: SessionRestart;
+  /** Required behavior, not an optional capability or an unsupported default. */
+  readonly reload: SessionReload;
   readonly close: SessionClosePolicy;
   readonly drafts: { readonly durability: 'persistent' | 'memory' };
   readonly selection: SessionSelectionPolicy;

@@ -2,7 +2,7 @@ import type { SavedSessionIdentity } from './session-lifecycle';
 
 export type SessionStatus =
   | 'closed' | 'inactive' | 'starting' | 'ready' | 'working' | 'input'
-  | 'failed' | 'unread' | 'sending' | 'compacting' | 'restarting'
+  | 'failed' | 'unread' | 'sending' | 'compacting' | 'reloading'
   | 'closing' | 'deleting' | 'recovery';
 
 /** Shared list projection, not a connection owner or a second session state machine. */

@@ -98,7 +98,7 @@ row/identity/draft for explicit retry. Startup does not resume Copilot conversat
 Listing, selection and replay never send prompts, restore in-flight work, stamp
 Send recency, emit completion alerts or change another session's draft/focus.
 Loading readiness controls composer availability. Close removes membership only;
-Restart stays Pi-only. Copilot deletion uses the separate SDK
+Reload uses the required [session reload port](projects-and-sessions.md#reload-session-lifecycle) for Pi, Copilot and Codex. Copilot deletion uses the separate SDK
 [deletion operation](session-deletion.md#consumer-interface-and-copilot-deletion).
 
 ## Fixtures and remaining evidence

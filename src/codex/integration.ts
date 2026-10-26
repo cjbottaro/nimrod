@@ -8,7 +8,7 @@ import { codexInteraction, codexSessionActions } from './view-policy';
 import { codexIntegrationUi } from './integration-ui';
 import { codexToolPlugin } from './card-plugins';
 import { defineHarness } from '../harness-registry';
-import { configurationActions, noProjectActions, explicitSelection, noReferences, savedClose, taggedSavedSessions, unsupportedRestart } from '../harness-defaults';
+import { configurationActions, noProjectActions, explicitSelection, noReferences, savedClose, taggedSavedSessions } from '../harness-defaults';
 import { conversationPort } from '../harness-conversation';
 import type { HarnessProject, HarnessSession, SessionRequest } from '../harness-contract';
 import type { HarnessProjectHost, HarnessSessionHost } from '../harness-host';
@@ -55,17 +55,17 @@ function createCodexProject(projectHost: HarnessProjectHost): HarnessProject {
 function createCodexSession(host: HarnessSessionHost, request: SessionRequest, project: HarnessProjectHost, ready: () => boolean, generation: () => string): HarnessSession {
   const backend: { session?: CodexSession; savedSessionId?: string } = { savedSessionId: request.mode === 'resume' ? request.reference.sessionId : undefined };
   const { lifetime, effects, ownership: owner } = host, ui = codexIntegrationUi(host);
-  let signature = '', sequence = 0;
+  let signature = '', sequence = 0, retiring = false;
   const lifecycle = createCodexConnection(() => owner, backend, {
     project: host.project, transport: nativeCodexTransport(host.project, () => ({ cli: project.runtime().codex, generation: generation() })),
-    current: lifetime.current, available: options => ready() && !project.deletionPending() && lifetime.available(options) && !lifetime.restarting(),
-    tearingDown: () => lifetime.closing() || lifetime.deleting(),
+    current: lifetime.current, available: options => ready() && !project.deletionPending() && lifetime.available(options),
+    tearingDown: () => lifetime.closing() || lifetime.deleting() || lifetime.reloading(),
     gate: () => ready() && !project.deletionPending() && !lifetime.deleting() ? 'ready' : 'blocked',
     conflicts: id => lifetime.conflicts({ kind: 'codex', sessionId: id }), drafts: host.drafts,
     effects: { changed: effects.changed, identified: effects.identified, retire: effects.retire,
       resolved: issue => effects.resolve(issue === 'cleanup' ? 'codex-cleanup' : 'connection'), hasConnectionOutcome: effects.hasConnectionOutcome,
       failure: failure => {
-        if (lifetime.closing() || lifetime.deleting()) return;
+        if (retiring || lifetime.closing() || lifetime.deleting()) return;
         if (failure.kind === 'cleanup') effects.notice({ id: 'codex-cleanup', operation: 'Stop Codex', message: failure.message, details: failure.details });
         else effects.connection(failure.message, failure.resumable, failure.details);
       } },
@@ -97,7 +97,24 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
     configuration: { current: () => backend.session?.configuration },
     actions: { current: () => configurationActions(codexSessionActions(backend.session), { model: 'model', thinking: 'effort' }), async control() { throw new Error('This Codex control is no longer available'); } },
     presentation: { snapshot: () => ({ harnessLabel: 'Codex', badge: 'Codex', badgeTitle: '', busy: backend.session?.state.busy === true,
-      working: backend.session?.state.busy === true, pending: backend.session?.state.busy === true, compacting: false, queuePending: false, destructiveBusy: backend.session?.state.busy === true }) },
-    restart: unsupportedRestart('Restart session — Close and Resume Codex explicitly'), close: savedClose, selection: explicitSelection, interactions: ui, references: noReferences,
+      working: backend.session?.state.busy === true, pending: backend.session?.state.busy === true, compacting: false, queuePending: false, destructiveBusy: backend.session?.hasPendingWork === true }) },
+    reload: {
+      available: () => !!lifecycle.identity,
+      reason: () => !lifecycle.identity ? 'Reload session — available after Codex assigns a saved identity' : lifetime.reloading() ? 'Reloading session…' : 'Reload session',
+      detail: 'Reload this conversation with a fresh Codex process',
+      confirmation: 'This interrupts this session’s agent and resumes its saved history. Your draft stays; in-flight work will not continue. Nothing is sent again automatically.',
+      needsConfirmation: inputPending => inputPending || !owner.ended && !!backend.session?.hasPendingWork,
+      async run() {
+        if (!lifecycle.identity) throw new Error('Reload requires a saved Codex identity');
+        retiring = true;
+        try {
+          await lifecycle.stop();
+          effects.retire(); effects.publish({ type: 'sessionDisconnected' });
+          lifecycle.disconnect('Session reloaded'); owner.ended = true;
+        } finally { retiring = false; }
+        await lifecycle.connect({ acceptedAction: true });
+      },
+    },
+    close: savedClose, selection: explicitSelection, interactions: ui, references: noReferences,
   };
 }

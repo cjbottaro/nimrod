@@ -123,6 +123,10 @@ export class CopilotSession {
       () => this.configuring ? Promise.resolve(null) : this.connection.request('context', {}, 'reject'));
     this.updateStatusArea();
   }
+  get hasPendingWork(): boolean {
+    return this.state.busy || this.configuring || this.commandQueue.occupied || this.pendingDecisions.size > 0
+      || this.configuration.operations.some(operation => operation.phase === 'queued' || operation.phase === 'applying');
+  }
   get canSubmit(): boolean { return !this.ended && !this.state.sessionUnavailable && !this.state.busy && !this.configuring && !this.commandOperation && !this.commandQueue?.occupied; }
   supports(kind: 'model' | 'thinking' | 'mode' | 'context'): boolean {
     const model = this.models.find(model => model.id === this.model);

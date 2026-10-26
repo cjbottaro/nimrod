@@ -28,9 +28,11 @@ export function readCommandUsage(value: unknown): CommandUsage[] {
   const ids = new Set<string>();
   const result: CommandUsage[] = [];
   for (const entry of value.entries) {
-    if (!entry || typeof entry.id !== 'string' || !entry.id || entry.id.length > 256 || ids.has(entry.id)
+    if (!entry || typeof entry.id !== 'string' || !entry.id || entry.id.length > 256
       || !Number.isSafeInteger(entry.lastUsedAt) || entry.lastUsedAt < 0 || !Number.isSafeInteger(entry.useCount) || entry.useCount < 1) continue;
-    ids.add(entry.id); result.push({ id: entry.id, lastUsedAt: entry.lastUsedAt, useCount: entry.useCount });
+    const id = entry.id === 'restart' ? 'reload' : entry.id; // Persisted action rename.
+    if (ids.has(id)) continue;
+    ids.add(id); result.push({ id, lastUsedAt: entry.lastUsedAt, useCount: entry.useCount });
     if (result.length === COMMAND_HISTORY_LIMIT) break;
   }
   return result;

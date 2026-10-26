@@ -40,7 +40,7 @@ ACP creation/options are absent from the palette, dispatcher and keybinding
 editor. Old `new-acp`/`acp-options` overrides remain stored but inert unknown
 IDs. Shell action contributions are filtered through the registered product
 actions. No active or restored ACP sessions enter the sidebar through product
-navigation. Pi and Copilot remain the exposed harnesses. MCP/Restart stay Pi-only.
+navigation. Pi, Copilot and Codex are the exposed harnesses. MCP inspection stays Pi-only; [Reload session](projects-and-sessions.md#reload-session-lifecycle) is implemented for all three. This dormant adapter explicitly refuses reload because it has no saved-identity/Resume path.
 
 ## Current foundation
 

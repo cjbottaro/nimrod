@@ -32,8 +32,9 @@ Share aligned mechanics, not approximate semantics. An unsupported operation is 
 
 | Contract | Consumers | Meaning |
 | --- | --- | --- |
-| `SessionPersistence` | Project layout/draft coordination | Saved reference, project-local stable key and draft scope; read-only and independent of connection or Restart support. |
+| `SessionPersistence` | Project layout/draft coordination | Saved reference, project-local stable key and draft scope; read-only and independent of connection or Reload support. |
 | `SessionConnectivity` | Selected-session connection coordinator and shell teardown | Display label, connection projection, startup policy, selection eligibility, connect, owned stop and local disconnect. |
+| `SessionReload` | Project bar, palette and shortcut dispatcher | Required exact-identity fresh-runtime reload, live availability/reason and interruption confirmation. Separate from persistence/connectivity. [Reload lifecycle](projects-and-sessions.md#reload-session-lifecycle) owns behavior and concrete mappings. |
 | `SessionLifecycle` | Composition root | Convenience intersection of those two ports, not a destination for every session feature. |
 | `SessionDeletionOperation` / `SessionDeletionSource` | Sidebar/Project bar controls, selected-session action and Delete sessions picker | Target-bound review/removal/reconciliation, with Pi tree and capability-gated Copilot single-session implementations; separate from lifecycle and history discovery. |
 
@@ -115,7 +116,7 @@ native-event translation is required.
 | `conversation` | Mounted transcript/composer, typed message input and view intents |
 | `presentation` | Sidebar activity, badge, pending work and destructive-operation review |
 | `configuration` / `actions` | Shared picker, operation cards, command palette and shortcut dispatcher |
-| `restart` / `close` | Supported-operation controls and confirmation policy |
+| `reload` / `close` | Required reload behavior, live availability and interruption/close confirmation policy |
 | `drafts` | Persistent versus memory-only draft/attachment lifetime |
 | `selection` | Explicit versus restored-selection connection policy |
 | `interactions` | Session activation/suspension and disposal of retained decisions |
@@ -123,8 +124,8 @@ native-event translation is required.
 
 Every slot is mandatory, including unsupported feature slots.
 `src/harness-defaults.ts` supplies explicit absent configuration/history/deletion,
-unsupported saved history/restart, no project actions, no retained interactions/references, safe
-selection/close policies and a generic idle text interaction. Core connect,
+unsupported saved history, no project actions, no retained interactions/references, safe
+selection/close policies and a generic idle text interaction. Reload has no unsupported default: every factory supplies the complete `SessionReload` port; product harnesses implement exact-identity fresh-runtime reload. Core connect,
 submission, protocol response and owned-stop implementations are not replaced
 with successful no-ops. `displayUnsupportedInteraction` displays literal
 question/request details and returns an explicit unsupported outcome; it does
@@ -171,12 +172,12 @@ extends the guard.
 
 `test/harness-contract.types.ts` is included by tsconfig and contains positive
 factory conformance plus negative `@ts-expect-error` assertions for missing
-mandatory ports, metadata-only actions and incorrect submission signatures.
+mandatory ports (including reload), unsupported-only reload stubs, missing reload execution, metadata-only actions and incorrect submission signatures.
 Making those slots optional causes the negative assertions to fail compilation.
 
 `test/fixtures/fixture-harness.ts` is a provider-free integration unknown to
 production consumers. Registry fixtures exercise real input/draft/history/
-action/deletion consumers and prototype-based implementations. The mounted
+action/reload/deletion consumers and prototype-based implementations. The mounted
 shell fixture changes only the composition import to register that fixture,
 then creates, sends, displays a fallback question, closes, resumes and deletes
 through unchanged application logic. Source/dependency, draft-scope and concrete
@@ -226,12 +227,12 @@ Names below are working labels, not pre-approved exported interfaces. Extract on
 | Session action contributions — registered executable/configuration ports | Palette/shortcuts/Status area need supported actions bound to an owning session, while application/project actions remain usable without one | Global definitions declare application/project/session context; concrete integrations contribute supported session IDs and metadata. Execution uses an integration-bound runner or its explicit setting target; the shell revalidates the same owner. No generic `execute(string, unknown)` escape hatch. |
 | Transcript logging | Nimrod diagnostics consumes native records through `TranscriptLogSink` | [Transcript logging](transcript-logs.md) owns the contract and concrete producers; no normalized conversation protocol or execution capability. |
 | Session list/history — implemented, unvalidated | Sidebar/Switch/Resume share `SessionListEntry` with semantic `SessionStatus`; Resume consumes project-bound `SessionHistory` discovery with paging/cancellation and source-local failure | [Session history](session-history.md) owns the contract. No connection owner per catalog entry; selection opens a session through its existing lifecycle. Pi catalog and Copilot SDK discovery remain concrete; no generic resume/delete protocol. |
-| Deletion coordinator — implemented, unvalidated | Delete controls/picker consume target-bound label/detail, explicit support/reason and live availability through one coordinator; registered sources publish scoped review/progress and authoritative cleanup targets | [Session deletion](session-deletion.md#consumer-interface-and-copilot-deletion) owns concrete mappings and lifetime. Shared pending/locks/stop, review ownership, error routing, tombstones and target-based cleanup need no harness branches. Pi tree transactions remain native; Copilot uses supported SDK deletion plus exact-project validation. Codex implements the same port with a guarded spawned-tree inventory/API, not a second UI; its [concrete contract](../../codex-integration/references/deletion.md) owns limitations. Review nodes now use opaque key/parentKey fields, while Pi file fields remain behind its adapter. Custom ACP has no deletion UI. Never infer Delete from saved identity or Restart. |
+| Deletion coordinator — implemented, unvalidated | Delete controls/picker consume target-bound label/detail, explicit support/reason and live availability through one coordinator; registered sources publish scoped review/progress and authoritative cleanup targets | [Session deletion](session-deletion.md#consumer-interface-and-copilot-deletion) owns concrete mappings and lifetime. Shared pending/locks/stop, review ownership, error routing, tombstones and target-based cleanup need no harness branches. Pi tree transactions remain native; Copilot uses supported SDK deletion plus exact-project validation. Codex implements the same port with a guarded spawned-tree inventory/API, not a second UI; its [concrete contract](../../codex-integration/references/deletion.md) owns limitations. Review nodes now use opaque key/parentKey fields, while Pi file fields remain behind its adapter. Custom ACP has no deletion UI. Never infer Delete from saved identity or Reload. |
 | Independent configuration owners — implemented, unvalidated | Shared configuration/picker/operation-card consumers need multiple configuration domains | `ConfigurationOwner` plus `SessionConfigurationSet` compose existing ports, not a universal harness controller. Permission command shortcuts now remain integration-owned session actions outside this port. See [Permission command shortcut](live-permissions.md). |
 | Session configuration — implemented, unvalidated | Model/effort picker consumes `SessionConfiguration` capabilities, confirmed getters, advertised choices and intent setters; Pi, SDK and dormant ACP retain concrete mutation/readiness semantics | [Model/thinking](model-thinking.md) owns latest-wins deferred intent, dependency validation, local transcript progress, disposal and evidence. Not a lifecycle/prompt controller or public plugin API. |
 | Status-area presentation — implemented, unvalidated | Shared Status area consumes `StatusAreaSnapshot` with explicit surface capabilities, keyed supported controls and current availability; Pi and Copilot SDK project their own semantics | [Harness presentation](harness-presentation.md#status-area-interface) owns the contract/mappings, ordered publication and reference-stability guarantees. Configuration execution/palette ownership remain concrete. No duplicate model/thinking capability flags, universal enum or permission approximation. |
 
-Restart, notifications and permission UI may expose further seams, but do not add empty interface families in anticipation of future harnesses. Connection, saved membership, history discovery, restart and deletion are independent capabilities.
+Reload is now a required consumer port, implemented for Pi, Copilot and Codex; its [lifecycle contract](projects-and-sessions.md#reload-session-lifecycle) owns runtime replacement and remaining limitations. Notifications and permission UI may expose further seams, but do not add empty interface families speculatively. Connection, saved membership, history discovery, reload and deletion remain separate responsibilities.
 
 ## Definition checklist
 
