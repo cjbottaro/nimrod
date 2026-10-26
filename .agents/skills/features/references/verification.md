@@ -9,7 +9,9 @@ composer validation/invocation/card cancellation, retained command output and
 Pi/Copilot/Codex/retained-ACP adapters are source-implemented. Codex exposes only
 reviewed native-API-backed `/model` and `/rename` client commands, not full CLI
 parity. New/updated shared, composer, type/registry, Pi, Codex and Copilot offline
-fixtures are authored **unrun**. The mandatory post-merge compile check is pending.
+fixtures are authored **unrun**. The mandatory post-merge `mise run check` passed:
+architectural dependency gate, TypeScript (including required-port/negative type
+assertions) and Rust compilation. This is compile evidence, not behavioral acceptance.
 No tests, builds, app launches, installed-CLI probes, live compaction or model
 requests were run for this task. Native model override confirmation and
 macOS/Linux interaction/focus/scroll acceptance remain outstanding.
