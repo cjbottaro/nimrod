@@ -1,7 +1,12 @@
 .keybinding-toolbar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:12px 0; }
-.keybinding-toolbar input { flex:1; min-width:180px; }
-.keybinding-row { display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--vscode-widget-border); }
-.keybinding-description { flex:1; min-width:180px; }
+.keybinding-toolbar input { flex:1; min-width:min(180px, 100%); }
+#keybinding-list { border:1px solid color-mix(in srgb, var(--vscode-panel-border) 65%, transparent); border-radius:9px; background:color-mix(in srgb, var(--vscode-descriptionForeground) 3%, transparent); }
+#keybinding-list:empty { display:none; }
+.keybinding-row { display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:13px 16px; border-bottom:1px solid color-mix(in srgb, var(--vscode-panel-border) 45%, transparent); }
+.keybinding-row:last-child { border-bottom:0; }
+.keybinding-description { flex:1; min-width:min(180px, 100%); }
+.keybinding-description strong { font-size:12px; font-weight:500; }
+.keybinding-description small { font-size:11px; line-height:1.5; }
 .keybinding-description strong, .keybinding-description small { display:block; }
 .keybinding-description small { color:var(--vscode-descriptionForeground); margin-top:4px; }
 .keybinding-buttons { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }

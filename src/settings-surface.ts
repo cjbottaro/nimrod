@@ -93,7 +93,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     error: feedback('themes', 'Color theme'),
     libraryEdits: global,
   });
-  if (!global) required('theme-picker').parentElement!.querySelector<HTMLElement>('.settings-hint')!.textContent = 'Choose a global-library theme for this project. Import or remove themes in global Settings.';
+  if (!global) required('theme-hint').textContent = 'Choose a global-library theme for this project. Import or remove themes in global Settings.';
   const appearance = installNativeWindowAppearance({
     read: () => preferences.windowAppearance(),
     save: patch => preferences.saveWindowAppearance(patch),

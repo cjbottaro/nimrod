@@ -32,8 +32,10 @@ for (const width of [1440, 800, 480]) {
       const geometry = await body.evaluate(element => ({
         left: getComputedStyle(element).paddingLeft, right: getComputedStyle(element).paddingRight,
         client: element.clientWidth, scroll: element.scrollWidth, overflows: element.scrollHeight > element.clientHeight,
+        containerWidth: element.parentElement!.clientWidth,
       }));
-      expect(geometry.left).toBe('20px'); expect(geometry.right).toBe('20px');
+      const gutter = geometry.containerWidth <= 560 ? '16px' : '28px';
+      expect(geometry.left).toBe(gutter); expect(geometry.right).toBe(gutter);
       expect(geometry.scroll).toBeLessThanOrEqual(geometry.client); expect(geometry.overflows).toBe(true);
       for (const x of [bounds.x + 8, bounds.x + bounds.width - 8]) {
         await body.evaluate(element => { element.scrollTop = 0; });

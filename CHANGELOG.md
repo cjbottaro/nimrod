@@ -51,6 +51,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- Settings has a quieter, more compact layout: restrained category navigation, grouped preference rows, shorter sliders, and paired font/size controls with an integrated live specimen. Detailed appearance help and configuration-file paths use expandable disclosures; project overrides and immediate preference behavior are unchanged.
+
 - **Reload session** replaces **Restart session** and now supports Pi, Copilot and Codex through a required integration interface. The Project bar, palette and ⌘/Ctrl+R reopen the same saved conversation with a fresh agent process, retaining drafts without replaying work or affecting other sessions. Existing custom shortcuts remain effective. Copilot/Codex installed-runtime and native acceptance remain pending.
 
 - New persistent Pi sessions show **Pi** immediately instead of **Pi · awaiting first save**. Reload still waits for verified saved history, with the reason in its tooltip; temporary sessions remain explicitly labelled.

@@ -1,6 +1,6 @@
 # Settings
 
-**Global Settings** opens in its own reusable window through **⌘/Ctrl+,**, the native **Settings…** menu item, or the command palette. It contains Appearance, Notifications, Diagnostics, Keybindings and Runtime. On first open, the window appears after its controls, theme, translucency and zoom are prepared, instead of showing a blank opaque page while loading. Runtime-path detection can continue afterward. Opening it again focuses the existing ready window; Close or Escape closes that window. No project is required.
+**Global Settings** opens in its own reusable window through **⌘/Ctrl+,**, the native **Settings…** menu item, or the command palette. It contains Appearance, Interaction, Notifications, Diagnostics, Keybindings and Runtime. On first open, the window appears after its controls, theme, translucency and zoom are prepared, instead of showing a blank opaque page while loading. Runtime-path detection can continue afterward. Opening it again focuses the existing ready window; Close or Escape closes that window. No project is required.
 
 **Project settings** opens inside the current project window through the Project bar's gear, **⌘/Ctrl+Shift+,**, or the command palette. The header names the project. **Back** or **Escape** returns to its conversation; **Open global settings** opens the separate defaults window.
 
@@ -27,6 +27,8 @@ Drag the sidebar's right edge to resize it. Its width is saved app-wide, separat
 Escape during a drag cancels resizing; the next Escape closes Settings.
 
 ## Appearance
+
+Related preferences are grouped into compact rows. **Window** contains the theme and background controls; **Typography** pairs font choices and sizes with a live specimen; **Interface** contains zoom, followed by animation and auto-follow preferences. Controls stack in narrow windows. Expand **About window appearance** or **About typography** for the detailed explanations.
 
 Sliders show the current value with an accent-colored filled track as soon as Settings opens, without needing a first adjustment. The fill follows theme changes and settings reloaded from disk.
 
@@ -110,7 +112,7 @@ On Windows, choose Pi's JS entry point and `node.exe` explicitly; npm `.cmd` wra
 
 ## Configuration files
 
-Resolved paths appear under Runtime. Defaults are:
+Resolved paths appear under **Runtime → Settings files**. Defaults are:
 
 ```text
 <project>/.nimrod/settings.json   # Optional project overrides (JSONC)
