@@ -94,6 +94,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Copilot command cards no longer repeatedly show and hide **Raw output** as streaming snapshots alternate between formatted and plain text. Once needed, the disclosure stays available through completion with its current exact output and expansion state preserved.
+
 - Codex reconnect preserves the exact native thread ID and local draft instead of silently replacing untouched threads. Retired private continuity markers no longer authorize replacement; saved-history controls wait for native confirmation, not a returned runtime ID. Missing-rollout errors explain the native limitation without falsely claiming history is saved, and retain full cleanup diagnostics in Details. Codex's zero-message persistence/discovery limitations also affect its native CLI; Nimrod does not force a save or fabricate native history.
 - A single expanded session notice keeps its complete outline and rounded corners while long diagnostics scroll, rather than clipping the banner's lower border. Multiple independent notices retain their separate borders.
 

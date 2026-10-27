@@ -121,6 +121,30 @@ for (const customization of ['same update', 'later update'] as const) test(`cust
   } finally { dom.window.close(); }
 });
 
+test('raw recovery stays visible once needed, including empty and subsequently literal snapshots', () => {
+  const dom = new JSDOM('<body></body>'); const doc = dom.window.document;
+  const plugin: DomCardRenderer<ToolCardBlock> = { apiVersion: 2, id: 'fixture.changing-coverage', supports: () => true,
+    mount(ctx) { return { update(data) {
+      ctx.renderPresentation({ title: 'Custom', sections: data.resultOutput ? [
+        { key: 'result', label: 'Result', text: data.resultOutput === 'original' ? 'Short summary' : data.resultOutput },
+      ] : [] });
+    }, dispose() {} }; },
+  };
+  const data = { name: 'custom', toolStatus: 'running' as const, resultOutput: 'original' };
+  const card = renderToolCard(doc, data, doc.createElement('details'), plugin); doc.body.append(card);
+  try {
+    const recovery = card.querySelector<HTMLDetailsElement>('.tool-raw-output')!;
+    recovery.open = true;
+    for (const resultOutput of ['literal replacement', '', 'original', 'literal again']) {
+      updateToolCard(doc, card, { ...data, resultOutput });
+      assert.equal(card.querySelector('.tool-raw-output'), recovery);
+      assert.equal(recovery.hidden, false); assert.equal(recovery.open, true);
+      assert.equal(recovery.querySelector('pre')?.textContent ?? '', resultOutput);
+      assert.equal(recovery.querySelectorAll('.tool-section').length, resultOutput ? 1 : 0, 'no stale raw content');
+    }
+  } finally { disposeToolCard(card); dom.window.close(); }
+});
+
 test('managed mutation captures before change and becomes inert after disposal; bundled inventory implements DOM API', () => {
   const dom = new JSDOM('<body><span id="summary"></span><div id="body"></div></body>'); const doc = dom.window.document;
   const order: string[] = []; let context!: CardPluginContext;
