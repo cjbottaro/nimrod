@@ -3984,7 +3984,8 @@ test('Settings preserves a live conversation and saving paths does not mutate it
     assert.equal(element<HTMLDialogElement>('settings-page').open, true);
     assert.equal(element('conversation').hidden, false);
     element<HTMLInputElement>('pi-path').value = '/new/pi'; element<HTMLInputElement>('node-path').value = '/new/node';
-    element('runtime-settings').dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true }));
+    element('pi-path').dispatchEvent(new win.Event('change', { bubbles: true }));
+    element('node-path').dispatchEvent(new win.Event('change', { bubbles: true }));
     await f.tick();
     assert.equal(JSON.parse(f.preferences.value.projectText!)['runtime.piPath'], '/new/pi');
     assert.equal(JSON.stringify(calls.find(c => c.command === 'start_pi')!.args.config), original);

@@ -83,32 +83,35 @@ test('runtime fields wait for detection; legacy paths survive and new preference
   } finally { next.close(); }
 });
 
-test('runtime changes require Save, preserve unsaved drafts across navigation, and return launch snapshots', () => {
+test('runtime commits edited fields without a Save button and returns launch snapshots', async () => {
   const f = runtimeFixture();
   try {
     f.runtime.initialize(defaults); const running = f.runtime.current();
     f.settings.open(); f.edit({ pi: '  /new/pi  ', node: '/new/node' });
     assert.deepEqual(f.runtime.current(), defaults);
-    assert.match(f.get('runtime-status').textContent!, /Unsaved/);
+    assert.equal(f.document.getElementById('save-runtime'), null);
     f.settings.close(); f.settings.open(); assert.equal(f.get<HTMLInputElement>('pi-path').value, '  /new/pi  ');
-    f.submit(); assert.equal(f.saves.length, 1);
+    f.submit(); await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(f.saves.length, 2);
     assert.deepEqual(f.runtime.current(), { pi: '/new/pi', node: '/new/node' });
     assert.deepEqual(running, defaults); assert.equal(f.get<HTMLInputElement>('pi-path').value, '/new/pi');
-    assert.match(f.get('runtime-status').textContent!, /next session/);
+    assert.match(f.get('runtime-status').textContent!, /new sessions/);
   } finally { f.close(); }
 });
 
-test('invalid runtime values and persistence failure do not change committed paths', () => {
+test('invalid runtime values and persistence failure do not change committed paths', async () => {
   for (const value of [{ pi: '', node: 'node' }, { pi: 'pi\n--bad', node: 'node' }, { pi: 'pi', node: 'x'.repeat(4097) }]) assert.throws(() => runtimePaths(value));
   const f = runtimeFixture();
   try {
-    f.runtime.initialize(defaults); f.edit({ pi: '', node: 'node' }); f.submit();
+    f.runtime.initialize(defaults); f.edit({ pi: '', node: defaults.node }); f.submit();
+    await new Promise(resolve => setTimeout(resolve, 0));
     assert.deepEqual(f.runtime.current(), defaults); assert.equal(f.saves.length, 0);
     assert.match(f.get('runtime-status').textContent!, /Not saved/);
   } finally { f.close(); }
   const failing = runtimeFixture(undefined, true);
   try {
-    failing.runtime.initialize(defaults); failing.edit({ pi: 'other-pi', node: 'node' }); failing.submit();
+    failing.runtime.initialize(defaults); failing.edit({ pi: 'other-pi', node: defaults.node }); failing.submit();
+    await new Promise(resolve => setTimeout(resolve, 0));
     assert.deepEqual(failing.runtime.current(), defaults);
     assert.match(failing.get('runtime-status').textContent!, /quota/);
   } finally { failing.close(); }
@@ -124,7 +127,7 @@ test('corrupt saved runtime preferences are recoverable without writing or chang
   } finally { f.close(); }
 });
 
-test('runtime Save retains newer inherited fields from its authoritative result', async () => {
+test('runtime field commit retains newer inherited fields from its authoritative result', async () => {
   const f = fixture();
   let saved = { ...defaults }, finish!: () => void;
   const gate = new Promise<void>(resolve => { finish = resolve; });

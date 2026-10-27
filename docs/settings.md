@@ -25,7 +25,7 @@ These are the complete set of six project-overridable Nimrod preferences, stored
 | Runtime | Copilot CLI executable | `runtime.copilotPath` | On the next Copilot session launch |
 | Runtime | Codex CLI executable | `runtime.codexPath` | On the next Codex session launch |
 
-Omitted keys inherit global settings, then built-in defaults or runtime discovery. Runtime overrides require **Save runtime paths**; saving never restarts an existing session. Every supported field shows its source and offers **Use global default** when overridden.
+Omitted keys inherit global settings, then built-in defaults or runtime discovery. Runtime fields save individually when changed and left, or when you press Enter; saving never restarts an existing session. Every supported field shows its source and offers **Use global default** when overridden.
 
 **Typography, translucency, zoom, modal animations and auto-follow after sending are global-only**, along with notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration. Project settings contains the theme picker under Appearance, autocomplete acceptance under Interaction and runtime paths under Runtime. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
 
@@ -118,10 +118,10 @@ Pi and Node paths are discovered automatically; override them here if needed.
 
 1. Wait for initial detection.
 2. Edit executable names or paths.
-3. Click **Save runtime paths**, or press Enter in the form. In Project settings, only edited fields become overrides; untouched fields keep inheriting.
+3. Leave the edited field or press Enter to save it automatically. Each field saves independently; in Project settings, untouched fields keep inheriting.
 4. Start a new session to use the saved paths.
 
-Saving never changes an already-running process. Unsaved fields survive navigation in this window, not restart, and aren't used for launch. External settings edits update saved launch paths without replacing dirty fields; Save then replaces those corresponding values. Invalid/failed saves retain the prior saved paths.
+Saving never changes an already-running process. Typing does not save every keystroke, and an unfinished or invalid field does not block saving another field. Invalid values and failed writes retain the last saved launch path and your typed text, with an error in the application notice strip; edit the affected field to try again. External settings edits update saved launch paths without replacing unfinished edits. Pending saves never disable the form or overwrite newer typing. Unsaved text is not retained across app restart.
 
 On Windows, choose Pi's JS entry point and `node.exe` explicitly; npm `.cmd` wrappers aren't supported. Models and thinking levels are [live session controls](model-thinking.md), not app preferences.
 

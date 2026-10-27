@@ -55,10 +55,10 @@ export function runtimePaths(value: unknown): RuntimePaths {
   return { pi: path(raw.pi, 'Pi'), node: path(raw.node, 'Node'), ...(raw.copilot === undefined ? {} : { copilot: path(raw.copilot, 'Copilot') }), ...(raw.codex === undefined ? {} : { codex: path(raw.codex, 'Codex') }) };
 }
 
-/** Runtime fields have an explicit Save boundary; unsaved edits never affect a launch. */
+/** Commit individual runtime fields on change/blur/Enter, never on each keystroke. */
 export function installRuntimeSettings(elements: {
   form: HTMLFormElement; fields: HTMLFieldSetElement; pi: HTMLInputElement; node: HTMLInputElement; copilot?: HTMLInputElement; codex?: HTMLInputElement; status: HTMLElement;
-}, host: { read(): unknown; save(paths: RuntimePaths & { version: 1 }, changed: RuntimeField[]): void | RuntimePaths | Promise<void | RuntimePaths>; error?(message?: string): void }): {
+}, host: { read(): unknown; save(paths: RuntimePaths & { version: 1 }, changed: RuntimeField[]): void | RuntimePaths | Promise<void | RuntimePaths>; error?(message?: string, field?: RuntimeField): void }): {
   initialize(defaults: RuntimePaths, legacy?: unknown): void;
   current(): RuntimePaths; resetField(key: RuntimeField): void; reload(): void; dispose(): void;
 } {
@@ -67,6 +67,10 @@ export function installRuntimeSettings(elements: {
   for (const key of ['pi', 'node', 'copilot', 'codex'] as const) if (elements[key]) inputs.set(key, elements[key]!);
   let committed: RuntimePaths | undefined;
   const edited = new Set<RuntimeField>();
+  const versions = new Map<RuntimeField, number>();
+  const attempts = new Map<RuntimeField, string>();
+  const failures = new Map<RuntimeField, string>();
+  let disposed = false, sequence = 0, applied = 0;
   const effective = (paths: RuntimePaths, key: RuntimeField) => paths[key] ?? key;
   fields.disabled = true;
   if (host.error) form.noValidate = true;
@@ -76,23 +80,61 @@ export function installRuntimeSettings(elements: {
   };
   const dirtyKeys = () => [...inputs].filter(([key, input]) => committed && (input.value !== effective(committed, key) || edited.has(key))).map(([key]) => key);
   const show = () => { if (committed) for (const [key, input] of inputs) input.value = effective(committed, key); };
-  const submit = async (event: Event) => {
-    event.preventDefault(); if (!committed) return;
+  const reportFailures = () => {
+    if (host.error) {
+      if (failures.size) { status.textContent = ''; status.classList.remove('error'); }
+      for (const key of inputs.keys()) host.error(failures.get(key), key);
+      if (!failures.size) host.error();
+    } else if (failures.size) message([...failures.values()].join(' '), true);
+  };
+  const commit = async (key: RuntimeField) => {
+    if (!committed || disposed || !dirtyKeys().includes(key)) return;
+    const field = inputs.get(key)!;
+    const value = field.value, version = versions.get(key) ?? 0;
+    const signature = JSON.stringify([version, value]);
+    // Native change followed by blur is one intent, including failed writes.
+    if (attempts.get(key) === signature) return;
+    attempts.set(key, signature);
+    const request = ++sequence;
     try {
-      const next = runtimePaths(Object.fromEntries([...inputs].map(([key, input]) => [key, input.value])));
-      fields.disabled = true;
-      const changed = dirtyKeys();
-      const authoritative = await host.save({ version: 1, ...next }, changed);
-      committed = authoritative ? runtimePaths(authoritative) : next; edited.clear(); show(); host.error?.();
-      message('Saved. These paths will be used for the next session.');
-    } catch (error) { message(`Not saved: ${String(error)}`, true); }
-    finally { fields.disabled = false; }
+      // Validate only this field against committed paths, not other partial drafts.
+      const next = runtimePaths({ ...committed, [key]: value });
+      message('Saving… Applies to new sessions.');
+      const authoritative = await host.save({ version: 1, ...next }, [key]);
+      if (disposed) return;
+      const dirty = new Set(dirtyKeys());
+      if (request >= applied) {
+        applied = request;
+        committed = authoritative ? runtimePaths(authoritative) : { ...committed, [key]: next[key] };
+      }
+      if ((versions.get(key) ?? 0) === version && field.value === value) {
+        dirty.delete(key); edited.delete(key);
+      }
+      for (const [name, element] of inputs) if (!dirty.has(name)) element.value = effective(committed, name);
+      if (attempts.get(key) === signature) failures.delete(key);
+      reportFailures();
+      if (!failures.size) message('Saved. Applies to new sessions.');
+    } catch (error) {
+      if (disposed || attempts.get(key) !== signature || (versions.get(key) ?? 0) !== version) return;
+      failures.set(key, `Not saved (${key}): ${String(error)}`); reportFailures();
+    }
   };
+  const targetKey = (event: Event) => [...inputs].find(([, element]) => event.target === element)?.[0];
   const input = (event: Event) => {
-    for (const [key, element] of inputs) if (event.target === element) edited.add(key);
-    if (committed) message(dirtyKeys().length ? 'Unsaved changes. Save to use these paths for the next session.' : '');
+    const key = targetKey(event);
+    if (key) {
+      edited.add(key); versions.set(key, (versions.get(key) ?? 0) + 1);
+      if (!failures.size) message('Changes save when you leave the field. Applies to new sessions.');
+    }
   };
+  const change = (event: Event) => { const key = targetKey(event); if (key) void commit(key); };
+  const keydown = (event: KeyboardEvent) => {
+    if (event.defaultPrevented || event.isComposing || event.key !== 'Enter' || !targetKey(event)) return;
+    event.preventDefault(); change(event);
+  };
+  const submit = (event: Event) => { event.preventDefault(); for (const key of dirtyKeys()) void commit(key); };
   form.addEventListener('submit', submit); form.addEventListener('input', input);
+  form.addEventListener('change', change); form.addEventListener('blur', change, true); form.addEventListener('keydown', keydown);
   return {
     initialize(defaults, legacy) {
       committed = runtimePaths(defaults);
@@ -107,7 +149,7 @@ export function installRuntimeSettings(elements: {
           committed = runtimePaths(saved);
         }
         message('');
-      } catch (error) { message(`Could not restore saved runtime settings: ${String(error)}. Review the paths and save again.`, true); }
+      } catch (error) { message(`Could not restore saved runtime settings: ${String(error)}. Review and edit the affected paths.`, true); }
       show(); fields.disabled = false;
     },
     reload() {
@@ -117,14 +159,20 @@ export function installRuntimeSettings(elements: {
       if ([...inputs.keys()].every(key => effective(next, key) === effective(committed!, key))) return;
       committed = next;
       for (const [key, input] of inputs) if (!dirty.has(key)) input.value = effective(next, key);
-      message(dirty.size ? 'Saved paths changed in settings.json. Your unsaved edits are retained; Save replaces the corresponding saved paths.' : 'Updated from settings.json. Applies to the next session.');
+      if (!failures.size) message(dirty.size ? 'Saved paths changed. Your unfinished edits are retained.' : 'Updated from settings.json. Applies to new sessions.');
     },
     resetField(key) {
       if (!committed) return;
       const input = inputs.get(key); if (input) input.value = effective(committed, key);
-      edited.delete(key); message(dirtyKeys().length ? 'Unsaved changes. Save to use these paths for the next session.' : '');
+      edited.delete(key); versions.set(key, (versions.get(key) ?? 0) + 1);
+      attempts.delete(key); failures.delete(key); applied = ++sequence;
+      reportFailures(); if (!failures.size) message('Applies to new sessions.');
     },
     current() { if (!committed) throw new Error('Runtime paths are not ready.'); return { ...committed }; },
-    dispose() { form.removeEventListener('submit', submit); form.removeEventListener('input', input); },
+    dispose() {
+      disposed = true;
+      form.removeEventListener('submit', submit); form.removeEventListener('input', input);
+      form.removeEventListener('change', change); form.removeEventListener('blur', change, true); form.removeEventListener('keydown', keydown);
+    },
   };
 }

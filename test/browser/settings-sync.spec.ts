@@ -17,7 +17,7 @@ test('file settings synchronize behind Settings without replacing the offline co
     await expect(page.locator('#theme-picker')).toHaveValue('dracula');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dracula');
     await expect(page.locator('#pi-path')).toHaveValue('/unsaved/pi');
-    await expect(page.locator('#runtime-status')).toContainText('unsaved edits are retained');
+    await expect(page.locator('#runtime-status')).toContainText('unfinished edits are retained');
     await fixture.editPreferences('{broken}');
     await expect(page.locator('#application-notices')).toBeVisible();
     await expect(page.locator('#preferences-error')).toBeHidden();

@@ -255,13 +255,13 @@ test('runtime validation uses the strip, not an inline error or native validatio
   const fixture = await demoFixture(page);
   try {
     await page.locator('#open-settings').click(); await page.locator('#settings-category-runtime').click();
-    await page.locator('#pi-path').fill(''); await page.locator('#save-runtime').click();
+    await page.locator('#pi-path').fill(''); await page.locator('#pi-path').press('Tab');
     await expect(page.locator('#application-notices')).toContainText('Save runtime paths');
     await expect(page.locator('#application-notices')).toContainText('non-empty');
     await expect(page.locator('#runtime-status')).not.toContainText('Not saved');
     await expect(page.locator('#settings-page')).toBeVisible();
     await page.locator('#pi-path').fill('/fixture/pi');
-    await page.locator('#save-runtime').click();
+    await page.locator('#pi-path').press('Enter');
     await expect(page.locator('#application-notices')).toBeHidden();
     await expect(page.locator('#runtime-status')).toContainText('Saved.');
     expect(fixture.errors).toEqual([]);

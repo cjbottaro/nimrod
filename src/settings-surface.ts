@@ -78,10 +78,10 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   }, {
     read: () => runtimeDefaults ? preferences.runtime(runtimeDefaults) : null,
     save: async (paths, fields) => {
-      await preferences.saveRuntime(paths, global ? undefined : fields);
+      await preferences.saveRuntime(paths, fields);
       return preferences.runtime(runtimeDefaults ?? paths);
     },
-    error: feedback('runtime', 'Save runtime paths'),
+    error: (message, field) => feedback(field ? 'runtime:' + field : 'runtime', 'Save runtime paths')(message),
   });
   const themes = installThemes({
     root: document.documentElement,
