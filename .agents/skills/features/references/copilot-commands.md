@@ -55,11 +55,15 @@ rename action.
 CLI 1.0.98 keeps `/config` entirely in its terminal client: it is absent from
 `commands.list()` and direct command RPC rejects it. Nimrod synthesizes a
 Copilot-owned client command from public `user.settings.get/set` and model
-metadata. Key completion combines dynamic SDK keys with a pinned path-only
-nested-key compatibility supplement. Model, effort, default mode, context tier,
+metadata. Key completion combines dynamic SDK leaf keys with a pinned path-only
+nested-key compatibility supplement; object containers and secure-only keys are
+not editable suggestions. Model, effort, default mode, context tier,
 Auto tier and default permission mode use typed harness pickers; remaining
-values are free-form, conservatively decoded, written and authoritatively
-confirmed by Copilot. These are defaults for future sessions and never dispatch
+values are free-form, conservatively decoded, validated through
+`user.settings.validate`, written and authoritatively confirmed by Copilot.
+Known typed values also advertise second-stage literal completions through
+`input.valueChoices`; free-form settings retain only `[value]`.
+These are defaults for future sessions and never dispatch
 Nimrod's live session configuration actions.
 
 Registered composer routing now uses the required [session command

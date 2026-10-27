@@ -25,7 +25,7 @@ export class CopilotClient {
     for (const [key, value] of Object.entries(settings)) {
       if (value === null) delete this.userSettings[key]; else this.userSettings[key] = value;
     }
-  } } } };
+  }, validate: async () => ({ ok: true }) } } };
   async start() {}
   async getStatus() { return { version: '1.0.98', protocolVersion: 3 }; }
   async ping() { return { timestamp: Date.now() }; }
@@ -85,7 +85,18 @@ class Session {
       set: async ({ name }) => { this.sessionName = name; this.emit('session.title_changed', { title: name }); },
       get: async () => ({ name: this.sessionName }),
     },
-    permissions: { getMode: async () => ({ mode: this.permissionMode }) },
+    permissions: {
+      getMode: async () => ({ mode: this.permissionMode }),
+      setMode: async ({ mode, source }) => {
+        assert.equal(this.saved, false, 'Resume must never reapply permission defaults');
+        assert.equal(source, 'user_setting');
+        assert.ok(['manual', 'assisted', 'allow-all'].includes(mode));
+        if (process.env.NIMROD_FIXTURE_COPILOT_MODEL_STATE === 'permission-rejected') return { success: false, mode: this.permissionMode };
+        this.permissionMode = mode;
+        this.emit('session.permissions_changed', { mode });
+        return { success: true, mode };
+      },
+    },
     skills: { list: async () => ({ skills: [
       { name: 'fixture-skill', description: 'Fixture skill details', enabled: true },
       { name: 'disabled-skill', description: 'Disabled fixture skill', enabled: false },
@@ -133,7 +144,7 @@ class Session {
         // The CLI can own its picker even when SDK invocation defaults to text.
         if (name === 'permissions') {
           if (input === 'allow-all') { this.permissionMode = 'allow-all'; this.emit('session.permissions_changed', { mode: 'allow-all' }); }
-          return { kind: 'text', text: `Fixture permission report: ${input ?? 'show'}`, markdown: false };
+          return { kind: 'text', text: `Fixture permission report: ${input ?? 'show'} (${this.permissionMode})`, markdown: false };
         }
         if (name === 'discover-fixture') {
           this.commandCatalog.push({ name: 'new-fixture', kind: 'builtin', description: 'Newly advertised command', allowDuringAgentExecution: false });

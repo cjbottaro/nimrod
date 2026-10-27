@@ -72,3 +72,37 @@ test('unknown mode is rejected before mutation and stale mode results are not re
   await assert.rejects(configuration.apply(session, 'mode', 'plan'), /did not apply/);
   assert.equal(mutations, 1);
 });
+
+test('permission defaults skip unset/already-effective modes and confirm native mutations', async () => {
+  const calls: unknown[] = [];
+  let mode = 'manual';
+  const session = { rpc: { permissions: {
+    getMode: async () => { calls.push('get'); return { mode }; },
+    setMode: async (params: { mode: string; source: 'user_setting' }) => {
+      calls.push(params); mode = params.mode; return { success: true, mode };
+    },
+  } } };
+  const configuration = createCopilotConfiguration(client);
+  await configuration.initializePermissions(session, undefined);
+  assert.deepEqual(calls, []);
+  await configuration.initializePermissions(session, 'manual');
+  assert.deepEqual(calls, ['get']);
+  calls.length = 0;
+  await configuration.initializePermissions(session, 'allow-all');
+  assert.deepEqual(calls, ['get', { mode: 'allow-all', source: 'user_setting' }, 'get']);
+});
+
+for (const outcome of ['rejected', 'mismatched-result', 'unconfirmed']) {
+  test(`permission-default ${outcome} fails without retry`, async () => {
+    let mutations = 0;
+    const session = { rpc: { permissions: {
+      getMode: async () => ({ mode: 'manual' }),
+      setMode: async () => {
+        mutations++;
+        return { success: outcome !== 'rejected', mode: outcome === 'mismatched-result' ? 'manual' : 'allow-all' };
+      },
+    } } };
+    await assert.rejects(createCopilotConfiguration(client).initializePermissions(session, 'allow-all'), /default permission mode/);
+    assert.equal(mutations, 1);
+  });
+}

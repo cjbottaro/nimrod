@@ -5,7 +5,10 @@ export interface SlashCommand {
   name: string; description: string; source: 'GUI' | 'Extension' | 'Template' | 'Skill' | 'Agent';
   aliases?: readonly string[];
   allowDuringAgentExecution?: boolean;
-  input?: { hint: string; required?: boolean; choices?: { name: string; description: string }[]; valueHint?: string };
+  input?: {
+    hint: string; required?: boolean; choices?: { name: string; description: string }[]; valueHint?: string;
+    valueChoices?: Record<string, { name: string; description: string }[]>;
+  };
 }
 export interface CommandCatalog { readonly revision: number; readonly commands: readonly SlashCommand[]; }
 export interface CommandInvocation { readonly id: string; readonly text: string; }

@@ -142,12 +142,14 @@ async function dispatch(message) {
         if (message.sessionId !== undefined) await membership(message.sessionId);
         replaying = true;
         const defaults = message.sessionId === undefined ? await configuration.defaults() : undefined;
+        const { permissionMode, ...creationDefaults } = defaults ?? {};
         if (closing) throw new Error('Copilot connection closed while reading configuration. Nothing was created.');
         session = message.sessionId === undefined
-          ? await client.createSession({ ...config(), ...defaults, name: 'Copilot session' })
+          ? await client.createSession({ ...config(), ...creationDefaults, name: 'Copilot session' })
           : await client.resumeSession(message.sessionId, { ...config(), allowTranscriptRecovery: false, continuePendingWork: false });
         if (message.sessionId !== undefined && session.sessionId !== message.sessionId) throw new Error('Copilot resumed a different session');
         send({ kind: 'identified', sessionId: session.sessionId });
+        if (message.sessionId === undefined) await configuration.initializePermissions(session, permissionMode);
         const mode = await session.rpc.mode.get();
         const events = await session.getEvents();
         // Use honored creation inputs only while the initial SDK snapshot omits

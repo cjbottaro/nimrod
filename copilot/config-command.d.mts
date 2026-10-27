@@ -6,7 +6,7 @@ export interface ConfigCommand {
   kind: 'client';
   allowDuringAgentExecution: boolean;
   description: string;
-  input: { hint: string; valueHint: string; choices: ConfigCommandChoice[] };
+  input: { hint: string; valueHint: string; choices: ConfigCommandChoice[]; valueChoices: Record<string, ConfigCommandChoice[]> };
   configValues: Record<string, ConfigValueChoice[]>;
 }
 export function configCommand(client: unknown): Promise<ConfigCommand>;

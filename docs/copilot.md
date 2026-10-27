@@ -394,12 +394,16 @@ passed through without interpretation.
 
 `/config` changes Copilot defaults for future sessions. Type `/config` and a
 setting prefix to complete a known key; after the key, the inline hint changes
-to `[value]` and values remain free-form. Running `/config model`,
+to `[value]`. Typed settings offer value completion too; other values remain
+free-form. Object containers such as `permissions` are not editable keys; use a
+leaf key such as `permissions.allow`. Running `/config model`,
 `effortLevel`, `defaultMode`, `contextTier`, `autoTier` or
 `defaultPermissionMode` without a value opens a typed Copilot-owned picker.
 Other keys open a free-form value input when submitted without a value.
 Copilot validates, persists and confirms each write. This does not change the
 current session; use Nimrod's session controls or `/model` for live settings.
+`/config defaultPermissionMode allow-all` applies to newly created sessions,
+not Resume. Use `/permissions allow-all` to change the current session.
 Sensitive proxy passwords remain delegated to Copilot's native secure
 configuration UI.
 

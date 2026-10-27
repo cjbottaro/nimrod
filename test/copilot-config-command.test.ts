@@ -12,7 +12,7 @@ function fixture() {
   const client = {
     rpc: { user: { settings: {
       get: async () => ({ settings: Object.fromEntries(['model', 'effortLevel', 'defaultMode', 'contextTier', 'autoTier',
-        'defaultPermissionMode', 'memory', 'dynamicRetrieval', 'commandHistoryMaxSize'].map(key => {
+        'defaultPermissionMode', 'memory', 'dynamicRetrieval', 'commandHistoryMaxSize', 'permissions', 'footer', 'sandbox'].map(key => {
         const present = Object.hasOwn(values, key), value = present ? values[key] : null;
         return [key, { value, default: null, isDefault: !present }];
       })) }),
@@ -22,6 +22,7 @@ function fixture() {
           if (value === null) delete values[key]; else values[key] = value;
         }
       },
+      validate: async () => ({ ok: true }),
     } } },
     listModels: async () => [
       { id: 'small', name: 'Fixture small', supportedReasoningEfforts: ['low', 'high'] },
@@ -41,6 +42,10 @@ test('config command combines dynamic keys, nested compatibility paths and curat
   assert.equal(command.input.valueHint, '[value]');
   assert.ok(command.input.choices.some((choice: { name: string }) => choice.name === 'dynamicRetrieval.mcp'));
   assert.ok(command.input.choices.some((choice: { name: string }) => choice.name === 'footer.showQuota'));
+  assert.ok(command.input.choices.some(choice => choice.name === 'permissions.allow'));
+  for (const name of ['permissions', 'footer', 'sandbox', 'dynamicRetrieval', 'sandbox.userPolicy.network.proxy.password'])
+    assert.equal(command.input.choices.some(choice => choice.name === name), false, `${name} is not an editable leaf`);
+  assert.deepEqual(command.input.valueChoices.defaultPermissionMode.map(choice => choice.name), ['manual', 'assisted', 'allow-all']);
   assert.deepEqual(command.configValues.model.map((choice: { id: string }) => choice.id), ['small', 'large']);
   assert.deepEqual(command.configValues.effortLevel.map((choice: { id: string }) => choice.id), ['low', 'high']);
   assert.deepEqual(command.configValues.defaultMode.map((choice: { id: string }) => choice.id), ['interactive', 'plan', 'autopilot']);
@@ -73,9 +78,17 @@ test('config command rejects missing, unknown, malformed and secure-only values 
   for (const [input, pattern] of [
     ['model', /Usage/],
     ['invented true', /Unknown/],
+    ['permissions true', /Unknown/],
     ['defaultMode invented', /advertised by Copilot/],
     ['dynamicRetrieval.mcp {bad', /Invalid JSON/],
     ['sandbox.userPolicy.network.proxy.password secret', /secure configuration UI/],
   ] as const) await assert.rejects(applyConfigCommand(f.client, input), pattern);
+  assert.deepEqual(f.writes, []);
+});
+
+test('config command validates all SDK writes before persisting and reports rejection', async () => {
+  const f = fixture();
+  f.client.rpc.user.settings.validate = async () => ({ ok: false, issues: [{ path: ['memory'], message: 'Expected boolean' }] });
+  await assert.rejects(applyConfigCommand(f.client, 'memory 42'), /Expected boolean/);
   assert.deepEqual(f.writes, []);
 });

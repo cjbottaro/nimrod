@@ -102,6 +102,11 @@ export async function configCommand(client) {
     if (!record(value)) continue;
     flatten(key, value.value, paths); flatten(key, value.default, paths);
   }
+  for (const path of paths) {
+    const parts = path.split('.');
+    while (parts.length > 1) { parts.pop(); paths.delete(parts.join('.')); }
+  }
+  for (const path of BLOCKED_FREEFORM) paths.delete(path);
   const models = await client.listModels();
   const configuredModel = typeof settings.model?.value === 'string' ? settings.model.value : undefined;
   const selectedModel = models.find(model => model.id === configuredModel);
@@ -118,6 +123,9 @@ export async function configCommand(client) {
     input: {
       hint: '[key]', valueHint: '[value]',
       choices: [...paths].sort().map(name => ({ name, description: CURATED[name]?.description || 'Copilot setting' })),
+      valueChoices: Object.fromEntries(Object.entries(values)
+        .filter(([key]) => paths.has(key))
+        .map(([key, choices]) => [key, choices.map(choice => ({ name: choice.id, description: choice.label }))])),
     },
     configValues: values,
   };
@@ -127,8 +135,8 @@ export async function applyConfigCommand(client, input) {
   const match = /^([^\s]+)(?:\s+([\s\S]*))?$/.exec(input.trim());
   if (!match?.[1] || !match[2]?.trim()) throw new Error(`Usage: /config ${match?.[1] || '<key>'} <value>`);
   const command = await configCommand(client);
-  if (!command.input.choices.some(choice => choice.name === match[1])) throw new Error(`Unknown Copilot setting: ${match[1]}`);
   if (BLOCKED_FREEFORM.has(match[1])) throw new Error(`Copilot setting ${match[1]} requires the native secure configuration UI.`);
+  if (!command.input.choices.some(choice => choice.name === match[1])) throw new Error(`Unknown Copilot setting: ${match[1]}`);
   const settings = await metadata(client), [top, ...rest] = match[1].split('.');
   if (!record(settings[top])) throw new Error(`Copilot setting ${match[1]} is unavailable in this runtime.`);
   const raw = match[2].trim(), offered = command.configValues[match[1]];
@@ -143,6 +151,14 @@ export async function applyConfigCommand(client, input) {
     if (next !== null && !model) throw new Error('Choose a model advertised by Copilot.');
     writes.model = model?.id ?? null;
     writes.modelProviderId = record(model?.provider) && typeof model.provider.id === 'string' ? model.provider.id : null;
+  }
+  for (const [topKey, value] of Object.entries(writes)) {
+    const validation = await client.rpc.user.settings.validate({ topKey, ...(value === null ? { delete: true } : { value }) });
+    if (!record(validation) || typeof validation.ok !== 'boolean') throw new Error('Copilot returned invalid settings validation.');
+    if (!validation.ok) {
+      const issues = Array.isArray(validation.issues) ? validation.issues.map(issue => issue.message).filter(message => typeof message === 'string') : [];
+      throw new Error(`Invalid Copilot setting ${match[1]}: ${issues.join('; ') || 'Copilot rejected this value.'}`);
+    }
   }
   await client.rpc.user.settings.set({ settings: writes });
   const confirmed = await metadata(client);

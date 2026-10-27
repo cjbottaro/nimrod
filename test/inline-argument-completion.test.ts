@@ -19,7 +19,14 @@ const commands = [
   { name: 'config', kind: 'client', input: { hint: '[key]', valueHint: '[value]', choices: [
     { name: 'model', description: 'Default model' },
     { name: 'memory', description: 'Memory setting' },
-  ] } },
+    { name: 'defaultPermissionMode', description: 'Default permission mode' },
+    { name: 'permissions.allow', description: 'Permission rules' },
+    { name: 'permissions.ask', description: 'Ask rules' },
+  ], valueChoices: { defaultPermissionMode: [
+    { name: 'manual', description: 'Manual approval' },
+    { name: 'assisted', description: 'Assisted approval' },
+    { name: 'allow-all', description: 'Allow all' },
+  ] } } },
 ];
 function fixture(configure?: (window: JSDOM['window']) => void, acceptWith: (() => AutocompleteAccept) | null = () => 'tabOrEnter') {
   const dom = new JSDOM('<div><textarea aria-describedby="existing"></textarea><div id="suggestions" role="listbox"></div><button>Other</button></div>', { pretendToBeVisual: true });
@@ -260,5 +267,36 @@ test('a selected key advances to a value-only inline hint without value suggesti
     assert.equal(f.ghost(), '[value]');
     f.type('/config model gpt');
     assert.equal(f.hidden(), true, 'values remain free-form without completion');
+  } finally { f.close(); }
+});
+
+test('config completes only leaf keys and advertised values, preserving the selected key', () => {
+  const f = fixture();
+  try {
+    f.type('/config per');
+    assert.equal(f.ghost(), 'missions.allow');
+    f.key('Tab');
+    assert.equal(f.input.value, '/config permissions.allow ');
+    assert.equal(f.ghost(), '[value]');
+    f.type('/config defaultPermissionMode al');
+    assert.equal(f.ghost(), 'low-all');
+    f.key('Tab');
+    assert.equal(f.input.value, '/config defaultPermissionMode allow-all ');
+    assert.equal(f.hidden(), true);
+    f.type('/CONFIG\tdefaultPermissionMode ');
+    assert.equal(f.ghost(), '[value]');
+    assert.equal(f.key('Enter').defaultPrevented, false);
+    f.key('ArrowDown'); assert.equal(f.ghost(), 'assisted');
+    f.key('Tab');
+    assert.equal(f.input.value, '/CONFIG\tdefaultPermissionMode assisted ');
+    f.type('/config defaultPermissionMode allow-all');
+    assert.equal(f.key('Enter').defaultPrevented, false, 'an exact value submits without rewriting');
+    f.type('/config defaultPermissionMode invalid');
+    assert.equal(f.hidden(), true);
+    assert.equal(f.key('Tab').defaultPrevented, false);
+    f.type('/config defaultPermissionMode al');
+    f.completion.setCommands([]);
+    assert.equal(f.hidden(), true);
+    assert.equal(f.key('Tab').defaultPrevented, false, 'stale values cannot be accepted');
   } finally { f.close(); }
 });

@@ -51,6 +51,18 @@ roots for both paths. `test/copilot-bridge.test.ts` covers new/Resume connection
 and catalog reads without prompts. These fixtures are authored but unrun;
 installed-CLI discovery parity remains pending user acceptance.
 
+New sessions additionally read `defaultPermissionMode` through user settings.
+The SDK create API has no permission-mode creation input: after publishing the
+new identity and before publishing Connected, the configuration adapter reads
+`permissions.getMode()`, applies a differing explicit default through
+`permissions.setMode({mode, source:'user_setting'})`, and confirms the result
+and a fresh mode read. Copilot still enforces managed permission restrictions;
+rejection or missing confirmation fails connection setup without a prompt or
+retry. Unset defaults leave native startup policy untouched. Resume never
+reapplies current user defaults. Authored bridge/configuration fixtures cover
+manual/assisted/allow-all/unset, rejection, mismatched confirmation and Resume;
+installed-runtime/native acceptance remains pending.
+
 ## Distribution and native ownership
 
 - `copilot/bridge.mjs` imports the bundled official SDK, its concrete

@@ -36,6 +36,10 @@ export function copilotCommands(raw: unknown): CopilotCommand[] {
       choices: Array.isArray(value.input.choices) ? value.input.choices.filter(record)
         .filter(choice => typeof choice.name === 'string' && !!choice.name && !/[\r\n\u0000]/.test(choice.name))
         .map(choice => ({ name: String(choice.name), description: typeof choice.description === 'string' ? choice.description : '' })) : undefined,
+      valueChoices: record(value.input.valueChoices) ? Object.fromEntries(Object.entries(value.input.valueChoices)
+        .map(([key, choices]) => [key, (Array.isArray(choices) ? choices : []).filter(record)
+          .filter(choice => typeof choice.name === 'string' && !!choice.name && !/[\r\n\u0000]/.test(choice.name))
+          .map(choice => ({ name: String(choice.name), description: typeof choice.description === 'string' ? choice.description : '' }))])) : undefined,
     } : undefined;
     const configValues = configValueMap(value.configValues);
     commands.push({ name: value.name, description: typeof value.description === 'string' ? value.description : 'Copilot command', source: 'Agent',

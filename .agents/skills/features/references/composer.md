@@ -48,6 +48,11 @@ original spelling and first whitespace delimiter on insertion.
   untyped suffix appears as ghost text; Up/Down cycle matches and Tab accepts
   the exact choice plus the existing trailing space. No completion invokes a
   command. Unmatched/free-text input hides the hint.
+- For metadata with `valueHint`, an exact first choice advances to the second
+  argument hint. Optional `valueChoices` keyed by that first choice provide the
+  same literal completion/cycling/acceptance there; absent choices leave values
+  free-form. Shared completion never identifies commands by name or infers
+  nested argument grammar from prose.
 - `interaction.autocompleteAccept` controls acceptance for command names and
   arguments: `tab` (default) leaves every Enter to the normal composer handler,
   including partial matches and arrow selections; `tabOrEnter` allows Enter to
