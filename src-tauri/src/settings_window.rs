@@ -199,23 +199,6 @@ pub fn open_project(app: &tauri::AppHandle, label: &str) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn open_owned_project_settings(
-    app: tauri::AppHandle,
-    cwd: std::path::PathBuf,
-) -> Result<(), String> {
-    let label = app
-        .state::<crate::WorkspaceWindows>()
-        .directories
-        .lock()
-        .unwrap()
-        .iter()
-        .find(|(_, path)| **path == cwd)
-        .map(|(label, _)| label.clone())
-        .ok_or("Project window is no longer open")?;
-    open_project(&app, &label)
-}
-
-#[tauri::command]
 pub fn take_project_settings_request(app: tauri::AppHandle, window: tauri::Window) -> bool {
     app.state::<SettingsWindow>()
         .projects

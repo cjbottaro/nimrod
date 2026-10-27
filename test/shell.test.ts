@@ -229,9 +229,8 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         return preferences.snapshot();
       }
       if (command.startsWith('preferences_') || command === 'project_preferences_settings' || command === 'record_command_usage') return preferences.invoke(command, args);
-      if (command === 'open_global_settings' || command === 'open_owned_project_settings') return;
+      if (command === 'open_global_settings') return;
       if (command === 'take_project_settings_request' || command === 'take_settings_category') return false;
-      if (command === 'list_project_overrides') return [];
       if (command === 'plugin:window|is_focused') return options.focused?.() ?? true;
       if (command === 'plugin:clipboard-manager|write_text' && options.performanceControl?.copyError) throw new Error(options.performanceControl.copyError);
       if (command === 'transcript_logs_directory') return '/fixture/.local/state/nimrod/transcript-logs';

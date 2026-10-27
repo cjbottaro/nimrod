@@ -10,9 +10,24 @@ Pi keeps running. Project settings preserves your draft, conversation and readin
 
 Project settings shows effective values, not a second independent configuration. **Global default** means the project follows the global value (or the built-in default/runtime discovery when omitted globally). Changing a control creates a **Project override**. **Use global default** removes that override and immediately follows the current global value again—it does not copy that value into the project file.
 
-Overrides stay explicit even if they match the global value. Global edits update inheriting projects, but never replace explicit project values. The Appearance pane in global Settings links to open projects with overrides.
+Overrides stay explicit even if they match the global value. Global edits update inheriting projects, but never replace explicit project values. Global Settings defines defaults only; inspect and reset overrides in the owning project's settings.
 
-Project overrides cover **theme, autocomplete acceptance and runtime paths**. **Typography, translucency, zoom, modal animations and auto-follow after sending are global-only**, along with notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration. Project settings contains the theme picker under Appearance, autocomplete acceptance under Interaction and runtime paths under Runtime. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
+### Project-overridable settings
+
+These are the complete set of six project-overridable Nimrod preferences, stored in `<project>/.nimrod/settings.json`:
+
+| Category | Setting | JSONC key | Applies |
+| --- | --- | --- | --- |
+| Appearance | Color theme | `appearance.theme` | Immediately to this project window; built-in or globally imported theme |
+| Interaction | Accept autocomplete with | `interaction.autocompleteAccept` | Immediately; `tab` or `tabOrEnter` |
+| Runtime | Pi executable / CLI JavaScript file | `runtime.piPath` | On the next session launch |
+| Runtime | Node executable | `runtime.nodePath` | On the next session launch |
+| Runtime | Copilot CLI executable | `runtime.copilotPath` | On the next Copilot session launch |
+| Runtime | Codex CLI executable | `runtime.codexPath` | On the next Codex session launch |
+
+Omitted keys inherit global settings, then built-in defaults or runtime discovery. Runtime overrides require **Save runtime paths**; saving never restarts an existing session. Every supported field shows its source and offers **Use global default** when overridden.
+
+**Typography, translucency, zoom, modal animations and auto-follow after sending are global-only**, along with notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration. Project settings contains the theme picker under Appearance, autocomplete acceptance under Interaction and runtime paths under Runtime. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
 
 This layering applies only to Nimrod preferences. Pi retains its own configuration and precedence.
 

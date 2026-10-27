@@ -225,41 +225,6 @@ pub fn project_preferences_settings(
     Ok(scoped_preferences_snapshot(app, window))
 }
 
-#[derive(Serialize)]
-pub struct ProjectOverride {
-    cwd: PathBuf,
-    keys: Vec<String>,
-}
-
-#[tauri::command]
-pub fn list_project_overrides(app: tauri::AppHandle) -> Vec<ProjectOverride> {
-    let directories: Vec<_> = app
-        .state::<crate::WorkspaceWindows>()
-        .directories
-        .lock()
-        .unwrap()
-        .values()
-        .cloned()
-        .collect();
-    let global = app.state::<Preferences>().snapshot();
-    let projects = app.state::<ProjectPreferences>();
-    let mut result = Vec::new();
-    for cwd in directories {
-        let snapshot = projects.snapshot(global.clone(), Some(&cwd));
-        let keys: Vec<_> = snapshot
-            .project_text
-            .as_deref()
-            .and_then(|text| overrides(text).ok())
-            .map(|object| object.keys().cloned().collect())
-            .unwrap_or_default();
-        if !keys.is_empty() {
-            result.push(ProjectOverride { cwd, keys });
-        }
-    }
-    result.sort_by(|a, b| a.cwd.cmp(&b.cwd));
-    result
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
