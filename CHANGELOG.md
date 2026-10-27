@@ -94,6 +94,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Delete session loading and deletion progress now use the same compact, accent-colored spinner as the Status area.
+
 - **Delete session…** smooths over Codex's non-persisted-session case: after confirmation it stops the owned runtime and removes the local row and draft, without sending a prompt, requiring Resume or directing users to a different Close action. Exact native lookup protects saved empty threads hidden by Codex's history list; history saved during shutdown follows native deletion. Failed/ambiguous lookups, failed stops and uncertain native deletion still retain local state.
 
 - Copilot command cards preserve ANSI colors (including green Elixir test dots) by preferring live shell chunks over overlapping colorless progress snapshots, without duplicating output. **Raw output** no longer repeatedly appears/disappears: once needed, its disclosure stays available through completion with its current exact output and expansion state preserved.

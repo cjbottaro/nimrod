@@ -295,7 +295,9 @@ closing or restarting the target does not. Native identity/ownership checks stil
 `SessionDeletion.run` arms the loading review before deletion IPC, but the dialog
 opens with loading only if preparation takes at least **150 ms**. Fast previews
 cancel that timer and open the populated review directly, avoiding a loading/tree
-flash. The themed reduced-motion-aware spinner has `role=status`; tree has
+flash. Loading and execution reuse the Status area's `.activity-spinner` size,
+theme colors and rotation, with a deletion-scoped reduced-motion override. The
+loading status has `role=status`; tree has
 `aria-busy=true` and Delete is disabled. If loading was already shown, correlated
 review replaces tree contents in place. An untouched loading dialog transfers its
 automatic Cancel focus to Delete when ready; keyboard or pointer interaction during
