@@ -293,6 +293,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         if (args.token) await options.harnessStop?.('codex', String(args.token));
         codexSessions.delete(String(args.token)); return 'codex-generation';
       }
+      if (['reserve_codex_deletion', 'stop_codex_deletion', 'release_codex_deletion'].includes(command)) return;
       if (command === 'start_codex') {
         if (options.codexStartError) throw new Error(options.codexStartError);
         codexSessions.set(String(args.token), { channel: args.onEvent as typeof channel });
@@ -303,7 +304,8 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         const request = args.message as JsonRecord;
         const send = (value: JsonRecord) => target.channel.onmessage({ kind: 'rpc', value });
         if (request.method === 'initialize') send({ id: request.id, result: { userAgent: 'offline-codex' } });
-        else if (request.method === 'thread/list') send({ id: request.id, result: { data: options.codexHistory || [], nextCursor: null } });
+        else if (request.method === 'thread/list') send({ id: request.id, result: { data: (request.params as JsonRecord).archived === true ? [] : options.codexHistory || [], nextCursor: null } });
+        else if (request.method === 'thread/delete') send({ id: request.id, result: {} });
         else if (options.codexConversation && ['thread/start', 'thread/resume'].includes(String(request.method))) {
           if (request.method === 'thread/resume' && options.harnessResumeError) {
             send({ id: request.id, error: { code: -32000, message: options.harnessResumeError } }); return;
@@ -459,6 +461,103 @@ test('mounting an explicitly disconnected saved session does not report a connec
     assert.doesNotMatch(f.win.document.querySelector('.session-view')!.textContent!, /Session is not connected|Unsupported.*operation/);
     assert.equal(f.win.document.querySelectorAll('.session-view .notice-item').length, 0);
   } finally { f.win.close(); }
+});
+
+test('Close consumes a disconnected Codex lifecycle without connecting or requiring saved-history confirmation', async () => {
+  const scope = 'codex:"waiting"';
+  const f = await fixture(undefined, { windowWorkspace: '/project', nativeDrafts: { [scope]: { draft: 'Keep my local draft', recovered: [] } }, appState: {
+    'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'waiting', name: 'Waiting Codex' }], active: scope },
+  } });
+  try {
+    assert.equal(f.rows().length, 1);
+    const menu = await f.rowMenu(f.rows()[0]); assert.equal(menu.close.disabled, false);
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'w', metaKey: true, bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 0);
+    assert.equal(f.saved().drafts[scope].draft, 'Keep my local draft');
+    assert.equal(f.calls.some(call => call.command === 'start_codex' || call.command === 'write_codex'), false);
+    assert.equal(f.calls.some(call => call.command === 'stop_codex' && !!call.args.token), false, 'no owned runtime is a successful stop, not a reconnect');
+    assert.deepEqual((f.preferences.value.state['nimrod.tabs.v1:/project'] as { tabs: unknown[] }).tabs, []);
+  } finally { f.win.close(); }
+});
+
+test('disconnected Codex Delete uses the independent catalog and shared review without conversation Resume', async () => {
+  const scope = 'codex:"waiting"';
+  const f = await fixture(undefined, { windowWorkspace: '/project', nativeDrafts: { [scope]: { draft: 'Keep until deletion confirms', recovered: [] } },
+    codexHistory: [{ id: 'waiting', cwd: '/project', ephemeral: false, parentThreadId: null, forkedFromId: null, turns: [], status: { type: 'notLoaded' }, name: 'Waiting Codex' }],
+    appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'waiting', name: 'Waiting Codex' }], active: scope } },
+  });
+  const conversationWrites = () => f.calls.filter(call => call.command === 'write_codex')
+    .map(call => call.args.message as JsonRecord)
+    .filter(request => ['thread/start', 'thread/resume', 'turn/start'].includes(String(request.method)));
+  try {
+    assert.equal(f.calls.some(call => call.command === 'start_codex'), false);
+    assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
+    const menu = await f.rowMenu(f.rows()[0]); assert.equal(menu.delete.disabled, false);
+    menu.delete.click(); await f.tick(); await f.tick();
+    assert.equal(f.element('deletion-title').textContent, 'Delete Codex thread tree');
+    f.element<HTMLButtonElement>('deletion-cancel').click(); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 1);
+    assert.equal(f.saved().drafts[scope].draft, 'Keep until deletion confirms');
+    assert.equal(conversationWrites().length, 0);
+    f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
+    f.element<HTMLButtonElement>('deletion-confirm').click(); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 0);
+    assert.equal(f.saved().drafts[scope], undefined);
+    assert.equal(conversationWrites().length, 0);
+    assert.ok(f.calls.filter(call => call.command === 'start_codex').every(call => (call.args.config as JsonRecord).catalog === true));
+    const deletes = f.calls.filter(call => call.command === 'write_codex' && (call.args.message as JsonRecord).method === 'thread/delete');
+    assert.equal(deletes.length, 1);
+    assert.equal(((deletes[0].args.message as JsonRecord).params as JsonRecord).threadId, 'waiting');
+  } finally { f.win.close(); }
+});
+
+test('a disconnected Codex candidate absent from native history is retained on Delete and can still be Closed', async () => {
+  const scope = 'codex:"never-saved"';
+  const f = await fixture(undefined, { windowWorkspace: '/project', codexHistory: [],
+    nativeDrafts: { [scope]: { draft: 'Orphan draft is not deletion evidence', recovered: [] } },
+    appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'never-saved', name: 'Never saved' }], active: scope } },
+  });
+  try {
+    assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
+    f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 1); assert.equal(f.saved().drafts[scope].draft, 'Orphan draft is not deletion evidence');
+    const requests = f.calls.filter(call => call.command === 'write_codex').map(call => call.args.message as JsonRecord);
+    assert.equal(requests.some(request => ['thread/delete', 'thread/start', 'thread/resume', 'turn/start'].includes(String(request.method))), false);
+    assert.match(f.element('application-notices').textContent!, /existing persisted thread/);
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'w', metaKey: true, bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 0); assert.equal(f.saved().drafts[scope].draft, 'Orphan draft is not deletion evidence');
+  } finally { f.win.close(); }
+});
+
+test('disconnected Codex Close retains membership on failed owned stop and retries teardown without Resume', async () => {
+  let refuse = true;
+  const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true,
+    harnessStop: async () => { if (refuse) throw new Error('EPERM: owned exit unconfirmed'); } });
+  try {
+    f.openPalette(); const input = f.element<HTMLInputElement>('palette-input');
+    input.value = 'New Codex session'; input.dispatchEvent(new f.win.Event('input'));
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Keep failed-close draft'; prompt.dispatchEvent(new f.win.Event('input'));
+    const token = String(f.calls.filter(call => call.command === 'start_codex' && !(call.args.config as JsonRecord).catalog).at(-1)!.args.token);
+    f.codexSessions.get(token)!.channel.onmessage({ kind: 'disconnected', message: 'Fixture runtime disconnected' });
+    await f.tick(); await f.tick();
+    const before = f.calls.length;
+    const close = async () => {
+      f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'w', metaKey: true, bubbles: true, cancelable: true }));
+      await f.tick(); await f.tick();
+    };
+    await close();
+    assert.equal(f.rows().length, 1); assert.equal(prompt.value, 'Keep failed-close draft');
+    assert.match(f.element('session-notices').textContent!, /Could not stop Codex.*EPERM/);
+    refuse = false; await close();
+    assert.equal(f.rows().length, 0);
+    assert.equal(f.calls.slice(before).some(call => call.command === 'start_codex' || call.command === 'write_codex'), false);
+    assert.ok(f.calls.slice(before).filter(call => call.command === 'stop_codex').every(call => call.args.token === token));
+    assert.equal(f.saved().drafts['codex:"codex-fixture"'].draft, 'Keep failed-close draft');
+  } finally { refuse = false; f.win.close(); }
 });
 
 test('registered project actions execute from palette and shortcuts without an open session', async () => {

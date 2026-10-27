@@ -90,8 +90,13 @@ Current behavior in `src/codex/connection.ts`:
   Send, project history over live rows or turn missing history into an untouched
   classification. Failures remain unconfirmed; retired/disconnected results
   cannot promote another runtime.
-- Reload and open-row saved deletion wait for that evidence. Close remains
-  independent and keeps the local draft. The Codex badge tooltip qualifies
+- Reload waits for that evidence. Deletion does not: an open row supplies its
+  exact target to the independent catalog/source even when disconnected and
+  unconfirmed. The catalog validates native existence/project/lineage before
+  review and removal. A missing persisted root is an explicit refusal, not
+  authority to discard local state; use Close to remove that local row while
+  retaining its draft. Close consumes the lifecycle stop port independently of
+  connection/history confirmation. The Codex badge tooltip qualifies
   unconfirmed history rather than claiming that a runtime ID is saved.
 - Missing-rollout errors retain complete diagnostics and any cleanup failure in
   Details, with a concise headline that does not falsely promise saved history.
@@ -105,7 +110,7 @@ Nimrod acceptance.
 
 ## Startup binding anomaly
 
-[Startup binding and cleanup diagnostics](references/startup.md) records the user's 0.164.0 successful native thread creation followed by a local draft-scope rejection, and a secondary cleanup error masking that cause. Codex scopes must be accepted by both the actual shared frontend draft store and native staging/deletion boundaries, not merely supplied by a lifecycle adapter. The fix preserves the first failure and adds scoped cleanup/phase diagnostics; the native EPERM mechanism and post-fix startup remain acceptance gaps. No history cleanup or sandbox-policy weakening is implied.
+[Startup binding and cleanup diagnostics](references/startup.md) records the user's 0.164.0 successful native thread creation followed by a local draft-scope rejection, and a secondary cleanup error masking that cause. Codex scopes must be accepted by both the actual shared frontend draft store and native staging/deletion boundaries, not merely supplied by a lifecycle adapter. The fix preserves the first failure and adds scoped cleanup/phase diagnostics. The later [owned-group teardown follow-up](references/startup.md#owned-group-teardown-after-graceful-exit) handles Darwin zombie-only group EPERM through observed child reaping and observation-only group disappearance; genuine permission/live-group failures still retain ownership. Post-fix native startup/Close acceptance remains pending. No history cleanup or sandbox-policy weakening is implied.
 
 ## Invariants and anomalies
 

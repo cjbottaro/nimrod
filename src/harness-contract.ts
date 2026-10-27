@@ -63,8 +63,14 @@ export interface HarnessSession {
   readonly reload: SessionReload;
   readonly naming: SessionNaming;
   readonly commands: import('./session-commands').SessionCommands;
-  /** Live integration-owned removal intent. Undefined explicitly means unsupported. */
+  /** Live integration-owned removal candidate, independent of conversation connection
+   * or a local saved-history flag. The catalog/source validates native scope.
+   * Undefined explicitly means unsupported, not merely disconnected.
+   */
   readonly deletion: { current(): SessionDeletionIntent | undefined };
+  /** Presentation policy for local Close; lifecycle.stop owns teardown even while
+   * disconnected. Remove membership only after success, without requiring history.
+   */
   readonly close: SessionClosePolicy;
   readonly drafts: { readonly durability: 'persistent' | 'memory' };
   readonly selection: SessionSelectionPolicy;

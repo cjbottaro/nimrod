@@ -6,9 +6,27 @@
 
 Use the existing `SessionDeletionSource` / `SessionDeletionOperation` / `SessionDeletionContext`, not `SessionLifecycle` and not a separate tree-review UI. `src/codex/session-deletion.ts` depends on the narrow `CodexDeletionHistory` port; the project-owned history connection implements it without binding a conversation, sending a prompt, editing rollout files or invoking private CLI commands.
 
-The reviewed CLI remains **0.162.0**. Its generated stable `Thread` contains `parentThreadId`, `forkedFromId`, cwd and ephemeral state; `ThreadSourceKind` enumerates ten source kinds. Official [app-server docs](https://developers.openai.com/codex/app-server/) say `thread/delete` permanently removes the persisted active/archived root and spawned descendants, existing rollout files and associated metadata, returns `{}` on success and emits `thread/deleted` per removed thread. Missing rollout files count as already deleted; ephemeral roots cannot be deleted.
+The reviewed deletion baseline remains **0.162.0**. Its generated stable `Thread` contains `parentThreadId`, `forkedFromId`, cwd and ephemeral state; `ThreadSourceKind` enumerates ten source kinds. Official [app-server docs](https://developers.openai.com/codex/app-server/) say `thread/delete` permanently removes the persisted active/archived root and spawned descendants, existing rollout files and associated metadata, returns `{}` on success and emits `thread/deleted` per removed thread. Missing rollout files count as already deleted; ephemeral roots cannot be deleted.
 
 This is **spawned ancestry**, not Pi's file lineage, `forkedFromId`, or Codex's tree-wide `sessionId`. We do not treat a history fork as deletion ancestry without evidence. The experimental `ancestorThreadId`/`parentThreadId` request filters described in current docs are not used: stable returned parent metadata plus an exhaustive source/archive inventory is sufficient for the implemented policy. Runtime compatibility of that metadata still needs installed-CLI acceptance.
+
+## Disconnected-session contract
+
+The session adapter exposes an exact-ID deletion candidate whenever it has a
+layout identity, including restored disconnected rows and unsuccessful Resume.
+Its local `historyConfirmed` flag belongs to Reload, not deletion availability.
+The project-owned catalog validates native existence/project/lineage and runs the
+shared review without `thread/start`, `thread/resume` or a first prompt on the
+conversation. UI callers see only the required deletion operation and lifecycle
+ports; there is no Codex branch in Close/Delete consumers.
+
+An ID alone does not authorize removal. If the catalog cannot establish a
+persisted root (including a never-saved thread), deletion refuses and retains its
+local row/draft. Ordinary Close remains independent: stop the exact owned runtime
+if one exists, then remove local membership while retaining persistent drafts.
+An unconfirmed owned-process stop still blocks Close/removal; the
+[teardown contract](startup.md#owned-group-teardown-after-graceful-exit) owns the
+Darwin exited-leader recovery, not a disconnected-session bypass.
 
 ## Inventory and policy boundaries
 
@@ -50,5 +68,7 @@ The reservation is Codex-specific native safety machinery, not another UI deleti
 `test/codex-tree-deletion.test.ts`: opaque tree keys, nested/deep ancestry, incomplete/cyclic/cross-project/fork/conflicting inventories, cancel, stop failure, post-review expansion, shrink, single mutation, partial notifications/unknown acknowledgement, retained cleanup failure and exhaustive read-only discovery.
 
 `src-tauri/src/codex_deletion.rs` tests: native affected-only gates, exact metadata/project/tree validation, catalog/root/observed-stop requirements. `test/json-rpc-connection.test.ts`: local proven-not-written request rejection without transport loss/replay. `test/deletion-review.test.ts`: opaque key/parentKey, duplicate/empty-key refusal and existing retained-modal behavior. Pi native event/browser fixtures keep `file`/`parent` wire fields and exercise their adapter into the shared model unchanged.
+
+`test/shell.test.ts` additionally exercises restored disconnected Codex Close through the shared shortcut, independent catalog deletion through row-menu/Project-bar review and cancellation, missing-root retention followed by local Close, and failed-stop/retry without Resume. These additions are authored **unrun**.
 
 These fixtures are authored **unrun**. On explicit validation authorization use `mise run test`; requested layout/scroll validation also needs offline browser tests. Actual CLI recursive removal, partial failure, archived-descendant behavior, native multi-window/process shutdown and macOS/Linux presentation remain acceptance gaps. No app build/launch or user-session operation is authorized by fixture authorship.

@@ -29,7 +29,9 @@ export interface SessionConnectivity {
    */
   connect(options?: ConnectSessionOptions): Promise<void>;
   /** Observe owned child exit; concurrent calls for one token share work. Failure retains ownership
-   * and permits a later explicit retry. This is not the composer's Stop/cancel-turn action.
+   * and permits a later explicit retry. Valid while disconnected or without saved history;
+   * no owned token is a no-op. Consumers must not connect/Resume in order to Close.
+   * This is not the composer's Stop/cancel-turn action.
    */
   stop(): Promise<void>;
   /** Synchronously retire local transport/pending operations. Does not itself await native exit;

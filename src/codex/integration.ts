@@ -101,8 +101,9 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
       working: backend.session?.state.busy === true, pending: backend.session?.state.busy === true, compacting: backend.session?.state.compacting === true, queuePending: false, destructiveBusy: backend.session?.hasPendingWork === true }) },
     deletion: { current: () => {
       const reference = lifecycle.identity;
-      if (!reference) return { kind: 'close' };
-      return backend.historyConfirmed ? { kind: 'saved', reference } : undefined;
+      // This is a target candidate, not saved-history or connection evidence.
+      // The independent catalog owns native existence, lineage and deletion guards.
+      return reference ? { kind: 'saved', reference } : { kind: 'close' };
     } },
     reload: {
       available: () => !!lifecycle.identity && backend.historyConfirmed === true,

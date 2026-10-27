@@ -69,7 +69,10 @@ Saved-history discovery must not advertise a local placeholder as harness histor
    records with retired untouched-session markers.
 5. Keep Reload, saved-history Resume and deletion eligibility truthful. A local
    placeholder/runtime ID is not a saved-history capability. Close is not history
-   deletion. History loss or connection failure never authorizes deleting drafts,
+   deletion. A native-deletion candidate may be reviewed by its independent
+   catalog/source without connecting the conversation or requiring local history
+   confirmation; only authoritative validation/removal authorizes cleanup.
+   History loss or connection failure never authorizes deleting drafts,
    replacing saved identity or repeating navigation.
 
 The [optimistic interaction policy](architecture.md#optimistic-interaction-policy)
