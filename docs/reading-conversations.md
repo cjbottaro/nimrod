@@ -79,7 +79,7 @@ Web sections use compact headings and wrapping text/links; code retains its whit
 
 ### Console-style command output
 
-Bash, shell and terminal tool cards render ANSI colors and text styles in both live output and results. Carriage returns, backspaces, tabs, line clearing and common relative cursor movements render progress updates instead of printing escape codes. Output remains selectable text in the existing scrollable viewport; colors follow the theme's terminal palette where available.
+Bash, shell and terminal tool cards render ANSI colors and text styles in both live output and results. Carriage returns, backspaces, tabs, line clearing and common relative cursor movements render progress updates instead of printing escape codes. Output remains selectable text in the existing scrollable viewport; colors follow the theme's terminal palette where available. Copilot cards preserve colors supplied by its live shell stream rather than replacing them with its colorless progress snapshots. Final results and resumed history may still be plain text when that is all Copilot supplies; Nimrod does not infer colors from test dots or other text.
 
 When rendering changes the supplied text, a separate **Raw output** disclosure retains the exact original output, including escape sequences. Formatted or customized plugin sections also retain Raw output when their visible text does not contain the exact original output. Once needed, the disclosure stays available for that tool call—even if later snapshots are plain text—so streaming updates do not repeatedly show and hide it. Other tools keep literal output unless their card plugin requests console rendering.
 

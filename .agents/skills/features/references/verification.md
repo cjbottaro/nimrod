@@ -341,6 +341,12 @@ pending.
 - No Linux build/native parity or Windows acceptance is established by macOS checks. Windows remains a possible future target.
 - Installed-Pi metadata smokes isolate config/projects/history and make no provider requests; they don't establish provider-generated first-save or queue behavior.
 
+## Copilot command colors
+
+Read-only inspection of existing October 27, 2026 Copilot transcript logs (`copilot-sdk/copilot/2026-10-27.000009.jsonl` and adjacent segments) confirmed ExUnit dots arrive as `tool.shell_output.text` containing `ESC[32m.` while interleaved deprecated `tool.execution_partial_result.partialOutput` snapshots contain plain dots without SGR codes. Across three inspected calls, shell chunks contained 220, 121 and 72 green SGR sequences respectively; their replacement snapshots contained none. The previous reducer merged both sources into one field, repeatedly erasing ANSI state and changing raw-recovery coverage. This is native payload evidence, not visual acceptance of the correction.
+
+The installed pinned SDK's `dist/generated/session-events.d.ts` explicitly deprecates merged partial snapshots in favor of append-only shell chunks; sequence is global across output streams per call, and shell chunks are ephemeral/not replayed to late subscribers. Source now prefers shell output per agent/tool invocation while retaining snapshot-only fallback and independent final results. Synthetic SDK/controller and mounted-card fixtures in `test/copilot-sdk.test.ts` and `test/copilot-sdk-presentation.test.ts` cover both source orders, split ANSI, green dots, duplicate/stale sequences, stdout/stderr ordering, subagent isolation, fallback and terminal precedence. These fixtures are authored **unrun**. No live command/provider request, user-session/log mutation, app build, browser or native visual validation was performed. Mandatory post-merge compilation is separate from tests/native acceptance.
+
 ## Copilot patch cards
 
 `test/copilot-patch-cards.test.ts`, including the multi-file-summary/colored-line-count follow-up, is authored but unrun. Payload inspection used existing local October 19 CLI 1.0.98 transcript logs only; no tools/providers were invoked and no user sessions/logs were changed. Native macOS/Linux visual/scroll acceptance remains pending; no app build or launch was performed. The mandatory post-merge `mise run check` is compilation evidence only, not fixture/native acceptance.
