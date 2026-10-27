@@ -11,7 +11,7 @@ function fixture(save?: (paths: RuntimePaths, changed: RuntimeField[]) => Promis
   let saved: RuntimePaths = { pi: 'pi', node: 'node', copilot: 'copilot', codex: 'codex' };
   const writes: RuntimeField[][] = [];
   const errors = new Map<string | undefined, string>();
-  const runtime = installRuntimeSettings({ form: get('runtime-settings'), fields: get('runtime-fields'), pi: get('pi-path'), node: get('node-path'), copilot: get('copilot-path'), codex: get('codex-path'), status: get('runtime-status') }, {
+  const runtime = installRuntimeSettings({ form: get('runtime-settings'), fields: get('runtime-fields'), pi: get('pi-path'), node: get('node-path'), copilot: get<HTMLInputElement>('copilot-path'), codex: get<HTMLInputElement>('codex-path'), status: get('runtime-status') }, {
     read: () => ({ version: 1, ...saved }),
     save: async (paths, changed) => {
       writes.push(changed);
