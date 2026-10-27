@@ -80,8 +80,14 @@ pin/recency, and waits for observed owned shutdown. It sends no synthetic input
 and reapplies no unsupported configuration. Legacy or possibly-used rows always
 use exact Resume; failure never falls back to creation. Reload/saved deletion are
 unavailable for unconfirmed new history; untouched rows have local Close.
-Fixture authoring is separate from execution and native acceptance; see
-[verification](../features/references/verification.md#registered-harness-application-contract).
+The later [native interoperability probe](references/protocol-evidence.md#untouched-native-session-interoperability-01640)
+shows that this Nimrod-local continuity mechanism does not satisfy arbitrary
+native-CLI untouched-session interoperability: untouched native exact-ID Resume
+also fails, whereas explicitly named empty paginated threads persist/resume but
+remain hidden by ordinary history listing. Shared-daemon visibility alone is not
+a Resume fix. No automatic replacement/rename or daemon migration is authorized
+by that investigation. Fixture authoring is separate from execution and native
+acceptance; see [verification](../features/references/verification.md#registered-harness-application-contract).
 
 ## Startup binding anomaly
 

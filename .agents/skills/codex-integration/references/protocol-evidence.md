@@ -91,6 +91,52 @@ order, fails on native errors/interruption, and reports missing confirmation as
 unknown without replay. Native execution/stop/usage behavior remains unaccepted;
 no live compaction was performed.
 
+## Untouched native-session interoperability (0.164.0)
+
+The user-authorized installed-runtime probe and its exact safety/coverage limits
+are recorded in [verification](../../features/references/verification.md#codex-native-untouched-session-probe).
+It demonstrates that runtime existence, durable Resume and ordinary history
+discovery are three separate contracts, including for sessions created by the
+native CLI rather than Nimrod.
+
+Matching official source:
+- `tui/src/app_server_session.rs::thread_start_params_from_config` selects
+  paginated history for persistent native sessions. Native naming sends the same
+  `thread/name/set` API used by other clients.
+- `thread-store/src/local/pending_thread_metadata_tests.rs::
+  idle_shutdown_clears_pending_thread_metadata_without_materializing` covers an
+  untouched thread remaining absent from saved storage after shutdown.
+- `app-server/tests/suite/v2/thread_resume.rs::
+  thread_resume_rejects_unmaterialized_thread` explicitly rejects Resume before
+  rollout materialization in both legacy and paginated modes, with or without turns.
+- `app-server/tests/suite/v2/thread_name_persistence.rs::
+  named_empty_paginated_thread_resumes_after_restart` and
+  `thread-store/src/local/update_thread_metadata.rs` establish that naming an empty
+  paginated thread persists its recorder before metadata acknowledgement. No
+  synthetic user turn is needed.
+- `state/src/runtime/threads.rs::push_thread_filters_with_preview` adds
+  `threads.preview <> ''` for ordinary non-archived, non-section-scoped listing.
+  A saved name alone does not supply a message preview. This explains why a named
+  zero-message thread can resume by exact ID yet remain absent from ordinary
+  native/app-server Resume discovery; `useStateDbOnly` does not bypass this filter.
+- `tui/src/app/exit_summary.rs` distinguishes client disconnect from embedded
+  shutdown and prints a reconnect command for shared-server tasks. That printed
+  command is not evidence that an unmaterialized thread can actually resume:
+  the controlled shared-server probe reproduced the native reconnect failure.
+
+Integration constraints: do not classify a native session as nonexistent merely
+because it has zero messages or is missing from the ordinary catalog. Conversely,
+a loaded ID/precomputed rollout path and a shared-server reconnect hint are not
+saved-history evidence. Nimrod-private untouched metadata/replacement can preserve
+a local placeholder but cannot provide native CLI interoperability for an
+arbitrary untouched external thread. Merely switching to the shared daemon does
+not fix the demonstrated Resume rejection. The user's plain-native-create →
+no-Send → quit → Nimrod requirement remains constrained by upstream persistence/
+Resume semantics in this version. Any broader saved-empty discovery needs a
+supported native API contract rather than private SQLite/filesystem inventory or
+fabricated history. No automatic rename, replacement or upstream change was
+implemented by this investigation.
+
 ## Distribution/authentication boundaries to revisit
 
 - The TypeScript automation SDK requires Node; using app-server directly should avoid adding that runtime to Codex. The native launcher is source-implemented; installed launch and packaging behavior remain unverified.

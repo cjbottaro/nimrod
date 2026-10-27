@@ -2,6 +2,49 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
+## Codex native untouched-session probe
+
+User-authorized, provider-free installed-runtime probe on macOS with
+`codex-cli 0.164.0`. Native TUI ran in a controlled PTY with disposable HOME,
+CODEX_HOME and project directories, a credential-free fixture provider, and an
+inherited macOS sandbox denying outbound TCP/UDP. A loopback check confirmed
+EPERM for both protocols. No prompts, turns, compaction, user-session reads/writes,
+user-daemon attachment, service installation or Nimrod build/launch occurred.
+
+| Native CLI scenario | Native exact-ID Resume | Fresh stdio app-server | Discovery |
+| --- | --- | --- | --- |
+| `--no-daemon`, create then `/quit` without Send | Exit 1: no saved session | `thread/resume` rejects with `no rollout found` | No rollout, no SQLite thread row, empty `thread/list` |
+| `--no-daemon`, `/rename offline-empty-probe`, then `/quit` without Send | Successful reconnect, graceful exit 0 | Exact-ID Resume and empty turns page succeed after process restart | Rollout and named SQLite row exist, but ordinary `thread/list` and native Resume picker still omit it |
+| Native `--remote unix://<fixture socket>`, create then `/quit` without Send; server stays alive | Reconnect to that same server exits 1 with `no rollout found` | Separate server also rejects Resume | Same server's `thread/loaded/list` includes the ID and metadata-only `thread/read` succeeds; ordinary `thread/list` is empty |
+
+The persistent shared-server case used an owned `codex app-server --listen
+unix://<fixture socket>`, not the user's daemon or managed daemon auto-start/
+launchd integration. The native CLI printed a reconnect command at quit, but that
+exact reconnect failed. Thus daemon visibility alone does not establish empty-
+thread Resume support. The fixture background servers exited successfully after
+scoped SIGTERM; no process scans or unrelated signals were used.
+
+The named empty case was checked with unfiltered/source/cwd/name-search and
+`useStateDbOnly` list variants, all empty. Read-only fixture database inspection
+confirmed its name and zero user messages; native picker also showed zero
+sessions. Its post-Resume rollout contained session metadata and settings events,
+not a user turn. Captured probe RPCs were limited to initialize/initialized,
+thread list/loaded-list/read/resume/turns-list.
+
+Raw PTY, protocol, SQLite fixture homes and helper scripts are retained locally
+under `/tmp/nimrod-codex-probe-jtxl4_2k/`; `matrix.stdout` records embedded cases,
+`shared-untouched-v2/result.json` records the successful shared-server probe,
+and `embedded-named/list-variants-result.json` records discovery. An initial PTY
+warm-up was force-stopped and is excluded from graceful-exit results; an attempted
+raw stdio proxy against the WebSocket Unix endpoint timed out, so the final
+same-server probe used a validated WebSocket handshake over the private Unix
+socket. These harness limitations are not product acceptance or Codex failures.
+
+This verifies the narrow installed-runtime behaviors above, not Nimrod integration,
+paid-model work, managed-daemon lifecycle, Linux or general native/platform
+acceptance. [Protocol implications](../../codex-integration/references/protocol-evidence.md#untouched-native-session-interoperability-01640)
+own the source mapping and next integration constraints.
+
 ## Codex command audit
 
 Source-only audit of existing official `rust-v0.164.0` source/generated types
