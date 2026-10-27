@@ -49,6 +49,49 @@ function fixture(custom?: (packet: CodexPacket, reply: (result: unknown) => void
   return { session, sent, publications, notices, completions, ids, event };
 }
 
+test('native saved-history evidence is separate from zero-message readiness and rename intent', async () => {
+  let persisted = false, confirmations = 0;
+  const f = fixture((packet, reply, session) => {
+    if (packet.method === 'thread/turns/list' && !persisted) {
+      session.receive({ id: packet.id, error: { code: -32600, message: 'thread/turns/list is unavailable before first user message' } });
+      return true;
+    }
+    if (packet.method === 'thread/name/set') { persisted = true; reply({}); return true; }
+    return false;
+  }, { historyConfirmed: () => { confirmations++; } });
+  try {
+    await f.session.initialize(cwd); await flush();
+    assert.equal(f.session.state.sessionUnavailable, false);
+    assert.equal(confirmations, 0);
+    assert.deepEqual(f.notices, [], 'an unavailable optional history read is not a startup error');
+    await f.session.rename('User-chosen native name'); await flush();
+    assert.equal(confirmations, 1, 'saved history is confirmed by its successful read, not the name alone');
+    assert.equal(f.session.state.messages.some(row => row.role === 'user'), false);
+    assert.equal(f.sent.some(packet => ['turn/start', 'turn/steer', 'thread/compact/start'].includes(String(packet.method))), false);
+  } finally { f.session.disconnect('done'); }
+});
+
+test('native terminal events can confirm saved history without replaying or rehydrating the live transcript', async () => {
+  let persisted = false, confirmations = 0;
+  const f = fixture((packet, _reply, session) => {
+    if (packet.method === 'thread/turns/list' && !persisted) {
+      session.receive({ id: packet.id, error: { code: -32600, message: 'thread/turns/list is unavailable before first user message' } });
+      return true;
+    }
+    return false;
+  }, { historyConfirmed: () => { confirmations++; } });
+  try {
+    await f.session.initialize(cwd); await flush();
+    await f.session.messageInput.submit({ id: 'one', text: 'Fixture input', mode: 'normal' });
+    const before = f.session.state.messages;
+    persisted = true; f.event('turn/completed', { turn: turn('completed') }); await flush();
+    assert.equal(confirmations, 1);
+    assert.equal(f.sent.filter(packet => packet.method === 'turn/start').length, 1);
+    assert.equal(f.session.state.messages.length, before.length);
+    assert.equal(f.session.state.messages.filter(row => row.role === 'user').length, 1);
+  } finally { f.session.disconnect('done'); }
+});
+
 test('native Codex rename is exact-thread, ordered and does not overwrite newer title events', async () => {
   let reply!: (result: unknown) => void;
   const f = fixture((packet, respond) => {
@@ -321,7 +364,7 @@ test('startup and cleanup diagnostics preserve the first failure and log both on
   assert.deepEqual(first.payload, { error: 'Local identity binding failed' });
   assert.deepEqual(last.payload, { error: cleanup.message });
   const notice = codexConnectionFailure('Local identity binding failed', true, cleanup);
-  assert.match(notice.message, /startup failed: Local identity binding failed/); assert.doesNotMatch(notice.message, /EPERM/);
+  assert.match(notice.message, /startup failed/); assert.match(notice.details, /Local identity binding failed/); assert.doesNotMatch(notice.message, /EPERM/);
   assert.match(notice.details!, /EPERM/); assert.match(notice.details!, /ownership remains reserved/);
   assert.equal(f.sent.filter(packet => packet.method === 'thread/start').length, 1);
   assert.equal(f.sent.some(packet => packet.method === 'turn/start'), false);

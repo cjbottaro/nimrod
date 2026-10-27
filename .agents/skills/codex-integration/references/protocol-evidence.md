@@ -137,6 +137,28 @@ supported native API contract rather than private SQLite/filesystem inventory or
 fabricated history. No automatic rename, replacement or upstream change was
 implemented by this investigation.
 
+## Existing upstream issues
+
+Authenticated read-only `gh` searches of `openai/codex` found these existing open
+issues. Issue reports and third-party comments are corroborating context, not
+maintainer guarantees or evidence that a suggested workaround works on 0.164.0.
+
+| Issue | Relevance / distinction |
+| --- | --- |
+| [#42099 — 0.151.0 regression: app-server thread/start no longer persists zero-turn threads, breaking resume](https://github.com/openai/codex/issues/42099) | Closest persistence/restart match: start returns an ID, shutdown precedes first turn, native Resume fails with no rollout. Reporter contrasts 0.150.1 with 0.151.0 and requests durable start or an explicit persistence API. Open, with no comments when checked. |
+| [#43053 — Resuming a fresh thread from a second client fails before its first message](https://github.com/openai/codex/issues/43053) | Closest cross-client attachment match. Report and follow-up discuss 0.153.4 paginated lineage/naming failures. The reporter's `excludeTurns:false` workaround is version/sequence-specific; Nimrod does not use a history read/resume to force materialization. |
+| [#48370 — Resume picker hides app-created threads with history when preview is empty](https://github.com/openai/codex/issues/48370) | Same listing filter as the probe: `threads.preview <> ''`. Its reproducer has real delegated history but no ordinary user event, rather than a truly untouched thread. It explicitly discusses named-empty visibility. An empty preview is neither absence of history nor deletion/replacement authority. |
+| [#55770 — app-server: metadata-only pre-input state query for unmaterialized threads](https://github.com/openai/codex/issues/55770) | Related API-contract request on 0.163.0 macOS/Linux. Explicitly separates a non-materializing state query from #43053's attachment/materialization issue; unavailable history is not proof of no input. |
+
+Broader searches included exact no-rollout text, first-user-message,
+zero-turn/unmaterialized and empty-preview/named-empty variants, plus issue bodies
+and relevant comments. No new issue, comment, reaction or subscription was posted.
+These matches are sufficient to track the known mechanisms; no claim was made
+that every superficially similar desktop error has the same cause or that a
+separate exact duplicate of the named-zero-message probe was found. Current
+Nimrod behavior and the retired private workaround are documented by the
+[parent integration contract](../SKILL.md#untouched-session-persistence-anomaly).
+
 ## Distribution/authentication boundaries to revisit
 
 - The TypeScript automation SDK requires Node; using app-server directly should avoid adding that runtime to Codex. The native launcher is source-implemented; installed launch and packaging behavior remain unverified.

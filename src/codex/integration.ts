@@ -54,9 +54,7 @@ function createCodexProject(projectHost: HarnessProjectHost): HarnessProject {
   };
 }
 function createCodexSession(host: HarnessSessionHost, request: SessionRequest, project: HarnessProjectHost, ready: () => boolean, generation: () => string): HarnessSession {
-  const reference = request.mode === 'resume' ? request.reference : undefined;
-  const backend: import('./connection').CodexBackend = { savedSessionId: reference?.sessionId,
-    continuity: reference && 'kind' in reference ? reference.codexContinuity : undefined };
+  const backend: import('./connection').CodexBackend = { savedSessionId: request.mode === 'resume' ? request.reference.sessionId : undefined };
   const { lifetime, effects, ownership: owner } = host, ui = codexIntegrationUi(host);
   let signature = '', sequence = 0, retiring = false;
   const lifecycle = createCodexConnection(() => owner, backend, {
@@ -65,7 +63,7 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
     tearingDown: () => lifetime.closing() || lifetime.deleting() || lifetime.reloading(),
     gate: () => ready() && !project.deletionPending() && !lifetime.deleting() ? 'ready' : 'blocked',
     conflicts: id => lifetime.conflicts({ kind: 'codex', sessionId: id }), drafts: host.drafts,
-    effects: { changed: effects.changed, identified: effects.identified, checkpoint: effects.checkpoint, retire: effects.retire,
+    effects: { changed: effects.changed, identified: effects.identified, retire: effects.retire,
       resolved: issue => effects.resolve(issue === 'cleanup' ? 'codex-cleanup' : 'connection'), hasConnectionOutcome: effects.hasConnectionOutcome,
       failure: failure => {
         if (retiring || lifetime.closing() || lifetime.deleting()) return;
@@ -99,21 +97,21 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
     conversation: conversationPort(host, () => backend.session, codexInteraction(text => owner.starting || !backend.session ? 'Codex is still connecting. Your draft was kept.' : backend.session.validatePrompt(text))),
     configuration: { current: () => backend.session?.configuration },
     actions: { current: () => configurationActions(codexSessionActions(backend.session), { model: 'model', thinking: 'effort' }), async control() { throw new Error('This Codex control is no longer available'); } },
-    presentation: { snapshot: () => ({ harnessLabel: 'Codex', badge: 'Codex', badgeTitle: '', busy: backend.session?.state.busy === true,
+    presentation: { snapshot: () => ({ harnessLabel: 'Codex', badge: 'Codex', badgeTitle: backend.historyConfirmed ? 'Saved Codex history confirmed' : 'Saved Codex history is not yet confirmed; reconnect may be unavailable', busy: backend.session?.state.busy === true,
       working: backend.session?.state.busy === true, pending: backend.session?.state.busy === true, compacting: backend.session?.state.compacting === true, queuePending: false, destructiveBusy: backend.session?.hasPendingWork === true }) },
     deletion: { current: () => {
       const reference = lifecycle.identity;
-      if (!reference || backend.continuity?.untouched === true) return { kind: 'close' };
-      return backend.continuity?.saved === false ? undefined : { kind: 'saved', reference };
+      if (!reference) return { kind: 'close' };
+      return backend.historyConfirmed ? { kind: 'saved', reference } : undefined;
     } },
     reload: {
-      available: () => !!lifecycle.identity && backend.continuity?.saved !== false,
-      reason: () => !lifecycle.identity || backend.continuity?.saved === false ? 'Reload session — available after saved Codex history is confirmed' : lifetime.reloading() ? 'Reloading session…' : 'Reload session',
+      available: () => !!lifecycle.identity && backend.historyConfirmed === true,
+      reason: () => !lifecycle.identity || !backend.historyConfirmed ? 'Reload session — available after saved Codex history is confirmed' : lifetime.reloading() ? 'Reloading session…' : 'Reload session',
       detail: 'Reload this conversation with a fresh Codex process',
       confirmation: 'This interrupts this session’s agent and resumes its saved history. Your draft stays; in-flight work will not continue. Nothing is sent again automatically.',
       needsConfirmation: inputPending => inputPending || !owner.ended && !!backend.session?.hasPendingWork,
       async run() {
-        if (!lifecycle.identity || backend.continuity?.saved === false) throw new Error('Reload requires confirmed saved Codex history');
+        if (!lifecycle.identity || !backend.historyConfirmed) throw new Error('Reload requires confirmed saved Codex history');
         retiring = true;
         try {
           await lifecycle.stop();

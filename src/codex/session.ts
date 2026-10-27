@@ -18,8 +18,9 @@ import type { TranscriptLogSink } from '../transcript-logs';
 export interface CodexSessionUi {
   publish(message: ConversationViewMessage): void;
   changed(): void; notice(message: string): void;
-  identified(id: string, empty?: boolean): void;
-  workObserved?(): void;
+  identified(id: string): void;
+  /** Successful exact Resume or a supported saved-history read, never a runtime-ID guess. */
+  historyConfirmed?(): void;
   approval: NonNullable<CodexClientHooks['approval']>;
   question?: CodexClientHooks['question'];
   asyncQuestion?(question: CodexAsyncQuestion, signal: AbortSignal): Promise<QuestionAnswer | undefined>;
@@ -47,6 +48,8 @@ export class CodexSession {
   private cwd = '';
   private ended = false;
   private hydrating = true;
+  private savedHistoryConfirmed = false;
+  private historyCheck?: Promise<void>;
   private submitting = 0;
   private configuring = false;
   private revision = 0;
@@ -73,10 +76,10 @@ export class CodexSession {
     });
     this.client = new CodexClient({ write: packet => { this.capture(typeof packet.method === 'string' ? 'request' : 'response', packet); return writer.write(packet); } }, {
       identified: (thread, settings) => {
-        ui.identified(thread.id, thread.status.type === 'idle' && thread.turns.length === 0); this.applySettings(settings);
+        ui.identified(thread.id); this.applySettings(settings);
         this.state = { ...this.state, sessionName: string(thread.name) || undefined };
       },
-      event: event => { if (/^(turn|item)\//.test(event.method)) ui.workObserved?.(); this.event(event); }, approval: ui.approval, question: ui.question,
+      event: event => this.event(event), approval: ui.approval, question: ui.question,
       interactionFailure: failure => {
         this.capture('interaction.rejected', failure);
         if (ui.interactionFailure) ui.interactionFailure(failure);
@@ -306,12 +309,14 @@ export class CodexSession {
         if (revision !== this.nameRevision) return;
         this.state = { ...this.state, sessionName: name }; this.publish([]);
       });
+      void this.confirmSavedHistory();
     } finally { this.renaming = false; this.publish([]); }
   }
 
   async initialize(cwd: string, savedId?: string): Promise<void> {
     this.cwd = cwd;
     await this.client.initialize(); await this.client.open(cwd, savedId);
+    if (savedId !== undefined) this.markHistoryConfirmed();
     const history: DisplayMessage[] = [];
     if (savedId) {
       const cursors = new Set<string>(); let cursor: string | undefined;
@@ -351,6 +356,21 @@ export class CodexSession {
     for (const native of this.deferredAsyncItems.values()) this.asyncQuestions.offer(native);
     this.deferredAsyncItems.clear();
     this.publish();
+    // Read-only, best effort and independent of Send readiness. An unavailable
+    // history page is not proof of an untouched thread or permission to replace it.
+    if (savedId === undefined) void this.confirmSavedHistory();
+  }
+  private markHistoryConfirmed(): void {
+    if (this.ended || this.savedHistoryConfirmed) return;
+    this.savedHistoryConfirmed = true; this.ui.historyConfirmed?.();
+  }
+  private confirmSavedHistory(): Promise<void> {
+    if (this.ended || this.savedHistoryConfirmed) return Promise.resolve();
+    if (this.historyCheck) return this.historyCheck;
+    const task = this.client.listTurns().then(() => this.markHistoryConfirmed()).catch(error => {
+      this.capture('history.unconfirmed', { error: error instanceof Error ? error.message : String(error) });
+    }).finally(() => { if (this.historyCheck === task) this.historyCheck = undefined; });
+    this.historyCheck = task; return task;
   }
   private async refreshModels(): Promise<void> {
     const models: RpcRecord[] = []; const seen = new Set<string>(); let cursor: string | undefined;
@@ -402,7 +422,7 @@ export class CodexSession {
       } else return;
       this.replace(this.project(native, string(params.turnId), false)); return;
     }
-    if (method === 'thread/name/updated') { this.nameRevision++; this.state = { ...this.state, sessionName: string(params.threadName) || undefined }; }
+    if (method === 'thread/name/updated') { this.nameRevision++; this.state = { ...this.state, sessionName: string(params.threadName) || undefined }; void this.confirmSavedHistory(); }
     else if (method === 'thread/settings/updated') { this.settingsRevision++; this.applySettings(record(params.threadSettings, 'thread settings')); }
     else if (method === 'thread/tokenUsage/updated') {
       const usage = record(params.tokenUsage, 'usage'), last = record(usage.last, 'last usage'), total = record(usage.total, 'total usage');
@@ -423,7 +443,7 @@ export class CodexSession {
       if (turn.error && !this.client.compacting) this.replace({ key: `codex:error:${string(turn.id)}`, role: 'error', content: [{ type: 'raw', text: json(turn.error) }], isError: true });
       this.state = { ...this.state, busy: false, status: turn.status === 'interrupted' ? 'Stopped' : 'Idle' };
       if (!this.client.compacting && turn.status !== 'interrupted') this.ui.completed(turn.status === 'failed', this.response());
-      this.publish(); return;
+      this.publish(); void this.confirmSavedHistory(); return;
     } else if (method === 'error' && params.willRetry !== true) {
       if (this.client.compacting) return;
       this.replace({ key: `codex:error:${string(params.turnId)}`, role: 'error', content: [{ type: 'raw', text: json(params.error) }], isError: true }); return;

@@ -61,33 +61,47 @@ Future extraction must remove actual consumer knowledge or move responsibility. 
 
 ## Untouched-session persistence anomaly
 
-The accepted shared [session durability policy](../features/references/session-durability.md)
-owns uniform local continuity, durability evidence and safe replacement rules for
-all harnesses. Codex 0.164.0 can return a non-ephemeral ID before saving a thread;
-the reported create-without-Send → restart → reconnect failure was `no rollout found`.
-The concrete connection adapter now persists versioned `codexContinuity` layout
-evidence alongside the runtime ID: `untouched` permits fresh creation on selection,
-whereas `saved` requires a successful exact Resume in a fresh owned process. A
-returned start ID/path or non-ephemeral flag is not durability evidence.
+Native CLI interoperability is required, not continuity available only to
+Nimrod-created sessions. The accepted [durability contract](../features/references/session-durability.md)
+separates local layout/drafts, runtime identity and saved history. Codex 0.164.0
+returns a non-ephemeral ID and prospective rollout path before saving a thread.
+The [installed-runtime probe](references/protocol-evidence.md#untouched-native-session-interoperability-01640)
+reproduced native/app-server Resume failure for untouched threads and the distinct
+saved-but-undiscoverable named-empty case. [Existing upstream issues](references/protocol-evidence.md#existing-upstream-issues)
+track both mechanisms; no new issue/comment was posted.
 
-Before first potentially history-producing dispatch (turn/steer, compaction,
-rename or configuration resume), the adapter clears untouched evidence and awaits
-a layout checkpoint. Failure prevents wire delivery, not optimistic local Send
-feedback. Native turn/item observations also clear untouched evidence, including
-buffered startup events. Recreating an untouched thread promotes only the current
-draft scope, rejects target collisions, preserves the mounted local session/title/
-pin/recency, and waits for observed owned shutdown. It sends no synthetic input
-and reapplies no unsupported configuration. Legacy or possibly-used rows always
-use exact Resume; failure never falls back to creation. Reload/saved deletion are
-unavailable for unconfirmed new history; untouched rows have local Close.
-The later [native interoperability probe](references/protocol-evidence.md#untouched-native-session-interoperability-01640)
-shows that this Nimrod-local continuity mechanism does not satisfy arbitrary
-native-CLI untouched-session interoperability: untouched native exact-ID Resume
-also fails, whereas explicitly named empty paginated threads persist/resume but
-remain hidden by ordinary history listing. Shared-daemon visibility alone is not
-a Resume fix. No automatic replacement/rename or daemon migration is authorized
-by that investigation. Fixture authoring is separate from execution and native
-acceptance; see [verification](../features/references/verification.md#registered-harness-application-contract).
+Current behavior in `src/codex/connection.ts`:
+- `savedSessionId` is a compatibility name for the exact layout reconnect
+  candidate, not saved-history evidence. Bind its draft scope synchronously, but
+  do not infer durability from that ID or `ephemeral:false`.
+- Every existing row resumes that exact ID. Never create a replacement thread,
+  auto-rename, send a synthetic prompt, switch to the user's daemon, scan native
+  history files or write private databases to force persistence.
+- Old `codexContinuity` metadata is ignored by layout decoding. Keep the row,
+  title, pin and original draft/attachment scope; even `untouched:true` is not
+  replacement authority. The earlier private checkpoint and saved-scope
+  replacement mechanisms are removed.
+- Runtime-only `historyConfirmed` comes from successful exact Resume or a
+  successful `thread/turns/list` response, including an empty page. The latter is
+  read-only in the reviewed native contract and requires saved materialization;
+  no `includeTurns:true` read or full-resume workaround is used to cause a save.
+  Best-effort checks run after new-session readiness, explicit rename/name
+  notification or a native terminal turn. They coalesce, do not poll, block
+  Send, project history over live rows or turn missing history into an untouched
+  classification. Failures remain unconfirmed; retired/disconnected results
+  cannot promote another runtime.
+- Reload and open-row saved deletion wait for that evidence. Close remains
+  independent and keeps the local draft. The Codex badge tooltip qualifies
+  unconfirmed history rather than claiming that a runtime ID is saved.
+- Missing-rollout errors retain complete diagnostics and any cleanup failure in
+  Details, with a concise headline that does not falsely promise saved history.
+  Explicit New Codex session is separate user intent, never a recovery side effect.
+
+The user's native-create → no-Send → quit → Nimrod requirement remains limited by
+Codex persistence/Resume/discovery in the reviewed version. Do not present removal
+of Nimrod's workaround as an upstream fix. [Verification](../features/references/verification.md#registered-harness-application-contract)
+separates authored fixtures, executed isolated probes and remaining native
+Nimrod acceptance.
 
 ## Startup binding anomaly
 

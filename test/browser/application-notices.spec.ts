@@ -149,6 +149,46 @@ for (const wrapped of [false, true]) test(`session notice first-line alignment a
   } finally { await fixture.close(); }
 });
 
+for (const height of [800, 400]) test(`one expanded session notice retains its complete border while diagnostics scroll at height ${height}`, async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height });
+  const fixture = await demoFixture(page);
+  try {
+    const token = String(fixture.calls.find(call => call.command === 'start_pi')!.args.token);
+    const message = 'Codex could not reopen this session.\n\n' + 'Native cleanup diagnostic with a retained reservation.\n'.repeat(60) + 'END OF DIAGNOSTICS';
+    const prompt = page.locator(visible('prompt')); await prompt.fill('Keep clipping draft'); await prompt.focus();
+    await page.evaluate(({ token, message }) => {
+      const state = window as unknown as { __fixtureChannels: Record<string, { onmessage(packet: unknown): void }> };
+      state.__fixtureChannels[token].onmessage({ kind: 'rpc', value: { type: 'extension_ui_request', method: 'notify', notifyType: 'error', id: 'clipping', message } });
+    }, { token, message });
+    const notices = page.locator(visible('session-notices')), list = notices.locator('.notice-list');
+    const row = list.locator('.application-notice');
+    await expect(notices).toBeVisible(); await expect(prompt).toBeFocused();
+    await row.evaluate(node => { (node as HTMLElement).dataset.testIdentity = 'retained'; });
+    await row.locator('.notice-details > summary').click();
+    const geometry = () => list.evaluate(node => {
+      const style = getComputedStyle(node), row = node.querySelector('.application-notice')!;
+      const bounds = node.getBoundingClientRect(), parent = node.parentElement!.getBoundingClientRect();
+      return { top: bounds.top, bottom: bounds.bottom, parentBottom: parent.bottom, borderTop: style.borderTopWidth,
+        borderBottom: style.borderBottomWidth, radius: style.borderBottomLeftRadius,
+        contentBorder: getComputedStyle(row).borderBottomWidth, scrollable: node.scrollHeight > node.clientHeight };
+    });
+    const before = await geometry();
+    expect(before.scrollable).toBe(true);
+    expect(before.borderTop).toBe('1px'); expect(before.borderBottom).toBe('1px');
+    expect(before.radius).toBe('5px'); expect(before.contentBorder).toBe('0px');
+    expect(before.bottom).toBeLessThanOrEqual(before.parentBottom + .5);
+    await list.evaluate(node => { node.scrollTop = node.scrollHeight; });
+    const after = await geometry();
+    expect(after.top).toBe(before.top); expect(after.bottom).toBe(before.bottom);
+    expect(after.borderBottom).toBe('1px');
+    await expect(row).toHaveAttribute('data-test-identity', 'retained');
+    await expect(row.locator('.notice-details')).toHaveAttribute('open', '');
+    await expect(row.locator('.notice-details > div')).toHaveText(message);
+    await expect(prompt).toHaveValue('Keep clipping draft');
+    expect(fixture.errors).toEqual([]);
+  } finally { await fixture.close(); }
+});
+
 test('window strip keeps its position and remains actionable through Settings and nested native dialogs', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {

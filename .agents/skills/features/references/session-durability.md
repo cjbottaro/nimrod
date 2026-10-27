@@ -1,6 +1,6 @@
 # Session durability and untouched-session continuity
 
-**Status: accepted cross-harness product policy; Codex untouched-session continuity source-implemented, broader adapter convergence pending.**
+**Status: native-compatible durability contract; Codex exact-ID reconnect source-implemented, with upstream untouched-session persistence/discovery limitations.**
 This reference owns the distinction between local session continuity, runtime
 identity and saved harness history. It applies to future integrations and reviews
 of existing ones; it does not claim that current ports or adapters implement it.
@@ -10,12 +10,14 @@ of existing ones; it does not claim that current ports or adapters implement it.
 
 ## Product decision
 
-Nimrod should feel uniform across harnesses at the session level, without
-pretending their native persistence semantics are identical. A persistent New
-session should remain a usable open conversation after restarting Nimrod, even
-when the user has not sent its first message. Preserve its local continuity and
-draft rather than exposing a harness's lazy history creation as a broken Resume.
-Explicit Temporary sessions retain their disposable lifetime.
+Nimrod should feel uniform across harnesses without pretending their native
+persistence semantics are identical. Native CLI interoperability is required:
+a persistence solution must not work only because Nimrod originally created the
+session. Preserve local membership and drafts independently from saved history,
+but promise post-restart conversation continuity only when the harness supports
+it. A local placeholder or a newly substituted native ID is not equivalent to
+resuming the original conversation. Explicit Temporary sessions retain their
+disposable lifetime.
 
 Uniformity belongs in the application contract and concrete adapters, not in a
 universal harness protocol, fabricated saved history or automatic prompt replay.
@@ -48,25 +50,23 @@ Saved-history discovery must not advertise a local placeholder as harness histor
 1. Restore persistent local membership and drafts without sending a message.
    Connection remains subject to the existing selection/activation policy; do not
    eagerly launch background sessions merely to make them persistent.
-2. A session **positively known to be untouched and not yet durably saved** may
-   obtain a fresh native thread on its next permitted connection. This is the
-   continuation of an empty local session, not Resume of the old runtime ID.
-   Preserve local identity, draft, title and navigation continuity. Do not send a
-   synthetic prompt, replay input, edit harness files or change global settings
-   to force persistence. Reapply only configuration with documented native support;
-   do not claim unsupported or unconfirmed settings were restored.
-3. Persist enough conservative lifecycle evidence to justify that distinction
-   across restarts. An empty rendered transcript, no known history file, a missing
-   catalog entry or a failed Resume is **not** proof that a session was untouched.
-   Once input may have been delivered, a turn/history is observed, or another
-   history-producing operation may have occurred, do not classify it as safely
-   replaceable. Mark that uncertainty before dispatch, not only after a response.
-   This evidence is not a stored prompt or submission replay mechanism.
+2. A local session without any native identity can create one on its permitted
+   initial connection. Once a native ID is assigned, reconnect targets that exact
+   identity. Do not silently substitute a fresh thread, even when Nimrod recorded
+   the original as untouched. Do not auto-rename, send synthetic input, replay
+   messages, edit native history or change global settings to force persistence.
+   An explicit separate New session remains possible.
+3. An empty rendered transcript, no known history file, a missing catalog entry,
+   a failed Resume or private untouched-session metadata is **not** native
+   saved-history evidence. A successful native history read can establish that
+   evidence even for a zero-message thread. Conversely, observed work is not
+   permission to assume saving completed. Keep uncertainty conservative, without
+   persisting prompts or introducing replay or private delivery checkpoints.
 4. A confirmed saved-history reference always resumes that exact identity.
    Missing, unreadable, corrupt, inaccessible or ambiguously persisted history
    fails visibly while preserving local state. Never turn arbitrary Resume errors
-   into New session. Legacy records without trustworthy untouched-session evidence
-   take this conservative path; an explicit separate New session remains possible.
+   into New session. All legacy candidates take this exact-ID path, including
+   records with retired untouched-session markers.
 5. Keep Reload, saved-history Resume and deletion eligibility truthful. A local
    placeholder/runtime ID is not a saved-history capability. Close is not history
    deletion. History loss or connection failure never authorizes deleting drafts,
@@ -84,11 +84,12 @@ untouched shutdown behavior, evidence of possible work and exact Resume semantic
 Review existing adapters against this policy rather than copying the behavior of
 another harness or assuming their current saved-ID ports prove durability.
 
-Provider-free fixtures should cover: create/restart/reselect before first Send;
-draft and image retention; promotion without duplicate membership; exact Resume
+Provider-free fixtures should cover: create/restart/reselect before first Send
+without substituting IDs; draft/image and membership retention; exact Resume
 after real persistence; ambiguous first Send followed by restart; missing saved
-history; legacy records without evidence; explicit Temporary disposal; failed
-owned shutdown; and isolation from siblings, newer drafts and background focus.
+history; ignored legacy replacement markers; explicit Temporary disposal; failed
+owned shutdown; native zero-message saved history; and isolation from siblings,
+newer drafts and background focus.
 Fixture authoring/execution and native acceptance must be reported separately.
 
 ## Codex motivating case and implementation
@@ -101,12 +102,11 @@ trace showed creation, no `turn/start`, then a later `thread/resume` rejection:
 `no rollout found for thread id …`.
 
 The [Codex integration skill](../../codex-integration/SKILL.md#untouched-session-persistence-anomaly)
-owns its implemented evidence/checkpoint mapping and conservative legacy policy.
-The compatibility encoding retains `kind: codex` / runtime `sessionId` for layout
-and draft routing, adding validated versioned `codexContinuity` evidence; such a
-layout identity is not itself a saved-history capability. Fresh replacement
-preserves the mounted local owner and promotes its scoped draft to the new runtime
-ID through an explicit collision-checked operation. Other harness encodings remain
-unchanged. Old Codex records without evidence are never inferred to be untouched.
-No live reproduction, migration of legacy empty rows or native acceptance is
-implied by source implementation.
+owns its exact-ID reconnect, runtime confirmation and upstream limitation mapping.
+The compatibility encoding retains `kind: codex` / `sessionId` for local layout
+and draft routing; this is a reconnect candidate, not saved-history proof.
+Retired `codexContinuity` metadata is ignored without removing rows or changing
+draft scopes. No automatic thread replacement, private checkpoint, native history
+migration or saved-scope reassignment remains. Other harness encodings are
+unchanged. The isolated native probe is actual installed-runtime evidence, not
+native Nimrod acceptance or a claim that the upstream limitation is fixed.

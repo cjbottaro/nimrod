@@ -780,11 +780,6 @@ function sessionHost(tab: Tab, owner: SessionLifecycleOwner): HarnessSessionHost
         updateTab(tab); if (change?.persist) persistTabs();
       },
       identified: () => { if (current()) { harnesses.assertIdentity(tab.project, tab.integration); persistTabs(); syncPopouts(); } },
-      checkpoint: async () => {
-        if (!current()) throw new Error('Session was retired before its lifecycle checkpoint');
-        persistTabs();
-        await preferences.saveState(layoutKey(), localState.get(layoutKey()));
-      },
       retire: () => { tab.cancelPreference?.(); if (tab.token) dialogs.cancel(tab.token); },
       input: delta => { tab.inputCount += delta; if (current()) updateTab(tab); },
       attention: (kind, token, label, response, signal) => {

@@ -64,7 +64,8 @@ notices retain their operation heading and severity icon.
 Session notices have even internal padding and breathing room above and below the
 border. The gap before the transcript stays visible while you scroll. The icon
 and Dismiss control align with the first message line, including when the message
-wraps or Details is expanded.
+wraps or Details is expanded. When one banner contains more diagnostics than fit,
+its complete outline stays visible while the content scrolls inside it.
 
 Every independent issue has its own banner, actions and dismiss control. There
 is no multi-error count/disclosure hiding other issues. Repeated reports of the

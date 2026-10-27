@@ -1,9 +1,12 @@
-/** Preserve the initiating failure when owned-process shutdown also fails. */
-export function codexConnectionFailure(primary: string, connecting: boolean, cleanup?: unknown): { message: string; details?: string } {
+/** Preserve native diagnostics without presenting a runtime ID as saved history. */
+export function codexConnectionFailure(primary: string, connecting: boolean, cleanup?: unknown): { message: string; details: string } {
+  const missing = /\bno rollout found for thread id \S+/.test(primary);
+  const details = [`Connection failure: ${primary}`];
+  if (missing) details.push('Codex could not find saved history for the requested thread. Codex may not persist a session before its first message; missing history can also have other causes. Nothing was replaced, renamed or replayed. Your local draft remains. Start a separate New Codex session if needed.');
+  if (cleanup !== undefined) details.push(`Owned-process cleanup also failed: ${cleanup instanceof Error ? cleanup.message : String(cleanup)}\nNative ownership remains reserved until exit is observed. Nothing was retried or treated as successfully stopped.`);
   return {
-    message: `${connecting ? 'Codex startup failed' : 'Codex disconnected'}: ${primary}. Saved history and any local draft remain; nothing was replayed.`,
-    ...(cleanup === undefined ? {} : {
-      details: `Connection failure: ${primary}\n\nOwned-process cleanup also failed: ${cleanup instanceof Error ? cleanup.message : String(cleanup)}\nNative ownership remains reserved until exit is observed. Nothing was retried or treated as successfully stopped.`,
-    }),
+    message: missing ? 'Codex could not reopen this session: no saved history was found. Your draft is kept.'
+      : `${connecting ? 'Codex startup failed' : 'Codex disconnected'}. Your draft is kept; nothing was replayed.`,
+    details: details.join('\n\n'),
   };
 }
