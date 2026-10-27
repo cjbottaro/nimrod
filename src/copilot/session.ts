@@ -68,7 +68,8 @@ export class CopilotSession {
   private revision = 0;
   private indices = new Map<string, number>();
   private events = new Set<string>();
-  private shellSequences = new Map<string, number>();
+  // Presence also marks shell chunks as authoritative over legacy snapshots.
+  private shellSequences = new Map<string, number | undefined>();
   private models: Model[] = [];
   private model?: string;
   private effort?: string;
@@ -569,10 +570,11 @@ export class CopilotSession {
         }
         return;
       }
-      if (type === 'tool.shell_output' && typeof data.sequence === 'number') {
+      const hasShellOutput = this.shellSequences.has(key);
+      if (type === 'tool.shell_output') {
         const sequence = this.shellSequences.get(key);
-        if (sequence !== undefined && data.sequence <= sequence) return;
-        this.shellSequences.set(key, data.sequence);
+        if (typeof data.sequence === 'number' && sequence !== undefined && data.sequence <= sequence) return;
+        this.shellSequences.set(key, typeof data.sequence === 'number' ? data.sequence : sequence);
       }
       const result = record(data.result) ? data.result : undefined;
       const error = record(data.error) ? data.error : undefined;
@@ -582,8 +584,10 @@ export class CopilotSession {
         toolSource: { backend: 'copilot-sdk', agent: 'copilot' }, toolTitle: start ? string('toolTitle') || name : previous?.toolTitle,
         toolKind: toolKind(name), toolArguments: start && Object.hasOwn(data, 'arguments') ? (retained[type] as Record<string, unknown>).arguments : previous?.toolArguments,
         toolNative: retained, streaming: !complete, uiPhase: undefined, toolStatus: complete ? 'result' : 'running',
-        ...(type === 'tool.shell_output' ? { output: (previous?.output || '') + string('text'), hasStreamingOutput: true } : {}),
-        ...(type === 'tool.execution_partial_result' ? { output: string('partialOutput'), hasStreamingOutput: true } : {}),
+        // Never concatenate the legacy merged snapshot with its duplicate raw
+        // chunks, or let a later colorless snapshot erase ANSI/parser state.
+        ...(type === 'tool.shell_output' ? { output: (hasShellOutput ? previous?.output || '' : '') + string('text'), hasStreamingOutput: true } : {}),
+        ...(type === 'tool.execution_partial_result' && !hasShellOutput ? { output: string('partialOutput'), hasStreamingOutput: true } : {}),
         ...(complete ? { isError: data.success === false, resultOutput: result ? copilotToolResult(result) : JSON.stringify(error ?? data, null, 2) } : {}),
       });
     } else if (type === 'session.permissions_changed' && !raw.agentId) {

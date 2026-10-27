@@ -426,7 +426,7 @@ test('SDK optimistic echo, native tools, content-only controls and one completio
   assert.equal(current.output, 'replacement two');
   f.event('tool.shell_output', { toolCallId: 'one', sequence: 0, text: '\nshell output' });
   f.event('tool.shell_output', { toolCallId: 'one', sequence: 0, text: '\nduplicate shell output' });
-  assert.equal(f.session.state.messages.find(message => message.role === 'tool')!.output, 'replacement two\nshell output');
+  assert.equal(f.session.state.messages.find(message => message.role === 'tool')!.output, '\nshell output');
   f.event('tool.execution_complete', { toolCallId: 'one', success: true, result: { content: 'Done', structuredContent: { exitCode: 0 } } });
   f.event('tool.execution_progress', { toolCallId: 'one', progressMessage: 'late progress' });
   current = f.session.state.messages.find(message => message.role === 'tool')!;
@@ -441,6 +441,40 @@ test('SDK optimistic echo, native tools, content-only controls and one completio
   assert.ok(f.captured.some(record => record.event === 'request.prompt'));
   assert.ok(f.sent.every(request => !('jsonrpc' in request)));
   f.session.disconnect('fixture complete');
+});
+
+for (const snapshotFirst of [false, true]) test(`SDK shell chunks outrank colorless snapshots without duplication (snapshot first: ${snapshotFirst})`, async () => {
+  const f = await fixture();
+  const current = () => f.session.state.messages.find(message => message.toolCallId === 'colors')!;
+  try {
+    f.event('tool.execution_start', { toolCallId: 'colors', toolName: 'bash', arguments: { command: 'mix test' } });
+    if (snapshotFirst) {
+      f.event('tool.execution_partial_result', { toolCallId: 'colors', partialOutput: '.' });
+      assert.equal(current().output, '.');
+    }
+    // Synthetic equivalent of the observed ExUnit stream: each colored dot is
+    // also delivered in a deprecated, colorless cumulative replacement snapshot.
+    f.event('tool.shell_output', { toolCallId: 'colors', sequence: 0, stream: 'stdout', text: '\x1b[32m.' });
+    f.event('tool.execution_partial_result', { toolCallId: 'colors', partialOutput: '.' });
+    assert.equal(current().output, '\x1b[32m.');
+    f.event('tool.shell_output', { toolCallId: 'colors', sequence: 1, stream: 'stderr', text: '.\x1b[0m' });
+    f.event('tool.execution_partial_result', { toolCallId: 'colors', partialOutput: '..' });
+    // Sequence is per call across stdout/stderr, not per stream.
+    f.event('tool.shell_output', { toolCallId: 'colors', sequence: 1, stream: 'stderr', text: 'duplicate' });
+    f.event('tool.shell_output', { toolCallId: 'colors', sequence: 0, stream: 'stdout', text: 'stale' });
+    assert.equal(current().output, '\x1b[32m..\x1b[0m');
+    f.event('tool.execution_partial_result', { toolCallId: 'fallback', partialOutput: 'fallback one' });
+    f.event('tool.execution_partial_result', { toolCallId: 'fallback', partialOutput: 'fallback replacement' });
+    assert.equal(f.session.state.messages.find(message => message.toolCallId === 'fallback')!.output, 'fallback replacement');
+    f.session.receive({ kind: 'event', event: { id: 'child-shell', agentId: 'child', type: 'tool.shell_output',
+      data: { toolCallId: 'colors', sequence: 0, stream: 'stdout', text: 'child only' } } });
+    assert.equal(f.session.state.messages.find(message => message.toolCallId === 'child:colors')!.output, 'child only');
+    f.event('tool.execution_complete', { toolCallId: 'colors', success: true, result: { content: '..\n2 tests, 0 failures' } });
+    f.event('tool.shell_output', { toolCallId: 'colors', sequence: 2, stream: 'stdout', text: 'late' });
+    f.event('tool.execution_partial_result', { toolCallId: 'colors', partialOutput: 'late replacement' });
+    assert.equal(current().output, '\x1b[32m..\x1b[0m');
+    assert.equal(current().resultOutput, '..\n2 tests, 0 failures'); assert.equal(current().toolStatus, 'result');
+  } finally { f.session.disconnect('fixture complete'); }
 });
 
 test('SDK busy drafts do not dispatch; Stop cancels session-bound decisions without approving them', async () => {

@@ -94,6 +94,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Copilot command cards preserve ANSI colors (including green Elixir test dots) by preferring live shell chunks over overlapping colorless progress snapshots, without duplicating output. **Raw output** no longer repeatedly appears/disappears: once needed, its disclosure stays available through completion with its current exact output and expansion state preserved.
+
 - Codex Close handles an already-exited owned process whose zombie-only macOS group rejects SIGTERM: it reaps the observed child and confirms group disappearance without re-signaling a recycled group ID. Genuine live-process/permission failures still retain ownership. Codex Delete is available for disconnected rows and validates them through the independent catalog without requiring Resume or local saved-history confirmation; a never-persisted target still requires local Close rather than fabricated native deletion. Native post-fix acceptance remains pending.
 
 - Codex reconnect preserves the exact native thread ID and local draft instead of silently replacing untouched threads. Retired private continuity markers no longer authorize replacement; Reload waits for native confirmation, not a returned runtime ID; deletion validates its target independently through the native catalog. Missing-rollout errors explain the native limitation without falsely claiming history is saved, and retain full cleanup diagnostics in Details. Codex's zero-message persistence/discovery limitations also affect its native CLI; Nimrod does not force a save or fabricate native history.
