@@ -12,7 +12,7 @@ function thread(id: string, parentThreadId: string | null = null, directory = cw
   return { id, cwd: directory, ephemeral: false, turns: [], status: { type: 'notLoaded' }, parentThreadId, forkedFromId: null, name: id };
 }
 const base = [thread('root'), thread('child', 'root')];
-function fixture(options: { confirm?: boolean; previews?: CodexThread[][]; removeError?: boolean; stopError?: boolean } = {}) {
+function fixture(options: { confirm?: boolean; previews?: (CodexThread[] | null | Error)[]; previewError?: boolean; reserveLocalError?: boolean; removeError?: boolean; stopError?: boolean } = {}) {
   const events: string[] = [], removed: string[] = [], reviews: DeletionReviewData[] = [];
   const abort = new AbortController(); let preview = 0;
   const context: SessionDeletionContext = {
@@ -25,8 +25,9 @@ function fixture(options: { confirm?: boolean; previews?: CodexThread[][]; remov
   };
   const history: CodexDeletionHistory = {
     supportsDeletion: true,
-    previewTree: async id => { events.push('preview'); const pages = options.previews ?? [base]; return codexDeletionTree(cwd, id, pages[Math.min(preview++, pages.length - 1)]); },
+    previewTree: async id => { events.push('preview'); if (options.previewError) throw new Error('Catalog lookup failed'); const pages = options.previews ?? [base]; const page = pages[Math.min(preview++, pages.length - 1)]; if (page instanceof Error) throw page; return page === null ? null : codexDeletionTree(cwd, id, page); },
     reserveDeletion: async (_operation, _root, ids) => { events.push(`reserve:${ids.length}`); },
+    reserveLocalRemoval: async () => { events.push('reserve-local'); if (options.reserveLocalError) throw new Error('Could not establish owned-writer fence'); },
     stopDeletionOwners: async () => { events.push('native-stop'); },
     deleteTree: async (_id, confirmed) => { events.push('delete'); confirmed('child'); if (options.removeError) throw new Error('Lost acknowledgement'); },
     finishDeletion: async (_id, uncertain) => { events.push(`finish:${uncertain}`); },
@@ -71,6 +72,46 @@ test('Codex deletion reuses review/locks/stop and reconciles only the authoritat
   assert.ok(f.events.lastIndexOf('preview') < f.events.indexOf('delete'));
   assert.equal(f.events.at(-1), 'finish:false');
   assert.ok(f.removed.includes(codexScope('root'))); assert.ok(f.removed.includes(codexScope('child')));
+});
+
+test('Delete removes a natively absent local session after confirmation, fenced stop and absence recheck', async () => {
+  const f = fixture({ previews: [null, null] }); await f.operation.run();
+  assert.equal(f.reviews[0].title, 'Delete Codex session');
+  assert.deepEqual(f.reviews[0].sessions.map(row => row.key), [codexScope('root')]);
+  assert.ok(f.events.indexOf('reserve-local') < f.events.indexOf('review'));
+  assert.ok(f.events.indexOf('review') < f.events.indexOf('stop:1'));
+  assert.ok(f.events.indexOf('native-stop') < f.events.lastIndexOf('preview'));
+  assert.equal(f.events.includes('delete'), false, 'local removal is not a fabricated native delete');
+  assert.deepEqual(f.removed, [codexScope('root')]);
+  assert.equal(f.events.at(-1), 'finish:false');
+});
+
+test('local Delete cancellation, fence failure, lookup failure and owned-stop failure retain local state', async () => {
+  for (const options of [
+    { previews: [null], confirm: false }, { previews: [null], reserveLocalError: true },
+    { previews: [null], stopError: true }, { previewError: true },
+    { previews: [null, new Error('Post-stop lookup unavailable')] },
+  ]) {
+    const f = fixture(options);
+    if (options.confirm === false) await f.operation.run(); else await assert.rejects(f.operation.run());
+    assert.deepEqual(f.removed, []);
+    assert.equal(f.events.includes('delete'), false);
+  }
+});
+
+test('a session saved during local Delete shutdown upgrades to guarded native tree deletion', async () => {
+  const f = fixture({ previews: [null, base, base] }); await f.operation.run();
+  assert.equal(f.reviews.length, 1, 'the accepted review already covers history saved during shutdown');
+  assert.ok(f.events.indexOf('reserve-local') < f.events.indexOf('reserve:2'));
+  assert.deepEqual(f.events.filter(event => event.startsWith('stop:')), ['stop:1', 'stop:2']);
+  assert.equal(f.events.filter(event => event === 'delete').length, 1);
+  assert.ok(f.removed.includes(codexScope('root'))); assert.ok(f.removed.includes(codexScope('child')));
+});
+
+test('saved history disappearing during native deletion never downgrades to a local purge', async () => {
+  const f = fixture({ previews: [base, null] }); await assert.rejects(f.operation.run(), /disappeared/);
+  assert.deepEqual(f.removed, []); assert.equal(f.events.includes('delete'), false);
+  assert.equal(f.events.includes('reserve-local'), false);
 });
 
 test('Codex cancelled review releases reservations without stopping, deleting or changing drafts', async () => {

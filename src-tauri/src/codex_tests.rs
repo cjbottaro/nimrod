@@ -1,4 +1,19 @@
 use super::*;
+#[tokio::test]
+async fn catalog_read_records_a_hidden_saved_root_without_binding_a_conversation() {
+    let owner = WireOwner {
+        catalog: true, token: "catalog".into(), cwd: PathBuf::from("/fixture"),
+        binding: Arc::new(Mutex::new(None)),
+        metadata: Arc::new(Mutex::new(HashMap::new())),
+        delete_request: Arc::new(Mutex::new(None)),
+        gate: Arc::new(RwLock::new(deletion::Gate::default())),
+    };
+    observe_record(&owner, &serde_json::json!({"id":1,"result":{"thread":{
+        "id":"hidden-root","cwd":"/fixture","ephemeral":false,"parentThreadId":null,"forkedFromId":null
+    }}})).await.unwrap();
+    assert!(owner.metadata.lock().await.contains_key("hidden-root"));
+    assert!(owner.binding.lock().await.is_none());
+}
 #[test]
 fn rename_requires_a_thread_and_valid_name() {
     assert!(validate_message(&serde_json::json!({"id":1,"method":"thread/name/set","params":{"threadId":"thread","name":"Friendly name"}})).is_ok());

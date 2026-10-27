@@ -555,7 +555,11 @@ async fn observe_record(owner: &WireOwner, value: &Value) -> Result<(), String> 
         if pending.as_ref().is_some_and(|id| value.get("id") == Some(id)) { *pending = None; }
     }
     if owner.catalog {
-        if let Some(rows) = value["result"]["data"].as_array() {
+        // A metadata-only read can recover a saved named-empty root hidden by
+        // thread/list's preview filter, without binding this catalog to it.
+        let mut rows: Vec<&Value> = value["result"]["data"].as_array().into_iter().flatten().collect();
+        if let Some(thread) = value["result"].get("thread") { rows.push(thread); }
+        if !rows.is_empty() {
             let mut metadata = owner.metadata.lock().await;
             for row in rows {
                 if let (Some(id), Some(cwd)) = (row["id"].as_str(), row["cwd"].as_str()) {

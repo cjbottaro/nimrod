@@ -46,6 +46,10 @@ export interface SessionDeletionContext {
   closeReview(): void;
   lock(targets: readonly SessionDeletionTarget[], executing: boolean): void;
   stop(targets: readonly SessionDeletionTarget[]): Promise<void>;
+  /** Reconcile confirmed native removals or a completed explicit local deletion
+   * after the adapter established native absence and stopped/fenced owned writers.
+   * Never infer this from a failed lookup or ambiguous native mutation.
+   */
   removed(targets: readonly SessionDeletionTarget[]): void;
   recovered(key: string): void;
   error(message: string): void;

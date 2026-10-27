@@ -34,6 +34,8 @@ interface ShellOptions {
   copilotDeleteGate?: Promise<void>;
   copilotHistory?: JsonRecord[];
   codexHistory?: JsonRecord[];
+  codexSavedThread?: JsonRecord;
+  codexReadError?: string;
   codexStartError?: string;
   codexConversation?: boolean;
   harnessStop?: (harness: 'copilot' | 'codex', token: string) => Promise<void>;
@@ -305,6 +307,10 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         const send = (value: JsonRecord) => target.channel.onmessage({ kind: 'rpc', value });
         if (request.method === 'initialize') send({ id: request.id, result: { userAgent: 'offline-codex' } });
         else if (request.method === 'thread/list') send({ id: request.id, result: { data: (request.params as JsonRecord).archived === true ? [] : options.codexHistory || [], nextCursor: null } });
+        else if (request.method === 'thread/read') {
+          if (options.codexSavedThread) send({ id: request.id, result: { thread: options.codexSavedThread } });
+          else send({ id: request.id, error: { code: options.codexReadError ? -32000 : -32600, message: options.codexReadError ?? `thread not loaded: ${(request.params as JsonRecord).threadId}` } });
+        }
         else if (request.method === 'thread/delete') send({ id: request.id, result: {} });
         else if (options.codexConversation && ['thread/start', 'thread/resume'].includes(String(request.method))) {
           if (request.method === 'thread/resume' && options.harnessResumeError) {
@@ -512,7 +518,7 @@ test('disconnected Codex Delete uses the independent catalog and shared review w
   } finally { f.win.close(); }
 });
 
-test('a disconnected Codex candidate absent from native history is retained on Delete and can still be Closed', async () => {
+test('Delete removes a natively absent Codex session and draft without native deletion or Resume', async () => {
   const scope = 'codex:"never-saved"';
   const f = await fixture(undefined, { windowWorkspace: '/project', codexHistory: [],
     nativeDrafts: { [scope]: { draft: 'Orphan draft is not deletion evidence', recovered: [] } },
@@ -521,13 +527,49 @@ test('a disconnected Codex candidate absent from native history is retained on D
   try {
     assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
     f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
+    assert.equal(f.element('deletion-title').textContent, 'Delete Codex session');
+    f.element<HTMLButtonElement>('deletion-cancel').click(); await f.tick(); await f.tick();
     assert.equal(f.rows().length, 1); assert.equal(f.saved().drafts[scope].draft, 'Orphan draft is not deletion evidence');
+    f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
+    f.element<HTMLButtonElement>('deletion-confirm').click(); await f.tick(); await f.tick();
     const requests = f.calls.filter(call => call.command === 'write_codex').map(call => call.args.message as JsonRecord);
     assert.equal(requests.some(request => ['thread/delete', 'thread/start', 'thread/resume', 'turn/start'].includes(String(request.method))), false);
-    assert.match(f.element('application-notices').textContent!, /existing persisted thread/);
-    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'w', metaKey: true, bubbles: true, cancelable: true }));
-    await f.tick(); await f.tick();
-    assert.equal(f.rows().length, 0); assert.equal(f.saved().drafts[scope].draft, 'Orphan draft is not deletion evidence');
+    assert.equal(f.rows().length, 0); assert.equal(f.saved().drafts[scope], undefined);
+    const fences = f.calls.filter(call => call.command === 'reserve_codex_deletion');
+    assert.ok(fences.length > 0);
+    assert.ok(fences.every(call => call.args.localOnly === true && call.args.rootId === 'never-saved'));
+    assert.ok(requests.filter(request => request.method === 'thread/read').every(request => (request.params as JsonRecord).includeTurns === false));
+  } finally { f.win.close(); }
+});
+
+test('Delete retains the Codex row and draft when native absence cannot be established', async () => {
+  const scope = 'codex:"lookup-denied"';
+  const f = await fixture(undefined, { windowWorkspace: '/project', codexHistory: [], codexReadError: 'Permission denied while reading saved history',
+    nativeDrafts: { [scope]: { draft: 'Keep unknown history draft', recovered: [] } },
+    appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'lookup-denied', name: 'Unknown history' }], active: scope } },
+  });
+  try {
+    f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 1); assert.equal(f.saved().drafts[scope].draft, 'Keep unknown history draft');
+    assert.match(f.element('application-notices').textContent!, /Permission denied/);
+    assert.equal(f.calls.some(call => call.command === 'reserve_codex_deletion'), false);
+    assert.equal(f.calls.some(call => call.command === 'write_codex' && (call.args.message as JsonRecord).method === 'thread/delete'), false);
+  } finally { f.win.close(); }
+});
+
+test('a saved named-empty Codex root omitted by listing still receives native deletion review', async () => {
+  const scope = 'codex:"named-empty"';
+  const f = await fixture(undefined, { windowWorkspace: '/project', codexHistory: [],
+    codexSavedThread: { id: 'named-empty', cwd: '/project', ephemeral: false, parentThreadId: null, forkedFromId: null, turns: [], status: { type: 'notLoaded' }, name: 'Named empty' },
+    appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'named-empty', name: 'Named empty' }], active: scope } },
+  });
+  try {
+    f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
+    assert.equal(f.element('deletion-title').textContent, 'Delete Codex thread tree');
+    f.element<HTMLButtonElement>('deletion-confirm').click(); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 0);
+    assert.ok(f.calls.filter(call => call.command === 'reserve_codex_deletion').every(call => call.args.localOnly === false));
+    assert.equal(f.calls.filter(call => call.command === 'write_codex' && (call.args.message as JsonRecord).method === 'thread/delete').length, 1);
   } finally { f.win.close(); }
 });
 
@@ -4205,7 +4247,7 @@ for (const harness of ['copilot', 'codex'] as const) {
       } else {
         f.openPalette(); const input = f.element<HTMLInputElement>('palette-input');
         input.value = 'Delete session'; input.dispatchEvent(new f.win.Event('input'));
-        assert.match(f.element('palette-list').textContent!, /Review this persisted thread and its spawned descendants/);
+        assert.match(f.element('palette-list').textContent!, /Delete this session, its draft and any saved thread tree/);
         assert.doesNotMatch(f.element('palette-list').textContent!, /no saved history to delete/);
       }
       assert.equal(writes(f).some(request => ['prompt', 'turn/start'].includes(String(request.method))), false);

@@ -8,6 +8,24 @@ Read the [user guide](../../../../docs/sessions.md#delete-session-tree),
 and conversation writes; Nimrod owns permanent file deletion. No Pi worker,
 installed extension, runtime executable or chat command participates in deletion.
 
+## Product Delete semantics
+
+**Delete session** removes the selected conversation; users do not need to choose
+Close merely because a harness never persisted it. Concrete adapters smooth that
+native distinction behind the same required deletion operation. A confirmed
+native target uses its reviewed removal API. A target authoritatively absent from
+native history uses confirmed local removal after scoped owned-runtime stop,
+then removes its sidebar membership, exact draft/attachment scope and references.
+Ordinary Close remains non-destructive to persistent drafts.
+
+A missing list entry, empty preview, unavailable runtime, failed catalog query or
+ambiguous deletion acknowledgement is not proof of native absence. Adapters keep
+those errors separate and retain local state. Recheck after owned shutdown, which
+can finish persistence; if history appears, continue through guarded native
+deletion rather than leaving it behind. Never silently downgrade a native delete
+failure to local cleanup. The shell consumes one target-bound operation and does
+not branch on harness persistence or ask the user to select another action.
+
 ## Consumer interface and Copilot deletion
 
 The shared review model is now `DeletionReviewNode { key, title, parentKey?, cwd? }`, with opaque cleanup keys rather than file identifiers. The renderer rejects empty/duplicate keys and cyclic topology, preserves iterative rendering and reuses the existing retained modal/focus/progress behavior. Pi's native `file`/`parent` fields remain a concrete wire compatibility shape (`PiDeletionTreeSession`) mapped by `src/pi/session-deletion.ts`; Copilot and Codex publish their own namespaced keys. Deletion remains independent from `SessionLifecycle`.

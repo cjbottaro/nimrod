@@ -72,8 +72,10 @@ Saved-history discovery must not advertise a local placeholder as harness histor
    deletion. A native-deletion candidate may be reviewed by its independent
    catalog/source without connecting the conversation or requiring local history
    confirmation; only authoritative validation/removal authorizes cleanup.
-   History loss or connection failure never authorizes deleting drafts,
-   replacing saved identity or repeating navigation.
+   Explicit Delete may remove local membership/drafts after authoritative native
+   absence, scoped owned stop and post-stop revalidation, without requiring the
+   user to choose Close instead. Unknown history/connection errors alone never
+   authorize deletion, replacing saved identity or repeating navigation.
 
 The [optimistic interaction policy](architecture.md#optimistic-interaction-policy)
 still applies: Send feedback is immediate, no durability acknowledgement gates

@@ -93,9 +93,13 @@ Current behavior in `src/codex/connection.ts`:
 - Reload waits for that evidence. Deletion does not: an open row supplies its
   exact target to the independent catalog/source even when disconnected and
   unconfirmed. The catalog validates native existence/project/lineage before
-  review and removal. A missing persisted root is an explicit refusal, not
-  authority to discard local state; use Close to remove that local row while
-  retaining its draft. Close consumes the lifecycle stop port independently of
+  review and removal. An absent list entry is not
+  enough to discard local state. The same Delete action handles authoritatively
+  absent native targets with reviewed local removal after fenced owned stop and
+  a native absence recheck; if shutdown saves history, it upgrades to native
+  deletion. Unknown lookups/native mutation failures never become local cleanup.
+  [Codex deletion](references/deletion.md#native-absence-and-local-removal) owns the
+  exact classification, native fence and confirmation contract. Close consumes the lifecycle stop port independently of
   connection/history confirmation. The Codex badge tooltip qualifies
   unconfirmed history rather than claiming that a runtime ID is saved.
 - Missing-rollout errors retain complete diagnostics and any cleanup failure in

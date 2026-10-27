@@ -57,12 +57,74 @@ test('Codex deletion inventory includes archived descendants and retires an unce
     },
   }, () => { events.push('duplicate-discovery-error'); });
   const tree = await history.previewTree('root', new AbortController().signal);
+  assert.ok(tree);
   assert.deepEqual(new Set(tree.ids), new Set(['root', 'exec-child', 'archived-child']));
   await history.reserveDeletion('operation', 'root', tree.ids); await history.stopDeletionOwners('operation');
   await assert.rejects(history.deleteTree('root', () => {})); await history.finishDeletion('operation', true);
   assert.ok(events.indexOf('catalog-exited') < events.indexOf('release')); assert.equal(events.includes('duplicate-discovery-error'), false);
   assert.equal(sent.some(packet => ['thread/start', 'thread/resume', 'turn/start'].includes(String(packet.method))), false);
   await history.dispose();
+});
+
+function deletionPreviewFixture(options: {
+  inventory?: Record<string, unknown>[]; saved?: Record<string, unknown>;
+  readError?: { code: number; message: string }; listError?: boolean;
+} = {}) {
+  const sent: CodexPacket[] = []; let receive!: (packet: unknown) => void;
+  const history = new CodexSessionHistory(cwd, {
+    start: async (_token, listener) => { receive = listener; return cwd; },
+    write: async (_token, packet) => {
+      sent.push(packet);
+      const params = packet.params as Record<string, unknown>;
+      if (packet.method === 'initialize') receive({ id: packet.id, result: { userAgent: 'fixture' } });
+      else if (packet.method === 'thread/list') {
+        if (options.listError) receive({ id: packet.id, error: { code: -32000, message: 'Catalog inventory unavailable' } });
+        else receive({ id: packet.id, result: { data: params.archived ? [] : options.inventory ?? [], nextCursor: null } });
+      } else if (packet.method === 'thread/read') {
+        assert.equal(params.includeTurns, false);
+        if (options.saved) receive({ id: packet.id, result: { thread: options.saved } });
+        else receive({ id: packet.id, error: options.readError ?? { code: -32600, message: `thread not loaded: ${params.threadId}` } });
+      }
+    },
+    stop: async () => {},
+    deletion: { reserve: async () => {}, stop: async () => {}, release: async () => {} },
+  }, () => {});
+  return { history, sent };
+}
+
+test('complete deletion inventory plus exact native not-found establishes local-only removal', async () => {
+  const f = deletionPreviewFixture();
+  try {
+    assert.equal(await f.history.previewTree('absent', new AbortController().signal), null);
+    assert.deepEqual(f.sent.filter(packet => packet.method === 'thread/list').map(packet => (packet.params as Record<string, unknown>).archived), [false, true]);
+    assert.equal(f.sent.filter(packet => packet.method === 'thread/read').length, 1);
+    assert.equal(f.sent.some(packet => ['thread/start', 'thread/resume', 'turn/start', 'thread/delete'].includes(String(packet.method))), false);
+  } finally { await f.history.dispose(); }
+});
+
+test('named saved zero-message root hidden by listing still produces a native deletion tree', async () => {
+  const f = deletionPreviewFixture({ saved: { ...thread('hidden-saved'), forkedFromId: null } });
+  try {
+    const plan = await f.history.previewTree('hidden-saved', new AbortController().signal);
+    assert.ok(plan); assert.deepEqual(plan.ids, ['hidden-saved']);
+  } finally { await f.history.dispose(); }
+});
+
+test('failed lookups, foreign identities and incomplete/ambiguous inventory never establish native absence', async () => {
+  for (const options of [
+    { listError: true },
+    { readError: { code: -32000, message: 'thread not loaded: absent' } },
+    { readError: { code: -32600, message: 'thread not loaded: different-id' } },
+    { readError: { code: -32600, message: 'Permission denied' } },
+    { saved: { ...thread('absent', '/other'), forkedFromId: null } },
+    { saved: { ...thread('different-id'), forkedFromId: null } },
+    { inventory: [{ ...thread('child'), parentThreadId: 'absent', forkedFromId: null }] },
+    { inventory: [{ ...thread('fork'), forkedFromId: 'absent' }] },
+  ]) {
+    const f = deletionPreviewFixture(options);
+    try { await assert.rejects(f.history.previewTree('absent', new AbortController().signal)); }
+    finally { await f.history.dispose(); }
+  }
 });
 
 test('Codex catalog captures and reports unsupported server interactions without creating a conversation', async () => {

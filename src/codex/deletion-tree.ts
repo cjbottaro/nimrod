@@ -11,6 +11,10 @@ export interface CodexDeletionTree {
   readonly review: DeletionReviewNode[];
   readonly targets: readonly SessionDeletionTarget[];
 }
+/** Only thrown after validating inventory structure/lineage, never for a failed scan. */
+export class CodexMissingDeletionRoot extends Error {
+  constructor(readonly rootId: string) { super('Codex deletion root is absent from the validated inventory'); }
+}
 /** The deletion API follows spawned-parent lineage, never tree-wide sessionId or fork history. */
 export function codexDeletionTree(cwd: string, rootId: string, inventory: readonly CodexThread[]): CodexDeletionTree {
   nonempty(rootId, 'deletion root');
@@ -35,7 +39,11 @@ export function codexDeletionTree(cwd: string, rootId: string, inventory: readon
   for (const node of threads.values()) if (typeof node.parentThreadId === 'string' && !threads.has(node.parentThreadId))
     throw new Error('Codex inventory has incomplete spawned lineage. The deletion scope cannot be established.');
   const root = threads.get(rootId);
-  if (!root || root.ephemeral || root.cwd !== cwd) throw new Error('Codex deletion requires an existing persisted thread in this exact project');
+  if (!root) {
+    if ([...threads.values()].some(node => node.forkedFromId === rootId)) throw new Error('Codex inventory retains fork references to the missing root; local removal scope is ambiguous');
+    throw new CodexMissingDeletionRoot(rootId);
+  }
+  if (root.ephemeral || root.cwd !== cwd) throw new Error('Codex deletion requires an existing persisted thread in this exact project');
   const found: CodexThread[] = [], seen = new Set<string>(), queue = [root];
   for (let index = 0; index < queue.length; index++) {
     const node = queue[index];

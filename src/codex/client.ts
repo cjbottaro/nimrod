@@ -86,6 +86,27 @@ export class CodexClient {
     });
     return result;
   }
+  /** Unbound catalog lookup: distinguish native absence from filtered listing.
+   * Never creates/resumes a thread or materializes history via includeTurns.
+   */
+  async readSavedThread(threadId: string, cwd: string): Promise<CodexThread | null> {
+    if (this.state !== 'ready') throw new Error('Saved-thread lookup requires an unbound Codex catalog');
+    nonempty(threadId, 'saved thread ID'); nonempty(cwd, 'project cwd');
+    let result!: CodexThread;
+    try {
+      await this.rpc('thread/read', { threadId, includeTurns: false }, value => {
+        result = thread(record(value, 'saved thread read').thread);
+        if (result.id !== threadId || result.cwd !== cwd || result.ephemeral)
+          throw new Error('Codex saved-thread lookup returned a conflicting identity, project or persistence state');
+      });
+    } catch (error) {
+      // This exact native read response is not a timeout, arbitrary Resume
+      // failure, empty transcript or missing thread/list entry.
+      if (error instanceof RpcResponseError && error.code === -32600 && error.message === `thread not loaded: ${threadId}`) return null;
+      throw error;
+    }
+    return result;
+  }
   async mcpServers(verbose: boolean, cursor?: string): Promise<CodexPage<RpcRecord>> {
     const threadId = this.requireBound(); let result!: CodexPage<RpcRecord>;
     await this.rpc('mcpServerStatus/list', { threadId, limit: 100, detail: verbose ? 'full' : 'toolsAndAuthOnly', ...(cursor ? { cursor } : {}) }, value => { result = page(value, mcpServer); });
