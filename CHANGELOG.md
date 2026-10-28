@@ -51,6 +51,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- Copilot’s **Running command** cards show one unlabeled, soft-wrapping output viewport, retaining live ANSI colors through completion instead of showing a second result/metadata block. Raw inputs and exact raw output stay in closed disclosures underneath; reported nonzero exit codes remain visible. Native visual acceptance is pending.
+
 - Runtime executable paths now save individually when you leave an edited field or press Enter, without a Save button. Typing does not save every keystroke; invalid fields do not block other paths, pending writes preserve newer edits, and changes apply only to new sessions.
 
 - Settings has a quieter, more compact layout: restrained category navigation, grouped preference rows, shorter sliders, and paired font/size controls with an integrated live specimen. Detailed appearance help and configuration-file paths use expandable disclosures. Global Settings defines defaults without an open-project override inventory; inspect and reset overrides in Project settings. Override semantics and immediate preference behavior are unchanged.

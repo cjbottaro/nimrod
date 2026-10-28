@@ -204,6 +204,7 @@ export class DomCardController<Data> {
   private renderPresentation(value: CardPresentation): void {
     const doc = this.body.ownerDocument;
     this.body.dataset.rawInputsPlacement = value.rawInputsPlacement ?? 'before';
+    this.body.dataset.rawOutputDisclosure = String(value.rawOutputDisclosure === true);
     if (value.inputDisclosure) { this.body.dataset.inputLabel = value.inputDisclosure.label; this.body.dataset.inputField = value.inputDisclosure.field; }
     else { delete this.body.dataset.inputLabel; delete this.body.dataset.inputField; }
     let title = this.summary.querySelector<HTMLElement>('.tool-card-title');
@@ -256,9 +257,11 @@ export class DomCardController<Data> {
         const output = doc.createElement('pre'); output.className = 'tool-output'; output.tabIndex = 0;
         section.append(label, output);
       }
-      section.querySelector<HTMLElement>('.tool-label')!.textContent = part.label;
+      const label = section.querySelector<HTMLElement>('.tool-label')!;
+      label.textContent = part.label; label.hidden = part.hideLabel === true;
       const output = section.querySelector<HTMLElement>('.tool-output')!;
       output.setAttribute('aria-label', part.label);
+      output.classList.toggle('tool-output-wrapped', part.wrap === true);
       const format = part.format || 'text';
       output.classList.toggle('tool-output-web-markdown', format === 'markdown' && part.webLinks === true);
       const previous = this.content.get(output);

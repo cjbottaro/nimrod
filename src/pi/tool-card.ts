@@ -98,7 +98,7 @@ function syncRawRecovery(document: Document, details: HTMLDetailsElement, block:
   // Replacement snapshots can alternate between transformed and literal output.
   // Once recovery is needed, retain it for this invocation rather than toggling
   // the disclosure (and card height/focus) on every streaming update.
-  if (!recovery && (provided || !expected.length)) return;
+  if (!recovery && (!expected.length || (provided && body.dataset.rawOutputDisclosure !== 'true'))) return;
   if (!recovery) {
     recovery = document.createElement('details'); recovery.className = 'tool-raw-output tool-raw-inputs';
     const summary = createCardSummary(document, 'Raw output'); recovery.append(summary); details.append(recovery);

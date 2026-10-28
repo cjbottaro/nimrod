@@ -106,6 +106,7 @@ details { margin:8px 0; border:0; border-radius:0; padding:0; }
 [data-output-kind="question-options"] .markdown { overflow-wrap:anywhere; }
 [data-output-kind="question-options"] .markdown ol { margin:4px 0; padding-left:1.6em; }
 [data-output-kind="question-options"] .markdown li + li { margin-top:.25em; }
+.tool-output-wrapped { max-width:100%; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-all; }
 .tool-output-web-markdown { font-family:var(--vscode-font-family, sans-serif); white-space:normal; background:transparent; padding:0; }
 .tool-output-web-markdown > .markdown { white-space:normal; overflow-wrap:anywhere; }
 .tool-output-web-markdown .markdown :is(h1, h2) { font-size:1.12em; line-height:1.4; }

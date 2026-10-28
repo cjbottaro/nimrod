@@ -345,6 +345,10 @@ pending.
 - No Linux build/native parity or Windows acceptance is established by macOS checks. Windows remains a possible future target.
 - Installed-Pi metadata smokes isolate config/projects/history and make no provider requests; they don't establish provider-generated first-save or queue behavior.
 
+## Copilot running-command cards
+
+The single-view, unlabeled, wrapping command presentation adds `test/copilot-shell-cards.test.ts` and updates the SDK mounted-card and offline browser fixtures. These fixtures are authored **unrun**. No app build/launch, browser debugging, live provider request, command execution or user-session mutation was performed for this task. Native macOS/Linux visual, resize, color and independent-scroll acceptance remains pending. Mandatory post-merge compilation is separate from fixture/native evidence. [Running-command cards](card-plugins.md#copilot-running-command-cards) owns the behavior and code map.
+
 ## Copilot command colors
 
 Read-only inspection of existing October 27, 2026 Copilot transcript logs (`copilot-sdk/copilot/2026-10-27.000009.jsonl` and adjacent segments) confirmed ExUnit dots arrive as `tool.shell_output.text` containing `ESC[32m.` while interleaved deprecated `tool.execution_partial_result.partialOutput` snapshots contain plain dots without SGR codes. Across three inspected calls, shell chunks contained 220, 121 and 72 green SGR sequences respectively; their replacement snapshots contained none. The previous reducer merged both sources into one field, repeatedly erasing ANSI state and changing raw-recovery coverage. This is native payload evidence, not visual acceptance of the correction.

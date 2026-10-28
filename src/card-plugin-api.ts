@@ -17,6 +17,10 @@ export interface ToolCardData {
 }
 export interface CardSection {
   key: string; label: string; text: string; format?: 'text' | 'markdown' | 'diff' | 'console';
+  /** Keep the accessible label without displaying a redundant heading. */
+  hideLabel?: boolean;
+  /** Soft-wrap literal/console output within its existing viewport. */
+  wrap?: boolean;
   /** Markdown-only: keep HTTP(S) links, resolving relative URLs only against a supplied web base. */
   webLinks?: boolean;
   baseUrl?: string;
@@ -30,6 +34,8 @@ export interface CardPresentation {
   questionAnswer?: { answer: string };
   /** Core-owned raw inputs default before the body; renderers may request them below it. */
   rawInputsPlacement?: 'before' | 'after';
+  /** Keep exact raw output disclosed even when the primary body is still literal. */
+  rawOutputDisclosure?: boolean;
   /** Compact display of a sole string input field; other shapes retain Raw inputs. */
   inputDisclosure?: { label: string; field: string };
   /** Optional retained disclosure around output sections. */

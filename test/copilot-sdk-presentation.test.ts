@@ -87,9 +87,12 @@ test('SDK ExUnit dots stay green when legacy snapshots interleave with split ANS
     assert.equal(f.details.querySelector('.tool-raw-output'), raw); assert.equal(raw.hidden, false);
     assert.equal(raw.querySelector('pre')?.textContent, '\x1b[32m..\x1b[0m');
     emit('tool.execution_complete', { toolCallId: 'dots', success: true, result: { content: '..\n2 tests, 0 failures' } }); patch();
-    const liveGreen = f.details.querySelector<HTMLElement>('[data-output-kind="execution"] .console-output-line > span')!;
+    assert.equal(f.details.querySelector('.card-plugin-body .tool-output'), output);
+    assert.equal(f.details.querySelectorAll('.card-plugin-body .tool-output').length, 1);
+    const liveGreen = output.querySelector<HTMLElement>('.console-output-line > span')!;
+    assert.equal(liveGreen, green);
     assert.equal(liveGreen.textContent, '..'); assert.match(liveGreen.style.color, /terminal-ansiGreen/);
-    assert.equal(f.details.querySelector('.card-plugin-body [data-output-kind="result"] .tool-output')?.textContent, '..\n2 tests, 0 failures');
+    assert.equal(output.textContent, '..\n2 tests, 0 failures');
   } finally { f.close(); session.disconnect('fixture complete'); }
 });
 
