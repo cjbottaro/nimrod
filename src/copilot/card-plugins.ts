@@ -149,6 +149,12 @@ function repositoryResult(output: Record<string, unknown>): string | undefined {
     notice: typeof output.content === 'string' && output.content.startsWith('Output too large to read at once (') && output.content.includes('Saved to:') ? 'Agent text preview was clipped; showing structured results.' : undefined });
   repositoryResults.set(output, text); return text;
 }
+/** Compact only the CLI's exact write-report shape; SELECT/unknown output stays literal. */
+function sqlResultText(text: string): string {
+  if (!/^Executed \d+ statement\(s\):(?:\n\n\d+\. (?:UPDATE|INSERT|DELETE)\n   \d+ row\(s\) (?:updated|inserted|deleted)\.)+$/.test(text)) return text;
+  return Array.from(text.matchAll(/(\d+)\. (UPDATE|INSERT|DELETE)\n   (\d+) row\(s\) (updated|inserted|deleted)\./g),
+    match => `${match[1]}. ${match[2]} — ${match[3]} ${match[3] === '1' ? 'row' : 'rows'} ${match[4]}`).join('\n');
+}
 /** Native SQL presentation only: never parse queries or reconstruct task/database state. */
 function sqlPresentation(data: Readonly<ToolCardData>, input: Record<string, unknown> | undefined): CardPresentation | undefined {
   const start = object(object(data.native)?.['tool.execution_start']);
@@ -162,9 +168,20 @@ function sqlPresentation(data: Readonly<ToolCardData>, input: Record<string, unk
     if (typeof count === 'number' && Number.isSafeInteger(count) && count >= 0) counts.push(`${count} ${count === 1 ? singular : plural}`);
   }
   const sections = data.isError ? copilotSections(data) : rawToolPresentation(data).sections;
-  return namedToolPresentation({ title: 'SQL', preview: firstString(input, ['description']), sections: sections.map(section =>
-    section.key === 'result' && native?.text !== undefined && section.text === native.source
-      ? { ...section, label: ['Results', ...counts].join(' · '), text: native.text, format: 'text' as const } : section) });
+  // Fence length is derived from the literal query, so SQL containing Markdown cannot
+  // escape its code block. This is display-only, not a SQL formatter/parser.
+  let fenceLength = 3;
+  for (const match of input.query.matchAll(/`+/g)) fenceLength = Math.max(fenceLength, match[0].length + 1);
+  const fence = '`'.repeat(fenceLength);
+  return namedToolPresentation({ title: 'SQL', preview: firstString(input, ['description']), sections: [
+    ...sections.map(section => {
+      if (section.key !== 'result') return section;
+      const result = native?.text !== undefined && section.text === native.source
+        ? { ...section, label: ['Results', ...counts].join(' · '), text: sqlResultText(native.text), format: 'text' as const } : section;
+      return result;
+    }),
+    { key: 'sql-query', label: 'Query', text: `${fence}sql\n${input.query}\n${fence}`, format: 'markdown' },
+  ] });
 }
 /** Completed questions are a read-only transcript exchange, never a second decision surface. */
 function questionPresentation(data: Readonly<ToolCardData>, input: Record<string, unknown> | undefined): CardPresentation | undefined {

@@ -357,6 +357,8 @@ The installed pinned SDK's `dist/generated/session-events.d.ts` explicitly depre
 
 ## Copilot SQL cards
 
+SQL card visual polish adds compact write-report and sanitized highlighted-query fixtures, including embedded backtick/HTML recovery and retained query/result DOM. These fixtures are authored **unrun**; native visual acceptance remains pending. No app build/launch or live SQL execution was performed.
+
 Read-only, user-authorized inspection of the October 18, 2026 CLI 1.0.98 transcript logs found the screenshot's built-in `sql` start/completion pair and surrounding task creation/final SELECT. This verifies the input/result/telemetry shapes and task bookkeeping in that conversation, not the new UI. A scrubbed pair is retained in `test/fixtures/copilot/sql/`; new `test/copilot-sql-cards.test.ts` DOM fixtures are authored **unrun**. No test suite, live prompt, SQL execution, app build/launch or session/log mutation was performed for this implementation. The mandatory post-merge TypeScript/Rust compile check is separate from automated-test/native acceptance. The [cookbook](../../../../docs/builtin-card-cookbook.md) supplies manual recipes; none was executed here. Native macOS/Linux visual/focus/scroll acceptance and recipe/tool availability remain unverified. [SQL contract](card-plugins.md#copilot-sql-cards).
 
 ## Current automated validation

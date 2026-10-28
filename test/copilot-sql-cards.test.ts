@@ -5,6 +5,7 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import type { ToolCardData } from '../src/card-plugin-api';
 import { copilotToolResult } from '../src/copilot/tool-result';
+import { createSafeMarkdownRenderer } from '../src/pi/safe-markdown';
 import { CardPluginCatalog } from '../src/pi/card-plugins/catalog';
 import { renderToolCard, updateToolCard, disposeToolCard } from '../src/pi/tool-card';
 
@@ -22,27 +23,60 @@ function sqlData(capture = captured()): ToolCardData {
 }
 function fixture(data: ToolCardData) {
   const dom = new JSDOM('<body></body>'), doc = dom.window.document;
-  const card = renderToolCard(doc, data, doc.createElement('details')); doc.body.append(card);
+  const markdown = createSafeMarkdownRenderer(dom.window as unknown as Window);
+  const card = renderToolCard(doc, data, doc.createElement('details'), undefined, undefined, { markdown: text => {
+    const node = doc.createElement('div'); node.className = 'markdown'; node.innerHTML = markdown.render(text); return node;
+  } }); doc.body.append(card);
   return { dom, doc, card, close() { disposeToolCard(card); dom.window.close(); } };
 }
+const compactWriteResult = '1. UPDATE — 2 rows updated\n2. UPDATE — 1 row updated';
 const bodyOutput = (card: HTMLElement) => card.querySelector<HTMLElement>('.card-plugin-body .tool-output');
 const bodyLabel = (card: HTMLElement) => card.querySelector('.card-plugin-body')?.textContent || '';
 
-test('captured SQL uses its description, reported counts and concise literal output with exact raw recovery', () => {
+test('captured SQL uses its description, reported counts and compact write report with exact raw recovery', () => {
   const capture = captured(), data = sqlData(capture), f = fixture(data);
   try {
     assert.equal(f.card.querySelector('.tool-card-title')?.textContent, 'SQL');
     assert.equal(f.card.querySelector('.tool-card-preview')?.textContent, 'Advance depth blur todos');
     assert.match(bodyLabel(f.card), /Results · 2 statements · 3 rows affected · 0 rows returned/);
-    assert.equal(bodyOutput(f.card)?.textContent, capture.complete.data.result.content);
+    assert.equal(bodyOutput(f.card)?.textContent, compactWriteResult);
     assert.doesNotMatch(bodyOutput(f.card)!.textContent!, /UPDATE todos|Copilot result metadata/);
     const raw = f.card.querySelector<HTMLDetailsElement>('.tool-raw-output')!;
     assert.equal(raw.open, false); assert.equal(raw.querySelector('pre')?.textContent, data.resultOutput);
     assert.deepEqual(JSON.parse(f.card.querySelector('.tool-raw-inputs pre')!.textContent!), data.arguments);
     assert.ok(f.card.querySelector('.card-plugin-body + .tool-raw-inputs'));
-    assert.equal(f.card.querySelector('[title]'), null);
+    const query = f.card.querySelector('[data-output-kind="sql-query"]')!;
+    assert.match(query.textContent!, /Query/);
+    assert.ok(query.querySelector('.tool-output')?.textContent?.includes(capture.start.data.arguments.query));
+    assert.equal(bodyOutput(f.card)?.parentElement?.dataset.outputKind, 'result');
+    assert.equal(f.card.querySelector('summary [title]'), null);
+    assert.equal(query.querySelector('.code-language')?.textContent, 'sql');
+    assert.ok(query.querySelector('.hljs-keyword'));
     assert.equal(capture.complete.data.toolTelemetry.metrics.rowsAffected, 3, 'native fixture is unchanged');
   } finally { f.close(); }
+});
+
+test('queries containing Markdown fences and HTML stay literal highlighted SQL', () => {
+  const capture = captured();
+  capture.start.data.arguments.query = "SELECT '```', '````', '<img src=x onerror=alert(1)>';\n-- ```\nSELECT 2;";
+  const f = fixture(sqlData(capture));
+  try {
+    const query = f.card.querySelector('[data-output-kind="sql-query"]')!;
+    assert.equal(query.querySelectorAll('.code-block').length, 1);
+    assert.equal(query.querySelector('code')?.textContent, `${capture.start.data.arguments.query}\n`);
+    assert.equal(query.querySelector('img, script, a'), null);
+    assert.deepEqual(JSON.parse(f.card.querySelector('.tool-raw-inputs pre')!.textContent!), capture.start.data.arguments);
+  } finally { f.close(); }
+});
+
+test('nonstandard write reports remain literal rather than being partially compacted', () => {
+  for (const text of ['Executed 1 statement(s):\n\n1. UPDATE\n   2 row(s) updated.\nWarning: partial result',
+    'Executed 1 statement(s):\n\n1. UPDATE\n   rows unknown.']) {
+    const capture = captured(); capture.complete.data.result = { content: text };
+    const data = sqlData(capture), f = fixture(data);
+    try { assert.equal(bodyOutput(f.card)?.textContent, text); }
+    finally { f.close(); }
+  }
 });
 
 test('SQL counts are optional nonnegative safe integers; zero and singular labels are not guessed', () => {
@@ -56,13 +90,13 @@ test('SQL counts are optional nonnegative safe integers; zero and singular label
     const f = fixture(sqlData(capture));
     try {
       assert.ok(bodyLabel(f.card).startsWith(expected));
-      assert.equal(bodyOutput(f.card)?.textContent, capture.complete.data.result.content);
+      assert.equal(bodyOutput(f.card)?.textContent, compactWriteResult);
       if (expected === 'Results') assert.doesNotMatch(bodyLabel(f.card), /statements ·|rows affected|rows returned/);
     } finally { f.close(); }
   }
   const capture = captured(); delete (capture.complete.data as Partial<Capture['complete']['data']>).toolTelemetry;
   const f = fixture(sqlData(capture));
-  try { assert.ok(bodyLabel(f.card).startsWith('Results')); assert.equal(bodyOutput(f.card)?.textContent, capture.complete.data.result.content); }
+  try { assert.ok(bodyLabel(f.card).startsWith('Results')); assert.equal(bodyOutput(f.card)?.textContent, compactWriteResult); }
   finally { f.close(); }
 });
 
@@ -114,7 +148,7 @@ test('SQL keeps independent live output and works without description or telemet
     assert.equal(f.card.querySelector('.tool-card-preview')?.textContent || '', '');
     const outputs = f.card.querySelectorAll('.card-plugin-body .tool-output');
     assert.equal(outputs[0]?.textContent, data.executionOutput);
-    assert.equal(outputs[1]?.textContent, capture.complete.data.result.content);
+    assert.equal(outputs[1]?.textContent, compactWriteResult);
     assert.equal(f.card.querySelector('.tool-raw-output [data-output-kind="result"] pre')?.textContent, data.resultOutput);
   } finally { f.close(); }
 });
@@ -168,9 +202,11 @@ test('generation, execution, result and late metadata enhance the same shell wit
     updateToolCard(f.doc, f.card, running);
     assert.equal(f.card.querySelector('.tool-card-title')?.textContent, 'SQL');
     const output = bodyOutput(f.card)!;
+    const query = f.card.querySelector('[data-output-kind="sql-query"] .code-block');
     output.focus();
     updateToolCard(f.doc, f.card, complete);
     assert.equal(f.card.querySelector('.card-plugin-body'), body);
+    assert.equal(f.card.querySelector('[data-output-kind="sql-query"] .code-block'), query);
     assert.equal(bodyOutput(f.card), output); assert.equal(f.doc.activeElement, output);
     assert.equal(f.card.querySelector('.tool-raw-inputs'), rawInputs); assert.equal(rawInputs.open, true);
     const rawOutput = f.card.querySelector<HTMLDetailsElement>('.tool-raw-output')!; rawOutput.open = true;

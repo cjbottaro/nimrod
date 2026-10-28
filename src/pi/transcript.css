@@ -116,6 +116,16 @@ details { margin:8px 0; border:0; border-radius:0; padding:0; }
 [data-output-kind="web-sources"] .markdown ol { margin:0; padding-left:1.8em; }
 [data-output-kind="web-sources"] .markdown li + li { margin-top:.35em; }
 :is([data-output-kind="fetch-source"], [data-output-kind="fetch-redirect"]) .tool-output-web-markdown { font-size:.92em; }
+/* SQL keeps literal results lightweight; the query reuses normal highlighted code. */
+.card-plugin-body:has(> [data-output-kind="sql-query"]) > [data-output-kind="result"] > .tool-output {
+  background:transparent; padding:6px 0 6px 12px;
+  border-left:2px solid var(--vscode-panel-border);
+  font-size:calc(var(--nimrod-monospace-size) * .9);
+}
+.card-plugin-body:has(> [data-output-kind="sql-query"]) > [data-output-kind="result"] > .tool-label { margin-top:10px; }
+[data-output-kind="sql-query"] > .tool-output { background:transparent; padding:0; white-space:normal; }
+[data-output-kind="sql-query"] .markdown { white-space:normal; }
+[data-output-kind="sql-query"] .code-block { margin:0; }
 .card-plugin-copy { margin:4px 0; padding:3px 7px; font-size:.8em; }
 .edit-card-preview { display:flex; flex:1; align-items:baseline; gap:12px; }
 .edit-card-filename { flex:none; max-width:70%; overflow:hidden; text-overflow:ellipsis; color:var(--vscode-foreground); }

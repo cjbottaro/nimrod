@@ -130,7 +130,10 @@ If that tool is unavailable, say so; do not substitute another tool.
 
 Expect **SQL** with **Inspect SQL card demo** in the summary. On a recognized
 successful completion, **Results** includes the supplied statement/affected/returned
-row counts and shows the concise result text. Metrics are optional: their absence
+row counts and shows the concise result text in a lightweight inset. Standard write
+reports use one line per statement rather than the multi-line console report. A
+**Query** section shows the supplied SQL with syntax highlighting and the normal
+code Copy/Pop out controls. Metrics are optional: their absence
 must not prevent a useful result. Tables remain literal text, not an interactive grid.
 **Raw inputs** retains the query; **Raw output** retains the detailed SQL/result and
 metadata whenever the displayed result differs.
