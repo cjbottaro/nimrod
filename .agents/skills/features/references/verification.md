@@ -345,6 +345,10 @@ pending.
 - No Linux build/native parity or Windows acceptance is established by macOS checks. Windows remains a possible future target.
 - Installed-Pi metadata smokes isolate config/projects/history and make no provider requests; they don't establish provider-generated first-save or queue behavior.
 
+## Shared shell-card layout
+
+Pi, Codex and retained ACP shell-card parity adds `test/harness-shell-cards.test.ts` and updates the shared console, external ACP helper and offline console browser fixtures. Coverage includes unlabeled wrapping layout/raw ordering, ANSI cumulative extension, authoritative replacement/history, native Codex exit codes, category isolation, retained nodes/focus/inspection/disclosures and narrow/resize geometry. These fixtures are authored **unrun**. No live harness/provider request, user-session mutation, browser debugging, app build or launch was performed. Native macOS/Linux appearance, output-follow, trackpad and resize acceptance remains pending; compile-only checks are not fixture/native evidence. [Console shell layout](transcript-cards.md#console-style-command-output) owns behavior.
+
 ## Copilot running-command cards
 
 The single-view, unlabeled, wrapping command presentation adds `test/copilot-shell-cards.test.ts` and updates the SDK mounted-card and offline browser fixtures. These fixtures are authored **unrun**. No app build/launch, browser debugging, live provider request, command execution or user-session mutation was performed for this task. Native macOS/Linux visual, resize, color and independent-scroll acceptance remains pending. Mandatory post-merge compilation is separate from fixture/native evidence. [Running-command cards](card-plugins.md#copilot-running-command-cards) owns the behavior and code map.

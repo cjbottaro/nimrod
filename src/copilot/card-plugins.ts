@@ -1,7 +1,7 @@
 import type { CardPlugin, CardPresentation, CardSection, CardPluginContext, ToolCardData } from '../card-plugin-api';
 import { copilotToolResult } from './tool-result';
 import { createPatchPresentation } from './patch-card';
-import { definePresentationPlugin, rawToolPresentation, shellPresentation, fileReadPresentation, searchPresentation, argumentRecord, firstString, webUrl, displayWebUrl, markdownWebLink, questionAnswerPresentation, webSearchPresentation, webFetchPresentation, type WebSource, namedToolPresentation, codeSearchText, type CodeSearchFile } from '../card-plugin-ui';
+import { definePresentationPlugin, rawToolPresentation, shellPresentation, consoleOutputSuffix, fileReadPresentation, searchPresentation, argumentRecord, firstString, webUrl, displayWebUrl, markdownWebLink, questionAnswerPresentation, webSearchPresentation, webFetchPresentation, type WebSource, namedToolPresentation, codeSearchText, type CodeSearchFile } from '../card-plugin-ui';
 
 function isCopilot(data: Readonly<ToolCardData>): boolean {
   return data.source?.backend === 'copilot-sdk' && ['copilot', 'copilot-cli'].includes((data.source?.agent || '').toLowerCase());
@@ -247,21 +247,17 @@ function shellCard(data: Readonly<ToolCardData>, command: string | undefined): C
     if (withoutTrailingNewline.endsWith(footer)) final = withoutTrailingNewline.slice(0, -footer.length).replace(/\r?\n$/, '');
   }
   const live = data.executionOutput || '';
-  // Reconcile colorless cumulative results without replacing the colored stream.
-  // Only ignore SGR for this comparison: cursor/progress rewrites are not plain logs.
-  const plainLive = final && !/[\r\b]/.test(live) ? live.replace(/\x1b\[[\d;:]*m/g, '') : live;
-  const extension = live && final.startsWith(plainLive) ? final.slice(plainLive.length) : undefined;
+  const extension = consoleOutputSuffix(live, final);
   // Concrete shell-exit responses are agent-facing previews, not extra stdout.
   // Unknown independent final text/errors remain visible rather than being discarded.
   let text = !live ? final : extension !== undefined ? live + extension
     : !final || live.includes(final) || (exit && !data.isError) ? live : `${live}\n\n${final}`;
   if (!text && exit && typeof exit.outputPreview === 'string') text = exit.outputPreview;
   if (exit && exit.exitCode !== 0) text += `${text ? '\n\n' : ''}Exit code ${exit.exitCode}`;
-  const output: CardSection[] = text ? [{ key: 'result', label: 'Command output', text,
-    hideLabel: true, wrap: true, ...(data.isError ? { format: 'text' as const } : {}) }] : [];
+  const output: CardSection[] = text ? [{ key: 'result', label: 'Command output', text }] : [];
   // Errors remain literal, not interpreted as terminal controls.
-  return data.isError ? { title: data.title || String(data.name || 'tool'), preview: command, sections: output }
-    : shellPresentation({ title: data.title || String(data.name || 'tool'), command, sections: output });
+  return shellPresentation({ title: data.title || String(data.name || 'tool'), command, sections: output,
+    format: data.isError ? 'text' : 'console' });
 }
 
 /** Late names/categories/SDK metadata update content inside the same mounted adapter. */
@@ -308,7 +304,7 @@ function copilotPresentation(data: Readonly<ToolCardData>, context: CardPluginCo
   if (sql) return sql;
   if (data.kind === 'execute') {
     const command = firstString(input, ['command', 'cmd']);
-    return { ...shellCard(data, command), rawOutputDisclosure: true };
+    return shellCard(data, command);
   }
   if (data.kind === 'read') {
     if (typeof input?.path === 'string' && input.path.trim()) return fileReadPresentation({ path: input.path, projectDirectory: context.projectDirectory, range: requestedRange(input.view_range), sections: copilotSections(data) });

@@ -42,6 +42,9 @@ test('external ACP shell example bundles and mounts with the same public compone
     assert.equal(details.querySelector('.tool-card-preview')?.textContent, 'printf fixture');
     assert.equal(details.querySelector('.card-plugin-body .tool-output')?.textContent, 'fixture');
     assert.ok(details.querySelector('.tool-raw-output'), 'formatted output retains exact source outside the plugin');
+    assert.equal(details.querySelector<HTMLElement>('.tool-label')!.hidden, true);
+    assert.ok(details.querySelector('.tool-output-wrapped'));
+    assert.ok(details.querySelector(':scope > .card-plugin-body + .tool-raw-inputs + .tool-raw-output'));
     disposeToolCard(details);
   } finally { dom.window.close(); }
 });

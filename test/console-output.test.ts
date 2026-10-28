@@ -117,7 +117,10 @@ test('bundled Bash aliases opt into console sections while raw/file output stays
   const renderer = defaultToolRenderer.mount();
   for (const name of ['bash', 'functions.bash', 'shell', 'terminal']) {
     const value = validatePresentation(bashPresentation({ name, toolStatus: 'result', executionOutput: 'live', resultOutput: '\x1b[32mdone\x1b[0m' }));
-    assert.deepEqual(value.sections.map(section => section.format), ['console', 'console']);
+    assert.deepEqual(value.sections.map(section => section.format), ['console']);
+    assert.equal(value.sections[0].text, '\x1b[32mdone\x1b[0m');
+    assert.equal(value.sections[0].hideLabel, true); assert.equal(value.sections[0].wrap, true);
+    assert.equal(value.rawInputsPlacement, 'after'); assert.equal(value.rawOutputDisclosure, true);
   }
   for (const name of ['read', 'bash', 'custom']) assert.equal(renderer.update({ name, resultOutput: '\x1b[32mliteral' }).sections[0].format, undefined);
   renderer.dispose();

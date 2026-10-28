@@ -137,7 +137,9 @@ test('all observed SDK tool families show native completion.error.message once a
       native: { 'tool.execution_complete': { success: false, error } }, resultOutput: JSON.stringify(error, null, 2) };
     const f = card(data);
     try {
-      assert.equal(f.details.querySelector('.card-plugin-body [data-output-kind="result"] .tool-label')?.textContent, 'Error');
+      const label = f.details.querySelector<HTMLElement>('.card-plugin-body [data-output-kind="result"] .tool-label')!;
+      assert.equal(label.textContent, kind === 'execute' ? 'Command output' : 'Error');
+      assert.equal(label.hidden, kind === 'execute');
       assert.equal(f.details.querySelector('.card-plugin-body .tool-output')?.textContent, error.message);
       assert.equal(f.details.querySelector('.tool-raw-output pre')?.textContent, data.resultOutput);
       assert.ok(f.details.querySelector('.tool-card-failed')); assert.equal(f.details.querySelector('script'), null);

@@ -51,7 +51,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
-- Copilot’s **Running command** cards show one unlabeled, soft-wrapping output viewport, retaining live ANSI colors through completion instead of showing a second result/metadata block. Raw inputs and exact raw output stay in closed disclosures underneath; reported nonzero exit codes remain visible. Native visual acceptance is pending.
+- Shell cards across Pi, Copilot and Codex use one unlabeled, soft-wrapping output viewport with closed Raw inputs/Raw output disclosures underneath. Matching final output preserves live ANSI colors without duplication; replacement output remains authoritative and supplied nonzero exit diagnostics stay visible. Copilot’s final preview/metadata stays in Raw output rather than a second result block. The shared component also covers retained ACP execute cards and plugins that use it. Native visual acceptance is pending.
 
 - Runtime executable paths now save individually when you leave an edited field or press Enter, without a Save button. Typing does not save every keystroke; invalid fields do not block other paths, pending writes preserve newer edits, and changes apply only to new sessions.
 
