@@ -10,6 +10,11 @@ stop, and conservative retention on discovery failures. Pi, Copilot, Codex and
 runtime-only ACP supply concrete policies; an unrelated fixture harness exercises
 the same shell path. New regression fixtures are authored but unrun. No build,
 app launch, user-session deletion or installed-runtime probe was performed.
+The reported follow-up `Unsupported Copilot SDK bridge operation` exposed a
+missing Rust IPC allowlist entry for `retention`; that entry is now source-fixed.
+Authored native fixtures cover valid/malformed exact IDs and gate the production
+bridge's saved/absent/saved-but-unlisted lookups through `validate_message` before
+real-pipe delivery to the offline SDK fixture. These additions remain unrun.
 Mandatory post-merge TypeScript/Rust compile results are reported separately;
 macOS/Linux native behavior remains unverified.
 

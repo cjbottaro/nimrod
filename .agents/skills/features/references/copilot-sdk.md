@@ -733,6 +733,12 @@ calls `deleteSession`. Its required retention adapter follows the shared
 `client.getSessionMetadata(id)` through the discovery bridge, validating ID,
 nonremote status and project cwd. Undefined metadata confirms absence; list
 omission alone does not. Saved-but-unlisted sessions remain native targets.
+The Rust `write_copilot` validator explicitly allows `retention` only with a
+nonblank exact session ID, alongside the JavaScript bridge dispatch. Changes to
+bridge operations must update both boundaries. The native offline-pipe fixture
+validates retention requests through that same gate before sending them to the
+production bridge; direct JavaScript/shell fixtures alone cannot cover native
+allowlist drift.
 
 SDK deletion uses `client.deleteSession(id)`, which permanently removes history
 and artifacts. The shared target-bound operation requires review, fresh exact
