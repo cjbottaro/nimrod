@@ -88,7 +88,7 @@ test('config command rejects missing, unknown, malformed and secure-only values 
 test('config model uses only public settings get/set and preserves the advertised provider', async () => {
   const f = fixture();
   assert.deepEqual(Object.keys(f.client.rpc.user.settings).sort(), ['get', 'set']);
-  f.client.listModels = async () => [{ id: 'large', name: 'Fixture large', provider: { id: 'fixture-provider' } }];
+  f.client.listModels = async () => [{ id: 'large', name: 'Fixture large', policy: { state: 'enabled' }, provider: { id: 'fixture-provider' } }];
   const result = await applyConfigCommand(f.client, 'model LARGE');
   assert.deepEqual(f.writes, [{ model: 'large', modelProviderId: 'fixture-provider' }]);
   assert.equal(result.text, 'Configured model for future Copilot sessions.');
