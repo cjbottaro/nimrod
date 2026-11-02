@@ -22,7 +22,6 @@ function fixture() {
           if (value === null) delete values[key]; else values[key] = value;
         }
       },
-      validate: async () => ({ ok: true }),
     } } },
     listModels: async () => [
       { id: 'small', name: 'Fixture small', supportedReasoningEfforts: ['low', 'high'] },
@@ -86,9 +85,44 @@ test('config command rejects missing, unknown, malformed and secure-only values 
   assert.deepEqual(f.writes, []);
 });
 
-test('config command validates all SDK writes before persisting and reports rejection', async () => {
+test('config model uses only public settings get/set and preserves the advertised provider', async () => {
   const f = fixture();
-  f.client.rpc.user.settings.validate = async () => ({ ok: false, issues: [{ path: ['memory'], message: 'Expected boolean' }] });
-  await assert.rejects(applyConfigCommand(f.client, 'memory 42'), /Expected boolean/);
+  assert.deepEqual(Object.keys(f.client.rpc.user.settings).sort(), ['get', 'set']);
+  f.client.listModels = async () => [{ id: 'large', name: 'Fixture large', provider: { id: 'fixture-provider' } }];
+  const result = await applyConfigCommand(f.client, 'model LARGE');
+  assert.deepEqual(f.writes, [{ model: 'large', modelProviderId: 'fixture-provider' }]);
+  assert.equal(result.text, 'Configured model for future Copilot sessions.');
+});
+
+test('config command reports SDK write rejection without retrying or reading confirmation', async () => {
+  const f = fixture();
+  let attempts = 0;
+  f.client.rpc.user.settings.set = async () => {
+    attempts++;
+    f.client.rpc.user.settings.get = async () => { assert.fail('Rejected writes must not read confirmation'); };
+    throw new Error('Copilot rejected this value');
+  };
+  await assert.rejects(applyConfigCommand(f.client, 'model large'), /Copilot rejected this value/);
+  assert.equal(attempts, 1);
+  assert.equal(f.values.model, 'small');
   assert.deepEqual(f.writes, []);
+});
+
+test('config command rejects unconfirmed writes without reporting success or retrying', async () => {
+  const f = fixture();
+  f.client.rpc.user.settings.set = async ({ settings }) => { f.writes.push(settings); };
+  await assert.rejects(applyConfigCommand(f.client, 'model large'), /Copilot did not confirm model/);
+  assert.deepEqual(f.writes, [{ model: 'large', modelProviderId: null }]);
+});
+
+test('config command does not replay a successful write when confirmation fails', async () => {
+  const f = fixture();
+  const set = f.client.rpc.user.settings.set;
+  f.client.rpc.user.settings.set = async params => {
+    await set(params);
+    f.client.rpc.user.settings.get = async () => { throw new Error('Settings read failed'); };
+  };
+  await assert.rejects(applyConfigCommand(f.client, 'model large'), /Settings read failed/);
+  assert.deepEqual(f.writes, [{ model: 'large', modelProviderId: null }]);
+  assert.equal(f.values.model, 'large');
 });

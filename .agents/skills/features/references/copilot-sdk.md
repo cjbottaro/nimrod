@@ -14,14 +14,15 @@ mandatory internal protocol. Built-in creation is **New Copilot session**;
 **New session** and its shortcuts remain Pi-default. No universal controller,
 duplicated transcript/composer/navigation engine, or SDK-to-ACP/Pi event adapter.
 
-The exact npm dependency is `@github/copilot-sdk@1.0.22`. Its released
-`package.json` declares `copilotCliVersion` and `copilotRuntime.version` **1.0.98**,
-matching the installed CLI version previously inspected. Its engine range is
+The exact npm dependency is `@github/copilot-sdk@1.0.28`. Its released
+`package.json` declares `copilotCliVersion` and `copilotRuntime.version` **1.0.105**.
+The earlier installed-CLI observations below used SDK 1.0.22 / CLI 1.0.98;
+they do not establish native acceptance of the upgraded pair. Its engine range is
 `^20.19.0 || >=22.12.0` (Node 21 is unsupported); mise pins Node 25.9.0.
 The released SDK speaks protocol 3, minimum 3; this is **not ACP protocol 1**.
 
-Evidence: [released package](https://www.npmjs.com/package/@github/copilot-sdk/v/1.0.22),
-[npm tarball](https://registry.npmjs.org/@github/copilot-sdk/-/copilot-sdk-1.0.22.tgz).
+Evidence: [released package](https://www.npmjs.com/package/@github/copilot-sdk/v/1.0.28),
+[npm tarball](https://registry.npmjs.org/@github/copilot-sdk/-/copilot-sdk-1.0.28.tgz).
 Inspect that release's `dist/types.d.ts`, `client.js`, `session.js`,
 `generated/rpc.d.ts` and `generated/session-events.d.ts` when changing this
 boundary; repository main documentation can describe unreleased interfaces.
@@ -74,7 +75,7 @@ installed-runtime/native acceptance remains pending.
 - `scripts/prepare-copilot.mjs`, called by `src-tauri/build.rs`, stages the bridge,
   SDK dist/package metadata and required dependency packages into ignored
   `src-tauri/resources/copilot/`. It excludes every optional SDK CLI runtime
-  package. User installation/authentication of CLI 1.0.98 and a supported Node
+  package. User installation/authentication of CLI 1.0.105 and a supported Node
   remain prerequisites. SDK upgrades require deliberate source/API review.
 - SDK imports `koffi` eagerly even for stdio; ship it and its matching
   `@koromix/koffi-<platform>-<arch>` native dependency, plus zod/vscode-jsonrpc.

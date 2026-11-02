@@ -25,7 +25,7 @@ export class CopilotClient {
     for (const [key, value] of Object.entries(settings)) {
       if (value === null) delete this.userSettings[key]; else this.userSettings[key] = value;
     }
-  }, validate: async () => ({ ok: true }) } } };
+  } } } };
   async start() {}
   async getStatus() { return { version: '1.0.98', protocolVersion: 3 }; }
   async ping() { return { timestamp: Date.now() }; }

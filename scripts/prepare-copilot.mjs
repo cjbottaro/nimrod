@@ -36,7 +36,7 @@ for (const name of ['@github/copilot-sdk', 'vscode-jsonrpc', 'zod', 'koffi', `@k
     await cp(join(directory, 'dist'), new URL('dist/', target), { recursive: true });
     await cp(join(directory, 'package.json'), new URL('package.json', target));
     const manifest = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'));
-    if (manifest.version !== '1.0.22' || manifest.copilotCliVersion !== '1.0.98') throw new Error('Unexpected Copilot SDK release');
+    if (manifest.version !== '1.0.28' || manifest.copilotCliVersion !== '1.0.105') throw new Error('Unexpected Copilot SDK release');
   } else await cp(directory, target, { recursive: true });
 }
 await writeFile(new URL('package.json', destination), '{"private":true,"type":"module"}\n');

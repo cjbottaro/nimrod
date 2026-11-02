@@ -516,6 +516,12 @@ test('SDK commands use discovery/invocation, retain arguments and choices, and n
     assert.ok(config.input.choices.some((choice: { name: string }) => choice.name === 'dynamicRetrieval.mcp'));
     assert.equal(config.input.valueHint, '[value]');
     assert.equal((await f.request('command', { name: 'config', input: 'memory false' })).kind, 'text');
+    const configured = await f.request('command', { name: 'config', input: 'model large' });
+    assert.equal(configured.text, 'Configured model for future Copilot sessions.');
+    const refreshed = f.packets.filter(packet => packet.kind === 'commands').at(-1)?.commands
+      .find((command: { name: string }) => command.name === 'config');
+    assert.deepEqual(refreshed.configValues.effortLevel, [], 'refreshed defaults use the saved model');
+    assert.equal(f.packets.some(packet => packet.kind === 'event' && packet.event.type === 'session.model_changed'), false);
     const menu = await f.request('command', { name: 'permissions' });
     assert.equal(menu.kind, 'text'); assert.equal(menu.text, 'Fixture permission report: show (manual)');
     const report = await f.request('command', { name: 'perms', input: 'show  literal\nrest' });

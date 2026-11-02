@@ -2,7 +2,7 @@
 
 Nimrod’s built-in Copilot integration uses the **official Copilot SDK**, bundled
 with the app. Install and authenticate the Copilot CLI yourself; you do not need
-to install an SDK. The pinned SDK 1.0.22 declares CLI **1.0.98** compatibility.
+to install an SDK. The pinned SDK 1.0.28 declares CLI **1.0.105** compatibility.
 It requires Node `^20.19.0 || >=22.12.0`; the development toolchain uses 25.9.0.
 Configure **Settings → Runtime → Copilot executable** and **Node executable** if
 desktop executable discovery fails. Account/authentication stays with Copilot.
@@ -400,7 +400,8 @@ leaf key such as `permissions.allow`. Running `/config model`,
 `effortLevel`, `defaultMode`, `contextTier`, `autoTier` or
 `defaultPermissionMode` without a value opens a typed Copilot-owned picker.
 Other keys open a free-form value input when submitted without a value.
-Copilot validates, persists and confirms each write. This does not change the
+Nimrod writes through Copilot's public settings API and confirms the saved value;
+Copilot write rejections are shown on the command. This does not change the
 current session; use Nimrod's session controls or `/model` for live settings.
 `/config defaultPermissionMode allow-all` applies to newly created sessions,
 not Resume. Use `/permissions allow-all` to change the current session.

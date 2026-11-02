@@ -152,14 +152,7 @@ export async function applyConfigCommand(client, input) {
     writes.model = model?.id ?? null;
     writes.modelProviderId = record(model?.provider) && typeof model.provider.id === 'string' ? model.provider.id : null;
   }
-  for (const [topKey, value] of Object.entries(writes)) {
-    const validation = await client.rpc.user.settings.validate({ topKey, ...(value === null ? { delete: true } : { value }) });
-    if (!record(validation) || typeof validation.ok !== 'boolean') throw new Error('Copilot returned invalid settings validation.');
-    if (!validation.ok) {
-      const issues = Array.isArray(validation.issues) ? validation.issues.map(issue => issue.message).filter(message => typeof message === 'string') : [];
-      throw new Error(`Invalid Copilot setting ${match[1]}: ${issues.join('; ') || 'Copilot rejected this value.'}`);
-    }
-  }
+  // The public SDK exposes get/set only; the runtime owns write validation.
   await client.rpc.user.settings.set({ settings: writes });
   const confirmed = await metadata(client);
   const actual = rest.length ? getPath(confirmed[top]?.value, rest.join('.')) : confirmed[top]?.value;
