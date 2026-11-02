@@ -727,16 +727,23 @@ unverified. Source documentation is API/rate evidence, not runtime acceptance.
 **Reload session** implements the required `SessionReload` port through the integration's existing owned-stop and exact-ID Resume paths. It retires pending decisions/commands/configuration, preserves mounted identity/drafts and does not continue pending work. See the canonical [reload lifecycle](projects-and-sessions.md#reload-session-lifecycle) for ordering, interruption confirmation, failure and no-replay contracts. New shell fixtures are authored but unrun; installed-runtime/native acceptance remains pending.
 
 Close awaits owned stop and SDK `session.disconnect()`/`client.stop()`; it never
-calls `deleteSession`, and keeps history/draft. Resume can reopen it explicitly.
+calls `deleteSession`. Its required retention adapter follows the shared
+[local-cleanup contract](session-durability.md#close-and-local-removal).
+`CopilotSessionHistory.retention` uses the public exact-ID
+`client.getSessionMetadata(id)` through the discovery bridge, validating ID,
+nonremote status and project cwd. Undefined metadata confirms absence; list
+omission alone does not. Saved-but-unlisted sessions remain native targets.
 
 SDK deletion uses `client.deleteSession(id)`, which permanently removes history
 and artifacts. The shared target-bound operation requires review, fresh exact
 project membership, locks, observed owned writer shutdown and another fresh
 membership check in the discovery-only bridge. It never resumes, creates,
 prompts, deletes a private directory or replaces Pi's native tree transaction.
-Aborted/failed stop, stale membership or an unknown deletion
-outcome retain identity/draft/references; confirmed success alone cleans the
-SDK scope. No automatic retry; Refresh may inform a later explicit attempt.
+After review, exact metadata is checked before and after owned stop. Confirmed
+post-stop absence removes local state without calling the deletion API; shutdown
+materialization proceeds to native deletion. Aborted/failed stop, invalid metadata
+or an unknown deletion outcome retain identity/draft/references. A failed native
+delete is never downgraded to local cleanup. No automatic retry; Refresh may inform a later explicit attempt.
 External applications remain uncoordinated.
 
 ## Code map and authored verification

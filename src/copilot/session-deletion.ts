@@ -1,7 +1,7 @@
 import type { SessionDeletionContext, SessionDeletionSource } from '../session-deletion-operation';
 import type { CopilotSessionHistory } from './session-history';
 import { copilotSdkScope } from './session-lifecycle';
-export type CopilotDeletionHistory = Pick<CopilotSessionHistory, 'supportsDeletion' | 'validateDeletion' | 'deleteSession'>;
+export type CopilotDeletionHistory = Pick<CopilotSessionHistory, 'supportsDeletion' | 'retention' | 'deleteSession'>;
 export function copilotSessionDeletion(history: () => CopilotDeletionHistory | undefined, context: SessionDeletionContext): SessionDeletionSource {
   return {
     pending: false,
@@ -23,13 +23,17 @@ export function copilotSessionDeletion(history: () => CopilotDeletionHistory | u
             description: 'Stops this session’s Nimrod-owned agent and permanently removes its Copilot history and artifacts, Nimrod draft and references. Other sessions are not included. This cannot be undone. External applications are not coordinated.',
             sessions: [{ key: scope, title }] })) return;
           context.signal.throwIfAborted();
-          await source.validateDeletion(sessionId);
+          await source.retention(sessionId);
           context.signal.throwIfAborted();
           context.lock([target], true);
           await context.stop([target]);
           context.signal.throwIfAborted();
           context.progress('deleting');
-          await source.deleteSession(sessionId);
+          // Missing list membership is not absence. The SDK's exact metadata
+          // lookup is rechecked after shutdown, which may have saved history.
+          const retention = await source.retention(sessionId);
+          context.signal.throwIfAborted();
+          if (retention === 'saved') await source.deleteSession(sessionId);
           context.removed([target]);
         },
       };

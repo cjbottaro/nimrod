@@ -12,7 +12,7 @@ function fixture(extraStop?: () => Promise<void>) {
   let confirm = true, failStop = false, failDelete = false, ready = true;
   const history: CopilotDeletionHistory = {
     supportsDeletion: true,
-    async validateDeletion(id) { events.push(`validate:${id}`); },
+    async retention(id) { events.push(`validate:${id}`); return 'saved'; },
     async deleteSession(id) { events.push(`delete:${id}`); if (failDelete) throw new Error('Outcome unknown'); },
   };
   const coordinator = new SessionDeletionCoordinator({
@@ -46,10 +46,39 @@ test('Copilot uses shared review, participant shutdown and confirmed-only reconc
   assert.equal(operation.available(), true);
   await operation.run();
   assert.deepEqual(f.events, ['lock:true:false', 'review:saved:Saved title', 'validate:saved',
-    'lock:true:true', 'stop', 'progress', 'delete:saved', `reconcile:${key}`, 'lock:false:false', 'close']);
+    'lock:true:true', 'stop', 'progress', 'validate:saved', 'delete:saved', `reconcile:${key}`, 'lock:false:false', 'close']);
   assert.equal(f.coordinator.removed(key), true);
   assert.equal(operation.available(), false);
   assert.equal(f.coordinator.pending, false);
+});
+
+test('Copilot native absence rechecked after stop removes local state without a native delete', async () => {
+  const f = fixture();
+  f.history.retention = async () => 'absent';
+  await f.coordinator.operation(reference, 'Orphan')!.run();
+  assert.equal(f.events.includes('stop'), true);
+  assert.equal(f.events.includes('delete:saved'), false);
+  assert.equal(f.coordinator.removed(savedSessionKey(reference)), true);
+});
+
+test('Copilot shutdown materialization upgrades absent history to native deletion', async () => {
+  const f = fixture(); let checks = 0;
+  f.history.retention = async () => ++checks === 1 ? 'absent' : 'saved';
+  await f.coordinator.operation(reference, 'Newly saved')!.run();
+  assert.equal(checks, 2);
+  assert.equal(f.events.includes('delete:saved'), true);
+  assert.equal(f.coordinator.removed(savedSessionKey(reference)), true);
+});
+
+test('Copilot failed post-stop metadata check retains local state without fallback or retry', async () => {
+  const f = fixture(); let checks = 0;
+  f.history.retention = async () => { if (++checks > 1) throw new Error('Lookup unavailable'); return 'absent'; };
+  await f.coordinator.operation(reference, 'Uncertain')!.run();
+  assert.equal(checks, 2);
+  assert.equal(f.events.includes('stop'), true);
+  assert.equal(f.events.includes('delete:saved'), false);
+  assert.equal(f.coordinator.removed(savedSessionKey(reference)), false);
+  assert.match(f.errors[0], /Lookup unavailable/);
 });
 
 test('canceling deletion does not stop work, dispatch deletion or remove history', async () => {
@@ -146,7 +175,7 @@ test('concurrent deletion is refused and disposal prevents dispatch after late v
   let started!: () => void;
   const validationStarted = new Promise<void>(resolve => { started = resolve; });
   const gate = new Promise<void>(resolve => { release = resolve; });
-  f.history.validateDeletion = async () => { started(); await gate; };
+  f.history.retention = async () => { started(); await gate; return 'saved'; };
   const operation = f.coordinator.operation(reference, 'Saved')!;
   const running = operation.run();
   await validationStarted;
@@ -232,7 +261,7 @@ test('an unrelated source release cannot dismiss the active review', async () =>
   f.coordinator.register(context => {
     effect = context; return { pending: false, operation: () => undefined };
   });
-  f.history.validateDeletion = async () => { effect.closeReview(); };
+  f.history.retention = async () => { effect.closeReview(); return 'saved'; };
   await f.coordinator.operation(reference, 'Saved')!.run();
   assert.equal(f.events.filter(event => event === 'close').length, 1);
   assert.ok(f.events.indexOf('close') > f.events.indexOf('delete:saved'));

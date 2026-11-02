@@ -825,7 +825,7 @@ test('SDK deletion requires review, fresh membership and owned stop; unknown del
   let unknown = false;
   const history = {
     supportsDeletion: true,
-    async validateDeletion() { order.push('membership'); },
+    async retention() { order.push('membership'); return 'saved'; },
     async deleteSession() { order.push('delete'); if (unknown) throw new Error('outcome unknown'); },
   } as unknown as CopilotSessionHistory;
   const context: SessionDeletionContext = {
@@ -836,7 +836,7 @@ test('SDK deletion requires review, fresh membership and owned stop; unknown del
   const source = copilotSessionDeletion(() => history, context);
   const operation = source.operation({ kind: 'copilot-sdk', sessionId: 'saved-id' }, 'Saved')!;
   await operation.run();
-  assert.deepEqual(order, ['review', 'membership', 'lock', 'stop', 'delete', 'removed']);
+  assert.deepEqual(order, ['review', 'membership', 'lock', 'stop', 'membership', 'delete', 'removed']);
   order.length = 0; unknown = true;
   await assert.rejects(operation.run(), /outcome unknown/);
   assert.equal(order.includes('removed'), false);

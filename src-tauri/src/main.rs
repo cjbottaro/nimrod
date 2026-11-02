@@ -602,6 +602,7 @@ fn main() {
             window_workspace,
             list_workspace_sessions,
             inspect_workspace_session,
+            workspace_windows::workspace_session_file_info,
             start_pi,
             acp::start_acp,
             acp::write_acp,

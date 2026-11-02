@@ -133,7 +133,8 @@ test('inconsistent identity/key projections are refused before a session reaches
 
 class PrototypeSession implements HarnessSession {
   constructor(private readonly inner: HarnessSession) {}
-  get lifecycle() { return this.inner.lifecycle; } get conversation() { return this.inner.conversation; }
+  get lifecycle() { return this.inner.lifecycle; }
+  get retention() { return this.inner.retention; } get conversation() { return this.inner.conversation; }
   get presentation() { return this.inner.presentation; } get configuration() { return this.inner.configuration; }
   get actions() { return this.inner.actions; } get reload() { return this.inner.reload; }
   get deletion() { return this.inner.deletion; } get commands() { return this.inner.commands; }
@@ -150,9 +151,11 @@ test('class/prototype implementations retain their live ports across registry bi
   const registry = new HarnessRegistry([registration], f.project, registration.id);
   await registry.initialize(); const session = registry.create(registry.get(registration.id), f.host, { mode: 'saved' });
   assert.equal(session.deletion.current()?.kind, 'close');
+  assert.equal(await session.retention.check(), 'absent');
   assert.equal(session.lifecycle.connection, 'disconnected'); await session.lifecycle.connect(); assert.equal(session.lifecycle.connection, 'connected');
   const changes = f.changes(); await session.naming.rename('Prototype name'); assert.ok(f.changes() > changes);
   assert.deepEqual(session.deletion.current(), { kind: 'saved', reference: session.lifecycle.identity });
+  assert.equal(await session.retention.check(), 'saved');
   f.dom.window.close();
 });
 

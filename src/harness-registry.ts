@@ -82,6 +82,7 @@ export class HarnessRegistry {
     this.assertIdentity(project, session);
     return {
       get lifecycle() { return session.lifecycle; },
+      get retention() { return session.retention; },
       get conversation() { return session.conversation; },
       get presentation() { return session.presentation; },
       get configuration() { return session.configuration; },

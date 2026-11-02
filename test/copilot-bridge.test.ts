@@ -45,6 +45,19 @@ function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) =>
     },
   };
 }
+test('SDK exact metadata distinguishes native absence, hidden saved history and failed/cross-project lookup', { timeout: 5000 }, async () => {
+  const f = bridge();
+  try {
+    await f.request('initialize');
+    assert.equal(await f.request('retention', { sessionId: 'missing' }), 'absent');
+    assert.equal(await f.request('retention', { sessionId: 'fixture-sdk' }), 'saved');
+    assert.equal(await f.request('retention', { sessionId: 'unlisted' }), 'saved');
+    await assert.rejects(f.request('retention', { sessionId: 'outside' }), /Nothing was loaded or deleted/);
+    await assert.rejects(f.request('retention', { sessionId: 'metadata-error' }), /Metadata unavailable/);
+    assert.equal(f.packets.some(packet => ['identified', 'connected', 'event'].includes(packet.kind)), false);
+  } finally { await f.close(); }
+});
+
 test('SDK bridge renames through the native name API and reads back the authoritative name', { timeout: 5000 }, async () => {
   const f = bridge();
   try {

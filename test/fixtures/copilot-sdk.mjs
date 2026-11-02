@@ -44,6 +44,12 @@ export class CopilotClient {
       { sessionId: 'outside', summary: 'Outside project fixture', isRemote: false, context: { workingDirectory: '/elsewhere' }, startTime: new Date(1000), modifiedTime: new Date(2000) },
     ].filter(session => session.sessionId !== this.deleted);
   }
+  async getSessionMetadata(id) {
+    if (id === 'metadata-error') throw new Error('Metadata unavailable');
+    // Saved-but-unlisted history is deliberately omitted from listSessions.
+    if (id === 'unlisted') return { sessionId: id, isRemote: false, context: { workingDirectory: this.cwd } };
+    return (await this.listSessions()).find(session => session.sessionId === id);
+  }
   async createSession(config) {
     assert.equal(config.name, 'Copilot session');
     assert.equal(this.defaultsReads, 1, 'read configured defaults before creating a session');

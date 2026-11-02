@@ -227,6 +227,22 @@ function createPiSession(host: HarnessSessionHost, request: SessionRequest, proj
       if (lifecycle.connection !== 'connected' || !backend.session || backend.session.state.sessionUnavailable) throw new Error('Resume this Pi session before renaming it.');
       await backend.session.rename(sessionName(name));
     } },
+    retention: { async check() {
+      if (owner.mode === 'temporary' || !owner.file) return 'absent';
+      const info = await invoke<SessionFile>('workspace_session_file_info', { path: owner.file.path, sessionId: owner.file.sessionId });
+      if (info.sessionId !== owner.file.sessionId || info.path !== owner.file.path || typeof info.exists !== 'boolean') return 'unknown';
+      if (info.exists && !owner.file.exists) {
+        owner.file = info;
+        host.drafts.bind(info.path);
+        host.drafts.remember({ path: info.path, sessionId: info.sessionId, cwd: host.project });
+        project.store.save(lastKey, { path: info.path, sessionId: info.sessionId, cwd: host.project });
+        effects.identified();
+      }
+      return info.exists ? 'saved' : 'absent';
+    }, forget() {
+      const last = project.store.read(lastKey) as { path?: string } | null;
+      if (last?.path && last.path === owner.file?.path) project.store.save(lastKey, null);
+    } },
     close: request.mode === 'temporary' ? temporaryClose : savedClose, selection: ordinarySelection,
     interactions: { setActive(active) { if (!active) backend.session?.slashCommands.cancel(); }, dispose() { backend.session?.slashCommands.cancel(); inspection.cancel(); } }, references: { file: () => owner.mode !== 'temporary' && owner.file?.exists ? { path: owner.file.path, sessionId: owner.file.sessionId } : undefined },
   };

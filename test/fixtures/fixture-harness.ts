@@ -67,6 +67,7 @@ function session(host: HarnessSessionHost, request: SessionRequest, remember: (r
     disconnect() { host.ownership.ended = true; state = { ...state, sessionUnavailable: true }; publish(); },
   };
   return { lifecycle,
+    retention: { async check() { return reference ? 'saved' : 'absent'; }, forget() {} },
     conversation: { interaction: genericInteraction('Fixture'), get state() { return state; },
       messageInput: { capabilities: () => ({ imageUnavailableReason: 'Fixture is text-only' }), async submit(message) {
         const key = `fixture:${message.id}`;

@@ -13,7 +13,7 @@ Nimrod keeps saved-session drafts in Rust-managed files beneath the app-state di
 
 An absolute `XDG_STATE_HOME` override changes the root, as with other app state. Drafts are separate from `state.json` and Pi's conversation files.
 
-Built-in [SDK Copilot sidebar sessions](copilot.md#history-close-and-delete) also use native draft storage, scoped by project, Copilot identity and session ID rather than a Pi file path. Their drafts survive quit/reopen and Close; custom ACP drafts remain runtime-only.
+Built-in [SDK Copilot sidebar sessions](copilot.md#history-close-and-delete) also use native draft storage, scoped by project, Copilot identity and session ID rather than a Pi file path. Their drafts survive quit/reopen and Close when history is saved or its recoverability is unknown. Explicit Close/Delete discards a draft when the harness confirms there is no saved history; see [Close a session](sessions.md#close-a-session). Custom ACP drafts remain runtime-only.
 
 Typing updates the draft immediately in memory and asynchronously stages the current session's record in Rust. Disk saves are debounced by 300 ms, with a 2-second maximum wait during continuous typing. Only the changed draft is written, using atomic replacement. Abrupt termination can lose recent unsaved typing or changes not yet delivered to Rust. Errors are shown without discarding the in-memory draft.
 

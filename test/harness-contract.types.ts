@@ -15,6 +15,12 @@ function compileAssertions(session: HarnessSession, project: HarnessProject, reg
   const { lifecycle, ...withoutLifecycle } = session;
   // @ts-expect-error A factory cannot register a session without lifecycle ownership.
   defineHarness({ ...registration, create: () => ({ ...project, create: () => withoutLifecycle }) });
+  const { retention, ...withoutRetention } = session;
+  // @ts-expect-error Every current/future integration must classify native recoverability explicitly.
+  const missingRetention: HarnessSession = withoutRetention;
+  // @ts-expect-error Classification cannot omit integration-local pointer cleanup.
+  const missingForget: HarnessSession['retention'] = { check: retention.check };
+  void [retention, missingRetention, missingForget];
   const { conversation, ...withoutConversation } = session;
   // @ts-expect-error Core input/output cannot be omitted or supplied by the project shell.
   const missingConversation: HarnessSession = withoutConversation;

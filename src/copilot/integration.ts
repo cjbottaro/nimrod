@@ -52,12 +52,12 @@ function createCopilotProject(projectHost: HarnessProjectHost): HarnessProject {
     saved: taggedSavedSessions('copilot-sdk'),
     history: { source, associate() { const project = projectHost.project(); if (project) { projectHost.store.save(copilotHistoryKey(project), true); source(); } }, async dispose() { await history?.dispose(); } },
     deletion: context => copilotSessionDeletion(() => history, context),
-    create: (host, request) => createCopilotSession(host, request, projectHost, () => ready && availability.available(), () => generation),
+    create: (host, request) => createCopilotSession(host, request, projectHost, () => ready && availability.available(), () => generation, () => source()),
     dispose() { void history?.dispose().catch(historyError); },
   };
 }
 
-function createCopilotSession(host: HarnessSessionHost, request: SessionRequest, project: HarnessProjectHost, ready: () => boolean, generation: () => string): HarnessSession {
+function createCopilotSession(host: HarnessSessionHost, request: SessionRequest, project: HarnessProjectHost, ready: () => boolean, generation: () => string, history: () => CopilotSessionHistory | undefined): HarnessSession {
   const backend: { session?: CopilotSession; savedSessionId?: string } = { savedSessionId: request.mode === 'resume' ? request.reference.sessionId : undefined };
   const { ownership: owner, lifetime, effects } = host;
   const transport = copilotTransport(host.project, project.runtime, generation);
@@ -122,6 +122,10 @@ function createCopilotSession(host: HarnessSessionHost, request: SessionRequest,
   }
   return {
     lifecycle, drafts: { durability: 'persistent' },
+    retention: { async check() {
+      if (!backend.savedSessionId) return 'absent';
+      return await history()?.retention(backend.savedSessionId) ?? 'unknown';
+    }, forget() {} },
     conversation: conversationPort(host, () => backend.session, copilotInteraction(text => owner.starting || !backend.session ? 'Copilot is still connecting. Your draft was kept.' : backend.session.validatePrompt(text))),
     configuration: { current: () => backend.session?.configuration },
     actions: { current: () => configurationActions(copilotSessionActions(backend.session), { model: 'model', thinking: 'effort', mode: 'mode', 'context-window': 'context-tier' }), async control() { throw new Error('This Copilot control is no longer available'); } },

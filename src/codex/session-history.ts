@@ -64,9 +64,16 @@ export class CodexSessionHistory implements SessionHistory {
       return { key: savedSessionKey(reference), reference, title: typeof thread.name === 'string' && thread.name.trim() ? thread.name : typeof thread.preview === 'string' && thread.preview.trim() ? thread.preview.slice(0, 100) : 'Untitled Codex session', harnessLabel: 'Codex', timestamp, open: false, status: 'closed' as const, keywords: thread.id };
     }) };
   }
+  async retention(sessionId: string): Promise<'saved' | 'absent'> {
+    return await this.inspectTree(sessionId, new AbortController().signal) ? 'saved' : 'absent';
+  }
   async previewTree(rootId: string, signal: AbortSignal): Promise<CodexDeletionTree | null> {
     if (this.deleting && this.client?.phase !== 'ready') throw new Error('Codex deletion catalog disconnected. Nothing was retried.');
-    this.deleting = true; await abortable(this.initialize(), signal);
+    this.deleting = true;
+    return this.inspectTree(rootId, signal);
+  }
+  private async inspectTree(rootId: string, signal: AbortSignal): Promise<CodexDeletionTree | null> {
+    await abortable(this.initialize(), signal);
     const inventory: CodexThread[] = [];
     for (const archived of [false, true]) {
       const cursors = new Set<string>(); let cursor: string | undefined;

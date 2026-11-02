@@ -104,6 +104,7 @@ function createAcpSession(host: HarnessSessionHost, _request: SessionRequest, pr
     reload: { available: () => false, reason: () => 'Reload session — ACP saved-session Resume is not implemented',
       detail: 'Reload requires an exact saved session', confirmation: '', needsConfirmation: () => false,
       async run() { throw new Error('ACP saved-session Resume is not implemented'); } },
+    retention: { async check() { return 'absent'; }, forget() {} },
     close: { alwaysConfirm: true, label: 'Close ACP session', message: 'This stops this ACP agent and discards Nimrod’s in-memory transcript, draft and pop-outs. Nimrod cannot resume it in this POC. The agent may keep its own saved history; this does not delete it.' },
     selection: ordinarySelection, references: noReferences, interactions: { setActive(active) { if (!active) backend.session?.slashCommands.cancel(); }, dispose() { backend.session?.slashCommands.cancel(); cancelOption?.(); } }, drafts: { durability: 'memory' },
   };

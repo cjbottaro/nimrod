@@ -52,11 +52,11 @@ function createCodexProject(projectHost: HarnessProjectHost): HarnessProject {
     saved: taggedSavedSessions('codex'),
     history: { source, associate() { const project = projectHost.project(); if (project) { projectHost.store.save(codexHistoryKey(project), true); source(); } }, async dispose() { await history?.dispose(); } },
     deletion: context => codexSessionDeletion(source, context),
-    create: (host, request) => createCodexSession(host, request, projectHost, () => ready && availability.available(), () => generation),
+    create: (host, request) => createCodexSession(host, request, projectHost, () => ready && availability.available(), () => generation, source),
     dispose() { void history?.dispose().catch(historyError); },
   };
 }
-function createCodexSession(host: HarnessSessionHost, request: SessionRequest, project: HarnessProjectHost, ready: () => boolean, generation: () => string): HarnessSession {
+function createCodexSession(host: HarnessSessionHost, request: SessionRequest, project: HarnessProjectHost, ready: () => boolean, generation: () => string, history: () => CodexSessionHistory | undefined): HarnessSession {
   const backend: import('./connection').CodexBackend = { savedSessionId: request.mode === 'resume' ? request.reference.sessionId : undefined };
   const { lifetime, effects, ownership: owner } = host, ui = codexIntegrationUi(host);
   let signature = '', sequence = 0, retiring = false;
@@ -97,6 +97,10 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
   });
   return {
     lifecycle, drafts: { durability: 'persistent' },
+    retention: { async check() {
+      if (!backend.savedSessionId) return 'absent';
+      return await history()?.retention(backend.savedSessionId) ?? 'unknown';
+    }, forget() {} },
     conversation: conversationPort(host, () => backend.session, codexInteraction(text => owner.starting || !backend.session ? 'Codex is still connecting. Your draft was kept.' : backend.session.validatePrompt(text))),
     configuration: { current: () => backend.session?.configuration },
     actions: { current: () => configurationActions(codexSessionActions(backend.session), { model: 'model', thinking: 'effort' }), async control() { throw new Error('This Codex control is no longer available'); } },

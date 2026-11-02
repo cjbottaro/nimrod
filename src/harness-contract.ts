@@ -55,6 +55,8 @@ export interface SessionInteractions { setActive(active: boolean): void; dispose
  */
 export interface HarnessSession {
   readonly lifecycle: SessionLifecycle;
+  /** Native recoverability for Close and mounted Delete, independent of connectivity. */
+  readonly retention: import('./session-retention').SessionRetention;
   readonly conversation: SessionConversation;
   readonly presentation: { snapshot(): SessionPresentation };
   readonly configuration: { current(): SessionConfiguration | undefined };

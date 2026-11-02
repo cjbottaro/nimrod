@@ -3,7 +3,8 @@
 **Status: native-compatible durability contract; Codex exact-ID reconnect source-implemented, with upstream untouched-session persistence/discovery limitations.**
 This reference owns the distinction between local session continuity, runtime
 identity and saved harness history. It applies to future integrations and reviews
-of existing ones; it does not claim that current ports or adapters implement it.
+of existing ones. The required mounted-session retention port implements the
+Close/local-cleanup boundary below; native acceptance remains pending.
 [Projects and sessions](projects-and-sessions.md) owns lifecycle mechanics,
 [native drafts](native-drafts.md) owns draft storage, and
 [consumer interfaces](consumer-interfaces.md) owns interface extraction.
@@ -45,6 +46,43 @@ promotion mechanics where suitable. Any interface/storage changes need an
 explicit compatibility design, not an undocumented reinterpretation of saved IDs.
 Saved-history discovery must not advertise a local placeholder as harness history.
 
+## Close and local removal
+
+Every `HarnessSession` supplies the required `SessionRetention` port in
+`src/session-retention.ts`, forwarded live by the registry. `check()` returns
+`saved`, `absent` or `unknown`; it never resumes/creates a conversation or sends
+work. The adapter owns native evidence, not the shell. Failed discovery, malformed
+responses, a missing filtered list entry and connection errors are unknown, not
+absence. `forget()` retires integration-owned local pointers after local removal;
+it never deletes native history.
+
+After observed owned stop, Close checks again. Confirmed absence discards exact
+sidebar/layout membership, draft/attachments, recency and local pointers, including
+provisional unassigned drafts. Retired draft owners reject late writes. Saved or
+unknown history preserves drafts; unknown lookup must not trap a row in the
+sidebar. Cancel/failed stop preserves everything. These checks occur only during
+explicit removal, never on typing or routine sidebar updates.
+
+Mounted Delete uses the same port to route absent targets through local Close
+cleanup, regardless of harness. Recheck after shutdown; if it saves history, use
+the native deletion review rather than silently abandoning it. Native deletion
+failures/uncertain acknowledgements never fall back to local cleanup. Ordinary
+Close never deletes native history and needs no destructive tombstone.
+
+Concrete evidence: Pi uses a window-project-bound exact file/ID check independent
+of a live token; temporary Pi and runtime-only ACP are explicitly absent.
+Copilot uses public SDK `getSessionMetadata(id)`, validating exact ID, local status
+and cwd (undefined alone means absent). Codex reuses the exhaustive validated
+deletion inventory and exact native lookup, including named saved-but-unlisted
+threads, without entering a deletion transaction. Missing/unavailable runtimes
+remain unknown. External writers are not coordinated by local Close.
+
+Fixtures: `test/session-retention.test.ts`, required-port negative type assertions,
+prototype registry forwarding, and shared shell Close/Delete cases for
+Pi/Copilot/Codex/an otherwise unknown fixture harness. Native API edge cases and
+post-stop materialization are covered by concrete history/deletion fixtures.
+[Verification](verification.md#session-retention-cleanup) owns execution status.
+
 ## Reopening and replacement rules
 
 1. Restore persistent local membership and drafts without sending a message.
@@ -72,9 +110,8 @@ Saved-history discovery must not advertise a local placeholder as harness histor
    deletion. A native-deletion candidate may be reviewed by its independent
    catalog/source without connecting the conversation or requiring local history
    confirmation; only authoritative validation/removal authorizes cleanup.
-   Explicit Delete may remove local membership/drafts after authoritative native
-   absence, scoped owned stop and post-stop revalidation, without requiring the
-   user to choose Close instead. Unknown history/connection errors alone never
+   Explicit Close and Delete share the [confirmed-absent cleanup](#close-and-local-removal)
+   policy after scoped owned stop and post-stop revalidation. Unknown history/connection errors alone never
    authorize deletion, replacing saved identity or repeating navigation.
 
 The [optimistic interaction policy](architecture.md#optimistic-interaction-policy)

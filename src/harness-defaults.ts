@@ -16,7 +16,7 @@ export const explicitSelection: SessionSelectionPolicy = { deferRestored: true,
   releasesDeferral: intent => intent === 'explicit' || intent === 'row' || intent === 'notification' };
 export const ordinarySelection: SessionSelectionPolicy = { deferRestored: false, releasesDeferral: intent => intent !== 'startup' };
 export const savedClose: SessionClosePolicy = { alwaysConfirm: false, label: 'Close session',
-  message: 'This stops only this session’s agent. Written history and your draft remain; queued and in-flight work will not continue.' };
+  message: 'This stops only this session’s agent. Saved history and its draft remain. If the harness confirms there is no saved history, its local entry and draft are discarded. Queued and in-flight work will not continue.' };
 export const temporaryClose: SessionClosePolicy = { alwaysConfirm: true, label: 'Close temporary session',
   message: 'This stops its agent and discards this temporary session, including its draft, queued messages and pop-outs.' };
 

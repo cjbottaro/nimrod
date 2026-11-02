@@ -19,6 +19,7 @@ import { copilotSdkScope } from '../src/copilot/session-lifecycle';
 // Real shell/renderer/controller bundle, mocked native boundary—not native WebKit acceptance.
 interface ShellOptions {
   fixtureHarness?: boolean;
+  fixtureRetention?: 'saved' | 'absent' | 'unknown';
   fixtureProjectActions?: boolean;
   platform?: string;
   menuError?: string;
@@ -106,7 +107,8 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
           `import { fixtureHarness } from ${JSON.stringify(path.resolve('test/fixtures/fixture-harness.ts'))};`,
           `import { noProjectActions } from ${JSON.stringify(path.resolve('src/harness-defaults.ts'))};`,
           `const fixture = ${options.fixtureProjectActions === false ? '{ ...fixtureHarness, create: host => ({ ...fixtureHarness.create(host), actions: noProjectActions }) }' : 'fixtureHarness'};`,
-          'const registrations = [piHarness, fixture]; registerHarnessMetadata(registrations);',
+          `const retentionFixture = ${options.fixtureRetention ? `{ ...fixture, create: host => { const project = fixture.create(host); return { ...project, create: (host, request) => ({ ...project.create(host, request), retention: { async check() { return ${JSON.stringify(options.fixtureRetention)}; }, forget() {} } }) }; } }` : 'fixture'};`,
+          'const registrations = [piHarness, retentionFixture]; registerHarnessMetadata(registrations);',
           'export function createBundledHarnessRegistry(host) { return new HarnessRegistry(registrations, host, "pi"); }',
         ].join('\n') }));
       }
@@ -333,7 +335,10 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         const send = (value: JsonRecord) => target.channel.onmessage({ kind: 'rpc', value });
         const event = (type: string, data: JsonRecord) => send({ kind: 'event', event: { id: win.crypto.randomUUID(), type, data } });
         let result: unknown = null;
-        if (request.method === 'list') {
+        if (request.method === 'retention') {
+          if (options.copilotListError) { send({ kind: 'result', id: request.id, error: options.copilotListError }); return; }
+          result = (options.copilotHistory || []).some(session => session.sessionId === request.sessionId && (session.context as JsonRecord)?.workingDirectory === workspace && session.isRemote === false) ? 'saved' : 'absent';
+        } else if (request.method === 'list') {
           await options.copilotListGate;
           if (options.copilotListError) { send({ kind: 'result', id: request.id, error: options.copilotListError }); return; }
         } else if (request.method === 'delete') {
@@ -388,6 +393,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         return { cwd: '/project', session: activeConfig.mode === 'resume' ? { path: activeConfig.sessionFile, sessionId: options.selectedId || 'fixture-id', exists: true } : undefined };
       }
       if (command === 'inspect_workspace_session') return { path: args.path, sessionId: options.selectedId || 'fixture-id', exists: true, parentSession: options.fileParents?.[String(args.path)], lastUserMessageAt: options.fileTimes?.[String(args.path)] };
+      if (command === 'workspace_session_file_info') return { path: args.path, sessionId: args.sessionId, exists: options.fileExists?.() ?? true };
       if (command === 'session_file_info') return { path: args.path, sessionId: args.sessionId, exists: options.fileExists?.() ?? true };
       if (command === 'write_pi') {
         const target = sessions.get(String(args.token)); assert.ok(target);
@@ -458,6 +464,79 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     disconnect: () => channel.onmessage({ kind: 'disconnected', message: 'fixture closed' }),
   };
 }
+
+// Close and Delete consume only the required retention port, including an unseen harness.
+for (const harness of ['pi', 'copilot-sdk', 'codex', 'fixture-harness'] as const) {
+  for (const action of ['close', 'delete'] as const) test(`confirmed-absent ${harness} ${action} removes its draft without resuming or deleting native history`, async () => {
+    const reference = harness === 'pi' ? { path: '/sessions/missing.jsonl', sessionId: 'missing' } : { kind: harness, sessionId: harness === 'fixture-harness' ? 'saved-fixture' : 'missing' };
+    const scope = harness === 'pi' ? 'file:/sessions/missing.jsonl' : `${harness}:${JSON.stringify(reference.sessionId)}`;
+    const key = harness === 'pi' ? '/sessions/missing.jsonl' : scope;
+    const f = await fixture(undefined, { windowWorkspace: '/project', fixtureHarness: harness === 'fixture-harness', fixtureRetention: 'absent',
+      fileExists: () => false, selectedId: reference.sessionId, nativeDrafts: { [scope]: { draft: 'Orphan draft', recovered: [], attachments: [] }, 'unassigned:sibling': { draft: 'Keep sibling' } },
+      appState: { 'nimrod.tabs.v1:/project': { tabs: [{ ...reference, name: 'Missing history' }], active: key },
+        ...(harness === 'copilot-sdk' ? { [copilotHistoryKey('/project')]: true } : {}) },
+    });
+    try {
+      await f.tick(); await f.tick();
+      const before = f.calls.length;
+      (await f.rowMenu(f.rows()[0]))[action].click();
+      for (let i = 0; i < 6; i++) await f.tick();
+      assert.equal(f.rows().length, 0);
+      assert.equal(f.saved().drafts[scope], undefined);
+      assert.equal(f.saved().drafts['unassigned:sibling'].draft, 'Keep sibling');
+      const removalCalls = f.calls.slice(before);
+      assert.equal(removalCalls.some(call => call.command === 'start_pi'), false);
+      assert.equal(removalCalls.some(call => ['write_copilot', 'write_codex'].includes(call.command)
+        && ['connect', 'delete', 'thread/resume', 'thread/start', 'thread/delete', 'turn/start'].includes(String((call.args.message as JsonRecord)?.method))), false);
+      const layout = f.preferences.value.state['nimrod.tabs.v1:/project'] as { tabs: unknown[] };
+      assert.equal(layout.tabs.length, 0);
+    } finally { f.win.close(); }
+  });
+}
+
+for (const retention of ['saved', 'unknown'] as const) test(`Close preserves ${retention} history's draft through the future-harness port`, async () => {
+  const scope = 'fixture-harness:"saved-fixture"';
+  const f = await fixture(undefined, { windowWorkspace: '/project', fixtureHarness: true, fixtureRetention: retention,
+    nativeDrafts: { [scope]: { draft: 'Keep recoverable draft' } },
+    appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'fixture-harness', sessionId: 'saved-fixture', name: 'Fixture' }], active: scope } },
+  });
+  try {
+    (await f.rowMenu(f.rows()[0])).close.click(); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 0);
+    assert.equal(f.saved().drafts[scope].draft, 'Keep recoverable draft');
+  } finally { f.win.close(); }
+});
+
+test('Close preserves a Pi draft when owned shutdown finishes its first save', async () => {
+  let exists = false, release!: () => void;
+  const f = await fixture(undefined, { windowWorkspace: '/project', fileExists: () => exists,
+    stopGate: new Promise<void>(resolve => { release = resolve; }) });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt');
+    prompt.value = 'Saved during shutdown'; prompt.dispatchEvent(new f.win.Event('input'));
+    (await f.rowMenu(f.rows()[0])).close.click(); await f.tick();
+    assert.equal(f.rows().length, 1, 'owned exit must precede cleanup');
+    exists = true; release();
+    for (let i = 0; i < 4; i++) await f.tick();
+    assert.equal(f.rows().length, 0);
+    assert.equal(f.saved().drafts['file:/sessions/new.jsonl'].draft, 'Saved during shutdown');
+    assert.equal(Object.keys(f.saved().drafts).some(key => key.startsWith('unassigned:')), false);
+    assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false);
+  } finally { release(); f.win.close(); }
+});
+
+test('Close after an unavailable Copilot lookup still removes the row and preserves the uncertain draft', async () => {
+  const scope = copilotSdkScope('missing');
+  const f = await fixture(undefined, { windowWorkspace: '/project', copilotListError: 'Metadata unavailable',
+    nativeDrafts: { [scope]: { draft: 'Do not infer absence' } },
+    appState: { [copilotHistoryKey('/project')]: true, 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'copilot-sdk', sessionId: 'missing', name: 'Copilot' }], active: scope } },
+  });
+  try {
+    await f.tick(); (await f.rowMenu(f.rows()[0])).close.click(); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 0); assert.equal(f.saved().drafts[scope].draft, 'Do not infer absence');
+  } finally { f.win.close(); }
+});
 
 test('startup discovery silently omits missing harness actions and history until restart', async () => {
   let installed = false;
@@ -663,9 +742,10 @@ test('disconnected Codex Close retains membership on failed owned stop and retri
     assert.match(f.element('session-notices').textContent!, /Could not stop Codex.*EPERM/);
     refuse = false; await close();
     assert.equal(f.rows().length, 0);
-    assert.equal(f.calls.slice(before).some(call => call.command === 'start_codex' || call.command === 'write_codex'), false);
+    assert.equal(f.calls.slice(before).some(call => call.command === 'start_codex' && !(call.args.config as JsonRecord).catalog), false);
+    assert.equal(f.calls.slice(before).some(call => call.command === 'write_codex' && ['thread/resume', 'thread/start', 'turn/start'].includes(String((call.args.message as JsonRecord).method))), false);
     assert.ok(f.calls.slice(before).filter(call => call.command === 'stop_codex').every(call => call.args.token === token));
-    assert.equal(f.saved().drafts['codex:"codex-fixture"'].draft, 'Keep failed-close draft');
+    assert.equal(f.saved().drafts['codex:"codex-fixture"'], undefined, 'successful stop plus authoritative absence discards the orphan draft');
   } finally { refuse = false; f.win.close(); }
 });
 
@@ -1163,6 +1243,7 @@ test('late Copilot loading never steals Pi selection or focus and Close preserve
   const gate = new Promise<void>(resolve => { release = resolve; });
   const scope = copilotSdkScope('saved-id'), key = 'nimrod.tabs.v1:/project';
   const f = await fixture(undefined, { windowWorkspace: '/project', copilotLoadGate: gate,
+    copilotHistory: [{ sessionId: 'saved-id', isRemote: false, context: { workingDirectory: '/project' } }],
     appState: { [key]: { tabs: [{ kind: 'copilot-sdk', sessionId: 'saved-id', name: 'Saved Copilot' }] } },
     nativeDrafts: { [scope]: { draft: 'Keep after Close' } } });
   try {

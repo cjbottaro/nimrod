@@ -2,6 +2,17 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
+## Session retention cleanup
+
+Source-implemented: required saved/absent/unknown retention port, shared mounted
+Close/Delete routing, exact draft/attachment/local-pointer cleanup after owned
+stop, and conservative retention on discovery failures. Pi, Copilot, Codex and
+runtime-only ACP supply concrete policies; an unrelated fixture harness exercises
+the same shell path. New regression fixtures are authored but unrun. No build,
+app launch, user-session deletion or installed-runtime probe was performed.
+Mandatory post-merge TypeScript/Rust compile results are reported separately;
+macOS/Linux native behavior remains unverified.
+
 ## Startup harness availability
 
 Source-implemented: once-only executable discovery, omission of unavailable

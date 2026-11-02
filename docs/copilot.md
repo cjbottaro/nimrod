@@ -437,15 +437,19 @@ Refresh requests a fresh list; one unavailable source does not hide the others.
 Selecting closed history immediately restores its SDK draft and then resumes
 that exact ID. Missing/failed loads never create a replacement.
 
-**Close** stops the owned connection and removes its sidebar entry, retaining
-Copilot history and the SDK draft.
+**Close** stops the owned connection and removes its sidebar entry. Saved Copilot
+history and its draft remain. If Copilot confirms there is no saved session,
+Close discards the local entry and draft, just like Delete. Lookup/connection
+failures alone do not authorize discarding the draft.
 
 **Delete session…**, row/Project bar trash controls and **Delete sessions…** use
 the SDK’s supported permanent deletion API. Review identifies one session and its
 artifacts, not a Pi tree.
-After confirmation Nimrod verifies fresh project membership, stops its owned
-writer, and requests deletion. Only confirmed success removes local SDK
-references/draft. Failed or uncertain results retain them and are never
+Nimrod checks the exact session's metadata rather than treating a missing history
+list entry as proof of absence. Confirmed-unsaved open sessions use local cleanup;
+saved sessions require review. After confirmation Nimrod verifies project
+ownership, stops its owned writer, and checks again. Saved history uses the SDK
+deletion API; confirmed absence removes only the local entry and draft. Failed or uncertain results retain them and are never
 automatically retried; use Refresh before a later explicit attempt. Nimrod does
 not remove private Copilot directories or coordinate external applications.
 

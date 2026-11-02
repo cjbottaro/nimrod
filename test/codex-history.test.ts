@@ -92,6 +92,19 @@ function deletionPreviewFixture(options: {
   return { history, sent };
 }
 
+test('retention uses complete native inventory plus exact lookup without entering a deletion transaction', async () => {
+  for (const options of [{}, { saved: { ...thread('root'), forkedFromId: null } }, { inventory: [{ ...thread('root'), forkedFromId: null }] }]) {
+    const f = deletionPreviewFixture(options);
+    try {
+      assert.equal(await f.history.retention('root'), 'saved' in options || 'inventory' in options ? 'saved' : 'absent');
+      assert.equal(f.sent.some(packet => ['thread/start', 'thread/resume', 'turn/start', 'thread/delete'].includes(String(packet.method))), false);
+    } finally { await f.history.dispose(); }
+  }
+  const f = deletionPreviewFixture({ listError: true });
+  try { await assert.rejects(f.history.retention('root'), /inventory unavailable/); }
+  finally { await f.history.dispose(); }
+});
+
 test('complete deletion inventory plus exact native not-found establishes local-only removal', async () => {
   const f = deletionPreviewFixture();
   try {

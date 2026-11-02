@@ -54,7 +54,8 @@ automatically. Installed-runtime and native macOS/Linux acceptance remain pendin
 
 Click its row's **Close** button or use **⌘/Ctrl+W**. Closing waits for that agent to stop.
 
-- Saved history, drafts and saved pop-outs remain available when reopened.
+- Saved history, its draft and saved pop-outs remain available when reopened.
+- If the harness confirms there is no saved history after stopping, Close discards the local session entry and its draft/attachments—just like Delete. This includes sessions created without ever sending a message. A connection or history-lookup failure is not proof of absence: Close still removes the row, but preserves the uncertain draft.
 - Temporary state is discarded; temporary or active-work Close asks for confirmation.
 - Cancel or failed shutdown keeps the session and draft available.
 - Closing a window stops its agents; quitting stops all Nimrod-owned agents. There is no background daemon or process continuity.
@@ -73,7 +74,7 @@ Reload is unavailable for temporary sessions, before a saved identity exists (Pi
 
 Right-click a Session sidebar row and choose **Delete session…** to target it without switching to or resuming it. The Project bar trash icon and **Delete session…** / **⌘/Ctrl+Backspace** target the selected session. The action has the same name across Pi, Copilot and Codex.
 
-For a brand-new Pi session that has not saved history, Delete simply closes it. Temporary sessions also close, with the usual confirmation and temporary-state disposal. Active work still asks for Close confirmation; a failed shutdown keeps the session open. A session that gains saved history during confirmation/shutdown uses the saved deletion review instead. Copilot and Codex can save a session at creation, before its first message; Delete then uses their actual deletion operation, not just Close.
+For an open session whose harness confirms there is no saved history, Delete closes it and discards its local draft/attachments, just like Close. This works across harnesses, including empty sessions that could not be restored after restart. Temporary sessions also close, with the usual confirmation and temporary-state disposal. Active work still asks for Close confirmation; a failed shutdown keeps the session open. A session that gains saved history during confirmation/shutdown uses the saved deletion review instead. Copilot and Codex can save a session at creation, before its first message; Delete then uses their actual deletion operation, not just Close.
 
 This section describes **Pi's tree deletion**. [Codex tree deletion](codex.md#delete-a-codex-thread-tree) reuses the same review/controls for spawned descendants through Codex's own API, with explicit cross-project/fork limitations. Built-in SDK Copilot uses the same controls and shortcut as **Delete session…**, reviewing only one saved session through the SDK deletion API; see [Copilot deletion](copilot.md#history-close-and-delete). Reload is independent of deletion.
 

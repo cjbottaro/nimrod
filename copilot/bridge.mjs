@@ -80,9 +80,16 @@ function event(value) {
     if (!value.agentId && value.type === 'commands.changed') void refreshCommands().catch(error => send({ kind: 'command-error', error: `Command discovery failed: ${failure(error)}` }));
   }
 }
+async function retention(id) {
+  if (typeof id !== 'string' || !id.trim()) throw new Error('An exact Copilot session ID is required');
+  const metadata = await client.getSessionMetadata(id);
+  if (metadata === undefined) return 'absent';
+  if (!metadata || metadata.sessionId !== id || metadata.isRemote !== false || metadata.context?.workingDirectory !== cwd)
+    throw new Error('This exact saved session is not listed in this project. Nothing was loaded or deleted.');
+  return 'saved';
+}
 async function membership(id) {
-  const sessions = await client.listSessions({ workingDirectory: cwd });
-  if (!sessions.some(item => item.sessionId === id && !item.isRemote && item.context?.workingDirectory === cwd))
+  if (await retention(id) !== 'saved')
     throw new Error('This exact saved session is not listed in this project. Nothing was loaded or deleted.');
 }
 function promptImages(value) {
@@ -129,6 +136,7 @@ async function dispatch(message) {
   }
   if (!initialized) throw new Error('Copilot bridge is not initialized');
   switch (message.method) {
+    case 'retention': return await retention(message.sessionId);
     case 'list': return (await client.listSessions({ workingDirectory: cwd })).filter(item => !item.isRemote && item.context?.workingDirectory === cwd);
     case 'delete':
       if (session) throw new Error('Deletion requires a history-only connection');

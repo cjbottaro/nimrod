@@ -58,9 +58,16 @@ export class SessionDrafts {
   /** Retire runtime-only state after the owned child has stopped and the view is disposed. */
   discardTemporary(): void {
     if (!ephemeral(this.active)) return;
+    this.discard();
+  }
+  /** Retire this exact draft, including provisional persistent scopes. Late writes are ignored. */
+  discard(): void {
+    if (this.discarded) return;
     this.discarded = true;
+    if (this.last && this.active === `file:${this.last.path}`) this.last = undefined;
     delete this.drafts[this.active];
-    this.flush();
+    if (!ephemeral(this.active)) this.changed?.(this.active, null);
+    if (ephemeral(this.active) || !this.changed) this.flush();
   }
   select(key: string, copyFrom?: string): unknown {
     this.active = key;

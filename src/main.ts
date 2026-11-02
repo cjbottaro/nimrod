@@ -7,6 +7,7 @@ import { loadSessionHistory, type SessionHistorySnapshot } from './session-histo
 import { savedSessionKey, resolveSessionListEntry, type SessionListEntry } from './session-list';
 import { availableSessionActions } from './session-actions';
 import { pickConfiguration } from './configuration-picker';
+import { checkSessionRetention, type SessionRetentionState } from './session-retention';
 import { readSavedSidebarSession, type SessionLifecycle, type SessionLifecycleOwner, type SavedSidebarSession, type SavedSessionIdentity } from './session-lifecycle';
 import type { ConversationViewMessage, ConversationView } from './conversation-view-host';
 import { mountConversationView } from './conversation-view';
@@ -258,7 +259,25 @@ function tabDeletion(tab: Tab | undefined): SessionDeleteAction | undefined {
   if (!tab || !tab.project.availability.available()) return;
   const intent = tab.integration.deletion.current();
   if (!intent) return;
-  if (intent.kind === 'saved') return deletions.operation(intent.reference, tab.title);
+  if (intent.kind === 'saved') {
+    const operation = deletions.operation(intent.reference, tab.title);
+    if (!operation) return;
+    return {
+      label: operation.label, detail: operation.detail, unavailableReason: operation.unavailableReason,
+      available: () => operation.available(),
+      async run() {
+        if (!operation.available()) return;
+        // Serialize the read-only classification with this row's other lifecycle actions.
+        tab.closing = true; updateTab(tab);
+        let retention: SessionRetentionState;
+        try { retention = await checkSessionRetention(tab.integration.retention); }
+        finally { tab.closing = false; if (tabs.includes(tab)) updateTab(tab); }
+        if (!tabs.includes(tab) || !operation.available()) return;
+        if (retention === 'absent') await closeTab(tab, true);
+        else await operation.run();
+      },
+    };
+  }
   return {
     label: 'Delete session…', detail: 'Close this session; it has no saved history to delete',
     available: () => ready && !unloading && !settings.isOpen && !deletions.pending && tabs.includes(tab)
@@ -1182,7 +1201,7 @@ function removeDeletedSessions(targets: readonly SessionDeletionTarget[]): void 
   if (recency.delete(keys) && workspace) save(recencyKey(), recency.dump());
   const removed = tabs.filter(tab => tab.lifecycle.key !== undefined && deleted.has(tab.lifecycle.key));
   // Dispose the entire subtree before selecting or persisting a replacement.
-  for (const tab of removed) disposeTab(tab);
+  for (const tab of removed) { disposeTab(tab); tab.drafts.discard(); }
   for (const target of targets) {
     try { drafts.deleteScope(target.draftScope); } catch (e) { persistenceError(e); }
   }
@@ -1237,21 +1256,39 @@ async function closeTab(tab: Tab, deletingUnsaved = false): Promise<void> {
   if ((policy.alwaysConfirm || running && (snapshot.busy || snapshot.pending || tab.inputCount || snapshot.queuePending))
     && !await dialogs.confirm(`Close ${tab.title}?`, policy.message, undefined, policy.label)) return;
   if (tab.closing || !tabs.includes(tab)) return;
-  // A first save while confirming Close must cross the saved-deletion review instead.
-  if (deletingUnsaved && tab.integration.deletion.current()?.kind !== 'close') return deleteSession(tab);
   tab.closing = true; updateTab(tab);
   try {
+    // A save during confirmation can already require the native review; do not
+    // stop that saved conversation outside its deletion transaction.
+    if (deletingUnsaved && tab.integration.deletion.current()?.kind === 'saved'
+      && await checkSessionRetention(tab.integration.retention) === 'saved') {
+      const intent = tab.integration.deletion.current();
+      tab.closing = false; updateTab(tab);
+      if (intent?.kind === 'saved' && tabs.includes(tab)) return deleteSavedSession(intent.reference, tab.title);
+      return;
+    }
     await nativeDrafts?.flush();
     await tab.lifecycle.stop();
     tab.receive?.({ type: 'sessionDisconnected' }); tab.lifecycle.disconnect('Disconnected');
-    // Shutdown can finish a first save. Do not silently leave that history behind.
-    if (deletingUnsaved && tab.integration.deletion.current()?.kind === 'saved') {
+    // Only the harness can establish native absence. Errors/connection failures
+    // preserve drafts without trapping a disconnected row in the sidebar.
+    const retention = await checkSessionRetention(tab.integration.retention);
+    if (!tabs.includes(tab)) return;
+    // Shutdown can finish a first save. Explicit Delete must not leave it behind.
+    if (deletingUnsaved && retention !== 'absent' && tab.integration.deletion.current()?.kind === 'saved') {
       tab.closing = false; updateTab(tab);
-      return deleteSession(tab);
+      const intent = tab.integration.deletion.current();
+      if (intent?.kind === 'saved') return deleteSavedSession(intent.reference, tab.title);
     }
     await nativeDrafts?.flush();
     if (tab.token) dialogs.cancel(tab.token);
-    detachTab(tab);
+    if (retention === 'absent') {
+      const { key, draftScope } = tab.lifecycle;
+      if (key !== undefined && draftScope !== undefined) removeDeletedSessions([{ key, draftScope }]);
+      else { detachTab(tab); tab.drafts.discard(); }
+      try { tab.integration.retention.forget(); } catch (error) { persistenceError(error); }
+      await nativeDrafts?.flush();
+    } else detachTab(tab);
   } catch (e) { tab.closing = false; showNotice(tab, `Could not stop ${tab.lifecycle.label}: ${e}`); updateTab(tab); }
 }
 async function pickWorkspace(): Promise<void> {
