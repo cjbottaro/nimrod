@@ -48,7 +48,7 @@ export class HarnessRegistry {
   }
   projectActions(): readonly HarnessProjectAction[] {
     const ids = new Set(this.projects.flatMap(project => project.creation.action ? [project.creation.action.id] : []));
-    const actions = this.projects.flatMap(project => project.actions.current());
+    const actions = this.projects.filter(project => project.availability.available()).flatMap(project => project.actions.current());
     for (const action of actions) {
       if (ids.has(action.id)) throw new Error(`Ambiguous harness project action: ${action.id}`);
       ids.add(action.id);
@@ -105,6 +105,9 @@ export class HarnessRegistry {
     };
   }
   async initialize(): Promise<void> {
+    await Promise.all(this.projects.map(project => project.availability.discover().catch(error => {
+      this.host.notice({ id: `harness-discovery:${project.id}`, operation: `Find ${project.label} runtime`, message: String(error) });
+    })));
     for (const initialize of this.nativeInitializers) void Promise.resolve().then(initialize).catch(error => this.host.notice({ id: 'native-initialization', operation: 'Initialize native owners', message: String(error) }));
     // Preserve the default/native host's blocking boot contract. Other owners
     // report source-local failures themselves and do not gate the application.

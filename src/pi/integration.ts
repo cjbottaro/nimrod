@@ -16,6 +16,7 @@ import { piSessionDeletion } from './session-deletion';
 import { piInspection } from './integration-inspection';
 import type { SessionDeletion, DeletionSnapshot, DeletionEvent } from '../session-deletion';
 import { bundledToolRenderer } from './card-plugins/registry';
+import { startupAvailability } from '../harness-availability';
 import { defineHarness } from '../harness-registry';
 import { conversationPort } from '../harness-conversation';
 import { bindSessionCommands } from '../session-commands';
@@ -31,6 +32,7 @@ const lastKey = 'nimrod.last-session.v1';
 const creation = { action: { id: 'new', label: 'New session', detail: 'Pi · persistent conversation (default harness)' }, defaultMode: 'saved', modes: ['saved', 'temporary'], named: true, title: 'Session' } satisfies import('../harness-contract').HarnessCreation;
 export const piHarness = defineHarness({ creation, cards: bundledToolRenderer, id: 'pi', label: 'Pi', actions: [], create: createPiProject });
 function createPiProject(host: HarnessProjectHost): HarnessProject {
+  const availability = startupAvailability(() => invoke<boolean>('pi_runtime_available', { pi: host.runtime().pi, node: host.runtime().node }));
   let ready = false, transaction: SessionDeletion | undefined, unlisten: UnlistenFn | undefined, disposed = false;
   const history = new PiSessionHistory({ catalog: () => invoke('list_workspace_sessions'), inspect: path => invoke('inspect_workspace_session', { path }),
     open: host.open, removed: path => transaction?.removed(path) ?? false, recency: reference => host.recency().get(reference) });
@@ -67,8 +69,9 @@ function createPiProject(host: HarnessProjectHost): HarnessProject {
   };
   return {
     id: 'pi', label: 'Pi', creation, actions: noProjectActions,
-    initialization: { blocking: true, ready: () => ready, async run() { await invoke('stop_pi'); transaction?.load(await invoke<DeletionSnapshot>('deletion_snapshot')); ready = true; } },
-    saved, history: { source: () => history, associate() {}, async dispose() { await history.dispose(); } },
+    availability,
+    initialization: { blocking: true, ready: () => ready && availability.available(), async run() { await invoke('stop_pi'); transaction?.load(await invoke<DeletionSnapshot>('deletion_snapshot')); ready = true; } },
+    saved, history: { source: () => availability.available() ? history : undefined, associate() {}, async dispose() { await history.dispose(); } },
     deletion(context) {
       const source = piSessionDeletion({
         panels: () => host.participants().flatMap(panel => {
@@ -90,7 +93,7 @@ function createPiProject(host: HarnessProjectHost): HarnessProject {
         .then(dispose => { if (disposed) dispose(); else unlisten = dispose; }).catch(error => host.notice({ id: 'pi-deletion-listener', operation: 'Observe session deletion', message: String(error) }));
       return source;
     },
-    create: (sessionHost, request) => createPiSession(sessionHost, request, host, saved, () => ready),
+    create: (sessionHost, request) => createPiSession(sessionHost, request, host, saved, () => ready && availability.available()),
     dispose() { disposed = true; unlisten?.(); },
   };
 }

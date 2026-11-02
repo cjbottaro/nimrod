@@ -50,6 +50,7 @@ interface ShellOptions {
   appearanceApply?: (args: JsonRecord, fail: (payload: { request: string; message: string }) => void) => Promise<void>;
   titlebarGate?: Promise<void>;
   runtimeDefaultsGate?: Promise<void>;
+  runtimeAvailable?: (harness: 'pi' | 'copilot' | 'codex') => boolean;
   storage?: Record<string, unknown>;
   nativeDrafts?: Record<string, unknown>;
   draftFlushError?: string;
@@ -256,6 +257,9 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       if (command === 'confirm_session_deletion') { options.confirmReview?.(args); return; }
       if (command === 'delete_session_tree') return options.deleteTree ? options.deleteTree(event => deletionEvent?.(event), args) : [];
       if (command === 'load_personal_card_plugins') return options.personalGate ?? { entries: [], plugins: [], warnings: [] };
+      if (command === 'pi_runtime_available') return options.runtimeAvailable?.('pi') ?? true;
+      if (command === 'copilot_runtime_available') return options.runtimeAvailable?.('copilot') ?? true;
+      if (command === 'codex_runtime_available') return options.runtimeAvailable?.('codex') ?? true;
       if (command === 'runtime_defaults') { await options.runtimeDefaultsGate; return { cwd: '/project', pi: '/bin/pi', node: '/bin/node', home: options.homeDirectory }; }
       if (command === 'window_workspace') {
         await options.windowWorkspaceGate;
@@ -431,7 +435,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     assert.ok(menu, 'native popup requested');
     const current = menu;
     function item(key: string, label: string, enabled: boolean) {
-      return { label, disabled: !enabled, click: () => { if (enabled) sessionMenuEvent?.(current.request, key); } };
+      return { label, hidden: current.options[`${key}Visible`] === false, disabled: !enabled, click: () => { if (enabled) sessionMenuEvent?.(current.request, key); } };
     }
     return {
       pin: item('pin', String(current.options.pinLabel), current.options.pinEnabled === true),
@@ -454,6 +458,70 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     disconnect: () => channel.onmessage({ kind: 'disconnected', message: 'fixture closed' }),
   };
 }
+
+test('startup discovery silently omits missing harness actions and history until restart', async () => {
+  let installed = false;
+  const options: ShellOptions = { windowWorkspace: '/project', runtimeAvailable: harness => harness === 'pi' || installed,
+    catalog: [{ path: '/sessions/pi.jsonl', sessionId: 'pi-saved', name: 'Saved Pi', preview: '', modified: 100, lastUserMessageAt: 100 }] };
+  const f = await fixture(undefined, options);
+  try {
+    f.openPalette();
+    assert.doesNotMatch(f.element('palette-list').textContent!, /New Codex|New Copilot/);
+    const input = f.element<HTMLInputElement>('palette-input');
+    input.value = 'Delete sessions'; input.dispatchEvent(new f.win.Event('input'));
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.match(f.element('palette-list').textContent!, /Saved Pi/);
+    assert.equal(f.calls.some(call => call.command === 'start_codex' || call.command === 'start_copilot'), false);
+    assert.equal(f.element('application-notices').hidden, true);
+    installed = true;
+    f.win.dispatchEvent(new f.win.Event('focus'));
+    f.element<HTMLButtonElement>('palette-refresh').click(); await f.tick(); await f.tick();
+    assert.equal(f.calls.filter(call => call.command.endsWith('_runtime_available')).length, 3);
+    assert.equal(f.calls.some(call => call.command === 'start_codex' || call.command === 'start_copilot'), false);
+    f.element<HTMLDialogElement>('command-palette').close(); await f.tick(); f.openPalette();
+    assert.doesNotMatch(f.element('palette-list').textContent!, /New Codex|New Copilot/);
+  } finally { f.win.close(); }
+  const restarted = await fixture(undefined, options);
+  try {
+    await restarted.tick(); restarted.openPalette();
+    assert.match(restarted.element('palette-list').textContent!, /New Codex session/);
+    assert.match(restarted.element('palette-list').textContent!, /New Copilot session/);
+  } finally { restarted.win.close(); }
+});
+
+test('missing Codex preserves restored rows and drafts but omits runtime actions', async () => {
+  const scope = 'codex:"waiting"';
+  const f = await fixture(undefined, { windowWorkspace: '/project', runtimeAvailable: harness => harness !== 'codex',
+    nativeDrafts: { [scope]: { draft: 'Keep my local draft', recovered: [] } },
+    appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'waiting', name: 'Waiting Codex' }], active: scope } },
+  });
+  try {
+    assert.equal(f.rows().length, 1);
+    f.rows()[0].click(); await f.tick();
+    assert.equal(f.calls.some(call => call.command === 'start_codex'), false);
+    assert.equal(f.element<HTMLButtonElement>('delete-session').hidden, true);
+    assert.equal(f.element<HTMLButtonElement>('reload-session').hidden, true);
+    const menu = await f.rowMenu(f.rows()[0]);
+    assert.equal(menu.delete.hidden, true); assert.equal(menu.rename.hidden, true); assert.equal(menu.close.disabled, false);
+    f.openPalette();
+    assert.doesNotMatch(f.element('palette-list').textContent!, /New Codex|Delete session…|Reload session|Rename session/);
+    assert.equal(f.saved().drafts[scope].draft, 'Keep my local draft');
+    assert.equal(f.element('application-notices').hidden, true);
+  } finally { f.win.close(); }
+});
+
+test('missing Pi hides default creation and history without blocking installed harnesses', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', runtimeAvailable: harness => harness !== 'pi' });
+  try {
+    await f.tick(); f.openPalette();
+    assert.doesNotMatch(f.element('palette-list').textContent!, /New named session|New temporary session|Pi · persistent/);
+    assert.match(f.element('palette-list').textContent!, /New Codex session|New Copilot session/);
+    assert.equal(f.element<HTMLButtonElement>('sidebar-new').hidden, true);
+    assert.equal(f.calls.some(call => call.command === 'start_pi'), false);
+    assert.equal(f.element('application-notices').hidden, true);
+  } finally { f.win.close(); }
+});
 
 test('mounting an explicitly disconnected saved session does not report a connection attempt failure', async () => {
   const scope = 'codex:"waiting"';
@@ -1296,15 +1364,15 @@ for (const picker of ['Resume', 'Delete sessions'] as const) test(`${picker} dis
   } finally { release(); f.win.close(); }
 });
 
-test('unavailable unassociated harnesses fail independently and never retry until explicit Refresh', async () => {
-  const f = await fixture(undefined, { windowWorkspace: '/project', copilotStartError: 'Copilot not installed', codexStartError: 'Codex not installed',
+test('enabled unassociated harness failures stay visible and never retry until explicit Refresh', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', copilotStartError: 'Copilot launch failed', codexStartError: 'Codex launch failed',
     catalog: [{ path: '/sessions/pi.jsonl', sessionId: 'pi', name: 'Saved Pi', preview: '', modified: 1 }] });
   try {
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Backspace', shiftKey: true, metaKey: true, bubbles: true, cancelable: true }));
     await f.tick(); await f.tick();
     assert.match(f.element('palette-list').textContent!, /Saved Pi/);
-    assert.match(f.win.document.body.textContent!, /Copilot not installed/);
-    assert.match(f.win.document.body.textContent!, /Codex not installed/);
+    assert.match(f.win.document.body.textContent!, /Copilot launch failed/);
+    assert.match(f.win.document.body.textContent!, /Codex launch failed/);
     await f.tick();
     for (const command of ['start_copilot', 'start_codex']) assert.equal(f.calls.filter(call => call.command === command).length, 1);
     f.element<HTMLButtonElement>('palette-refresh').click(); await f.tick(); await f.tick();

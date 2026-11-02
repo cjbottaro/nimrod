@@ -116,6 +116,8 @@ Search actions, record shortcuts, resolve conflicts explicitly, remove bindings 
 
 Pi and Node paths are discovered automatically; override them here if needed.
 
+Nimrod checks harness executables at startup. Harnesses it cannot find are omitted from creation and saved-history actions, without errors from unrelated harnesses. Existing sidebar sessions and drafts remain, but their harness-dependent actions are hidden; you can still close or pin those rows. **Restart Nimrod after installing or uninstalling a harness, or after correcting a path for a harness that was unavailable at startup.** Refreshing history does not recheck installed harnesses. This check does not verify authentication or CLI compatibility.
+
 1. Wait for initial detection.
 2. Edit executable names or paths.
 3. Leave the edited field or press Enter to save it automatically. Each field saves independently; in Project settings, untouched fields keep inheriting.

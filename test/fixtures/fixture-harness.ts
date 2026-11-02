@@ -22,6 +22,7 @@ function project(projectHost: HarnessProjectHost): HarnessProject {
     actions: { current: () => [{ id: 'harness-fixture-project', label: 'Fixture project action', detail: 'Project-bound offline operation',
       available: () => ready && projectHost.current() && projectHost.applicationReady() && !!projectHost.project(),
       async run() { const key = 'fixture-project-runs'; projectHost.store.save(key, Number(projectHost.store.read(key) ?? 0) + 1); } }] },
+    availability: { async discover() {}, available: () => true },
     initialization: { blocking: false, ready: () => ready, async run() { ready = true; projectHost.changed(); } },
     saved: taggedSavedSessions(id),
     history: { associate() { associated = true; }, source: () => !associated ? undefined : { id, label: 'Fixture',

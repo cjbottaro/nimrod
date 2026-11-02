@@ -44,6 +44,10 @@ function compileAssertions(session: HarnessSession, project: HarnessProject, reg
   const { interactions, ...withoutInteractions } = session;
   // @ts-expect-error Even an integration without rich decisions must explicitly choose noInteractions.
   const missingInteractions: HarnessSession = withoutInteractions;
+  const { availability, ...withoutAvailability } = project;
+  // @ts-expect-error Every project must explicitly supply startup runtime availability.
+  defineHarness({ ...registration, create: () => withoutAvailability });
+  void availability;
   const { actions, ...withoutProjectActions } = project;
   // @ts-expect-error Project contributions must choose an executable port or explicit noProjectActions.
   defineHarness({ ...registration, create: () => withoutProjectActions });

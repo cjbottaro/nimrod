@@ -21,6 +21,7 @@ export function createAcpHarness(profile: AcpProfile) {
     let ready = false;
     return { id: 'acp', label: profile.name,
       creation, actions: noProjectActions,
+      availability: { async discover() {}, available: () => true },
       initialization: { blocking: false, ready: () => ready, async run() { try { await invoke('stop_acp'); if (project.current()) { ready = true; project.changed(); } }
         catch (error) { project.notice({ id: 'acp-startup', operation: 'Clean up agents', message: String(error) }); } } },
       saved: noSavedSessions('ACP Resume is not exposed; its drafts are memory-only'),

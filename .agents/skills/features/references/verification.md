@@ -2,6 +2,18 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
+## Startup harness availability
+
+Source-implemented: once-only executable discovery, omission of unavailable
+harness actions/history and preservation of restored session/draft state. Authored
+fixtures cover the immutable snapshot/restart boundary, silent missing optional
+history, missing Pi, restored Codex actions and configured native resolver paths.
+Tests/browser fixtures and installed-runtime/native macOS/Linux acceptance have
+not been run for this change. Post-merge TypeScript/Rust compile results are
+reported separately; compilation is not native acceptance. The separate reported
+notice flash during deletion-confirmation transitions has not been reproduced or
+fixed here; missing-at-startup harness notices are no longer produced.
+
 ## Codex native untouched-session probe
 
 User-authorized, provider-free installed-runtime probe on macOS with

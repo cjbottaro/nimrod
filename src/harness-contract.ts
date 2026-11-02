@@ -108,6 +108,8 @@ export interface HarnessProject {
   readonly label: string;
   readonly creation: HarnessCreation;
   readonly actions: { current(): readonly HarnessProjectAction[] };
+  /** Startup executable discovery, independent of native-owner readiness. */
+  readonly availability: { discover(): Promise<void>; available(): boolean };
   readonly initialization: { readonly blocking: boolean; run(): Promise<void>; ready(): boolean };
   readonly saved: HarnessSavedSessions;
   readonly history: HarnessHistory;

@@ -25,6 +25,37 @@ Missing keys use defaults; malformed external files retain the last valid snapsh
 - `src-tauri/src/window_state.rs`, `native_menu.rs`: geometry capture/restore and app-owned macOS Quit.
 - `index.html`, `src/theme.css`, `src/workspace.css`: mounted page surfaces and error presentation.
 
+## Startup harness availability
+
+Product harnesses take one executable-availability snapshot during project-window
+startup, after effective Runtime paths/defaults are initialized. Each concrete
+integration supplies the required `HarnessProject.availability` port; the registry
+awaits the lightweight discovery checks before exposing project actions/history,
+then retains the existing separate native-owner initialization lifetimes. Discovery
+resolves configured executables with launch's lookup rules; it never starts a
+conversation, authenticates, sends a prompt or probes model/provider services.
+Pi needs Pi plus Node (a Pi JS entry point need not be executable); Copilot needs
+its CLI plus Node; Codex needs its CLI. Copilot/Codex stay unavailable on platforms
+without their implemented process-tree ownership. This is installation discovery,
+not CLI-version, authentication or successful-handshake acceptance.
+
+Missing runtimes are an ordinary false result, not an application notice.
+Unavailable harnesses contribute no creation, history Resume/Delete, mounted-row
+delete/reload/rename or configuration actions. Restored rows, identity, pins and
+drafts remain; selection never connects them. Local Close/pin remain available.
+History refresh, focus, picker reopening and Runtime preference edits do not
+invalidate availability. Install/uninstall or correcting an initially unavailable
+runtime requires restarting Nimrod. Committed path edits still affect future
+launches for harnesses already enabled by the snapshot; native launch validation
+remains authoritative if an executable disappears afterward. Unexpected discovery
+IPC errors remain visible, and installed-runtime history/launch failures are not
+silently suppressed.
+
+`src/harness-availability.ts` coalesces the once-only check; concrete Rust discovery
+commands share executable resolution with launch. `test/harness-availability.test.ts`,
+shell startup/history/restored-row fixtures and native resolver fixtures are authored;
+[verification](verification.md#startup-harness-availability) records execution status.
+
 ## Project layering
 
 Effective Nimrod preferences are built-in defaults → global JSONC → canonical-project JSONC; Pi configuration remains Pi-owned and unmodified. The optional project file is `<canonical cwd>/.nimrod/settings.json`, created only by an explicit override write. No ancestor discovery or automatic project-file migration. Keys applied at project scope: `appearance.theme`, `runtime.piPath`, `runtime.nodePath`, `runtime.copilotPath`, `runtime.codexPath` and `interaction.autocompleteAccept`. This six-key allowlist is mirrored by `src/preferences.ts::PROJECT_SETTING_KEYS` and `src-tauri/src/project_preferences.rs::KEYS`; the [user-facing catalogue](../../../../docs/settings.md#project-overridable-settings) lists controls and application timing. The latter is the validated `tab` (default) / `tabOrEnter` enum in `src/autocomplete-settings.ts`, mirrored natively; [composer completion](composer.md#shared-slash-completion) owns its keyboard meaning. Global/project saves use the existing queued JSONC/CAS writer, and Use global default deletes only the project key. No migration or startup write is needed. [Window translucency](translucency.md), zoom and send auto-follow are global-only: getters read the validated global layer and saves always target the global JSONC file, including zoom shortcuts invoked from project windows. Earlier project entries `appearance.zoom` and `appearance.autoFollowAfterSending` are tolerated but excluded before merged validation/provenance projection—even obsolete values cannot affect effective settings. Keep their raw source/comments for CAS and unrelated JSONC edits; do not automatically rewrite files or promote a project's former value into the global file. Other unsupported global-only keys are rejected in project files; imported palettes remain in the global library.

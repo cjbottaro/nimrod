@@ -152,6 +152,19 @@ fn executable(path: &Path) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+#[tauri::command]
+fn pi_runtime_available(pi: PathBuf, node: PathBuf) -> bool {
+    executable(&node).is_ok_and(|path| which::which(path).is_ok())
+        && executable(&pi).is_ok_and(|path| {
+            if path.extension().is_some_and(|ext| ext == "js" || ext == "mjs" || ext == "cjs") {
+                return true; // Pi's JavaScript entry point is launched through Node.
+            }
+            #[cfg(windows)]
+            if path.extension().is_some_and(|ext| ext == "cmd" || ext == "bat") { return false; }
+            which::which(path).is_ok()
+        })
+}
+
 fn resource(app: &tauri::AppHandle, name: &str) -> Result<PathBuf, String> {
     app.path()
         .resolve(
@@ -540,6 +553,9 @@ fn main() {
             drafts::drafts_flush,
             drafts::drafts_references,
             runtime_defaults,
+            pi_runtime_available,
+            codex::codex_runtime_available,
+            copilot::copilot_runtime_available,
             fonts::installed_fonts,
             window_appearance::window_appearance_capabilities,
             window_appearance::apply_window_appearance,

@@ -100,6 +100,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Missing harness executables no longer produce unrelated Resume/Delete history errors. Startup discovery hides unavailable harness actions while preserving existing session rows and drafts; installation changes require restarting Nimrod.
+
 - Copilot `/config model` and other settings no longer fail with `settings.validate is not a function`. They use the SDK's public settings write API and retain saved-value confirmation; failed or uncertain writes are not retried.
 
 - Delete session loading and deletion progress now use the same compact, accent-colored spinner as the Status area.

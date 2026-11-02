@@ -29,9 +29,11 @@ polling or transcript copy.
 
 `loadSessionHistory` queries sources concurrently and publishes incrementally.
 Explicit Resume and Delete pickers request `history.source({ discover: true })` from
-every registered harness, independent of prior Nimrod use/association. Concrete
+every harness enabled by [startup executable discovery](preferences.md#startup-harness-availability),
+independent of prior Nimrod use/association. Missing-at-startup runtimes contribute
+no history source and no error; Refresh does not recheck installation. Concrete
 sources wait for their coalesced native-owner initialization before launching a
-catalog connection; a slow, missing or failed runtime remains source-local and
+catalog connection; a slow or failed enabled runtime remains source-local and
 does not block other results. Existing associations still control startup
 warm-up, not explicit discovery. Listing itself never creates an association,
 opens a sidebar row, creates/resumes a conversation or sends a prompt.

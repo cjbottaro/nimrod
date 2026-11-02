@@ -73,6 +73,29 @@ pub struct Config {
     catalog: bool,
 }
 
+// Discovery and launch must resolve the same configured executable.
+fn resolve_cli(configured: Option<PathBuf>) -> Result<PathBuf, String> {
+    let cli = configured
+        .map(|path| {
+            if path.is_absolute() {
+                Ok(path)
+            } else {
+                path.to_str()
+                    .and_then(crate::find_program)
+                    .ok_or("Configured Codex CLI executable was not found".to_owned())
+            }
+        })
+        .transpose()?
+        .or_else(|| crate::find_program("codex"))
+        .ok_or("Install and authenticate Codex CLI, or configure its Runtime path")?;
+    crate::executable(&cli)
+}
+
+#[tauri::command]
+pub fn codex_runtime_available(cli: Option<PathBuf>) -> bool {
+    cfg!(unix) && resolve_cli(cli).is_ok_and(|path| which::which(path).is_ok())
+}
+
 impl CodexHost {
     pub async fn retire_window(&self, window: &str) {
         self.windows.lock().await.closing.insert(window.into());
@@ -300,21 +323,7 @@ pub async fn start_codex(
     {
         return Err("Codex requires this window's canonical project directory".into());
     }
-    let cli = config
-        .cli
-        .map(|path| {
-            if path.is_absolute() {
-                Ok(path)
-            } else {
-                path.to_str()
-                    .and_then(crate::find_program)
-                    .ok_or("Configured Codex CLI executable was not found".to_owned())
-            }
-        })
-        .transpose()?
-        .or_else(|| crate::find_program("codex"))
-        .ok_or("Install and authenticate Codex CLI, or configure its Runtime path")?;
-    let cli = crate::executable(&cli)?;
+    let cli = resolve_cli(config.cli)?;
     #[cfg(not(unix))]
     return Err(
         "Codex process-tree ownership is currently implemented for macOS and Linux only"

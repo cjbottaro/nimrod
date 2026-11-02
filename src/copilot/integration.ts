@@ -7,6 +7,7 @@ import { copilotSessionDeletion } from './session-deletion';
 import { copilotTransport } from './native';
 import { copilotIntegrationUi } from './integration-ui';
 import { bundledCopilotPlugin } from './card-plugins';
+import { startupAvailability } from '../harness-availability';
 import { defineHarness } from '../harness-registry';
 import { configurationActions, noProjectActions, noReferences, ordinarySelection, savedClose, taggedSavedSessions } from '../harness-defaults';
 import { conversationPort } from '../harness-conversation';
@@ -18,6 +19,7 @@ import type { HarnessProjectHost, HarnessSessionHost } from '../harness-host';
 const creation = { action: { id: 'new-copilot', label: 'New Copilot session', detail: 'Start a Copilot session' }, defaultMode: 'saved', modes: ['saved'], named: false, title: 'Copilot session' } satisfies import('../harness-contract').HarnessCreation;
 export const copilotHarness = defineHarness({ creation, cards: bundledCopilotPlugin, id: 'copilot-sdk', label: 'Copilot', actions: [], create: createCopilotProject });
 function createCopilotProject(projectHost: HarnessProjectHost): HarnessProject {
+  const availability = startupAvailability(() => invoke<boolean>('copilot_runtime_available', { cli: projectHost.runtime().copilot, node: projectHost.runtime().node }));
   let ready = false, generation = '', history: CopilotSessionHistory | undefined;
   const historyError = (error: unknown) => { if (projectHost.current()) projectHost.notice({ id: 'history:copilot-sdk', operation: 'Read Copilot history', message: String(error) }); };
   let initializing: Promise<void> | undefined;
@@ -30,7 +32,7 @@ function createCopilotProject(projectHost: HarnessProjectHost): HarnessProject {
   })();
   const source = ({ discover = false } = {}): CopilotSessionHistory | undefined => {
     const project = projectHost.project();
-    if (!project || !projectHost.current() || !discover && !history && (!ready || projectHost.store.read(copilotHistoryKey(project)) !== true)) return;
+    if (!availability.available() || !project || !projectHost.current() || !discover && !history && (!ready || projectHost.store.read(copilotHistoryKey(project)) !== true)) return;
     if (!history) {
       const transport = copilotTransport(project, projectHost.runtime, () => generation);
       history = new CopilotSessionHistory(project, { ...transport, async start(...args) {
@@ -45,11 +47,12 @@ function createCopilotProject(projectHost: HarnessProjectHost): HarnessProject {
   return {
     id: 'copilot-sdk', label: 'Copilot',
     creation, actions: noProjectActions,
-    initialization: { blocking: false, ready: () => ready, run: initialize },
+    availability,
+    initialization: { blocking: false, ready: () => ready && availability.available(), run: initialize },
     saved: taggedSavedSessions('copilot-sdk'),
     history: { source, associate() { const project = projectHost.project(); if (project) { projectHost.store.save(copilotHistoryKey(project), true); source(); } }, async dispose() { await history?.dispose(); } },
     deletion: context => copilotSessionDeletion(() => history, context),
-    create: (host, request) => createCopilotSession(host, request, projectHost, () => ready, () => generation),
+    create: (host, request) => createCopilotSession(host, request, projectHost, () => ready && availability.available(), () => generation),
     dispose() { void history?.dispose().catch(historyError); },
   };
 }

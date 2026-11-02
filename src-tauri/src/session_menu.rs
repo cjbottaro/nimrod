@@ -16,6 +16,8 @@ pub struct SessionMenuOptions {
     pin_enabled: bool,
     close_enabled: bool,
     rename_enabled: bool,
+    rename_visible: bool,
+    delete_visible: bool,
     delete_label: String,
     delete_enabled: bool,
     x: f64,
@@ -75,10 +77,15 @@ pub fn popup_session_menu(
             options.delete_enabled,
             None::<&str>,
         )?;
-        Menu::with_items(
-            &window,
-            &[&pin, &rename, &close, &PredefinedMenuItem::separator(&window)?, &remove],
-        )
+        let menu = Menu::new(&window)?;
+        menu.append(&pin)?;
+        if options.rename_visible { menu.append(&rename)?; }
+        menu.append(&close)?;
+        if options.delete_visible {
+            menu.append(&PredefinedMenuItem::separator(&window)?)?;
+            menu.append(&remove)?;
+        }
+        Ok(menu)
     };
     let menu = build().map_err(|error| error.to_string())?;
     // Linux popup completion is not a dismissal signal. Keep the menu alive

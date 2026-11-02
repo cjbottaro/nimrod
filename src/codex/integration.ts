@@ -6,6 +6,7 @@ import { codexSessionDeletion } from './session-deletion';
 import { codexInteraction, codexSessionActions } from './view-policy';
 import { codexIntegrationUi } from './integration-ui';
 import { codexToolPlugin } from './card-plugins';
+import { startupAvailability } from '../harness-availability';
 import { defineHarness } from '../harness-registry';
 import { configurationActions, noProjectActions, explicitSelection, noReferences, savedClose, taggedSavedSessions } from '../harness-defaults';
 import { conversationPort } from '../harness-conversation';
@@ -17,6 +18,7 @@ import type { HarnessProjectHost, HarnessSessionHost } from '../harness-host';
 const creation = { action: { id: 'new-codex', label: 'New Codex session', detail: 'Start a Codex app-server session' }, defaultMode: 'saved', modes: ['saved'], named: false, title: 'Codex session' } satisfies import('../harness-contract').HarnessCreation;
 export const codexHarness = defineHarness({ creation, cards: () => codexToolPlugin, id: 'codex', label: 'Codex', actions: [], create: createCodexProject });
 function createCodexProject(projectHost: HarnessProjectHost): HarnessProject {
+  const availability = startupAvailability(() => invoke<boolean>('codex_runtime_available', { cli: projectHost.runtime().codex }));
   let ready = false, generation = '', history: CodexSessionHistory | undefined;
   const historyError = (error: unknown) => { if (projectHost.current()) projectHost.notice({ id: 'history:codex', operation: 'Read Codex history', message: String(error) }); };
   let initializing: Promise<void> | undefined;
@@ -29,7 +31,7 @@ function createCodexProject(projectHost: HarnessProjectHost): HarnessProject {
   })();
   const source = ({ discover = false } = {}): CodexSessionHistory | undefined => {
     const project = projectHost.project();
-    if (!project || !projectHost.current() || !discover && !history && (!ready || projectHost.store.read(codexHistoryKey(project)) !== true)) return;
+    if (!availability.available() || !project || !projectHost.current() || !discover && !history && (!ready || projectHost.store.read(codexHistoryKey(project)) !== true)) return;
     const transport = nativeCodexTransport(project, () => ({ cli: projectHost.runtime().codex, generation }), true);
     history ??= new CodexSessionHistory(project, { ...transport, async start(...args) {
       await initialize();
@@ -45,11 +47,12 @@ function createCodexProject(projectHost: HarnessProjectHost): HarnessProject {
   return {
     id: 'codex', label: 'Codex',
     creation, actions: noProjectActions,
-    initialization: { blocking: false, ready: () => ready, run: initialize },
+    availability,
+    initialization: { blocking: false, ready: () => ready && availability.available(), run: initialize },
     saved: taggedSavedSessions('codex'),
     history: { source, associate() { const project = projectHost.project(); if (project) { projectHost.store.save(codexHistoryKey(project), true); source(); } }, async dispose() { await history?.dispose(); } },
     deletion: context => codexSessionDeletion(source, context),
-    create: (host, request) => createCodexSession(host, request, projectHost, () => ready, () => generation),
+    create: (host, request) => createCodexSession(host, request, projectHost, () => ready && availability.available(), () => generation),
     dispose() { void history?.dispose().catch(historyError); },
   };
 }

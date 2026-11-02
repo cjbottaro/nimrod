@@ -100,6 +100,8 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
       if (text === undefined) throw new Error('Fixture package missing');
       return text;
     }
+    if (command === 'pi_runtime_available' || command === 'copilot_runtime_available') return true;
+    if (command === 'codex_runtime_available') return false;
     if (command === 'runtime_defaults') return { cwd: process.cwd(), node: process.execPath, pi: 'fixture-only' };
     if (command === 'take_project_picker_request') return false;
     if (command === 'list_projects') return (preferences.value.state['nimrod.workspaces.v1'] as string[] || []).map(cwd => ({ cwd, open: cwd === process.cwd() }));

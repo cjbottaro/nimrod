@@ -1,4 +1,15 @@
 use super::*;
+#[test]
+fn startup_discovery_uses_configured_paths_without_launching_a_harness() {
+    let binary = std::env::current_exe().unwrap();
+    let missing = binary.parent().unwrap().join(format!("missing-{}", uuid::Uuid::new_v4()));
+    assert_eq!(copilot_runtime_available(Some(binary.clone()), Some(binary.clone())), cfg!(unix));
+    assert!(!copilot_runtime_available(Some(missing.clone()), Some(binary.clone())));
+    assert_eq!(resolve_cli(Some(binary.clone())).unwrap(), binary);
+    assert!(resolve_cli(Some(missing)).is_err(), "a missing override must not fall back to an installed CLI");
+    assert!(!copilot_runtime_available(Some(binary.clone()), Some(binary.with_file_name("missing-node"))));
+}
+
 use serde_json::json;
 
 #[test]

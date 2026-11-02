@@ -143,7 +143,7 @@ pending/error/cancellation semantics. Existing richer Codex/Copilot UI is retain
 
 Project ports include required `actions.current()` with executable, availability-checked `HarnessProjectAction` contributions (or explicit `noProjectActions`). Static action metadata only registers discoverability/shortcuts; it never substitutes for a live runner. Project actions have a shared palette/shortcut execution path independent of selected-session membership and revalidate availability at invocation.
 
-Project ports own runtime initialization, saved-reference acceptance/keying and
+Project ports own required once-only [startup runtime availability](preferences.md#startup-harness-availability), native-owner initialization, saved-reference acceptance/keying and
 preparation, history association/discovery, deletion-source registration and
 session creation. The only product list is `src/bundled-harnesses.ts`.
 Add a registration there plus its concrete implementation/native packaging
