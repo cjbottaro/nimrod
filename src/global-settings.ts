@@ -67,7 +67,7 @@ export async function mountGlobalSettings() {
     presentation.own(() => dispatch.dispose());
     await presentation.presentWhenPrepared(() => surface.settled());
     if (presentation.disposed) return;
-    // PATH/mise discovery can take seconds; do not gate first presentation on it.
+    // Runtime defaults initialize separately; do not gate first presentation on them.
     void invoke<{ pi: string; node: string }>('runtime_defaults').then(defaults => {
       if (!presentation.disposed) surface.initializeRuntime(defaults);
     }).catch(error => { if (!presentation.disposed) notices.report({ id: 'runtime-defaults', operation: 'Detect runtime paths', message: String(error) }); });

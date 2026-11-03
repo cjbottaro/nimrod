@@ -1,6 +1,6 @@
 # Settings
 
-**Global Settings** opens in its own reusable window through **⌘/Ctrl+,**, the native **Settings…** menu item, or the command palette. It contains Appearance, Interaction, Notifications, Diagnostics, Keybindings and Runtime. On first open, the window appears after its controls, theme, translucency and zoom are prepared, instead of showing a blank opaque page while loading. Runtime-path detection can continue afterward. Opening it again focuses the existing ready window; Close or Escape closes that window. No project is required.
+**Global Settings** opens in its own reusable window through **⌘/Ctrl+,**, the native **Settings…** menu item, or the command palette. It contains Appearance, Interaction, Notifications, Diagnostics, Keybindings and Runtime. On first open, the window appears after its controls, theme, translucency and zoom are prepared, instead of showing a blank opaque page while loading. Runtime fields initialize afterward. Opening it again focuses the existing ready window; Close or Escape closes that window. No project is required.
 
 **Project settings** opens inside the current project window through the Project bar's gear, **⌘/Ctrl+Shift+,**, or the command palette. The header names the project and makes clear that changes apply only there and override Global Settings. **Back** or **Escape** returns to its conversation; **Global Settings…** opens the separate defaults window.
 
@@ -8,7 +8,7 @@ Pi keeps running. Project settings preserves your draft, conversation and readin
 
 ## Global defaults and project overrides
 
-Project settings shows effective values, not a second independent configuration. **Inherited** means the project follows the global value (or the built-in default/runtime discovery when omitted globally). Choosing a theme/autocomplete value or entering a Runtime path creates a **Project override**. For theme and autocomplete, **Remove override** removes that override and immediately follows the current global value again—it does not copy that value into the project file.
+Project settings shows effective values, not a second independent configuration. **Inherited** means the project follows the global value (or the built-in default when omitted globally). Choosing a theme/autocomplete value or entering a Runtime path creates a **Project override**. For theme and autocomplete, **Remove override** removes that override and immediately follows the current global value again—it does not copy that value into the project file.
 
 Overrides stay explicit even if they match the global value. Global edits update inheriting projects, but never replace explicit project values. Global Settings defines defaults only; inspect and reset overrides in the owning project's settings.
 
@@ -25,7 +25,7 @@ These are the complete set of six project-overridable Nimrod preferences, stored
 | Runtime | Copilot CLI executable | `runtime.copilotPath` | On the next Copilot session launch |
 | Runtime | Codex CLI executable | `runtime.codexPath` | On the next Codex session launch |
 
-Omitted keys inherit global settings, then built-in defaults or runtime discovery. Runtime fields save individually when changed and left, or when you press Enter; saving never restarts an existing session. Theme and autocomplete show their source and offer **Remove override** when overridden. Project Runtime fields use empty inputs with inherited values as placeholders instead of source labels and reset buttons.
+Omitted keys inherit global settings, then built-in defaults. Runtime fields save individually when changed and left, or when you press Enter; saving never restarts an existing session. Theme and autocomplete show their source and offer **Remove override** when overridden. Project Runtime fields use empty inputs with inherited values as placeholders instead of source labels and reset buttons.
 
 **Typography, translucency, zoom, modal animations and auto-follow after sending are global-only**, along with notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration. Project settings contains the theme picker under Appearance, autocomplete acceptance under Interaction and runtime paths under Runtime. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
 
@@ -114,13 +114,13 @@ Search actions, record shortcuts, resolve conflicts explicitly, remove bindings 
 
 ## Runtime
 
-Pi and Node paths are discovered automatically; override them here if needed.
+Runtime defaults are the command names **`pi`**, **`node`**, **`copilot`** and **`codex`**, resolved using Nimrod’s `PATH`. Defaults are not expanded to installation-specific paths or selected through mise. Set an explicit path when a command is unavailable on the app’s `PATH`—desktop launches may have a different `PATH` from your terminal. Existing saved global/project paths remain unchanged.
 
-In **Project settings**, leave a Runtime field **blank** to inherit from Global Settings (or runtime discovery/app defaults when omitted globally). Its effective inherited path is shown as muted placeholder text, not saved input text. An explicit project override appears as actual text—even when it matches the global value. Clearing the field and leaving it or pressing Enter deletes only that project key; the placeholder follows subsequent global changes. No override is created by simply focusing or leaving an untouched blank field. **Global Settings** retains filled Runtime inputs and requires nonempty executable names/paths.
+In **Project settings**, leave a Runtime field **blank** to inherit from Global Settings (or command-name defaults when omitted globally). Its effective inherited path is shown as muted placeholder text, not saved input text. An explicit project override appears as actual text—even when it matches the global value. Clearing the field and leaving it or pressing Enter deletes only that project key; the placeholder follows subsequent global changes. No override is created by simply focusing or leaving an untouched blank field. **Global Settings** retains filled Runtime inputs and requires nonempty executable names/paths.
 
 Nimrod checks harness executables at startup. Harnesses it cannot find are omitted from creation and saved-history actions, without errors from unrelated harnesses. Existing sidebar sessions and drafts remain, but their harness-dependent actions are hidden; you can still close or pin those rows. **Restart Nimrod after installing or uninstalling a harness, or after correcting a path for a harness that was unavailable at startup.** Refreshing history does not recheck installed harnesses. This check does not verify authentication or CLI compatibility.
 
-1. Wait for initial detection.
+1. Use the command-name defaults, or configure explicit paths where needed.
 2. Edit executable names or paths.
 3. Leave the edited field or press Enter to save it automatically. Each field saves independently; in Project settings, untouched fields keep inheriting. Clear a project Runtime field to remove its override.
 4. Start a new session to use the saved paths.
@@ -174,7 +174,7 @@ Personal [card plugins](card-plugins.md#personal-typescript-plugins) are discove
 
 The project file applies only `appearance.theme`, `interaction.autocompleteAccept`, `runtime.piPath`, `runtime.nodePath`, `runtime.copilotPath`, and `runtime.codexPath`. Earlier project entries for `appearance.zoom` and `appearance.autoFollowAfterSending` are ignored; their bytes/comments are preserved on unrelated saves, never copied into global preferences, and you can remove those obsolete entries manually. Other unsupported project keys still report a configuration error. Nimrod creates it only on an explicit override save, not when opening a project or Settings. There is no ancestor-directory discovery: the canonical project directory is the only project scope. You can choose whether to version-control `.nimrod/settings.json`; imported theme IDs refer to your global theme library.
 
-Omitted project keys inherit global settings; omitted global keys use defaults or runtime discovery. Imported themes live in `appearance.importedThemes`; [keybinding overrides](keybindings.md#configuration-file) live in `keybindings`. Pi's settings remain Pi-owned. [Drafts](drafts.md) use separate Rust-managed per-session files with debounced asynchronous saves; legacy webview drafts are ignored without migration.
+Omitted project keys inherit global settings; omitted global keys use built-in defaults. Imported themes live in `appearance.importedThemes`; [keybinding overrides](keybindings.md#configuration-file) live in `keybindings`. Pi's settings remain Pi-owned. [Drafts](drafts.md) use separate Rust-managed per-session files with debounced asynchronous saves; legacy webview drafts are ignored without migration.
 
 Valid external edits update open windows. Invalid files keep the last valid values and show an error in the shared notice strip; correcting the file clears it. UI saves preserve comments and unrelated keys, refuse malformed files and report detected conflicts rather than silently retrying. External editors aren't locked.
 

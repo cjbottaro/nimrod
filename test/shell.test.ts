@@ -262,7 +262,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       if (command === 'pi_runtime_available') return options.runtimeAvailable?.('pi') ?? true;
       if (command === 'copilot_runtime_available') return options.runtimeAvailable?.('copilot') ?? true;
       if (command === 'codex_runtime_available') return options.runtimeAvailable?.('codex') ?? true;
-      if (command === 'runtime_defaults') { await options.runtimeDefaultsGate; return { cwd: '/project', pi: '/bin/pi', node: '/bin/node', home: options.homeDirectory }; }
+      if (command === 'runtime_defaults') { await options.runtimeDefaultsGate; return { cwd: '/project', pi: 'pi', node: 'node', home: options.homeDirectory }; }
       if (command === 'window_workspace') {
         await options.windowWorkspaceGate;
         if (options.windowWorkspaceError) throw new Error(options.windowWorkspaceError);
@@ -4540,7 +4540,7 @@ test('reload reaps only the selected child and resumes the exact file in the sam
     f.element<HTMLButtonElement>('reload-session').click(); await f.tick(); await f.tick();
     const launches = f.calls.filter(c => c.command === 'start_pi');
     assert.equal(launches.length, 3);
-    assert.deepEqual({ ...(launches[2].args.config as JsonRecord) }, { cwd: '/project', pi: '/bin/pi', node: '/bin/node', mode: 'resume', sessionName: undefined, sessionFile: '/sessions/new-1.jsonl', sessionId: 'fixture-id' });
+    assert.deepEqual({ ...(launches[2].args.config as JsonRecord) }, { cwd: '/project', pi: 'pi', node: 'node', mode: 'resume', sessionName: undefined, sessionFile: '/sessions/new-1.jsonl', sessionId: 'fixture-id' });
     assert.notEqual(launches[2].args.token, oldToken);
     assert.deepEqual(f.calls.filter(c => c.command === 'stop_pi' && c.args.token).map(c => c.args.token), [oldToken]);
     assert.ok(f.calls.findIndex(c => c.command === 'stop_pi' && c.args.token === oldToken) < f.calls.indexOf(launches[2]));
@@ -5366,7 +5366,7 @@ test('native persistence never delays a steer, and finishing a flush after Stop 
   } finally { release(); f.dom.window.close(); }
 });
 
-test('cold Settings reveals after appearance/tint/zoom but never waits for runtime discovery', async () => {
+test('cold Settings reveals after appearance/tint/zoom but never waits for Runtime defaults', async () => {
   let releaseAppearance!: () => void, releaseTitlebar!: () => void, releaseRuntime!: () => void;
   const appearanceGate = new Promise<void>(resolve => { releaseAppearance = resolve; });
   const titlebarGate = new Promise<void>(resolve => { releaseTitlebar = resolve; });
@@ -5456,6 +5456,32 @@ for (const globalSettings of [false, true]) {
       assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
       assert.equal(f.win.document.activeElement, button);
       assert.equal(f.calls.some(call => ['preferences_settings', 'project_preferences_settings', 'start_pi', 'write_pi'].includes(call.command)), false);
+    } finally { f.win.close(); }
+  });
+}
+
+for (const globalSettings of [false, true]) {
+  test(`Runtime defaults stay command names without persisting discovered paths (${globalSettings ? 'global' : 'project'})`, async () => {
+    const f = await fixture(undefined, { globalSettings, windowWorkspace: globalSettings ? undefined : '/project' });
+    try {
+      if (!globalSettings) f.openSettings();
+      for (const key of ['pi', 'node', 'copilot', 'codex']) {
+        const field = f.element<HTMLInputElement>(key + '-path');
+        assert.equal(field.value, globalSettings ? key : '');
+        assert.equal(field.placeholder, globalSettings ? '' : key);
+      }
+      const source = globalSettings ? f.preferences.value.text : f.preferences.value.projectText ?? '{}';
+      for (const key of ['runtime.piPath', 'runtime.nodePath', 'runtime.copilotPath', 'runtime.codexPath']) {
+        assert.equal(parseSettings(source)[key], undefined);
+      }
+      f.preferences.external('{"runtime.nodePath":"/configured/node"}'); await f.tick();
+      const node = f.element<HTMLInputElement>('node-path');
+      assert.equal(globalSettings ? node.value : node.placeholder, '/configured/node');
+      if (!globalSettings) {
+        f.preferences.externalProject('{"runtime.nodePath":"/project/node"}'); await f.tick();
+        assert.equal(node.value, '/project/node');
+        assert.equal(node.placeholder, '/configured/node');
+      }
     } finally { f.win.close(); }
   });
 }
