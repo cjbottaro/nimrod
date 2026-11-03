@@ -13,7 +13,7 @@ function fixture(options: { save?: () => Promise<void>; clear?: () => Promise<vo
   const effective = (): RuntimePaths => ({ ...inherited, ...overrides });
   const writes: { key: RuntimeField; value?: string }[] = [];
   const errors = new Map<RuntimeField | undefined, string>();
-  const runtime = installRuntimeSettings({ form: get('runtime-settings'), fields: get('runtime-fields'), pi: get('pi-path'), node: get('node-path'), copilot: get('copilot-path'), codex: get('codex-path'), status: get('runtime-status') }, {
+  const runtime = installRuntimeSettings({ form: get('runtime-settings'), fields: get('runtime-fields'), pi: get('pi-path'), node: get('node-path'), copilot: get<HTMLInputElement>('copilot-path'), codex: get<HTMLInputElement>('codex-path'), status: get('runtime-status') }, {
     read: () => ({ version: 1, ...effective() }),
     save: async (paths, fields) => {
       const key = fields[0]; writes.push({ key, value: paths[key] });
