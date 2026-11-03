@@ -5,7 +5,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { installApplicationNotices } from './application-notices';
 import { installPreferences, type ProjectSettingKey } from './preferences';
-import { installSettings, installRuntimeSettings } from './settings';
+import { installSettings, installRuntimeSettings, type RuntimeField } from './settings';
 import { installSettingsNavigation } from './settings-navigation';
 import { installSidebarResize } from './sidebar-resize';
 import { installKeybindingEditor } from './keybinding-editor';
@@ -75,6 +75,13 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     defaultWidth: () => 220, maxAvailableWidth: available => Math.min(available * .45, Math.max(0, available - 240)),
     active: () => settings.isOpen, allowedDialog: required<HTMLDialogElement>('settings-page'),
   });
+  const runtimeKeys: Record<RuntimeField, ProjectSettingKey> = { pi: 'runtime.piPath', node: 'runtime.nodePath', copilot: 'runtime.copilotPath', codex: 'runtime.codexPath' };
+  required('runtime-inheritance-hint').hidden = global;
+  if (!global) for (const id of ['pi-path', 'node-path', 'copilot-path', 'codex-path']) {
+    const field = required<HTMLInputElement>(id);
+    field.required = false;
+    field.setAttribute('aria-describedby', 'runtime-inheritance-hint');
+  }
   let runtimeDefaults: { pi: string; node: string } | undefined;
   const runtime = installRuntimeSettings({
     form: required<HTMLFormElement>('runtime-settings'), fields: required<HTMLFieldSetElement>('runtime-fields'),
@@ -84,6 +91,14 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     save: async (paths, fields) => {
       await preferences.saveRuntime(paths, fields);
       return preferences.runtime(runtimeDefaults ?? paths);
+    },
+    project: global ? undefined : {
+      overridden: key => preferences.isOverridden(runtimeKeys[key]),
+      inherited: () => preferences.runtime(runtimeDefaults!, 'global'),
+      clear: async key => {
+        await preferences.useGlobal(runtimeKeys[key]);
+        return preferences.runtime(runtimeDefaults!);
+      },
     },
     error: (message, field) => feedback(field ? 'runtime:' + field : 'runtime', 'Save runtime paths')(message),
   });
@@ -413,12 +428,8 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     const controls: [ProjectSettingKey, string][] = [
       ['appearance.theme', 'theme-picker'],
       ['interaction.autocompleteAccept', 'autocomplete-accept'],
-      ['runtime.piPath', 'pi-path'], ['runtime.nodePath', 'node-path'],
-      ['runtime.copilotPath', 'copilot-path'], ['runtime.codexPath', 'codex-path'],
     ];
-    const editVersions = new Map<string, number>();
     for (const [key, id] of controls) {
-      if (key.startsWith('runtime.')) required(id).addEventListener('input', () => editVersions.set(id, (editVersions.get(id) ?? 0) + 1));
       const row = document.createElement('div'); row.className = 'settings-source';
       const status = document.createElement('span'); status.id = id + '-source';
       const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'settings-reset secondary'; reset.textContent = 'Remove override';
@@ -426,15 +437,10 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
       required(id).setAttribute('aria-describedby', [required(id).getAttribute('aria-describedby'), status.id].filter(Boolean).join(' '));
       row.append(status, reset); required(id).after(row); sources.set(key, { status, reset });
       reset.addEventListener('click', () => {
-        const version = editVersions.get(id);
         const restoreFocus = document.activeElement === reset;
         reset.disabled = true;
         void preferences.useGlobal(key).then(() => {
           if (unloading) return;
-          if (key.startsWith('runtime.')) {
-            runtime.reload();
-            if (editVersions.get(id) === version) runtime.resetField(key === 'runtime.piPath' ? 'pi' : key === 'runtime.nodePath' ? 'node' : key === 'runtime.copilotPath' ? 'copilot' : 'codex');
-          }
           const nested = [...document.querySelectorAll('dialog[open], #dialog.open')].some(dialog => dialog !== required('settings-page'));
           if (restoreFocus && settings.isOpen && !nested && !required(id).closest<HTMLElement>('.settings-panel')?.hidden && (document.activeElement === reset || document.activeElement === document.body)) required(id).focus({ preventScroll: true });
           feedback('settings-reset', 'Remove override')();

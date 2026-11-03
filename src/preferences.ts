@@ -213,7 +213,10 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
     isOverridden(key: ProjectSettingKey) { return Object.hasOwn(projectSettings, key); },
     useGlobal(key: ProjectSettingKey) { return patch({ [key]: undefined }, true); },
     subscribe(callback: () => void) { subscribers.add(callback); return () => { subscribers.delete(callback); }; },
-    runtime(defaults: { pi: string; node: string; copilot?: string; codex?: string }) { return { version: 1 as const, pi: settings['runtime.piPath'] as string ?? defaults.pi, node: settings['runtime.nodePath'] as string ?? defaults.node, copilot: settings['runtime.copilotPath'] as string ?? defaults.copilot ?? 'copilot', codex: settings['runtime.codexPath'] as string ?? defaults.codex ?? 'codex' }; },
+    runtime(defaults: { pi: string; node: string; copilot?: string; codex?: string }, scope: 'effective' | 'global' = 'effective') {
+      const values = scope === 'global' ? globalSettings : settings;
+      return { version: 1 as const, pi: values['runtime.piPath'] as string ?? defaults.pi, node: values['runtime.nodePath'] as string ?? defaults.node, copilot: values['runtime.copilotPath'] as string ?? defaults.copilot ?? 'copilot', codex: values['runtime.codexPath'] as string ?? defaults.codex ?? 'codex' };
+    },
     saveRuntime(paths: { pi: string; node: string; copilot?: string; codex?: string }, fields: ('pi' | 'node' | 'copilot' | 'codex')[] = ['pi', 'node', ...(paths.copilot === undefined ? [] : ['copilot' as const]), ...(paths.codex === undefined ? [] : ['codex' as const])]) {
       return patch(Object.fromEntries(fields.map(key => [key === 'pi' ? 'runtime.piPath' : key === 'node' ? 'runtime.nodePath' : key === 'copilot' ? 'runtime.copilotPath' : 'runtime.codexPath', paths[key]])));
     },

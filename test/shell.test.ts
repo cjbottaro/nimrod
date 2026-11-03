@@ -5493,21 +5493,26 @@ for (const globalSettings of [false, true]) {
       assert.equal(f.element('settings-project-file').hidden, globalSettings);
       assert.equal(f.element('settings-state-file').hidden, !globalSettings);
       assert.equal(f.element('settings-file-path').textContent, f.preferences.value.settingsPath);
+      assert.equal(f.element('runtime-inheritance-hint').hidden, globalSettings);
+      if (globalSettings) assert.equal(f.element<HTMLInputElement>('pi-path').required, true);
       if (!globalSettings) {
         assert.match(f.element('settings-scope-description').textContent!, /only to project and override Global Settings/);
         assert.equal(f.element('settings-global-link').textContent, 'Global Settings…');
         assert.equal(f.element('project-settings-file-path').textContent, '.nimrod/settings.json');
         assert.equal(f.element('project-settings-file-path').title, f.preferences.value.projectPath);
-        assert.equal(f.element('pi-path-source').textContent, 'Inherited');
-        assert.equal(f.element('pi-path-source').nextElementSibling!.hasAttribute('hidden'), true);
+        const pi = f.element<HTMLInputElement>('pi-path');
+        assert.equal(pi.value, '');
+        assert.ok(pi.placeholder);
+        assert.equal(pi.required, false);
+        assert.equal(f.win.document.getElementById('pi-path-source'), null);
         // Presence, not equality with a global value, is the override source.
         f.preferences.external('{"runtime.piPath":"/same/pi"}');
         f.preferences.externalProject('{"runtime.piPath":"/same/pi"}'); await f.tick();
-        assert.equal(f.element('pi-path-source').textContent, 'Project override');
-        const reset = f.element('pi-path-source').nextElementSibling as HTMLButtonElement;
-        assert.equal(reset.textContent, 'Remove override'); assert.equal(reset.hidden, false);
-        reset.click(); await f.tick();
-        assert.equal(f.element('pi-path-source').textContent, 'Inherited');
+        assert.equal(pi.value, '/same/pi');
+        pi.value = ''; pi.dispatchEvent(new f.win.Event('input', { bubbles: true }));
+        pi.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        await f.tick();
+        assert.equal(pi.value, ''); assert.equal(pi.placeholder, '/same/pi');
         assert.equal(parseSettings(f.preferences.value.projectText!)['runtime.piPath'], undefined);
       }
       const writes = f.calls.filter(call => ['preferences_settings', 'project_preferences_settings'].includes(call.command)).length;

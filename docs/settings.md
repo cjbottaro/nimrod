@@ -8,7 +8,7 @@ Pi keeps running. Project settings preserves your draft, conversation and readin
 
 ## Global defaults and project overrides
 
-Project settings shows effective values, not a second independent configuration. **Inherited** means the project follows the global value (or the built-in default/runtime discovery when omitted globally). Changing a control creates a **Project override**. **Remove override** removes that override and immediately follows the current global value again—it does not copy that value into the project file.
+Project settings shows effective values, not a second independent configuration. **Inherited** means the project follows the global value (or the built-in default/runtime discovery when omitted globally). Choosing a theme/autocomplete value or entering a Runtime path creates a **Project override**. For theme and autocomplete, **Remove override** removes that override and immediately follows the current global value again—it does not copy that value into the project file.
 
 Overrides stay explicit even if they match the global value. Global edits update inheriting projects, but never replace explicit project values. Global Settings defines defaults only; inspect and reset overrides in the owning project's settings.
 
@@ -25,7 +25,7 @@ These are the complete set of six project-overridable Nimrod preferences, stored
 | Runtime | Copilot CLI executable | `runtime.copilotPath` | On the next Copilot session launch |
 | Runtime | Codex CLI executable | `runtime.codexPath` | On the next Codex session launch |
 
-Omitted keys inherit global settings, then built-in defaults or runtime discovery. Runtime fields save individually when changed and left, or when you press Enter; saving never restarts an existing session. Every supported field shows its source and offers **Remove override** when overridden.
+Omitted keys inherit global settings, then built-in defaults or runtime discovery. Runtime fields save individually when changed and left, or when you press Enter; saving never restarts an existing session. Theme and autocomplete show their source and offer **Remove override** when overridden. Project Runtime fields use empty inputs with inherited values as placeholders instead of source labels and reset buttons.
 
 **Typography, translucency, zoom, modal animations and auto-follow after sending are global-only**, along with notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration. Project settings contains the theme picker under Appearance, autocomplete acceptance under Interaction and runtime paths under Runtime. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
 
@@ -116,11 +116,13 @@ Search actions, record shortcuts, resolve conflicts explicitly, remove bindings 
 
 Pi and Node paths are discovered automatically; override them here if needed.
 
+In **Project settings**, leave a Runtime field **blank** to inherit from Global Settings (or runtime discovery/app defaults when omitted globally). Its effective inherited path is shown as muted placeholder text, not saved input text. An explicit project override appears as actual text—even when it matches the global value. Clearing the field and leaving it or pressing Enter deletes only that project key; the placeholder follows subsequent global changes. No override is created by simply focusing or leaving an untouched blank field. **Global Settings** retains filled Runtime inputs and requires nonempty executable names/paths.
+
 Nimrod checks harness executables at startup. Harnesses it cannot find are omitted from creation and saved-history actions, without errors from unrelated harnesses. Existing sidebar sessions and drafts remain, but their harness-dependent actions are hidden; you can still close or pin those rows. **Restart Nimrod after installing or uninstalling a harness, or after correcting a path for a harness that was unavailable at startup.** Refreshing history does not recheck installed harnesses. This check does not verify authentication or CLI compatibility.
 
 1. Wait for initial detection.
 2. Edit executable names or paths.
-3. Leave the edited field or press Enter to save it automatically. Each field saves independently; in Project settings, untouched fields keep inheriting.
+3. Leave the edited field or press Enter to save it automatically. Each field saves independently; in Project settings, untouched fields keep inheriting. Clear a project Runtime field to remove its override.
 4. Start a new session to use the saved paths.
 
 Saving never changes an already-running process. Typing does not save every keystroke, and an unfinished or invalid field does not block saving another field. Invalid values and failed writes retain the last saved launch path and your typed text, with an error in the application notice strip; edit the affected field to try again. External settings edits update saved launch paths without replacing unfinished edits. Pending saves never disable the form or overwrite newer typing. Unsaved text is not retained across app restart.

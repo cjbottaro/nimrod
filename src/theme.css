@@ -129,6 +129,7 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
   .settings-group-footer { padding:12px 14px; }
 }
 #runtime-fields { min-width:0; margin:0; padding:0; border:0; }
+#runtime-fields input::placeholder { color:var(--vscode-descriptionForeground); opacity:1; }
 #runtime-status { min-height:1.5em; font-size:12px; line-height:1.5; }
 #theme-current { display:block; margin-top:6px; overflow-wrap:anywhere; }
 #theme-library-actions { display:flex; flex-wrap:wrap; gap:8px; }

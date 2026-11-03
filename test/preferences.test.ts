@@ -512,6 +512,14 @@ test('project overrides merge over global defaults and reset removes keys rather
     await p.saveRuntime({ pi: '/project/pi', node: '/new/node' }, ['pi']);
     assert.deepEqual(p.runtime({ pi: 'pi', node: 'node' }), { version: 1, pi: '/project/pi', node: '/new/node', copilot: 'copilot' });
     assert.equal(p.isOverridden('runtime.nodePath'), false);
+    assert.equal(p.runtime({ pi: 'discovered-pi', node: 'discovered-node' }, 'global').pi, 'discovered-pi');
+    assert.equal(p.runtime({ pi: 'discovered-pi', node: 'discovered-node' }, 'global').node, '/new/node');
+    const globalText = f.host.value.text;
+    await p.useGlobal('runtime.piPath');
+    assert.equal(p.isOverridden('runtime.piPath'), false);
+    assert.equal(p.runtime({ pi: 'discovered-pi', node: 'discovered-node' }).pi, 'discovered-pi');
+    assert.equal(f.host.value.text, globalText, 'clearing a project runtime field never edits globals');
+    assert.equal(parseSettings(f.host.value.projectText!)['runtime.piPath'], undefined);
     await p.useGlobal('appearance.theme');
     assert.equal(p.theme().selected, 'tokyo-night'); assert.equal(p.isOverridden('appearance.theme'), false);
     assert.match(f.host.value.projectText!, /Project/); assert.match(f.host.value.text, /Global/);

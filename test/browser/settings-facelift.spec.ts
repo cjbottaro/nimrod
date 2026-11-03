@@ -75,7 +75,10 @@ test('project provenance stays with its compact field and global-only groups sta
       await expect(page.locator(`#${id}`)).toBeHidden();
     }
     await page.locator('#settings-category-runtime').click();
-    await expect(page.locator('#pi-path').locator('..').locator('.settings-source')).toContainText('Inherited');
+    await expect(page.locator('#pi-path').locator('..').locator('.settings-source')).toHaveCount(0);
+    await expect(page.locator('#pi-path')).toHaveValue('');
+    await expect(page.locator('#pi-path')).toHaveAttribute('placeholder', /.+/);
+    await expect(page.locator('#runtime-inheritance-hint')).toContainText('Leave blank');
     await page.locator('#pi-path').fill('/unsaved/pi');
     await page.locator('#settings-category-appearance').click();
     await page.locator('#settings-category-runtime').click();
