@@ -46,7 +46,7 @@
 
   <!-- Full-window page in the native dialog top layer: the workspace stays laid out and mounted. -->
   <dialog id="settings-page" aria-labelledby="settings-title">
-    <header class="settings-header"><button id="settings-back" type="button" class="secondary" title="Back · Escape">← Back</button><div class="settings-heading"><h1 id="settings-title">Project settings</h1><p id="settings-scope-description" class="settings-hint">Uses global settings unless overridden here.</p></div><button id="settings-global-link" type="button" class="secondary">Open global settings</button></header>
+    <header class="settings-header"><button id="settings-back" type="button" class="secondary" title="Back · Escape">← Back</button><div class="settings-heading"><h1 id="settings-title">Project settings</h1><p id="settings-scope-description" class="settings-hint">Changes here apply only to this project and override Global Settings.</p></div><button id="settings-global-link" type="button" class="secondary">Global Settings…</button></header>
     <div id="settings-layout" class="sidebar-layout">
       <aside id="settings-sidebar" class="layout-sidebar" aria-label="Settings categories">
         <div id="settings-categories" role="tablist" aria-label="Settings categories" aria-orientation="vertical">
@@ -63,6 +63,7 @@
       <p id="preferences-error" role="alert" hidden></p>
       <p id="card-plugin-status" role="status"></p>
       <p id="card-plugin-error" role="alert" hidden></p>
+      <p id="settings-project-inheritance" class="settings-hint" hidden>Inherited values come from Global Settings or app defaults and follow global changes. Edit a field to override it for this project.</p>
       <section id="settings-panel-appearance" class="settings-panel" data-category="appearance" role="tabpanel" aria-labelledby="settings-category-appearance" tabindex="0">
         <h2 id="appearance-title">Appearance</h2><p class="settings-description">Make yourself at home. Changes apply immediately.</p>
         <h3 class="settings-section-title">Window</h3>
@@ -176,7 +177,25 @@ console.log(greeting); // 0123456789</code></pre>
       <section id="settings-panel-runtime" class="settings-panel" data-category="runtime" role="tabpanel" aria-labelledby="settings-category-runtime" tabindex="0" hidden>
         <h2 id="runtime-title">Runtime</h2>
         <p class="settings-description">Executable paths for the next session. Running sessions stay untouched.</p>
-        <details class="settings-help settings-runtime-files"><summary>Settings files</summary><p class="settings-hint">Settings file: <code id="settings-file-path"></code><br>App-managed state: <code id="state-file-path"></code><br>Valid file edits synchronize automatically across windows.</p></details>
+        <details class="settings-help settings-runtime-files">
+          <summary>Settings files</summary>
+          <div class="settings-files">
+            <div id="settings-project-file" class="settings-file" hidden>
+              <div class="settings-file-content"><h4>Project settings</h4><p id="project-settings-file-path" class="settings-file-path">.nimrod/settings.json</p><p class="settings-hint">Overrides for this project. Created when you first save an override.</p></div>
+              <button id="copy-project-settings-path" type="button" class="secondary" aria-label="Copy project settings path">Copy path</button>
+            </div>
+            <div class="settings-file">
+              <div class="settings-file-content"><h4>Global settings</h4><p id="settings-file-path" class="settings-file-path"></p><p class="settings-hint">Defaults for all projects. Project overrides take precedence.</p></div>
+              <button id="copy-global-settings-path" type="button" class="secondary" aria-label="Copy global settings path">Copy path</button>
+            </div>
+            <div id="settings-state-file" class="settings-file">
+              <div class="settings-file-content"><h4>App-managed state</h4><p id="state-file-path" class="settings-file-path"></p><p class="settings-hint">Window layout and other app bookkeeping, not editable settings.</p></div>
+              <button id="copy-state-path" type="button" class="secondary" aria-label="Copy app-managed state path">Copy path</button>
+            </div>
+          </div>
+          <p class="settings-hint">Valid settings-file edits synchronize automatically across windows.</p>
+          <p id="settings-file-copy-status" class="settings-hint" role="status"></p>
+        </details>
         <form id="runtime-settings">
           <fieldset id="runtime-fields" disabled>
             <div class="settings-group">

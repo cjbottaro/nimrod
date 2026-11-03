@@ -15,7 +15,7 @@ test('project provenance and global defaults reconcile across independent Settin
     await expect(page.locator('#settings-zoom')).toBeHidden();
     await expect(page.locator('#settings-send-auto-follow')).toBeHidden();
     await expect(page.locator('.settings-source')).toHaveCount(6);
-    await expect(page.locator('#theme-picker-source')).toHaveText('Global default');
+    await expect(page.locator('#theme-picker-source')).toHaveText('Inherited');
     await page.locator('#theme-picker').click();
     await page.locator('#palette-list [data-key="dracula"]').click();
     await expect(page.locator('#command-palette')).not.toBeVisible();
@@ -40,9 +40,9 @@ test('project provenance and global defaults reconcile across independent Settin
     await expect(settingsPage.locator('#settings-page')).toBeVisible();
     await expect(page.locator('#theme-picker')).toHaveAttribute('data-theme', 'dracula');
     await page.bringToFront();
-    await page.getByRole('button', { name: 'Use global default for Color theme', exact: true }).click();
+    await page.getByRole('button', { name: 'Remove override for Color theme', exact: true }).click();
     await expect(page.locator('#theme-picker')).toHaveAttribute('data-theme', 'tokyo-night');
-    await expect(page.locator('#theme-picker-source')).toHaveText('Global default');
+    await expect(page.locator('#theme-picker-source')).toHaveText('Inherited');
     await expect(settingsPage.locator('.settings-project-overrides, .settings-project-links')).toHaveCount(0);
     await fixture.editPreferences('{"appearance.theme":"osaka-jade"}');
     await expect(page.locator('#theme-picker')).toHaveAttribute('data-theme', 'osaka-jade');
@@ -50,14 +50,14 @@ test('project provenance and global defaults reconcile across independent Settin
     await settingsPage.locator('#autocomplete-accept').selectOption('tabOrEnter');
     await page.locator('#settings-category-interaction').click();
     await expect(page.locator('#autocomplete-accept')).toHaveValue('tabOrEnter');
-    await expect(page.locator('#autocomplete-accept-source')).toHaveText('Global default');
+    await expect(page.locator('#autocomplete-accept-source')).toHaveText('Inherited');
     await page.locator('#autocomplete-accept').selectOption('tabOrEnter');
     await expect(page.locator('#autocomplete-accept-source')).toHaveText('Project override');
     await settingsPage.locator('#autocomplete-accept').selectOption('tab');
     await expect(page.locator('#autocomplete-accept')).toHaveValue('tabOrEnter');
-    await page.getByRole('button', { name: 'Use global default for Accept autocomplete with', exact: true }).click();
+    await page.getByRole('button', { name: 'Remove override for Accept autocomplete with', exact: true }).click();
     await expect(page.locator('#autocomplete-accept')).toHaveValue('tab');
-    await expect(page.locator('#autocomplete-accept-source')).toHaveText('Global default');
+    await expect(page.locator('#autocomplete-accept-source')).toHaveText('Inherited');
     await page.locator('#settings-back').click();
     await expect(prompt).toHaveValue('Keep my draft');
     expect(fixture.calls.filter(call => call.command === 'start_pi')).toHaveLength(starts);

@@ -5426,7 +5426,7 @@ test('autocomplete Settings has global defaults, project provenance and reset wi
       if (!globalSettings) {
         assert.equal(f.element('autocomplete-accept-source').textContent, 'Project override');
         picker.nextElementSibling!.querySelector<HTMLButtonElement>('button')!.click(); await f.tick(); await f.tick();
-        assert.equal(picker.value, 'tab'); assert.equal(f.element('autocomplete-accept-source').textContent, 'Global default');
+        assert.equal(picker.value, 'tab'); assert.equal(f.element('autocomplete-accept-source').textContent, 'Inherited');
         assert.equal(parseSettings(f.preferences.value.projectText!)['interaction.autocompleteAccept'], undefined);
       }
       assert.equal(f.calls.some(call => ['start_pi', 'start_copilot', 'write_pi', 'write_copilot'].includes(call.command)), false);
@@ -5482,6 +5482,53 @@ test('global Settings boots without any project services', async () => {
   } finally { f.win.close(); }
 });
 
+for (const globalSettings of [false, true]) {
+  test(`Settings files disclose scope and copy native paths (${globalSettings ? 'global' : 'project'})`, async () => {
+    const control = { after: [] as (() => void)[], copyError: '' };
+    const f = await fixture(undefined, { globalSettings, windowWorkspace: globalSettings ? undefined : '/project', performanceControl: control });
+    try {
+      if (!globalSettings) f.openSettings();
+      assert.equal(f.element('settings-project-inheritance').hidden, globalSettings);
+      assert.equal(f.element('card-plugin-status').hidden, !globalSettings);
+      assert.equal(f.element('settings-project-file').hidden, globalSettings);
+      assert.equal(f.element('settings-state-file').hidden, !globalSettings);
+      assert.equal(f.element('settings-file-path').textContent, f.preferences.value.settingsPath);
+      if (!globalSettings) {
+        assert.match(f.element('settings-scope-description').textContent!, /only to project and override Global Settings/);
+        assert.equal(f.element('settings-global-link').textContent, 'Global Settings…');
+        assert.equal(f.element('project-settings-file-path').textContent, '.nimrod/settings.json');
+        assert.equal(f.element('project-settings-file-path').title, f.preferences.value.projectPath);
+        assert.equal(f.element('pi-path-source').textContent, 'Inherited');
+        assert.equal(f.element('pi-path-source').nextElementSibling!.hasAttribute('hidden'), true);
+        // Presence, not equality with a global value, is the override source.
+        f.preferences.external('{"runtime.piPath":"/same/pi"}');
+        f.preferences.externalProject('{"runtime.piPath":"/same/pi"}'); await f.tick();
+        assert.equal(f.element('pi-path-source').textContent, 'Project override');
+        const reset = f.element('pi-path-source').nextElementSibling as HTMLButtonElement;
+        assert.equal(reset.textContent, 'Remove override'); assert.equal(reset.hidden, false);
+        reset.click(); await f.tick();
+        assert.equal(f.element('pi-path-source').textContent, 'Inherited');
+        assert.equal(parseSettings(f.preferences.value.projectText!)['runtime.piPath'], undefined);
+      }
+      const writes = f.calls.filter(call => ['preferences_settings', 'project_preferences_settings'].includes(call.command)).length;
+      const copies = [
+        ['copy-global-settings-path', f.preferences.value.settingsPath],
+        globalSettings ? ['copy-state-path', f.preferences.value.statePath] : ['copy-project-settings-path', f.preferences.value.projectPath],
+      ];
+      for (const [id, expected] of copies) {
+        f.element<HTMLButtonElement>(id!).click(); await f.tick();
+        assert.equal(f.calls.filter(call => call.command === 'plugin:clipboard-manager|write_text').at(-1)!.args.text, expected);
+        assert.match(f.element('settings-file-copy-status').textContent!, /Copied/);
+      }
+      control.copyError = 'fixture clipboard unavailable';
+      f.element<HTMLButtonElement>('copy-global-settings-path').click(); await f.tick();
+      assert.match(f.element('application-notices').textContent!, /Copy settings path.*fixture clipboard unavailable/);
+      assert.equal(f.element('settings-file-copy-status').textContent, '');
+      assert.equal(f.calls.filter(call => ['preferences_settings', 'project_preferences_settings'].includes(call.command)).length, writes);
+    } finally { f.win.close(); }
+  });
+}
+
 test('project settings routes scope shortcuts and removes overrides rather than copying defaults', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   try {
@@ -5493,7 +5540,7 @@ test('project settings routes scope shortcuts and removes overrides rather than 
     assert.equal(f.element<HTMLDialogElement>('settings-page').open, true);
     assert.match(f.element('settings-title').textContent!, /Project settings — project/);
     const picker = f.element<HTMLButtonElement>('theme-picker');
-    assert.equal(f.element('theme-picker-source').textContent, 'Global default');
+    assert.equal(f.element('theme-picker-source').textContent, 'Inherited');
     assert.equal(f.element('theme-library-actions').hidden, true);
     picker.click();
     f.element<HTMLElement>('palette-list').querySelector<HTMLElement>('[data-key="dracula"]')!.click(); await f.tick();
@@ -5502,7 +5549,7 @@ test('project settings routes scope shortcuts and removes overrides rather than 
     assert.equal(picker.dataset.theme, 'dracula');
     picker.nextElementSibling!.querySelector<HTMLButtonElement>('button')!.click(); await f.tick();
     assert.equal(picker.dataset.theme, 'tokyo-night');
-    assert.equal(f.element('theme-picker-source').textContent, 'Global default');
+    assert.equal(f.element('theme-picker-source').textContent, 'Inherited');
     assert.equal(JSON.parse(f.preferences.value.projectText!)['appearance.theme'], undefined);
     assert.equal(f.calls.some(call => call.command === 'start_pi' || call.command === 'write_pi'), false);
   } finally { f.win.close(); }

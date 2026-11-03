@@ -33,7 +33,7 @@ remain usable; the old Gogh discovery/download feature is no longer present.
 
 ## Built-in themes
 
-Open **global Settings** using **⌘/Ctrl ,** or the native **Settings…** menu item, then click **Change theme…** under **Appearance**. Global selections apply to projects without theme overrides. The Project bar gear / **⌘/Ctrl+Shift+,** opens Project settings, where you can select a project override from the same library or **Use global default**. Imports and removal are global-only:
+Open **global Settings** using **⌘/Ctrl ,** or the native **Settings…** menu item, then click **Change theme…** under **Appearance**. Global selections apply to projects without theme overrides. The Project bar gear / **⌘/Ctrl+Shift+,** opens Project settings, where you can select a project override from the same library or **Remove override**. Imports and removal are global-only:
 
 - **Nimrod (system)** — the app's custom Nimrod scheme; follows macOS/Windows/Linux light/dark appearance. This remains the default.
 - **Dracula** — a dark adaptation of [Dracula's official palette](https://draculatheme.com/), including purple accents, pink keywords, yellow strings, and green functions. It stays dark even when the OS is light. Attribution and license are in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).

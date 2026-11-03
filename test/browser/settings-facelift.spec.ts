@@ -35,17 +35,47 @@ for (const width of [1440, 800, 480]) {
   });
 }
 
+for (const width of [1440, 800, 480]) {
+  test(`project scope and Settings files stay compact at ${width}px`, async ({ page }) => {
+    const fixture = await demoFixture(page);
+    try {
+      await page.setViewportSize({ width, height: 760 });
+      await page.locator('#open-settings').click();
+      await expect(page.locator('#settings-scope-description')).toContainText('override Global Settings');
+      await expect(page.locator('#settings-project-inheritance')).toContainText('Inherited values');
+      await expect(page.locator('#card-plugin-status')).toBeHidden();
+      await page.locator('#settings-category-runtime').click();
+      await page.locator('.settings-runtime-files summary').click();
+      await expect(page.locator('#settings-project-file')).toBeVisible();
+      await expect(page.locator('#project-settings-file-path')).toHaveText('.nimrod/settings.json');
+      await expect(page.locator('#settings-state-file')).toBeHidden();
+      await expect(page.locator('#settings-file-path')).not.toBeEmpty();
+      const calls = fixture.calls.length;
+      await page.locator('#copy-project-settings-path').click();
+      await expect(page.locator('#settings-file-copy-status')).toHaveText('Copied project settings path.');
+      expect(fixture.calls.slice(calls).filter(call => call.command === 'plugin:clipboard-manager|write_text')).toHaveLength(1);
+      const panel = page.locator('#settings-panel-runtime');
+      expect(await panel.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+      expect(await page.locator('.settings-header').evaluate(node => (node as HTMLElement).offsetHeight)).toBe(48);
+      await page.locator('#settings-category-appearance').click();
+      await page.locator('#settings-category-runtime').click();
+      await expect(page.locator('.settings-runtime-files')).toHaveAttribute('open', '');
+      expect(fixture.errors).toEqual([]);
+    } finally { await fixture.close(); }
+  });
+}
+
 test('project provenance stays with its compact field and global-only groups stay hidden', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {
     await page.locator('#open-settings').click();
     await expect(page.locator('#theme-hint')).toContainText('this project');
-    await expect(page.locator('#theme-picker').locator('..').locator('.settings-source')).toContainText('Global default');
+    await expect(page.locator('#theme-picker').locator('..').locator('.settings-source')).toContainText('Inherited');
     for (const id of ['settings-translucency', 'settings-typography', 'settings-zoom', 'settings-modal-animation', 'settings-send-auto-follow']) {
       await expect(page.locator(`#${id}`)).toBeHidden();
     }
     await page.locator('#settings-category-runtime').click();
-    await expect(page.locator('#pi-path').locator('..').locator('.settings-source')).toContainText('Global default');
+    await expect(page.locator('#pi-path').locator('..').locator('.settings-source')).toContainText('Inherited');
     await page.locator('#pi-path').fill('/unsaved/pi');
     await page.locator('#settings-category-appearance').click();
     await page.locator('#settings-category-runtime').click();

@@ -50,6 +50,10 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     required('settings-send-auto-follow').hidden = true;
     required('settings-modal-animation').hidden = true;
   }
+  required('card-plugin-status').hidden = !global;
+  required('settings-project-inheritance').hidden = global;
+  required('settings-project-file').hidden = global;
+  required('settings-state-file').hidden = !global;
   const settingsNavigation = installSettingsNavigation(required<HTMLDialogElement>('settings-page'));
   const typography = installTypography(document.documentElement, {
     read: () => preferences.typography(),
@@ -417,8 +421,8 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
       if (key.startsWith('runtime.')) required(id).addEventListener('input', () => editVersions.set(id, (editVersions.get(id) ?? 0) + 1));
       const row = document.createElement('div'); row.className = 'settings-source';
       const status = document.createElement('span'); status.id = id + '-source';
-      const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'settings-reset secondary'; reset.textContent = 'Use global default';
-      reset.setAttribute('aria-label', 'Use global default for ' + (document.querySelector('label[for="' + id + '"]')?.textContent ?? id));
+      const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'settings-reset secondary'; reset.textContent = 'Remove override';
+      reset.setAttribute('aria-label', 'Remove override for ' + (document.querySelector('label[for="' + id + '"]')?.textContent ?? id));
       required(id).setAttribute('aria-describedby', [required(id).getAttribute('aria-describedby'), status.id].filter(Boolean).join(' '));
       row.append(status, reset); required(id).after(row); sources.set(key, { status, reset });
       reset.addEventListener('click', () => {
@@ -433,8 +437,8 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
           }
           const nested = [...document.querySelectorAll('dialog[open], #dialog.open')].some(dialog => dialog !== required('settings-page'));
           if (restoreFocus && settings.isOpen && !nested && !required(id).closest<HTMLElement>('.settings-panel')?.hidden && (document.activeElement === reset || document.activeElement === document.body)) required(id).focus({ preventScroll: true });
-          feedback('settings-reset', 'Use global default')();
-        }).catch(error => feedback('settings-reset', 'Use global default')(String(error))).finally(reloadSources);
+          feedback('settings-reset', 'Remove override')();
+        }).catch(error => feedback('settings-reset', 'Remove override')(String(error))).finally(reloadSources);
       });
     }
   }
@@ -443,17 +447,43 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     required('settings-title').textContent = global ? 'Settings' : 'Project settings' + (project ? ' — ' + project.split(/[\\/]/).pop() : '');
     required('settings-scope-description').textContent = global
       ? 'Global defaults for all projects. Project overrides take precedence.'
-      : 'Settings for this project. Uses global settings unless overridden here.';
+      : `Changes here apply only to ${project?.split(/[\\/]/).pop() || 'this project'} and override Global Settings.`;
     required('settings-scope-description').title = project ?? '';
     required('settings-title').title = project ?? 'Global Settings';
-    required('settings-file-path').textContent = global ? preferences.paths.settings : preferences.projectPath ?? '';
+    required('settings-file-path').textContent = preferences.paths.settings;
+    required('project-settings-file-path').title = preferences.projectPath ?? '';
+    required('copy-project-settings-path').title = preferences.projectPath ?? '';
     required('state-file-path').textContent = preferences.paths.state;
     for (const [key, { status, reset }] of sources) {
       const overridden = preferences.isOverridden(key);
-      status.textContent = overridden ? 'Project override' : 'Global default';
+      status.textContent = overridden ? 'Project override' : 'Inherited';
+      status.dataset.source = overridden ? 'project' : 'inherited';
       reset.hidden = !overridden; reset.disabled = false;
     }
   }
+  let copyRevision = 0;
+  const fileCopyBindings = [
+    { id: 'copy-project-settings-path', path: () => preferences.projectPath ?? '', label: 'project settings' },
+    { id: 'copy-global-settings-path', path: () => preferences.paths.settings, label: 'global settings' },
+    { id: 'copy-state-path', path: () => preferences.paths.state, label: 'app-managed state' },
+  ].map(({ id, path, label }) => {
+    const button = required<HTMLButtonElement>(id);
+    const copy = () => {
+      const value = path();
+      if (unloading || !value) return;
+      const revision = ++copyRevision;
+      required('settings-file-copy-status').textContent = '';
+      void writeText(value).then(() => {
+        if (unloading || revision !== copyRevision) return;
+        required('settings-file-copy-status').textContent = `Copied ${label} path.`;
+        feedback('settings-file-copy', 'Copy settings path')();
+      }).catch(error => {
+        if (!unloading && revision === copyRevision) feedback('settings-file-copy', 'Copy settings path')(String(error));
+      });
+    };
+    button.addEventListener('click', copy);
+    return () => button.removeEventListener('click', copy);
+  });
   required('settings-global-link').hidden = global;
   required('settings-global-link').addEventListener('click', () => {
     void invoke('open_global_settings').catch(error => feedback('open-settings', 'Open Settings')(String(error)));
@@ -483,6 +513,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     openKeybindings() { settings.open(); if (settings.isOpen && settingsNavigation.select('keybindings')) keybindingEditor?.focus(); },
     dispose() {
       unloading = true; unsubscribe();
+      fileCopyBindings.forEach(dispose => dispose());
       typography.dispose();
       autocompletePicker.removeEventListener('change', changeAutocomplete);
       required('modal-animation-preview').removeEventListener('click', previewAnimation);

@@ -53,6 +53,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- Project settings makes its scope and global inheritance explicit, with **Inherited** / **Project override** labels and **Remove override** controls. Settings files now use compact, copyable project/global paths; app-managed state and card-plugin counts no longer clutter Project settings.
+
 - Settings replaces the color-theme dropdown with **Change theme…**, opening the existing searchable **Select theme…** action with live previews. The saved theme remains visible; import and removal stay in Global Settings.
 
 - Close and Delete now discard the local entry and draft/attachments when a harness confirms there is no saved history, including empty Copilot sessions that cannot be restored after restart. Saved or uncertain history still preserves drafts on Close. All harness integrations supply the same required recoverability interface; shutdown is rechecked in case it saves history. Native acceptance remains pending.

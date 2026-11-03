@@ -60,12 +60,13 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 #settings-scope-description { margin:3px 0 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; line-height:1.2; }
 #settings-global-link { flex:none; }
 .settings-source { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 16px; margin-top:6px; font-size:12px; color:var(--vscode-descriptionForeground); }
+.settings-source > [data-source=project] { color:var(--vscode-foreground); font-weight:500; }
 .settings-reset { padding:2px 0; background:transparent; text-decoration:underline; text-underline-offset:3px; font-size:12px; }
 #settings-title { margin:0; font-size:13px; font-weight:600; letter-spacing:0; }
 #settings-scope-description { font-size:11px; }
 .settings-content { overflow:hidden; container-type:inline-size; }
 .settings-content > :is(#card-plugin-status, #card-plugin-error):empty { display:none; }
-.settings-content > :is(#card-plugin-status, #card-plugin-error):not(:empty) { flex:none; margin:0; padding:12px 28px; font-size:12px; overflow-wrap:anywhere; }
+.settings-content > :is(#card-plugin-status, #card-plugin-error):not(:empty):not([hidden]) { flex:none; margin:0; padding:12px 28px; font-size:12px; overflow-wrap:anywhere; }
 .settings-panel { box-sizing:border-box; flex:1; min-width:0; min-height:0; padding:28px 28px 40px; overflow:auto; }
 .settings-panel > * { max-width:820px; }
 .settings-panel :is(button, input:not([type=range]):not([type=checkbox]), select) { box-sizing:border-box; min-height:32px; border-radius:5px; font-size:12px; }
@@ -111,8 +112,19 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 #settings-translucency > .settings-help { padding:0 16px 12px; }
 .settings-group-footer > .settings-help { flex:1 1 200px; }
 .settings-runtime-files { margin:0 0 20px; }
+#settings-project-inheritance { flex:none; margin:0; padding:12px 28px; border-bottom:1px solid var(--vscode-panel-border); }
+.settings-files { margin-top:10px; border:1px solid color-mix(in srgb, var(--vscode-panel-border) 65%, transparent); border-radius:7px; overflow:hidden; }
+.settings-file { display:flex; align-items:flex-start; flex-wrap:wrap; gap:10px 16px; padding:12px 14px; }
+.settings-file:not([hidden]) ~ .settings-file { border-top:1px solid color-mix(in srgb, var(--vscode-panel-border) 45%, transparent); }
+.settings-file-content { flex:1 1 240px; min-width:0; }
+.settings-file h4 { margin:0 0 4px; font-size:12px; font-weight:500; color:var(--vscode-foreground); }
+.settings-file-path { margin:0; font-size:11px; overflow-wrap:anywhere; user-select:text; }
+.settings-file .settings-hint { margin:4px 0 0; }
+.settings-file > button { flex:none; min-height:26px; font-size:11px; }
+#settings-file-copy-status:empty { display:none; }
 @container (max-width:560px) {
   .settings-panel { padding:20px 16px 32px; }
+  #settings-project-inheritance { padding:10px 16px; }
   .settings-row { grid-template-columns:minmax(0, 1fr); gap:8px; padding:13px 14px; }
   .settings-group-footer { padding:12px 14px; }
 }

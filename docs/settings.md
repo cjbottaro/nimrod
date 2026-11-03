@@ -2,13 +2,13 @@
 
 **Global Settings** opens in its own reusable window through **⌘/Ctrl+,**, the native **Settings…** menu item, or the command palette. It contains Appearance, Interaction, Notifications, Diagnostics, Keybindings and Runtime. On first open, the window appears after its controls, theme, translucency and zoom are prepared, instead of showing a blank opaque page while loading. Runtime-path detection can continue afterward. Opening it again focuses the existing ready window; Close or Escape closes that window. No project is required.
 
-**Project settings** opens inside the current project window through the Project bar's gear, **⌘/Ctrl+Shift+,**, or the command palette. The header names the project. **Back** or **Escape** returns to its conversation; **Open global settings** opens the separate defaults window.
+**Project settings** opens inside the current project window through the Project bar's gear, **⌘/Ctrl+Shift+,**, or the command palette. The header names the project and makes clear that changes apply only there and override Global Settings. **Back** or **Escape** returns to its conversation; **Global Settings…** opens the separate defaults window.
 
 Pi keeps running. Project settings preserves your draft, conversation and reading position and restores prior focus when available. Pi extension dialogs retain priority. Global Settings does not launch, resume, stop or restart agents.
 
 ## Global defaults and project overrides
 
-Project settings shows effective values, not a second independent configuration. **Global default** means the project follows the global value (or the built-in default/runtime discovery when omitted globally). Changing a control creates a **Project override**. **Use global default** removes that override and immediately follows the current global value again—it does not copy that value into the project file.
+Project settings shows effective values, not a second independent configuration. **Inherited** means the project follows the global value (or the built-in default/runtime discovery when omitted globally). Changing a control creates a **Project override**. **Remove override** removes that override and immediately follows the current global value again—it does not copy that value into the project file.
 
 Overrides stay explicit even if they match the global value. Global edits update inheriting projects, but never replace explicit project values. Global Settings defines defaults only; inspect and reset overrides in the owning project's settings.
 
@@ -25,7 +25,7 @@ These are the complete set of six project-overridable Nimrod preferences, stored
 | Runtime | Copilot CLI executable | `runtime.copilotPath` | On the next Copilot session launch |
 | Runtime | Codex CLI executable | `runtime.codexPath` | On the next Codex session launch |
 
-Omitted keys inherit global settings, then built-in defaults or runtime discovery. Runtime fields save individually when changed and left, or when you press Enter; saving never restarts an existing session. Every supported field shows its source and offers **Use global default** when overridden.
+Omitted keys inherit global settings, then built-in defaults or runtime discovery. Runtime fields save individually when changed and left, or when you press Enter; saving never restarts an existing session. Every supported field shows its source and offers **Remove override** when overridden.
 
 **Typography, translucency, zoom, modal animations and auto-follow after sending are global-only**, along with notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration. Project settings contains the theme picker under Appearance, autocomplete acceptance under Interaction and runtime paths under Runtime. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
 
@@ -129,7 +129,9 @@ On Windows, choose Pi's JS entry point and `node.exe` explicitly; npm `.cmd` wra
 
 ## Configuration files
 
-Resolved paths appear under **Runtime → Settings files**. Defaults are:
+Under **Runtime → Settings files**, project and global settings have separate labelled entries with **Copy path** controls. The project file is shown as `.nimrod/settings.json`; hover its path for the full location. Global settings shows its actual configured path. App-managed state is listed only in Global Settings, separate from editable preferences.
+
+Default locations are:
 
 ```text
 <project>/.nimrod/settings.json   # Optional project overrides (JSONC)
