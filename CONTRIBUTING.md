@@ -6,10 +6,18 @@ Use the pinned mise toolchain; Rust is installed through mise, not Homebrew:
 
 ```sh
 mise trust
-mise install
-npm ci
+mise run setup
 mise run dev
 ```
+
+Run setup from the primary checkout. It installs the pinned mise toolchain, runs
+`npm ci`, and symlinks `~/.local/bin/nimrod` to this checkout's launcher. It refuses
+to overwrite another command and does not edit your shell; ensure `~/.local/bin`
+is on `PATH`. The launcher can be installed before building, but needs a built
+app to run. Setup does not build or launch the app or install system packages.
+Re-running setup recreates `node_modules`; use `mise exec -- npm ci` alone for
+dependency updates in task worktrees so the installed launcher stays on the
+primary checkout. `mise run build` and `mise run dev` do not run setup implicitly.
 
 macOS needs Xcode Command Line Tools. See [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for Linux or possible Windows development. Keep the JS/Rust Tauri packages on compatible major/minor versions and update both lockfiles deliberately.
 
@@ -91,8 +99,7 @@ On an Atomic Linux host such as Bazzite, build inside your development distrobox
 distrobox enter devbox
 cd ~/Projects/nimrod
 mise trust
-mise install
-npm ci
+mise run setup
 mise run build
 ```
 

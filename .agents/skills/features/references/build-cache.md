@@ -17,6 +17,16 @@ Explicitly requested builds use checkout-local targets and publish verified whol
 
 ## Code map and invariants
 
+- `mise run setup` sequentially installs the pinned toolchain (`mise install`),
+  recreates checkout-local npm dependencies (`npm ci`, including optional native
+  dependencies), and invokes `scripts/install-cli.sh`. Run setup in the primary
+  checkout: the installer links `~/.local/bin/nimrod` to the invoking checkout,
+  refuses conflicting destinations, and never edits shell configuration. Setup
+  does not build/launch the app or install platform prerequisites; dev/build do
+  not invoke it. Task worktrees use `mise exec -- npm ci` without repointing the
+  installed launcher. [Local setup](../../../../CONTRIBUTING.md#local-setup) owns
+  developer instructions.
+
 - `scripts/build-app.mjs`: selects macOS app packaging/signature verification or a Linux native `--no-bundle` build, then stages the configured resource mappings and native esbuild helper beside the Linux executable. Linux local builds produce no installer.
 - `mise.toml`: pins `aqua:mozilla/sccache` at 0.18.0 alongside Rust/Node;
   project-scoped `RUSTC_WRAPPER=sccache`, `CARGO_INCREMENTAL=0` apply to dev,
