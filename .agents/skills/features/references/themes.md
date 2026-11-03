@@ -21,10 +21,7 @@ Theme application changes palette CSS colors only. After CSS is complete, `apply
 - `src/themes/builtins.ts`: existing adaptations plus `CATALOG_THEMES` parsed by
   the normal importer. `selectedTheme` is shared by Settings, project windows and
   pop-outs. Catalog source metadata provides author text for picker search.
-- `src/themes/picker.ts`: persisted-before-applied Settings selection, local
-  import/removal, collision-safe names (also against catalog names), stale-file
-  guards and local preview/restore. Catalog entries have a distinct Settings
-  optgroup; only imported copies can be removed.
+- `src/themes/picker.ts`: Settings **Change theme…** action entry, saved-theme label, global-only import/removal buttons, collision-safe names (also against catalog names), stale-file guards and local preview/restore. Only imported copies can be removed.
 - `src/preferences.ts`: TS validation and JSONC synchronization. `selectTheme`
   reads fresh native state, retains concurrent imported additions and CAS writes
   without replay. Catalog selections do not add imports. `appearance.theme` is a
@@ -51,7 +48,7 @@ Theme application changes palette CSS colors only. After CSS is complete, `apply
   **not** run collection. Bundled data works on a fresh offline first launch. No
   Refresh/download controls, webview external request, native HTTP command or
   application Reqwest dependency. Maintenance tool is a separate Rust crate.
-- `src/main.ts:pickTheme` combines Nimrod, existing built-ins, saved imports and
+- `src/themes/selection.ts:createThemeSelection` shares the **Select theme…** action between project and Global Settings bootstraps; Settings **Change theme…** invokes that same interaction. It combines Nimrod, existing built-ins, saved imports and
   catalog. `src/command-palette.ts:startPreviewSelection` shares normal lifecycle:
   arrow/filter/mouse movement previews the initiating window only; Enter/click
   persists through post-close acceptance; Escape/native/API close/Back/page
@@ -67,7 +64,8 @@ Theme application changes palette CSS colors only. After CSS is complete, `apply
   committed colors; newer preview generations prevent old save completions from
   overriding a newly opened picker. Accepted global selection updates inheriting project
   windows/pop-outs; project selection affects its own project window and owned reference pop-outs through native scoped snapshots. No preview persistence/broadcast.
-- `select-theme` is registered and bindable via shared dispatcher, with empty
+- Settings remains mounted beneath the theme picker. Explicit preview entry accepts its owning Settings dialog; unrelated/nested dialogs still block interaction. Escape/Back restores the latest committed palette and focus to **Change theme…** without closing Settings. Other palette entries retain their existing modal guards.
+- `select-theme` is application-context, registered and bindable via shared dispatcher, with empty
   default shortcuts. Picker entry/shortcut/modal priority are harness-independent.
 - Former `import-gogh-*` saved copies and optional `{provider:'gogh', author}`
   metadata remain valid and visible. No deletion/migration of user settings or

@@ -118,7 +118,8 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 }
 #runtime-fields { min-width:0; margin:0; padding:0; border:0; }
 #runtime-status { min-height:1.5em; font-size:12px; line-height:1.5; }
-#theme-picker { display:block; width:100%; max-width:400px; text-overflow:ellipsis; }
+#theme-current { display:block; margin-top:6px; overflow-wrap:anywhere; }
+#theme-library-actions { display:flex; flex-wrap:wrap; gap:8px; }
 #theme-notice { display:flex; align-items:start; gap:8px; margin:12px 0; padding:10px; background:var(--vscode-editorWidget-background); border:1px solid var(--vscode-panel-border); border-radius:6px; }
 #theme-notice-text { overflow-wrap:anywhere; line-height:1.5; }
 #theme-notice-dismiss { flex:none; padding:0 5px; color:var(--vscode-foreground); background:transparent; }

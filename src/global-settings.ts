@@ -7,6 +7,8 @@ import { installSettingsSurface } from './settings-surface';
 import { isApplicationAction, runApplicationAction } from './application-actions';
 import { installKeybindingDispatch } from './keybindings';
 import { installWindowPresentation } from './window-presentation';
+import { installCommandPalette } from './command-palette';
+import { createThemeSelection } from './themes/selection';
 
 /** Deliberately separate boot: global Settings never mounts session controllers. */
 export async function mountGlobalSettings() {
@@ -28,6 +30,15 @@ export async function mountGlobalSettings() {
     if (presentation.disposed) return;
     const surface = installSettingsSurface(preferences, notices, true);
     presentation.own(() => surface.dispose());
+    const palette = installCommandPalette(window, document.getElementById('command-palette') as HTMLDialogElement, {
+      canOpen: () => !presentation.disposed, shortcuts: false,
+      commands: () => [{ id: 'select-theme', label: 'Select theme…', detail: 'Preview bundled themes and saved imports', next: true, run: () => selectTheme() }],
+      sessions: async () => ({ items: [] }), openSessions: () => ({ items: [] }),
+      error: (message, operation) => notices.report({ id: 'settings-theme-action', operation, message }),
+    });
+    const selectTheme = createThemeSelection(palette, preferences, surface.themes);
+    surface.onSelectTheme(selectTheme);
+    presentation.own(() => palette.dispose());
     appearanceReady = surface.ready;
     surface.settings.open();
     if (new URLSearchParams(location.search).get('settings') === 'keybindings') surface.openKeybindings();
@@ -41,9 +52,10 @@ export async function mountGlobalSettings() {
     if (presentation.disposed) return;
     const dispatch = installKeybindingDispatch(window, {
       read: () => preferences.keybindings(), settingsWindow: true,
-      enabled: id => isApplicationAction(window, id) || ['settings', 'keybindings', 'close', 'zoom-in', 'zoom-out', 'zoom-reset'].includes(id),
+      enabled: id => isApplicationAction(window, id) || ['settings', 'keybindings', 'select-theme', 'close', 'zoom-in', 'zoom-out', 'zoom-reset'].includes(id),
       run: id => {
         if (isApplicationAction(window, id)) return runApplicationAction(id);
+        if (id === 'select-theme') return selectTheme();
         if (id === 'keybindings') surface.openKeybindings();
         if (id === 'close') return getCurrentWindow().close();
         if (id === 'zoom-in') surface.zoom.run('in');

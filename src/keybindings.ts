@@ -15,7 +15,7 @@ const BUILTIN_ACTIONS = [
   { id: 'delete-sessions', label: 'Delete sessions…', scope: 'project', context: 'project', defaults: ['primary+shift+backspace'] },
   { id: 'capture-performance', label: 'Capture performance report', scope: 'project', context: 'project', defaults: [] },
   { id: 'reload-card-plugins', label: 'Reload card plugins', scope: 'project', context: 'project', defaults: [] },
-  { id: 'select-theme', label: 'Select theme…', scope: 'project', context: 'project', defaults: [] },
+  { id: 'select-theme', label: 'Select theme…', scope: 'app', context: 'application', defaults: [] },
   { id: 'mcp', label: 'MCP servers…', scope: 'project', context: 'session', defaults: [] },
   { id: 'model', label: 'Select model…', scope: 'project', context: 'session', defaults: ['primary+shift+m'] },
   { id: 'thinking', label: 'Select thinking level…', keywords: 'effort reasoning', scope: 'project', context: 'session', defaults: ['primary+shift+e'] },

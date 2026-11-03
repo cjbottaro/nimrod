@@ -69,9 +69,10 @@
         <div class="settings-group">
           <div class="settings-row">
             <label for="theme-picker">Color theme</label>
-            <div class="settings-field"><select id="theme-picker" aria-label="Color theme" title="Color theme"><option value="nimrod">Nimrod (system)</option></select></div>
+            <div class="settings-field"><button id="theme-picker" type="button" class="secondary" aria-haspopup="dialog">Change theme…</button><span id="theme-current" class="settings-hint"></span></div>
             <input id="theme-file" type="file" accept=".json,.jsonc,application/json" aria-label="Import VS Code color theme" hidden>
-            <p id="theme-hint" class="settings-hint settings-row-note">Import a VS Code JSON/JSONC theme from the theme menu. Select an imported theme to remove it.</p>
+            <div id="theme-library-actions" class="settings-row-note"><button id="theme-import" type="button" class="secondary">Import color theme…</button><button id="theme-remove" type="button" class="secondary" hidden>Remove current imported theme</button></div>
+            <p id="theme-hint" class="settings-hint settings-row-note">Change theme opens the searchable Select theme… picker with live previews. Imports use standalone VS Code JSON/JSONC files.</p>
             <div id="theme-notice" class="settings-row-note" role="status" hidden><span id="theme-notice-text"></span><button id="theme-notice-dismiss" type="button" aria-label="Dismiss theme notice">×</button></div>
           </div>
           <div id="settings-translucency">

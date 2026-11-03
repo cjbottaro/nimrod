@@ -83,16 +83,19 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     },
     error: (message, field) => feedback(field ? 'runtime:' + field : 'runtime', 'Save runtime paths')(message),
   });
+  let selectTheme = () => {};
   const themes = installThemes({
     root: document.documentElement,
-    select: required<HTMLSelectElement>('theme-picker'), file: required<HTMLInputElement>('theme-file'),
+    select: required<HTMLButtonElement>('theme-picker'), current: required('theme-current'),
+    importButton: required<HTMLButtonElement>('theme-import'), removeButton: required<HTMLButtonElement>('theme-remove'), file: required<HTMLInputElement>('theme-file'),
     notice: required('theme-notice'), noticeText: required('theme-notice-text'), dismiss: required<HTMLButtonElement>('theme-notice-dismiss'),
   }, {
     read: () => preferences.theme(),
     save: library => preferences.saveTheme(library), newId: () => `import-${crypto.randomUUID()}`,
     error: feedback('themes', 'Color theme'),
-    libraryEdits: global,
+    libraryEdits: global, selectTheme: () => selectTheme(),
   });
+  if (!global) required('theme-library-actions').hidden = true;
   if (!global) required('theme-hint').textContent = 'Choose a global-library theme for this project. Import or remove themes in global Settings.';
   const appearance = installNativeWindowAppearance({
     read: () => preferences.windowAppearance(),
@@ -468,6 +471,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   reloadSources();
   return {
     settings, settingsNavigation, themes, zoom, runtime,
+    onSelectTheme(action: () => void) { selectTheme = action; },
     ready: Promise.all([appearance.ready, zoom.ready]).then(() => {}),
     async settled() { await appearance.ready; await zoom.reload(); await appearance.settled(); },
     initializeRuntime(defaults: { pi: string; node: string }) { runtimeDefaults = defaults; runtime.initialize(defaults); },

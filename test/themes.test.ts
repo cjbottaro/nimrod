@@ -179,26 +179,31 @@ test('saved library round trips and rejects injected values and duplicate/reserv
 });
 
 function pickerFixture(saved?: unknown, write: (value: ThemeLibrary) => void = () => {}) {
-  const dom = new JSDOM('<select id="theme"></select><input type="file"><div hidden><span></span><button>Dismiss</button></div>');
+  const dom = new JSDOM('<button id="theme">Change theme…</button><span id="current"></span><button id="import">Import</button><button id="remove">Remove</button><input type="file"><div hidden><span></span><button>Dismiss</button></div>');
   const document = dom.window.document;
-  const select = document.querySelector('select')!, file = document.querySelector('input')!;
-  const notice = document.querySelector('div')!, noticeText = document.querySelector('span')!;
-  const saves: ThemeLibrary[] = []; let count = 0;
-  const picker = installThemes({ root: document.documentElement, select, file, notice, noticeText, dismiss: document.querySelector('button')! }, {
-    read: () => saved, save: value => { write(value); saves.push(value); }, newId: () => `import-${++count}`,
+  const select = document.querySelector<HTMLButtonElement>('#theme')!, file = document.querySelector('input')!;
+  const notice = document.querySelector('div')!, noticeText = notice.querySelector('span')!;
+  const saves: ThemeLibrary[] = []; let count = 0, chosen = 'nimrod';
+  const current = document.querySelector<HTMLElement>('#current')!, importButton = document.querySelector<HTMLButtonElement>('#import')!, removeButton = document.querySelector<HTMLButtonElement>('#remove')!;
+  const picker = installThemes({ root: document.documentElement, select, current, importButton, removeButton, file, notice, noticeText, dismiss: notice.querySelector('button')! }, {
+    read: () => saved, save: value => { write(value); saves.push(value); saved = value; }, newId: () => `import-${++count}`,
+    selectTheme: () => {
+      try { const value = { ...readLibrary(saved), selected: chosen }; write(value); saves.push(value); saved = value; picker.restore(); }
+      catch (error) { noticeText.textContent = String(error); notice.hidden = false; }
+    },
   });
-  const choose = (id: string) => { select.value = id; select.dispatchEvent(new dom.window.Event('change')); };
+  const choose = (id: string) => { if (id === '$import') importButton.click(); else if (id === '$remove') removeButton.click(); else { chosen = id; select.dispatchEvent(new dom.window.Event('click')); } };
   const importFile = (data = JSON.stringify(minimal), name = 'theme.json') => picker.importFile({ name, size: data.length, text: async () => data });
-  return { dom, document, select, file, notice, noticeText, saves, picker, choose, importFile, close: () => { picker.dispose(); dom.window.close(); } };
+  return { dom, document, select, current, removeButton, file, notice, noticeText, saves, picker, choose, importFile, close: () => { picker.dispose(); dom.window.close(); } };
 }
 
 test('picker switches builtins immediately and restores the saved selection', () => {
   const f = pickerFixture();
   try {
-    assert.equal(f.select.value, 'nimrod');
+    assert.equal(f.select.dataset.theme, 'nimrod');
     f.choose('dracula'); assert.equal(f.document.documentElement.dataset.theme, 'dracula');
     const next = pickerFixture(f.saves.at(-1));
-    try { assert.equal(next.select.value, 'dracula'); assert.equal(next.document.documentElement.style.colorScheme, 'dark'); }
+    try { assert.equal(next.select.dataset.theme, 'dracula'); assert.equal(next.document.documentElement.style.colorScheme, 'dark'); }
     finally { next.close(); }
     f.choose('nimrod'); assert.equal(f.document.documentElement.style.getPropertyValue('--vscode-focusBorder'), '');
   } finally { f.close(); }
@@ -211,17 +216,17 @@ for (const theme of [TOKYO_NIGHT, OSAKA_JADE]) {
       f.choose(theme.id);
       assert.equal(f.select.title, `Color theme: ${theme.name}`);
       assert.equal(f.document.documentElement.dataset.theme, theme.id);
-      assert.equal(f.select.querySelector('option[value="$remove"]'), null);
+      assert.equal(f.removeButton.hidden, true);
       const saved = f.saves.at(-1)!;
       assert.equal(readLibrary(saved).selected, theme.id);
       assert.equal(selectedTheme(saved), theme);
       const next = pickerFixture(saved);
       try {
-        assert.equal(next.select.value, theme.id);
+        assert.equal(next.select.dataset.theme, theme.id);
         assert.equal(next.document.documentElement.style.colorScheme, 'dark');
         assert.equal(next.document.documentElement.style.getPropertyValue('--vscode-editor-background'), theme.colors['editor.background']);
         saved.selected = 'dracula'; next.picker.reload();
-        assert.equal(next.select.value, 'dracula');
+        assert.equal(next.select.dataset.theme, 'dracula');
       } finally { next.close(); }
       f.choose('nimrod');
       assert.equal(f.document.documentElement.style.getPropertyValue('--nimrod-syntax-keyword'), '');
@@ -241,12 +246,12 @@ test('file import adds, selects, persists and removes only the local theme copy'
   const f = pickerFixture();
   try {
     await f.importFile();
-    assert.equal(f.select.value, 'import-1'); assert.match(f.noticeText.textContent!, /Imported Sample/);
+    assert.equal(f.select.dataset.theme, 'import-1'); assert.match(f.noticeText.textContent!, /Imported Sample/);
     const next = pickerFixture(f.saves.at(-1));
-    try { assert.equal(next.select.value, 'import-1'); assert.equal(next.document.documentElement.style.getPropertyValue('--vscode-editor-background'), '#112233'); }
+    try { assert.equal(next.select.dataset.theme, 'import-1'); assert.equal(next.document.documentElement.style.getPropertyValue('--vscode-editor-background'), '#112233'); }
     finally { next.close(); }
     await f.importFile(); assert.equal(f.saves.at(-1)!.imports[1].name, 'Sample (2)');
-    f.choose('$remove'); assert.equal(f.select.value, 'nimrod'); assert.equal(f.saves.at(-1)!.imports.length, 1);
+    f.choose('$remove'); assert.equal(f.select.dataset.theme, 'nimrod'); assert.equal(f.saves.at(-1)!.imports.length, 1);
   } finally { f.close(); }
 });
 
@@ -255,10 +260,10 @@ test('cancelled file picking and invalid files retain the active theme', async (
   try {
     f.choose('dracula');
     let clicked = false; f.file.click = () => { clicked = true; };
-    f.choose('$import'); assert.equal(clicked, true); assert.equal(f.select.value, 'dracula');
+    f.choose('$import'); assert.equal(clicked, true); assert.equal(f.select.dataset.theme, 'dracula');
     f.file.dispatchEvent(new f.dom.window.Event('change'));
     await f.importFile('{ nope');
-    assert.equal(f.select.value, 'dracula'); assert.equal(f.document.documentElement.dataset.theme, 'dracula');
+    assert.equal(f.select.dataset.theme, 'dracula'); assert.equal(f.document.documentElement.dataset.theme, 'dracula');
     assert.match(f.noticeText.textContent!, /not imported/); assert.equal(f.saves.length, 1);
   } finally { f.close(); }
 });
@@ -270,7 +275,7 @@ test('file input changes import through the visible picker flow', async () => {
     Object.defineProperty(f.file, 'files', { value: [{ name: 'selected.jsonc', size: data.length, text: async () => data }] });
     f.file.dispatchEvent(new f.dom.window.Event('change'));
     await new Promise(resolve => setTimeout(resolve, 0));
-    assert.equal(f.select.value, 'import-1');
+    assert.equal(f.select.dataset.theme, 'import-1');
     assert.equal(f.file.value, '');
     assert.equal(f.saves.at(-1)?.selected, 'import-1');
   } finally { f.close(); }
@@ -288,16 +293,16 @@ test('oversized files and full libraries are rejected before reading another fil
   try {
     await f.picker.importFile({ name: 'large.json', size: MAX_THEME_BYTES + 1, text: async () => { read = true; return '{}'; } });
     assert.equal(read, false); assert.match(f.noticeText.textContent!, /512 KiB/);
-    assert.equal(f.select.value, 'nimrod');
+    assert.equal(f.select.dataset.theme, 'nimrod');
   } finally { f.close(); }
 });
 
 test('storage failure leaves the current palette intact and reports why', async () => {
   const f = pickerFixture(undefined, () => { throw new Error('quota exceeded'); });
   try {
-    f.choose('dracula'); await Promise.resolve(); assert.equal(f.select.value, 'nimrod');
+    f.choose('dracula'); await Promise.resolve(); assert.equal(f.select.dataset.theme, 'nimrod');
     assert.equal(f.document.documentElement.dataset.theme, 'nimrod'); assert.match(f.noticeText.textContent!, /quota exceeded/);
-    await f.importFile(); assert.equal(f.select.value, 'nimrod'); assert.equal(f.saves.length, 0);
+    await f.importFile(); assert.equal(f.select.dataset.theme, 'nimrod'); assert.equal(f.saves.length, 0);
   } finally { f.close(); }
 });
 
@@ -305,7 +310,7 @@ test('theme names are text and cannot inject markup', async () => {
   const f = pickerFixture();
   try {
     await f.importFile(JSON.stringify({ ...minimal, name: '<img src=x onerror=alert(1)>' }));
-    assert.equal(f.select.selectedOptions[0].textContent, '<img src=x onerror=alert(1)>');
+    assert.equal(f.current.textContent, '<img src=x onerror=alert(1)>');
     assert.equal(f.document.querySelector('img, [onerror]'), null);
   } finally { f.close(); }
 });

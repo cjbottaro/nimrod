@@ -6,11 +6,15 @@ interface ThemeHost {
   save(library: ThemeLibrary): void | Promise<void>;
   newId(): string;
   libraryEdits?: boolean;
+  selectTheme(): void;
   error?(message?: string): void;
 }
 interface ThemeElements {
   root: HTMLElement;
-  select: HTMLSelectElement;
+  select: HTMLButtonElement;
+  current: HTMLElement;
+  importButton: HTMLButtonElement;
+  removeButton: HTMLButtonElement;
   file: HTMLInputElement;
   notice: HTMLElement;
   noticeText: HTMLElement;
@@ -24,7 +28,7 @@ export function installThemes(elements: ThemeElements, host: ThemeHost): {
   restore(): void;
   dispose(): void;
 } {
-  const { root, select, file, notice, noticeText, dismiss } = elements;
+  const { root, select, current, importButton, removeButton, file, notice, noticeText, dismiss } = elements;
   let state: ThemeLibrary = { version: 1, selected: 'nimrod', imports: [] };
   let disposed = false;
   let generation = 0;
@@ -37,22 +41,12 @@ export function installThemes(elements: ThemeElements, host: ThemeHost): {
   catch (error) { tell(`Could not restore themes: ${String(error)}`, true); }
 
   function options(): void {
-    const document = select.ownerDocument;
-    const option = (value: string, label: string) => {
-      const node = document.createElement('option'); node.value = value; node.textContent = label; return node;
-    };
-    const builtins = document.createElement('optgroup'); builtins.label = 'Built-in';
-    builtins.append(option('nimrod', 'Nimrod (system)'), ...BUILTIN_THEMES.map(theme => option(theme.id, theme.name)));
-    const bundled = document.createElement('optgroup'); bundled.label = 'VS Code themes';
-    bundled.append(...CATALOG_THEMES.map(entry => option(entry.theme.id, entry.theme.name)));
-    const imported = document.createElement('optgroup'); imported.label = 'Imported';
-    imported.append(...state.imports.map(theme => option(theme.id, theme.name)));
-    const actions = document.createElement('optgroup'); actions.label = 'Themes';
-    if (host.libraryEdits !== false) actions.append(option('$import', 'Import color theme…'));
-    if (host.libraryEdits !== false && state.imports.some(theme => theme.id === state.selected)) actions.append(option('$remove', 'Remove current imported theme'));
-    select.replaceChildren(builtins, bundled, ...(state.imports.length ? [imported] : []), actions);
-    select.value = state.selected;
-    select.title = `Color theme: ${state.selected === 'nimrod' ? 'Nimrod scheme (follows system appearance)' : selectedTheme(state)?.name}`;
+    const name = state.selected === 'nimrod' ? 'Nimrod (system)' : selectedTheme(state)?.name ?? state.selected;
+    select.title = `Color theme: ${state.selected === 'nimrod' ? 'Nimrod scheme (follows system appearance)' : name}`;
+    select.dataset.theme = state.selected;
+    current.textContent = name;
+    importButton.hidden = host.libraryEdits === false;
+    removeButton.hidden = host.libraryEdits === false || !state.imports.some(theme => theme.id === state.selected);
     select.disabled = false;
   }
   function apply(): void {
@@ -87,20 +81,19 @@ export function installThemes(elements: ThemeElements, host: ThemeHost): {
       if (!disposed && request === generation) { options(); tell(`Theme not imported: ${String(error)}`, true); }
     } finally { if (!disposed && request === generation) select.disabled = false; }
   }
-  const onSelect = async () => {
+  const onSelect = () => { ++generation; host.selectTheme(); };
+  const onImport = () => { if (disposed || host.libraryEdits === false) return; file.value = ''; file.click(); };
+  const onRemove = async () => {
+    if (disposed || host.libraryEdits === false || !state.imports.some(theme => theme.id === state.selected)) return;
     ++generation;
-    const selected = select.value;
-    select.value = state.selected;
-    notice.hidden = true;
-    if (selected === '$import' && host.libraryEdits !== false) { file.value = ''; file.click(); return; }
-    try {
-      if (selected === '$remove' && host.libraryEdits !== false) await commit({ ...state, selected: 'nimrod', imports: state.imports.filter(theme => theme.id !== state.selected) });
-      else if (['nimrod', ...BUILTIN_THEMES.map(theme => theme.id), ...CATALOG_THEMES.map(entry => entry.theme.id), ...state.imports.map(theme => theme.id)].includes(selected)) await commit({ ...state, selected });
-    } catch (error) { options(); tell(`Could not save theme settings: ${String(error)}`, true); }
+    try { await commit({ ...state, selected: 'nimrod', imports: state.imports.filter(theme => theme.id !== state.selected) }); }
+    catch (error) { options(); tell(`Could not save theme settings: ${String(error)}`, true); }
   };
   const onFile = () => { const input = file.files?.[0]; file.value = ''; if (input) void importFile(input); };
   const onDismiss = () => { notice.hidden = true; };
-  select.addEventListener('change', onSelect);
+  select.addEventListener('click', onSelect);
+  importButton.addEventListener('click', onImport);
+  removeButton.addEventListener('click', onRemove);
   file.addEventListener('change', onFile);
   dismiss.addEventListener('click', onDismiss);
   return { importFile,
@@ -112,7 +105,9 @@ export function installThemes(elements: ThemeElements, host: ThemeHost): {
     ++generation; state = next; if (!previewing) apply(); options();
   }, dispose() {
     disposed = true; ++generation;
-    select.removeEventListener('change', onSelect);
+    select.removeEventListener('click', onSelect);
+    importButton.removeEventListener('click', onImport);
+    removeButton.removeEventListener('click', onRemove);
     file.removeEventListener('change', onFile);
     dismiss.removeEventListener('click', onDismiss);
   } };

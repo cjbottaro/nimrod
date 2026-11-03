@@ -53,6 +53,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- Settings replaces the color-theme dropdown with **Change theme…**, opening the existing searchable **Select theme…** action with live previews. The saved theme remains visible; import and removal stay in Global Settings.
+
 - Close and Delete now discard the local entry and draft/attachments when a harness confirms there is no saved history, including empty Copilot sessions that cannot be restored after restart. Saved or uncertain history still preserves drafts on Close. All harness integrations supply the same required recoverability interface; shutdown is rechecked in case it saves history. Native acceptance remains pending.
 
 - Shell cards across Pi, Copilot and Codex use one unlabeled, soft-wrapping output viewport with closed Raw inputs/Raw output disclosures underneath. Matching final output preserves live ANSI colors without duplication; replacement output remains authoritative and supplied nonzero exit diagnostics stay visible. Copilot’s final preview/metadata stays in Raw output rather than a second result block. The shared component also covers retained ACP execute cards and plugins that use it. Native visual acceptance is pending.

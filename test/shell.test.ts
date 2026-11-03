@@ -4031,7 +4031,7 @@ test('external settings edits synchronize Appearance and saved Runtime while pre
     pi.value = '/unsaved/pi'; pi.dispatchEvent(new f.win.Event('input', { bubbles: true }));
     f.preferences.external('{"appearance.theme":"dracula","appearance.zoom":150,"runtime.piPath":"/external/pi","runtime.nodePath":"/external/node"}');
     await f.tick();
-    assert.equal(f.element<HTMLSelectElement>('theme-picker').value, 'dracula');
+    assert.equal(f.element<HTMLButtonElement>('theme-picker').dataset.theme, 'dracula');
     assert.equal(f.element<HTMLSelectElement>('zoom-level').value, '150');
     assert.equal(pi.value, '/unsaved/pi');
     assert.match(f.element('runtime-status').textContent!, /unsaved edits are retained/);
@@ -4039,7 +4039,7 @@ test('external settings edits synchronize Appearance and saved Runtime while pre
     f.preferences.external('{broken}');
     assert.equal(f.element('preferences-error').hidden, true);
     assert.equal(f.element('application-notices').hidden, false);
-    assert.equal(f.element<HTMLSelectElement>('theme-picker').value, 'dracula');
+    assert.equal(f.element<HTMLButtonElement>('theme-picker').dataset.theme, 'dracula');
     assert.equal(pi.value, '/unsaved/pi');
     f.preferences.external('{"appearance.theme":"dracula","appearance.zoom":150,"runtime.piPath":"/external/pi","runtime.nodePath":"/external/node"}');
     assert.equal(f.element('preferences-error').hidden, true);
@@ -4065,9 +4065,15 @@ test('project shell boots without Pi and Settings holds layered preferences, not
     assert.equal(page.querySelector('[data-pi-id="thinking"]'), null);
     assert.equal(win.document.querySelector('#workspace-bar select, #launch-form #pi-path'), null);
     f.openSettings(); assert.equal(page.open, true);
-    const themes = element<HTMLSelectElement>('theme-picker');
-    assert.equal(themes.value, 'nimrod');
-    themes.value = 'dracula'; themes.dispatchEvent(new win.Event('change')); await f.tick();
+    const themes = element<HTMLButtonElement>('theme-picker');
+    assert.equal(themes.dataset.theme, 'nimrod');
+    assert.equal(themes.textContent, 'Change theme…');
+    themes.click();
+    assert.equal(page.open, true);
+    assert.equal(element<HTMLDialogElement>('command-palette').open, true);
+    element<HTMLElement>('palette-list').querySelector<HTMLElement>('[data-key="dracula"]')!.click(); await f.tick();
+    assert.equal(page.open, true);
+    assert.equal(win.document.activeElement, themes);
     assert.equal(win.document.documentElement.dataset.theme, 'dracula');
     assert.equal(win.document.documentElement.style.getPropertyValue('--vscode-editor-background'), '#282a36');
     assert.equal(JSON.parse(f.preferences.value.projectText!)['appearance.theme'], 'dracula');
@@ -5428,6 +5434,32 @@ test('autocomplete Settings has global defaults, project provenance and reset wi
   }
 });
 
+for (const globalSettings of [false, true]) {
+  test(`Settings theme picker cancels above its mounted parent (${globalSettings ? 'global' : 'project'})`, async () => {
+    const f = await fixture(undefined, globalSettings ? { globalSettings: true } : { windowWorkspace: '/project' });
+    try {
+      if (!globalSettings) f.openSettings();
+      const button = f.element<HTMLButtonElement>('theme-picker');
+      button.click();
+      const input = f.element<HTMLInputElement>('palette-input');
+      input.value = 'Dracula'; input.dispatchEvent(new f.win.Event('input'));
+      assert.equal(f.win.document.documentElement.dataset.theme, 'dracula');
+      input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      await f.tick();
+      assert.equal(f.element<HTMLDialogElement>('settings-page').open, true);
+      assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+      assert.equal(f.win.document.documentElement.dataset.theme, 'nimrod');
+      assert.equal(f.win.document.activeElement, button);
+      button.click();
+      f.element<HTMLButtonElement>('palette-back').click(); await f.tick();
+      assert.equal(f.element<HTMLDialogElement>('settings-page').open, true);
+      assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+      assert.equal(f.win.document.activeElement, button);
+      assert.equal(f.calls.some(call => ['preferences_settings', 'project_preferences_settings', 'start_pi', 'write_pi'].includes(call.command)), false);
+    } finally { f.win.close(); }
+  });
+}
+
 test('global Settings boots without any project services', async () => {
   const f = await fixture(undefined, { globalSettings: true });
   try {
@@ -5439,8 +5471,12 @@ test('global Settings boots without any project services', async () => {
     assert.equal(f.element('performance-capture').hidden, true);
     assert.equal(f.win.document.querySelector('.settings-source'), null);
     assert.equal(f.calls.some(call => ['start_pi', 'stop_pi', 'write_pi', 'drafts_load', 'sync_popout_sessions', 'load_personal_card_plugins'].includes(call.command)), false);
-    const theme = f.element<HTMLSelectElement>('theme-picker');
-    theme.value = 'dracula'; theme.dispatchEvent(new f.win.Event('change')); await f.tick();
+    const theme = f.element<HTMLButtonElement>('theme-picker');
+    theme.click();
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
+    f.element<HTMLElement>('palette-list').querySelector<HTMLElement>('[data-key="dracula"]')!.click(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('settings-page').open, true);
+    assert.equal(f.win.document.activeElement, theme);
     assert.equal(parseSettings(f.preferences.value.text)['appearance.theme'], 'dracula');
     assert.equal(f.calls.some(call => call.command === 'project_preferences_settings'), false);
   } finally { f.win.close(); }
@@ -5456,15 +5492,16 @@ test('project settings routes scope shortcuts and removes overrides rather than 
     shortcut(true);
     assert.equal(f.element<HTMLDialogElement>('settings-page').open, true);
     assert.match(f.element('settings-title').textContent!, /Project settings — project/);
-    const picker = f.element<HTMLSelectElement>('theme-picker');
+    const picker = f.element<HTMLButtonElement>('theme-picker');
     assert.equal(f.element('theme-picker-source').textContent, 'Global default');
-    assert.equal([...picker.options].some(option => option.value === '$import'), false);
-    picker.value = 'dracula'; picker.dispatchEvent(new f.win.Event('change')); await f.tick();
+    assert.equal(f.element('theme-library-actions').hidden, true);
+    picker.click();
+    f.element<HTMLElement>('palette-list').querySelector<HTMLElement>('[data-key="dracula"]')!.click(); await f.tick();
     assert.equal(f.element('theme-picker-source').textContent, 'Project override');
     f.preferences.external('{"appearance.theme":"tokyo-night"}'); await f.tick();
-    assert.equal(picker.value, 'dracula');
+    assert.equal(picker.dataset.theme, 'dracula');
     picker.nextElementSibling!.querySelector<HTMLButtonElement>('button')!.click(); await f.tick();
-    assert.equal(picker.value, 'tokyo-night');
+    assert.equal(picker.dataset.theme, 'tokyo-night');
     assert.equal(f.element('theme-picker-source').textContent, 'Global default');
     assert.equal(JSON.parse(f.preferences.value.projectText!)['appearance.theme'], undefined);
     assert.equal(f.calls.some(call => call.command === 'start_pi' || call.command === 'write_pi'), false);

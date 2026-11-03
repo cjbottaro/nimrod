@@ -102,6 +102,8 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   let notice = '';
   let loading = false;
   let opener: HTMLElement | undefined;
+  let parentDialog: HTMLDialogElement | undefined;
+  const anotherDialog = () => [...doc.querySelectorAll('dialog[open]')].some(node => node !== dialog && node !== parentDialog);
   let afterClose: (() => void | Promise<void>) | undefined;
   let resolveChoice: ((value: string | undefined) => void) | undefined;
   let retryAction: (() => void) | undefined;
@@ -328,7 +330,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     }
   }
   async function projects(refresh = false): Promise<void> {
-    if (!options.projects || doc.querySelector('dialog[open]:not(#command-palette)')) return;
+    if (!options.projects || anotherDialog()) return;
     const request = beginPage('projects', 'Open recent project', 'Search recent projects…', () => { void projects(true); }, refresh);
     if (request === undefined) return;
     input.setAttribute('aria-label', 'Search recent projects'); retry.textContent = 'Refresh';
@@ -404,14 +406,15 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
         matches = []; selected = 0; input.value = ''; notice = page.notice || ''; loading = false;
         context.replaceChildren(details); context.hidden = false;
         draw();
-        if (!doc.querySelector('dialog[open]:not(#command-palette)')) input.focus({ preventScroll: true });
+        if (!anotherDialog()) input.focus({ preventScroll: true });
       },
       remaining(text) { if (current()) { remaining.textContent = text; remaining.hidden = !text; } },
-      focus() { if (current() && !doc.querySelector('dialog[open]:not(#command-palette)')) input.focus({ preventScroll: true }); },
+      focus() { if (current() && !anotherDialog()) input.focus({ preventScroll: true }); },
       cancel() { if (current()) closeInteraction(); },
     };
   }
-  function startPreviewSelection(heading: string, onRetry: (() => void) | undefined, onPreview: (item?: PaletteItem) => void, onCancel: () => void): PreviewSelectionRequest | undefined {
+  function startPreviewSelection(heading: string, onRetry: (() => void) | undefined, onPreview: (item?: PaletteItem) => void, onCancel: () => void, parent?: HTMLDialogElement): PreviewSelectionRequest | undefined {
+    if (!dialog.open && !open(parent?.open ? parent : undefined)) return;
     const request = beginPage('selection', heading, 'Type to filter themes…', onRetry || (() => {}));
     if (request === undefined) return;
     preview = onPreview; cancelPreview = onCancel;
@@ -431,7 +434,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     };
   }
   function namedSession(onCreate: (name: string) => void | Promise<void>): void {
-    if (doc.querySelector('dialog[open]:not(#command-palette)')) return;
+    if (anotherDialog()) return;
     if (!dialog.open && !open()) return;
     historyRequest?.abort(); historyRequest = undefined;
     deletionControls(false);
@@ -443,20 +446,21 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     draw(); input.focus();
   }
   function submitName(): void {
-    if (!dialog.open || mode !== 'name' || !createNamed || composing || !validName() || doc.querySelector('dialog[open]:not(#command-palette)')) return;
+    if (!dialog.open || mode !== 'name' || !createNamed || composing || !validName() || anotherDialog()) return;
     const action = createNamed, name = input.value.trim();
     // Use the same post-close action boundary as selection, not a prompt.
     closeInteraction(() => action(name));
   }
-  function open(): boolean {
-    if (disposed || closing || !options.canOpen() || doc.querySelector('dialog[open]')) return false;
+  function open(parent?: HTMLDialogElement): boolean {
+    if (disposed || closing || !options.canOpen() || [...doc.querySelectorAll('dialog[open]')].some(node => node !== parent)) return false;
+    parentDialog = parent;
     opener = doc.activeElement instanceof realm.HTMLElement ? doc.activeElement : undefined;
     commandQuery = ''; afterClose = undefined;
     showModal(dialog); commands(); return true;
   }
   function choose(index = selected): void {
     const item = matches[index];
-    if (!dialog.open || !item || loading || deleting || doc.querySelector('dialog[open]:not(#command-palette)')) return;
+    if (!dialog.open || !item || loading || deleting || anotherDialog()) return;
     if (mode === 'inspection') { selected = index; selection(); return; }
     if (mode === 'commands') options.ranking?.record(item.id);
     if (item.next) {
@@ -482,7 +486,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
         const preferred = selectedId && survivors.has(selectedId) ? selectedId : neighbors.find(id => survivors.has(id));
         if (failure) { if (options.error) options.error(failure, 'Delete sessions'); else notice = [failure, notice].filter(Boolean).join(' '); }
         draw(true, preferred);
-        if (!doc.querySelector('dialog[open]:not(#command-palette)')) input.focus({ preventScroll: true });
+        if (!anotherDialog()) input.focus({ preventScroll: true });
       })();
       return;
     }
@@ -494,7 +498,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   input.addEventListener('compositionend', () => { composing = false; }, { signal });
   input.addEventListener('input', () => { matches = []; selected = 0; draw(); }, { signal });
   dialog.addEventListener('keydown', event => {
-    if (!dialog.open || event.isComposing || event.keyCode === 229 || doc.querySelector('dialog[open]:not(#command-palette)')) return;
+    if (!dialog.open || event.isComposing || event.keyCode === 229 || anotherDialog()) return;
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeInteraction(); }
     else if (!deleting && event.target === input && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -504,7 +508,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       event.preventDefault();
     }
   }, { signal });
-  dialog.addEventListener('cancel', event => { event.preventDefault(); if (!doc.querySelector('dialog[open]:not(#command-palette)')) closeInteraction(); }, { signal });
+  dialog.addEventListener('cancel', event => { event.preventDefault(); if (!anotherDialog()) closeInteraction(); }, { signal });
   dialog.addEventListener('close', () => {
     historyRequest?.abort(); historyRequest = undefined;
     bufferedHistory = undefined;
@@ -512,7 +516,8 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     endRetained(); endPreview();
     cancelChoice(); createNamed = undefined; retryAction = undefined; generation++;
     const action = afterClose; afterClose = undefined;
-    if (!doc.querySelector('dialog[open]') && opener?.isConnected && !opener.closest('[hidden], [inert]')) opener.focus({ preventScroll: true });
+    if (!anotherDialog() && opener?.isConnected && !opener.closest('[hidden], [inert]')) opener.focus({ preventScroll: true });
+    parentDialog = undefined;
     if (action) void Promise.resolve().then(action).catch(error => {
       // An action error is not a reason to replay it (especially a launch).
       if (options.error) options.error(String(error), 'Command action');
@@ -524,12 +529,12 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     const row = (event.target as HTMLElement).closest<HTMLElement>('[data-index]'); if (row) choose(Number(row.dataset.index));
   }, { signal });
   list.addEventListener('mousemove', event => {
-    if ((!preview && mode !== 'inspection') || !dialog.open || doc.querySelector('dialog[open]:not(#command-palette)')) return;
+    if ((!preview && mode !== 'inspection') || !dialog.open || anotherDialog()) return;
     const row = (event.target as HTMLElement).closest<HTMLElement>('[data-index]');
     if (row && selected !== Number(row.dataset.index)) { selected = Number(row.dataset.index); selection(); }
   }, { signal });
   create.addEventListener('click', submitName, { signal });
-  back.addEventListener('click', commands, { signal });
+  back.addEventListener('click', () => { if (parentDialog) closeInteraction(); else commands(); }, { signal });
   retry.addEventListener('click', () => retryAction?.(), { signal });
   win.addEventListener('keydown', event => {
     if (options.shortcuts === false || event.defaultPrevented) return;
