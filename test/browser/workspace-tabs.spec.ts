@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { demoFixture, visible } from './demo-fixture';
+import { chooseSetting, demoFixture, visible } from './demo-fixture';
 
 const sessions = '#open-sessions .session-row';
 
@@ -213,7 +213,7 @@ test('Settings test notification is recorded without running another agent and O
     await settingsPage.getByRole('button', { name: 'Send test notification', exact: true }).click();
     await expect(settingsPage.locator('#notification-status')).toHaveText(/Test notification submitted to the OS/);
     expect(demo.calls.filter(c => c.command === 'test_notification')).toHaveLength(1);
-    await settingsPage.locator('#notification-mode').selectOption('off');
+    await chooseSetting(settingsPage, 'notification-mode', 'off');
     await expect(settingsPage.locator('#notification-test')).toBeDisabled();
     await settingsPage.getByRole('button', { name: 'Refresh notification diagnostics', exact: true }).click();
     await expect(settingsPage.locator('#notification-status')).toHaveText(/Notification diagnostics.*foreground handler calls: 1/);

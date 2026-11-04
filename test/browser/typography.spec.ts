@@ -35,7 +35,8 @@ test('global typography uses searchable font samples, synchronizes content only 
     expect(await page.locator('#workspace-bar').evaluate(node => getComputedStyle(node).fontFamily)).toBe(originalInterface);
     await settings.locator('#typography-reset').click();
     await expect(prompt).toHaveCSS('font-size', '14px');
-    await expect(settings.locator('#conversation-font')).toHaveText('System default ▾');
+    await expect(settings.locator('#conversation-font-current')).toHaveText('System default');
+    await expect(settings.locator('#conversation-font')).toHaveText('Change…');
     expect(fixture.calls.filter(call => call.command === 'preferences_settings').some(call => String(call.args.text).includes('appearance.zoom'))).toBe(false);
     expect(fixture.calls.filter(call => call.command === 'installed_fonts')).toHaveLength(1);
     expect(fixture.calls.filter(call => call.command === 'start_pi')).toHaveLength(1);

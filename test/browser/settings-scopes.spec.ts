@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { demoFixture, visible } from './demo-fixture';
+import { chooseSetting, demoFixture, visible } from './demo-fixture';
 
 // Real offline WebKit pages; singleton routing/native ownership still needs native acceptance.
 test('project provenance and global defaults reconcile across independent Settings and project pages', async ({ page }) => {
@@ -27,10 +27,10 @@ test('project provenance and global defaults reconcile across independent Settin
     await expect(settingsPage.locator('#workspace-layout')).toBeHidden();
     await expect(settingsPage.locator('#settings-zoom')).toBeVisible();
     await expect(settingsPage.locator('#settings-send-auto-follow')).toBeVisible();
-    await settingsPage.locator('#zoom-level').selectOption('150');
-    await expect(page.locator('#zoom-level')).toHaveValue('150');
-    await settingsPage.locator('#send-auto-follow').selectOption('never');
-    await expect(page.locator('#send-auto-follow')).toHaveValue('never');
+    await chooseSetting(settingsPage, 'zoom-level', '150');
+    await expect(page.locator('#zoom-level')).toHaveAttribute('value', '150');
+    await chooseSetting(settingsPage, 'send-auto-follow', 'never');
+    await expect(page.locator('#send-auto-follow')).toHaveAttribute('value', 'never');
     await expect(settingsPage.locator('#theme-picker')).toHaveAttribute('data-theme', 'nimrod');
     await expect(settingsPage.locator('.settings-project-overrides, .settings-project-links')).toHaveCount(0);
     await expect(settingsPage.locator('#settings-scope-description')).toContainText('Project overrides take precedence.');
@@ -47,16 +47,16 @@ test('project provenance and global defaults reconcile across independent Settin
     await fixture.editPreferences('{"appearance.theme":"osaka-jade"}');
     await expect(page.locator('#theme-picker')).toHaveAttribute('data-theme', 'osaka-jade');
     await settingsPage.locator('#settings-category-interaction').click();
-    await settingsPage.locator('#autocomplete-accept').selectOption('tabOrEnter');
+    await chooseSetting(settingsPage, 'autocomplete-accept', 'tabOrEnter');
     await page.locator('#settings-category-interaction').click();
-    await expect(page.locator('#autocomplete-accept')).toHaveValue('tabOrEnter');
+    await expect(page.locator('#autocomplete-accept')).toHaveAttribute('value', 'tabOrEnter');
     await expect(page.locator('#autocomplete-accept-source')).toHaveText('Inherited');
-    await page.locator('#autocomplete-accept').selectOption('tabOrEnter');
+    await chooseSetting(page, 'autocomplete-accept', 'tabOrEnter');
     await expect(page.locator('#autocomplete-accept-source')).toHaveText('Project override');
-    await settingsPage.locator('#autocomplete-accept').selectOption('tab');
-    await expect(page.locator('#autocomplete-accept')).toHaveValue('tabOrEnter');
+    await chooseSetting(settingsPage, 'autocomplete-accept', 'tab');
+    await expect(page.locator('#autocomplete-accept')).toHaveAttribute('value', 'tabOrEnter');
     await page.getByRole('button', { name: 'Remove override for Accept autocomplete with', exact: true }).click();
-    await expect(page.locator('#autocomplete-accept')).toHaveValue('tab');
+    await expect(page.locator('#autocomplete-accept')).toHaveAttribute('value', 'tab');
     await expect(page.locator('#autocomplete-accept-source')).toHaveText('Inherited');
     await page.locator('#settings-category-runtime').click();
     await settingsPage.locator('#settings-category-runtime').click();

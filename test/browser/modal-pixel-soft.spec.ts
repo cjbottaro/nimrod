@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { demoFixture } from './demo-fixture';
+import { chooseSetting, demoFixture } from './demo-fixture';
 
 test('Pixel options preserve live per-tile blur/fade through a partial close and clean up masks', async ({ page }) => {
   const fixture = await demoFixture(page);
@@ -41,9 +41,9 @@ test('Pixel options preserve live per-tile blur/fade through a partial close and
     expect(result.filters.some(filter => /^blur\((?:[1-3](?:\.\d+)?)px\)$/.test(filter))).toBe(true);
     expect(result.exitAlphas).toEqual(result.alphas); expect(result.copies).toBe(0); expect(result.duration).toBe(400);
     expect(result.text).toBe('Still live while materializing'); expect(result.open).toBe(false); expect(result.focused).toBe('modal-animation-preview');
-    await settings.locator('#modal-animation-style').selectOption('none');
+    await chooseSetting(settings, 'modal-animation-style', 'none');
     await expect(settings.locator('[data-modal-pixel-mask], [data-modal-pixel-blur-tile]')).toHaveCount(0);
-    await settings.locator('#modal-animation-style').selectOption('pixel');
+    await chooseSetting(settings, 'modal-animation-style', 'pixel');
     await blur.focus(); await blur.press('Home'); await expect(settings.locator('#modal-pixel-blur-value')).toHaveText('Off');
     await fade.uncheck(); await expect(settings.locator('html')).toHaveCSS('--modal-pixel-fade', 'false');
     await settings.locator('#modal-animation-preview').click();

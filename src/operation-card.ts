@@ -39,7 +39,7 @@ export function renderOperationCard(node: HTMLElement, operation: OperationCard 
   title.classList.toggle('delivery-status-shimmer', operation.state === 'pending');
   let cancel = header.querySelector<HTMLButtonElement>('.operation-cancel');
   if (operation.state === 'pending' && operation.cancelId) {
-    if (!cancel) { cancel = create('button', 'operation-cancel'); cancel.type = 'button'; cancel.textContent = 'Cancel'; header.append(cancel); }
+    if (!cancel) { cancel = create('button', 'operation-cancel utility-button'); cancel.type = 'button'; cancel.textContent = 'Cancel'; header.append(cancel); }
     cancel.dataset.cancelOperation = operation.cancelId;
     cancel.setAttribute('aria-label', `Cancel ${operation.title.toLowerCase()}`);
   } else {

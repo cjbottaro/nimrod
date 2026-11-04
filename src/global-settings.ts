@@ -9,6 +9,7 @@ import { installKeybindingDispatch } from './keybindings';
 import { installWindowPresentation } from './window-presentation';
 import { installCommandPalette } from './command-palette';
 import { createThemeSelection } from './themes/selection';
+import { settingsChoicePage } from './settings-choice-controls';
 
 /** Deliberately separate boot: global Settings never mounts session controllers. */
 export async function mountGlobalSettings() {
@@ -38,6 +39,7 @@ export async function mountGlobalSettings() {
     });
     const selectTheme = createThemeSelection(palette, preferences, surface.themes);
     surface.onSelectTheme(selectTheme);
+    surface.onChooseSetting(settingsChoicePage(palette, document.getElementById('settings-page') as HTMLDialogElement));
     presentation.own(() => palette.dispose());
     appearanceReady = surface.ready;
     surface.settings.open();

@@ -23,7 +23,7 @@ export function installTypography(root: HTMLElement, host: {
     for (const kind of ['conversation', 'monospace'] as const) {
       const family = value[`${kind}Font`], size = value[`${kind}Size`];
       const button = required<HTMLButtonElement>(`${kind}-font`);
-      button.textContent = `${family || 'System default'} ▾`;
+      required(`${kind}-font-current`).textContent = family || 'System default';
       button.title = family || 'System default';
       const input = required<HTMLInputElement>(`${kind}-font-size`);
       if (!editing.has(kind)) input.value = String(size);

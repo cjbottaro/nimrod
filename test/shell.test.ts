@@ -1737,7 +1737,7 @@ test('palette commands show shortcuts except intentionally unbound actions and r
 test('transcript logging setting enables native Pi logging without changing the mounted conversation', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   try {
-    assert.equal(f.element<HTMLSelectElement>('transcript-logs-mode').value, 'off');
+    assert.equal(f.element<HTMLInputElement>('transcript-logs-mode').checked, false);
     f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
     f.emit({ type: 'tool_execution_start', toolCallId: 'disabled', toolName: 'extension_tool' }); await f.tick();
     assert.equal(f.calls.some(c => c.command === 'append_transcript_logs'), false);
@@ -1746,7 +1746,7 @@ test('transcript logging setting enables native Pi logging without changing the 
     const view = prompt.closest('.session-view');
     const starts = f.calls.filter(c => c.command === 'start_pi').length;
     f.preferences.external('{"diagnostics.transcriptLogs":true}'); await f.tick();
-    assert.equal(f.element<HTMLSelectElement>('transcript-logs-mode').value, 'on');
+    assert.equal(f.element<HTMLInputElement>('transcript-logs-mode').checked, true);
     f.emit({ type: 'tool_execution_start', toolCallId: 'custom', toolName: 'extension_tool', args: { value: 1 } });
     await new Promise(resolve => setTimeout(resolve, 150)); await f.tick();
     const writes = f.calls.filter(c => c.command === 'append_transcript_logs');
@@ -1943,7 +1943,7 @@ test('performance capture is opt-in, bindable, timing-only and preserves the mou
   const control = { after: [] as (() => void)[], writeError: undefined as string | undefined, copyError: undefined as string | undefined };
   const f = await fixture(undefined, { windowWorkspace: '/project', performanceControl: control });
   try {
-    assert.equal(f.element<HTMLSelectElement>('performance-mode').value, 'off');
+    assert.equal(f.element<HTMLInputElement>('performance-mode').checked, false);
     assert.equal(f.element<HTMLButtonElement>('performance-capture').disabled, true);
     f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
     const prompt = f.element<HTMLTextAreaElement>('prompt');
@@ -3735,13 +3735,13 @@ test('notification settings save, synchronize and suppress alerts without interr
     f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
     const stopCount = f.calls.filter(c => c.command === 'stop_pi').length;
     f.openSettings();
-    const picker = f.element<HTMLSelectElement>('notification-mode');
-    picker.value = 'off'; picker.dispatchEvent(new f.win.Event('change')); await f.tick();
+    const picker = f.element<HTMLInputElement>('notification-mode');
+    picker.checked = false; picker.dispatchEvent(new f.win.Event('change')); await f.tick();
     assert.equal(parseSettings(f.preferences.value.text)['notifications.enabled'], false);
     f.emit({ type: 'agent_start' }); f.emit({ type: 'agent_settled' }); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'notify_session').length, 0);
     f.preferences.external('{"notifications.enabled":true}');
-    assert.equal(picker.value, 'on');
+    assert.equal(picker.checked, true);
     f.emit({ type: 'extension_ui_request', method: 'confirm', id: 'ask', title: 'private request', message: 'private body' }); await f.tick();
     assert.deepEqual(structuredClone(f.calls.filter(c => c.command === 'notify_session').at(-1)?.args), { kind: 'input', session: 'Session', target: { session: f.rows()[0].id.replace('session-', ''), token: [...f.sessions.keys()][0] }, selected: false });
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
@@ -5576,9 +5576,9 @@ test('project settings routes scope shortcuts and removes overrides rather than 
     assert.equal(f.element('theme-picker-source').parentElement!.parentElement, row);
     assert.equal(f.element('theme-current').parentElement!.contains(f.element('theme-picker-source')), false);
     assert.equal(row.querySelector('.settings-control-actions')!.contains(picker), true);
-    assert.equal(picker.classList.contains('settings-utility'), true);
-    assert.equal(f.element('settings-global-link').classList.contains('settings-utility'), true);
-    assert.equal(f.element('settings-back').classList.contains('settings-utility'), false);
+    assert.equal(picker.classList.contains('utility-button'), true);
+    assert.equal(f.element('settings-global-link').classList.contains('utility-button'), true);
+    assert.equal(f.element('settings-back').classList.contains('utility-button'), false);
     assert.match(picker.getAttribute('aria-describedby')!, /theme-current/);
     assert.equal(f.element('theme-hint').hidden, true);
     assert.equal(f.element('theme-library-actions').hidden, true);

@@ -355,7 +355,8 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       cancel() { if (current()) closeInteraction(); },
     };
   }
-  function startSelection(heading: string, onRetry: () => void, onError?: (message: string) => void, standalone = false): SelectionRequest | undefined {
+  function startSelection(heading: string, onRetry: () => void, onError?: (message: string) => void, standalone = false, parent?: HTMLDialogElement): SelectionRequest | undefined {
+    if (parent && (dialog.open || !parent.open || !open(parent))) return;
     const request = beginPage('selection', heading, 'Type to filter…', onRetry);
     if (request === undefined) return;
     if (standalone) { back.hidden = true; retry.hidden = true; }

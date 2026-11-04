@@ -646,6 +646,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       }
       if (controlsNode.children.item(position) !== node) controlsNode.insertBefore(node, controlsNode.children.item(position));
       position++;
+      if (!node.classList.contains('utility-button')) node.classList.add('utility-button');
       node.hidden = false; node.textContent = control.label; node.title = control.title; node.setAttribute('aria-label', control.title);
       node.disabled = control.disabled || state.sessionUnavailable === true;
     }
@@ -677,6 +678,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
         sessionMetrics.replaceChildren(...status.metricParts.map(part => {
           if (!part.actionId) return document.createTextNode(part.text);
           const button = element('button'); button.type = 'button'; button.textContent = part.text;
+          button.className = 'utility-button';
           button.dataset.controlId = part.actionId; button.title = part.title || part.text;
           button.setAttribute('aria-label', button.title);
           return button;

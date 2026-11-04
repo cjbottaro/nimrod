@@ -43,7 +43,9 @@ Escape during a drag cancels resizing; the next Escape closes Settings.
 
 ## Appearance
 
-**Global Settings…**, **Change theme…**, **Remove override** and **Copy path** use quiet outlined buttons with visible boundaries before hover. **Back** remains a text navigation control.
+Zoom, modal animation and auto-follow show their current value beside **Change…**, which opens a searchable choice picker. **Enter** or clicking a choice applies it; **Escape** cancels and returns to Settings. The theme picker alone has live hover previews.
+
+Settings utility actions use quiet outlined buttons with visible boundaries before hover, including Change…, Reset, Preview, Test/Refresh, Capture and Copy path. **Back** remains a text navigation control.
 
 Related preferences are grouped into compact rows. **Window** contains the theme and background controls; **Typography** pairs font choices and sizes with a live specimen; **Interface** contains zoom, followed by animation and auto-follow preferences. Controls stack in narrow windows. Expand **About window appearance** or **About typography** for the detailed explanations.
 
@@ -75,7 +77,7 @@ Use **Global Settings → Appearance → Typography** to adjust reading comfort 
 
 Both font choices start at **System default**, with **14px** sizes. Sizes range from **10–32 logical pixels**, in one-pixel steps. Zoom still applies: at the default 125% zoom, 14px text is displayed at a larger scale. Changing a font or size never changes zoom. Navigation, Settings, labels and other interface controls keep their system UI font.
 
-Click a font button to search installed font families. Each family name is shown in its own font; **System default** stays first, and the Monospace picker puts fixed-pitch families before other fonts. Use Up/Down or Home/End to move, then Enter or click to choose. Escape or Close cancels without changing your font and returns to Settings. **Refresh** re-reads the installed fonts if you have added one. The app does not download fonts.
+Click **Change…** beside the current font name to search installed font families. Each family name is shown in its own font; **System default** stays first, and the Monospace picker puts fixed-pitch families before other fonts. Use Up/Down or Home/End to move, then Enter or click to choose. Escape or Close cancels without changing your font and returns to Settings. **Refresh** re-reads the installed fonts if you have added one. The app does not download fonts.
 
 The preview contains prose, code and a composer sample. Selections apply immediately to the preview; saved changes synchronize to project and pop-out windows without restarting agents or replacing conversations. Typing a valid size previews it locally; leaving the field or using its step buttons saves it. Drafts, focus, disclosure choices and follow-versus-reading intent are retained while text reflows.
 
@@ -84,6 +86,8 @@ The preview contains prose, code and a composer sample. Selections apply immedia
 Installed-font discovery and visual behavior still need native acceptance on macOS; Linux remains unverified.
 
 ## Interaction
+
+**Accept autocomplete with** shows its current value beside **Change…**. Project inheritance stays in the separate provenance column.
 
 **Accept autocomplete with** applies to slash-command name suggestions and inline
 argument completions, across harnesses:
@@ -102,9 +106,13 @@ newline bindings.
 
 ## Notifications
 
+Use the **Enabled** checkbox for Background session alerts; Test and Refresh remain separate actions.
+
 **Background session alerts** are on by default. Turn them off across windows, send a fixed-content delivery test, or refresh read-only macOS diagnostics. See [Notifications](notifications.md) for triggers, click behavior and troubleshooting.
 
 ## Diagnostics
+
+Transcript logging and performance diagnostics use **Enabled** checkboxes, not On/Off menus. Their content/privacy guidance remains visible.
 
 **Transcript debug logs** is off by default. Enable full-content local conversation traces for debugging; logs can contain secrets and are never uploaded. Logging is best-effort and never waits for disk during session delivery. Full buffers drop diagnostic records and report an incomplete capture rather than slowing session processing. See [Transcript debug logs](transcript-logs.md) for storage, retention and troubleshooting.
 

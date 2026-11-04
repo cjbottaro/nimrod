@@ -95,6 +95,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Harness-contributed Set permissions command shortcuts and Copilot mapping | [Permission command shortcut](references/live-permissions.md) | [Copilot permission changes](../../../docs/copilot.md#change-permissions-during-work) |
 | Session configuration interface, model/effort choices, deferred changes and local transcript progress | [Model/thinking](references/model-thinking.md) | [Model/thinking](../../../docs/model-thinking.md) |
 | Global defaults, project JSONC overrides, migration and window state | [Preferences](references/preferences.md) | [Settings](../../../docs/settings.md) |
+| Shared value/action controls, outlined utility buttons and direct binary preferences | [Control patterns](references/controls.md) | [Settings](../../../docs/settings.md), [Reading conversations](../../../docs/reading-conversations.md) |
 | Global Settings window, Project settings page, categories and independent width | [Settings layout](references/settings-layout.md) | [Settings](../../../docs/settings.md) |
 | Global conversation/code font families and sizes, installed-font pickers, previews and content-only reflow | [Typography](references/typography.md) | [Typography settings](../../../docs/settings.md#typography) |
 | Bindable actions, recorder and conflicts | [Keybindings](references/keybindings.md) | [Keybindings](../../../docs/keybindings.md) |

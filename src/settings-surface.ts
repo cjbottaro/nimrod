@@ -12,6 +12,7 @@ import { installKeybindingEditor } from './keybinding-editor';
 import { isMac } from './keybindings';
 import { installThemes } from './themes/picker';
 import { installZoom } from './zoom';
+import { installSettingsChoiceControls, type ChooseSetting } from './settings-choice-controls';
 import { installModalMotion, showModal, closeModal } from './modal-motion';
 import { applyModalAnimation, type ModalAnimationStyle } from './modal-animation';
 import { updateRangeFill } from './range-input';
@@ -27,6 +28,8 @@ import type { InstalledFont } from './font-picker';
 export function installSettingsSurface(preferences: Awaited<ReturnType<typeof installPreferences>>, notices: ReturnType<typeof installApplicationNotices>, global = false) {
   const required = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   let unloading = false, noticeSequence = 0;
+  let chooseSetting: ChooseSetting = async () => undefined;
+  let choiceControls: ReturnType<typeof installSettingsChoiceControls> | undefined;
   const feedback = (id: string, operation: string) => (message?: string) => {
     if (message) notices.report({ id, operation, message }); else notices.resolve(id);
   };
@@ -126,12 +129,12 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     blurValue: required<HTMLOutputElement>('background-blur-value'),
     blurGroup: required('settings-background-blur'), hint: required('translucency-hint'),
   } : undefined);
-  const zoom = installZoom(window, required<HTMLSelectElement>('zoom-level'), required('zoom-error'), {
+  const zoom = installZoom(window, required<HTMLButtonElement>('zoom-level'), required('zoom-error'), {
     read: () => preferences.zoom(), save: percent => preferences.saveZoom(percent),
     apply: scale => getCurrentWebview().setZoom(scale),
-    error: feedback('zoom', 'App zoom'),
+    error: feedback('zoom', 'App zoom'), present: () => choiceControls?.paint(),
   }, false);
-  const transcriptLogPicker = required<HTMLSelectElement>('transcript-logs-mode');
+  const transcriptLogPicker = required<HTMLInputElement>('transcript-logs-mode');
   const transcriptLogStatus = required('transcript-logs-status');
   let transcriptLogPath = '', transcriptLogFailure = '', transcriptLogLoss = '';
   const transcriptLog = createTranscriptLog({
@@ -161,12 +164,12 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   function reloadTranscriptLog(): void {
     const enabled = preferences.transcriptLogEnabled();
     transcriptLog.setEnabled(enabled && !global);
-    transcriptLogPicker.value = enabled ? 'on' : 'off';
+    transcriptLogPicker.checked = enabled;
     transcriptLogStatus.textContent = transcriptLogFailure || transcriptLogLoss || `${enabled ? 'Transcript debug logging enabled for project windows.' : 'Transcript debug logging is off; existing logs are retained.'}${transcriptLogPath ? ` Logs: ${transcriptLogPath}` : ''}`;
   }
   transcriptLogPicker.addEventListener('change', () => {
     transcriptLogPicker.disabled = true;
-    void preferences.saveTranscriptLog(transcriptLogPicker.value === 'on').then(() => notices.resolve('transcript-logs-settings'))
+    void preferences.saveTranscriptLog(transcriptLogPicker.checked).then(() => notices.resolve('transcript-logs-settings'))
       .catch(error => notices.report({ id: 'transcript-logs-settings', operation: 'Save transcript debug logging setting', message: String(error) }))
       .finally(() => { if (!unloading) { reloadTranscriptLog(); transcriptLogPicker.disabled = false; } });
   });
@@ -187,7 +190,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
       ...appearance.diagnostics(),
     },
   }));
-  const performancePicker = required<HTMLSelectElement>('performance-mode');
+  const performancePicker = required<HTMLInputElement>('performance-mode');
   const performanceCapture = required<HTMLButtonElement>('performance-capture');
   const performanceStatus = required('performance-status');
   let capturingPerformance = false;
@@ -196,7 +199,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     const enabled = preferences.performanceEnabled();
     const changed = enabled !== performanceDiagnostics.enabled;
     performanceDiagnostics.setEnabled(enabled && !global);
-    performancePicker.value = enabled ? 'on' : 'off';
+    performancePicker.checked = enabled;
     performanceCapture.disabled = !enabled || capturingPerformance;
     if (changed || !enabled) performanceStatus.textContent = enabled ? 'Timing diagnostics enabled. Capture when the app feels slow.' : 'Performance diagnostics are off.';
   }
@@ -237,7 +240,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   performanceCapture.addEventListener('click', () => { void capturePerformance(); });
   performancePicker.addEventListener('change', () => {
     performancePicker.disabled = true;
-    void preferences.savePerformance(performancePicker.value === 'on').then(() => {
+    void preferences.savePerformance(performancePicker.checked).then(() => {
       notices.resolve('performance-settings');
     }).catch(error => {
       notices.report({ id: 'performance-settings', operation: 'Save performance diagnostics setting', message: String(error) });
@@ -245,7 +248,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   });
   reloadPerformance();
   const modalMotion = installModalMotion(document);
-  const animationStyle = required<HTMLSelectElement>('modal-animation-style');
+  const animationStyle = required<HTMLButtonElement>('modal-animation-style');
   const animationDuration = required<HTMLInputElement>('modal-animation-duration');
   const animationDurationValue = required<HTMLOutputElement>('modal-animation-duration-value');
   const animationPreview = required<HTMLDialogElement>('modal-animation-preview-dialog');
@@ -272,7 +275,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   function reloadModalAnimation(force = false): void {
     const animation = preferences.modalAnimation(pendingStyle);
     applyModalAnimation(document.documentElement, animation);
-    animationStyle.value = animation.style;
+    animationStyle.value = animation.style; choiceControls?.paint();
     const scan = isScanStyle(animation.style), kind = scan ? 'scanSpeed' : 'duration';
     const kindChanged = valueKind !== kind; valueKind = kind;
     animationDuration.step = scan ? '50' : '10';
@@ -352,19 +355,20 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   const previewAnimation = () => { if (!animationPreview.open) showModal(animationPreview); };
   required('modal-animation-preview').addEventListener('click', previewAnimation);
   reloadModalAnimation();
-  const sendAutoFollowPicker = required<HTMLSelectElement>('send-auto-follow');
-  const reloadSendAutoFollow = () => { sendAutoFollowPicker.value = preferences.sendAutoFollow(); };
-  sendAutoFollowPicker.addEventListener('change', () => {
+  const sendAutoFollowPicker = required<HTMLButtonElement>('send-auto-follow');
+  const reloadSendAutoFollow = () => { sendAutoFollowPicker.value = preferences.sendAutoFollow(); choiceControls?.paint(); };
+  const changeSendAutoFollow = () => {
     sendAutoFollowPicker.disabled = true;
     void preferences.saveSendAutoFollow(sendAutoFollowPicker.value as import('./pi/transcript-scroll').SendAutoFollow).then(() => {
       notices.resolve('send-auto-follow-settings');
     }).catch(error => {
       notices.report({ id: 'send-auto-follow-settings', operation: 'Save auto-follow setting', message: String(error) });
-    }).finally(() => { reloadSendAutoFollow(); sendAutoFollowPicker.disabled = false; });
-  });
+    }).finally(() => { if (!unloading) { reloadSendAutoFollow(); sendAutoFollowPicker.disabled = false; } });
+  };
+  sendAutoFollowPicker.addEventListener('change', changeSendAutoFollow);
   reloadSendAutoFollow();
-  const autocompletePicker = required<HTMLSelectElement>('autocomplete-accept');
-  const reloadAutocomplete = () => { autocompletePicker.value = preferences.autocompleteAccept(); };
+  const autocompletePicker = required<HTMLButtonElement>('autocomplete-accept');
+  const reloadAutocomplete = () => { autocompletePicker.value = preferences.autocompleteAccept(); choiceControls?.paint(); };
   const changeAutocomplete = () => {
     autocompletePicker.disabled = true;
     void preferences.saveAutocompleteAccept(autocompletePicker.value as import('./autocomplete-settings').AutocompleteAccept)
@@ -374,13 +378,13 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   };
   autocompletePicker.addEventListener('change', changeAutocomplete);
   reloadAutocomplete();
-  const notificationPicker = required<HTMLSelectElement>('notification-mode');
+  const notificationPicker = required<HTMLInputElement>('notification-mode');
   const notificationStatus = required('notification-status');
   const notificationTest = required<HTMLButtonElement>('notification-test');
   const notificationDiagnostics = required<HTMLButtonElement>('notification-diagnostics');
   let testingNotification = false, readingNotificationDiagnostics = false;
   const reloadNotifications = () => {
-    notificationPicker.value = preferences.notificationsEnabled() ? 'on' : 'off';
+    notificationPicker.checked = preferences.notificationsEnabled();
     notificationTest.disabled = testingNotification || readingNotificationDiagnostics || !preferences.notificationsEnabled();
     notificationDiagnostics.disabled = testingNotification || readingNotificationDiagnostics;
   };
@@ -416,11 +420,18 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   reloadNotifications();
   notificationPicker.addEventListener('change', () => {
     notificationPicker.disabled = true;
-    void preferences.saveNotifications(notificationPicker.value === 'on').then(() => {
+    void preferences.saveNotifications(notificationPicker.checked).then(() => {
       notificationStatus.textContent = 'Saved. System notification settings still apply.'; notices.resolve('notification-settings');
     }).catch(error => { notificationStatus.textContent = ''; notices.report({ id: 'notification-settings', operation: 'Save notification settings', message: String(error) }); }).finally(() => {
       reloadNotifications(); notificationPicker.disabled = false;
     });
+  });
+
+  choiceControls = installSettingsChoiceControls(document, {
+    choose: (...args) => chooseSetting(...args),
+    apply: { 'zoom-level': value => zoom.select(Number(value)), 'modal-animation-style': changeAnimationStyle,
+      'send-auto-follow': changeSendAutoFollow, 'autocomplete-accept': changeAutocomplete },
+    error: (id, error) => feedback('settings-choice:' + id, 'Change setting')(String(error)),
   });
 
   const sources = new Map<ProjectSettingKey, { status: HTMLElement; reset: HTMLButtonElement }>();
@@ -432,7 +443,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     for (const [key, id] of controls) {
       const row = document.createElement('div'); row.className = 'settings-source';
       const status = document.createElement('span'); status.id = id + '-source';
-      const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'settings-reset secondary settings-utility'; reset.textContent = 'Remove override';
+      const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'settings-reset secondary utility-button'; reset.textContent = 'Remove override';
       reset.id = id + '-reset';
       reset.setAttribute('aria-label', 'Remove override for ' + (document.querySelector('label[for="' + id + '"]')?.textContent ?? id));
       required(id).setAttribute('aria-describedby', [required(id).getAttribute('aria-describedby'), status.id].filter(Boolean).join(' '));
@@ -518,6 +529,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   return {
     settings, settingsNavigation, themes, zoom, runtime,
     onSelectTheme(action: () => void) { selectTheme = action; },
+    onChooseSetting(choose: ChooseSetting) { chooseSetting = choose; },
     ready: Promise.all([appearance.ready, zoom.ready]).then(() => {}),
     async settled() { await appearance.ready; await zoom.reload(); await appearance.settled(); },
     initializeRuntime(defaults: { pi: string; node: string }) { runtimeDefaults = defaults; runtime.initialize(defaults); },
@@ -530,7 +542,8 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     dispose() {
       unloading = true; unsubscribe();
       fileCopyBindings.forEach(dispose => dispose());
-      typography.dispose();
+      typography.dispose(); choiceControls?.dispose();
+      sendAutoFollowPicker.removeEventListener('change', changeSendAutoFollow);
       autocompletePicker.removeEventListener('change', changeAutocomplete);
       required('modal-animation-preview').removeEventListener('click', previewAnimation);
       animationStyle.removeEventListener('change', changeAnimationStyle);

@@ -33,6 +33,7 @@ import { AttachmentStore } from './attachment-store';
 import { readClipboardImage } from './clipboard-image';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { createThemeSelection } from './themes/selection';
+import { settingsChoicePage } from './settings-choice-controls';
 import { measureWork } from './performance-diagnostics';
 import { SessionDrafts } from './session-drafts';
 import { NativeDrafts } from './native-drafts';
@@ -56,6 +57,7 @@ import './workspace.css';
 import './keybindings.css';
 import './modal.css';
 import './application-notices.css';
+import './utility-button.css';
 
 const required = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 let applicationNotices: ReturnType<typeof installApplicationNotices> | undefined;
@@ -726,6 +728,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
 });
 const pickTheme = createThemeSelection(palette, preferences, themes);
 settingsSurface.onSelectTheme(pickTheme);
+settingsSurface.onChooseSetting(settingsChoicePage(palette, required<HTMLDialogElement>('settings-page')));
 async function takeProjectPickerRequest(): Promise<void> {
   if (!ready || unloading) return;
   if (await invoke<boolean>('take_project_picker_request')) await palette.projects();

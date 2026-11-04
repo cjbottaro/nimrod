@@ -108,7 +108,8 @@ test('font picker filters samples, prioritizes monospace, preserves parent and r
     search.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     assert.equal(picker.open, false); assert.equal(parent.open, true);
     assert.equal(f.doc.activeElement, opener);
-    assert.equal(opener.textContent, 'Fixture Sans ▾');
+    assert.equal(opener.textContent, 'Change…');
+    assert.equal(f.doc.getElementById('monospace-font-current')!.textContent, 'Fixture Sans');
     assert.deepEqual([...f.writes], [{ monospaceFont: 'Fixture Sans' }]);
     f.pending[0].resolve(); await settle();
     opener.click();

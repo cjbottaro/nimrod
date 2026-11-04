@@ -21,6 +21,15 @@ type TestWindow = Window & {
   __fixtureNotificationClick?: (event: { session: string; token: string }) => void;
 };
 export const visible = (id: string) => `.session-view:not([hidden]) [data-pi-id="${id}"]`;
+export async function chooseSetting(page: Page, id: string, value: string) {
+  const control = page.locator('#' + id);
+  if (['notification-mode', 'performance-mode', 'transcript-logs-mode'].includes(id)) {
+    await control.setChecked(value === 'on'); return;
+  }
+  await control.click();
+  await page.locator('#palette-list [data-key="' + value + '"]').click();
+  await expect(page.locator('#command-palette')).not.toBeVisible();
+}
 
 /** Real app bundle and independent offline demo children. Never starts Pi. */
 export async function demoFixture(page: Page, appState: Record<string, unknown> = {}, catalog: { path: string; sessionId: string; name: string; preview: string; modified: number; lastUserMessageAt?: number }[] = [], typingOptions?: { drafts: Record<string, unknown>; persistent: boolean }, pluginOptions?: { settings: string; packages: Record<string, string>; personal?: () => Promise<import('../../src/pi/card-plugins/catalog').PersonalBundles> }, fixtureOptions?: { tool?: 'edit'; enforceCsp?: boolean; acpAgentName?: 'Copilot' }) {
@@ -30,7 +39,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
       builder.onLoad({ filter: /.*/, namespace: 'raw' }, args => ({ contents: readFileSync(args.path, 'utf8'), loader: 'text' }));
     } }],
   });
-  const css = ['src/pi/transcript.css', 'src/theme.css', 'src/typography.css', 'src/range-input.css', 'src/workspace.css', 'src/keybindings.css', 'src/modal.css', 'src/application-notices.css', 'src/window-appearance.css', 'src/acp/session.css'].map(p => readFileSync(p, 'utf8')).join('\n');
+  const css = ['src/pi/transcript.css', 'src/theme.css', 'src/typography.css', 'src/range-input.css', 'src/workspace.css', 'src/keybindings.css', 'src/modal.css', 'src/application-notices.css', 'src/window-appearance.css', 'src/acp/session.css', 'src/utility-button.css'].map(p => readFileSync(p, 'utf8')).join('\n');
   let html = readFileSync('index.html', 'utf8').replace('<script type="module" src="/src/main.ts"></script>', '').replace('</head>', `<style>${css}</style></head>`);
   if (fixtureOptions?.enforceCsp) {
     const policy = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8')).app.security.csp as string;

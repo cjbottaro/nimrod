@@ -46,7 +46,7 @@
 
   <!-- Full-window page in the native dialog top layer: the workspace stays laid out and mounted. -->
   <dialog id="settings-page" aria-labelledby="settings-title">
-    <header class="settings-header"><button id="settings-back" type="button" class="secondary" title="Back · Escape">← Back</button><div class="settings-heading"><h1 id="settings-title">Project settings</h1><p id="settings-scope-description" class="settings-hint">Changes here apply only to this project directory and override Global Settings.</p></div><button id="settings-global-link" type="button" class="secondary settings-utility">Global Settings…</button></header>
+    <header class="settings-header"><button id="settings-back" type="button" class="secondary" title="Back · Escape">← Back</button><div class="settings-heading"><h1 id="settings-title">Project settings</h1><p id="settings-scope-description" class="settings-hint">Changes here apply only to this project directory and override Global Settings.</p></div><button id="settings-global-link" type="button" class="secondary utility-button">Global Settings…</button></header>
     <div id="settings-layout" class="sidebar-layout">
       <aside id="settings-sidebar" class="layout-sidebar" aria-label="Settings categories">
         <div id="settings-categories" role="tablist" aria-label="Settings categories" aria-orientation="vertical">
@@ -72,10 +72,10 @@
             <label for="theme-picker">Color theme</label>
             <div class="settings-field"><span id="theme-current"></span></div>
             <div class="settings-control-actions">
-              <button id="theme-picker" type="button" class="secondary settings-utility" aria-haspopup="dialog" aria-describedby="theme-current">Change theme…</button>
+              <button id="theme-picker" type="button" class="secondary utility-button" aria-haspopup="dialog" aria-describedby="theme-current">Change theme…</button>
             </div>
             <input id="theme-file" type="file" accept=".json,.jsonc,application/json" aria-label="Import VS Code color theme" hidden>
-            <div id="theme-library-actions" class="settings-row-note"><button id="theme-import" type="button" class="secondary settings-utility">Import color theme…</button><button id="theme-remove" type="button" class="secondary settings-utility" hidden>Remove current imported theme</button></div>
+            <div id="theme-library-actions" class="settings-row-note"><button id="theme-import" type="button" class="secondary utility-button">Import color theme…</button><button id="theme-remove" type="button" class="secondary utility-button" hidden>Remove current imported theme</button></div>
             <p id="theme-hint" class="settings-hint settings-row-note">Change theme opens the searchable Select theme… picker with live previews. Imports use standalone VS Code JSON/JSONC files.</p>
             <div id="theme-notice" class="settings-row-note" role="status" hidden><span id="theme-notice-text"></span><button id="theme-notice-dismiss" type="button" aria-label="Dismiss theme notice">×</button></div>
           </div>
@@ -91,11 +91,11 @@
           <h3 id="typography-title" class="settings-section-title">Typography</h3>
           <div class="settings-group">
           <div class="typography-row">
-            <div class="typography-family"><label id="conversation-font-label" for="conversation-font">Conversation font</label><button id="conversation-font" type="button" class="secondary" aria-haspopup="dialog">System default ▾</button></div>
+            <div class="typography-family"><label id="conversation-font-label" for="conversation-font">Conversation font</label><div class="typography-font-value"><span id="conversation-font-current" class="settings-choice-value">System default</span><button id="conversation-font" type="button" class="secondary utility-button" aria-haspopup="dialog" aria-describedby="conversation-font-current">Change…</button></div></div>
             <div class="typography-size"><label for="conversation-font-size">Size (px)</label><div class="typography-stepper"><button id="conversation-font-smaller" type="button" class="secondary" aria-label="Decrease conversation font size">−</button><input id="conversation-font-size" type="number" min="10" max="32" step="1" value="14"><button id="conversation-font-larger" type="button" class="secondary" aria-label="Increase conversation font size">+</button></div></div>
           </div>
           <div class="typography-row">
-            <div class="typography-family"><label id="monospace-font-label" for="monospace-font">Monospace font</label><button id="monospace-font" type="button" class="secondary" aria-haspopup="dialog">System default ▾</button></div>
+            <div class="typography-family"><label id="monospace-font-label" for="monospace-font">Monospace font</label><div class="typography-font-value"><span id="monospace-font-current" class="settings-choice-value">System default</span><button id="monospace-font" type="button" class="secondary utility-button" aria-haspopup="dialog" aria-describedby="monospace-font-current">Change…</button></div></div>
             <div class="typography-size"><label for="monospace-font-size">Size (px)</label><div class="typography-stepper"><button id="monospace-font-smaller" type="button" class="secondary" aria-label="Decrease monospace font size">−</button><input id="monospace-font-size" type="number" min="10" max="32" step="1" value="14"><button id="monospace-font-larger" type="button" class="secondary" aria-label="Increase monospace font size">+</button></div></div>
           </div>
           <div class="typography-preview" role="region" aria-label="Typography preview">
@@ -104,21 +104,21 @@
 console.log(greeting); // 0123456789</code></pre>
             <textarea class="typography-composer" rows="2" readonly aria-label="Composer font preview" tabindex="-1">Explain the changes and suggest a next step.</textarea>
           </div>
-          <div class="settings-group-footer"><details class="settings-help"><summary>About typography</summary><p class="settings-hint">Conversation text and composer; code and tool output. Interface fonts stay unchanged. Sizes are logical pixels; Zoom scales these too. Missing fonts use the system fallback.</p></details><button id="typography-reset" type="button" class="secondary">Reset typography</button></div>
+          <div class="settings-group-footer"><details class="settings-help"><summary>About typography</summary><p class="settings-hint">Conversation text and composer; code and tool output. Interface fonts stay unchanged. Sizes are logical pixels; Zoom scales these too. Missing fonts use the system fallback.</p></details><button id="typography-reset" type="button" class="secondary utility-button">Reset typography</button></div>
           </div>
         </section>
         <div id="settings-zoom">
           <h3 class="settings-section-title">Interface</h3>
           <div class="settings-group"><div class="settings-row">
             <label for="zoom-level">Zoom</label>
-            <div class="settings-field"><select id="zoom-level" aria-label="App zoom" title="App zoom · ⌘/Ctrl +, −, 0" disabled><option>100%</option></select></div>
+            <div class="settings-field"><span id="zoom-level-current" class="settings-choice-value"></span></div><div class="settings-control-actions"><button id="zoom-level" type="button" class="secondary utility-button" aria-haspopup="dialog" aria-describedby="zoom-level-current" disabled>Change…</button></div>
             <p id="zoom-shortcut-hint" class="settings-hint settings-row-note">⌘/Ctrl + / − anywhere in the app. ⌘/Ctrl 0 resets to 100%.</p>
             <p id="zoom-error" class="settings-row-note" role="status" hidden></p>
           </div></div>
         </div>
         <div id="settings-modal-animation" class="settings-group settings-spaced-group">
           <div class="settings-row"><label for="modal-animation-style">Modal animation</label>
-          <div class="settings-field"><select id="modal-animation-style" aria-describedby="modal-animation-hint"><option value="none">None</option><option value="subtle" selected>Subtle (default)</option><option value="crt">CRT power-on</option><option value="hologram">Hologram</option><option value="pixel">Pixel dissolve</option></select></div></div>
+          <div class="settings-field"><span id="modal-animation-style-current" class="settings-choice-value"></span></div><div class="settings-control-actions"><button id="modal-animation-style" type="button" class="secondary utility-button" aria-haspopup="dialog" aria-describedby="modal-animation-style-current modal-animation-hint">Change…</button></div></div>
           <div id="modal-animation-options" class="settings-row">
             <label id="modal-animation-value-label" for="modal-animation-duration">Duration (milliseconds)</label>
             <div class="appearance-duration"><input id="modal-animation-duration" type="range" min="100" max="1500" step="10" value="500" aria-describedby="modal-animation-hint"><output id="modal-animation-duration-value" for="modal-animation-duration">500 ms</output></div>
@@ -132,11 +132,11 @@ console.log(greeting); // 0123456789</code></pre>
             <p id="modal-pixel-hint" class="settings-hint">Text and content inside each hard-edged tile sharpen and fade in. Larger panels may coarsen the grid to keep at most 96 tiles.</p>
           </div>
           <div class="settings-group-footer"><p id="modal-animation-hint" class="settings-hint">A short fade, lift and gentle scale. Default: 500 ms; dismissal is 25% faster. Reduced motion disables animations.</p>
-          <button id="modal-animation-preview" type="button" class="secondary">Preview animation</button></div>
+          <button id="modal-animation-preview" type="button" class="secondary utility-button">Preview animation</button></div>
         </div>
         <div id="settings-send-auto-follow" class="settings-group settings-spaced-group">
           <div class="settings-row"><label for="send-auto-follow">Auto-follow after sending</label>
-          <div class="settings-field"><select id="send-auto-follow" aria-describedby="send-auto-follow-hint"><option value="always">Always</option><option value="whenIdle" selected>When idle (default)</option><option value="never">Never</option></select></div>
+          <div class="settings-field"><span id="send-auto-follow-current" class="settings-choice-value"></span></div><div class="settings-control-actions"><button id="send-auto-follow" type="button" class="secondary utility-button" aria-haspopup="dialog" aria-describedby="send-auto-follow-current send-auto-follow-hint">Change…</button></div>
           <p id="send-auto-follow-hint" class="settings-hint settings-row-note">Jump to the bottom and follow new output after sending. When idle preserves your reading position for steering and queued follow-ups. Never preserves current scroll intent, including active auto-follow. Scrolling upward always pauses auto-follow.</p></div>
         </div>
       </section>
@@ -144,7 +144,7 @@ console.log(greeting); // 0123456789</code></pre>
         <h2>Interaction</h2><p class="settings-description">Keep the keyboard working your way.</p>
         <div class="settings-group"><div class="settings-row">
           <label for="autocomplete-accept">Accept autocomplete with</label>
-          <div class="settings-field"><select id="autocomplete-accept" aria-describedby="autocomplete-accept-hint"><option value="tab">Tab only (default)</option><option value="tabOrEnter">Tab or Enter</option></select></div>
+          <div class="settings-field"><span id="autocomplete-accept-current" class="settings-choice-value"></span></div><div class="settings-control-actions"><button id="autocomplete-accept" type="button" class="secondary utility-button" aria-haspopup="dialog" aria-describedby="autocomplete-accept-current autocomplete-accept-hint">Change…</button></div>
           <p id="autocomplete-accept-hint" class="settings-hint settings-row-note">Applies to slash-command names and argument completions. Tab only leaves Enter to submit and Shift+Enter to insert a newline. Tab or Enter also accepts partial or arrow-selected suggestions with Enter; exact matches submit normally. Palette and modal selection are unchanged.</p>
         </div></div>
       </section>
@@ -152,11 +152,11 @@ console.log(greeting); // 0123456789</code></pre>
         <h2 id="notifications-title">Notifications</h2><p class="settings-description">Stay informed without breaking your focus.</p>
         <div class="settings-group"><div class="settings-row">
           <label for="notification-mode">Background session alerts</label>
-          <div class="settings-field"><select id="notification-mode"><option value="on">On</option><option value="off">Off</option></select></div>
+          <div class="settings-field"><label class="settings-toggle"><input id="notification-mode" type="checkbox"> Enabled</label></div>
           <p class="settings-hint settings-row-note">Finished, input needed, or failed. Alerts stay quiet while you’re viewing that session in a focused project window. Completion alerts preview the agent’s response. No custom sounds.</p>
         </div><div class="settings-group-footer settings-actions">
-          <button id="notification-test" type="button" class="secondary">Send test notification</button>
-          <button id="notification-diagnostics" type="button" class="secondary">Refresh notification diagnostics</button>
+          <button id="notification-test" type="button" class="secondary utility-button">Send test notification</button>
+          <button id="notification-diagnostics" type="button" class="secondary utility-button">Refresh notification diagnostics</button>
         </div></div>
         <p id="notification-status" class="settings-hint" role="status">No notification attempt yet. System notification settings apply; click-to-session routing is not available yet.</p>
       </section>
@@ -164,15 +164,15 @@ console.log(greeting); // 0123456789</code></pre>
         <h2>Diagnostics</h2><p class="settings-description">Local tools for understanding what happened.</p>
         <div class="settings-group settings-inset">
         <div class="settings-row"><label for="transcript-logs-mode">Transcript debug logs</label>
-        <div class="settings-field"><select id="transcript-logs-mode"><option value="off">Off (default)</option><option value="on">On</option></select></div></div>
+        <div class="settings-field"><label class="settings-toggle"><input id="transcript-logs-mode" type="checkbox"> Enabled</label></div></div>
         <p class="settings-hint">Log native conversation events, prompts, assistant text/reasoning, tools, history, configuration and requests/results locally. Logs include full content and may contain secrets. Nothing is uploaded. Best-effort logging never waits for disk during session delivery. Full buffers drop diagnostic records and report an incomplete capture. Files rotate at a 25 MiB target, keeping captured events whole; oldest logs are deleted to keep at most 250 MiB and seven days. Agent history is untouched.</p>
         <p id="transcript-logs-status" class="settings-hint" role="status">Transcript debug logging is off.</p>
         </div>
         <div class="settings-group settings-inset settings-spaced-group">
         <div class="settings-row"><label for="performance-mode">Performance diagnostics</label>
-        <div class="settings-field"><select id="performance-mode"><option value="off">Off (default)</option><option value="on">On</option></select></div></div>
+        <div class="settings-field"><label class="settings-toggle"><input id="performance-mode" type="checkbox"> Enabled</label></div></div>
         <p class="settings-hint">Keep up to 60 seconds of timing data in memory. No prompt text, responses, key values or session paths are recorded. Enabling applies to all project windows; reports capture only this window.</p>
-        <button id="performance-capture" type="button" class="secondary" disabled>Capture performance report</button>
+        <button id="performance-capture" type="button" class="secondary utility-button" disabled>Capture performance report</button>
         <p class="settings-hint">When the app feels slow, capture here or through the command palette. Recording continues for five seconds, then saves locally. No data is uploaded. Keeps the latest 20 reports.</p>
         <p id="performance-status" class="settings-hint" role="status">Performance diagnostics are off.</p>
         </div>
@@ -185,15 +185,15 @@ console.log(greeting); // 0123456789</code></pre>
           <div class="settings-files">
             <div id="settings-project-file" class="settings-file" hidden>
               <div class="settings-file-content"><h4>Project settings</h4><p id="project-settings-file-path" class="settings-file-path">.nimrod/settings.json</p><p class="settings-hint">Overrides for this project. Created when you first save an override.</p></div>
-              <button id="copy-project-settings-path" type="button" class="secondary settings-utility" aria-label="Copy project settings path">Copy path</button>
+              <button id="copy-project-settings-path" type="button" class="secondary utility-button" aria-label="Copy project settings path">Copy path</button>
             </div>
             <div class="settings-file">
               <div class="settings-file-content"><h4>Global settings</h4><p id="settings-file-path" class="settings-file-path"></p><p class="settings-hint">Defaults for all projects. Project overrides take precedence.</p></div>
-              <button id="copy-global-settings-path" type="button" class="secondary settings-utility" aria-label="Copy global settings path">Copy path</button>
+              <button id="copy-global-settings-path" type="button" class="secondary utility-button" aria-label="Copy global settings path">Copy path</button>
             </div>
             <div id="settings-state-file" class="settings-file">
               <div class="settings-file-content"><h4>App-managed state</h4><p id="state-file-path" class="settings-file-path"></p><p class="settings-hint">Window layout and other app bookkeeping, not editable settings.</p></div>
-              <button id="copy-state-path" type="button" class="secondary settings-utility" aria-label="Copy app-managed state path">Copy path</button>
+              <button id="copy-state-path" type="button" class="secondary utility-button" aria-label="Copy app-managed state path">Copy path</button>
             </div>
           </div>
           <p class="settings-hint">Valid settings-file edits synchronize automatically across windows.</p>
@@ -210,7 +210,7 @@ console.log(greeting); // 0123456789</code></pre>
             </div>
             <p class="settings-hint">Use an executable on PATH or its full path. Changes save when you leave a field or press Enter and apply to new sessions. Paths are checked at launch.</p>
           </fieldset>
-          <p id="runtime-status" role="status">Detecting runtime paths…</p>
+          <p id="runtime-status" role="status">Initializing Runtime defaults…</p>
         </form>
       </section>
       </div>

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { demoFixture, visible } from './demo-fixture';
+import { chooseSetting, demoFixture, visible } from './demo-fixture';
 
 test('modal style options, duration retention, preview and cross-window synchronization', async ({ page }) => {
   const fixture = await demoFixture(page);
@@ -9,16 +9,16 @@ test('modal style options, duration retention, preview and cross-window synchron
     const settings = await fixture.settingsWindow();
     const style = settings.locator('#modal-animation-style');
     const duration = settings.locator('#modal-animation-duration');
-    await expect(style).toHaveValue('subtle');
+    await expect(style).toHaveAttribute('value', 'subtle');
     await expect(duration).toHaveValue('500');
     await expect(settings.locator('#modal-animation-hint')).toContainText('Default duration: 500 ms');
-    await style.selectOption('crt');
+    await chooseSetting(settings, 'modal-animation-style', 'crt');
     await expect(duration).toHaveValue('500');
     await expect(duration).toHaveAttribute('step', '50');
     await expect(settings.locator('#modal-animation-value-label')).toHaveText('Scan speed (pixels/second)');
     await expect(settings.locator('#modal-animation-hint')).toContainText('Default scan speed: 500 px/s');
     await expect(page.locator('html')).toHaveCSS('--modal-scan-speed', '500');
-    await style.selectOption('subtle');
+    await chooseSetting(settings, 'modal-animation-style', 'subtle');
     await expect(duration).toHaveValue('500');
     await expect(duration).toHaveAttribute('type', 'range');
     await expect(duration).toHaveAttribute('min', '100');
@@ -42,19 +42,19 @@ test('modal style options, duration retention, preview and cross-window synchron
     await duration.dispatchEvent('change');
     await expect(page.locator('html')).toHaveCSS('--modal-enter-duration', '1200ms');
     await expect(page.locator('html')).toHaveCSS('--modal-exit-duration', '900ms');
-    await style.selectOption('none');
+    await chooseSetting(settings, 'modal-animation-style', 'none');
     await expect(settings.locator('#modal-animation-options')).toBeHidden();
     await expect(page.locator('html')).toHaveCSS('--modal-enter-duration', '0ms');
-    await style.selectOption('crt');
+    await chooseSetting(settings, 'modal-animation-style', 'crt');
     await expect(duration).toHaveValue('500');
     await expect(settings.locator('#modal-animation-hint')).toContainText('CRT powering on');
     await expect(page.locator('html')).toHaveAttribute('data-modal-animation', 'crt');
     await duration.evaluate((input: HTMLInputElement) => { input.value = '750'; input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true })); });
     await expect(durationValue).toHaveText('750 px/s');
     await expect(page.locator('html')).toHaveCSS('--modal-scan-speed', '750');
-    await style.selectOption('hologram');
+    await chooseSetting(settings, 'modal-animation-style', 'hologram');
     await expect(duration).toHaveValue('750');
-    await style.selectOption('subtle');
+    await chooseSetting(settings, 'modal-animation-style', 'subtle');
     await expect(duration).toHaveValue('1200');
     await settings.locator('#modal-animation-preview').click();
     const preview = settings.locator('#modal-animation-preview-dialog');

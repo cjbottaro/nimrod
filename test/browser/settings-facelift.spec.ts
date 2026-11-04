@@ -112,7 +112,7 @@ for (const width of [1440, 800, 480]) {
         expect(border.style).toBe('solid');
         expect(border.color).not.toBe('rgba(0, 0, 0, 0)');
       }
-      await expect(page.locator('#settings-back')).not.toHaveClass(/settings-utility/);
+      await expect(page.locator('#settings-back')).not.toHaveClass(/utility-button/);
       await page.locator('#theme-current').evaluate(node => { node.textContent = 'An imported theme with a deliberately very long name for narrow settings panes'; });
       expect(await page.locator('#settings-panel-appearance').evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
       await page.locator('#theme-picker').click();
