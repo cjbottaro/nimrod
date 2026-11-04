@@ -46,7 +46,7 @@
 
   <!-- Full-window page in the native dialog top layer: the workspace stays laid out and mounted. -->
   <dialog id="settings-page" aria-labelledby="settings-title">
-    <header class="settings-header"><button id="settings-back" type="button" class="secondary" title="Back · Escape">← Back</button><div class="settings-heading"><h1 id="settings-title">Project settings</h1><p id="settings-scope-description" class="settings-hint">Changes here apply only to this project directory and override Global Settings.</p></div><button id="settings-global-link" type="button" class="secondary">Global Settings…</button></header>
+    <header class="settings-header"><button id="settings-back" type="button" class="secondary" title="Back · Escape">← Back</button><div class="settings-heading"><h1 id="settings-title">Project settings</h1><p id="settings-scope-description" class="settings-hint">Changes here apply only to this project directory and override Global Settings.</p></div><button id="settings-global-link" type="button" class="secondary settings-utility">Global Settings…</button></header>
     <div id="settings-layout" class="sidebar-layout">
       <aside id="settings-sidebar" class="layout-sidebar" aria-label="Settings categories">
         <div id="settings-categories" role="tablist" aria-label="Settings categories" aria-orientation="vertical">
@@ -68,14 +68,14 @@
         <h2 id="appearance-title">Appearance</h2><p class="settings-description">Make yourself at home. Changes apply immediately.</p>
         <h3 class="settings-section-title">Window</h3>
         <div class="settings-group">
-          <div id="settings-theme-row" class="settings-row">
+          <div id="settings-theme-row" class="settings-row settings-column-row">
             <label for="theme-picker">Color theme</label>
-            <div class="settings-field theme-setting-controls">
-              <div class="theme-setting-value"><span id="theme-current"></span></div>
-              <button id="theme-picker" type="button" class="secondary" aria-haspopup="dialog" aria-describedby="theme-current">Change theme…</button>
+            <div class="settings-field"><span id="theme-current"></span></div>
+            <div class="settings-control-actions">
+              <button id="theme-picker" type="button" class="secondary settings-utility" aria-haspopup="dialog" aria-describedby="theme-current">Change theme…</button>
             </div>
             <input id="theme-file" type="file" accept=".json,.jsonc,application/json" aria-label="Import VS Code color theme" hidden>
-            <div id="theme-library-actions" class="settings-row-note"><button id="theme-import" type="button" class="secondary">Import color theme…</button><button id="theme-remove" type="button" class="secondary" hidden>Remove current imported theme</button></div>
+            <div id="theme-library-actions" class="settings-row-note"><button id="theme-import" type="button" class="secondary settings-utility">Import color theme…</button><button id="theme-remove" type="button" class="secondary settings-utility" hidden>Remove current imported theme</button></div>
             <p id="theme-hint" class="settings-hint settings-row-note">Change theme opens the searchable Select theme… picker with live previews. Imports use standalone VS Code JSON/JSONC files.</p>
             <div id="theme-notice" class="settings-row-note" role="status" hidden><span id="theme-notice-text"></span><button id="theme-notice-dismiss" type="button" aria-label="Dismiss theme notice">×</button></div>
           </div>
@@ -185,15 +185,15 @@ console.log(greeting); // 0123456789</code></pre>
           <div class="settings-files">
             <div id="settings-project-file" class="settings-file" hidden>
               <div class="settings-file-content"><h4>Project settings</h4><p id="project-settings-file-path" class="settings-file-path">.nimrod/settings.json</p><p class="settings-hint">Overrides for this project. Created when you first save an override.</p></div>
-              <button id="copy-project-settings-path" type="button" class="secondary" aria-label="Copy project settings path">Copy path</button>
+              <button id="copy-project-settings-path" type="button" class="secondary settings-utility" aria-label="Copy project settings path">Copy path</button>
             </div>
             <div class="settings-file">
               <div class="settings-file-content"><h4>Global settings</h4><p id="settings-file-path" class="settings-file-path"></p><p class="settings-hint">Defaults for all projects. Project overrides take precedence.</p></div>
-              <button id="copy-global-settings-path" type="button" class="secondary" aria-label="Copy global settings path">Copy path</button>
+              <button id="copy-global-settings-path" type="button" class="secondary settings-utility" aria-label="Copy global settings path">Copy path</button>
             </div>
             <div id="settings-state-file" class="settings-file">
               <div class="settings-file-content"><h4>App-managed state</h4><p id="state-file-path" class="settings-file-path"></p><p class="settings-hint">Window layout and other app bookkeeping, not editable settings.</p></div>
-              <button id="copy-state-path" type="button" class="secondary" aria-label="Copy app-managed state path">Copy path</button>
+              <button id="copy-state-path" type="button" class="secondary settings-utility" aria-label="Copy app-managed state path">Copy path</button>
             </div>
           </div>
           <p class="settings-hint">Valid settings-file edits synchronize automatically across windows.</p>

@@ -432,11 +432,19 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     for (const [key, id] of controls) {
       const row = document.createElement('div'); row.className = 'settings-source';
       const status = document.createElement('span'); status.id = id + '-source';
-      const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'settings-reset secondary'; reset.textContent = 'Remove override';
+      const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'settings-reset secondary settings-utility'; reset.textContent = 'Remove override';
+      reset.id = id + '-reset';
       reset.setAttribute('aria-label', 'Remove override for ' + (document.querySelector('label[for="' + id + '"]')?.textContent ?? id));
       required(id).setAttribute('aria-describedby', [required(id).getAttribute('aria-describedby'), status.id].filter(Boolean).join(' '));
-      row.append(status, reset);
-      (key === 'appearance.theme' ? required('theme-current') : required(id)).after(row);
+      const setting = required(id).closest<HTMLElement>('.settings-row')!;
+      setting.classList.add('settings-column-row', 'settings-provenance-row');
+      const field = setting.querySelector<HTMLElement>('.settings-field')!;
+      let actions = setting.querySelector<HTMLElement>('.settings-control-actions');
+      if (!actions) {
+        actions = document.createElement('div'); actions.className = 'settings-control-actions';
+      }
+      row.append(status); actions.append(reset);
+      field.after(row); row.after(actions);
       sources.set(key, { status, reset });
       reset.addEventListener('click', () => {
         const restoreFocus = document.activeElement === reset;

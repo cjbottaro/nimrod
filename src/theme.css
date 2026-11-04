@@ -53,15 +53,22 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 #settings-page[open] { display:flex; flex-direction:column; }
 #settings-page::backdrop { background:var(--vscode-editor-background); }
 .settings-header { box-sizing:border-box; display:flex; align-items:center; gap:12px; flex:none; height:48px; padding:0 20px; border-bottom:1px solid var(--vscode-panel-border); }
-.settings-header button.secondary { min-height:28px; padding:4px 8px; border-radius:5px; background:transparent; color:var(--vscode-descriptionForeground); font-size:12px; font-weight:500; }
-.settings-header button.secondary:hover { color:var(--vscode-foreground); background:var(--nimrod-toolbar-hover-background, var(--vscode-toolbar-hoverBackground)); }
+.settings-header button.secondary { min-height:28px; padding:4px 8px; border-radius:5px; font-size:12px; font-weight:500; }
+#settings-back { background:transparent; color:var(--vscode-descriptionForeground); }
+#settings-back:hover { color:var(--vscode-foreground); background:var(--nimrod-toolbar-hover-background, var(--vscode-toolbar-hoverBackground)); }
+button.secondary.settings-utility { color:var(--vscode-foreground); background:transparent; border:1px solid color-mix(in srgb, var(--vscode-foreground) 35%, transparent); padding:5px 10px; }
+button.secondary.settings-utility:not(:disabled):hover { background:color-mix(in srgb, var(--vscode-foreground) 8%, transparent); border-color:color-mix(in srgb, var(--vscode-foreground) 55%, transparent); }
+button.settings-utility:focus-visible { outline:2px solid var(--vscode-focusBorder); outline-offset:2px; }
+@media (forced-colors:active) {
+  button.secondary.settings-utility { color:ButtonText; background:ButtonFace; border-color:ButtonText; }
+}
 .settings-heading { flex:1; min-width:0; }
 #settings-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #settings-scope-description { margin:3px 0 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; line-height:1.2; }
 #settings-global-link { flex:none; }
-.settings-source { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 16px; margin-top:6px; font-size:12px; color:var(--vscode-descriptionForeground); }
-.settings-source > [data-source=project] { color:var(--vscode-foreground); font-weight:500; }
-.settings-reset { padding:2px 0; background:transparent; text-decoration:underline; text-underline-offset:3px; font-size:12px; }
+.settings-source { min-width:0; margin:0; font-size:11px; line-height:32px; color:var(--vscode-descriptionForeground); }
+.settings-control-actions { display:flex; flex-direction:column; gap:6px; width:140px; min-height:32px; justify-self:end; }
+.settings-reset { text-decoration:none; }
 #settings-title { margin:0; font-size:13px; font-weight:600; letter-spacing:0; }
 #settings-scope-description { font-size:11px; }
 .settings-content { overflow:hidden; container-type:inline-size; }
@@ -90,9 +97,10 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 .settings-row { display:grid; grid-template-columns:minmax(150px, 1fr) minmax(0, 320px); align-items:center; gap:6px 24px; padding:15px 16px; }
 .settings-row + .settings-row, .settings-group > #settings-translucency, #settings-translucency > .settings-row + .settings-row { border-top:1px solid color-mix(in srgb, var(--vscode-panel-border) 45%, transparent); }
 .settings-row > label { margin:0; line-height:1.5; }
+.settings-column-row { grid-template-columns:minmax(140px, 1fr) minmax(0, 200px) 140px; column-gap:16px; align-items:start; }
+.settings-provenance-row { grid-template-columns:minmax(140px, 1fr) minmax(0, 200px) 105px 140px; }
+.settings-column-row > label { line-height:32px; }
 .settings-field { min-width:0; }
-.settings-field .settings-source button { min-height:24px; font-size:11px; }
-.settings-field .settings-source { font-size:11px; gap:4px 12px; }
 .settings-field :is(input, select) { width:100%; max-width:100%; }
 .settings-row-note { grid-column:1 / -1; }
 .settings-row > .settings-hint { margin:0; }
@@ -122,21 +130,26 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 .settings-file .settings-hint { margin:4px 0 0; }
 .settings-file > button { flex:none; min-height:26px; font-size:11px; }
 #settings-file-copy-status:empty { display:none; }
+@container (max-width:720px) {
+  .settings-column-row { grid-template-columns:minmax(0, 1fr) 140px; }
+  .settings-column-row > label { grid-column:1 / -1; }
+  .settings-column-row > .settings-field { grid-column:1; grid-row:2; }
+  .settings-column-row > .settings-source { grid-column:1; grid-row:3; }
+  .settings-column-row > .settings-control-actions { grid-column:2; grid-row:2 / span 2; }
+}
 @container (max-width:560px) {
   .settings-panel { padding:20px 16px 32px; }
   #settings-project-inheritance { padding:10px 16px; }
   .settings-row { grid-template-columns:minmax(0, 1fr); gap:8px; padding:13px 14px; }
   .settings-group-footer { padding:12px 14px; }
+  .settings-column-row { grid-template-columns:minmax(0, 1fr); }
+  .settings-column-row > :is(label, .settings-field, .settings-source, .settings-control-actions) { grid-column:1; grid-row:auto; }
+  .settings-column-row > .settings-control-actions { justify-self:start; }
 }
 #runtime-fields { min-width:0; margin:0; padding:0; border:0; }
 #runtime-fields input::placeholder { color:var(--vscode-descriptionForeground); opacity:1; }
 #runtime-status { min-height:1.5em; font-size:12px; line-height:1.5; }
-#settings-theme-row > label { align-self:start; line-height:32px; }
-.theme-setting-controls { display:flex; align-items:flex-start; flex-wrap:wrap; gap:8px 12px; }
-.theme-setting-value { flex:1 1 140px; min-width:0; }
 #theme-current { display:block; margin:0; padding:7px 0; font-size:12px; font-weight:500; line-height:18px; color:var(--vscode-foreground); overflow-wrap:anywhere; }
-.theme-setting-value .settings-source { margin-top:0; }
-#theme-picker { flex:none; }
 #theme-library-actions { display:flex; flex-wrap:wrap; gap:8px; }
 #theme-notice { display:flex; align-items:start; gap:8px; margin:12px 0; padding:10px; background:var(--vscode-editorWidget-background); border:1px solid var(--vscode-panel-border); border-radius:6px; }
 #theme-notice-text { overflow-wrap:anywhere; line-height:1.5; }

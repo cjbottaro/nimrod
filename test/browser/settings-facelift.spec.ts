@@ -30,6 +30,19 @@ for (const width of [1440, 800, 480]) {
         expect(await panel.evaluate(node => node.scrollWidth <= node.clientWidth + 1), category).toBe(true);
       }
       await expect(settings.locator('#settings-translucency > details')).toHaveAttribute('open', '');
+      expect(await settings.locator('#theme-picker').evaluate(button => {
+        const style = getComputedStyle(button);
+        return style.borderTopStyle === 'solid' && parseFloat(style.borderTopWidth) > 0;
+      })).toBe(true);
+      await settings.locator('#settings-category-runtime').click();
+      await settings.locator('.settings-runtime-files summary').click();
+      for (const id of ['copy-global-settings-path', 'copy-state-path']) {
+        expect(await settings.locator('#' + id).evaluate(button => {
+          const style = getComputedStyle(button);
+          return style.borderTopStyle === 'solid' && parseFloat(style.borderTopWidth) > 0;
+        })).toBe(true);
+      }
+      await settings.locator('#settings-category-appearance').click();
       expect(fixture.errors).toEqual([]);
     } finally { await fixture.close(); }
   });
@@ -73,20 +86,33 @@ for (const width of [1440, 800, 480]) {
       await page.locator('#open-settings').click();
       await expect(page.locator('#settings-scope-description')).toContainText('this project directory');
       await expect(page.locator('#theme-hint')).toBeHidden();
-      await expect(page.locator('.theme-setting-value .settings-source')).toContainText('Inherited');
-      const layout = await page.locator('.theme-setting-controls').evaluate(element => {
-        const value = element.querySelector<HTMLElement>('.theme-setting-value')!;
-        const button = element.querySelector<HTMLElement>('#theme-picker')!;
-        const name = value.querySelector<HTMLElement>('#theme-current')!;
-        const source = value.querySelector<HTMLElement>('.settings-source')!;
-        const field = element.getBoundingClientRect(), v = value.getBoundingClientRect(), b = button.getBoundingClientRect();
-        return { fits: field.width >= 140 + b.width + 12, inline: Math.abs(v.top - b.top) <= 1 && v.right <= b.left,
-          wrapped: b.top >= v.bottom, sourceBelow: source.getBoundingClientRect().top >= name.getBoundingClientRect().bottom,
-          overflow: element.scrollWidth > element.clientWidth + 1 };
-      });
-      expect(layout.fits ? layout.inline : layout.wrapped).toBe(true);
-      expect(layout.sourceBelow).toBe(true);
-      expect(layout.overflow).toBe(false);
+      await expect(page.locator('#settings-theme-row > .settings-source')).toContainText('Inherited');
+      for (const category of ['appearance', 'interaction']) {
+        await page.locator('#settings-category-' + category).click();
+        const selector = category === 'appearance' ? '#settings-theme-row' : '.settings-provenance-row:has(#autocomplete-accept)';
+        const layout = await page.locator(selector).evaluate(row => {
+          const rect = (selector: string) => row.querySelector(selector)!.getBoundingClientRect();
+          const field = rect('.settings-field'), source = rect('.settings-source'), actions = rect('.settings-control-actions');
+          return { width: row.closest('.settings-content')!.getBoundingClientRect().width,
+            inline: Math.abs(field.top - source.top) <= 1 && field.right <= source.left && source.right <= actions.left,
+            sourceBelow: source.top >= field.bottom, actionsBelow: actions.top >= source.bottom,
+            overflow: row.scrollWidth > row.clientWidth + 1 };
+        });
+        expect(layout.width > 720 ? layout.inline : layout.sourceBelow).toBe(true);
+        if (layout.width <= 560) expect(layout.actionsBelow).toBe(true);
+        expect(layout.overflow).toBe(false);
+      }
+      await page.locator('#settings-category-appearance').click();
+      for (const id of ['settings-global-link', 'theme-picker']) {
+        const border = await page.locator('#' + id).evaluate(button => {
+          const style = getComputedStyle(button);
+          return { width: parseFloat(style.borderTopWidth), style: style.borderTopStyle, color: style.borderTopColor };
+        });
+        expect(border.width).toBeGreaterThan(0);
+        expect(border.style).toBe('solid');
+        expect(border.color).not.toBe('rgba(0, 0, 0, 0)');
+      }
+      await expect(page.locator('#settings-back')).not.toHaveClass(/settings-utility/);
       await page.locator('#theme-current').evaluate(node => { node.textContent = 'An imported theme with a deliberately very long name for narrow settings panes'; });
       expect(await page.locator('#settings-panel-appearance').evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
       await page.locator('#theme-picker').click();
@@ -103,7 +129,7 @@ test('project provenance stays with its compact field and global-only groups sta
   try {
     await page.locator('#open-settings').click();
     await expect(page.locator('#theme-hint')).toBeHidden();
-    await expect(page.locator('.theme-setting-value .settings-source')).toContainText('Inherited');
+    await expect(page.locator('#settings-theme-row > .settings-source')).toContainText('Inherited');
     for (const id of ['settings-translucency', 'settings-typography', 'settings-zoom', 'settings-modal-animation', 'settings-send-auto-follow']) {
       await expect(page.locator(`#${id}`)).toBeHidden();
     }

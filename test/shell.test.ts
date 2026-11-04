@@ -5425,7 +5425,7 @@ test('autocomplete Settings has global defaults, project provenance and reset wi
       assert.equal(parseSettings(source)['interaction.autocompleteAccept'], 'tabOrEnter');
       if (!globalSettings) {
         assert.equal(f.element('autocomplete-accept-source').textContent, 'Project override');
-        picker.nextElementSibling!.querySelector<HTMLButtonElement>('button')!.click(); await f.tick(); await f.tick();
+        f.element<HTMLButtonElement>('autocomplete-accept-reset').click(); await f.tick(); await f.tick();
         assert.equal(picker.value, 'tab'); assert.equal(f.element('autocomplete-accept-source').textContent, 'Inherited');
         assert.equal(parseSettings(f.preferences.value.projectText!)['interaction.autocompleteAccept'], undefined);
       }
@@ -5572,8 +5572,13 @@ test('project settings routes scope shortcuts and removes overrides rather than 
     assert.match(f.element('settings-title').textContent!, /Project settings — project/);
     const picker = f.element<HTMLButtonElement>('theme-picker');
     assert.equal(f.element('theme-picker-source').textContent, 'Inherited');
-    assert.equal(f.element('theme-current').nextElementSibling!.contains(f.element('theme-picker-source')), true);
-    assert.equal(f.element('theme-current').parentElement!.contains(picker), false);
+    const row = f.element('settings-theme-row');
+    assert.equal(f.element('theme-picker-source').parentElement!.parentElement, row);
+    assert.equal(f.element('theme-current').parentElement!.contains(f.element('theme-picker-source')), false);
+    assert.equal(row.querySelector('.settings-control-actions')!.contains(picker), true);
+    assert.equal(picker.classList.contains('settings-utility'), true);
+    assert.equal(f.element('settings-global-link').classList.contains('settings-utility'), true);
+    assert.equal(f.element('settings-back').classList.contains('settings-utility'), false);
     assert.match(picker.getAttribute('aria-describedby')!, /theme-current/);
     assert.equal(f.element('theme-hint').hidden, true);
     assert.equal(f.element('theme-library-actions').hidden, true);
@@ -5582,7 +5587,7 @@ test('project settings routes scope shortcuts and removes overrides rather than 
     assert.equal(f.element('theme-picker-source').textContent, 'Project override');
     f.preferences.external('{"appearance.theme":"tokyo-night"}'); await f.tick();
     assert.equal(picker.dataset.theme, 'dracula');
-    f.element('theme-picker-source').nextElementSibling!.dispatchEvent(new f.win.MouseEvent('click', { bubbles: true })); await f.tick();
+    f.element<HTMLButtonElement>('theme-picker-reset').click(); await f.tick();
     assert.equal(picker.dataset.theme, 'tokyo-night');
     assert.equal(f.element('theme-picker-source').textContent, 'Inherited');
     assert.equal(JSON.parse(f.preferences.value.projectText!)['appearance.theme'], undefined);
