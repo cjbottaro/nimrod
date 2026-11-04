@@ -33,6 +33,12 @@ Generic ACP is not the ceiling or mandatory route for curated harnesses. Use sup
 
 Each bespoke backend is an alternative controller for that harness, not a second concurrent controller of the same live session. Do not promise seamless ACP/SDK switching until session identity, history, configuration and ownership interoperability are verified. Harnesses remain authoritative, and controls must reflect actual capabilities rather than approximating Pi semantics.
 
+For session creation, persistence, reconnect, Resume, Reload or new harness work,
+read [session durability and untouched-session continuity](references/session-durability.md).
+It records the accepted cross-harness policy: uniform local continuity without
+confusing a runtime ID with durable saved history. Existing adapters must be
+reviewed against it; implementation convergence remains pending.
+
 ## Changelog and release policy
 
 For requests to generate, prepare, cut, ship, publish or retry a release, load the dedicated [release skill](../release/SKILL.md). It requires a concrete version/source/changelog/platform/validation preview and a subsequent explicit approval before release metadata edits, tags or publication. Ordinary task commit/merge authorization does not bypass that gate.
@@ -57,10 +63,14 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Copilot Plan review picker, feedback, pending-plan banner and completed cards | [Plan review](references/copilot-sdk.md#plan-review-interaction), [cards](references/card-plugins.md#copilot-plan-review-cards) | [Plan and Autopilot](../../../docs/copilot.md#plan-and-autopilot) |
 | Copilot Question picker, nested custom answers and pending-question banner | [Copilot questions](references/copilot-sdk.md#questions-and-custom-answers) | [Questions](../../../docs/copilot.md#permissions-and-questions) |
 | Copilot reported AIC/estimated USD, compact context utilization and optional metadata lifetime | [Copilot usage metrics](references/copilot-sdk.md#usage-metrics) | [Copilot usage](../../../docs/copilot.md#usage-metrics) |
+| Codex complete native command inventory, version/schema diffs and potential-support audit | [Codex audit](../slash-commands/references/codex-audit.md), [compatibility matrix](../slash-commands/references/codex.md) | [Codex commands](../../../docs/codex.md#slash-commands) |
+| Required cross-harness command port, registration enforcement and shared composer/card mechanics | [Session commands](references/session-commands.md) | [Writing messages](../../../docs/writing-messages.md#slash-commands-and-compaction), [Codex commands](../../../docs/codex.md#slash-commands) |
 | Slash-command ownership, lifecycle, generic result handling, reconciliation, audits and adapter criteria | [Slash commands skill](../slash-commands/SKILL.md), [shared ownership](references/harness-presentation.md#harness-command-ownership) | Integration-specific user guides |
 | Copilot command discovery, argument suggestions, harness-owned modal choices and command output | [Copilot slash commands](references/copilot-commands.md) | [Copilot commands](../../../docs/copilot.md#slash-commands) |
-| Project identity, recent projects, session lifecycle and draft storage | [Projects/sessions](references/projects-and-sessions.md) | [Projects](../../../docs/projects.md), [Sessions](../../../docs/sessions.md) |
+| Cross-harness session durability, untouched-session restart continuity and safe replacement policy | [Session durability](references/session-durability.md) | [Codex continuity](../../../docs/codex.md#history-drafts-and-close) |
+| Project identity, recent projects, required cross-harness Reload session lifecycle and draft storage | [Projects/sessions](references/projects-and-sessions.md) | [Projects](../../../docs/projects.md), [Sessions](../../../docs/sessions.md) |
 | Ordering, pinning, native row menus, activation, connection and cleanup selection | [Session navigation](references/session-navigation.md) | [Sidebar navigation](../../../docs/session-sidebar.md#ordering-and-navigation) |
+| Required Rename session action, native naming APIs and target-bound errors | [Session naming](references/session-naming.md) | [Rename a session](../../../docs/sessions.md#rename-a-session) |
 | Shared session-list/status contract and Pi/Copilot saved-history discovery | [Session history](references/session-history.md) | [Sessions](../../../docs/sessions.md#switch-or-resume), [Copilot history](../../../docs/copilot.md#history-close-and-delete) |
 | All/Unread/Working membership, indicators, recency and [sidebar scroll intent](references/sidebar-attention.md#sidebar-scroll-intent) | [Sidebar views](references/sidebar-attention.md) | [Session sidebar](../../../docs/session-sidebar.md) |
 | Shared sidebar resize mechanics | [Sidebar resizing](references/sidebar-resize.md) | [Resize](../../../docs/session-sidebar.md#resize) |

@@ -2,7 +2,121 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
+## Session retention cleanup
+
+Source-implemented: required saved/absent/unknown retention port, shared mounted
+Close/Delete routing, exact draft/attachment/local-pointer cleanup after owned
+stop, and conservative retention on discovery failures. Pi, Copilot, Codex and
+runtime-only ACP supply concrete policies; an unrelated fixture harness exercises
+the same shell path. New regression fixtures are authored but unrun. No build,
+app launch, user-session deletion or installed-runtime probe was performed.
+The reported follow-up `Unsupported Copilot SDK bridge operation` exposed a
+missing Rust IPC allowlist entry for `retention`; that entry is now source-fixed.
+Authored native fixtures cover valid/malformed exact IDs and gate the production
+bridge's saved/absent/saved-but-unlisted lookups through `validate_message` before
+real-pipe delivery to the offline SDK fixture. These additions remain unrun.
+Mandatory post-merge TypeScript/Rust compile results are reported separately;
+macOS/Linux native behavior remains unverified.
+
+## Startup harness availability
+
+Source-implemented: once-only executable discovery, omission of unavailable
+harness actions/history and preservation of restored session/draft state. Authored
+fixtures cover the immutable snapshot/restart boundary, silent missing optional
+history, missing Pi, restored Codex actions and configured native resolver paths.
+Tests/browser fixtures and installed-runtime/native macOS/Linux acceptance have
+not been run for this change. Post-merge TypeScript/Rust compile results are
+reported separately; compilation is not native acceptance. The separate reported
+notice flash during deletion-confirmation transitions has not been reproduced or
+fixed here; missing-at-startup harness notices are no longer produced.
+
+## Codex native untouched-session probe
+
+User-authorized, provider-free installed-runtime probe on macOS with
+`codex-cli 0.164.0`. Native TUI ran in a controlled PTY with disposable HOME,
+CODEX_HOME and project directories, a credential-free fixture provider, and an
+inherited macOS sandbox denying outbound TCP/UDP. A loopback check confirmed
+EPERM for both protocols. No prompts, turns, compaction, user-session reads/writes,
+user-daemon attachment, service installation or Nimrod build/launch occurred.
+
+| Native CLI scenario | Native exact-ID Resume | Fresh stdio app-server | Discovery |
+| --- | --- | --- | --- |
+| `--no-daemon`, create then `/quit` without Send | Exit 1: no saved session | `thread/resume` rejects with `no rollout found` | No rollout, no SQLite thread row, empty `thread/list` |
+| `--no-daemon`, `/rename offline-empty-probe`, then `/quit` without Send | Successful reconnect, graceful exit 0 | Exact-ID Resume and empty turns page succeed after process restart | Rollout and named SQLite row exist, but ordinary `thread/list` and native Resume picker still omit it |
+| Native `--remote unix://<fixture socket>`, create then `/quit` without Send; server stays alive | Reconnect to that same server exits 1 with `no rollout found` | Separate server also rejects Resume | Same server's `thread/loaded/list` includes the ID and metadata-only `thread/read` succeeds; ordinary `thread/list` is empty |
+
+The persistent shared-server case used an owned `codex app-server --listen
+unix://<fixture socket>`, not the user's daemon or managed daemon auto-start/
+launchd integration. The native CLI printed a reconnect command at quit, but that
+exact reconnect failed. Thus daemon visibility alone does not establish empty-
+thread Resume support. The fixture background servers exited successfully after
+scoped SIGTERM; no process scans or unrelated signals were used.
+
+The named empty case was checked with unfiltered/source/cwd/name-search and
+`useStateDbOnly` list variants, all empty. Read-only fixture database inspection
+confirmed its name and zero user messages; native picker also showed zero
+sessions. Its post-Resume rollout contained session metadata and settings events,
+not a user turn. Captured probe RPCs were limited to initialize/initialized,
+thread list/loaded-list/read/resume/turns-list.
+
+Raw PTY, protocol, SQLite fixture homes and helper scripts are retained locally
+under `/tmp/nimrod-codex-probe-jtxl4_2k/`; `matrix.stdout` records embedded cases,
+`shared-untouched-v2/result.json` records the successful shared-server probe,
+and `embedded-named/list-variants-result.json` records discovery. An initial PTY
+warm-up was force-stopped and is excluded from graceful-exit results; an attempted
+raw stdio proxy against the WebSocket Unix endpoint timed out, so the final
+same-server probe used a validated WebSocket handshake over the private Unix
+socket. These harness limitations are not product acceptance or Codex failures.
+
+This verifies the narrow installed-runtime behaviors above, not Nimrod integration,
+paid-model work, managed-daemon lifecycle, Linux or general native/platform
+acceptance. [Protocol implications](../../codex-integration/references/protocol-evidence.md#untouched-native-session-interoperability-01640)
+own the source mapping and next integration constraints.
+
+## Codex command audit
+
+Source-only audit of existing official `rust-v0.164.0` source/generated types
+inventoried 65 built-ins and 178 app-server methods. The source-only extractor was
+executed to create the pinned metadata/fingerprint snapshot; it did not launch
+Codex. This is catalog/protocol evidence, not executed command acceptance.
+Native-backed compaction and read-only report adapters are source implemented;
+new report, lifecycle/order/error/pagination, audit-extractor and native
+ownership/deletion-gate fixtures are authored **unrun**. The mandatory post-merge
+`mise run check` passed: architectural dependency gate, TypeScript (including
+negative registration assertions) and Rust compilation. This is not behavioral
+or native acceptance. No tests, builds, app launches,
+app-server probes, user-session/configuration mutation, live compaction or model
+requests were run. Installed-runtime and macOS/Linux focus/scroll/Stop/usage
+acceptance remain pending. The [compatibility matrix](../../slash-commands/references/codex.md)
+and [audit procedure/inventory](../../slash-commands/references/codex-audit.md)
+own behavior, scope and future audit triggers.
+
+## Session command port
+
+Required `HarnessSession.commands` registration/registry forwarding, shared
+composer validation/invocation/card cancellation, retained command output and
+Pi/Copilot/Codex/retained-ACP adapters are source-implemented. Codex's bounded
+native-API-backed catalog is recorded in its compatibility matrix; the command
+audit above extends the initial model/name baseline without claiming full CLI parity. New/updated shared, composer, type/registry, Pi, Codex and Copilot offline
+fixtures are authored **unrun**. The mandatory post-merge `mise run check` passed:
+architectural dependency gate, TypeScript (including required-port/negative type
+assertions) and Rust compilation. This is compile evidence, not behavioral acceptance.
+No tests, builds, app launches, installed-CLI probes, live compaction or model
+requests were run for this task. Native model override confirmation and
+macOS/Linux interaction/focus/scroll acceptance remain outstanding.
+[Session commands](session-commands.md) owns the contract/code/fixture map.
+
 ## Registered harness application contract
+
+**Unified Codex Delete follow-up:** the same deletion operation handles exact native absence as reviewed local removal, using a local-only native writer fence, mounted/native owned stop and post-stop absence recheck. A saved root hidden by listing still receives native review; history appearing during shutdown upgrades to guarded native deletion, and native-to-local downgrade is forbidden. Added client/catalog, adapter, native guard/metadata and shared-shell fixtures cover absent/saved-hidden/error/cancel/stop/upgrade paths and draft cleanup; these changes are authored **unrun**. No live native session or user data was queried/deleted, no provider work, build, app launch or native visual acceptance was performed. Only the required post-merge compile check is automatic. [Product Delete semantics](session-deletion.md#product-delete-semantics) and [Codex local removal](../../codex-integration/references/deletion.md#native-absence-and-local-removal) own the contract.
+
+**Disconnected Close/Delete and owned-group follow-up:** required lifecycle/deletion port documentation now explicitly separates teardown, catalog-validated removal and conversation/Reload readiness. Codex no longer suppresses its deletion candidate when local history confirmation is absent. Shared shell regressions cover disconnected shortcut Close, catalog-only Delete/review/cancel, missing-root handling (superseded by the unified local-removal follow-up above) and failed-stop retry without Resume; native fixtures cover exited-leader reaping after group EPERM, live denial retention and remaining members without re-signaling. All new fixtures are authored **unrun**. Apple's kernel source supports the zombie-only group mechanism; no live reproduction, app build/launch, user-session deletion, model request or native/platform acceptance was performed for this change. Only the mandatory post-merge TypeScript/Rust compile check is automatic. [Session contracts](consumer-interfaces.md#lifecycle-guarantees), [Codex deletion](../../codex-integration/references/deletion.md#disconnected-session-contract) and [owned teardown](../../codex-integration/references/startup.md#owned-group-teardown-after-graceful-exit) own behavior.
+
+**Codex native-contract revision and notice clipping:** the earlier Nimrod-private untouched-thread replacement/checkpoint/scope-move workaround is removed. Exact-ID reconnect, ignored retired markers with retained layout/draft scopes, runtime-only native history confirmation for Reload and concise missing-history diagnostics are source-implemented; the disconnected-deletion follow-up above removes its initially over-broad removal gate. New/updated connection/session fixtures cover no replacement even with old untouched markers, unavailable optional history reads, saved zero-turn reads, exact Resume, native rename/terminal confirmation and no replay. CSS keeps a lone banner's border on its scroll viewport; short/tall offline-browser regression assertions are authored. These changed fixtures are **unrun**; no new native/model probe, build, app launch or native visual acceptance was performed for this revision. The isolated Codex probe above remains narrow runtime evidence, not proof of the new Nimrod paths. Authenticated read-only `gh` issue searches found the existing reports linked in [protocol evidence](../../codex-integration/references/protocol-evidence.md#existing-upstream-issues); no GitHub content was posted. Only the required post-merge TypeScript/Rust compile check is automatic. [Codex contract](../../codex-integration/SKILL.md#untouched-session-persistence-anomaly) and [notice layout](error-presentation.md) own behavior.
+
+**Rename session follow-up:** required `SessionNaming` port, palette/configurable shortcut/native row menu, Pi/Copilot/Codex native mutations and explicit ACP rejection are source-implemented. New normalization, registry/type, shell, native-operation/order/error, offline bridge and Rust validation/deletion-gate fixtures are authored **unrun**. The mandatory post-merge compile check is the only automatic validation; no build, app launch, live session mutation or native/platform acceptance is implied. [Session naming](session-naming.md) owns the behavior and fixture map.
+
+**Reload session follow-up:** the required `SessionReload` port replaces the optional-support Restart contract; Pi, Copilot and Codex implement exact-identity fresh-runtime reload. New/updated offline registry, shell, shortcut-compatibility and MRU fixtures are authored **unrun**. Only the mandatory post-merge TypeScript/Rust compile check is automatic for this task; compilation is not behavioral evidence. No build, app launch, installed-runtime probe or native acceptance was performed. Copilot/Codex owned-process reload and macOS/Linux focus/decision cancellation remain native acceptance work. [Reload lifecycle](projects-and-sessions.md#reload-session-lifecycle) owns the contract.
 
 The review-branch migration is source-implemented: required typed registration/
 project/session factories, explicit unsupported/generic feature implementations,
@@ -196,7 +310,7 @@ See the [skill disclosure contract](transcript-cards.md#skill-disclosures).
 
 **Configurable modal motion:** Subtle remains duration-based; CRT/Hologram now use an independent CSS-pixel scan-speed preference with geometry-derived timing. A ResizeObserver retargets from current pixel edges on filter/size changes; revisions prevent retired segments canceling successors. Existing native default/controlled close, inert snapshots, early-microtask capture, focus, None/reduced motion and lifetime handling remain. Pure geometry, controller/config/native and offline browser fixtures for size-dependent time, constant velocity, grow/shrink continuity, asymmetric CRT edges, contextual slider units and live filtering are authored **unrun**. The user previously confirmed actual-app Subtle dismissal and slider fill; this does not validate the new speed/retarget implementation. Native macOS/Linux pixel speed, live-resize smoothness, CSS/native zoom, keyboard/focus and accessibility acceptance remain pending. No build/app launch was performed. See [Modal motion](modal-layout.md#modal-motion).
 
-**Built-in Copilot SDK lacks broad installed-CLI/native acceptance.** SDK 1.0.22 package/source declares CLI 1.0.98 and protocol 3 compatibility; that is source evidence only. SDK browser scenarios and real CLI/history/decisions/tools, owned process-group shutdown, signed packaging and macOS/Linux acceptance remain gaps. Windows SDK launch is unavailable. Earlier ACP/Pi results do not establish SDK acceptance; logging evidence is scoped in [Transcript logging](#transcript-logging).
+**Built-in Copilot SDK lacks broad installed-CLI/native acceptance.** SDK 1.0.28 package/source declares CLI 1.0.105 and protocol 3 compatibility; that is source evidence only. Earlier installed-runtime observations below used SDK 1.0.22 / CLI 1.0.98 and have not been repeated for the upgraded pair. SDK browser scenarios and real CLI/history/decisions/tools, owned process-group shutdown, signed packaging and macOS/Linux acceptance remain gaps. Windows SDK launch is unavailable. Earlier ACP/Pi results do not establish SDK acceptance; logging evidence is scoped in [Transcript logging](#transcript-logging).
 
 [Copilot command discovery/invocation](copilot-commands.md) additionally has
 unrun metadata/argument, production-bridge, modal/cancellation and shell-output
@@ -252,6 +366,16 @@ and confirmed writes. Offline command/bridge/inline-completion fixtures are
 authored unrun; native picker, persistence and restart/default acceptance remain
 pending.
 
+The `/config` failure follow-up inspected released SDK 1.0.28 source: public
+`client.rpc.user.settings` exposes `get/set`, while `validate` is internal.
+The adapter now uses only public writes with authoritative readback. Unit and
+production-bridge fixtures no longer invent a public validator; new coverage
+includes model/provider writes, write rejection, mismatched readback and failed
+confirmation without retry. These fixtures are authored **unrun**. The SDK pin,
+lockfile and staging guard now target 1.0.28 / CLI 1.0.105. Installed-runtime
+command re-audit, native acceptance and packaging remain pending; no app build,
+launch, real settings write or provider request was performed.
+
 - TypeScript/jsdom shell tests use mocked native IPC.
 - Rust fixture tests use actual pipes, owned subprocesses and generated disposable session files; deletion tests unlink only those fixtures.
 - Automated Playwright WebKit exercises real browser layout/events with an offline child fixture and mock Tauri operations. Its CSS zoom is not native WKWebView zoom.
@@ -259,11 +383,27 @@ pending.
 - No Linux build/native parity or Windows acceptance is established by macOS checks. Windows remains a possible future target.
 - Installed-Pi metadata smokes isolate config/projects/history and make no provider requests; they don't establish provider-generated first-save or queue behavior.
 
+## Shared shell-card layout
+
+Pi, Codex and retained ACP shell-card parity adds `test/harness-shell-cards.test.ts` and updates the shared console, external ACP helper and offline console browser fixtures. Coverage includes unlabeled wrapping layout/raw ordering, ANSI cumulative extension, authoritative replacement/history, native Codex exit codes, category isolation, retained nodes/focus/inspection/disclosures and narrow/resize geometry. These fixtures are authored **unrun**. No live harness/provider request, user-session mutation, browser debugging, app build or launch was performed. Native macOS/Linux appearance, output-follow, trackpad and resize acceptance remains pending; compile-only checks are not fixture/native evidence. [Console shell layout](transcript-cards.md#console-style-command-output) owns behavior.
+
+## Copilot running-command cards
+
+The single-view, unlabeled, wrapping command presentation adds `test/copilot-shell-cards.test.ts` and updates the SDK mounted-card and offline browser fixtures. These fixtures are authored **unrun**. No app build/launch, browser debugging, live provider request, command execution or user-session mutation was performed for this task. Native macOS/Linux visual, resize, color and independent-scroll acceptance remains pending. Mandatory post-merge compilation is separate from fixture/native evidence. [Running-command cards](card-plugins.md#copilot-running-command-cards) owns the behavior and code map.
+
+## Copilot command colors
+
+Read-only inspection of existing October 27, 2026 Copilot transcript logs (`copilot-sdk/copilot/2026-10-27.000009.jsonl` and adjacent segments) confirmed ExUnit dots arrive as `tool.shell_output.text` containing `ESC[32m.` while interleaved deprecated `tool.execution_partial_result.partialOutput` snapshots contain plain dots without SGR codes. Across three inspected calls, shell chunks contained 220, 121 and 72 green SGR sequences respectively; their replacement snapshots contained none. The previous reducer merged both sources into one field, repeatedly erasing ANSI state and changing raw-recovery coverage. This is native payload evidence, not visual acceptance of the correction.
+
+The installed pinned SDK's `dist/generated/session-events.d.ts` explicitly deprecates merged partial snapshots in favor of append-only shell chunks; sequence is global across output streams per call, and shell chunks are ephemeral/not replayed to late subscribers. Source now prefers shell output per agent/tool invocation while retaining snapshot-only fallback and independent final results. Synthetic SDK/controller and mounted-card fixtures in `test/copilot-sdk.test.ts` and `test/copilot-sdk-presentation.test.ts` cover both source orders, split ANSI, green dots, duplicate/stale sequences, stdout/stderr ordering, subagent isolation, fallback and terminal precedence. These fixtures are authored **unrun**. No live command/provider request, user-session/log mutation, app build, browser or native visual validation was performed. Mandatory post-merge compilation is separate from tests/native acceptance.
+
 ## Copilot patch cards
 
 `test/copilot-patch-cards.test.ts`, including the multi-file-summary/colored-line-count follow-up, is authored but unrun. Payload inspection used existing local October 19 CLI 1.0.98 transcript logs only; no tools/providers were invoked and no user sessions/logs were changed. Native macOS/Linux visual/scroll acceptance remains pending; no app build or launch was performed. The mandatory post-merge `mise run check` is compilation evidence only, not fixture/native acceptance.
 
 ## Copilot SQL cards
+
+SQL card visual polish adds compact write-report and sanitized highlighted-query fixtures, including embedded backtick/HTML recovery and retained query/result DOM. These fixtures are authored **unrun**; native visual acceptance remains pending. No app build/launch or live SQL execution was performed.
 
 Read-only, user-authorized inspection of the October 18, 2026 CLI 1.0.98 transcript logs found the screenshot's built-in `sql` start/completion pair and surrounding task creation/final SELECT. This verifies the input/result/telemetry shapes and task bookkeeping in that conversation, not the new UI. A scrubbed pair is retained in `test/fixtures/copilot/sql/`; new `test/copilot-sql-cards.test.ts` DOM fixtures are authored **unrun**. No test suite, live prompt, SQL execution, app build/launch or session/log mutation was performed for this implementation. The mandatory post-merge TypeScript/Rust compile check is separate from automated-test/native acceptance. The [cookbook](../../../../docs/builtin-card-cookbook.md) supplies manual recipes; none was executed here. Native macOS/Linux visual/focus/scroll acceptance and recipe/tool availability remain unverified. [SQL contract](card-plugins.md#copilot-sql-cards).
 
@@ -456,7 +596,7 @@ owns implementation details and the fixture map.
 | ACP POC | Compact command-permission previews and their new unit/shell/browser fixtures are source-implemented but unvalidated; native wrapping, code viewport, raw disclosure, button/focus and cancellation acceptance remain pending. Installed Copilot and second-agent interoperability, list/load/delete capability/schema and cross-process history discovery/pagination, exact saved-sidebar loading/replay/draft recovery across process restarts, packaged Tauri IPC/window/permission/focus/shutdown behavior, platform-specific launch discovery; offline fixtures are not native app acceptance. Copilot Resume discovery and advertised single-session deletion are source-implemented but unvalidated; custom history/attachments/login/client services remain unimplemented. |
 | Projects/startup | Finder runtime discovery, rapid cold/warm CLI forwarding, minimized-window focus, native window cycling and pop-out ownership |
 | Drafts | Native typing feel, Close/Quit flush and crash/reload limits; [storage specification](native-drafts.md) |
-| Sessions | Real first-save/exact-file resume, Close/Restart cancellation and failure, independent multi-window shutdown, no replay |
+| Sessions | Real first-save/exact-file resume, Close/Reload cancellation and failure, independent multi-window shutdown, no replay |
 | Deletion | Working-session deletion and retained stopping/removal modal are implemented with new/updated fixtures, not yet run. User reported needing two deletion attempts; review-time fingerprint/report rejection paths were removed, but that live case is not reproduced or native-accepted. Native multi-window shutdown/expanding descendant locks, partial filesystem failure recovery and external mutation limits remain unverified. [Specification](session-deletion.md) |
 | Transcript/sidebar | Native zoom/trackpad/keyboard, follow/pause, disclosure animation, narrow/ultrawide geometry and view selection |
 | Executable card plugins | The user reports Copilot cards look much better (limited visual feedback, not comprehensive native acceptance). Project-relative/path-then-line-range previews, cited web-search/fetch cards, compact fetch permissions and their new unit/offline-browser fixtures remain unvalidated; native boundary/outside-path display, raw recovery, focus/reader positions and output rendering await acceptance. Broader compiler packaging/cold-warm cache, trust/load failure, custom DOM/focus/reading and host-action matrices; Linux delivery. User-confirmed macOS Pi Web Access reload/rendering/containment is limited evidence, not general plugin/platform parity. |

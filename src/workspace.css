@@ -42,7 +42,7 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor:col-resize !important; u
 .session-indicator[data-state=unread] { color:var(--vscode-progressBar-background); }
 .session-indicator[data-state=input], .session-indicator[data-state=recovery] { color:var(--vscode-editorWarning-foreground,var(--vscode-foreground)); font-weight:700; }
 .session-indicator[data-state=failed] { color:var(--vscode-errorForeground); font-weight:700; }
-.session-indicator:is([data-state=working],[data-state=compacting],[data-state=sending],[data-state=starting],[data-state=restarting],[data-state=closing],[data-state=deleting])::before { content:""; box-sizing:border-box; width:12px; height:12px; border:2px solid var(--vscode-panel-border); border-top-color:var(--vscode-progressBar-background); border-radius:50%; animation:sidebar-indicator-spin .9s linear infinite; }
+.session-indicator:is([data-state=working],[data-state=compacting],[data-state=sending],[data-state=starting],[data-state=reloading],[data-state=closing],[data-state=deleting])::before { content:""; box-sizing:border-box; width:12px; height:12px; border:2px solid var(--vscode-panel-border); border-top-color:var(--vscode-progressBar-background); border-radius:50%; animation:sidebar-indicator-spin .9s linear infinite; }
 @keyframes sidebar-indicator-spin { to { transform:rotate(360deg); } }
 @media (prefers-reduced-motion:reduce) { .session-indicator::before { animation:none !important; } }
 .open-session.pin-boundary { border-top:1px solid var(--vscode-panel-border); margin-top:7px; padding-top:7px; }
@@ -84,8 +84,6 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor:col-resize !important; u
 .deletion-execution { display:flex; align-items:center; align-self:start; gap:10px; box-sizing:border-box; min-height:32px; padding:6px 8px; color:var(--vscode-descriptionForeground); }
 #deletion-confirm { background:var(--nimrod-danger-background, var(--vscode-errorForeground)); color:var(--nimrod-danger-foreground, var(--vscode-editor-background)); }
 .deletion-loading { display:flex; align-items:center; gap:10px; min-height:80px; color:var(--vscode-descriptionForeground); }
-.deletion-spinner { width:16px; height:16px; flex:none; border:2px solid var(--vscode-panel-border); border-top-color:var(--vscode-descriptionForeground); border-radius:50%; animation:deletion-spin .8s linear infinite; }
-@keyframes deletion-spin { to { transform:rotate(360deg); } }
 @media (prefers-reduced-motion:reduce) { .deletion-spinner { animation:none; } }
 .palette-heading > span { margin-left:auto; color:var(--vscode-descriptionForeground); font-size:11px; }
 #palette-back, #palette-refresh { padding:3px 7px; font-size:11px; }

@@ -17,6 +17,85 @@ function card(data: ToolCardData) {
   return { dom, details, close() { disposeToolCard(details); dom.window.close(); } };
 }
 
+test('SDK command replacement snapshots retain raw recovery through formatted/plain output and completion', () => {
+  const session = new CopilotSession(async () => { assert.fail('Rendering must not request agent work'); }, {
+    publish() {}, changed() {}, identified() {}, disconnected() {}, completed() {}, notice(message) { assert.fail(message); }, decision: async () => undefined,
+  });
+  session.receive({ kind: 'connected', sessionId: 'fixture', events: [], models: [], model: {} });
+  let sequence = 0;
+  const emit = (type: string, data: Record<string, unknown>) => session.receive({ kind: 'event', event: { id: `event-${sequence++}`, type, data } });
+  const message = () => session.state.messages.find(row => row.role === 'tool')!;
+  emit('tool.execution_start', { toolCallId: 'command', toolName: 'bash', toolTitle: 'Running command', arguments: { command: 'fixture' } });
+  const f = card(toolMessageBlock(message()));
+  const patch = () => updateToolCard(f.dom.window.document, f.details, toolMessageBlock(message()));
+  try {
+    f.details.open = true;
+    emit('tool.execution_partial_result', { toolCallId: 'command', partialOutput: 'plain initial output' }); patch();
+    assert.equal(f.details.querySelector('.tool-raw-output'), null, 'literal-only output needs no duplicate');
+    const output = f.details.querySelector('.card-plugin-body .tool-output');
+    const indicator = f.details.querySelector('.tool-card-spinner');
+    emit('tool.execution_partial_result', { toolCallId: 'command', partialOutput: '\x1b[32mformatted\x1b[0m' }); patch();
+    const raw = f.details.querySelector<HTMLDetailsElement>('.tool-raw-output')!;
+    raw.open = true;
+    const rawOutput = raw.querySelector<HTMLElement>('pre')!;
+    rawOutput.focus(); rawOutput.scrollTop = 19;
+    for (const partialOutput of ['plain replacement', '\x1b[31mnext formatted\x1b[0m', 'final plain output']) {
+      emit('tool.execution_partial_result', { toolCallId: 'command', partialOutput }); patch();
+      assert.equal(f.details.querySelector('.tool-raw-output'), raw);
+      assert.equal(raw.hidden, false); assert.equal(raw.open, true);
+      assert.equal(raw.querySelector('pre'), rawOutput); assert.equal(rawOutput.textContent, partialOutput);
+      assert.equal(rawOutput.scrollTop, 19); assert.equal(f.dom.window.document.activeElement, rawOutput);
+      assert.equal(f.details.querySelector('.card-plugin-body .tool-output'), output);
+      assert.equal(f.details.querySelector('.tool-card-spinner'), indicator);
+    }
+    emit('tool.execution_complete', { toolCallId: 'command', success: true, result: { content: 'final plain output' } }); patch();
+    assert.equal(f.details.querySelector('.tool-raw-output'), raw);
+    assert.equal(raw.hidden, false); assert.equal(raw.open, true); assert.equal(f.details.open, true);
+    assert.equal(rawOutput.textContent, 'final plain output');
+    assert.equal(f.dom.window.document.activeElement, rawOutput);
+    assert.ok(rawOutput.classList.contains('tool-output-final'));
+  } finally { f.close(); session.disconnect('fixture complete'); }
+});
+
+test('SDK ExUnit dots stay green when legacy snapshots interleave with split ANSI shell chunks', () => {
+  const session = new CopilotSession(async () => { assert.fail('Rendering must not request agent work'); }, {
+    publish() {}, changed() {}, identified() {}, disconnected() {}, completed() {}, notice(message) { assert.fail(message); }, decision: async () => undefined,
+  });
+  session.receive({ kind: 'connected', sessionId: 'fixture', events: [], models: [], model: {} });
+  let sequence = 0;
+  const emit = (type: string, data: Record<string, unknown>) => session.receive({ kind: 'event', event: { id: `event-${sequence++}`, type, data } });
+  const message = () => session.state.messages.find(row => row.role === 'tool')!;
+  emit('tool.execution_start', { toolCallId: 'dots', toolName: 'bash', toolTitle: 'Running command', arguments: { command: 'mix test' } });
+  const f = card(toolMessageBlock(message()));
+  const patch = () => updateToolCard(f.dom.window.document, f.details, toolMessageBlock(message()));
+  try {
+    f.details.open = true;
+    emit('tool.shell_output', { toolCallId: 'dots', sequence: 0, stream: 'stdout', text: '\x1b[3' }); patch();
+    const output = f.details.querySelector('.card-plugin-body .tool-output')!;
+    emit('tool.execution_partial_result', { toolCallId: 'dots', partialOutput: '.' }); patch();
+    emit('tool.shell_output', { toolCallId: 'dots', sequence: 1, stream: 'stdout', text: '2m.' }); patch();
+    const green = output.querySelector<HTMLElement>('.console-output-line > span')!;
+    assert.match(green.style.color, /terminal-ansiGreen/); assert.equal(green.textContent, '.');
+    const raw = f.details.querySelector<HTMLDetailsElement>('.tool-raw-output')!;
+    emit('tool.execution_partial_result', { toolCallId: 'dots', partialOutput: '.' }); patch();
+    assert.equal(output.querySelector('.console-output-line > span'), green);
+    emit('tool.shell_output', { toolCallId: 'dots', sequence: 2, stream: 'stdout', text: '.\x1b[0m' }); patch();
+    emit('tool.execution_partial_result', { toolCallId: 'dots', partialOutput: '..' }); patch();
+    assert.equal(f.details.querySelector('.card-plugin-body .tool-output'), output);
+    assert.equal(output.querySelector('.console-output-line > span'), green); assert.equal(green.textContent, '..');
+    assert.match(green.style.color, /terminal-ansiGreen/);
+    assert.equal(f.details.querySelector('.tool-raw-output'), raw); assert.equal(raw.hidden, false);
+    assert.equal(raw.querySelector('pre')?.textContent, '\x1b[32m..\x1b[0m');
+    emit('tool.execution_complete', { toolCallId: 'dots', success: true, result: { content: '..\n2 tests, 0 failures' } }); patch();
+    assert.equal(f.details.querySelector('.card-plugin-body .tool-output'), output);
+    assert.equal(f.details.querySelectorAll('.card-plugin-body .tool-output').length, 1);
+    const liveGreen = output.querySelector<HTMLElement>('.console-output-line > span')!;
+    assert.equal(liveGreen, green);
+    assert.equal(liveGreen.textContent, '..'); assert.match(liveGreen.style.color, /terminal-ansiGreen/);
+    assert.equal(output.textContent, '..\n2 tests, 0 failures');
+  } finally { f.close(); session.disconnect('fixture complete'); }
+});
+
 test('SDK read/shell/URL/MCP permission requests have compact native previews and closed complete raw details', () => {
   const dom = new JSDOM();
   try {
@@ -58,7 +137,9 @@ test('all observed SDK tool families show native completion.error.message once a
       native: { 'tool.execution_complete': { success: false, error } }, resultOutput: JSON.stringify(error, null, 2) };
     const f = card(data);
     try {
-      assert.equal(f.details.querySelector('.card-plugin-body [data-output-kind="result"] .tool-label')?.textContent, 'Error');
+      const label = f.details.querySelector<HTMLElement>('.card-plugin-body [data-output-kind="result"] .tool-label')!;
+      assert.equal(label.textContent, kind === 'execute' ? 'Command output' : 'Error');
+      assert.equal(label.hidden, kind === 'execute');
       assert.equal(f.details.querySelector('.card-plugin-body .tool-output')?.textContent, error.message);
       assert.equal(f.details.querySelector('.tool-raw-output pre')?.textContent, data.resultOutput);
       assert.ok(f.details.querySelector('.tool-card-failed')); assert.equal(f.details.querySelector('script'), null);

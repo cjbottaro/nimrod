@@ -73,6 +73,43 @@ test('offline Copilot cards keep compact previews, exact raw recovery and inspec
     await expect(github.locator('script')).toHaveCount(0);
     await github.locator(':scope > .tool-raw-output > summary').click();
     expect(await github.locator(':scope > .tool-raw-output pre').textContent()).toBe(copilotToolResult(githubResult));
+    const shellText = Array.from({ length: 60 }, (_, index) => `line ${index}: ${'x'.repeat(240)}`).join('\n');
+    const colored = `\x1b[32m${shellText}\x1b[0m`;
+    await emit([
+      { type: 'tool.execution_start', data: { toolCallId: 'shell-fixture', toolName: 'bash', toolTitle: 'Running command', arguments: { command: 'fixture command' } } },
+      { type: 'tool.shell_output', data: { toolCallId: 'shell-fixture', sequence: 0, stream: 'stdout', text: colored } },
+      { type: 'tool.execution_partial_result', data: { toolCallId: 'shell-fixture', partialOutput: shellText } },
+    ]);
+    const shell = page.locator('details[data-detail-key="tool:shell-fixture"]');
+    await shell.evaluate(node => { if (!(node as HTMLDetailsElement).open) node.querySelector('summary')!.click(); });
+    const consoleOutput = shell.locator('.card-plugin-body .tool-output');
+    await expect(consoleOutput).toHaveCount(1);
+    await expect(shell.locator('.card-plugin-body .tool-label')).toBeHidden();
+    expect(await consoleOutput.textContent()).toBe(shellText);
+    const geometry = () => consoleOutput.evaluate(node => ({ width: node.clientWidth, content: node.scrollWidth, wrap: getComputedStyle(node).whiteSpace }));
+    expect(await geometry()).toMatchObject({ wrap: 'pre-wrap' });
+    expect((await geometry()).content).toBeLessThanOrEqual((await geometry()).width + 1);
+    expect(await consoleOutput.locator('.console-output-line > span').first().evaluate(node => getComputedStyle(node).color))
+      .not.toBe(await consoleOutput.evaluate(node => getComputedStyle(node).color));
+    const shellPosition = await consoleOutput.evaluate(node => {
+      const output = node as HTMLElement; output.scrollTop = 40; output.focus(); output.dataset.fixtureIdentity = 'shell-output'; return output.scrollTop;
+    });
+    const shellFinal = { content: 'preview\n<shellId: 9 completed with exit code 0>', contents: [
+      { type: 'shell_exit', shellId: '9', exitCode: 0, outputPreview: 'preview', cwd: project },
+    ] };
+    await emit([{ type: 'tool.execution_complete', data: { toolCallId: 'shell-fixture', success: true, result: shellFinal } }]);
+    await expect(consoleOutput).toHaveAttribute('data-fixture-identity', 'shell-output');
+    await expect(consoleOutput).toBeFocused();
+    expect(await consoleOutput.evaluate(node => node.scrollTop)).toBe(shellPosition);
+    expect(await consoleOutput.textContent()).toBe(shellText);
+    const shellRaw = shell.locator(':scope > .tool-raw-output');
+    await expect(shellRaw).not.toHaveAttribute('open', '');
+    expect(await shell.locator(':scope > .card-plugin-body + .tool-raw-inputs + .tool-raw-output').count()).toBe(1);
+    await page.setViewportSize({ width: 800, height: 900 });
+    expect((await geometry()).content).toBeLessThanOrEqual((await geometry()).width + 1);
+    await shellRaw.locator(':scope > summary').click();
+    expect(await shellRaw.locator('[data-output-kind="execution"] pre').textContent()).toBe(colored);
+    expect(await shellRaw.locator('[data-output-kind="result"] pre').textContent()).toBe(copilotToolResult(shellFinal));
     expect(demo.errors).toEqual([]);
     expect(demo.calls.some(call => call.command === 'write_copilot' && (call.args.message as { method?: string }).method === 'prompt')).toBe(false);
   } finally { await demo.close(); }

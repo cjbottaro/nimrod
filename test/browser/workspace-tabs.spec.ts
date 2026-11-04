@@ -21,9 +21,9 @@ test('sidebar sessions keep independent drafts and a background agent live witho
     await expect(page.locator('#sidebar-workspace, #sidebar-directory, #open-section, .sidebar-actions')).toHaveCount(0);
     await expect(page.locator('#session-tabs, #all-section')).toHaveCount(0);
     await expect(page.locator('#open-workspace, #open-palette, #disconnect')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Restart session', exact: true })).toBeVisible();
-    await expect(page.locator('#restart-session')).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Delete session tree', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Reload session', exact: true })).toBeVisible();
+    await expect(page.locator('#reload-session')).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Delete session', exact: true })).toBeVisible();
     await expect(page.locator('#delete-session')).toBeDisabled();
     await demo.turn(1);
     const firstPanel = await page.locator('.session-view').getAttribute('id');
@@ -243,7 +243,7 @@ test('attention hides the entire conversation and restores mounted draft, disclo
     await expect(page.locator('#workspace-empty')).toBeHidden();
     await expect(page.locator('.session-view:not([hidden])')).toHaveCount(0);
     await expect(page.locator('#mode-badge')).toBeEmpty();
-    await expect(page.locator('#restart-session')).toBeDisabled();
+    await expect(page.locator('#reload-session')).toBeDisabled();
     await expect(page.locator('#delete-session')).toBeDisabled();
     await page.getByRole('tab', { name: /^All \(\d+\)$/ }).click();
     await expect(page.locator(`#${panel}`)).toBeVisible();

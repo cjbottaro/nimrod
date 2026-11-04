@@ -59,6 +59,17 @@ test('registration alone connects an unknown harness through real input, draft, 
   assert.equal(reopened.selection.deferRestored, true); assert.equal(reopened.lifecycle.connection, 'disconnected');
   assert.deepEqual(restored.host.drafts.read(), { draft: 'Preserved before identity exists' });
   assert.equal(restored.publications.length, 0, 'restoration alone never connects or prompts');
+  const messages = session.conversation.state?.messages;
+  const publications = f.publications.length;
+  assert.equal(session.reload.available(), true);
+  await session.reload.run();
+  assert.equal(session.lifecycle.connection, 'connected');
+  assert.deepEqual(session.lifecycle.identity, reference);
+  assert.equal(session.lifecycle.draftScope, scope);
+  assert.deepEqual(f.host.drafts.read(), { draft: 'Preserved before identity exists' });
+  assert.equal(session.conversation.state?.messages, messages, 'fixture reload reopens its authoritative history');
+  assert.equal(f.publications.slice(publications).some(message => message.type === 'submissionReceipt'), false, 'reload never sends');
+  assert.ok(f.publications.slice(publications).some(message => message.type === 'sessionReset'));
   const removed: string[] = [];
   const deletion = new SessionDeletionCoordinator({ canRun: () => true,
     participants: () => [{ lock() {}, stop: () => session.lifecycle.stop() }],
@@ -69,7 +80,7 @@ test('registration alone connects an unknown harness through real input, draft, 
   deletion.register(context => project.deletion(context));
   await deletion.operation(reference, 'Fixture session')!.run(); await writer.flush();
   assert.deepEqual(removed, [scope]); assert.equal(records.get(scope)?.value, null);
-  assert.equal(session.restart.supported, false); assert.equal(session.configuration.current(), undefined);
+  assert.equal(session.configuration.current(), undefined);
   session.interactions.dispose(); reopened.interactions.dispose(); deletion.dispose(); registry.dispose();
   assert.deepEqual(errors, []); f.dom.window.close(); restored.dom.window.close();
 });
@@ -122,12 +133,14 @@ test('inconsistent identity/key projections are refused before a session reaches
 
 class PrototypeSession implements HarnessSession {
   constructor(private readonly inner: HarnessSession) {}
-  get lifecycle() { return this.inner.lifecycle; } get conversation() { return this.inner.conversation; }
+  get lifecycle() { return this.inner.lifecycle; }
+  get retention() { return this.inner.retention; } get conversation() { return this.inner.conversation; }
   get presentation() { return this.inner.presentation; } get configuration() { return this.inner.configuration; }
-  get actions() { return this.inner.actions; } get restart() { return this.inner.restart; }
+  get actions() { return this.inner.actions; } get reload() { return this.inner.reload; }
+  get deletion() { return this.inner.deletion; } get commands() { return this.inner.commands; }
   get close() { return this.inner.close; } get drafts() { return this.inner.drafts; }
   get selection() { return this.inner.selection; } get interactions() { return this.inner.interactions; }
-  get references() { return this.inner.references; }
+  get references() { return this.inner.references; } get naming() { return this.inner.naming; }
 }
 test('class/prototype implementations retain their live ports across registry binding', async () => {
   const f = harnessHostFixture();
@@ -137,7 +150,12 @@ test('class/prototype implementations retain their live ports across registry bi
   } });
   const registry = new HarnessRegistry([registration], f.project, registration.id);
   await registry.initialize(); const session = registry.create(registry.get(registration.id), f.host, { mode: 'saved' });
+  assert.equal(session.deletion.current()?.kind, 'close');
+  assert.equal(await session.retention.check(), 'absent');
   assert.equal(session.lifecycle.connection, 'disconnected'); await session.lifecycle.connect(); assert.equal(session.lifecycle.connection, 'connected');
+  const changes = f.changes(); await session.naming.rename('Prototype name'); assert.ok(f.changes() > changes);
+  assert.deepEqual(session.deletion.current(), { kind: 'saved', reference: session.lifecycle.identity });
+  assert.equal(await session.retention.check(), 'saved');
   f.dom.window.close();
 });
 

@@ -512,7 +512,9 @@ test('each tool output retains its own inspection position in a multi-tool turn'
     const tool = (id: string, text: string) => ({ type: 'toolCall', id, name: 'bash', arguments: { command: id }, toolStatus: 'running', executionOutput: text });
     const snapshot = (text: string) => f.snapshot({ messages: [{ key: 'multi', role: 'assistant', content: [tool('a', text), tool('b', text)] }] });
     snapshot('one');
-    const outputs = Array.from(f.win.document.querySelectorAll<HTMLElement>('.tool-output'));
+    const outputs = Array.from(f.win.document.querySelectorAll<HTMLElement>('.card-plugin-body .tool-output'));
+    assert.equal(outputs.length, 2);
+    assert.equal(f.win.document.querySelectorAll('.tool-raw-output').length, 2);
     outputs.forEach((output, index) => {
       Object.defineProperties(output, { scrollHeight: { value: 1_000 }, clientHeight: { value: 100 } });
       output.scrollTop = 30 + index * 50;

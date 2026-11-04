@@ -20,6 +20,8 @@ export interface ConfigurationOperation {
   readonly details?: string;
   /** Concise known failure rendered inline instead of as diagnostic disclosure. */
   readonly inlineError?: string;
+  /** Typed command output retained inside the invocation's own card. */
+  readonly commandOutput?: readonly { text: string; markdown?: boolean }[];
   readonly cause?: 'connection';
   readonly cancellable?: boolean;
   /** Pre-result transcript boundary for operations whose own output is appended before settlement. Null means before the first row. */

@@ -71,7 +71,7 @@ test('sidebar pin and Close reveal on hover/focus; pin remains visible with reta
     await row.click({ button: 'right' });
     await expect.poll(() => demo.calls.filter(call => call.command === 'popup_session_menu').length).toBe(1);
     const options = demo.calls.find(call => call.command === 'popup_session_menu')!.args.options as Record<string, unknown>;
-    expect(options.pinLabel).toBe('Unpin session'); expect(options.deleteEnabled).toBe(false);
+    expect(options.pinLabel).toBe('Unpin session'); expect(options.deleteEnabled).toBe(true);
     expect(demo.calls.some(call => call.command === 'delete_session_tree')).toBe(false);
     expect(demo.children.size).toBe(1); expect(demo.errors).toEqual([]);
   } finally { await demo.close(); }

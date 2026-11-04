@@ -54,17 +54,23 @@ Send immediately clears the submitted text and images from the composer, includi
 - **Definitely not sent:** show the error. The message is not restored; type a new message if needed.
 - **Acceptance unknown:** show an error explaining that Pi may have received the message. No restore/retry action or extra submission gate is added. Sending still requires a connected, available session.
 
-Results never repeat the submission's transcript jump or change newer text/images, even if you retype exactly the same message, and never repeat or undo Send's sidebar ordering/scroll effects. Only Pi's response establishes acceptance; later model/provider failures leave accepted messages in the transcript. Disconnect, reload and Restart never replay a prompt. Submission tracking is not saved as draft recovery.
+Results never repeat the submission's transcript jump or change newer text/images, even if you retype exactly the same message, and never repeat or undo Send's sidebar ordering/scroll effects. Only Pi's response establishes acceptance; later model/provider failures leave accepted messages in the transcript. Disconnect, window reload and Reload session never replay a prompt. Submission tracking is not saved as draft recovery.
 
-Stop keeps the process alive. Use [Restart session](sessions.md#restart-session) for a stuck saved session, or Close for temporary/unsaved sessions.
+Stop keeps the process alive. Use [Reload session](sessions.md#reload-session) for a stuck saved session, or Close for temporary/unsaved sessions.
 
 ## Slash commands and compaction
 
-Type `/` for suggestions discovered from Pi.
+Type `/` for suggestions discovered from Pi. Supported commands use one retained
+Command card, without an ordinary Send preview, sidebar-recency bump or forced
+transcript navigation. Accepted commands wait for Pi's main agent to become idle;
+Escape in a command picker cancels before invocation. Unknown commands keep the
+draft and are not sent as chat. [Codex](codex.md#slash-commands) and
+[Copilot](copilot.md#slash-commands) use the same command presentation with their
+own catalogs and native execution semantics.
 
 - `/name` names the session.
 - Bare `/mcp` opens the read-only [MCP inspector](mcp.md), without a model request, conversation turn, sidebar-recency bump or transcript navigation. Explicit subcommands still go to Pi.
-- `/compact` is available only while idle and may include optional instructions.
+- `/compact` executes at idle and may include optional instructions. If submitted during work, its Command card waits for idle.
 - Automatic and manual compaction are visible and lock the composer until complete.
 - Session-management commands such as `/resume` and Pi's `/reload` are unavailable; use Nimrod's session actions instead. Unsupported commands are rejected rather than silently sent as chat.
 - Images cannot be combined with slash commands; the draft remains intact.

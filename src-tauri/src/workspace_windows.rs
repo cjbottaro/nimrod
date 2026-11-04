@@ -213,6 +213,29 @@ pub async fn inspect_workspace_session(
         .map_err(|e| e.to_string())?
 }
 
+/// Exact Pi history check independent of a conversation token, including absence.
+#[tauri::command]
+pub async fn workspace_session_file_info(
+    app: tauri::AppHandle,
+    window: tauri::Window,
+    path: PathBuf,
+    session_id: String,
+) -> Result<crate::sessions::SessionFile, String> {
+    let cwd = app
+        .state::<WorkspaceWindows>()
+        .directories
+        .lock()
+        .unwrap()
+        .get(window.label())
+        .cloned()
+        .ok_or("Open a project first")?;
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::sessions::reported_file(&path, &cwd, &session_id)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub async fn list_workspace_sessions(
     app: tauri::AppHandle,

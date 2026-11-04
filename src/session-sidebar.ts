@@ -12,7 +12,7 @@ const statusPresentation: Record<SessionStatus, { label: string; mark: string }>
   unread: { label: 'Unread', mark: '◉' },
   sending: { label: 'Sending', mark: '' },
   compacting: { label: 'Compacting', mark: '' },
-  restarting: { label: 'Restarting', mark: '' },
+  reloading: { label: 'Reloading', mark: '' },
   closing: { label: 'Closing', mark: '' },
   deleting: { label: 'Deleting', mark: '' },
   recovery: { label: 'Recovery needed', mark: '↻' },
@@ -37,14 +37,14 @@ export function sessionTime(timestamp: unknown, now = Date.now(), locale?: strin
 }
 
 export interface SidebarState {
-  deleting?: boolean; blocked?: boolean; restarting?: boolean; closing?: boolean; starting?: boolean;
+  deleting?: boolean; blocked?: boolean; reloading?: boolean; closing?: boolean; starting?: boolean;
   inputCount?: number; failed?: boolean; inactive?: boolean; compacting?: boolean; busy?: boolean; pending?: boolean; unread?: boolean;
 }
 /** Keep lifecycle/error precedence separate from timestamp presentation. */
 export function sessionStatus(state: SidebarState): SessionStatus {
   if (state.deleting) return 'deleting';
   if (state.blocked) return 'recovery';
-  if (state.restarting) return 'restarting';
+  if (state.reloading) return 'reloading';
   if (state.closing) return 'closing';
   if (state.starting) return 'starting';
   if (state.inputCount) return 'input';

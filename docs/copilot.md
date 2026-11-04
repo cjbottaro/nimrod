@@ -2,7 +2,7 @@
 
 Nimrod’s built-in Copilot integration uses the **official Copilot SDK**, bundled
 with the app. Install and authenticate the Copilot CLI yourself; you do not need
-to install an SDK. The pinned SDK 1.0.22 declares CLI **1.0.98** compatibility.
+to install an SDK. The pinned SDK 1.0.28 declares CLI **1.0.105** compatibility.
 It requires Node `^20.19.0 || >=22.12.0`; the development toolchain uses 25.9.0.
 Configure **Settings → Runtime → Copilot executable** and **Node executable** if
 desktop executable discovery fails. Account/authentication stays with Copilot.
@@ -207,7 +207,9 @@ commands. Failed/uncertain sends do not restore or replay images or alter a newe
 draft. New offline image fixtures are authored but unrun; installed-CLI/model and
 native clipboard/history acceptance remain pending.
 
-Current limits: no Restart, steering, queue, Pi MCP inspector
+[Reload session](sessions.md#reload-session) reopens the same saved conversation with a fresh Copilot agent while keeping your draft. Installed-runtime/native reload acceptance remains pending.
+
+Current limits: no steering, queue, Pi MCP inspector
 or in-place harness switching. Slash commands use the SDK's supported interface,
 not full terminal-UI emulation; see below.
 Interactive, Plan and Autopilot sessions are supported through the SDK. Generic
@@ -359,8 +361,9 @@ stay within the current connection and are not restored on Close/Resume.
 Invoked skills appear as one [skill disclosure](reading-conversations.md): the
 skill command is collapsed by default, with any arguments visible below it.
 Expand it to read the injected skill instructions and related-file context.
-Successful recognized skill invocations replace their temporary command card
-with that user turn; failed or unconfirmed commands retain their outcome card.
+The Command card retains the invocation's transition/outcome separately from
+that native user turn; it does not duplicate the injected skill body. Text and
+Markdown command reports stay inside their original Command card.
 Resumed expanded skill turns use the same presentation.
 
 New commands work automatically when they use supported SDK metadata and
@@ -391,12 +394,17 @@ passed through without interpretation.
 
 `/config` changes Copilot defaults for future sessions. Type `/config` and a
 setting prefix to complete a known key; after the key, the inline hint changes
-to `[value]` and values remain free-form. Running `/config model`,
+to `[value]`. Typed settings offer value completion too; other values remain
+free-form. Object containers such as `permissions` are not editable keys; use a
+leaf key such as `permissions.allow`. Running `/config model`,
 `effortLevel`, `defaultMode`, `contextTier`, `autoTier` or
 `defaultPermissionMode` without a value opens a typed Copilot-owned picker.
 Other keys open a free-form value input when submitted without a value.
-Copilot validates, persists and confirms each write. This does not change the
+Nimrod writes through Copilot's public settings API and confirms the saved value;
+Copilot write rejections are shown on the command. This does not change the
 current session; use Nimrod's session controls or `/model` for live settings.
+`/config defaultPermissionMode allow-all` applies to newly created sessions,
+not Resume. Use `/permissions allow-all` to change the current session.
 Sensitive proxy passwords remain delegated to Copilot's native secure
 configuration UI.
 
@@ -421,22 +429,27 @@ last selected Copilot row automatically. Other restored rows stay disconnected
 until selected. Reconnection uses the exact ID without sending a prompt or
 continuing pending work.
 
-After using built-in Copilot in a project, **Resume session… / ⌘/Ctrl+K** queries
-project-owned SDK discovery alongside Pi. Discovery does not create/load a
+**Resume session… / ⌘/Ctrl+K** and **Delete sessions…** query
+project-owned SDK discovery alongside other available harnesses, even if you have
+not previously used Copilot in Nimrod for that directory. Discovery does not create/load a
 conversation. Only exact project-directory, local sessions are included.
 Refresh requests a fresh list; one unavailable source does not hide the others.
 Selecting closed history immediately restores its SDK draft and then resumes
 that exact ID. Missing/failed loads never create a replacement.
 
-**Close** stops the owned connection and removes its sidebar entry, retaining
-Copilot history and the SDK draft.
+**Close** stops the owned connection and removes its sidebar entry. Saved Copilot
+history and its draft remain. If Copilot confirms there is no saved session,
+Close discards the local entry and draft, just like Delete. Lookup/connection
+failures alone do not authorize discarding the draft.
 
 **Delete session…**, row/Project bar trash controls and **Delete sessions…** use
 the SDK’s supported permanent deletion API. Review identifies one session and its
 artifacts, not a Pi tree.
-After confirmation Nimrod verifies fresh project membership, stops its owned
-writer, and requests deletion. Only confirmed success removes local SDK
-references/draft. Failed or uncertain results retain them and are never
+Nimrod checks the exact session's metadata rather than treating a missing history
+list entry as proof of absence. Confirmed-unsaved open sessions use local cleanup;
+saved sessions require review. After confirmation Nimrod verifies project
+ownership, stops its owned writer, and checks again. Saved history uses the SDK
+deletion API; confirmed absence removes only the local entry and draft. Failed or uncertain results retain them and are never
 automatically retried; use Refresh before a later explicit attempt. Nimrod does
 not remove private Copilot directories or coordinate external applications.
 

@@ -15,12 +15,45 @@ function compileAssertions(session: HarnessSession, project: HarnessProject, reg
   const { lifecycle, ...withoutLifecycle } = session;
   // @ts-expect-error A factory cannot register a session without lifecycle ownership.
   defineHarness({ ...registration, create: () => ({ ...project, create: () => withoutLifecycle }) });
+  const { retention, ...withoutRetention } = session;
+  // @ts-expect-error Every current/future integration must classify native recoverability explicitly.
+  const missingRetention: HarnessSession = withoutRetention;
+  // @ts-expect-error Classification cannot omit integration-local pointer cleanup.
+  const missingForget: HarnessSession['retention'] = { check: retention.check };
+  void [retention, missingRetention, missingForget];
   const { conversation, ...withoutConversation } = session;
   // @ts-expect-error Core input/output cannot be omitted or supplied by the project shell.
   const missingConversation: HarnessSession = withoutConversation;
+  const { commands, ...withoutCommands } = session;
+  // @ts-expect-error Commands are a required consumer port, even for an empty catalog.
+  defineHarness({ ...registration, create: () => ({ ...project, create: () => withoutCommands }) });
+  // @ts-expect-error Discovery alone cannot stand in for invocation/lifetime handling.
+  const incompleteCommands: HarnessSession['commands'] = { catalog: commands.catalog };
+  void incompleteCommands;
+  const { naming, ...withoutNaming } = session;
+  // @ts-expect-error Every factory must supply an executable naming consumer port.
+  defineHarness({ ...registration, create: () => ({ ...project, create: () => withoutNaming }) });
+  // @ts-expect-error An unsupported flag cannot replace an explicit rejecting implementation.
+  const unsupportedNaming: HarnessSession['naming'] = { supported: false };
+  void naming; void unsupportedNaming;
+  const { deletion, ...withoutDeletion } = session;
+  // @ts-expect-error Every factory must explicitly declare mounted-session removal semantics.
+  const missingDeletion: HarnessSession = withoutDeletion;
+  const { reload, ...withoutReload } = session;
+  // @ts-expect-error Every factory must supply the reload consumer port.
+  defineHarness({ ...registration, create: () => ({ ...project, create: () => withoutReload }) });
+  // @ts-expect-error A silent unsupported flag cannot stand in for reload behavior.
+  const unsupportedReload: HarnessSession['reload'] = { supported: false, reason: 'Forgot reload' };
+  const { run, ...withoutRun } = reload;
+  // @ts-expect-error Even unavailable states require an explicit execution contract.
+  const missingReloadRun: HarnessSession['reload'] = withoutRun;
   const { interactions, ...withoutInteractions } = session;
   // @ts-expect-error Even an integration without rich decisions must explicitly choose noInteractions.
   const missingInteractions: HarnessSession = withoutInteractions;
+  const { availability, ...withoutAvailability } = project;
+  // @ts-expect-error Every project must explicitly supply startup runtime availability.
+  defineHarness({ ...registration, create: () => withoutAvailability });
+  void availability;
   const { actions, ...withoutProjectActions } = project;
   // @ts-expect-error Project contributions must choose an executable port or explicit noProjectActions.
   defineHarness({ ...registration, create: () => withoutProjectActions });
@@ -31,6 +64,6 @@ function compileAssertions(session: HarnessSession, project: HarnessProject, reg
   const emptyAction: HarnessAction = { id: 'model', label: 'Model', detail: 'Missing implementation' };
   // @ts-expect-error Completion/receipt semantics require the asynchronous submission contract.
   const incorrectInput: HarnessSession['conversation']['messageInput'] = { capabilities: () => ({}), submit() {} };
-  void [lifecycle, conversation, interactions, actions, cards, missingConversation, missingInteractions, emptyAction, incorrectInput];
+  void [lifecycle, conversation, reload, run, unsupportedReload, missingReloadRun, interactions, actions, cards, missingConversation, missingInteractions, emptyAction, incorrectInput];
 }
 void compileAssertions;

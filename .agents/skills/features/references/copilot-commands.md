@@ -3,7 +3,7 @@
 **Status: source implemented; authored offline fixtures unrun.** No app launches
 or model requests were performed for the argument-picker follow-up. A sanitized
 user-observed installed-CLI trace supplies the bare `/model` result evidence
-described below; the released `@github/copilot-sdk@1.0.22`
+described below; the released `@github/copilot-sdk@1.0.28`
 declarations/implementation remain the API evidence, not repository-main
 documentation or native acceptance.
 
@@ -55,12 +55,25 @@ rename action.
 CLI 1.0.98 keeps `/config` entirely in its terminal client: it is absent from
 `commands.list()` and direct command RPC rejects it. Nimrod synthesizes a
 Copilot-owned client command from public `user.settings.get/set` and model
-metadata. Key completion combines dynamic SDK keys with a pinned path-only
-nested-key compatibility supplement. Model, effort, default mode, context tier,
+metadata. Key completion combines dynamic SDK leaf keys with a pinned path-only
+nested-key compatibility supplement; object containers and secure-only keys are
+not editable suggestions. Model, effort, default mode, context tier,
 Auto tier and default permission mode use typed harness pickers; remaining
-values are free-form, conservatively decoded, written and authoritatively
-confirmed by Copilot. These are defaults for future sessions and never dispatch
+values are free-form and conservatively decoded. Writes use public
+`user.settings.set`, surface runtime rejection without retry, and require
+an authoritative `user.settings.get` readback before reporting success.
+SDK 1.0.28 exposes only `get/set` on public `client.rpc.user.settings`;
+`validate` belongs to the internal RPC surface and must not be called here.
+Known typed values also advertise second-stage literal completions through
+`input.valueChoices`; free-form settings retain only `[value]`.
+These are defaults for future sessions and never dispatch
 Nimrod's live session configuration actions.
+
+Registered composer routing now uses the required [session command
+port](session-commands.md). Queue and modal mechanics are shared; SDK results,
+adapters and authoritative effects remain here. Command output renders inside
+the retained invocation card, and explicit agent-prompt transitions keep that
+card separately from native conversation history. New/updated fixtures are unrun.
 
 This feature applies to **Copilot SDK sessions**. Pi's existing `/name`,
 `/compact` and bare `/mcp` interception remains unchanged; removing it requires a
@@ -211,6 +224,7 @@ use the existing bounded request timeout/unknown-outcome disconnect contract.
   raw argument preservation, selection/cancellation/late results, discovery
   updates, finalized model reconciliation, explicit agent prompts and no fallback
   for unsupported effects.
+- `test/copilot-config-command.test.ts`: public get/set-only fixture, model/provider persistence, rejected writes, mismatched confirmation and readback failure without retry; authored unrun.
 - `test/copilot-command-effects.test.ts`: applied/cancelled model and Plan-model
   transactions, authoritative mismatch and finalization uncertainty.
 - `test/copilot-bridge.test.ts`, `test/fixtures/copilot-sdk.mjs`: production bridge

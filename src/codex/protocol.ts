@@ -1,4 +1,5 @@
-/** Reviewed consumer subset of codex-cli 0.162.0's generated app-server schema.
+/** Reviewed consumer subset: 0.162.0 baseline; questions/command reports/compaction
+ * additionally reviewed against 0.164.0 source and generated app-server schema.
  * Not generated, not a complete Codex API. Unknown item variants retain native data.
  */
 import { isRecord, type RpcRecord } from '../json-rpc-connection';

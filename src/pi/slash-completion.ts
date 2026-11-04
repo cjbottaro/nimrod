@@ -2,20 +2,18 @@ import { DEFAULT_AUTOCOMPLETE_ACCEPT, type AutocompleteAccept } from '../autocom
 import { matchSlashCommands } from "./slash-matching";
 import { installInlineCompletion } from './inline-completion';
 
-export interface SlashCommand {
-  name: string; description: string; source: "GUI" | "Extension" | "Template" | "Skill" | "Agent";
-  input?: { hint: string; required?: boolean; choices?: { name: string; description: string }[]; valueHint?: string };
-}
+import type { SlashCommand } from '../session-commands';
+export type { SlashCommand } from '../session-commands';
 
 export function slashCommands(raw: unknown): SlashCommand[] {
   const commands = new Map<string, SlashCommand>([
-    ["name", { name: "name", description: "Rename this Pi session", source: "GUI" }],
-    ["compact", { name: "compact", description: "Compact the active context", source: "GUI" }],
+    ["name", { name: "name", description: "Rename this Pi session", source: "GUI", input: { hint: "name" } }],
+    ["compact", { name: "compact", description: "Compact the active context", source: "GUI", input: { hint: "focus" } }],
   ]);
   if (Array.isArray(raw)) for (const value of raw) {
     if (!value || typeof value !== "object") continue;
     const { name, description, source } = value as Record<string, unknown>;
-    if (typeof name !== "string" || !name || /[\s\u0000-\u001f]/.test(name) || name.startsWith("/") || commands.has(name)) continue;
+    if (typeof name !== "string" || !name || /[\s\u0000-\u001f]/.test(name) || name.startsWith("/") || /^(resume|delete|new|fork|clone|tree|reload|quit)$/.test(name) || commands.has(name)) continue;
     commands.set(name, { name, description: typeof description === "string" ? description : "Pi command", source: source === "skill" ? "Skill" : source === "prompt" ? "Template" : "Extension" });
   }
   return [...commands.values()];
@@ -34,6 +32,7 @@ export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLEle
   let argumentPrefix = '';
   let argumentQuery = '';
   let valueStage = false;
+  let valueChoices: { name: string; description: string }[] = [];
   let argumentSelected = false;
   let selected = 0;
   let previousQuery: string | undefined;
@@ -62,7 +61,7 @@ export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLEle
       const hint = (valueStage ? argumentCommand.input?.valueHint : argumentCommand.input?.hint)?.trim()
         || (matches.length ? matches.map(choice => choice.name).join('|') : '');
       const placeholder = /^[\[<]/.test(hint) ? hint : argumentCommand.input?.required ? `<${hint}>` : `[${hint}]`;
-      const completing = !valueStage && !!candidate && (!!argumentQuery || argumentSelected);
+      const completing = !!candidate && (!!argumentQuery || argumentSelected);
       const suffix = completing ? candidate.name.slice(argumentQuery.length) : argumentQuery || !hint ? '' : placeholder;
       const separator = input.value === argumentPrefix.trimEnd() ? ' ' : '';
       const announcement = candidate && (completing || !hint)
@@ -104,6 +103,7 @@ export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLEle
     let query = slashQuery(input.value, input.selectionStart, input.selectionEnd);
     argumentCommand = undefined;
     valueStage = false;
+    valueChoices = [];
     // An exact command can show its hint without requiring a trailing space.
     const args = /^\/([^\s/]+)(?:([ \t])([\s\S]*))?$/.exec(input.value);
     const command = args && commands.find(command => command.name.toLowerCase() === args[1].toLowerCase());
@@ -112,21 +112,23 @@ export function installSlashCompletion(input: HTMLTextAreaElement, list: HTMLEle
       argumentPrefix = args![2] ? input.value.slice(0, args![1].length + 2) : `${input.value} `;
       argumentQuery = args![3] ?? '';
       const first = /^([^\s]+)(?:\s+([\s\S]*))?$/.exec(argumentQuery);
-      if (command.input.valueHint && first && command.input.choices?.some(choice => choice.name.toLowerCase() === first[1].toLowerCase())) {
+      const firstChoice = first && command.input.choices?.find(choice => choice.name.toLowerCase() === first[1].toLowerCase());
+      if (command.input.valueHint && first && firstChoice) {
         valueStage = true;
+        valueChoices = command.input.valueChoices?.[firstChoice.name] ?? [];
         argumentPrefix = `${argumentPrefix}${first[1]} `;
         argumentQuery = first[2] ?? '';
       }
       query = argumentQuery.toLowerCase();
     }
     if (query === undefined) { close(); return; }
-    const context = argumentCommand ? `${argumentCommand.name} ${query}` : query;
+    const context = argumentCommand ? `${argumentPrefix}${valueStage ? 'value' : 'argument'} ${query}` : query;
     const previous = context === previousQuery ? matches[selected]?.name : undefined;
     if (context !== previousQuery) argumentSelected = false;
     previousQuery = context;
     // Inline suffixes must be literal prefix completions, not fuzzy rewrites.
-    matches = valueStage ? [] : argumentCommand
-      ? (argumentCommand.input?.choices ?? []).filter(choice => choice.name.toLowerCase().startsWith(query!))
+    matches = argumentCommand
+      ? (valueStage ? valueChoices : argumentCommand.input?.choices ?? []).filter(choice => choice.name.toLowerCase().startsWith(query!))
         .map(choice => ({ ...choice, source: argumentCommand!.source }))
       : matchSlashCommands(commands, query);
     if (!matches.length && !(argumentCommand && (valueStage ? argumentCommand.input?.valueHint : argumentCommand.input?.hint) && !argumentQuery)) { close(); return; }

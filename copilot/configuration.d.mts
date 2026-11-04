@@ -2,6 +2,7 @@ interface Defaults {
   model?: string;
   reasoningEffort?: string;
   contextTier?: string;
+  permissionMode?: 'manual' | 'assisted' | 'allow-all';
 }
 interface Snapshot {
   modelId?: string;
@@ -32,6 +33,12 @@ export function createCopilotConfiguration(client: {
   rpc: { user: { settings: { get(): Promise<unknown> } } };
 }): {
   defaults(): Promise<Defaults>;
+  initializePermissions(session: {
+    rpc: { permissions: {
+      getMode(): Promise<{ mode: string }>;
+      setMode(params: { mode: string; source: 'user_setting' }): Promise<{ success: boolean; mode: string }>;
+    } };
+  }, mode: Defaults['permissionMode']): Promise<void>;
   snapshot(session: ConfigurationSession, defaults?: Defaults): Promise<Snapshot>;
   apply(session: ConfigurationSession, setting: string, value: string): Promise<{
     model: Snapshot;

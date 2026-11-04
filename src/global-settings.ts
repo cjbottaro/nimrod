@@ -29,41 +29,6 @@ export async function mountGlobalSettings() {
     const surface = installSettingsSurface(preferences, notices, true);
     presentation.own(() => surface.dispose());
     appearanceReady = surface.ready;
-    const section = document.createElement('section'); section.className = 'settings-project-overrides';
-    const heading = document.createElement('h2'); heading.textContent = 'Open projects with overrides';
-    const description = document.createElement('p'); description.className = 'settings-hint'; description.textContent = 'These projects keep their explicit values when global defaults change.';
-    const links = document.createElement('div'); links.className = 'settings-project-links';
-    section.append(heading, description, links); document.getElementById('settings-panel-appearance')!.append(section);
-    let generation = 0, projectSignature: string | undefined;
-    const labels: Record<string, string> = { 'appearance.theme': 'Theme', 'runtime.piPath': 'Pi path', 'runtime.nodePath': 'Node path', 'runtime.copilotPath': 'Copilot path', 'runtime.codexPath': 'Codex path', 'interaction.autocompleteAccept': 'Autocomplete acceptance' };
-    async function reloadProjects() {
-      const request = ++generation;
-      try {
-        const projects = await invoke<{ cwd: string; keys: string[] }[]>('list_project_overrides');
-        if (presentation.disposed || request !== generation) return;
-        notices.resolve('project-overrides');
-        const signature = JSON.stringify(projects);
-        if (signature === projectSignature) return;
-        projectSignature = signature;
-        const active = document.activeElement;
-        const focusedProject = links.contains(active) ? (active as HTMLElement).dataset.cwd : undefined;
-        const buttons = projects.map(project => {
-          const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary';
-          button.textContent = (project.cwd.split(/[\\/]/).filter(Boolean).pop() ?? project.cwd) + ' — ' + project.keys.map(key => labels[key] ?? key).join(', ');
-          button.title = project.cwd; button.dataset.cwd = project.cwd; button.setAttribute('aria-label', 'Open project settings for ' + project.cwd);
-          button.addEventListener('click', () => { void invoke('open_owned_project_settings', { cwd: project.cwd }).catch(error => notices.report({ id: 'project-settings', operation: 'Open project settings', message: String(error) })); });
-          return button;
-        });
-        links.replaceChildren(...buttons);
-        if (!projects.length) links.textContent = 'No open project has overrides.';
-        if (focusedProject && document.hasFocus() && document.activeElement === document.body) buttons.find(button => button.dataset.cwd === focusedProject)?.focus({ preventScroll: true });
-      } catch (error) { if (!presentation.disposed) notices.report({ id: 'project-overrides', operation: 'Read project overrides', message: String(error) }); }
-    }
-    presentation.own(await listen('nimrod-preferences', () => { void reloadProjects(); }));
-    if (presentation.disposed) return;
-    presentation.own(await getCurrentWindow().onFocusChanged(event => { if (event.payload) void reloadProjects(); }));
-    if (presentation.disposed) return;
-    void reloadProjects();
     surface.settings.open();
     if (new URLSearchParams(location.search).get('settings') === 'keybindings') surface.openKeybindings();
     const takeCategory = async () => {

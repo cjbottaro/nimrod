@@ -73,6 +73,29 @@ pub struct Config {
     catalog: bool,
 }
 
+// Discovery and launch must resolve the same configured executable.
+fn resolve_cli(configured: Option<PathBuf>) -> Result<PathBuf, String> {
+    let cli = configured
+        .map(|path| {
+            if path.is_absolute() {
+                Ok(path)
+            } else {
+                path.to_str()
+                    .and_then(crate::find_program)
+                    .ok_or("Configured Codex CLI executable was not found".to_owned())
+            }
+        })
+        .transpose()?
+        .or_else(|| crate::find_program("codex"))
+        .ok_or("Install and authenticate Codex CLI, or configure its Runtime path")?;
+    crate::executable(&cli)
+}
+
+#[tauri::command]
+pub fn codex_runtime_available(cli: Option<PathBuf>) -> bool {
+    cfg!(unix) && resolve_cli(cli).is_ok_and(|path| which::which(path).is_ok())
+}
+
 impl CodexHost {
     pub async fn retire_window(&self, window: &str) {
         self.windows.lock().await.closing.insert(window.into());
@@ -185,12 +208,40 @@ fn validate_message(value: &Value) -> Result<(), String> {
             Some("initialized") if value.get("id").is_none() => {},
             Some("initialize" | "thread/start" | "thread/resume" | "thread/list"
                 | "thread/turns/list" | "thread/items/list"
-                | "turn/start" | "turn/steer" | "turn/interrupt" | "model/list" | "thread/delete") if valid_id(&value["id"]) => {},
+                | "turn/start" | "turn/steer" | "turn/interrupt" | "model/list" | "thread/delete" | "thread/name/set"
+                | "thread/compact/start" | "thread/read" | "mcpServerStatus/list" | "thread/backgroundTerminals/list" | "skills/list" | "hooks/list") if valid_id(&value["id"]) => {},
             _ => return Err("Unsupported Codex operation".into()),
         }
-        if matches!(method.as_str(), Some("thread/resume" | "thread/turns/list" | "thread/items/list" | "turn/start" | "turn/steer" | "turn/interrupt" | "thread/delete"))
+        if matches!(method.as_str(), Some("thread/resume" | "thread/turns/list" | "thread/items/list" | "turn/start" | "turn/steer" | "turn/interrupt" | "thread/delete" | "thread/name/set"
+            | "thread/compact/start" | "thread/read" | "mcpServerStatus/list" | "thread/backgroundTerminals/list"))
             && value["params"]["threadId"].as_str().is_none_or(|id| id.is_empty() || id.len() > 128) {
             return Err("Codex operation requires a thread ID".into());
+        }
+        if matches!(method.as_str(), Some("thread/compact/start" | "thread/read" | "mcpServerStatus/list" | "thread/backgroundTerminals/list" | "skills/list" | "hooks/list")) {
+            let params = value["params"].as_object().ok_or("Invalid Codex command parameters")?;
+            let allowed: &[&str] = match method.as_str() {
+                Some("thread/compact/start") => &["threadId"],
+                Some("thread/read") => &["threadId", "includeTurns"],
+                Some("mcpServerStatus/list") => &["threadId", "cursor", "limit", "detail"],
+                Some("thread/backgroundTerminals/list") => &["threadId", "cursor", "limit"],
+                _ => &["cwds"],
+            };
+            if params.keys().any(|key| !allowed.contains(&key.as_str())) { return Err("Unsupported Codex command parameter".into()); }
+            if method.as_str() == Some("thread/read") && value["params"]["includeTurns"] != false { return Err("Command reports require metadata-only thread reads".into()); }
+            if matches!(method.as_str(), Some("skills/list" | "hooks/list")) && value["params"]["cwds"].as_array().is_none_or(|cwds|
+                cwds.len() != 1 || cwds[0].as_str().is_none_or(|cwd| cwd.is_empty())) { return Err("Codex catalog report requires one project".into()); }
+            if matches!(method.as_str(), Some("mcpServerStatus/list" | "thread/backgroundTerminals/list")) {
+                if value["params"]["limit"] != 100 || value["params"].get("cursor").is_some_and(|cursor| cursor.as_str().is_none_or(|cursor| cursor.is_empty())) {
+                    return Err("Invalid Codex command pagination".into());
+                }
+                if method.as_str() == Some("mcpServerStatus/list") && !matches!(value["params"]["detail"].as_str(), Some("full" | "toolsAndAuthOnly")) {
+                    return Err("Invalid Codex MCP detail".into());
+                }
+            }
+        }
+        if method.as_str() == Some("thread/name/set") && value["params"]["name"].as_str().is_none_or(|name|
+            name.trim().is_empty() || name.chars().any(char::is_control)) {
+            return Err("Invalid Codex session name".into());
         }
         if matches!(method.as_str(), Some("turn/start" | "turn/steer")) {
             let params = &value["params"];
@@ -272,21 +323,7 @@ pub async fn start_codex(
     {
         return Err("Codex requires this window's canonical project directory".into());
     }
-    let cli = config
-        .cli
-        .map(|path| {
-            if path.is_absolute() {
-                Ok(path)
-            } else {
-                path.to_str()
-                    .and_then(crate::find_program)
-                    .ok_or("Configured Codex CLI executable was not found".to_owned())
-            }
-        })
-        .transpose()?
-        .or_else(|| crate::find_program("codex"))
-        .ok_or("Install and authenticate Codex CLI, or configure its Runtime path")?;
-    let cli = crate::executable(&cli)?;
+    let cli = resolve_cli(config.cli)?;
     #[cfg(not(unix))]
     return Err(
         "Codex process-tree ownership is currently implemented for macOS and Linux only"
@@ -393,6 +430,10 @@ pub async fn write_codex(
         .ok_or("Unknown Codex connection or wrong window")?;
     if let Some(cwd) = message["params"].get("cwd") {
         if cwd.as_str() != owner.cwd.to_str() { return Err("Codex cwd must match its project".into()); }
+    }
+    if matches!(message["method"].as_str(), Some("skills/list" | "hooks/list"))
+        && message["params"]["cwds"].as_array().is_none_or(|cwds| cwds.len() != 1 || cwds[0].as_str() != owner.cwd.to_str()) {
+        return Err("Codex command catalog must match its project".into());
     }
     if matches!(message["method"].as_str(), Some("thread/start" | "thread/resume"))
         && message["params"]["cwd"].as_str() != owner.cwd.to_str() {
@@ -523,7 +564,11 @@ async fn observe_record(owner: &WireOwner, value: &Value) -> Result<(), String> 
         if pending.as_ref().is_some_and(|id| value.get("id") == Some(id)) { *pending = None; }
     }
     if owner.catalog {
-        if let Some(rows) = value["result"]["data"].as_array() {
+        // A metadata-only read can recover a saved named-empty root hidden by
+        // thread/list's preview filter, without binding this catalog to it.
+        let mut rows: Vec<&Value> = value["result"]["data"].as_array().into_iter().flatten().collect();
+        if let Some(thread) = value["result"].get("thread") { rows.push(thread); }
+        if !rows.is_empty() {
             let mut metadata = owner.metadata.lock().await;
             for row in rows {
                 if let (Some(id), Some(cwd)) = (row["id"].as_str(), row["cwd"].as_str()) {

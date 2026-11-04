@@ -44,6 +44,12 @@ export class CopilotClient {
       { sessionId: 'outside', summary: 'Outside project fixture', isRemote: false, context: { workingDirectory: '/elsewhere' }, startTime: new Date(1000), modifiedTime: new Date(2000) },
     ].filter(session => session.sessionId !== this.deleted);
   }
+  async getSessionMetadata(id) {
+    if (id === 'metadata-error') throw new Error('Metadata unavailable');
+    // Saved-but-unlisted history is deliberately omitted from listSessions.
+    if (id === 'unlisted') return { sessionId: id, isRemote: false, context: { workingDirectory: this.cwd } };
+    return (await this.listSessions()).find(session => session.sessionId === id);
+  }
   async createSession(config) {
     assert.equal(config.name, 'Copilot session');
     assert.equal(this.defaultsReads, 1, 'read configured defaults before creating a session');
@@ -79,8 +85,24 @@ class Session {
     { ...permissionCommand, aliases: ['perms'] },
     { name: 'discover-fixture', description: 'Add a new fixture command', kind: 'builtin', allowDuringAgentExecution: false },
   ];
+  sessionName = null;
   rpc = {
-    permissions: { getMode: async () => ({ mode: this.permissionMode }) },
+    name: {
+      set: async ({ name }) => { this.sessionName = name; this.emit('session.title_changed', { title: name }); },
+      get: async () => ({ name: this.sessionName }),
+    },
+    permissions: {
+      getMode: async () => ({ mode: this.permissionMode }),
+      setMode: async ({ mode, source }) => {
+        assert.equal(this.saved, false, 'Resume must never reapply permission defaults');
+        assert.equal(source, 'user_setting');
+        assert.ok(['manual', 'assisted', 'allow-all'].includes(mode));
+        if (process.env.NIMROD_FIXTURE_COPILOT_MODEL_STATE === 'permission-rejected') return { success: false, mode: this.permissionMode };
+        this.permissionMode = mode;
+        this.emit('session.permissions_changed', { mode });
+        return { success: true, mode };
+      },
+    },
     skills: { list: async () => ({ skills: [
       { name: 'fixture-skill', description: 'Fixture skill details', enabled: true },
       { name: 'disabled-skill', description: 'Disabled fixture skill', enabled: false },
@@ -128,7 +150,7 @@ class Session {
         // The CLI can own its picker even when SDK invocation defaults to text.
         if (name === 'permissions') {
           if (input === 'allow-all') { this.permissionMode = 'allow-all'; this.emit('session.permissions_changed', { mode: 'allow-all' }); }
-          return { kind: 'text', text: `Fixture permission report: ${input ?? 'show'}`, markdown: false };
+          return { kind: 'text', text: `Fixture permission report: ${input ?? 'show'} (${this.permissionMode})`, markdown: false };
         }
         if (name === 'discover-fixture') {
           this.commandCatalog.push({ name: 'new-fixture', kind: 'builtin', description: 'Newly advertised command', allowDuringAgentExecution: false });

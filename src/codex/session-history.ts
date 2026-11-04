@@ -1,6 +1,6 @@
 import { CodexClient, type CodexInteractionFailure } from './client';
 import type { CodexTransport, CodexDeletionControl } from './native';
-import { codexDeletionTree, MAX_CODEX_INVENTORY, type CodexDeletionTree } from './deletion-tree';
+import { codexDeletionTree, CodexMissingDeletionRoot, MAX_CODEX_INVENTORY, type CodexDeletionTree } from './deletion-tree';
 import type { CodexThread } from './protocol';
 import { abortable, type SessionHistory, type SessionHistoryPage } from '../session-history';
 import { ownedSessionStop } from '../session-lifecycle';
@@ -64,9 +64,16 @@ export class CodexSessionHistory implements SessionHistory {
       return { key: savedSessionKey(reference), reference, title: typeof thread.name === 'string' && thread.name.trim() ? thread.name : typeof thread.preview === 'string' && thread.preview.trim() ? thread.preview.slice(0, 100) : 'Untitled Codex session', harnessLabel: 'Codex', timestamp, open: false, status: 'closed' as const, keywords: thread.id };
     }) };
   }
-  async previewTree(rootId: string, signal: AbortSignal): Promise<CodexDeletionTree> {
+  async retention(sessionId: string): Promise<'saved' | 'absent'> {
+    return await this.inspectTree(sessionId, new AbortController().signal) ? 'saved' : 'absent';
+  }
+  async previewTree(rootId: string, signal: AbortSignal): Promise<CodexDeletionTree | null> {
     if (this.deleting && this.client?.phase !== 'ready') throw new Error('Codex deletion catalog disconnected. Nothing was retried.');
-    this.deleting = true; await abortable(this.initialize(), signal);
+    this.deleting = true;
+    return this.inspectTree(rootId, signal);
+  }
+  private async inspectTree(rootId: string, signal: AbortSignal): Promise<CodexDeletionTree | null> {
+    await abortable(this.initialize(), signal);
     const inventory: CodexThread[] = [];
     for (const archived of [false, true]) {
       const cursors = new Set<string>(); let cursor: string | undefined;
@@ -80,11 +87,32 @@ export class CodexSessionHistory implements SessionHistory {
         if (cursor) cursors.add(cursor);
       } while (cursor);
     }
-    signal.throwIfAborted(); return codexDeletionTree(this.cwd, rootId, inventory);
+    signal.throwIfAborted();
+    if (!inventory.some(thread => thread.id === rootId)) {
+      // Named zero-message histories may be saved but excluded from thread/list.
+      const saved = await abortable(this.client!.readSavedThread(rootId, this.cwd), signal);
+      signal.throwIfAborted();
+      if (saved) {
+        inventory.push(saved);
+        if (inventory.length > MAX_CODEX_INVENTORY) throw new Error('Codex deletion inventory exceeds 100,000 threads');
+      } else {
+        try { codexDeletionTree(this.cwd, rootId, inventory); }
+        catch (error) {
+          if (error instanceof CodexMissingDeletionRoot) return null;
+          throw error;
+        }
+        throw new Error('Codex absence lookup conflicted with its deletion inventory');
+      }
+    }
+    return codexDeletionTree(this.cwd, rootId, inventory);
   }
   async reserveDeletion(operationId: string, rootId: string, ids: readonly string[]): Promise<void> {
     if (!this.supportsDeletion || !this.owner.token) throw new Error('Codex deletion is unavailable');
     await this.host.deletion!.reserve(this.owner.token, operationId, rootId, ids);
+  }
+  async reserveLocalRemoval(operationId: string, rootId: string): Promise<void> {
+    if (!this.supportsDeletion || !this.owner.token) throw new Error('Codex local removal is unavailable');
+    await this.host.deletion!.reserve(this.owner.token, operationId, rootId, [rootId], true);
   }
   async stopDeletionOwners(operationId: string): Promise<void> {
     if (!this.owner.token || !this.host.deletion) throw new Error('Codex deletion ownership is unavailable');

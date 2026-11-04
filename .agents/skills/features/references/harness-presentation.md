@@ -9,7 +9,7 @@
 | Integration | Target experience | Commitment |
 | --- | --- | --- |
 | Pi | Excellent | Flagship, bespoke integration that preserves Pi's distinctive supported capabilities and extension ecosystem. |
-| Copilot | Great | Official SDK 1.0.22 with explicit installed CLI; implementation/fixtures authored, acceptance pending. |
+| Copilot | Great | Official SDK 1.0.28 with explicit installed CLI; implementation/fixtures authored, acceptance pending. |
 | Codex | Great | [Native app-server](../../codex-integration/SKILL.md) core workflows implemented against reviewed CLI 0.162.0; installed-runtime/native acceptance and explicit capability gaps remain. |
 | Claude Code | Great | Deliberate workflows, controls and presentation through supported interfaces. |
 | Other ACP agents | Good | Reliable capability-driven baseline, useful generic cards and optional presentation enhancements, without agent-specific completeness promises. |
@@ -62,9 +62,11 @@ finalize the harness command rather than redirecting to a similar Nimrod action.
 Unknown or ambiguous operations fail explicitly without prompt fallback,
 automatic replay or invented parity.
 
-This policy applies equally to Pi, Copilot, curated future integrations and
-generic ACP agents. It does not require every harness to expose slash commands
-or identical command capabilities. Concrete references own documented
+This policy applies equally to Pi, Copilot, Codex, curated future integrations and
+generic ACP agents. Every registration must implement the [required command
+consumer port](session-commands.md), with an explicitly rejecting empty catalog
+when unsupported. It does not require identical command capabilities or a common
+native command protocol. Concrete references own documented
 exceptions and verification evidence; for example, [Copilot slash
 commands](copilot-commands.md) records the pinned CLI's missing bare `/model`
 picker projection and its narrow adapter.
@@ -90,7 +92,7 @@ ACP is a broad fallback, not a ceiling or universal harness protocol. Copilot us
 - `src/pi/webview-client.ts` / `view-host.ts` / `view-state.ts`: compatibility entry for Pi callers and existing fixtures. Pi controller/reducer state and RPC behavior remain unchanged. Control IDs translate to existing Pi operations at the adapter boundary.
 - `src/acp/view-policy.ts`: advertised-only slash completion, busy-send rejection through the owning session, no steering/queues and agent-specific Stop label. Its session-owned input port declares text-only attachment guidance. ACP does not interpret Pi skill markup.
 - `src/acp/session.ts`: produces display state directly, without fabricated Pi queue, extension or model-control records. Agent-advertised model/thinking/**mode** categories contribute keyed Status-area controls; remaining or uncategorized options remain in the palette. Values/descriptions come from the agent; a mode label does not imply a client-invented permission policy.
-- `src/harness-contract.ts`, `harness-registry.ts`, `session-actions.ts`: mandatory registered consumer ports replace the concrete backend union. The shell consumes integration-owned conversation/interaction, activity, configuration, executable actions, selection, close/restart and retained-interaction contributions. All factories implement the same required ports, choosing explicit defaults for unsupported features. [Consumer interfaces](consumer-interfaces.md#implemented-extraction-and-registration-boundary) owns the full contract, compile/dependency enforcement and defaults. `SessionLifecycle` still composes persistence and connectivity; Restart never decides saved membership. Native file/exact-ID history, deletion and handshake semantics stay concrete.
+- `src/harness-contract.ts`, `harness-registry.ts`, `session-actions.ts`: mandatory registered consumer ports replace the concrete backend union. The shell consumes integration-owned conversation/interaction, activity, configuration, executable actions, selection, close/reload and retained-interaction contributions. All factories implement the same required ports, choosing explicit defaults for unsupported features. [Consumer interfaces](consumer-interfaces.md#implemented-extraction-and-registration-boundary) owns the full contract, compile/dependency enforcement and defaults. `SessionLifecycle` still composes persistence and connectivity; Reload never decides saved membership. Native file/exact-ID history, deletion and handshake semantics stay concrete.
 
 Control updates preserve existing button nodes by ID, hide unsupported controls/separators, and do not navigate or focus. New controls use the same Status-area layout. Connected configuration controls accept immediate or deferred intent, including replacements during a mutation. Pi can apply during work/compaction; Copilot model/effort/mode/context and dormant ACP apply at their supported idle boundary. Harness integrations may contribute [Set permissions command shortcuts](live-permissions.md) through their session actions; these enter the integration's normal command owner rather than a universal configuration setting. [Model/thinking](model-thinking.md) owns the shared configuration port, readiness, dependencies and local transcript progress.
 

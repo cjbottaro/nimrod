@@ -8,6 +8,24 @@ Read the [user guide](../../../../docs/sessions.md#delete-session-tree),
 and conversation writes; Nimrod owns permanent file deletion. No Pi worker,
 installed extension, runtime executable or chat command participates in deletion.
 
+## Product Delete semantics
+
+**Delete session** removes the selected conversation; users do not need to choose
+Close merely because a harness never persisted it. Concrete adapters smooth that
+native distinction behind the same required deletion operation. A confirmed
+native target uses its reviewed removal API. A target authoritatively absent from
+native history uses confirmed local removal after scoped owned-runtime stop,
+then removes its sidebar membership, exact draft/attachment scope and references.
+Ordinary Close shares [confirmed-absent cleanup](session-durability.md#close-and-local-removal), but preserves drafts for saved or unknown history.
+
+A missing list entry, empty preview, unavailable runtime, failed catalog query or
+ambiguous deletion acknowledgement is not proof of native absence. Adapters keep
+those errors separate and retain local state. Recheck after owned shutdown, which
+can finish persistence; if history appears, continue through guarded native
+deletion rather than leaving it behind. Never silently downgrade a native delete
+failure to local cleanup. The shell consumes one target-bound operation and does
+not branch on harness persistence or ask the user to select another action.
+
 ## Consumer interface and Copilot deletion
 
 The shared review model is now `DeletionReviewNode { key, title, parentKey?, cwd? }`, with opaque cleanup keys rather than file identifiers. The renderer rejects empty/duplicate keys and cyclic topology, preserves iterative rendering and reuses the existing retained modal/focus/progress behavior. Pi's native `file`/`parent` fields remain a concrete wire compatibility shape (`PiDeletionTreeSession`) mapped by `src/pi/session-deletion.ts`; Copilot and Codex publish their own namespaced keys. Deletion remains independent from `SessionLifecycle`.
@@ -19,7 +37,9 @@ Unknown results retain SDK identity/draft; no retries or private-directory
 removal. Old draft files from the removed integration are never purged by SDK
 cleanup. [SDK deletion](copilot-sdk.md#close-and-delete) owns concrete semantics.
 
-`src/session-deletion-operation.ts` owns the consumer-oriented `SessionDeletionOperation`, `SessionDeletionSource` and source-scoped `SessionDeletionContext` interfaces. The named consumers are the Session sidebar native row menus, Project bar trash control, selected-session palette/shortcut and repeated Delete sessions picker. A source binds a saved reference/title to an operation, returning `undefined` only for identities it does not own. Operations supply a cleanup target (`key`, `draftScope`), integration-specific `label`/`detail`, live `supported` and `available()` projections, an optional `unavailableReason`, and reviewed execution. An owned but unsupported identity can still explain its disabled controls; Delete discovery includes only supported operations. Completion also includes cancellation or a reported failure; only authoritative tombstones prove removal. This port is separate from `SessionLifecycle`: persistence, connectivity, discovery, Restart and deletion are independent capabilities.
+`src/session-deletion-operation.ts` owns the consumer-oriented `SessionDeletionOperation`, `SessionDeletionSource` and source-scoped `SessionDeletionContext` interfaces. The named consumers are the Session sidebar native row menus, Project bar trash control, selected-session palette/shortcut and repeated Delete sessions picker. Each required `HarnessSession.deletion.current()` explicitly publishes a live `SessionDeletionIntent`: `close` for a session without persisted history, `saved` with its exact identity, or `undefined` for unsupported removal. The shared consumer never treats a missing saved identity as proof that Delete is unavailable. Pi chooses Close before its first verified save and for temporary sessions; Copilot/Codex choose saved deletion as soon as creation assigns a durable identity, even with no messages. Retained ACP explicitly exposes no removal intent. The registry forwards the live port, including prototype-based implementations.
+
+For `close`, the shell uses ordinary Close (confirmation for temporary/active work, observed owned stop, retention-based draft lifetime and connected-first replacement), without a deletion transaction, tombstone or history request. Failed stop retains the mounted session and draft. A first save while confirming or stopping switches to the saved review instead of silently leaving history behind. For `saved`, a source binds the reference/title to an operation, returning `undefined` only for identities it does not own. Operations supply a cleanup target (`key`, `draftScope`), the common `Delete session…` action label and integration-specific `detail`, live `supported` and `available()` projections, an optional `unavailableReason`, and reviewed execution. An owned but unsupported identity can still explain its disabled controls; Delete discovery includes only supported operations. Completion also includes cancellation or a reported failure; only authoritative tombstones prove removal. This port is separate from `SessionLifecycle`: persistence, connectivity, discovery, Reload and deletion are independent capabilities. A `saved` intent identifies a native-deletion candidate; it is not proof of saved history. Adapters must not hide it merely because the conversation is disconnected or a local history-confirmation flag is unset. The independent source validates native existence/project/lineage and supplies readiness; no conversation Resume or first prompt is required. Close likewise consumes `lifecycle.stop()` while disconnected, including its no-token no-op, without probing history.
 
 - `src/session-deletion-coordinator.ts::SessionDeletionCoordinator` registers sources, serializes local deletion, incorporates integration-owned external pending state, revalidates generic window/mounted-session gates, and owns one confirmed-success ledger. Its scoped context owns dialog presentation/progress, review ownership, mounted participant locks/observed stop, project-lifetime cancellation and application error routing. A Pi release/snapshot cannot dismiss another source's review. Locks are captured once per target, and all owned stops settle before failure releases them. Authoritative success effects deduplicate batches before the shared reconciliation callback; recovery explicitly retires a tombstone. Resolving `run()` is not an acknowledgement of successful deletion.
 - `src/pi/session-deletion.ts::piSessionDeletion` constructs/adapts the existing `SessionDeletion` native transaction. It maps native files to cleanup targets and routes review/progress/errors and confirmed event/IPC/snapshot successes through its scoped context. The transaction retains ordered event processing, native writer coordination, partial results, persisted quarantine and recovery. Its native tombstone deduplication remains integration bookkeeping, not a separate UI deletion ledger.
@@ -27,12 +47,17 @@ cleanup. [SDK deletion](copilot-sdk.md#close-and-delete) owns concrete semantics
 - `src/codex/session-deletion.ts` implements the same operation/source/context ports through a narrow `CodexDeletionHistory` dependency. It uses the shared review, locks, stopping/deleting progress and confirmed-success reconciliation; Codex owns exhaustive spawned-tree discovery and its guarded recursive API. See [Codex tree deletion](../../codex-integration/references/deletion.md) for native reservations, archive/source coverage, uncertainty and explicit cross-project/fork limitations.
 - `main.ts` registers integrations and supplies one lifecycle-keyed participant adapter and one target-based cleanup callback. The latter disposes all confirmed-deleted mounted rows before choosing a replacement once, deletes exact draft scopes, retires matching recency/legacy last-session references, and updates layout/pop-outs. Delete controls, picker IDs/filtering/pruning and stale saved-history checks consume the coordinator; there is no Pi/Copilot pending OR or separate Copilot cleanup function. Pi-specific native event/recovery gates remain concrete. Adding deletion for an otherwise integrated harness requires a source implementation and registration, not another UI branch; its saved identity/layout/draft encoding remains a separate concrete persistence responsibility.
 
-Copilot deletion requires a ready SDK history connection and a durable SDK identity.
+Copilot deletion requires a ready SDK history connection and an exact SDK identity,
+not proof that creation persisted history. Its public exact-ID metadata lookup
+validates project/local ownership or establishes absence; a fresh post-stop check
+chooses native deletion or confirmed local cleanup. Missing catalog membership
+alone is not absence. Mounted Delete first consumes the shared retention port, as
+specified in [local cleanup](session-durability.md#close-and-local-removal).
 Generic ACP sessions expose no deletion operation. Review locks only the target
 without activating it or stopping work; Cancel unlocks with no lifecycle/navigation
 effects. Confirmation retains/disables the dialog through fresh exact-project
 membership validation, observed owned conversation stop and SDK deletion. Discovery
-checks membership again immediately before `client.deleteSession(id)`. This is one
+checks exact metadata again immediately before `client.deleteSession(id)`. This is one
 session plus SDK-owned artifacts, never a Pi descendants tree or private-file removal.
 
 Only confirmed success removes the exact sidebar/layout/draft scope and references
@@ -43,8 +68,9 @@ and reports through the deletion operation. Refresh verifies history before anot
 explicit attempt; missing history never falls back to creating a session.
 
 Delete sessions aggregates Pi/Copilot/Codex with the same incremental isolation and
-cancellation as Resume. Accepting a review retires unfinished listing to preserve
-survivor DOM/query/highlight during execution; Refresh explicitly finishes discovery.
+cancellation as Resume. Accepting a review buffers unfinished listing publications
+while discovery continues; settlement reconciles once with stable rows/query/highlight. See the
+[repeated picker contract](#repeated-deletion-picker).
 Readiness/history publication refreshes controls, not content-stream events.
 
 Updated `test/session-deletion-operation.test.ts` uses the narrow SDK deletion port
@@ -83,7 +109,7 @@ removed. Do not reintroduce extension discovery or `/pi-gui-delete` dispatch.
 
 `delete-sessions` is a project action with `primary+shift+backspace`, distinct from selected-tree `delete` / `primary+backspace`. `main.ts::paletteSessions('delete')` shares Resume's saved top-level catalog, warnings, ordering, search metadata and row presentation. `deleteSavedSession` obtains the coordinator's identity-bound operation; the coordinator revalidates shell availability and any matching open row's saved ID/lifecycle eligibility, while the source retains its safety/capability checks. Closed targets never create tabs, activate or launch a conversation; concrete identity/affected-owner checks remain authoritative.
 
-`command-palette.ts::sessions('delete')` supplies the page. Choosing a row sets `isDeleting` and retains the open picker, input/query, cached catalog, row DOM and scroll position. Read-only input, disabled Back/Refresh and duplicate activation guards last until the coordinator's operation settles. `installDeletionReview` accepts a narrow `canCover` callback from main: only this window's executing deletion picker may remain open underneath; unrelated modals still block review. Native modality gives review focus/Escape; picker key/cancel handlers also refuse higher-dialog events. Cancellation changes no rows or selection. After settlement, `sessionDeleted` reads the shared coordinator's authoritative tombstones (concrete events, IPC results, response or snapshot successes); only matching cached rows are removed, including hidden filtered successes, with survivor nodes retained and pointer indices renumbered. Selected-row success advances to the same surviving index, falling back to previous; retained roots after partial failure stay listed/selected. No catalog reload occurs except explicit Refresh. Focus returns to the picker without passing through the composer or hiding/reopening the picker. Generation/disposal guards reject stale completion updates after closure/new pages; nothing is retried or reopened. Empty lists remain open; final picker Escape restores original focus. Explicit Back goes to commands.
+`command-palette.ts::sessions('delete')` supplies the page. Choosing a row sets `isDeleting` and retains the open picker, input/query, cached catalog, row DOM and scroll position. Read-only input, disabled Back/Refresh and duplicate activation guards last until the coordinator's operation settles. `installDeletionReview` accepts a narrow `canCover` callback from main: only this window's executing deletion picker may remain open underneath; unrelated modals still block review. Native modality gives review focus/Escape; picker key/cancel handlers also refuse higher-dialog events. Discovery continues throughout review/execution; publications and final completion replace one buffered accumulated page, never the covered picker DOM. After settlement (including Cancel/failure), apply the latest buffered page once and filter it against `sessionDeleted`, the shared coordinator's authoritative tombstones (concrete events, IPC results, response or snapshot successes). Hidden filtered successes are removed too, and later stale pages cannot resurrect them. Reconcile keyed survivor/content nodes with stable ARIA IDs and renumber pointer indices. Retain the selected identity on Cancel/failure/partial retention; on selected-row success, choose the first surviving next neighbor from the pre-review filtered list, then the nearest previous neighbor, only falling back to a new row if no old match survives. New arrivals cannot steal that replacement. Preserve the visible selected/replacement row's screen offset, falling back to a surviving visible anchor if the highlight is offscreen. Cancellation can expose newly discovered rows but never changes a surviving selected identity. No catalog reload occurs except explicit Refresh. Focus returns to the picker without passing through the composer or hiding/reopening the picker. Generation/disposal guards reject stale completion updates after closure/new pages; nothing is retried or reopened. Empty lists remain open; final picker Escape restores original focus. Explicit Back goes to commands.
 
 Authored, unrun geometry coverage in `test/browser/deletion-review.spec.ts` compares panel and Delete-button bounds through both progress phases for single-session desktop/narrow reviews and a scrollable 101-session tree. `test/deletion-review.test.ts` checks retained description/label, hidden reservation semantics and reset on the next review. Native visual acceptance remains pending.
 
@@ -174,7 +200,7 @@ One native transaction per app process:
 `SessionDeletion.pending` reserves deletion itself, not all session lifecycle
 operations. `locked(file)` tracks only the active reviewed set; `blocked(file)`
 tracks persisted quarantine (or invalid persisted safety state for saved paths).
-New/New named/Temporary session, unrelated Resume/Restart/Close and notification
+New/New named/Temporary session, unrelated Resume/Reload/Close and notification
 navigation stay available while another window reviews or executes deletion.
 Normal dialog priority still applies within the reviewing window. There is no
 launch queue, implicit review cancellation or command replay.
@@ -214,7 +240,7 @@ persisted deletion state blocks saved resumes/recovery, but not fresh sessions.
   sessions have no saved target to recover, so that error must not block them.
 
 Shell tests cover another window's begin, all creation variants and naming races,
-unrelated Resume/Restart/Close, immediate unrelated cleanup reconnection and
+unrelated Resume/Reload/Close, immediate unrelated cleanup reconnection and
 stale cached Resume rows. Coordinator tests cover file-scoped locks/recovery;
 Rust ownership fixtures cover fresh/unrelated launches, affected attachment
 rejection and missing-file rejection after release. Fixture coverage is not
@@ -265,14 +291,18 @@ models Any semantics and tests two distinct window labels.
 `createTab` exposes Delete through the OS-rendered session-row context menu, not an inline `.session-delete` button. Pin/Close retain compact sibling controls; [sidebar pinning/menu specification](sidebar-attention.md#pinning-and-native-row-menus) owns native popup routing, input, state and lifecycle. The Project bar trash control and palette/shortcut remain unchanged.
 
 The menu captures its row's `Tab` and popup request, invokes shared `runSessionRowAction(tab, 'delete')` → `deleteSession(tab)` without `activate`, and never resumes/selects a background target. Shared `deletable`
-checks saved, non-demo/non-temporary, lifecycle and deletion pending/lock/quarantine
-state. Working, queued and pending-submission sessions remain eligible; starting,
+checks the integration's current removal intent, lifecycle and deletion pending/lock/quarantine
+state. New and temporary sessions remain eligible through their Close intent. Row menus,
+the Project bar and palette/shortcut use the same `Delete session…` label; saved reviews
+still disclose the actual single-session or tree scope. Working, queued and pending-submission sessions remain eligible; starting,
 closing or restarting the target does not. Native identity/ownership checks still win.
 
 `SessionDeletion.run` arms the loading review before deletion IPC, but the dialog
 opens with loading only if preparation takes at least **150 ms**. Fast previews
 cancel that timer and open the populated review directly, avoiding a loading/tree
-flash. The themed reduced-motion-aware spinner has `role=status`; tree has
+flash. Loading and execution reuse the Status area's `.activity-spinner` size,
+theme colors and rotation, with a deletion-scoped reduced-motion override. The
+loading status has `role=status`; tree has
 `aria-busy=true` and Delete is disabled. If loading was already shown, correlated
 review replaces tree contents in place. An untouched loading dialog transfers its
 automatic Cancel focus to Delete when ready; keyboard or pointer interaction during
@@ -333,7 +363,7 @@ pop-outs; deletion uses `popouts::delete_sessions`. Quarantine rejects late pop-
 opens; serialized geometry/update-existing writes prevent resurrection.
 
 Failed/missing/unknown results after shutdown begins retain inactive draft-bearing
-entries as **Recovery needed**. Row selection, Retry and Restart cannot launch
+entries as **Recovery needed**. Row selection, Retry and Reload cannot launch
 them. Explicit Resume/exact-file open calls `recover_deletion_session`, validates
 saved ID/cwd after the transaction finishes, removes quarantine/tombstones and
 reuses the mounted conversation. Missing/replaced files remain unavailable.
@@ -353,6 +383,8 @@ block startup. Guard state is separate from drafts, runtime tokens and pop-outs.
 Snapshots reconcile locks and missed completion as well as guards.
 
 ## Verification and remaining acceptance
+
+Mounted-removal fixtures cover unwritten Pi deletion through the Project bar, shortcut, palette and background row menu; temporary Close cancellation/disposal; failed owned stop; first-save promotion; and fresh Copilot/Codex saved deletion eligibility before any prompt. Contract assertions require the new port and registry fixtures exercise live prototype forwarding. These additions are authored but unrun; existing native acceptance gaps remain.
 
 - `session_files.rs` tests use disposable directories and **actually unlink only
   generated fixtures**: cross-project lineage, children-first removal, unrelated

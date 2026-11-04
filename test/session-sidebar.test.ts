@@ -46,7 +46,7 @@ test('state indicators have distinct idle/unread/input/error shapes and explicit
   assert.equal(sessionIndicator({ inputCount: 1, busy: true }).mark, '?');
   assert.equal(sessionIndicator({ failed: true, inactive: true }).mark, '!');
   assert.equal(sessionIndicator({ blocked: true, failed: true }).state, 'recovery');
-  for (const state of ['starting', 'restarting', 'closing', 'deleting'] as const) assert.equal(sessionIndicator({ [state]: true, failed: true }).state, state);
+  for (const state of ['starting', 'reloading', 'closing', 'deleting'] as const) assert.equal(sessionIndicator({ [state]: true, failed: true }).state, state);
 });
 
 test('shared row updates preserve content nodes and expose open membership without a badge', () => {

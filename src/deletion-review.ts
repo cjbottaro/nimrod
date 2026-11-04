@@ -86,7 +86,7 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
     const status = doc.createElement('div'); status.className = 'deletion-execution';
     // The description's live status announces the same phase once.
     status.setAttribute('aria-hidden', 'true');
-    const spinner = doc.createElement('span'); spinner.className = 'deletion-spinner';
+    const spinner = doc.createElement('span'); spinner.className = 'activity-spinner deletion-spinner';
     bodyProgressText = doc.createElement('span');
     status.append(spinner, bodyProgressText); tree.append(status); tree.scrollTop = 0;
     // Keep the reviewed copy in layout so progress cannot shrink the modal.
@@ -133,7 +133,7 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
       confirm.disabled = true; labelDialogAction(confirm, 'Delete sessions');
       tree.setAttribute('aria-busy', 'true');
       const status = doc.createElement('div'); status.className = 'deletion-loading'; status.setAttribute('role', 'status');
-      const spinner = doc.createElement('span'); spinner.className = 'deletion-spinner'; spinner.setAttribute('aria-hidden', 'true');
+      const spinner = doc.createElement('span'); spinner.className = 'activity-spinner deletion-spinner'; spinner.setAttribute('aria-hidden', 'true');
       status.append(spinner, 'Loading session tree…'); tree.replaceChildren(status);
       doc.addEventListener('close', onOtherClose, true);
       // Local previews normally finish before this: show a populated review

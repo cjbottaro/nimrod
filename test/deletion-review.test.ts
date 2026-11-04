@@ -97,6 +97,7 @@ test('slow previews show loading after 150ms and default untouched ready reviews
     assert.equal(f.doc.querySelector<HTMLButtonElement>('#deletion-confirm')!.disabled, true);
     assert.equal(f.doc.querySelector('#deletion-tree')!.getAttribute('aria-busy'), 'true');
     assert.match(f.doc.querySelector('#deletion-tree [role="status"]')!.textContent!, /Loading session tree/);
+    assert.ok(f.doc.querySelector('.deletion-loading .deletion-spinner.activity-spinner'));
     f.dialog.close('delete'); // Even a synthetic form close cannot confirm loading.
     assert.equal(await f.controller.review({ id: 'late', sessions }), false);
     assert.equal(f.dialog.open, false);
@@ -266,7 +267,7 @@ test('confirmation keeps the modal open, blocks cancel/repeated submit and repor
     // Check synchronously: no confirmation continuation or native progress yet.
     assert.equal(confirm.disabled, true); assert.equal(cancel.disabled, true);
     assert.equal(f.doc.querySelector('.deletion-execution span:last-child')!.textContent, 'Stopping sessions…');
-    assert.ok(f.doc.querySelector('.deletion-execution .deletion-spinner'));
+    assert.ok(f.doc.querySelector('.deletion-execution .deletion-spinner.activity-spinner'));
     assert.equal(f.doc.querySelector('.deletion-tree-reserved')!.getAttribute('aria-hidden'), 'true');
     assert.equal(f.doc.querySelector('#deletion-tree')!.getAttribute('data-executing'), 'true');
     assert.equal(await answer, true);

@@ -7,7 +7,7 @@ test('console-style live and final output retains selectable text, raw bytes and
     await demo.turn(1);
     const token = [...demo.children.keys()][0];
     const ids = ['ansi-output-one', 'ansi-output-two'];
-    const source = '\x1b[32m' + Array.from({ length: 60 }, (_, i) => `Line ${i}`).join('\n') + '\nprogress 10%';
+    const source = '\x1b[32m' + Array.from({ length: 60 }, (_, i) => `Line ${i}: ${'x'.repeat(240)}`).join('\n') + '\nprogress 10%';
     const emit = async (values: object[]) => page.evaluate(({ token, values }) => {
       const channels = (window as unknown as { __fixtureChannels: Record<string, { onmessage(packet: unknown): void }> }).__fixtureChannels;
       for (const value of values) channels[token].onmessage({ kind: 'rpc', value });
@@ -23,6 +23,12 @@ test('console-style live and final output retains selectable text, raw bytes and
     for (const card of cards) {
       await card.evaluate(node => { if (!(node as HTMLDetailsElement).open) node.querySelector('summary')!.click(); });
       await expect(card.locator('.card-plugin-body .tool-output')).toContainText('progress 10%');
+      await expect(card.locator('.card-plugin-body .tool-output')).toHaveCount(1);
+      await expect(card.locator('.card-plugin-body .tool-label')).toBeHidden();
+      expect(await card.locator('.card-plugin-body .tool-output').evaluate(node => ({
+        wraps: getComputedStyle(node).whiteSpace === 'pre-wrap', fits: node.scrollWidth <= node.clientWidth + 1,
+      }))).toEqual({ wraps: true, fits: true });
+      await expect(card.locator(':scope > .card-plugin-body + .tool-raw-inputs + .tool-raw-output')).toHaveCount(1);
     }
     await page.locator(visible('prompt')).focus();
     const positions = await page.evaluate(ids => ids.map((id, i) => {
@@ -42,6 +48,9 @@ test('console-style live and final output retains selectable text, raw bytes and
     await emit([{ type: 'tool_execution_end', toolCallId: ids[0], toolName: 'bash', result: { content: [{ type: 'text', text: final }] }, isError: false }]);
     await expect(cards[0].locator('.card-plugin-body [data-output-kind="result"] .tool-output-final')).toContainText('done');
     expect(await cards[0].locator('.card-plugin-body [data-output-kind="result"] .tool-output').evaluate(node => node.scrollTop)).toBe(positions[0]);
+    await expect(cards[0].locator('.card-plugin-body .tool-output')).toHaveCount(1);
+    await page.setViewportSize({ width: 800, height: 900 });
+    expect(await output.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
     const raw = cards[0].locator(':scope > .tool-raw-output');
     await raw.locator(':scope > summary').click();
     expect(await raw.locator('[data-output-kind="result"] pre').textContent()).toBe(final);

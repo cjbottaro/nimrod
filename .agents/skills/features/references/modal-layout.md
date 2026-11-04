@@ -15,7 +15,7 @@ Ordinary dialogs share a shell, not identical content. Confirmation labels remai
 - Whole-window translucency uses a shared denser glass panel, restrained endpoint-continuous scrim, and scoped field/inset surfaces. Opaque/Reduce Transparency preserve the original solid appearance. [Translucency](translucency.md#shared-modal-glass) owns density/contrast calibration, [modal depth blur](translucency.md#modal-depth-blur-and-renderer-parity) and button tint credit; `.nimrod-modal` consumes those values here. No per-dialog glass or blur overrides.
 - Native `<dialog>` and the existing Pi editor overlay share presentation, not lifecycle. Do not change native modality, acknowledgement, Escape/Back, request correlation, editor responses or focus restoration as part of styling. The editor remains the existing non-native overlay; this work does not claim improved modality/accessibility.
 - Override the native dialog UA `max-width` cap in the shared shell; otherwise native dialogs and overlay cards differ by a few pixels at zoom/narrow widths.
-- Scrollable bodies shrink within stack/form height limits; footer actions stay outside content scrolling. Shell overflow remains available for unusually long non-body content.
+- Scrollable bodies shrink within stack/form height limits; footer actions stay outside content scrolling. Footers use the stack gap without a separator line or extra top padding. Shell overflow remains available for unusually long non-body content.
 
 ## Implementation checklist
 
@@ -51,7 +51,7 @@ Apply this to every new or modified ordinary modal, including previews and dynam
 
 ## Confirmation actions
 
-`src/dialog-actions.ts` shares plain action labels and non-visual `aria-keyshortcuts`. Buttons contain label text only; no Enter SVG, Esc text or hint-specific styling. Picker-row hints are unchanged. `Dialogs.confirm` accepts an optional action label after owner; shell Close/Restart provide explicit labels, Pi retains Confirm. Input/select calls clear shortcut metadata and reset the generic label.
+`src/dialog-actions.ts` shares plain action labels and non-visual `aria-keyshortcuts`. Buttons contain label text only; no Enter SVG, Esc text or hint-specific styling. Picker-row hints are unchanged. `Dialogs.confirm` accepts an optional action label after owner; shell Close/Reload provide explicit labels, Pi retains Confirm. Input/select calls clear shortcut metadata and reset the generic label.
 
 `navigateDialogActions` shares footer-button navigation across host input/select/confirm dialogs, deletion review, keybinding recorder/reset dialogs and Pi's editor overlay. Unmodified Left/Up move backward and Right/Down move forward in DOM order, wrapping between enabled, non-hidden/non-inert Cancel and accept buttons. Navigation changes focus only, with no activation or scrolling; disabled Delete is skipped during loading. Repeated arrows can move focus; composing/keyCode-229 arrows are consumed without movement. Arrows from text fields, selects, the shortcut-recording input and other content retain their existing behavior; modified arrows are untouched. Palette pickers retain their existing list navigation (they have no Cancel/accept footer pair).
 
@@ -67,6 +67,34 @@ Copilot plan review reuses the retained palette and the same nested host-input
 lifecycle for revision/optional approval feedback. See the
 [Plan review interaction](copilot-sdk.md#plan-review-interaction) for response and
 dismissal semantics; it adds no modal geometry or motion override.
+
+## Host text input
+
+`Dialogs.input` uses a one-row textarea for custom answers, feedback and ordinary
+host inputs. It grows with wrapped text/newlines up to 160 CSS px, then scrolls;
+manual resizing is disabled. Enter submits the exact text, Shift+Enter inserts a
+newline, and IME/keyCode-229 Enter and repeated Enter cannot submit. Footer focus
+still controls native button activation; Escape/Cancel retains the existing
+nested-dialog dismissal and owner-cancellation semantics. The Pi editor overlay
+is a separate editing interaction and keeps its existing behavior.
+
+`Dialogs.input` accepts an optional final `selectPrefill` flag (default false).
+Rename session opts in: after opening and focusing the input, select its full
+value so typing replaces the current name. This is native text selection, not
+placeholder styling; it is applied once on open, never reapplied during edits,
+resizing or animation. Other callers retain their existing selection behavior.
+
+Sizing uses native CSS `field-sizing:content` where available. Other engines
+reuse `resizeComposer` on open/prefill and coalesce input/window-resize work to
+one animation frame; closing removes listeners and cancels pending sizing. No
+composer draft, transcript or harness response semantics change.
+
+Authored, unrun fixtures: `test/dialogs.test.ts` covers exact multiline delivery,
+Shift+Enter/IME/repeat guards, nested cancellation/focus and label reuse;
+`test/browser/modal-input.spec.ts` covers native/fallback growth, shrinking,
+bounded overflow, prefill, trusted Enter/Shift+Enter/Escape, separator-free
+footers and unchanged composer drafts. Native appearance/platform acceptance
+remains pending.
 
 ## Command rows
 

@@ -7,7 +7,7 @@ import path from 'node:path';
 import type { Packet } from '../../src/pi/transport';
 import type { JsonRecord } from '../../src/pi/types';
 import { MemoryPreferences } from '../preferences-fixture';
-import { PROJECT_SETTING_KEYS, type PreferencesSnapshot } from '../../src/preferences';
+import type { PreferencesSnapshot } from '../../src/preferences';
 import { parse } from 'jsonc-parser';
 import type { DeletionEvent } from '../../src/session-deletion';
 
@@ -81,8 +81,6 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'popup_session_menu') return; // Record native popup intent only; browser cannot render OS menus.
     if (command === 'scoped_preferences_snapshot') return preferences.snapshot();
     if (command === 'open_global_settings') { await openSettingsWindow(typeof args.category === 'string' ? args.category : undefined); return; }
-    if (command === 'open_owned_project_settings') { await page.bringToFront(); return; }
-    if (command === 'list_project_overrides') { const keys = Object.keys(parse(preferences.value.projectText ?? '{}')).filter(key => (PROJECT_SETTING_KEYS as readonly string[]).includes(key)); return keys.length ? [{ cwd: process.cwd(), keys }] : []; }
     if (command === 'take_project_settings_request' || command === 'take_settings_category') return false;
     if (command.startsWith('preferences_') || command === 'project_preferences_settings' || command === 'record_command_usage') return preferences.invoke(command, args);
     if (command === 'plugin:clipboard-manager|write_text' || command === 'open_card_link' || command === 'open_code_popout') return; // Recorded presentation actions, no OS side effects.
@@ -102,6 +100,8 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
       if (text === undefined) throw new Error('Fixture package missing');
       return text;
     }
+    if (command === 'pi_runtime_available' || command === 'copilot_runtime_available') return true;
+    if (command === 'codex_runtime_available') return false;
     if (command === 'runtime_defaults') return { cwd: process.cwd(), node: process.execPath, pi: 'fixture-only' };
     if (command === 'take_project_picker_request') return false;
     if (command === 'list_projects') return (preferences.value.state['nimrod.workspaces.v1'] as string[] || []).map(cwd => ({ cwd, open: cwd === process.cwd() }));

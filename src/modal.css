@@ -60,7 +60,7 @@ dialog.modal-stack:not([open]) { display:none; }
 .modal-title { margin:0; font-size:13px; }
 .modal-description { margin:0; color:var(--vscode-descriptionForeground); font-size:12px; line-height:1.5; }
 .modal-body { min-height:0; overflow:auto; }
-.modal-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:8px; margin:0; padding-top:var(--modal-gap); border-top:1px solid var(--vscode-panel-border); }
+.modal-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:8px; margin:0; padding:0; }
 .modal-overlay { position:fixed; inset:0; display:none; z-index:4; }
 .modal-overlay::before { content:''; position:fixed; inset:0; pointer-events:none; }
 .modal-overlay.open { display:block; }

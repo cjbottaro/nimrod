@@ -1,3 +1,5 @@
+import { sessionName } from '../session-naming';
+import { commandCatalog, type SessionCommands } from '../session-commands';
 import { validateMessageImages, type SessionMessageInput } from '../session-message-input';
 import type { ImageContent } from '../image-attachments';
 import { copilotImageCapabilities, copilotUserContent, type CopilotImageModel } from './image-input';
@@ -66,7 +68,8 @@ export class CopilotSession {
   private revision = 0;
   private indices = new Map<string, number>();
   private events = new Set<string>();
-  private shellSequences = new Map<string, number>();
+  // Presence also marks shell chunks as authoritative over legacy snapshots.
+  private shellSequences = new Map<string, number | undefined>();
   private models: Model[] = [];
   private model?: string;
   private effort?: string;
@@ -90,6 +93,8 @@ export class CopilotSession {
   private waitingStatus?: string;
   private captureConnectionId = crypto.randomUUID();
   private runtimeVersion?: string;
+  private nameRevision = 0;
+  private renaming = false;
   constructor(send: (message: BridgeRequest) => Promise<void>, private ui: CopilotSessionUi) {
     this.connection = new CopilotConnection(async message => {
       this.capture(`request.${message.method}`, message);
@@ -118,10 +123,22 @@ export class CopilotSession {
         return !this.ended && !this.state.sessionUnavailable && !this.configuring && !this.commandOperation
           && (!this.state.busy || command?.allowDuringAgentExecution === true);
       },
-      (id, text, signal, dispatched) => this.runCommand(id, text, { signal }, dispatched), () => this.publish([]));
+      (id, text, signal, dispatched) => this.runCommand(id, text, { signal }, dispatched), () => this.publish([]), 'Copilot');
     this.usage = new CopilotUsageController(() => this.connection.request('usage', {}, 'reject'), () => this.publish([]),
       () => this.configuring ? Promise.resolve(null) : this.connection.request('context', {}, 'reject'));
+    const session = this;
+    this.slashCommands = {
+      catalog: commandCatalog(() => this.ended || this.state.sessionUnavailable ? [] : this.commands),
+      validate: text => this.validatePrompt(text) || (!parseCopilotCommand(text) ? 'A harness slash command is required.' : undefined),
+      invoke: ({ id, text }) => this.handle({ type: 'command', id, text }),
+      get operations() { return session.commandQueue.operations; },
+      cancel: key => this.commandQueue.cancel(undefined, key),
+    };
     this.updateStatusArea();
+  }
+  get hasPendingWork(): boolean {
+    return this.state.busy || this.renaming || this.configuring || this.commandQueue.occupied || this.pendingDecisions.size > 0
+      || this.configuration.operations.some(operation => operation.phase === 'queued' || operation.phase === 'applying');
   }
   get canSubmit(): boolean { return !this.ended && !this.state.sessionUnavailable && !this.state.busy && !this.configuring && !this.commandOperation && !this.commandQueue?.occupied; }
   supports(kind: 'model' | 'thinking' | 'mode' | 'context'): boolean {
@@ -148,6 +165,22 @@ export class CopilotSession {
     this.connection.receive(packet);
   }
   disconnect(reason: string): void { this.connection.disconnect(reason); }
+  async rename(value: string): Promise<void> {
+    const name = sessionName(value);
+    if ([...name].length > 100) throw new Error('Copilot session names must be at most 100 characters.');
+    if (this.ended || this.state.sessionUnavailable) throw new Error('Resume this Copilot session before renaming it.');
+    if (this.renaming) throw new Error('A session rename is already in progress.');
+    const revision = this.nameRevision;
+    this.renaming = true; this.publish([]);
+    try {
+      await this.connection.request('rename', { name }, 'disconnect', result => {
+        if (!record(result) || typeof result.name !== 'string' || !result.name.trim()) throw new Error('Copilot did not confirm a session name.');
+        if (revision !== this.nameRevision) return;
+        this.state = { ...this.state, sessionName: result.name }; this.publish([]);
+      });
+    } finally { this.renaming = false; this.publish([]); }
+  }
+
   async initialize(sessionId?: string): Promise<void> {
     this.initialUsage = initialCopilotUsage(sessionId === undefined);
     const status = await this.connection.request('initialize');
@@ -159,6 +192,7 @@ export class CopilotSession {
     capabilities: () => copilotImageCapabilities(this.models.find(model => model.id === this.model)),
     submit: message => this.handle({ ...message, type: 'prompt' }),
   };
+  readonly slashCommands: SessionCommands;
   invokeCommand(text: string): Promise<void> {
     const error = this.validatePrompt(text);
     if (error || !text.trimStart().startsWith('/')) return Promise.reject(new Error(error || 'A harness slash command is required.'));
@@ -208,10 +242,8 @@ export class CopilotSession {
       this.disconnect(`Copilot delivery was not confirmed: ${String(error)}`);
     }
   }
-  private commandOutput(text: string, command: string, markdown = false, error = false): void {
-    const key = `copilot:command:${crypto.randomUUID()}`;
-    this.replace(key, { key, role: 'command', originLabel: `Copilot command · /${command}`, isError: error,
-      content: [{ type: markdown ? 'text' : 'raw', text }] });
+  private commandOutput(text: string, _command: string, markdown = false): void {
+    this.commandQueue.output(text, markdown);
   }
   private async runCommand(id: string, text: string, operation: { signal: AbortSignal }, dispatched: () => void): Promise<void | boolean> {
     const invocation = parseCopilotCommand(text)!;
@@ -353,9 +385,7 @@ export class CopilotSession {
           const skill = command.kind === 'skill' ? parseCopilotSkillInvocation(result.prompt) : undefined;
           const skillTurn = skill?.label === `/${command.name}`;
           await this.sendPrompt(id, result.prompt, skillTurn ? result.prompt : result.displayPrompt);
-          // The recognized expanded user turn now owns the skill presentation.
-          // Keep the command's unknown-outcome card if delivery disconnected.
-          if (skillTurn && !this.ended && !operation.signal.aborted) return false;
+          // The command transition keeps its card; native turns own agent work.
           return;
         } else if (result.kind === 'set-model') {
           if (result.commandApplied !== true || !record(result.configuration)) throw new Error('Copilot returned an incomplete applied model command.');
@@ -540,10 +570,11 @@ export class CopilotSession {
         }
         return;
       }
-      if (type === 'tool.shell_output' && typeof data.sequence === 'number') {
+      const hasShellOutput = this.shellSequences.has(key);
+      if (type === 'tool.shell_output') {
         const sequence = this.shellSequences.get(key);
-        if (sequence !== undefined && data.sequence <= sequence) return;
-        this.shellSequences.set(key, data.sequence);
+        if (typeof data.sequence === 'number' && sequence !== undefined && data.sequence <= sequence) return;
+        this.shellSequences.set(key, typeof data.sequence === 'number' ? data.sequence : sequence);
       }
       const result = record(data.result) ? data.result : undefined;
       const error = record(data.error) ? data.error : undefined;
@@ -553,8 +584,10 @@ export class CopilotSession {
         toolSource: { backend: 'copilot-sdk', agent: 'copilot' }, toolTitle: start ? string('toolTitle') || name : previous?.toolTitle,
         toolKind: toolKind(name), toolArguments: start && Object.hasOwn(data, 'arguments') ? (retained[type] as Record<string, unknown>).arguments : previous?.toolArguments,
         toolNative: retained, streaming: !complete, uiPhase: undefined, toolStatus: complete ? 'result' : 'running',
-        ...(type === 'tool.shell_output' ? { output: (previous?.output || '') + string('text'), hasStreamingOutput: true } : {}),
-        ...(type === 'tool.execution_partial_result' ? { output: string('partialOutput'), hasStreamingOutput: true } : {}),
+        // Never concatenate the legacy merged snapshot with its duplicate raw
+        // chunks, or let a later colorless snapshot erase ANSI/parser state.
+        ...(type === 'tool.shell_output' ? { output: (hasShellOutput ? previous?.output || '' : '') + string('text'), hasStreamingOutput: true } : {}),
+        ...(type === 'tool.execution_partial_result' && !hasShellOutput ? { output: string('partialOutput'), hasStreamingOutput: true } : {}),
         ...(complete ? { isError: data.success === false, resultOutput: result ? copilotToolResult(result) : JSON.stringify(error ?? data, null, 2) } : {}),
       });
     } else if (type === 'session.permissions_changed' && !raw.agentId) {
@@ -584,7 +617,7 @@ export class CopilotSession {
       const mode = string('newMode');
       if (!['interactive', 'plan', 'autopilot'].includes(mode)) { this.disconnect(`Copilot changed to unknown mode "${mode}".`); return; }
       this.mode = mode; this.configurationVersion++; this.publish([]);
-    } else if (type === 'session.title_changed' && !raw.agentId) { this.state = { ...this.state, sessionName: string('title') }; this.publish([]); }
+    } else if (type === 'session.title_changed' && !raw.agentId) { this.nameRevision++; this.state = { ...this.state, sessionName: string('title') }; this.publish([]); }
     else if (type === 'session.task_complete' && !raw.agentId && !this.replaying) {
       this.acceptedCompletion = data.success === true && this.state.busy && !this.stopped && !this.failed
         ? { summary: typeof data.summary === 'string' && data.summary.trim() ? data.summary : undefined } : undefined;

@@ -13,6 +13,10 @@ body.application-notice-shell { grid-template-rows:48px var(--application-notice
 .application-notice { flex:none; display:flex; align-items:flex-start; gap:10px; padding:8px 12px; border:1px solid color-mix(in srgb, var(--vscode-descriptionForeground) 25%, transparent); border-radius:5px; background:var(--vscode-editorWidget-background); }
 #application-notices .application-notice { background:transparent; }
 .session-notices .application-notice { gap:8px; border-color:color-mix(in srgb, var(--vscode-errorForeground) 60%, transparent); background:color-mix(in srgb, var(--vscode-descriptionForeground) 6%, var(--vscode-editor-background)); }
+/* A lone error's perimeter belongs to its scroll viewport, not the oversized
+   content row. Expanded diagnostics scroll without cutting off the bottom border. */
+.session-notices .notice-list:has(> .application-notice:only-child) { border:1px solid color-mix(in srgb, var(--vscode-errorForeground) 60%, transparent); border-radius:5px; }
+.session-notices .notice-list > .application-notice:only-child { border:0; border-radius:0; }
 .session-notices .application-notice[data-presentation=pending-action] { border-color:var(--vscode-panel-border); }
 .session-notices .application-notice[data-presentation=pending-action] .notice-icon { color:var(--vscode-descriptionForeground); }
 .application-notice-text { display:grid; gap:3px; flex:1; min-width:0; overflow-wrap:anywhere; }

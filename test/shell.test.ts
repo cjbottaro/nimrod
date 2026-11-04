@@ -19,6 +19,7 @@ import { copilotSdkScope } from '../src/copilot/session-lifecycle';
 // Real shell/renderer/controller bundle, mocked native boundary—not native WebKit acceptance.
 interface ShellOptions {
   fixtureHarness?: boolean;
+  fixtureRetention?: 'saved' | 'absent' | 'unknown';
   fixtureProjectActions?: boolean;
   platform?: string;
   menuError?: string;
@@ -33,6 +34,14 @@ interface ShellOptions {
   copilotDeleteError?: string;
   copilotDeleteGate?: Promise<void>;
   copilotHistory?: JsonRecord[];
+  codexHistory?: JsonRecord[];
+  codexSavedThread?: JsonRecord;
+  codexReadError?: string;
+  codexStartError?: string;
+  codexConversation?: boolean;
+  harnessStop?: (harness: 'copilot' | 'codex', token: string) => Promise<void>;
+  harnessResumeError?: string;
+  harnessInitializationGate?: Promise<void>;
   catalogError?: string;
   globalSettings?: boolean;
   appearanceCapabilities?: import('../src/window-appearance').AppearanceCapabilities;
@@ -42,6 +51,7 @@ interface ShellOptions {
   appearanceApply?: (args: JsonRecord, fail: (payload: { request: string; message: string }) => void) => Promise<void>;
   titlebarGate?: Promise<void>;
   runtimeDefaultsGate?: Promise<void>;
+  runtimeAvailable?: (harness: 'pi' | 'copilot' | 'codex') => boolean;
   storage?: Record<string, unknown>;
   nativeDrafts?: Record<string, unknown>;
   draftFlushError?: string;
@@ -97,7 +107,8 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
           `import { fixtureHarness } from ${JSON.stringify(path.resolve('test/fixtures/fixture-harness.ts'))};`,
           `import { noProjectActions } from ${JSON.stringify(path.resolve('src/harness-defaults.ts'))};`,
           `const fixture = ${options.fixtureProjectActions === false ? '{ ...fixtureHarness, create: host => ({ ...fixtureHarness.create(host), actions: noProjectActions }) }' : 'fixtureHarness'};`,
-          'const registrations = [piHarness, fixture]; registerHarnessMetadata(registrations);',
+          `const retentionFixture = ${options.fixtureRetention ? `{ ...fixture, create: host => { const project = fixture.create(host); return { ...project, create: (host, request) => ({ ...project.create(host, request), retention: { async check() { return ${JSON.stringify(options.fixtureRetention)}; }, forget() {} } }) }; } }` : 'fixture'};`,
+          'const registrations = [piHarness, retentionFixture]; registerHarnessMetadata(registrations);',
           'export function createBundledHarnessRegistry(host) { return new HarnessRegistry(registrations, host, "pi"); }',
         ].join('\n') }));
       }
@@ -127,6 +138,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   const sessions = new Map<string, { channel: typeof channel; config: JsonRecord; file: string; name?: string }>();
   const acpSessions = new Map<string, { channel: typeof channel; promptId?: unknown; sessionId?: string }>();
   const sdkSessions = new Map<string, { channel: typeof channel; sessionId?: string }>();
+  const codexSessions = new Map<string, { channel: typeof channel }>();
   let workspace = options.windowWorkspace;
   let selectedModel: JsonRecord | null = null;
   let thinkingLevel = 'medium';
@@ -220,9 +232,8 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         return preferences.snapshot();
       }
       if (command.startsWith('preferences_') || command === 'project_preferences_settings' || command === 'record_command_usage') return preferences.invoke(command, args);
-      if (command === 'open_global_settings' || command === 'open_owned_project_settings') return;
+      if (command === 'open_global_settings') return;
       if (command === 'take_project_settings_request' || command === 'take_settings_category') return false;
-      if (command === 'list_project_overrides') return [];
       if (command === 'plugin:window|is_focused') return options.focused?.() ?? true;
       if (command === 'plugin:clipboard-manager|write_text' && options.performanceControl?.copyError) throw new Error(options.performanceControl.copyError);
       if (command === 'transcript_logs_directory') return '/fixture/.local/state/nimrod/transcript-logs';
@@ -248,6 +259,9 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       if (command === 'confirm_session_deletion') { options.confirmReview?.(args); return; }
       if (command === 'delete_session_tree') return options.deleteTree ? options.deleteTree(event => deletionEvent?.(event), args) : [];
       if (command === 'load_personal_card_plugins') return options.personalGate ?? { entries: [], plugins: [], warnings: [] };
+      if (command === 'pi_runtime_available') return options.runtimeAvailable?.('pi') ?? true;
+      if (command === 'copilot_runtime_available') return options.runtimeAvailable?.('copilot') ?? true;
+      if (command === 'codex_runtime_available') return options.runtimeAvailable?.('codex') ?? true;
       if (command === 'runtime_defaults') { await options.runtimeDefaultsGate; return { cwd: '/project', pi: '/bin/pi', node: '/bin/node', home: options.homeDirectory }; }
       if (command === 'window_workspace') {
         await options.windowWorkspaceGate;
@@ -276,14 +290,55 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         sdkSessions.set(String(args.token), { channel: args.onEvent as typeof channel });
         return (args.config as JsonRecord).cwd;
       }
-      if (command === 'stop_copilot') { sdkSessions.delete(String(args.token)); return 'sdk-generation'; }
+      if (command === 'stop_copilot') {
+        if (!args.token) await options.harnessInitializationGate;
+        if (args.token) await options.harnessStop?.('copilot', String(args.token));
+        sdkSessions.delete(String(args.token)); return 'sdk-generation';
+      }
+      if (command === 'stop_codex') {
+        if (!args.token) await options.harnessInitializationGate;
+        if (args.token) await options.harnessStop?.('codex', String(args.token));
+        codexSessions.delete(String(args.token)); return 'codex-generation';
+      }
+      if (['reserve_codex_deletion', 'stop_codex_deletion', 'release_codex_deletion'].includes(command)) return;
+      if (command === 'start_codex') {
+        if (options.codexStartError) throw new Error(options.codexStartError);
+        codexSessions.set(String(args.token), { channel: args.onEvent as typeof channel });
+        return (args.config as JsonRecord).cwd;
+      }
+      if (command === 'write_codex') {
+        const target = codexSessions.get(String(args.token)); assert.ok(target);
+        const request = args.message as JsonRecord;
+        const send = (value: JsonRecord) => target.channel.onmessage({ kind: 'rpc', value });
+        if (request.method === 'initialize') send({ id: request.id, result: { userAgent: 'offline-codex' } });
+        else if (request.method === 'thread/list') send({ id: request.id, result: { data: (request.params as JsonRecord).archived === true ? [] : options.codexHistory || [], nextCursor: null } });
+        else if (request.method === 'thread/read') {
+          if (options.codexSavedThread) send({ id: request.id, result: { thread: options.codexSavedThread } });
+          else send({ id: request.id, error: { code: options.codexReadError ? -32000 : -32600, message: options.codexReadError ?? `thread not loaded: ${(request.params as JsonRecord).threadId}` } });
+        }
+        else if (request.method === 'thread/delete') send({ id: request.id, result: {} });
+        else if (options.codexConversation && ['thread/start', 'thread/resume'].includes(String(request.method))) {
+          if (request.method === 'thread/resume' && options.harnessResumeError) {
+            send({ id: request.id, error: { code: -32000, message: options.harnessResumeError } }); return;
+          }
+          const params = request.params as JsonRecord;
+          send({ id: request.id, result: { cwd: workspace, thread: { id: params.threadId ?? 'codex-fixture', cwd: workspace,
+            ephemeral: false, parentThreadId: null, turns: [], status: { type: 'idle' } }, model: 'fixture', reasoningEffort: 'low' } });
+        } else if (options.codexConversation && ['model/list', 'thread/turns/list'].includes(String(request.method))) {
+          send({ id: request.id, result: { data: [], nextCursor: null } });
+        } else assert.equal(request.method, 'initialized', 'history must not create/resume a thread or start a turn');
+        return;
+      }
       if (command === 'write_copilot') {
         const target = sdkSessions.get(String(args.token)); assert.ok(target);
         const request = args.message as JsonRecord;
         const send = (value: JsonRecord) => target.channel.onmessage({ kind: 'rpc', value });
         const event = (type: string, data: JsonRecord) => send({ kind: 'event', event: { id: win.crypto.randomUUID(), type, data } });
         let result: unknown = null;
-        if (request.method === 'list') {
+        if (request.method === 'retention') {
+          if (options.copilotListError) { send({ kind: 'result', id: request.id, error: options.copilotListError }); return; }
+          result = (options.copilotHistory || []).some(session => session.sessionId === request.sessionId && (session.context as JsonRecord)?.workingDirectory === workspace && session.isRemote === false) ? 'saved' : 'absent';
+        } else if (request.method === 'list') {
           await options.copilotListGate;
           if (options.copilotListError) { send({ kind: 'result', id: request.id, error: options.copilotListError }); return; }
         } else if (request.method === 'delete') {
@@ -292,6 +347,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
           options.copilotHistory = options.copilotHistory?.filter(session => session.sessionId !== request.sessionId);
         } else if (request.method === 'connect') {
           await options.copilotLoadGate;
+          if (request.sessionId && options.harnessResumeError) { send({ kind: 'result', id: request.id, error: options.harnessResumeError }); return; }
           target.sessionId = String(request.sessionId ?? 'sdk-fixture');
           send({ kind: 'connected', sessionId: target.sessionId, model: { modelId: 'fixture' }, models: [],
             events: request.sessionId ? [
@@ -337,6 +393,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         return { cwd: '/project', session: activeConfig.mode === 'resume' ? { path: activeConfig.sessionFile, sessionId: options.selectedId || 'fixture-id', exists: true } : undefined };
       }
       if (command === 'inspect_workspace_session') return { path: args.path, sessionId: options.selectedId || 'fixture-id', exists: true, parentSession: options.fileParents?.[String(args.path)], lastUserMessageAt: options.fileTimes?.[String(args.path)] };
+      if (command === 'workspace_session_file_info') return { path: args.path, sessionId: args.sessionId, exists: options.fileExists?.() ?? true };
       if (command === 'session_file_info') return { path: args.path, sessionId: args.sessionId, exists: options.fileExists?.() ?? true };
       if (command === 'write_pi') {
         const target = sessions.get(String(args.token)); assert.ok(target);
@@ -384,10 +441,11 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     assert.ok(menu, 'native popup requested');
     const current = menu;
     function item(key: string, label: string, enabled: boolean) {
-      return { label, disabled: !enabled, click: () => { if (enabled) sessionMenuEvent?.(current.request, key); } };
+      return { label, hidden: current.options[`${key}Visible`] === false, disabled: !enabled, click: () => { if (enabled) sessionMenuEvent?.(current.request, key); } };
     }
     return {
       pin: item('pin', String(current.options.pinLabel), current.options.pinEnabled === true),
+      rename: item('rename', 'Rename session…', current.options.renameEnabled === true),
       close: item('close', 'Close session', current.options.closeEnabled === true),
       delete: item('delete', String(current.options.deleteLabel), current.options.deleteEnabled === true),
     };
@@ -395,7 +453,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   return { dom, win, tick, calls, element, openSettings, back, preferences, openPalette, rows, rowMenu,
     confirm: async () => { await tick(); element<HTMLDialogElement>('host-dialog').close('ok'); await tick(); await tick(); },
     saved: (): { drafts: Record<string, any>; last: unknown } => ({ drafts: Object.fromEntries([...nativeDrafts].filter(([, record]) => record.value !== null).map(([key, record]) => [key, record.value])), last: preferences.value.state['nimrod.last-session.v1'] }),
-    sessions, acpSessions, sdkSessions,
+    sessions, acpSessions, sdkSessions, codexSessions,
     deletionEvent: (event: DeletionEvent, target?: string) => deletionEvent?.(event, target),
     projectPicker: (target?: string) => projectPicker?.(target),
     linkError: (message: string, target?: string) => linkError?.(message, target),
@@ -406,6 +464,143 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     disconnect: () => channel.onmessage({ kind: 'disconnected', message: 'fixture closed' }),
   };
 }
+
+// Close and Delete consume only the required retention port, including an unseen harness.
+for (const harness of ['pi', 'copilot-sdk', 'codex', 'fixture-harness'] as const) {
+  for (const action of ['close', 'delete'] as const) test(`confirmed-absent ${harness} ${action} removes its draft without resuming or deleting native history`, async () => {
+    const reference = harness === 'pi' ? { path: '/sessions/missing.jsonl', sessionId: 'missing' } : { kind: harness, sessionId: harness === 'fixture-harness' ? 'saved-fixture' : 'missing' };
+    const scope = harness === 'pi' ? 'file:/sessions/missing.jsonl' : `${harness}:${JSON.stringify(reference.sessionId)}`;
+    const key = harness === 'pi' ? '/sessions/missing.jsonl' : scope;
+    const f = await fixture(undefined, { windowWorkspace: '/project', fixtureHarness: harness === 'fixture-harness', fixtureRetention: 'absent',
+      fileExists: () => false, selectedId: reference.sessionId, nativeDrafts: { [scope]: { draft: 'Orphan draft', recovered: [], attachments: [] }, 'unassigned:sibling': { draft: 'Keep sibling' } },
+      appState: { 'nimrod.tabs.v1:/project': { tabs: [{ ...reference, name: 'Missing history' }], active: key },
+        ...(harness === 'copilot-sdk' ? { [copilotHistoryKey('/project')]: true } : {}) },
+    });
+    try {
+      await f.tick(); await f.tick();
+      const before = f.calls.length;
+      (await f.rowMenu(f.rows()[0]))[action].click();
+      for (let i = 0; i < 6; i++) await f.tick();
+      assert.equal(f.rows().length, 0);
+      assert.equal(f.saved().drafts[scope], undefined);
+      assert.equal(f.saved().drafts['unassigned:sibling'].draft, 'Keep sibling');
+      const removalCalls = f.calls.slice(before);
+      assert.equal(removalCalls.some(call => call.command === 'start_pi'), false);
+      assert.equal(removalCalls.some(call => ['write_copilot', 'write_codex'].includes(call.command)
+        && ['connect', 'delete', 'thread/resume', 'thread/start', 'thread/delete', 'turn/start'].includes(String((call.args.message as JsonRecord)?.method))), false);
+      const layout = f.preferences.value.state['nimrod.tabs.v1:/project'] as { tabs: unknown[] };
+      assert.equal(layout.tabs.length, 0);
+    } finally { f.win.close(); }
+  });
+}
+
+for (const retention of ['saved', 'unknown'] as const) test(`Close preserves ${retention} history's draft through the future-harness port`, async () => {
+  const scope = 'fixture-harness:"saved-fixture"';
+  const f = await fixture(undefined, { windowWorkspace: '/project', fixtureHarness: true, fixtureRetention: retention,
+    nativeDrafts: { [scope]: { draft: 'Keep recoverable draft' } },
+    appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'fixture-harness', sessionId: 'saved-fixture', name: 'Fixture' }], active: scope } },
+  });
+  try {
+    (await f.rowMenu(f.rows()[0])).close.click(); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 0);
+    assert.equal(f.saved().drafts[scope].draft, 'Keep recoverable draft');
+  } finally { f.win.close(); }
+});
+
+test('Close preserves a Pi draft when owned shutdown finishes its first save', async () => {
+  let exists = false, release!: () => void;
+  const f = await fixture(undefined, { windowWorkspace: '/project', fileExists: () => exists,
+    stopGate: new Promise<void>(resolve => { release = resolve; }) });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt');
+    prompt.value = 'Saved during shutdown'; prompt.dispatchEvent(new f.win.Event('input'));
+    (await f.rowMenu(f.rows()[0])).close.click(); await f.tick();
+    assert.equal(f.rows().length, 1, 'owned exit must precede cleanup');
+    exists = true; release();
+    for (let i = 0; i < 4; i++) await f.tick();
+    assert.equal(f.rows().length, 0);
+    assert.equal(f.saved().drafts['file:/sessions/new.jsonl'].draft, 'Saved during shutdown');
+    assert.equal(Object.keys(f.saved().drafts).some(key => key.startsWith('unassigned:')), false);
+    assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false);
+  } finally { release(); f.win.close(); }
+});
+
+test('Close after an unavailable Copilot lookup still removes the row and preserves the uncertain draft', async () => {
+  const scope = copilotSdkScope('missing');
+  const f = await fixture(undefined, { windowWorkspace: '/project', copilotListError: 'Metadata unavailable',
+    nativeDrafts: { [scope]: { draft: 'Do not infer absence' } },
+    appState: { [copilotHistoryKey('/project')]: true, 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'copilot-sdk', sessionId: 'missing', name: 'Copilot' }], active: scope } },
+  });
+  try {
+    await f.tick(); (await f.rowMenu(f.rows()[0])).close.click(); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 0); assert.equal(f.saved().drafts[scope].draft, 'Do not infer absence');
+  } finally { f.win.close(); }
+});
+
+test('startup discovery silently omits missing harness actions and history until restart', async () => {
+  let installed = false;
+  const options: ShellOptions = { windowWorkspace: '/project', runtimeAvailable: harness => harness === 'pi' || installed,
+    catalog: [{ path: '/sessions/pi.jsonl', sessionId: 'pi-saved', name: 'Saved Pi', preview: '', modified: 100, lastUserMessageAt: 100 }] };
+  const f = await fixture(undefined, options);
+  try {
+    f.openPalette();
+    assert.doesNotMatch(f.element('palette-list').textContent!, /New Codex|New Copilot/);
+    const input = f.element<HTMLInputElement>('palette-input');
+    input.value = 'Delete sessions'; input.dispatchEvent(new f.win.Event('input'));
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.match(f.element('palette-list').textContent!, /Saved Pi/);
+    assert.equal(f.calls.some(call => call.command === 'start_codex' || call.command === 'start_copilot'), false);
+    assert.equal(f.element('application-notices').hidden, true);
+    installed = true;
+    f.win.dispatchEvent(new f.win.Event('focus'));
+    f.element<HTMLButtonElement>('palette-refresh').click(); await f.tick(); await f.tick();
+    assert.equal(f.calls.filter(call => call.command.endsWith('_runtime_available')).length, 3);
+    assert.equal(f.calls.some(call => call.command === 'start_codex' || call.command === 'start_copilot'), false);
+    f.element<HTMLDialogElement>('command-palette').close(); await f.tick(); f.openPalette();
+    assert.doesNotMatch(f.element('palette-list').textContent!, /New Codex|New Copilot/);
+  } finally { f.win.close(); }
+  const restarted = await fixture(undefined, options);
+  try {
+    await restarted.tick(); restarted.openPalette();
+    assert.match(restarted.element('palette-list').textContent!, /New Codex session/);
+    assert.match(restarted.element('palette-list').textContent!, /New Copilot session/);
+  } finally { restarted.win.close(); }
+});
+
+test('missing Codex preserves restored rows and drafts but omits runtime actions', async () => {
+  const scope = 'codex:"waiting"';
+  const f = await fixture(undefined, { windowWorkspace: '/project', runtimeAvailable: harness => harness !== 'codex',
+    nativeDrafts: { [scope]: { draft: 'Keep my local draft', recovered: [] } },
+    appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'waiting', name: 'Waiting Codex' }], active: scope } },
+  });
+  try {
+    assert.equal(f.rows().length, 1);
+    f.rows()[0].click(); await f.tick();
+    assert.equal(f.calls.some(call => call.command === 'start_codex'), false);
+    assert.equal(f.element<HTMLButtonElement>('delete-session').hidden, true);
+    assert.equal(f.element<HTMLButtonElement>('reload-session').hidden, true);
+    const menu = await f.rowMenu(f.rows()[0]);
+    assert.equal(menu.delete.hidden, true); assert.equal(menu.rename.hidden, true); assert.equal(menu.close.disabled, false);
+    f.openPalette();
+    assert.doesNotMatch(f.element('palette-list').textContent!, /New Codex|Delete session…|Reload session|Rename session/);
+    assert.equal(f.saved().drafts[scope].draft, 'Keep my local draft');
+    assert.equal(f.element('application-notices').hidden, true);
+  } finally { f.win.close(); }
+});
+
+test('missing Pi hides default creation and history without blocking installed harnesses', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', runtimeAvailable: harness => harness !== 'pi' });
+  try {
+    await f.tick(); f.openPalette();
+    assert.doesNotMatch(f.element('palette-list').textContent!, /New named session|New temporary session|Pi · persistent/);
+    assert.match(f.element('palette-list').textContent!, /New Codex session|New Copilot session/);
+    assert.equal(f.element<HTMLButtonElement>('sidebar-new').hidden, true);
+    assert.equal(f.calls.some(call => call.command === 'start_pi'), false);
+    assert.equal(f.element('application-notices').hidden, true);
+  } finally { f.win.close(); }
+});
 
 test('mounting an explicitly disconnected saved session does not report a connection attempt failure', async () => {
   const scope = 'codex:"waiting"';
@@ -418,6 +613,140 @@ test('mounting an explicitly disconnected saved session does not report a connec
     assert.doesNotMatch(f.win.document.querySelector('.session-view')!.textContent!, /Session is not connected|Unsupported.*operation/);
     assert.equal(f.win.document.querySelectorAll('.session-view .notice-item').length, 0);
   } finally { f.win.close(); }
+});
+
+test('Close consumes a disconnected Codex lifecycle without connecting or requiring saved-history confirmation', async () => {
+  const scope = 'codex:"waiting"';
+  const f = await fixture(undefined, { windowWorkspace: '/project', nativeDrafts: { [scope]: { draft: 'Keep my local draft', recovered: [] } }, appState: {
+    'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'waiting', name: 'Waiting Codex' }], active: scope },
+  } });
+  try {
+    assert.equal(f.rows().length, 1);
+    const menu = await f.rowMenu(f.rows()[0]); assert.equal(menu.close.disabled, false);
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'w', metaKey: true, bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 0);
+    assert.equal(f.saved().drafts[scope].draft, 'Keep my local draft');
+    assert.equal(f.calls.some(call => call.command === 'start_codex' || call.command === 'write_codex'), false);
+    assert.equal(f.calls.some(call => call.command === 'stop_codex' && !!call.args.token), false, 'no owned runtime is a successful stop, not a reconnect');
+    assert.deepEqual((f.preferences.value.state['nimrod.tabs.v1:/project'] as { tabs: unknown[] }).tabs, []);
+  } finally { f.win.close(); }
+});
+
+test('disconnected Codex Delete uses the independent catalog and shared review without conversation Resume', async () => {
+  const scope = 'codex:"waiting"';
+  const f = await fixture(undefined, { windowWorkspace: '/project', nativeDrafts: { [scope]: { draft: 'Keep until deletion confirms', recovered: [] } },
+    codexHistory: [{ id: 'waiting', cwd: '/project', ephemeral: false, parentThreadId: null, forkedFromId: null, turns: [], status: { type: 'notLoaded' }, name: 'Waiting Codex' }],
+    appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'waiting', name: 'Waiting Codex' }], active: scope } },
+  });
+  const conversationWrites = () => f.calls.filter(call => call.command === 'write_codex')
+    .map(call => call.args.message as JsonRecord)
+    .filter(request => ['thread/start', 'thread/resume', 'turn/start'].includes(String(request.method)));
+  try {
+    assert.equal(f.calls.some(call => call.command === 'start_codex'), false);
+    assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
+    const menu = await f.rowMenu(f.rows()[0]); assert.equal(menu.delete.disabled, false);
+    menu.delete.click(); await f.tick(); await f.tick();
+    assert.equal(f.element('deletion-title').textContent, 'Delete Codex thread tree');
+    f.element<HTMLButtonElement>('deletion-cancel').click(); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 1);
+    assert.equal(f.saved().drafts[scope].draft, 'Keep until deletion confirms');
+    assert.equal(conversationWrites().length, 0);
+    f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
+    f.element<HTMLButtonElement>('deletion-confirm').click(); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 0);
+    assert.equal(f.saved().drafts[scope], undefined);
+    assert.equal(conversationWrites().length, 0);
+    assert.ok(f.calls.filter(call => call.command === 'start_codex').every(call => (call.args.config as JsonRecord).catalog === true));
+    const deletes = f.calls.filter(call => call.command === 'write_codex' && (call.args.message as JsonRecord).method === 'thread/delete');
+    assert.equal(deletes.length, 1);
+    assert.equal(((deletes[0].args.message as JsonRecord).params as JsonRecord).threadId, 'waiting');
+  } finally { f.win.close(); }
+});
+
+test('Delete removes a natively absent Codex session and draft without native deletion or Resume', async () => {
+  const scope = 'codex:"never-saved"';
+  const f = await fixture(undefined, { windowWorkspace: '/project', codexHistory: [],
+    nativeDrafts: { [scope]: { draft: 'Orphan draft is not deletion evidence', recovered: [] } },
+    appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'never-saved', name: 'Never saved' }], active: scope } },
+  });
+  try {
+    assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
+    f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
+    assert.equal(f.element('deletion-title').textContent, 'Delete Codex session');
+    f.element<HTMLButtonElement>('deletion-cancel').click(); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 1); assert.equal(f.saved().drafts[scope].draft, 'Orphan draft is not deletion evidence');
+    f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
+    f.element<HTMLButtonElement>('deletion-confirm').click(); await f.tick(); await f.tick();
+    const requests = f.calls.filter(call => call.command === 'write_codex').map(call => call.args.message as JsonRecord);
+    assert.equal(requests.some(request => ['thread/delete', 'thread/start', 'thread/resume', 'turn/start'].includes(String(request.method))), false);
+    assert.equal(f.rows().length, 0); assert.equal(f.saved().drafts[scope], undefined);
+    const fences = f.calls.filter(call => call.command === 'reserve_codex_deletion');
+    assert.ok(fences.length > 0);
+    assert.ok(fences.every(call => call.args.localOnly === true && call.args.rootId === 'never-saved'));
+    assert.ok(requests.filter(request => request.method === 'thread/read').every(request => (request.params as JsonRecord).includeTurns === false));
+  } finally { f.win.close(); }
+});
+
+test('Delete retains the Codex row and draft when native absence cannot be established', async () => {
+  const scope = 'codex:"lookup-denied"';
+  const f = await fixture(undefined, { windowWorkspace: '/project', codexHistory: [], codexReadError: 'Permission denied while reading saved history',
+    nativeDrafts: { [scope]: { draft: 'Keep unknown history draft', recovered: [] } },
+    appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'lookup-denied', name: 'Unknown history' }], active: scope } },
+  });
+  try {
+    f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 1); assert.equal(f.saved().drafts[scope].draft, 'Keep unknown history draft');
+    assert.match(f.element('application-notices').textContent!, /Permission denied/);
+    assert.equal(f.calls.some(call => call.command === 'reserve_codex_deletion'), false);
+    assert.equal(f.calls.some(call => call.command === 'write_codex' && (call.args.message as JsonRecord).method === 'thread/delete'), false);
+  } finally { f.win.close(); }
+});
+
+test('a saved named-empty Codex root omitted by listing still receives native deletion review', async () => {
+  const scope = 'codex:"named-empty"';
+  const f = await fixture(undefined, { windowWorkspace: '/project', codexHistory: [],
+    codexSavedThread: { id: 'named-empty', cwd: '/project', ephemeral: false, parentThreadId: null, forkedFromId: null, turns: [], status: { type: 'notLoaded' }, name: 'Named empty' },
+    appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'named-empty', name: 'Named empty' }], active: scope } },
+  });
+  try {
+    f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
+    assert.equal(f.element('deletion-title').textContent, 'Delete Codex thread tree');
+    f.element<HTMLButtonElement>('deletion-confirm').click(); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 0);
+    assert.ok(f.calls.filter(call => call.command === 'reserve_codex_deletion').every(call => call.args.localOnly === false));
+    assert.equal(f.calls.filter(call => call.command === 'write_codex' && (call.args.message as JsonRecord).method === 'thread/delete').length, 1);
+  } finally { f.win.close(); }
+});
+
+test('disconnected Codex Close retains membership on failed owned stop and retries teardown without Resume', async () => {
+  let refuse = true;
+  const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true,
+    harnessStop: async () => { if (refuse) throw new Error('EPERM: owned exit unconfirmed'); } });
+  try {
+    f.openPalette(); const input = f.element<HTMLInputElement>('palette-input');
+    input.value = 'New Codex session'; input.dispatchEvent(new f.win.Event('input'));
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Keep failed-close draft'; prompt.dispatchEvent(new f.win.Event('input'));
+    const token = String(f.calls.filter(call => call.command === 'start_codex' && !(call.args.config as JsonRecord).catalog).at(-1)!.args.token);
+    f.codexSessions.get(token)!.channel.onmessage({ kind: 'disconnected', message: 'Fixture runtime disconnected' });
+    await f.tick(); await f.tick();
+    const before = f.calls.length;
+    const close = async () => {
+      f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'w', metaKey: true, bubbles: true, cancelable: true }));
+      await f.tick(); await f.tick();
+    };
+    await close();
+    assert.equal(f.rows().length, 1); assert.equal(prompt.value, 'Keep failed-close draft');
+    assert.match(f.element('session-notices').textContent!, /Could not stop Codex.*EPERM/);
+    refuse = false; await close();
+    assert.equal(f.rows().length, 0);
+    assert.equal(f.calls.slice(before).some(call => call.command === 'start_codex' && !(call.args.config as JsonRecord).catalog), false);
+    assert.equal(f.calls.slice(before).some(call => call.command === 'write_codex' && ['thread/resume', 'thread/start', 'turn/start'].includes(String((call.args.message as JsonRecord).method))), false);
+    assert.ok(f.calls.slice(before).filter(call => call.command === 'stop_codex').every(call => call.args.token === token));
+    assert.equal(f.saved().drafts['codex:"codex-fixture"'], undefined, 'successful stop plus authoritative absence discards the orphan draft');
+  } finally { refuse = false; f.win.close(); }
 });
 
 test('registered project actions execute from palette and shortcuts without an open session', async () => {
@@ -452,7 +781,7 @@ test('registered project metadata without a live handler stays unavailable inste
   } finally { f.win.close(); }
 });
 
-test('a registration unknown to the shell creates, sends, displays fallback questions, closes, resumes and deletes through unchanged consumers', async () => {
+test('a registration unknown to the shell creates, sends, renames, reloads, displays fallback questions, closes, resumes and deletes through unchanged consumers', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project', fixtureHarness: true });
   const enter = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
   const search = (text: string) => { const input = f.element<HTMLInputElement>('palette-input'); input.value = text; input.dispatchEvent(new f.win.Event('input')); };
@@ -470,6 +799,16 @@ test('a registration unknown to the shell creates, sends, displays fallback ques
     assert.match(f.win.document.querySelector('.session-view:not([hidden])')!.textContent!, /Fixture tool/);
     assert.match(f.win.document.querySelector('.session-view:not([hidden])')!.textContent!, /unknown fixture item/);
     prompt.value = 'Preserve newer draft'; prompt.dispatchEvent(new f.win.Event('input')); await f.tick();
+    const root = prompt.closest('.session-view');
+    f.openPalette(); search('Rename session'); enter(); await f.tick(); await f.tick();
+    f.element<HTMLTextAreaElement>('host-dialog-input').value = 'Fixture renamed'; await f.confirm();
+    assert.equal(f.element('project-session-name').textContent, 'Fixture renamed');
+    assert.equal(prompt.value, 'Preserve newer draft');
+    f.openPalette(); search('Reload session'); enter(); await f.tick(); await f.tick();
+    assert.equal(f.element('prompt'), prompt); assert.equal(prompt.closest('.session-view'), root);
+    assert.equal(prompt.value, 'Preserve newer draft'); assert.equal(f.rows().length, 1);
+    assert.equal(f.win.document.querySelectorAll('.message.user').length, 1, 'reload never resubmits input');
+    assert.equal((f.preferences.value.state['nimrod.tabs.v1:/project'] as typeof layout).tabs[0].sessionId, sessionId);
     f.openPalette(); search('Display fixture question'); enter(); await f.tick(); await f.tick();
     assert.match(f.win.document.querySelector('.session-view:not([hidden])')!.textContent!, /Which option should the agent use/);
     assert.equal(prompt.value, 'Preserve newer draft');
@@ -483,6 +822,82 @@ test('a registration unknown to the shell creates, sends, displays fallback ques
     f.element<HTMLButtonElement>('deletion-confirm').click(); await f.tick(); await f.tick();
     assert.equal(f.rows().length, 0); assert.equal(f.saved().drafts[scope], undefined);
     assert.equal(f.calls.some(call => ['start_pi', 'write_pi', 'start_copilot', 'write_copilot', 'start_codex', 'write_codex', 'delete_session_tree'].includes(call.command)), false);
+  } finally { f.win.close(); }
+});
+
+test('Rename session targets a connected background row without navigation, recency or draft changes', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const [target, selected] = f.rows(), prompt = f.element<HTMLTextAreaElement>('prompt');
+    prompt.value = 'Keep draft'; prompt.dispatchEvent(new f.win.Event('input'));
+    const time = target.querySelector('time')!.getAttribute('datetime'), before = f.calls.length;
+    (await f.rowMenu(target)).rename.click(); await f.tick(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('host-dialog').open, true);
+    const name = f.element<HTMLTextAreaElement>('host-dialog-input');
+    assert.equal(name.selectionStart, 0); assert.equal(name.selectionEnd, name.value.length);
+    f.element<HTMLTextAreaElement>('host-dialog-input').value = '  Background name  '; await f.confirm();
+    assert.match(target.textContent!, /Background name/);
+    assert.equal(selected.getAttribute('aria-current'), 'true');
+    assert.equal(target.querySelector('time')!.getAttribute('datetime'), time);
+    assert.equal(prompt.value, 'Keep draft');
+    const requests = f.calls.slice(before).filter(call => call.command === 'write_pi');
+    assert.equal(requests.filter(call => (call.args.message as JsonRecord).type === 'set_session_name').length, 1);
+    assert.equal(requests.some(call => (call.args.message as JsonRecord).type === 'prompt'), false);
+    assert.equal(f.calls.slice(before).some(call => ['start_pi', 'stop_pi'].includes(call.command)), false);
+    f.disconnect();
+  } finally { f.win.close(); }
+});
+
+test('Rename session palette action is bindable, prefilled, cancellable and validates before dispatch', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const open = async () => {
+      f.openPalette();
+      const input = f.element<HTMLInputElement>('palette-input'); input.value = 'Rename session';
+      input.dispatchEvent(new f.win.Event('input'));
+      input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      await f.tick(); await f.tick();
+    };
+    assert.deepEqual(ACTIONS.find(action => action.id === 'rename')!.defaults, ['primary+shift+r']);
+    await open();
+    const name = f.element<HTMLTextAreaElement>('host-dialog-input');
+    assert.equal(name.value, f.element('project-session-name').textContent);
+    assert.equal(f.win.document.activeElement, name);
+    assert.equal(name.selectionStart, 0); assert.equal(name.selectionEnd, name.value.length);
+    f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
+    assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'set_session_name'), false);
+    await open(); f.element<HTMLTextAreaElement>('host-dialog-input').value = 'two\nlines'; await f.confirm();
+    assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'set_session_name'), false);
+    assert.match(f.element('session-notices').textContent!, /single-line/);
+    await open(); f.element<HTMLTextAreaElement>('host-dialog-input').value = 'Palette name'; await f.confirm();
+    assert.equal(f.element('project-session-name').textContent, 'Palette name');
+    assert.doesNotMatch(f.element('session-notices').textContent!, /single-line/);
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'R', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('host-dialog').open, true);
+    f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
+    f.preferences.external('{"keybindings":{"rename":["primary+shift+y"]}}'); await f.tick();
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'y', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('host-dialog').open, true);
+    f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
+    f.disconnect();
+  } finally { f.win.close(); }
+});
+
+test('Rename session on a disconnected row reports a session notice without starting a runtime', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    f.disconnect(); await f.tick(); await f.tick();
+    const before = f.calls.length;
+    (await f.rowMenu(f.rows()[0])).rename.click(); await f.tick(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('host-dialog').open, false);
+    assert.match(f.element('session-notices').textContent!, /Resume this session/);
+    assert.equal(f.calls.slice(before).some(call => ['start_pi', 'write_pi'].includes(call.command)), false);
   } finally { f.win.close(); }
 });
 
@@ -708,7 +1123,7 @@ test('SDK sidebar identity, title, recency and draft survive reopening with sele
     prompt.dispatchEvent(new first.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await first.tick();
     first.element<HTMLButtonElement>('send').click(); await first.tick(); await first.tick();
-    prompt.value = 'Draft after restart'; prompt.dispatchEvent(new first.win.Event('input'));
+    prompt.value = 'Draft after reload'; prompt.dispatchEvent(new first.win.Event('input'));
     await first.tick(); await first.tick();
     appState = structuredClone(first.preferences.value.state);
     nativeDrafts = structuredClone(first.saved().drafts);
@@ -721,13 +1136,13 @@ test('SDK sidebar identity, title, recency and draft survive reopening with sele
     assert.equal(layout.tabs[0].name, 'Copilot sidebar title');
     assert.equal('path' in layout.tabs[0], false, 'Copilot identity is not a Pi path');
     assert.equal('env' in layout.tabs[0], false, 'launch environment is not persisted');
-    assert.equal((nativeDrafts[scope] as { draft: string }).draft, 'Draft after restart');
+    assert.equal((nativeDrafts[scope] as { draft: string }).draft, 'Draft after reload');
   } finally { first.win.close(); }
   const f = await fixture(undefined, { windowWorkspace: '/project', appState, nativeDrafts });
   try {
     assert.equal(f.rows().length, 1);
     assert.match(f.rows()[0].textContent!, /Copilot sidebar title.*Copilot/);
-    assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Draft after restart');
+    assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Draft after reload');
     assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, 2, 'project discovery and the selected conversation start independently');
     const messages = () => f.calls.filter(call => call.command === 'write_copilot').map(call => call.args.message as JsonRecord);
     assert.equal(messages().find(message => message.method === 'connect')?.sessionId, 'sdk-fixture');
@@ -735,7 +1150,7 @@ test('SDK sidebar identity, title, recency and draft survive reopening with sele
     const used = (f.preferences.value.state[key] as { tabs: { lastUsed: number }[] }).tabs[0].lastUsed;
     assert.equal(messages().some(message => message.method === 'prompt'), false);
     assert.match(f.element('messages').textContent!, /Saved Copilot question.*Saved Copilot answer/s);
-    assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Draft after restart');
+    assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Draft after reload');
     assert.equal((f.preferences.value.state[key] as { tabs: { lastUsed: number }[] }).tabs[0].lastUsed, used, 'replay is not local use');
     assert.equal(f.calls.some(call => call.command === 'notify_session'), false);
     const writes = f.calls.filter(call => call.command === 'preferences_state').length;
@@ -793,7 +1208,7 @@ test('missing Copilot executable retains the sidebar identity and draft and supp
   } finally { f.win.close(); }
 });
 
-test('shared lifecycle preserves mixed sidebar membership independently of connection and Pi-only Restart', async () => {
+test('shared lifecycle preserves mixed sidebar membership independently of connection and reload availability', async () => {
   const key = 'nimrod.tabs.v1:/project', path = '/sessions/pi.jsonl', scope = copilotSdkScope('fixture-id');
   const f = await fixture(undefined, { windowWorkspace: '/project', appState: { [key]: {
     tabs: [
@@ -807,12 +1222,12 @@ test('shared lifecycle preserves mixed sidebar membership independently of conne
     assert.equal(f.calls.filter(call => call.command === 'start_pi').length, 1);
     assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, 1);
     assert.equal(layout().tabs.length, 2);
-    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, false);
+    assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, false);
     f.rows()[1].click(); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, 2);
-    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, true);
+    assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, false);
     assert.equal(layout().active, scope);
-    assert.equal(layout().tabs.length, 2, 'disabling Restart cannot remove Copilot persistence');
+    assert.equal(layout().tabs.length, 2, 'reload availability cannot remove Copilot persistence');
     const target = [...f.sdkSessions.values()].find(session => session.sessionId === 'fixture-id')!;
     target.channel.onmessage({ kind: 'disconnected', message: 'Offline agent exited' }); await f.tick();
     assert.equal(f.rows().length, 2, 'disconnect cannot close the sidebar entry');
@@ -828,6 +1243,7 @@ test('late Copilot loading never steals Pi selection or focus and Close preserve
   const gate = new Promise<void>(resolve => { release = resolve; });
   const scope = copilotSdkScope('saved-id'), key = 'nimrod.tabs.v1:/project';
   const f = await fixture(undefined, { windowWorkspace: '/project', copilotLoadGate: gate,
+    copilotHistory: [{ sessionId: 'saved-id', isRemote: false, context: { workingDirectory: '/project' } }],
     appState: { [key]: { tabs: [{ kind: 'copilot-sdk', sessionId: 'saved-id', name: 'Saved Copilot' }] } },
     nativeDrafts: { [scope]: { draft: 'Keep after Close' } } });
   try {
@@ -1004,7 +1420,49 @@ test('Resume discovers closed Copilot history, restores its draft and reuses the
   } finally { reopened.win.close(); }
 });
 
-test('Resume sorts incremental mixed-harness history by displayed recency after overlaying open rows', async () => {
+for (const picker of ['Resume', 'Delete sessions'] as const) test(`${picker} discovers all harnesses without association, including while native owners initialize`, async () => {
+  let release!: () => void;
+  const f = await fixture(undefined, { windowWorkspace: '/project',
+    harnessInitializationGate: new Promise<void>(resolve => { release = resolve; }),
+    catalog: [{ path: '/sessions/pi.jsonl', sessionId: 'pi', name: 'Saved Pi', preview: '', modified: 100, lastUserMessageAt: 100 }],
+    copilotHistory: [{ sessionId: 'copilot', context: { workingDirectory: '/project' }, isRemote: false, summary: 'External Copilot', modifiedTime: new Date(200).toISOString() }],
+    codexHistory: [{ id: 'codex', cwd: '/project', ephemeral: false, turns: [], status: { type: 'notLoaded' }, name: 'External Codex', updatedAt: 1 }],
+  });
+  try {
+    assert.equal(f.calls.some(call => ['start_pi', 'start_copilot', 'start_codex'].includes(call.command)), false, 'opening a project does not start discovery or conversations without association');
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: picker === 'Resume' ? 'k' : 'Backspace', shiftKey: picker === 'Delete sessions', metaKey: true, bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.match(f.element('palette-list').textContent!, /Saved Pi/);
+    release(); await f.tick(); await f.tick();
+    assert.deepEqual([...f.element('palette-list').querySelectorAll('.session-row-label')].map(row => row.textContent), ['External Codex', 'External Copilot', 'Saved Pi']);
+    for (const command of ['start_copilot', 'start_codex']) assert.equal(f.calls.filter(call => call.command === command).length, 1);
+    assert.equal(f.calls.filter(call => call.command === 'stop_copilot' && !call.args.token).length, 1, 'native generation initialization is coalesced');
+    assert.equal(f.calls.filter(call => call.command === 'stop_codex' && !call.args.token).length, 1);
+    assert.equal(f.rows().length, 0, 'discovery does not open sidebar sessions');
+    assert.equal(f.calls.some(call => call.command === 'start_pi'), false);
+    assert.equal(f.calls.some(call => call.command === 'write_copilot' && ['connect', 'prompt'].includes(String((call.args.message as JsonRecord).method))), false);
+    assert.equal(f.preferences.value.state[copilotHistoryKey('/project')], undefined, 'listing is not explicit conversation use');
+  } finally { release(); f.win.close(); }
+});
+
+test('enabled unassociated harness failures stay visible and never retry until explicit Refresh', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', copilotStartError: 'Copilot launch failed', codexStartError: 'Codex launch failed',
+    catalog: [{ path: '/sessions/pi.jsonl', sessionId: 'pi', name: 'Saved Pi', preview: '', modified: 1 }] });
+  try {
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Backspace', shiftKey: true, metaKey: true, bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.match(f.element('palette-list').textContent!, /Saved Pi/);
+    assert.match(f.win.document.body.textContent!, /Copilot launch failed/);
+    assert.match(f.win.document.body.textContent!, /Codex launch failed/);
+    await f.tick();
+    for (const command of ['start_copilot', 'start_codex']) assert.equal(f.calls.filter(call => call.command === command).length, 1);
+    f.element<HTMLButtonElement>('palette-refresh').click(); await f.tick(); await f.tick();
+    for (const command of ['start_copilot', 'start_codex']) assert.equal(f.calls.filter(call => call.command === command).length, 2);
+    assert.equal(f.rows().length, 0);
+  } finally { f.win.close(); }
+});
+
+for (const picker of ['Resume', 'Delete sessions'] as const) test(`${picker} sorts incremental mixed-harness history by displayed recency after overlaying open rows`, async () => {
   let release!: () => void;
   const f = await fixture(undefined, { windowWorkspace: '/project',
     appState: {
@@ -1027,7 +1485,7 @@ test('Resume sorts incremental mixed-harness history by displayed recency after 
   });
   const titles = () => [...f.element('palette-list').querySelectorAll('.session-row-label')].map(row => row.textContent);
   try {
-    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true, cancelable: true }));
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: picker === 'Resume' ? 'k' : 'Backspace', shiftKey: picker === 'Delete sessions', metaKey: true, bubbles: true, cancelable: true }));
     await f.tick(); await f.tick();
     assert.deepEqual(titles(), ['Open Pi', 'Closed Pi', 'Unknown Pi']);
     release(); await f.tick(); await f.tick();
@@ -1615,7 +2073,7 @@ test('performance capture is opt-in, bindable, timing-only and preserves the mou
   } finally { f.win.close(); }
 });
 
-test('personal compilation does not gate shell/session boot and Reload card plugins is bindable without Pi restart', async () => {
+test('personal compilation does not gate shell/session boot and Reload card plugins is bindable without Pi reload', async () => {
   let release!: (value: import('../src/pi/card-plugins/catalog').PersonalBundles) => void;
   const gate = new Promise<import('../src/pi/card-plugins/catalog').PersonalBundles>(resolve => { release = resolve; });
   const f = await fixture(undefined, { windowWorkspace: '/project', personalGate: gate });
@@ -1638,7 +2096,7 @@ test('personal compilation does not gate shell/session boot and Reload card plug
   } finally { f.win.close(); }
 });
 
-test('Cmd-R restarts the selected saved session, preserves its draft and honors modality, repeats and overrides', async () => {
+test('Cmd-R reloads the selected saved session, preserves its draft and honors modality, repeats and overrides', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   const key = (name = 'r', extra: KeyboardEventInit = {}) => {
     const event = new f.win.KeyboardEvent('keydown', { key: name, metaKey: true, bubbles: true, cancelable: true, ...extra });
@@ -1650,7 +2108,7 @@ test('Cmd-R restarts the selected saved session, preserves its draft and honors 
     key(); await f.tick(); assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
     f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
     const root = f.win.document.querySelector('.session-view:not([hidden])');
-    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Retained restart draft'; prompt.dispatchEvent(new f.win.Event('input'));
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Retained reload draft'; prompt.dispatchEvent(new f.win.Event('input'));
     f.openPalette(); key(); await f.tick(); assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 2);
     f.element<HTMLDialogElement>('command-palette').close(); await f.tick();
     key('r', { repeat: true }); key('r', { isComposing: true }); key('r', { shiftKey: true });
@@ -1660,11 +2118,11 @@ test('Cmd-R restarts the selected saved session, preserves its draft and honors 
     const config = f.calls.filter(c => c.command === 'start_pi').at(-1)!.args.config as JsonRecord;
     assert.equal(config.mode, 'resume'); assert.equal(config.sessionFile, '/sessions/new.jsonl');
     assert.equal(f.win.document.querySelector('.session-view:not([hidden])'), root);
-    assert.equal(f.element('prompt'), prompt); assert.equal(prompt.value, 'Retained restart draft');
-    f.preferences.external('{"keybindings":{"restart":["primary+j"]}}'); await f.tick();
+    assert.equal(f.element('prompt'), prompt); assert.equal(prompt.value, 'Retained reload draft');
+    f.preferences.external('{"keybindings":{"reload":["primary+j"]}}'); await f.tick();
     assert.equal(key().defaultPrevented, false);
     key('j'); await f.tick(); await f.tick(); assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 4);
-    f.preferences.external('{"keybindings":{"restart":[]}}'); await f.tick();
+    f.preferences.external('{"keybindings":{"reload":[]}}'); await f.tick();
     assert.equal(key().defaultPrevented, false); assert.equal(key('j').defaultPrevented, false);
     assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
   } finally { f.win.close(); }
@@ -1739,7 +2197,9 @@ test('customizable requested shortcuts use normal session/model/effort actions w
     key('N', { shiftKey: true }); await f.tick(); await f.tick();
     assert.equal((f.calls.filter(call => call.command === 'start_pi').at(-1)!.args.config as JsonRecord).mode, 'temporary');
     assert.equal(prompt.value, 'Retain this draft'); assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
-    key('Backspace'); await f.tick(); assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false, 'temporary session is not deletable');
+    key('Backspace'); await f.tick(); assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false, 'temporary deletion uses Close, not a saved-tree transaction');
+    assert.equal(f.element<HTMLDialogElement>('host-dialog').open, true);
+    f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
     f.openSettings(); key('n'); await f.tick(); assert.equal(f.calls.filter(call => call.command === 'start_pi').length, before + 1);
     f.back();
     f.preferences.external('{"keybindings":{"new":[],"temporary":["primary+j"],"palette":["primary+l"]}}');
@@ -2331,7 +2791,7 @@ test('restored Working and Unread views stay blank without launching historical 
   }
 });
 
-test('empty attention view reports live working counts without restarting dots or altering membership', async () => {
+test('empty attention view reports live working counts without reloading dots or altering membership', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   try {
     for (let i = 0; i < 2; i++) { f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick(); }
@@ -2393,20 +2853,20 @@ test('attention blanks filtered conversations, preserves mounted state and treat
     assert.equal(f.element('conversation').hidden, true);
     assert.equal(f.element('workspace-empty').hidden, true);
     assert.equal(f.element('mode-badge').textContent, '');
-    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, true);
+    assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, true);
     assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, true);
     assert.equal(f.win.document.activeElement, f.element('sidebar-unread'));
     // Session commands must not act on the remembered but hidden selection.
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'w', metaKey: true, bubbles: true }));
     f.openPalette();
     const commands = f.element('palette-list').textContent!;
-    assert.doesNotMatch(commands, /Restart session|Delete session tree|Close session|Select model|Select thinking level/);
+    assert.doesNotMatch(commands, /Reload session|Delete session|Close session|Select model|Select thinking level/);
     f.element<HTMLDialogElement>('command-palette').close(); await f.tick();
     f.element<HTMLButtonElement>('sidebar-all').click();
     assert.equal(root.hidden, false); assert.equal(root.inert, false);
     assert.equal(f.element<HTMLTextAreaElement>('prompt'), prompt);
     assert.equal(prompt.value, 'Keep this draft'); assert.equal(pane.scrollTop, 42);
-    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, false);
+    assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, false);
     f.element<HTMLButtonElement>('sidebar-unread').click();
     f.emit({ type: 'agent_start' }); f.emit({ type: 'agent_settled' }); await f.tick();
     assert.equal(f.element('sidebar-unread-count').textContent, '1');
@@ -2749,7 +3209,7 @@ test('sidebar menu deletion targets a background row without selecting/resuming 
       const rows = f.rows(), prompt = f.element<HTMLTextAreaElement>('prompt');
       const trash = (await f.rowMenu(rows[0])).delete;
       assert.equal(rows[0].parentElement!.querySelector('.session-delete'), null);
-      assert.equal(trash.label, 'Delete session tree…');
+      assert.equal(trash.label, 'Delete session…');
       assert.equal(trash.disabled, false); assert.equal(rows[2].getAttribute('aria-current'), 'true');
       const starts = f.calls.filter(call => call.command === 'start_pi').length;
       trash.click(); trash.click();
@@ -2777,12 +3237,95 @@ test('sidebar menu deletion targets a background row without selecting/resuming 
   }
 });
 
-test('sidebar menu deletion allows working and pending sessions but guards unsaved, temporary and quarantined sessions', async () => {
+for (const entry of ['button', 'shortcut', 'palette', 'row'] as const) test(`Delete closes an unwritten Pi session through ${entry} without filesystem deletion`, async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', fileExists: () => false });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const target = f.rows()[0], token = f.calls.find(call => call.command === 'start_pi')!.args.token;
+    let sibling: HTMLTextAreaElement | undefined;
+    if (entry === 'row') {
+      f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+      sibling = f.element<HTMLTextAreaElement>('prompt'); sibling.value = 'Keep selected sibling'; sibling.dispatchEvent(new f.win.Event('input')); sibling.focus();
+    }
+    const before = f.calls.length;
+    assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
+    assert.equal(f.element('delete-session').getAttribute('aria-label'), 'Delete session');
+    if (entry === 'button') f.element<HTMLButtonElement>('delete-session').click();
+    else if (entry === 'shortcut') f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Backspace', metaKey: true, bubbles: true, cancelable: true }));
+    else if (entry === 'palette') {
+      f.openPalette(); const input = f.element<HTMLInputElement>('palette-input');
+      input.value = 'Delete session'; input.dispatchEvent(new f.win.Event('input'));
+      input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    } else {
+      const action = (await f.rowMenu(target)).delete;
+      assert.equal(action.label, 'Delete session…'); assert.equal(action.disabled, false); action.click();
+    }
+    await f.tick(); await f.tick();
+    assert.equal(f.rows().length, sibling ? 1 : 0);
+    assert.equal(f.calls.slice(before).some(call => call.command === 'delete_session_tree' || call.command === 'start_pi'), false);
+    assert.deepEqual(f.calls.slice(before).filter(call => call.command === 'stop_pi').map(call => call.args.token), [token]);
+    assert.equal(f.element<HTMLDialogElement>('deletion-review').open, false);
+    if (sibling) { assert.equal(f.element('prompt'), sibling); assert.equal(sibling.value, 'Keep selected sibling'); assert.equal(f.win.document.activeElement, sibling); }
+  } finally { f.win.close(); }
+});
+
+test('Delete on a temporary Pi session follows Close confirmation, cancellation and draft disposal', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Temporary draft'; prompt.dispatchEvent(new f.win.Event('input'));
+    const before = f.calls.length;
+    f.element<HTMLButtonElement>('delete-session').click(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('host-dialog').open, true);
+    f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
+    assert.equal(f.rows().length, 1); assert.equal(prompt.value, 'Temporary draft');
+    assert.equal(f.calls.slice(before).some(call => call.command === 'stop_pi'), false);
+    f.element<HTMLButtonElement>('delete-session').click(); await f.tick();
+    f.element<HTMLDialogElement>('host-dialog').close('ok'); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 0);
+    assert.equal(f.calls.slice(before).filter(call => call.command === 'stop_pi').length, 1);
+    assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false);
+    assert.equal(Object.keys(f.saved().drafts).some(key => key.startsWith('temporary:')), false);
+  } finally { f.win.close(); }
+});
+
+test('a first Pi save during unsaved Delete confirmation switches to the saved deletion operation', async () => {
+  let saved = false;
+  const f = await fixture(undefined, { windowWorkspace: '/project', fileExists: () => saved });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    f.emit({ type: 'agent_start' }); await f.tick();
+    f.element<HTMLButtonElement>('delete-session').click(); await f.tick();
+    assert.equal(f.element<HTMLDialogElement>('host-dialog').open, true);
+    saved = true;
+    const now = f.win.Date.now(); f.win.Date.now = () => now + 4000;
+    f.emit({ type: 'agent_settled' }); await f.tick(); await f.tick();
+    f.element<HTMLDialogElement>('host-dialog').close('ok'); await f.tick(); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'delete_session_tree').length, 1);
+    assert.equal(f.calls.filter(call => call.command === 'stop_pi').length, 0, 'saved transaction owns shutdown, not the provisional Close');
+    assert.equal(f.rows().length, 1, 'no authoritative removal was returned by the fixture');
+  } finally { f.win.close(); }
+});
+
+test('unsaved Delete preserves the mounted Pi session and draft when owned shutdown fails', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', fileExists: () => false, stopError: () => 'Fixture stop refused' });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Retain on failed Close'; prompt.dispatchEvent(new f.win.Event('input'));
+    f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 1); assert.equal(f.element('prompt'), prompt); assert.equal(prompt.value, 'Retain on failed Close');
+    assert.match(f.element('session-notices').textContent!, /Could not stop Pi.*Fixture stop refused/);
+    assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
+    assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false);
+  } finally { f.win.close(); }
+});
+
+test('sidebar menu deletion allows unsaved, temporary, working and pending sessions but guards quarantine', async () => {
   let exists = false;
   const f = await fixture(undefined, { windowWorkspace: '/project', fileExists: () => exists, holdPrompts: true });
   try {
     f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
-    assert.equal((await f.rowMenu(f.rows()[0])).delete.disabled, true, 'unwritten saved sessions cannot be deleted');
+    assert.equal((await f.rowMenu(f.rows()[0])).delete.disabled, false, 'unwritten saved sessions can be closed through Delete');
     exists = true; f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
     const trash = () => f.rowMenu(f.rows()[1]).then(menu => menu.delete);
     assert.equal((await trash()).disabled, false);
@@ -2798,7 +3341,7 @@ test('sidebar menu deletion allows working and pending sessions but guards unsav
     assert.equal((await trash()).disabled, false, 'receipt settlement refreshes eligibility without an activity event');
     assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
     f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
-    assert.equal((await f.rowMenu(f.rows()[2])).delete.disabled, true);
+    assert.equal((await f.rowMenu(f.rows()[2])).delete.disabled, false);
     assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false);
   } finally { f.win.close(); }
   const quarantined = await fixture(undefined, { windowWorkspace: '/project', deletionSnapshot: { pending: false, quarantine: ['/sessions/root'], files: [] }, appState: {
@@ -2848,7 +3391,7 @@ test('delete-tree icon delegates a verified saved session to native filesystem d
   const f = await fixture(undefined, options);
   try {
     const trash = f.element<HTMLButtonElement>('delete-session'); assert.equal(trash.disabled, true);
-    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick(); assert.equal(trash.disabled, true);
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick(); assert.equal(trash.disabled, false);
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick(); assert.equal(trash.disabled, false);
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Discard only after success'; prompt.dispatchEvent(new f.win.Event('input'));
     trash.click(); trash.click(); await f.tick(); await f.tick(); await f.tick();
@@ -2885,14 +3428,14 @@ test('failed file preview and cancelled confirmation keep the conversation and d
   }
 });
 
-test('restored deletion quarantine blocks implicit launch/restart and explicit Resume validates before recovery', async () => {
+test('restored deletion quarantine blocks implicit launch/reload and explicit Resume validates before recovery', async () => {
   const file = '/sessions/retained.jsonl';
   const f = await fixture(undefined, { windowWorkspace: '/project', deletionSnapshot: { pending: false, quarantine: [file], files: [] }, appState: {
     'nimrod.tabs.v1:/project': { tabs: [{ path: file, sessionId: 'fixture-id', name: 'Retained draft' }], active: file },
   }, nativeDrafts: { [`file:${file}`]: { draft: 'Preserved after unknown deletion' } } });
   try {
     assert.equal(f.calls.some(c => c.command === 'start_pi'), false);
-    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, true);
+    assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, true);
     assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, true);
     f.win.document.querySelector<HTMLButtonElement>('.session-row')!.click(); await f.tick(); assert.equal(f.calls.some(c => c.command === 'start_pi'), false);
     f.openPalette(); const input = f.element<HTMLInputElement>('palette-input'); input.value = 'resume'; input.dispatchEvent(new f.win.Event('input'));
@@ -3208,7 +3751,7 @@ test('native notification timeouts can be dismissed in Settings without retrying
   } finally { f.dom.window.close(); }
 });
 
-test('global auto-follow saves and synchronizes without moving readers or restarting sessions', async () => {
+test('global auto-follow saves and synchronizes without moving readers or reloading sessions', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   const global = await fixture(undefined, { globalSettings: true });
   try {
@@ -3334,7 +3877,7 @@ test('pending deletion leaves unrelated Resume, Restart and Close available', as
     f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
     assert.equal((f.calls.find(c => c.command === 'start_pi')!.args.config as JsonRecord).sessionFile, file);
-    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, false);
+    assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, false);
     key('r'); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 2);
     key('w'); await f.tick(); await f.tick();
@@ -3376,7 +3919,7 @@ test('new named session passes its name at launch without a rename RPC and waits
     release(); await f.tick(); await f.tick();
     assert.match(f.win.document.querySelector('.session-row')!.textContent!, /Planned work/);
     assert.equal(f.element<HTMLButtonElement>('send').disabled, false);
-    assert.equal(f.element('mode-badge').textContent, 'Pi · awaiting first save');
+    assert.equal(f.element('mode-badge').textContent, 'Pi');
     assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
     f.disconnect();
   } finally { f.dom.window.close(); }
@@ -3654,7 +4197,8 @@ test('Settings preserves a live conversation and saving paths does not mutate it
     assert.equal(element<HTMLDialogElement>('settings-page').open, true);
     assert.equal(element('conversation').hidden, false);
     element<HTMLInputElement>('pi-path').value = '/new/pi'; element<HTMLInputElement>('node-path').value = '/new/node';
-    element('runtime-settings').dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true }));
+    element('pi-path').dispatchEvent(new win.Event('change', { bubbles: true }));
+    element('node-path').dispatchEvent(new win.Event('change', { bubbles: true }));
     await f.tick();
     assert.equal(JSON.parse(f.preferences.value.projectText!)['runtime.piPath'], '/new/pi');
     assert.equal(JSON.stringify(calls.find(c => c.command === 'start_pi')!.args.config), original);
@@ -3695,7 +4239,7 @@ test('saved launch waits for a written Pi file before remembering exact resume i
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
     const config = f.calls.find(c => c.command === 'start_pi')!.args.config as JsonRecord;
     assert.equal(config.mode, 'saved'); assert.equal('demo' in config, false);
-    assert.equal(f.element('mode-badge').textContent, 'Pi · awaiting first save');
+    assert.equal(f.element('mode-badge').textContent, 'Pi');
     assert.equal(f.saved().last, undefined);
     assert.equal((f.calls.filter(c => c.command === 'sync_popout_sessions').at(-1)!.args.sessions as JsonRecord[])[0].pi, null);
     const prompt = f.element<HTMLTextAreaElement>('prompt');
@@ -3821,7 +4365,7 @@ test('new saved session remains persistent when startup identity is absent', asy
   try {
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
     assert.equal(f.element('conversation').hidden, false);
-    assert.equal(f.element('mode-badge').textContent, 'Pi · awaiting first save');
+    assert.equal(f.element('mode-badge').textContent, 'Pi');
     assert.equal(f.saved().last, undefined);
     assert.equal(f.calls.some(c => c.command === 'session_file_info'), false);
     f.disconnect();
@@ -3883,33 +4427,165 @@ test('sibling launch can proceed during shutdown and late old receipts cannot cl
   } finally { release(); f.dom.window.close(); }
 });
 
-test('Project bar restart stays disabled for no session, temporary sessions and an unverified first save', async () => {
+for (const harness of ['copilot', 'codex'] as const) {
+  const label = harness === 'copilot' ? 'Copilot' : 'Codex';
+  const create = async (f: Awaited<ReturnType<typeof fixture>>) => {
+    f.openPalette(); const input = f.element<HTMLInputElement>('palette-input');
+    input.value = `New ${label} session`; input.dispatchEvent(new f.win.Event('input'));
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.equal(f.element('mode-badge').textContent, label);
+  };
+  const writes = (f: Awaited<ReturnType<typeof fixture>>) => f.calls.filter(call => call.command === `write_${harness}`).map(call => call.args.message as JsonRecord);
+  const channel = (f: Awaited<ReturnType<typeof fixture>>, token: string) => (harness === 'copilot' ? f.sdkSessions : f.codexSessions).get(token)!.channel;
+  const markBusy = (f: Awaited<ReturnType<typeof fixture>>, target: ReturnType<typeof channel>) => target.onmessage({ kind: 'rpc', value: harness === 'copilot'
+    ? { kind: 'event', event: { id: 'working', type: 'assistant.turn_start', data: {} } }
+    : { method: 'turn/started', params: { threadId: 'codex-fixture', turn: { id: 'working', status: 'inProgress', items: [] } } } });
+
+  test(`${label} new sessions expose saved deletion before the first prompt with the common Delete label`, async () => {
+    const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true,
+      copilotHistory: [{ sessionId: 'sdk-fixture', context: { workingDirectory: '/project' }, isRemote: false, summary: 'Empty Copilot' }] });
+    try {
+      await create(f);
+      assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
+      assert.equal(f.element('delete-session').getAttribute('aria-label'), 'Delete session');
+      const action = (await f.rowMenu(f.rows()[0])).delete;
+      assert.equal(action.label, 'Delete session…'); assert.equal(action.disabled, false);
+      if (harness === 'copilot') {
+        action.click(); await f.tick();
+        assert.equal(f.element('deletion-title').textContent, 'Delete Copilot session');
+        f.element<HTMLButtonElement>('deletion-confirm').click(); await f.tick(); await f.tick();
+        assert.equal(writes(f).filter(request => request.method === 'delete').length, 1);
+        assert.equal(f.rows().length, 0);
+      } else {
+        f.openPalette(); const input = f.element<HTMLInputElement>('palette-input');
+        input.value = 'Delete session'; input.dispatchEvent(new f.win.Event('input'));
+        assert.match(f.element('palette-list').textContent!, /Delete this session, its draft and any saved thread tree/);
+        assert.doesNotMatch(f.element('palette-list').textContent!, /no saved history to delete/);
+      }
+      assert.equal(writes(f).some(request => ['prompt', 'turn/start'].includes(String(request.method))), false);
+      assert.equal(f.calls.some(call => call.command === 'delete_session_tree'), false);
+    } finally { f.win.close(); }
+  });
+
+  test(`${label} reload waits for owned exit, resumes exact identity and preserves mounted drafts without replay or sibling focus theft`, async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true, harnessStop: async () => gate });
+    try {
+      f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+      const sibling = f.element<HTMLTextAreaElement>('prompt'); sibling.value = 'Pi sibling draft'; sibling.dispatchEvent(new f.win.Event('input'));
+      await create(f);
+      const prompt = f.element<HTMLTextAreaElement>('prompt'), root = prompt.closest('.session-view');
+      prompt.value = 'Retained draft'; prompt.dispatchEvent(new f.win.Event('input'));
+      const starts = f.calls.filter(call => call.command === `start_${harness}`), token = String(starts.at(-1)!.args.token);
+      const old = channel(f, token), before = f.calls.length;
+      const reference = (f.preferences.value.state['nimrod.tabs.v1:/project'] as { tabs: JsonRecord[] }).tabs[1];
+      assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, false);
+      f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'r', metaKey: true, bubbles: true, cancelable: true })); await f.tick();
+      assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, true);
+      assert.match(f.rows()[1].getAttribute('aria-label')!, /Reloading/);
+      f.element<HTMLButtonElement>('reload-session').click();
+      f.rows()[0].click(); await f.tick(); f.rows()[1].click(); await f.tick();
+      assert.equal(f.calls.filter(call => call.command === `start_${harness}`).length, starts.length, 'reselection cannot launch before owned exit');
+      prompt.value = 'Newer draft during reload'; prompt.dispatchEvent(new f.win.Event('input'));
+      f.rows()[0].click(); sibling.focus();
+      release(); await f.tick(); await f.tick();
+      const replacement = f.calls.filter(call => call.command === `start_${harness}`).at(-1)!;
+      assert.notEqual(replacement.args.token, token);
+      assert.equal(f.calls.filter(call => call.command === `start_${harness}`).length, starts.length + 1);
+      const stops = f.calls.slice(before).filter(call => call.command === `stop_${harness}`);
+      assert.deepEqual(stops.map(call => call.args.token), [token], 'only the old conversation child stops, not discovery');
+      assert.ok(f.calls.indexOf(stops[0]) < f.calls.indexOf(replacement));
+      assert.equal(f.calls.slice(before).some(call => call.command === 'stop_pi'), false);
+      assert.equal(f.win.document.activeElement, sibling); assert.equal(sibling.value, 'Pi sibling draft');
+      markBusy(f, old); await f.tick();
+      f.rows()[1].click(); await f.tick();
+      assert.equal(f.element('prompt'), prompt); assert.equal(prompt.closest('.session-view'), root);
+      assert.equal(prompt.value, 'Newer draft during reload'); assert.equal(f.rows().length, 2);
+      assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, false);
+      assert.doesNotMatch(f.rows()[1].getAttribute('aria-label')!, /Working|Reloading/);
+      const resumed = writes(f).filter(request => request.method === (harness === 'copilot' ? 'connect' : 'thread/resume')).at(-1)!;
+      assert.equal(harness === 'copilot' ? resumed.sessionId : (resumed.params as JsonRecord).threadId, reference.sessionId);
+      assert.equal(writes(f).some(request => ['prompt', 'turn/start', 'turn/steer'].includes(String(request.method))), false);
+      assert.equal(f.element('session-notices').textContent, '', 'intentional teardown is not a connection failure');
+    } finally { release(); f.win.close(); }
+  });
+
+  test(`${label} reload confirms active work and cancellation leaves its agent untouched`, async () => {
+    const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true });
+    try {
+      await create(f);
+      const token = String(f.calls.filter(call => call.command === `start_${harness}`).at(-1)!.args.token);
+      markBusy(f, channel(f, token)); await f.tick();
+      const before = f.calls.length;
+      f.element<HTMLButtonElement>('reload-session').click(); await f.tick();
+      assert.match(f.element('host-dialog-title').textContent!, /Reload/);
+      assert.equal(f.element('host-dialog').querySelector('[value="ok"]')?.textContent, 'Reload session');
+      f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
+      assert.equal(f.calls.slice(before).some(call => call.command === `stop_${harness}` || call.command === `start_${harness}`), false);
+      assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, false);
+    } finally { f.win.close(); }
+  });
+
+  test(`${label} reload retries failed shutdown explicitly and retains identity/draft after rejected resume without a fresh-session fallback`, async () => {
+    let stopError = true;
+    const options: ShellOptions = { windowWorkspace: '/project', codexConversation: true,
+      harnessStop: async () => { if (stopError) throw new Error('Fixture stop refused'); } };
+    const f = await fixture(undefined, options);
+    try {
+      await create(f);
+      const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Keep on failure'; prompt.dispatchEvent(new f.win.Event('input'));
+      const count = () => f.calls.filter(call => call.command === `start_${harness}`).length, initial = count();
+      f.element<HTMLButtonElement>('reload-session').click(); await f.tick(); await f.tick();
+      assert.equal(count(), initial); assert.match(f.element('session-notices').textContent!, /Could not reload.*Fixture stop refused/);
+      stopError = false; options.harnessResumeError = 'Fixture resume refused';
+      f.openPalette(); const input = f.element<HTMLInputElement>('palette-input');
+      input.value = 'Reload session'; input.dispatchEvent(new f.win.Event('input'));
+      input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      await f.tick(); await f.tick();
+      assert.equal(count(), initial + 1); assert.equal(prompt.value, 'Keep on failure'); assert.equal(f.rows().length, 1);
+      assert.match(f.element('session-notices').textContent!, /Fixture resume refused/);
+      assert.equal(f.element<HTMLButtonElement>('send').disabled, true);
+      const opens = writes(f).filter(request => ['connect', 'thread/start', 'thread/resume'].includes(String(request.method)));
+      assert.equal(opens.length, 2);
+      assert.ok(harness === 'copilot' ? opens[1].sessionId : opens[1].method === 'thread/resume');
+      options.harnessResumeError = undefined;
+      f.element<HTMLButtonElement>('reload-session').click(); await f.tick(); await f.tick();
+      assert.equal(count(), initial + 2); assert.equal(prompt.value, 'Keep on failure');
+      assert.equal(f.element<HTMLButtonElement>('send').disabled, false);
+      assert.equal(writes(f).some(request => ['prompt', 'turn/start'].includes(String(request.method))), false);
+    } finally { stopError = false; f.win.close(); }
+  });
+}
+
+test('Project bar reload stays disabled for no session, temporary sessions and an unverified first save', async () => {
   let saved = false;
   const f = await fixture(undefined, { fileExists: () => saved });
   try {
-    const restart = f.element<HTMLButtonElement>('restart-session');
-    assert.equal(restart.disabled, true);
-    assert.equal(restart.getAttribute('aria-label'), 'Restart session');
-    assert.equal(restart.querySelector('svg')?.getAttribute('aria-hidden'), 'true');
-    assert.equal(restart.textContent, '');
+    const reload = f.element<HTMLButtonElement>('reload-session');
+    assert.equal(reload.disabled, true);
+    assert.equal(reload.getAttribute('aria-label'), 'Reload session');
+    assert.equal(reload.querySelector('svg')?.getAttribute('aria-hidden'), 'true');
+    assert.equal(reload.textContent, '');
     for (const id of ['start-temporary']) {
       f.element<HTMLButtonElement>(id).click(); await f.tick(); await f.tick();
-      assert.equal(restart.disabled, true); assert.match(restart.title, /temporary/);
+      assert.equal(reload.disabled, true); assert.match(reload.title, /temporary/);
       const count = f.calls.filter(c => c.command === 'start_pi').length;
-      restart.click(); await f.tick(); assert.equal(f.calls.filter(c => c.command === 'start_pi').length, count);
+      reload.click(); await f.tick(); assert.equal(f.calls.filter(c => c.command === 'start_pi').length, count);
     }
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
-    assert.equal(restart.disabled, true); assert.match(restart.title, /first save/);
-    assert.match(f.element('mode-badge').textContent!, /awaiting first save/);
+    assert.equal(reload.disabled, true); assert.match(reload.title, /first save/);
+    assert.equal(f.element('mode-badge').textContent, 'Pi');
     saved = true;
     const now = f.win.Date.now(); f.win.Date.now = () => now + 4000;
     f.emit({ type: 'agent_settled' }); await f.tick(); await f.tick();
-    assert.equal(restart.disabled, false); assert.equal(restart.title, 'Restart session');
+    assert.equal(reload.disabled, false); assert.equal(reload.title, 'Reload session');
     for (const s of f.sessions.values()) s.channel.onmessage({ kind: 'disconnected', message: 'done' });
   } finally { f.dom.window.close(); }
 });
 
-test('restart reaps only the selected child and resumes the exact file in the same mounted conversation with its draft', async () => {
+test('reload reaps only the selected child and resumes the exact file in the same mounted conversation with its draft', async () => {
   const f = await fixture();
   try {
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
@@ -3919,7 +4595,7 @@ test('restart reaps only the selected child and resumes the exact file in the sa
     const root = f.win.document.querySelector('.session-view:not([hidden])');
     const row = f.win.document.querySelectorAll('.session-row')[1];
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Keep my unsent draft'; prompt.dispatchEvent(new f.win.Event('input'));
-    f.element<HTMLButtonElement>('restart-session').click(); await f.tick(); await f.tick();
+    f.element<HTMLButtonElement>('reload-session').click(); await f.tick(); await f.tick();
     const launches = f.calls.filter(c => c.command === 'start_pi');
     assert.equal(launches.length, 3);
     assert.deepEqual({ ...(launches[2].args.config as JsonRecord) }, { cwd: '/project', pi: '/bin/pi', node: '/bin/node', mode: 'resume', sessionName: undefined, sessionFile: '/sessions/new-1.jsonl', sessionId: 'fixture-id' });
@@ -3933,12 +4609,12 @@ test('restart reaps only the selected child and resumes the exact file in the sa
     assert.equal(f.win.document.querySelectorAll('.session-row').length, 2);
     assert.equal(f.calls.some(c => c.command === 'stop_pi' && c.args.token === first), false);
     assert.equal(f.calls.some(c => (c.args.message as JsonRecord)?.type === 'prompt'), false);
-    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, false);
+    assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, false);
     for (const s of f.sessions.values()) s.channel.onmessage({ kind: 'disconnected', message: 'done' });
   } finally { f.dom.window.close(); }
 });
 
-test('restart confirmation can cancel, serializes shutdown, preserves newer draft and ignores late old receipts', async () => {
+test('reload confirmation can cancel, serializes shutdown, preserves newer draft and ignores late old receipts', async () => {
   let release!: () => void;
   const f = await fixture(undefined, { holdPrompts: true, stopGate: new Promise<void>(resolve => { release = resolve; }) });
   try {
@@ -3948,16 +4624,19 @@ test('restart confirmation can cancel, serializes shutdown, preserves newer draf
     const oldChannel = f.captureChannel();
     const oldRequest = f.calls.find(c => (c.args.message as JsonRecord)?.type === 'prompt')!.args.message as JsonRecord;
     prompt.value = 'Newer draft'; prompt.dispatchEvent(new f.win.Event('input'));
-    const restart = f.element<HTMLButtonElement>('restart-session'); restart.click(); await f.tick();
-    assert.match(f.element('host-dialog-title').textContent!, /Restart/);
+    f.emit({ type: 'extension_ui_request', method: 'notify', id: 'retain-on-cancel', notifyType: 'error', message: 'Retain until runtime replacement' }); await f.tick();
+    const reload = f.element<HTMLButtonElement>('reload-session'); reload.click(); await f.tick();
+    assert.match(f.element('host-dialog-title').textContent!, /Reload/);
     assert.match(f.element('host-dialog-description').textContent!, /Nothing is sent again automatically/);
     f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
-    assert.equal(restart.disabled, false);
+    assert.equal(reload.disabled, false);
+    assert.match(f.element('session-notices').textContent!, /Retain until runtime replacement/, 'cancellation retains prior notices');
     assert.equal(f.calls.filter(c => c.command === 'stop_pi' && c.args.token).length, 0);
-    restart.click(); await f.confirm();
-    assert.equal(restart.disabled, true);
+    reload.click(); await f.confirm();
+    assert.match(f.element('session-notices').textContent!, /Retain until runtime replacement/, 'pending shutdown retains prior notices');
+    assert.equal(reload.disabled, true);
     assert.equal(f.win.document.querySelector<HTMLButtonElement>('.session-close')!.disabled, true);
-    restart.click();
+    reload.click();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
     assert.equal(f.calls.filter(c => c.command === 'stop_pi' && c.args.token).length, 1);
     release(); await f.tick(); await f.tick();
@@ -3975,7 +4654,7 @@ test('restart confirmation can cancel, serializes shutdown, preserves newer draf
   } finally { release(); f.dom.window.close(); }
 });
 
-test('switching away and back during restart cannot launch early or steal a sibling composer focus', async () => {
+test('switching away and back during reload cannot launch early or steal a sibling composer focus', async () => {
   let release!: () => void;
   const f = await fixture(undefined, { stopGate: new Promise<void>(resolve => { release = resolve; }) });
   try {
@@ -3983,10 +4662,10 @@ test('switching away and back during restart cannot launch early or steal a sibl
     const firstPrompt = f.element<HTMLTextAreaElement>('prompt'); firstPrompt.value = 'Sibling draft'; firstPrompt.dispatchEvent(new f.win.Event('input'));
     f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
     const rows = f.rows();
-    f.element<HTMLButtonElement>('restart-session').click(); await f.tick();
+    f.element<HTMLButtonElement>('reload-session').click(); await f.tick();
     rows[0].click(); rows[1].click(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 2);
-    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, true);
+    assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, true);
     rows[0].click(); firstPrompt.focus();
     release(); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 3);
@@ -3997,14 +4676,14 @@ test('switching away and back during restart cannot launch early or steal a sibl
   } finally { release(); f.dom.window.close(); }
 });
 
-test('a disconnected saved session can restart from the Project bar or command palette', async () => {
+test('a disconnected saved session can reload from the Project bar or command palette', async () => {
   const f = await fixture();
   try {
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
     f.disconnect(); await f.tick();
-    assert.equal(f.element<HTMLButtonElement>('restart-session').disabled, false);
+    assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, false);
     f.openPalette(); const input = f.element<HTMLInputElement>('palette-input');
-    input.value = 'restart session'; input.dispatchEvent(new f.win.Event('input'));
+    input.value = 'reload session'; input.dispatchEvent(new f.win.Event('input'));
     assert.equal(f.element('palette-list').children.length, 1);
     input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 2);
@@ -4014,31 +4693,66 @@ test('a disconnected saved session can restart from the Project bar or command p
   } finally { f.dom.window.close(); }
 });
 
-test('failed restart shutdown never launches a replacement and a second attempt retries native stop', async () => {
+test('reload retires only its old-runtime notices and recurring errors do not accumulate', async () => {
+  const f = await fixture();
+  try {
+    f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
+    const sibling = f.captureChannel();
+    const report = (target: typeof sibling, message: string) => target.onmessage({ kind: 'rpc', value: {
+      type: 'extension_ui_request', method: 'notify', id: 'error', notifyType: 'error', message,
+    } });
+    report(sibling, 'Sibling error'); await f.tick();
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const old = f.captureChannel();
+    report(old, 'Recurring session error'); report(old, 'Dismissed error'); await f.tick();
+    const root = f.element('prompt').closest('.session-view')!;
+    const rows = () => [...root.querySelectorAll<HTMLElement>('.notice-list > .application-notice')];
+    rows()[1].querySelector<HTMLButtonElement>('[data-dismiss]')!.click();
+    assert.equal(rows().length, 1);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      f.element<HTMLButtonElement>('reload-session').click(); await f.tick(); await f.tick();
+      assert.equal(rows().length, 0, 'replacement runtime retires old notices');
+      const replacement = f.captureChannel();
+      report(old, 'Retired runtime error');
+      report(replacement, 'Recurring session error'); report(replacement, 'Recurring session error');
+      report(replacement, 'Dismissed error'); await f.tick();
+      assert.equal(rows().length, 3, 'independent identical issues remain distinct and dismissal does not carry over');
+      assert.doesNotMatch(root.textContent!, /Retired runtime error/);
+    }
+    f.rows()[0].click(); await f.tick();
+    assert.match(f.element('session-notices').textContent!, /Sibling error/);
+    assert.equal(f.element('application-notices').hidden, true);
+  } finally { f.win.close(); }
+});
+
+test('failed reload shutdown never launches a replacement and a second attempt retries native stop', async () => {
   let stopError: string | undefined = 'fixture shutdown failure';
   const f = await fixture(undefined, { stopError: () => stopError });
   try {
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
-    const restart = f.element<HTMLButtonElement>('restart-session'); restart.click(); await f.tick(); await f.tick();
+    f.emit({ type: 'extension_ui_request', method: 'notify', id: 'old-error', notifyType: 'error', message: 'Keep until replacement starts' }); await f.tick();
+    const reload = f.element<HTMLButtonElement>('reload-session'); reload.click(); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
+    assert.match(f.element('session-notices').textContent!, /Keep until replacement starts/);
     assert.equal(f.win.document.querySelectorAll('.session-row').length, 1);
-    assert.match(f.element('session-notices').textContent!, /Could not restart Pi.*fixture shutdown failure/);
-    assert.equal(restart.disabled, false);
-    stopError = undefined; restart.click(); await f.tick(); await f.tick();
+    assert.match(f.element('session-notices').textContent!, /Could not reload Pi.*fixture shutdown failure/);
+    assert.equal(reload.disabled, false);
+    stopError = undefined; reload.click(); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(c => c.command === 'stop_pi' && c.args.token).length, 2);
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 2);
+    assert.equal(f.element('session-notices').hidden, true, 'successful replacement retires old errors and failed-stop feedback');
     f.disconnect();
   } finally { f.dom.window.close(); }
 });
 
-test('restart resume failure keeps the saved session and draft without falling back to a new session', async () => {
+test('reload resume failure keeps the saved session and draft without falling back to a new session', async () => {
   const options: ShellOptions = {};
   const f = await fixture(undefined, options);
   try {
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Retained after failed resume'; prompt.dispatchEvent(new f.win.Event('input'));
     options.startError = 'Session file unavailable';
-    f.element<HTMLButtonElement>('restart-session').click(); await f.tick(); await f.tick();
+    f.element<HTMLButtonElement>('reload-session').click(); await f.tick(); await f.tick();
     const starts = f.calls.filter(c => c.command === 'start_pi');
     assert.equal(starts.length, 2); assert.equal((starts[1].args.config as JsonRecord).mode, 'resume');
     assert.equal(f.win.document.querySelectorAll('.session-row').length, 1);
@@ -4346,7 +5060,7 @@ test('brand-new unwritten session can select its first model and effort through 
   try {
     f.element<HTMLButtonElement>('start-pi').click(); await f.tick(); await f.tick();
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Unsent draft'; prompt.dispatchEvent(new f.win.Event('input'));
-    assert.equal(f.element('mode-badge').textContent, 'Pi · awaiting first save');
+    assert.equal(f.element('mode-badge').textContent, 'Pi');
     f.element<HTMLButtonElement>('thinking').click(); await f.tick();
     assert.equal(f.element<HTMLDialogElement>('command-palette').open, false, 'failed session picker returns to its owning conversation');
     assert.match(f.element('session-notices').textContent!, /Select a model/);

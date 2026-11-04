@@ -14,7 +14,7 @@ The banner title is **project · session**: the project directory’s final comp
 
 Previews never pull from user messages, reasoning, tool-result records, dialog content, or raw errors. Prompt-derived sidebar titles stay excluded. Response previews can also appear in Notification Center or on the lock screen according to your OS settings. No custom sound is requested. Ordinary Pi extension notices remain in-app rather than becoming desktop alerts.
 
-Intentional Stop/Close/Restart/quit and history restoration do not produce completion/failure alerts. Completion markers in the session sidebar come from live settled runs rather than routine state refreshes.
+Intentional Stop/Close/Reload/quit and history restoration do not produce completion/failure alerts. Completion markers in the session sidebar come from live settled runs rather than routine state refreshes.
 
 ## Click to open the session
 

@@ -38,6 +38,28 @@ async function fixture(events: unknown[] = [], decision: CopilotSessionUi['decis
   return { session, sent, published, completed, responses, captured, last, reply, event };
 }
 
+test('native Copilot rename confirms its name in channel order without a prompt or slash command', async () => {
+  const f = await fixture();
+  try {
+    const renaming = f.session.rename('  Named session  ');
+    assert.equal(f.last('rename').name, 'Named session');
+    f.reply('rename', { name: 'Named session' });
+    assert.equal(f.session.state.sessionName, 'Named session', 'apply synchronously before later events');
+    f.event('session.title_changed', { title: 'Newer event' });
+    await renaming; assert.equal(f.session.state.sessionName, 'Newer event');
+    const again = f.session.rename('Another');
+    f.event('session.title_changed', { title: 'Authoritative event' });
+    f.reply('rename', { name: 'Stale result' }); await again;
+    assert.equal(f.session.state.sessionName, 'Authoritative event');
+    assert.equal(f.sent.some(request => ['prompt', 'command'].includes(request.method)), false);
+    await assert.rejects(f.session.rename('x'.repeat(101)), /100 characters/);
+    const failed = f.session.rename('Rejected');
+    f.session.receive({ kind: 'result', id: f.last('rename').id, error: 'Rename unavailable' });
+    await assert.rejects(failed, /Rename unavailable/);
+    assert.equal(f.session.state.sessionName, 'Authoritative event');
+  } finally { f.session.disconnect('done'); }
+});
+
 for (const caption of ['', 'Image caption']) test(`image input sends bytes and reconciles the SDK echo (${caption || 'image only'})`, async () => {
   const f = await fixture();
   try {
@@ -404,7 +426,7 @@ test('SDK optimistic echo, native tools, content-only controls and one completio
   assert.equal(current.output, 'replacement two');
   f.event('tool.shell_output', { toolCallId: 'one', sequence: 0, text: '\nshell output' });
   f.event('tool.shell_output', { toolCallId: 'one', sequence: 0, text: '\nduplicate shell output' });
-  assert.equal(f.session.state.messages.find(message => message.role === 'tool')!.output, 'replacement two\nshell output');
+  assert.equal(f.session.state.messages.find(message => message.role === 'tool')!.output, '\nshell output');
   f.event('tool.execution_complete', { toolCallId: 'one', success: true, result: { content: 'Done', structuredContent: { exitCode: 0 } } });
   f.event('tool.execution_progress', { toolCallId: 'one', progressMessage: 'late progress' });
   current = f.session.state.messages.find(message => message.role === 'tool')!;
@@ -419,6 +441,40 @@ test('SDK optimistic echo, native tools, content-only controls and one completio
   assert.ok(f.captured.some(record => record.event === 'request.prompt'));
   assert.ok(f.sent.every(request => !('jsonrpc' in request)));
   f.session.disconnect('fixture complete');
+});
+
+for (const snapshotFirst of [false, true]) test(`SDK shell chunks outrank colorless snapshots without duplication (snapshot first: ${snapshotFirst})`, async () => {
+  const f = await fixture();
+  const current = () => f.session.state.messages.find(message => message.toolCallId === 'colors')!;
+  try {
+    f.event('tool.execution_start', { toolCallId: 'colors', toolName: 'bash', arguments: { command: 'mix test' } });
+    if (snapshotFirst) {
+      f.event('tool.execution_partial_result', { toolCallId: 'colors', partialOutput: '.' });
+      assert.equal(current().output, '.');
+    }
+    // Synthetic equivalent of the observed ExUnit stream: each colored dot is
+    // also delivered in a deprecated, colorless cumulative replacement snapshot.
+    f.event('tool.shell_output', { toolCallId: 'colors', sequence: 0, stream: 'stdout', text: '\x1b[32m.' });
+    f.event('tool.execution_partial_result', { toolCallId: 'colors', partialOutput: '.' });
+    assert.equal(current().output, '\x1b[32m.');
+    f.event('tool.shell_output', { toolCallId: 'colors', sequence: 1, stream: 'stderr', text: '.\x1b[0m' });
+    f.event('tool.execution_partial_result', { toolCallId: 'colors', partialOutput: '..' });
+    // Sequence is per call across stdout/stderr, not per stream.
+    f.event('tool.shell_output', { toolCallId: 'colors', sequence: 1, stream: 'stderr', text: 'duplicate' });
+    f.event('tool.shell_output', { toolCallId: 'colors', sequence: 0, stream: 'stdout', text: 'stale' });
+    assert.equal(current().output, '\x1b[32m..\x1b[0m');
+    f.event('tool.execution_partial_result', { toolCallId: 'fallback', partialOutput: 'fallback one' });
+    f.event('tool.execution_partial_result', { toolCallId: 'fallback', partialOutput: 'fallback replacement' });
+    assert.equal(f.session.state.messages.find(message => message.toolCallId === 'fallback')!.output, 'fallback replacement');
+    f.session.receive({ kind: 'event', event: { id: 'child-shell', agentId: 'child', type: 'tool.shell_output',
+      data: { toolCallId: 'colors', sequence: 0, stream: 'stdout', text: 'child only' } } });
+    assert.equal(f.session.state.messages.find(message => message.toolCallId === 'child:colors')!.output, 'child only');
+    f.event('tool.execution_complete', { toolCallId: 'colors', success: true, result: { content: '..\n2 tests, 0 failures' } });
+    f.event('tool.shell_output', { toolCallId: 'colors', sequence: 2, stream: 'stdout', text: 'late' });
+    f.event('tool.execution_partial_result', { toolCallId: 'colors', partialOutput: 'late replacement' });
+    assert.equal(current().output, '\x1b[32m..\x1b[0m');
+    assert.equal(current().resultOutput, '..\n2 tests, 0 failures'); assert.equal(current().toolStatus, 'result');
+  } finally { f.session.disconnect('fixture complete'); }
 });
 
 test('SDK busy drafts do not dispatch; Stop cancels session-bound decisions without approving them', async () => {
@@ -769,7 +825,7 @@ test('SDK deletion requires review, fresh membership and owned stop; unknown del
   let unknown = false;
   const history = {
     supportsDeletion: true,
-    async validateDeletion() { order.push('membership'); },
+    async retention() { order.push('membership'); return 'saved'; },
     async deleteSession() { order.push('delete'); if (unknown) throw new Error('outcome unknown'); },
   } as unknown as CopilotSessionHistory;
   const context: SessionDeletionContext = {
@@ -780,7 +836,7 @@ test('SDK deletion requires review, fresh membership and owned stop; unknown del
   const source = copilotSessionDeletion(() => history, context);
   const operation = source.operation({ kind: 'copilot-sdk', sessionId: 'saved-id' }, 'Saved')!;
   await operation.run();
-  assert.deepEqual(order, ['review', 'membership', 'lock', 'stop', 'delete', 'removed']);
+  assert.deepEqual(order, ['review', 'membership', 'lock', 'stop', 'membership', 'delete', 'removed']);
   order.length = 0; unknown = true;
   await assert.rejects(operation.run(), /outcome unknown/);
   assert.equal(order.includes('removed'), false);

@@ -1,6 +1,6 @@
 # Settings
 
-**Global Settings** opens in its own reusable window through **⌘/Ctrl+,**, the native **Settings…** menu item, or the command palette. It contains Appearance, Notifications, Diagnostics, Keybindings and Runtime. On first open, the window appears after its controls, theme, translucency and zoom are prepared, instead of showing a blank opaque page while loading. Runtime-path detection can continue afterward. Opening it again focuses the existing ready window; Close or Escape closes that window. No project is required.
+**Global Settings** opens in its own reusable window through **⌘/Ctrl+,**, the native **Settings…** menu item, or the command palette. It contains Appearance, Interaction, Notifications, Diagnostics, Keybindings and Runtime. On first open, the window appears after its controls, theme, translucency and zoom are prepared, instead of showing a blank opaque page while loading. Runtime-path detection can continue afterward. Opening it again focuses the existing ready window; Close or Escape closes that window. No project is required.
 
 **Project settings** opens inside the current project window through the Project bar's gear, **⌘/Ctrl+Shift+,**, or the command palette. The header names the project. **Back** or **Escape** returns to its conversation; **Open global settings** opens the separate defaults window.
 
@@ -10,9 +10,24 @@ Pi keeps running. Project settings preserves your draft, conversation and readin
 
 Project settings shows effective values, not a second independent configuration. **Global default** means the project follows the global value (or the built-in default/runtime discovery when omitted globally). Changing a control creates a **Project override**. **Use global default** removes that override and immediately follows the current global value again—it does not copy that value into the project file.
 
-Overrides stay explicit even if they match the global value. Global edits update inheriting projects, but never replace explicit project values. The Appearance pane in global Settings links to open projects with overrides.
+Overrides stay explicit even if they match the global value. Global edits update inheriting projects, but never replace explicit project values. Global Settings defines defaults only; inspect and reset overrides in the owning project's settings.
 
-Project overrides cover **theme, autocomplete acceptance and runtime paths**. **Typography, translucency, zoom, modal animations and auto-follow after sending are global-only**, along with notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration. Project settings contains the theme picker under Appearance, autocomplete acceptance under Interaction and runtime paths under Runtime. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
+### Project-overridable settings
+
+These are the complete set of six project-overridable Nimrod preferences, stored in `<project>/.nimrod/settings.json`:
+
+| Category | Setting | JSONC key | Applies |
+| --- | --- | --- | --- |
+| Appearance | Color theme | `appearance.theme` | Immediately to this project window; built-in or globally imported theme |
+| Interaction | Accept autocomplete with | `interaction.autocompleteAccept` | Immediately; `tab` or `tabOrEnter` |
+| Runtime | Pi executable / CLI JavaScript file | `runtime.piPath` | On the next session launch |
+| Runtime | Node executable | `runtime.nodePath` | On the next session launch |
+| Runtime | Copilot CLI executable | `runtime.copilotPath` | On the next Copilot session launch |
+| Runtime | Codex CLI executable | `runtime.codexPath` | On the next Codex session launch |
+
+Omitted keys inherit global settings, then built-in defaults or runtime discovery. Runtime fields save individually when changed and left, or when you press Enter; saving never restarts an existing session. Every supported field shows its source and offers **Use global default** when overridden.
+
+**Typography, translucency, zoom, modal animations and auto-follow after sending are global-only**, along with notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration. Project settings contains the theme picker under Appearance, autocomplete acceptance under Interaction and runtime paths under Runtime. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
 
 This layering applies only to Nimrod preferences. Pi retains its own configuration and precedence.
 
@@ -27,6 +42,8 @@ Drag the sidebar's right edge to resize it. Its width is saved app-wide, separat
 Escape during a drag cancels resizing; the next Escape closes Settings.
 
 ## Appearance
+
+Related preferences are grouped into compact rows. **Window** contains the theme and background controls; **Typography** pairs font choices and sizes with a live specimen; **Interface** contains zoom, followed by animation and auto-follow preferences. Controls stack in narrow windows. Expand **About window appearance** or **About typography** for the detailed explanations.
 
 Sliders show the current value with an accent-colored filled track as soon as Settings opens, without needing a first adjustment. The fill follows theme changes and settings reloaded from disk.
 
@@ -99,18 +116,20 @@ Search actions, record shortcuts, resolve conflicts explicitly, remove bindings 
 
 Pi and Node paths are discovered automatically; override them here if needed.
 
+Nimrod checks harness executables at startup. Harnesses it cannot find are omitted from creation and saved-history actions, without errors from unrelated harnesses. Existing sidebar sessions and drafts remain, but their harness-dependent actions are hidden; you can still close or pin those rows. **Restart Nimrod after installing or uninstalling a harness, or after correcting a path for a harness that was unavailable at startup.** Refreshing history does not recheck installed harnesses. This check does not verify authentication or CLI compatibility.
+
 1. Wait for initial detection.
 2. Edit executable names or paths.
-3. Click **Save runtime paths**, or press Enter in the form. In Project settings, only edited fields become overrides; untouched fields keep inheriting.
+3. Leave the edited field or press Enter to save it automatically. Each field saves independently; in Project settings, untouched fields keep inheriting.
 4. Start a new session to use the saved paths.
 
-Saving never changes an already-running process. Unsaved fields survive navigation in this window, not restart, and aren't used for launch. External settings edits update saved launch paths without replacing dirty fields; Save then replaces those corresponding values. Invalid/failed saves retain the prior saved paths.
+Saving never changes an already-running process. Typing does not save every keystroke, and an unfinished or invalid field does not block saving another field. Invalid values and failed writes retain the last saved launch path and your typed text, with an error in the application notice strip; edit the affected field to try again. External settings edits update saved launch paths without replacing unfinished edits. Pending saves never disable the form or overwrite newer typing. Unsaved text is not retained across app restart.
 
 On Windows, choose Pi's JS entry point and `node.exe` explicitly; npm `.cmd` wrappers aren't supported. Models and thinking levels are [live session controls](model-thinking.md), not app preferences.
 
 ## Configuration files
 
-Resolved paths appear under Runtime. Defaults are:
+Resolved paths appear under **Runtime → Settings files**. Defaults are:
 
 ```text
 <project>/.nimrod/settings.json   # Optional project overrides (JSONC)

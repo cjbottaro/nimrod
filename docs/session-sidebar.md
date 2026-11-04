@@ -2,7 +2,7 @@
 
 The Session sidebar shows open conversations and their activity. **Open** means retained here; **connected** means a live agent connection; **working** means agent activity. These are independent—a disconnected session can still be open.
 
-Click a row to select it. **⌘/Ctrl+B** hides/shows the sidebar without closing sessions. Hover or keyboard-focus a row to reveal **Pin** and **Close**. A pinned row keeps its pin visible. Right-click a row (Control-click on macOS) for a native **Pin/Unpin session**, **Close session** and [Delete](sessions.md#delete-session-tree) menu. The menu targets that row without switching to it. **Shift+F10** or the Menu key opens it from a focused row. Delete reviews a Pi tree or one saved Copilot session when supported; unsupported deletion stays disabled.
+Click a row to select it. **⌘/Ctrl+B** hides/shows the sidebar without closing sessions. Hover or keyboard-focus a row to reveal **Pin** and **Close**. A pinned row keeps its pin visible. Right-click a row (Control-click on macOS) for a native **Pin/Unpin session**, [**Rename session…**](sessions.md#rename-a-session), **Close session** and [Delete](sessions.md#delete-session-tree) menu. The menu targets that row without switching to it. **Shift+F10** or the Menu key opens it from a focused row. Delete reviews a Pi tree or one saved Copilot session when supported; unsupported deletion stays disabled.
 
 ## Views
 

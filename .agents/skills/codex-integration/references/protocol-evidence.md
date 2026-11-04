@@ -52,6 +52,113 @@ Read-only investigation used installed `codex-cli 0.164.0`, `codex app-server ge
 
 This is reviewed native-client behavior pinned to one version, not a promise that the envelope is a stable public API. [Question contract](questions.md#async-follow-up-questions) owns Nimrod's deliberate retained-until-answered/ignored/superseded UX and remaining limitations.
 
+## Rename protocol review (0.164.0)
+
+The Rename session implementation additionally read the existing local 0.164.0
+generated `ClientRequest.ts`, `v2/ThreadSetNameParams.ts`,
+`ThreadSetNameResponse.ts` and `ThreadNameUpdatedNotification.ts` from the
+async-question review. They expose `thread/name/set {threadId,name}`, an empty
+object result, and `thread/name/updated {threadId,threadName}`. No new generator,
+server connection or user-session mutation was needed. The [shared naming
+contract](../../features/references/session-naming.md) owns the concrete
+implementation, native binding/deletion guards and remaining runtime acceptance.
+
+## Slash-command source/schema audit (0.164.0)
+
+The [complete command audit](../../slash-commands/references/codex-audit.md)
+reused the existing matching official source and generated experimental types,
+without launching Codex or a server, reading user sessions, running commands or
+making model requests. It records all 65 enum commands, serialization aliases,
+feature/platform/busy rules, dynamic command families and 178 schema methods.
+The development-only fingerprint snapshot/script supports future upgrade diffs;
+it is not a runtime catalog or API allowlist.
+
+New consumed report schemas: `ThreadReadParams/Response` (metadata only),
+`ListMcpServerStatusParams/Response`, `McpServerStatus/Detail`,
+`ThreadBackgroundTerminalsListParams/Response`, `SkillsListParams/Response/Entry`,
+`SkillMetadata`, `HooksListParams/Response/Entry` and `HookMetadata`. Cwd and
+thread identity remain exact, pagination must complete or fail, and skill/hook
+reports deliberately omit native use/configuration/trust interactions.
+
+`ThreadCompactStartParams` accepts only `threadId`; its empty response means
+`Op::Compact` was submitted, not completed. Matching native
+`app-server/src/request_processors/thread_processor.rs` and
+`core/src/tasks/compact.rs` establish that manual compaction emits a native turn
+and may use provider work. V2 emits a canonical `contextCompaction` item; the
+legacy context-compacted notification is not used for confirmation. Nimrod waits
+for that item's identified turn and its terminal outcome in either RPC/event
+order, fails on native errors/interruption, and reports missing confirmation as
+unknown without replay. Native execution/stop/usage behavior remains unaccepted;
+no live compaction was performed.
+
+## Untouched native-session interoperability (0.164.0)
+
+The user-authorized installed-runtime probe and its exact safety/coverage limits
+are recorded in [verification](../../features/references/verification.md#codex-native-untouched-session-probe).
+It demonstrates that runtime existence, durable Resume and ordinary history
+discovery are three separate contracts, including for sessions created by the
+native CLI rather than Nimrod.
+
+Matching official source:
+- `tui/src/app_server_session.rs::thread_start_params_from_config` selects
+  paginated history for persistent native sessions. Native naming sends the same
+  `thread/name/set` API used by other clients.
+- `thread-store/src/local/pending_thread_metadata_tests.rs::
+  idle_shutdown_clears_pending_thread_metadata_without_materializing` covers an
+  untouched thread remaining absent from saved storage after shutdown.
+- `app-server/tests/suite/v2/thread_resume.rs::
+  thread_resume_rejects_unmaterialized_thread` explicitly rejects Resume before
+  rollout materialization in both legacy and paginated modes, with or without turns.
+- `app-server/tests/suite/v2/thread_name_persistence.rs::
+  named_empty_paginated_thread_resumes_after_restart` and
+  `thread-store/src/local/update_thread_metadata.rs` establish that naming an empty
+  paginated thread persists its recorder before metadata acknowledgement. No
+  synthetic user turn is needed.
+- `state/src/runtime/threads.rs::push_thread_filters_with_preview` adds
+  `threads.preview <> ''` for ordinary non-archived, non-section-scoped listing.
+  A saved name alone does not supply a message preview. This explains why a named
+  zero-message thread can resume by exact ID yet remain absent from ordinary
+  native/app-server Resume discovery; `useStateDbOnly` does not bypass this filter.
+- `tui/src/app/exit_summary.rs` distinguishes client disconnect from embedded
+  shutdown and prints a reconnect command for shared-server tasks. That printed
+  command is not evidence that an unmaterialized thread can actually resume:
+  the controlled shared-server probe reproduced the native reconnect failure.
+
+Integration constraints: do not classify a native session as nonexistent merely
+because it has zero messages or is missing from the ordinary catalog. Conversely,
+a loaded ID/precomputed rollout path and a shared-server reconnect hint are not
+saved-history evidence. Nimrod-private untouched metadata/replacement can preserve
+a local placeholder but cannot provide native CLI interoperability for an
+arbitrary untouched external thread. Merely switching to the shared daemon does
+not fix the demonstrated Resume rejection. The user's plain-native-create →
+no-Send → quit → Nimrod requirement remains constrained by upstream persistence/
+Resume semantics in this version. Any broader saved-empty discovery needs a
+supported native API contract rather than private SQLite/filesystem inventory or
+fabricated history. No automatic rename, replacement or upstream change was
+implemented by this investigation.
+
+## Existing upstream issues
+
+Authenticated read-only `gh` searches of `openai/codex` found these existing open
+issues. Issue reports and third-party comments are corroborating context, not
+maintainer guarantees or evidence that a suggested workaround works on 0.164.0.
+
+| Issue | Relevance / distinction |
+| --- | --- |
+| [#42099 — 0.151.0 regression: app-server thread/start no longer persists zero-turn threads, breaking resume](https://github.com/openai/codex/issues/42099) | Closest persistence/restart match: start returns an ID, shutdown precedes first turn, native Resume fails with no rollout. Reporter contrasts 0.150.1 with 0.151.0 and requests durable start or an explicit persistence API. Open, with no comments when checked. |
+| [#43053 — Resuming a fresh thread from a second client fails before its first message](https://github.com/openai/codex/issues/43053) | Closest cross-client attachment match. Report and follow-up discuss 0.153.4 paginated lineage/naming failures. The reporter's `excludeTurns:false` workaround is version/sequence-specific; Nimrod does not use a history read/resume to force materialization. |
+| [#48370 — Resume picker hides app-created threads with history when preview is empty](https://github.com/openai/codex/issues/48370) | Same listing filter as the probe: `threads.preview <> ''`. Its reproducer has real delegated history but no ordinary user event, rather than a truly untouched thread. It explicitly discusses named-empty visibility. An empty preview is neither absence of history nor deletion/replacement authority. |
+| [#55770 — app-server: metadata-only pre-input state query for unmaterialized threads](https://github.com/openai/codex/issues/55770) | Related API-contract request on 0.163.0 macOS/Linux. Explicitly separates a non-materializing state query from #43053's attachment/materialization issue; unavailable history is not proof of no input. |
+
+Broader searches included exact no-rollout text, first-user-message,
+zero-turn/unmaterialized and empty-preview/named-empty variants, plus issue bodies
+and relevant comments. No new issue, comment, reaction or subscription was posted.
+These matches are sufficient to track the known mechanisms; no claim was made
+that every superficially similar desktop error has the same cause or that a
+separate exact duplicate of the named-zero-message probe was found. Current
+Nimrod behavior and the retired private workaround are documented by the
+[parent integration contract](../SKILL.md#untouched-session-persistence-anomaly).
+
 ## Distribution/authentication boundaries to revisit
 
 - The TypeScript automation SDK requires Node; using app-server directly should avoid adding that runtime to Codex. The native launcher is source-implemented; installed launch and packaging behavior remain unverified.

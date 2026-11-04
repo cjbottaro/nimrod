@@ -15,6 +15,9 @@ pub struct SessionMenuOptions {
     pin_label: String,
     pin_enabled: bool,
     close_enabled: bool,
+    rename_enabled: bool,
+    rename_visible: bool,
+    delete_visible: bool,
     delete_label: String,
     delete_enabled: bool,
     x: f64,
@@ -53,6 +56,13 @@ pub fn popup_session_menu(
             options.pin_enabled,
             None::<&str>,
         )?;
+        let rename = MenuItem::with_id(
+            &window,
+            item_id(window.label(), &request, "rename"),
+            "Rename session…",
+            options.rename_enabled,
+            None::<&str>,
+        )?;
         let close = MenuItem::with_id(
             &window,
             item_id(window.label(), &request, "close"),
@@ -67,10 +77,15 @@ pub fn popup_session_menu(
             options.delete_enabled,
             None::<&str>,
         )?;
-        Menu::with_items(
-            &window,
-            &[&pin, &close, &PredefinedMenuItem::separator(&window)?, &remove],
-        )
+        let menu = Menu::new(&window)?;
+        menu.append(&pin)?;
+        if options.rename_visible { menu.append(&rename)?; }
+        menu.append(&close)?;
+        if options.delete_visible {
+            menu.append(&PredefinedMenuItem::separator(&window)?)?;
+            menu.append(&remove)?;
+        }
+        Ok(menu)
     };
     let menu = build().map_err(|error| error.to_string())?;
     // Linux popup completion is not a dismissal signal. Keep the menu alive
@@ -82,7 +97,7 @@ pub fn popup_session_menu(
 
 fn decode(id: &str) -> Option<[String; 3]> {
     let parts: [String; 3] = serde_json::from_str(id.strip_prefix(PREFIX)?).ok()?;
-    if !["pin", "close", "delete"].contains(&parts[2].as_str()) {
+    if !["pin", "close", "delete", "rename"].contains(&parts[2].as_str()) {
         return None;
     }
     Some(parts)

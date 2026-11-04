@@ -36,8 +36,21 @@ export function createCopilotConfiguration(client) {
         return optionalValue(setting.value, `${key} setting`);
       };
       const model = read('model'), reasoningEffort = read('effortLevel'), contextTier = read('contextTier');
+      const permissionMode = read('defaultPermissionMode');
+      if (permissionMode !== undefined && !['manual', 'assisted', 'allow-all'].includes(permissionMode))
+        throw new Error('Copilot returned an invalid default permission mode. Nothing was created.');
       return { ...(model === undefined ? {} : { model }), ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
-        ...(contextTier === undefined ? {} : { contextTier }) };
+        ...(contextTier === undefined ? {} : { contextTier }), ...(permissionMode === undefined ? {} : { permissionMode }) };
+    },
+    async initializePermissions(session, mode) {
+      if (mode === undefined) return;
+      const current = await session.rpc.permissions.getMode();
+      if (current.mode === mode) return;
+      const result = await session.rpc.permissions.setMode({ mode, source: 'user_setting' });
+      if (result?.success !== true || result.mode !== mode)
+        throw new Error('Copilot did not apply the configured default permission mode. No prompt was sent.');
+      const confirmed = await session.rpc.permissions.getMode();
+      if (confirmed.mode !== mode) throw new Error('Copilot did not confirm the configured default permission mode. No prompt was sent.');
     },
     snapshot,
     async apply(session, setting, value) {

@@ -64,7 +64,8 @@ notices retain their operation heading and severity icon.
 Session notices have even internal padding and breathing room above and below the
 border. The gap before the transcript stays visible while you scroll. The icon
 and Dismiss control align with the first message line, including when the message
-wraps or Details is expanded.
+wraps or Details is expanded. When one banner contains more diagnostics than fit,
+its complete outline stays visible while the content scrolls inside it.
 
 Every independent issue has its own banner, actions and dismiss control. There
 is no multi-error count/disclosure hiding other issues. Repeated reports of the
@@ -79,6 +80,11 @@ Errors remain until dismissed or their own issue resolves; they do not flash and
 disappear. Later unrelated success does not clear an earlier issue. One failure
 should appear once, even if it propagates through several layers. For example,
 unknown delivery takes precedence over a connection error from the same cause.
+
+[Reload session](sessions.md#reload-session) clears that session's old notices when
+the replacement agent runtime starts. Recurring problems can report again without
+accumulating old banners. Cancelling Reload or a failed shutdown retains the
+existing notices; other sessions and application notices are unaffected.
 
 Dismissal only hides the notice. It does not retry an operation, reconnect Pi or
 confirm that a message was received. An unchanged repeated report of a dismissed

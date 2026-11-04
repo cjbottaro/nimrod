@@ -64,9 +64,14 @@ export class CopilotSessionHistory implements SessionHistory {
         harnessLabel: 'Copilot', timestamp: Number.isFinite(timestamp) && timestamp > 0 ? timestamp : undefined, open: false, status: 'closed' as const, keywords: value.sessionId };
     }) };
   }
+  async retention(sessionId: string): Promise<'saved' | 'absent'> {
+    await this.initialize();
+    const result = await this.connection!.request('retention', { sessionId });
+    if (result !== 'saved' && result !== 'absent') throw new Error('Invalid Copilot retention response');
+    return result;
+  }
   async validateDeletion(sessionId: string): Promise<void> {
-    const page = await this.list({ signal: new AbortController().signal });
-    if (!page.entries.some(entry => entry.reference?.sessionId === sessionId)) throw new Error('This Copilot session is no longer listed in this project. Nothing was deleted.');
+    if (await this.retention(sessionId) !== 'saved') throw new Error('This Copilot session has no saved history. Nothing was deleted.');
   }
   async deleteSession(sessionId: string): Promise<void> {
     this.deleting = true;

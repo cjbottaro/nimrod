@@ -44,6 +44,8 @@ export interface ConversationViewHost {
   projectDirectory?: string;
   interaction: ConversationInteraction;
   messageInput: import('./session-message-input').SessionMessageInput;
+  /** Always supplied by registered sessions; optional for legacy standalone views. */
+  commands?: import('./session-commands').SessionCommands;
   performance?: import('./performance-diagnostics').PerformanceProbe;
   /** Owning registration supplies the source for generic items that omit one. Legacy callers default to Pi. */
   readonly cardSource?: Readonly<CardPluginTarget>;

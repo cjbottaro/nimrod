@@ -17,6 +17,6 @@ Pi’s RPC `/mcp` report exposes server state, server-level exposure, counts, an
 
 There are no reconnect, sign-in, enable/disable, or configuration-editing buttons in this version. Existing explicit `/mcp` subcommands continue through Pi’s normal command path. Inspection itself does not fix connection problems or modify Pi configuration.
 
-If status delivery becomes uncertain or the report format is unrecognized, Nimrod does not automatically replay the request. It reports the failure to the originating session; restart that session before another inspection attempt after an uncertain status request.
+If status delivery becomes uncertain or the report format is unrecognized, Nimrod does not automatically replay the request. It reports the failure to the originating session; reload that session before another inspection attempt after an uncertain status request.
 
 Native appearance, focus and installed-Pi behavior still need user validation; Linux behavior is intended, not platform-verified.

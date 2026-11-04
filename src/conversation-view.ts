@@ -3,6 +3,7 @@ import { navigateDialogActions } from "./dialog-actions";
 import { ConfigurationTranscript } from './configuration-transcript';
 import { createMainActivityDom, createSubagentActivityDom, renderMainActivity, renderSubagentActivity } from "./pi/activity-dom";
 import { installSlashCompletion } from "./pi/slash-completion";
+import { commandSuggestions } from './session-commands';
 
 import { reconcileContentBlock } from "./pi/content-dom";
 import { clearDraft, ComposerState, recoverClearedQueue, restoreRecoveredQueueItem, SubmissionMode, updateDraft } from "./pi/composer-state";
@@ -184,7 +185,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   if (isTemporaryRestore(bootstrapRestore)) composer = { ...composer, recovered: [], queue: { steering: [], followUp: [], authoritative: false } };
   prompt.value = composer.draft;
   sizeComposer();
-  const slashCompletion = installSlashCompletion(prompt, required("slash-suggestions"), text => updateComposer(updateDraft(composer, text)), host.interaction.commands, host.autocompleteAccept);
+  const slashCompletion = installSlashCompletion(prompt, required("slash-suggestions"), text => updateComposer(updateDraft(composer, text)), host.commands ? () => commandSuggestions(host.commands!.catalog().commands) : host.interaction.commands, host.autocompleteAccept);
   slashCompletion.setActive(active);
 
   function post(type: string, extra: Record<string, unknown> = {}): void { host.postMessage({ type, ...extra }); }
@@ -465,10 +466,25 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     return article;
   }
 
+  const commandOutputSources = new WeakMap<HTMLElement, import('./session-configuration').ConfigurationOperation['commandOutput']>();
   function renderConfigurationOperation(node: HTMLElement, operation: import('./session-configuration').ConfigurationOperation): void {
     let text = node.querySelector<HTMLElement>('.configuration-text');
     if (!text) { text = element('div', 'configuration-text'); node.append(text); }
     if (text.textContent !== operation.text) text.textContent = operation.text;
+    const previous = commandOutputSources.get(node), parts = operation.commandOutput;
+    if (previous === parts) return;
+    commandOutputSources.set(node, parts);
+    let output = node.querySelector<HTMLElement>('.command-output');
+    if (parts?.length && !output) { output = element('div', 'command-output'); node.append(output); }
+    if (!output) return;
+    for (const [index, part] of (parts ?? []).entries()) {
+      if (previous?.[index]?.text === part.text && previous[index].markdown === part.markdown) continue;
+      const body = part.markdown ? renderMarkdown(part.text) : element('pre', 'command-output-text');
+      if (!part.markdown) body.textContent = part.text;
+      const existing = output.children[index];
+      if (existing) existing.replaceWith(body); else output.append(body);
+    }
+    while (output.children.length > (parts?.length ?? 0)) output.lastElementChild!.remove();
   }
 
   function disposeMessageCards(node: HTMLElement): void {
@@ -906,6 +922,19 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     if (composer.attachments?.length && text.startsWith('/')) { updateComposer({ ...composer, lastError: 'Send images with a message, not a slash command. Your draft was kept.' }); return; }
     try { validateImageSelection(composer.attachments ?? [], host.messageInput.capabilities()); }
     catch (error) { updateComposer({ ...composer, lastError: String(error) }); return; }
+    if (text.startsWith('/') && host.commands) {
+      const submittedText = composer.draft.trimStart();
+      const error = host.commands.validate(submittedText);
+      if (error) { updateComposer({ ...composer, lastError: error }); return; }
+      if (displayedState.sessionUnavailable || displayedState.inputLocked) return;
+      const id = `submission-${Date.now()}-${++nextSubmissionId}`;
+      updateComposer(clearDraft(composer));
+      // Accepted commands have no ordinary Send preview, recency or navigation effects.
+      void host.commands.invoke({ id, text: submittedText }).catch(error => {
+        if (!disposed) updateComposer({ ...composer, lastError: String(error) });
+      });
+      return;
+    }
     const submission = host.interaction.prepare(text, displayedState);
     if (submission.kind === 'reject') { updateComposer({ ...composer, lastError: submission.error }); return; }
     if (displayedState.sessionUnavailable || displayedState.inputLocked || (!text && !composer.attachments?.length)) return;
@@ -1114,7 +1143,8 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
         persistedState = { ...retained, restore: data.restore };
         persistComposer();
       }
-      if (data.commands !== undefined && data.commands !== lastCommands) { lastCommands = data.commands; slashCompletion.setCommands(data.commands); }
+      if (host.commands) slashCompletion.setCommands(host.commands.catalog().commands);
+      else if (data.commands !== undefined && data.commands !== lastCommands) { lastCommands = data.commands; slashCompletion.setCommands(data.commands); }
       const state = data.state || {};
       const incremental = data.transcript?.rows !== undefined && data.transcript.base === receivedRevision;
       receivedRevision = data.transcript?.revision;

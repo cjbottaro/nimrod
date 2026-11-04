@@ -1,7 +1,7 @@
 import type { CardPlugin, CardPresentation, CardSection, CardPluginContext, ToolCardData } from '../card-plugin-api';
 import { copilotToolResult } from './tool-result';
 import { createPatchPresentation } from './patch-card';
-import { definePresentationPlugin, rawToolPresentation, shellPresentation, fileReadPresentation, searchPresentation, argumentRecord, firstString, webUrl, displayWebUrl, markdownWebLink, questionAnswerPresentation, webSearchPresentation, webFetchPresentation, type WebSource, namedToolPresentation, codeSearchText, type CodeSearchFile } from '../card-plugin-ui';
+import { definePresentationPlugin, rawToolPresentation, shellPresentation, consoleOutputSuffix, fileReadPresentation, searchPresentation, argumentRecord, firstString, webUrl, displayWebUrl, markdownWebLink, questionAnswerPresentation, webSearchPresentation, webFetchPresentation, type WebSource, namedToolPresentation, codeSearchText, type CodeSearchFile } from '../card-plugin-ui';
 
 function isCopilot(data: Readonly<ToolCardData>): boolean {
   return data.source?.backend === 'copilot-sdk' && ['copilot', 'copilot-cli'].includes((data.source?.agent || '').toLowerCase());
@@ -149,6 +149,12 @@ function repositoryResult(output: Record<string, unknown>): string | undefined {
     notice: typeof output.content === 'string' && output.content.startsWith('Output too large to read at once (') && output.content.includes('Saved to:') ? 'Agent text preview was clipped; showing structured results.' : undefined });
   repositoryResults.set(output, text); return text;
 }
+/** Compact only the CLI's exact write-report shape; SELECT/unknown output stays literal. */
+function sqlResultText(text: string): string {
+  if (!/^Executed \d+ statement\(s\):(?:\n\n\d+\. (?:UPDATE|INSERT|DELETE)\n   \d+ row\(s\) (?:updated|inserted|deleted)\.)+$/.test(text)) return text;
+  return Array.from(text.matchAll(/(\d+)\. (UPDATE|INSERT|DELETE)\n   (\d+) row\(s\) (updated|inserted|deleted)\./g),
+    match => `${match[1]}. ${match[2]} — ${match[3]} ${match[3] === '1' ? 'row' : 'rows'} ${match[4]}`).join('\n');
+}
 /** Native SQL presentation only: never parse queries or reconstruct task/database state. */
 function sqlPresentation(data: Readonly<ToolCardData>, input: Record<string, unknown> | undefined): CardPresentation | undefined {
   const start = object(object(data.native)?.['tool.execution_start']);
@@ -162,9 +168,20 @@ function sqlPresentation(data: Readonly<ToolCardData>, input: Record<string, unk
     if (typeof count === 'number' && Number.isSafeInteger(count) && count >= 0) counts.push(`${count} ${count === 1 ? singular : plural}`);
   }
   const sections = data.isError ? copilotSections(data) : rawToolPresentation(data).sections;
-  return namedToolPresentation({ title: 'SQL', preview: firstString(input, ['description']), sections: sections.map(section =>
-    section.key === 'result' && native?.text !== undefined && section.text === native.source
-      ? { ...section, label: ['Results', ...counts].join(' · '), text: native.text, format: 'text' as const } : section) });
+  // Fence length is derived from the literal query, so SQL containing Markdown cannot
+  // escape its code block. This is display-only, not a SQL formatter/parser.
+  let fenceLength = 3;
+  for (const match of input.query.matchAll(/`+/g)) fenceLength = Math.max(fenceLength, match[0].length + 1);
+  const fence = '`'.repeat(fenceLength);
+  return namedToolPresentation({ title: 'SQL', preview: firstString(input, ['description']), sections: [
+    ...sections.map(section => {
+      if (section.key !== 'result') return section;
+      const result = native?.text !== undefined && section.text === native.source
+        ? { ...section, label: ['Results', ...counts].join(' · '), text: sqlResultText(native.text), format: 'text' as const } : section;
+      return result;
+    }),
+    { key: 'sql-query', label: 'Query', text: `${fence}sql\n${input.query}\n${fence}`, format: 'markdown' },
+  ] });
 }
 /** Completed questions are a read-only transcript exchange, never a second decision surface. */
 function questionPresentation(data: Readonly<ToolCardData>, input: Record<string, unknown> | undefined): CardPresentation | undefined {
@@ -212,6 +229,37 @@ function planPresentation(data: Readonly<ToolCardData>, input: Record<string, un
   return questionAnswerPresentation({ question: 'Plan review', answer: outcome,
     sections: summary ? [{ key: 'plan-summary', label: 'Plan summary', text: summary, format: 'markdown' }] : [] });
 }
+/** One retained console viewport; final SDK summaries/metadata are not a second log. */
+function shellCard(data: Readonly<ToolCardData>, command: string | undefined): CardPresentation {
+  const sections = copilotSections(data);
+  const native = nativeResult(data);
+  const exits = Array.isArray(native?.output.contents) ? native.output.contents.map(object).filter(item => item?.type === 'shell_exit') : [];
+  // Only interpret the concrete native shell-exit shape, never exit-looking command text.
+  const exit = exits.length === 1 && typeof exits[0]?.shellId === 'string'
+    && Number.isSafeInteger(exits[0]?.exitCode) ? exits[0] : undefined;
+  const nativeText = typeof native?.output.detailedContent === 'string' ? native.output.detailedContent : native?.text;
+  let final = data.resultOutput ? nativeText !== undefined && !data.isError ? nativeText
+    : sections.find(section => section.key === 'result')?.text || '' : '';
+  if (exit && native) {
+    final = nativeText ?? (typeof exit.outputPreview === 'string' ? exit.outputPreview : '');
+    const footer = `<shellId: ${exit.shellId} completed with exit code ${exit.exitCode}>`;
+    const withoutTrailingNewline = final.replace(/\r?\n$/, '');
+    if (withoutTrailingNewline.endsWith(footer)) final = withoutTrailingNewline.slice(0, -footer.length).replace(/\r?\n$/, '');
+  }
+  const live = data.executionOutput || '';
+  const extension = consoleOutputSuffix(live, final);
+  // Concrete shell-exit responses are agent-facing previews, not extra stdout.
+  // Unknown independent final text/errors remain visible rather than being discarded.
+  let text = !live ? final : extension !== undefined ? live + extension
+    : !final || live.includes(final) || (exit && !data.isError) ? live : `${live}\n\n${final}`;
+  if (!text && exit && typeof exit.outputPreview === 'string') text = exit.outputPreview;
+  if (exit && exit.exitCode !== 0) text += `${text ? '\n\n' : ''}Exit code ${exit.exitCode}`;
+  const output: CardSection[] = text ? [{ key: 'result', label: 'Command output', text }] : [];
+  // Errors remain literal, not interpreted as terminal controls.
+  return shellPresentation({ title: data.title || String(data.name || 'tool'), command, sections: output,
+    format: data.isError ? 'text' : 'console' });
+}
+
 /** Late names/categories/SDK metadata update content inside the same mounted adapter. */
 function copilotPresentation(data: Readonly<ToolCardData>, context: CardPluginContext, patch: ReturnType<typeof createPatchPresentation>): CardPresentation {
   const raw = rawToolPresentation(data);
@@ -256,7 +304,7 @@ function copilotPresentation(data: Readonly<ToolCardData>, context: CardPluginCo
   if (sql) return sql;
   if (data.kind === 'execute') {
     const command = firstString(input, ['command', 'cmd']);
-    return data.isError ? namedToolPresentation({ title: raw.title, preview: command, sections }) : shellPresentation({ title: raw.title, command, sections });
+    return shellCard(data, command);
   }
   if (data.kind === 'read') {
     if (typeof input?.path === 'string' && input.path.trim()) return fileReadPresentation({ path: input.path, projectDirectory: context.projectDirectory, range: requestedRange(input.view_range), sections: copilotSections(data) });

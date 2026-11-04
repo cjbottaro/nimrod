@@ -6,9 +6,59 @@
 
 Use the existing `SessionDeletionSource` / `SessionDeletionOperation` / `SessionDeletionContext`, not `SessionLifecycle` and not a separate tree-review UI. `src/codex/session-deletion.ts` depends on the narrow `CodexDeletionHistory` port; the project-owned history connection implements it without binding a conversation, sending a prompt, editing rollout files or invoking private CLI commands.
 
-The reviewed CLI remains **0.162.0**. Its generated stable `Thread` contains `parentThreadId`, `forkedFromId`, cwd and ephemeral state; `ThreadSourceKind` enumerates ten source kinds. Official [app-server docs](https://developers.openai.com/codex/app-server/) say `thread/delete` permanently removes the persisted active/archived root and spawned descendants, existing rollout files and associated metadata, returns `{}` on success and emits `thread/deleted` per removed thread. Missing rollout files count as already deleted; ephemeral roots cannot be deleted.
+The reviewed deletion baseline remains **0.162.0**. Its generated stable `Thread` contains `parentThreadId`, `forkedFromId`, cwd and ephemeral state; `ThreadSourceKind` enumerates ten source kinds. Official [app-server docs](https://developers.openai.com/codex/app-server/) say `thread/delete` permanently removes the persisted active/archived root and spawned descendants, existing rollout files and associated metadata, returns `{}` on success and emits `thread/deleted` per removed thread. Missing rollout files count as already deleted; ephemeral roots cannot be deleted.
 
 This is **spawned ancestry**, not Pi's file lineage, `forkedFromId`, or Codex's tree-wide `sessionId`. We do not treat a history fork as deletion ancestry without evidence. The experimental `ancestorThreadId`/`parentThreadId` request filters described in current docs are not used: stable returned parent metadata plus an exhaustive source/archive inventory is sufficient for the implemented policy. Runtime compatibility of that metadata still needs installed-CLI acceptance.
+
+## Disconnected-session contract
+
+The session adapter exposes an exact-ID deletion candidate whenever it has a
+layout identity, including restored disconnected rows and unsuccessful Resume.
+Its local `historyConfirmed` flag belongs to Reload, not deletion availability.
+The project-owned catalog validates native existence/project/lineage and runs the
+shared review without `thread/start`, `thread/resume` or a first prompt on the
+conversation. UI callers see only the required deletion operation and lifecycle
+ports; there is no Codex branch in Close/Delete consumers.
+
+An ID alone does not authorize native history deletion, but users still have one
+**Delete session** action. If complete inventory plus a successful exact native
+absence lookup establish that no saved target exists, that operation removes
+only the local session/draft after review, scoped owned stop and a post-stop
+absence recheck. Ordinary Close is separate and retains persistent drafts. Unknown
+native scope or an unconfirmed owned-process stop still retains local state; the
+[teardown contract](startup.md#owned-group-teardown-after-graceful-exit) owns the
+Darwin exited-leader handling, not a disconnected-session bypass.
+
+### Native absence and local removal
+
+- `CodexSessionHistory.previewTree` returns `null` only after all reviewed
+  source/archive inventory pages complete, a metadata-only exact-ID `thread/read`
+  returns native `-32600` with exactly `thread not loaded: <requested ID>`, and
+  inventory lineage validation establishes no remaining root/descendant/fork
+  ambiguity. Exceptions are failures, never local-removal permission.
+- `thread/list` absence alone is insufficient: native named-empty saved threads
+  can be omitted by the preview filter. A successful exact metadata read adds that
+  validated root to native review. No `includeTurns:true` read, prompt, Resume,
+  native database edit or forced materialization is used.
+- A native `localOnly` reservation fences exactly the selected root's owned
+  writers/attachments using the existing window/project/token guards. It is not
+  authority to delete native history: both native write guards reject
+  `thread/delete` under this mode. This Close-equivalent authority needs no
+  invented saved-root metadata and can never stop another window/project's writer.
+- The same shared review confirms session/draft and any saved spawned tree,
+  including history saved during shutdown. After confirmation, stop both mounted
+  participants and any other exact affected native owners, then repeat the exact
+  native lookup while the fence remains held.
+- If absence remains confirmed, reconcile the exact local cleanup target through
+  `SessionDeletionContext.removed`; the shared coordinator removes membership,
+  references and draft/attachment scope without a fabricated native deletion or
+  a second user action. Cancel, failed fence/stop/read or ambiguous state leaves
+  those records intact.
+- If owned shutdown materializes history, upgrade that same reservation to a
+  validated native tree, reset stopped-scope proof, stop any expanded scope and
+  follow normal single-RPC native deletion. Native-to-local downgrade is forbidden;
+  a lost native delete response never triggers local purge. External writers are
+  still not excluded.
 
 ## Inventory and policy boundaries
 
@@ -21,7 +71,7 @@ This is **spawned ancestry**, not Pi's file lineage, `forkedFromId`, or Codex's 
 
 ## Review and execution
 
-1. Discover/validate the spawned tree. Lock exact mounted cleanup targets through the shared context and publish a native reservation owned by project window, catalog token and a fresh operation ID. Native validates the supplied tree against metadata actually observed on that catalog, not merely caller-supplied IDs.
+1. Discover/validate the spawned tree. Lock exact mounted cleanup targets through the shared context and publish a native reservation owned by project window, catalog token and a fresh operation ID. Native validates the supplied tree against metadata actually observed on that catalog, not merely caller-supplied IDs. The local-only mode above is a distinct exact-writer fence, not native history-removal authority.
 2. Render the existing retained tree-review dialog with opaque `key` / `parentKey` nodes. Description explicitly authorizes the root's current spawned descendants, including those created during review/shutdown. Cancelling releases the reservation/locks without deliberately stopping established agents or deleting history/drafts. A pending attachment or late mutation may be rejected while a scope is reserved.
 3. After confirmation, use the shared stopping progress, await all mounted participant stops, then await native observed exit for any remaining affected owned processes. Tokens stopped natively are retired before waiting, preventing delayed replacement starts. No ownership/transition lock is held while waiting for child exit.
 4. Rescan both archive/source inventories after shutdown. Expand the monotonically guarded scope and repeat stop/rescan when new descendants appear. Scope shrink/change is an explicit error, not permission to silently delete a different tree. There is no second review for newly spawned descendants; the original confirmation covers them, as with Pi.
@@ -31,7 +81,7 @@ This is **spawned ancestry**, not Pi's file lineage, `forkedFromId`, or Codex's 
 
 ## Native and transport boundaries
 
-`src-tauri/src/codex_deletion.rs` owns Codex's scope gate and reservation/stop/release IPC. `codex.rs` distinguishes catalog from conversation processes, records native conversation bindings, captures validated catalog lineage and enforces the gate again when queued records reach the pipe. A scoped read lease covers each bounded write; reservation changes wait for prior writes, while unrelated records can use concurrent read leases. The reservation itself does not hold a global native lock through review or process teardown.
+`src-tauri/src/codex_deletion.rs` owns Codex's scope gate and reservation/stop/release IPC. `codex.rs` distinguishes catalog from conversation processes, records native conversation bindings, captures validated catalog lineage from list results or exact metadata reads and enforces the gate again when queued records reach the pipe. A scoped read lease covers each bounded write; reservation changes wait for prior writes, while unrelated records can use concurrent read leases. The reservation itself does not hold a global native lock through review or process teardown.
 
 Normal reads, already-bound cancellation and permission responses remain possible while reviewed mutation/resume writes are blocked. A native-proven pre-write refusal returns a distinct private IPC result, mapped to `RpcWriteRejected`; shared RPC rejects only that request as locally not-written. It does **not** disconnect a working agent merely because review started, fabricate a Codex response/event, or replay work. Unknown writes still disconnect conservatively. ACP does not emit this marker and retains its existing behavior.
 
@@ -50,5 +100,7 @@ The reservation is Codex-specific native safety machinery, not another UI deleti
 `test/codex-tree-deletion.test.ts`: opaque tree keys, nested/deep ancestry, incomplete/cyclic/cross-project/fork/conflicting inventories, cancel, stop failure, post-review expansion, shrink, single mutation, partial notifications/unknown acknowledgement, retained cleanup failure and exhaustive read-only discovery.
 
 `src-tauri/src/codex_deletion.rs` tests: native affected-only gates, exact metadata/project/tree validation, catalog/root/observed-stop requirements. `test/json-rpc-connection.test.ts`: local proven-not-written request rejection without transport loss/replay. `test/deletion-review.test.ts`: opaque key/parentKey, duplicate/empty-key refusal and existing retained-modal behavior. Pi native event/browser fixtures keep `file`/`parent` wire fields and exercise their adapter into the shared model unchanged.
+
+`test/shell.test.ts` additionally exercises restored disconnected Codex Close through the shared shortcut, independent catalog deletion through row-menu/Project-bar review and cancellation, missing-root retention followed by local Close, and failed-stop/retry without Resume. Local-removal follow-ups cover absent-target Delete/review/cancel, hidden saved zero-message roots, failed native lookups, post-stop persistence upgrade, no downgrade after native failure, and exact local draft cleanup. Native guard fixtures reject history deletion in local-only mode and verify upgrades reset stopped-scope proof. These additions are authored **unrun**.
 
 These fixtures are authored **unrun**. On explicit validation authorization use `mise run test`; requested layout/scroll validation also needs offline browser tests. Actual CLI recursive removal, partial failure, archived-descendant behavior, native multi-window/process shutdown and macOS/Linux presentation remain acceptance gaps. No app build/launch or user-session operation is authorized by fixture authorship.

@@ -1,5 +1,6 @@
+import { unsupportedCommands } from '../../src/session-commands';
 import { defineHarness } from '../../src/harness-registry';
-import { explicitSelection, noConfiguration, noInteractions, noReferences, savedClose, taggedSavedSessions, unsupportedRestart, displayUnsupportedInteraction } from '../../src/harness-defaults';
+import { explicitSelection, noConfiguration, noInteractions, noReferences, savedClose, taggedSavedSessions, displayUnsupportedInteraction } from '../../src/harness-defaults';
 import { genericInteraction } from '../../src/harness-defaults';
 import { genericCards } from '../../src/card-renderers';
 import { savedDraftScope } from '../../src/draft-scope';
@@ -21,6 +22,7 @@ function project(projectHost: HarnessProjectHost): HarnessProject {
     actions: { current: () => [{ id: 'harness-fixture-project', label: 'Fixture project action', detail: 'Project-bound offline operation',
       available: () => ready && projectHost.current() && projectHost.applicationReady() && !!projectHost.project(),
       async run() { const key = 'fixture-project-runs'; projectHost.store.save(key, Number(projectHost.store.read(key) ?? 0) + 1); } }] },
+    availability: { async discover() {}, available: () => true },
     initialization: { blocking: false, ready: () => ready, async run() { ready = true; projectHost.changed(); } },
     saved: taggedSavedSessions(id),
     history: { associate() { associated = true; }, source: () => !associated ? undefined : { id, label: 'Fixture',
@@ -65,6 +67,7 @@ function session(host: HarnessSessionHost, request: SessionRequest, remember: (r
     disconnect() { host.ownership.ended = true; state = { ...state, sessionUnavailable: true }; publish(); },
   };
   return { lifecycle,
+    retention: { async check() { return reference ? 'saved' : 'absent'; }, forget() {} },
     conversation: { interaction: genericInteraction('Fixture'), get state() { return state; },
       messageInput: { capabilities: () => ({ imageUnavailableReason: 'Fixture is text-only' }), async submit(message) {
         const key = `fixture:${message.id}`;
@@ -76,10 +79,24 @@ function session(host: HarnessSessionHost, request: SessionRequest, remember: (r
       } }, async handle(message) { if (message.type !== 'stop') throw new Error('Unsupported fixture operation'); } },
     presentation: { snapshot: () => ({ harnessLabel: 'Fixture', badge: 'Fixture', badgeTitle: '', busy: false, working: false, pending: false, compacting: false, queuePending: false, destructiveBusy: false }) },
     configuration: noConfiguration,
+    commands: unsupportedCommands('The fixture has no command catalog.'),
     actions: { current: () => [{ id: 'harness-fixture-question', label: 'Display fixture question', detail: 'Display-only unsupported interaction', async run() {
       displayUnsupportedInteraction(host, { id: 'fixture-question', title: 'Fixture question', text: 'Which option should the agent use?', raw: { choices: ['A', 'B'] } });
     } }], async control() { throw new Error('No fixture configuration controls'); } },
-    restart: unsupportedRestart('Fixture restart is unsupported'), close: savedClose, selection: explicitSelection,
+    naming: { async rename(name) { host.effects.changed({ title: name, persist: !!reference }); } },
+    deletion: { current: () => reference ? { kind: 'saved', reference } : { kind: 'close' } },
+    reload: {
+      available: () => !!reference, reason: () => reference ? 'Reload session' : 'Reload session — no saved identity',
+      detail: 'Reload the offline fixture conversation', confirmation: 'Reload this fixture session?', needsConfirmation: () => false,
+      async run() {
+        if (!reference) throw new Error('No fixture saved identity');
+        await lifecycle.stop(); host.effects.retire(); host.effects.publish({ type: 'sessionDisconnected' });
+        lifecycle.disconnect('Session reloaded');
+        host.effects.publish({ type: 'sessionReset', composerState: host.drafts.read() });
+        await lifecycle.connect({ acceptedAction: true });
+      },
+    },
+    close: savedClose, selection: explicitSelection,
     interactions: noInteractions, references: noReferences, drafts: { durability: 'persistent' },
   };
 }

@@ -40,7 +40,7 @@ export interface HarnessSessionLifetime {
   selected(): boolean;
   settingsOpen(): boolean;
   closing(): boolean;
-  restarting(): boolean;
+  reloading(): boolean;
   deleting(): boolean;
   available(options: ConnectSessionOptions): boolean;
   conflicts(reference: SavedSessionIdentity): boolean;

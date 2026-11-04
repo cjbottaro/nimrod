@@ -2,8 +2,10 @@ import type { ConversationInteraction, ConversationViewState } from './conversat
 import type { SessionLifecycle, SavedSessionIdentity, LaunchMode } from './session-lifecycle';
 import type { SessionMessageInput } from './session-message-input';
 import type { SessionConfiguration } from './session-configuration';
+import type { SessionReload } from './session-reload';
+import type { SessionNaming } from './session-naming';
 import type { SessionHistory } from './session-history';
-import type { SessionDeletionContext, SessionDeletionSource } from './session-deletion-operation';
+import type { SessionDeletionContext, SessionDeletionSource, SessionDeletionIntent } from './session-deletion-operation';
 import type { ActionId } from './keybindings';
 import type { HarnessProjectHost, HarnessSessionHost } from './harness-host';
 
@@ -37,9 +39,6 @@ export interface SessionConversation {
   readonly state: ConversationViewState | undefined;
   handle(message: Record<string, unknown>): Promise<void>;
 }
-export type SessionRestart =
-  | { supported: false; reason: string }
-  | { supported: true; available(): boolean; reason(): string; detail: string; confirmation: string; needsConfirmation(inputPending: boolean): boolean; run(): Promise<void> };
 export interface SessionClosePolicy {
   readonly alwaysConfirm: boolean;
   readonly label: string;
@@ -56,11 +55,24 @@ export interface SessionInteractions { setActive(active: boolean): void; dispose
  */
 export interface HarnessSession {
   readonly lifecycle: SessionLifecycle;
+  /** Native recoverability for Close and mounted Delete, independent of connectivity. */
+  readonly retention: import('./session-retention').SessionRetention;
   readonly conversation: SessionConversation;
   readonly presentation: { snapshot(): SessionPresentation };
   readonly configuration: { current(): SessionConfiguration | undefined };
   readonly actions: { current(): readonly HarnessAction[]; control(id: string): Promise<void> };
-  readonly restart: SessionRestart;
+  /** Required behavior, not an optional capability or an unsupported default. */
+  readonly reload: SessionReload;
+  readonly naming: SessionNaming;
+  readonly commands: import('./session-commands').SessionCommands;
+  /** Live integration-owned removal candidate, independent of conversation connection
+   * or a local saved-history flag. The catalog/source validates native scope.
+   * Undefined explicitly means unsupported, not merely disconnected.
+   */
+  readonly deletion: { current(): SessionDeletionIntent | undefined };
+  /** Presentation policy for local Close; lifecycle.stop owns teardown even while
+   * disconnected. Remove membership only after success, without requiring history.
+   */
   readonly close: SessionClosePolicy;
   readonly drafts: { readonly durability: 'persistent' | 'memory' };
   readonly selection: SessionSelectionPolicy;
@@ -80,7 +92,8 @@ export interface HarnessSavedSessions {
   last(): { project: string; reference: SavedSessionIdentity } | undefined;
 }
 export interface HarnessHistory {
-  source(): SessionHistory | undefined;
+  /** Explicit history pickers discover even without prior Nimrod project association. */
+  source(options?: { discover?: boolean }): SessionHistory | undefined;
   /** Mark project association on explicit use/restored membership, never start a conversation. */
   associate(): void;
   dispose(): Promise<void>;
@@ -97,6 +110,8 @@ export interface HarnessProject {
   readonly label: string;
   readonly creation: HarnessCreation;
   readonly actions: { current(): readonly HarnessProjectAction[] };
+  /** Startup executable discovery, independent of native-owner readiness. */
+  readonly availability: { discover(): Promise<void>; available(): boolean };
   readonly initialization: { readonly blocking: boolean; run(): Promise<void>; ready(): boolean };
   readonly saved: HarnessSavedSessions;
   readonly history: HarnessHistory;

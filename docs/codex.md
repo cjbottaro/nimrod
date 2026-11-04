@@ -27,17 +27,19 @@ Image paste and image-only messages are enabled only when the connected model ad
 
 ## History, drafts and Close
 
-Codex threads have their own saved identity and draft namespace; an identical Pi/Copilot ID does not alias them. **Resume session…** includes project-local top-level Codex history after the project has used Codex. History is paginated and does not require sending a prompt. Nimrod's catalog explicitly includes CLI, VS Code and app-server roots, including Nimrod-created history, and excludes archived threads; it is not a promise to list every headless/exec or archived thread.
+Codex threads have their own saved identity and draft namespace; an identical Pi/Copilot ID does not alias them. **Resume session…** and **Delete sessions…** discover project-local top-level Codex history even if the project has not used Codex in Nimrod. History is paginated and does not require sending a prompt. Nimrod's catalog explicitly includes CLI, VS Code and app-server roots, including Nimrod-created history, and excludes archived threads; it is not a promise to list every headless/exec or archived thread.
 
-Restored Codex rows stay disconnected until you explicitly select or Resume one. Resume uses the exact thread ID and project; a failure never creates a replacement session. Background sessions remain independently live once connected. Closing stops only Nimrod's owned process and keeps saved Codex history and your draft. No background-process continuity or coordination with external writers is promised.
+Restored Codex rows stay disconnected until you explicitly select or Resume one. Reconnect always uses that exact thread ID and project, whether the thread was created by Nimrod or the native CLI. A failure never starts a replacement conversation, renames the thread or sends a prompt to force saving. Your local draft, title and pin remain; they are independent of Codex's saved history. Background sessions remain independently live once connected. Closing stops only Nimrod's owned process and keeps any saved Codex history and your draft. No background-process continuity or coordination with external writers is promised.
+
+**Untouched-session limitation:** Codex 0.164.0 can assign an ID without saving resumable history. Creating a session, sending no message and quitting can therefore leave a thread that neither native Codex nor Nimrod can reopen. An open sidebar row is not a guarantee of saved history. Native naming can persist an empty paginated thread, but Codex's ordinary history list—and consequently Resume pickers—may still omit it. Nimrod does not scan private Codex databases or fabricate history to bypass these limits. Use **New Codex session** explicitly if the original cannot be resumed; nothing is automatically replayed.
 
 Startup failures preserve your local draft and do not replay a prompt. If cleanup also fails, the original startup error remains visible with cleanup diagnostics in Details. Late startup cleanup targets only its original process, not a replacement connection.
 
-Restart is currently unavailable for Codex; use Close and explicit Resume. Close is not deletion.
+[Reload session](sessions.md#reload-session) reopens this same thread with a fresh Codex agent while keeping your draft. Reload remains unavailable until exact Resume or a successful native saved-history read confirms persistence; deletion is independent of that confirmation. These read-only checks run after readiness and supported native lifecycle changes, without delaying Send; Close remains available independently. Installed-runtime/native restart and reload acceptance remain pending. Close is not deletion.
 
 ## Delete a Codex thread tree
 
-Use the session-row menu, Project bar trash control or **Delete sessions…** to review **Delete Codex thread tree…**. The existing shared review shows the root and its spawned descendants, including archived and non-interactive descendants. Confirmation authorizes the current spawned subtree, including descendants created during review or shutdown; Nimrod rescans after stopping affected owned agents before submitting one recursive deletion request.
+Use **Delete session…** in the session-row menu or command palette, the Project bar trash control, or **Delete sessions…** to review a Codex thread tree. The conversation does **not** need to be connected: Nimrod validates the saved target through its separate history catalog, without resuming it or sending a message. If Codex never saved the thread, the same **Delete session…** action stops its owned runtime and removes the local session and draft after confirmation; you do not need to use Close instead. Nimrod checks the exact native thread rather than trusting its potentially filtered history list, and rechecks after shutdown so newly saved history is deleted too. Failed lookups, uncertain deletion results or failed process stops retain local state. **Close session** (⌘/Ctrl+W) remains separate and keeps your draft. The existing shared review shows the root and its spawned descendants, including archived and non-interactive descendants. Confirmation authorizes the current spawned subtree, including descendants created during review or shutdown; Nimrod rescans after stopping affected owned agents before submitting one recursive deletion request.
 
 Cancel releases the review without deliberately stopping established agents or deleting history/drafts. Unrelated sessions stay usable. Late affected mutations or new attachments can be rejected while reviewed; nothing is automatically replayed.
 
@@ -73,8 +75,36 @@ Advertised model/effort choices use the shared Status-area controls and pickers.
 
 Usage shows Codex-reported token totals and the last-turn token amount against the reported model window. This is not a guaranteed current-context measurement or a monetary estimate. No inferred dollar cost, Copilot credit conversion or fabricated context metric is shown.
 
+## Slash commands
+
+Type `/` for the commands supported by the connected Codex integration:
+
+- `/model` opens the Codex model picker; `/model <model-id>` selects an exact advertised ID.
+- `/rename` asks for a session name; `/rename <name>` renames the connected thread.
+- `/compact` asks Codex to compact the conversation. It may use the model; the card waits for native compaction completion, not just request acknowledgement. There is no optional focus argument. The composer locks while it runs, and Stop targets the identified compaction turn.
+- `/mcp` reports Codex's MCP servers, tools and authentication state; `/mcp verbose` adds descriptions and resources. Discovery may contact configured MCP servers. MCP login/configuration changes are not supported here.
+- `/status` reports thread/model details and last reported token usage—not account quotas or a complete configuration dump.
+- `/pwd` (also `/cwd`) shows the verified thread working directory; it never changes the project.
+- `/ps` lists the thread's background terminals without stopping them or scanning OS processes.
+- `/skills` and `/hooks` show read-only catalogs and reported diagnostics. Skill invocation/toggles and hook editing/trust changes are not implemented.
+
+Each accepted command gets one Command card immediately. Model, rename and
+compaction commands wait for idle; report commands can run during work, while
+preserving accepted FIFO order. The card stays pending through any picker and
+native confirmation. Output/errors stay on that card, without an ordinary chat message,
+sidebar-recency bump or forced transcript navigation. Cancellation before dispatch
+invokes nothing; uncertain delivery is never retried. Switching away cancels
+pending command interactions without changing a newer draft.
+
+These are Codex-owned client adapters backed by native app-server APIs, not a
+copy of the complete CLI command catalog. Some are deliberately read-only subsets
+of a richer terminal workflow. Native `/stop` (alias `/clean`) stops background
+terminals; it is **not** Nimrod's Stop button and is not exposed as a slash command. Model changes require effective-state confirmation;
+installed-runtime acceptance remains pending. Other commands are rejected with
+the draft intact, never submitted as a model prompt.
+
 ## Current differences
 
-Codex app-server does not advertise the CLI's slash-command catalog, so slash text is rejected rather than submitted as a model prompt. Plan/Autopilot controls, a context-tier picker, live permission-policy editing, manual compaction and MCP inspection are not provided by this integration yet. Unknown native item types keep raw details; command output and file changes have dedicated shared-component presentations.
+Codex app-server does not advertise the CLI's complete slash-command catalog. Plan/Autopilot controls, a context-tier picker, live permission-policy editing and Pi's MCP inspector are not provided by this integration yet. Native compaction and the MCP slash report are available as described above. Unknown native item types keep raw details; command output and file changes have dedicated shared-component presentations.
 
 See [Sessions](sessions.md), [Drafts](drafts.md), [Reading conversations](reading-conversations.md) and [Error messages](error-messages.md) for the shared workspace behavior.

@@ -7,7 +7,17 @@ export interface SessionDeletionTarget {
   readonly draftScope: string;
 }
 
-/** Delete controls consume a target-bound operation, not a connection lifecycle. */
+/** A mounted session declares a local-Close or native-deletion candidate. Neither
+ * connectivity nor local history-confirmation state is deletion authority: the
+ * independent source validates existence/scope and owns the operation's guards.
+ */
+export type SessionDeletionIntent =
+  | { readonly kind: 'close' }
+  | { readonly kind: 'saved'; readonly reference: SavedSessionIdentity };
+
+/** Delete controls consume a target-bound operation, not a connection lifecycle.
+ * Disconnected targets must not need connect()/Resume to obtain or run one.
+ */
 export interface SessionDeletionOperation {
   readonly target: SessionDeletionTarget;
   readonly label: string;
@@ -36,6 +46,10 @@ export interface SessionDeletionContext {
   closeReview(): void;
   lock(targets: readonly SessionDeletionTarget[], executing: boolean): void;
   stop(targets: readonly SessionDeletionTarget[]): Promise<void>;
+  /** Reconcile confirmed native removals or a completed explicit local deletion
+   * after the adapter established native absence and stopped/fenced owned writers.
+   * Never infer this from a failed lookup or ambiguous native mutation.
+   */
   removed(targets: readonly SessionDeletionTarget[]): void;
   recovered(key: string): void;
   error(message: string): void;

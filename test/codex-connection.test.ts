@@ -1,20 +1,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createCodexConnection, type CodexConnectionHost } from '../src/codex/connection';
-import type { CodexSession } from '../src/codex/session';
+import { createCodexConnection, type CodexConnectionHost, type CodexBackend } from '../src/codex/connection';
 import type { CodexPacket } from '../src/codex/protocol';
 import { codexScope } from '../src/codex/session-lifecycle';
 import { SessionDrafts } from '../src/session-drafts';
 import { NativeDrafts, type NativeDraftRecord } from '../src/native-drafts';
 import { SessionConnection } from '../src/session-connection';
-import type { SessionLifecycleOwner } from '../src/session-lifecycle';
+import { codexConnectionFailure } from '../src/codex/connection-failure';
+import { readSavedSidebarSession, type SessionLifecycleOwner } from '../src/session-lifecycle';
 import type { ConversationViewMessage } from '../src/conversation-view-host';
 
 const project = '/fixture/codex';
 const flush = async () => { for (let i = 0; i < 80; i++) await Promise.resolve(); };
-function fixture(options: { savedId?: string; bindError?: string; startGate?: Promise<string>; stop?: (token: string) => Promise<void> } = {}) {
+function fixture(options: { savedId?: string; historyAvailable?: boolean; freshId?: string; rejectResume?: boolean; bindError?: string; startGate?: Promise<string>; stop?: (token: string) => Promise<void> } = {}) {
   const owner: SessionLifecycleOwner = { starting: false, ended: true };
-  const backend: { session?: CodexSession; savedSessionId?: string } = { savedSessionId: options.savedId };
+  const backend: CodexBackend = { savedSessionId: options.savedId };
   const packets: CodexPacket[] = [], stops: string[] = [], starts: string[] = [], stages: NativeDraftRecord[] = [], errors: unknown[] = [];
   const publications: ConversationViewMessage[] = [], failures: Parameters<CodexConnectionHost['effects']['failure']>[0][] = [];
   const resolutions: string[] = [], identities: unknown[] = [];
@@ -36,13 +36,19 @@ function fixture(options: { savedId?: string; bindError?: string; startGate?: Pr
       write: async (_token, packet) => {
         packets.push(packet);
         if (packet.method === 'initialized' || packet.method === undefined) return;
+        if (packet.method === 'turn/start' || packet.method === 'thread/compact/start' || packet.method === 'thread/name/set' || options.rejectResume && packet.method === 'thread/resume') {
+          receive({ id: packet.id, error: { code: -32000, message: packet.method === 'thread/resume' ? `no rollout found for thread id ${options.savedId}` : 'fixture rejection after possible delivery' } }); return;
+        }
+        if (packet.method === 'thread/turns/list' && !backend.historyConfirmed && !options.historyAvailable) {
+          receive({ id: packet.id, error: { code: -32600, message: 'thread/turns/list is unavailable before first user message' } }); return;
+        }
         let result: unknown;
         if (packet.method === 'initialize') result = { userAgent: 'fixture/0.164.0' };
         else if (packet.method === 'thread/start' || packet.method === 'thread/resume') result = {
-          cwd: project, thread: { id: options.savedId ?? 'thread', cwd: project, ephemeral: false, parentThreadId: null, turns: [], status: { type: 'idle' } }, model: 'fixture-model', reasoningEffort: 'low',
+          cwd: project, thread: { id: packet.method === 'thread/start' ? options.freshId ?? 'thread' : options.savedId ?? 'thread', cwd: project, ephemeral: false, parentThreadId: null, turns: [], status: { type: 'idle' } }, model: 'fixture-model', reasoningEffort: 'low',
         };
         else if (packet.method === 'thread/turns/list' || packet.method === 'model/list') {
-          assert.equal(lifecycle.draftScope, codexScope(options.savedId ?? 'thread'), 'identity and real drafts bind before history/catalog');
+          assert.equal(lifecycle.draftScope, codexScope(backend.savedSessionId!), 'identity and real drafts bind before history/catalog');
           assert.deepEqual(drafts.read(), { draft: 'Keep newer draft' });
           result = { data: [], nextCursor: null };
         } else throw new Error(`Unexpected provider-facing operation: ${String(packet.method)}`);
@@ -82,13 +88,81 @@ test('Codex connection owner binds actual drafts before readiness, and selection
   assert.deepEqual(f.errors, []);
 });
 
+test('retired untouched markers never replace an exact reconnect candidate or move its draft', async () => {
+  const legacy = { kind: 'codex', sessionId: 'old-empty-thread', name: 'Kept title', lastUsed: 123, pinned: true };
+  for (const codexContinuity of [{ version: 1, untouched: true, saved: false }, { version: 1, untouched: false, saved: false }, { version: 1, untouched: false, saved: true }, null, {}]) {
+    const restored = readSavedSidebarSession({ ...legacy, codexContinuity })!;
+    assert.deepEqual(restored, legacy, 'retired evidence is ignored, without dropping membership');
+    const f = fixture({ savedId: restored.sessionId, freshId: 'must-not-create', rejectResume: true });
+    f.drafts.select('unassigned:sibling'); f.drafts.write({ draft: 'Sibling' });
+    f.drafts.select(codexScope(restored.sessionId));
+    await f.lifecycle.connect();
+    assert.equal(f.backend.savedSessionId, restored.sessionId);
+    assert.equal(f.lifecycle.draftScope, codexScope(restored.sessionId));
+    assert.deepEqual(f.drafts.read(), { draft: 'Keep newer draft' });
+    assert.equal(f.packets.filter(packet => packet.method === 'thread/resume').length, 1);
+    assert.equal(f.packets.some(packet => ['thread/start', 'thread/name/set', 'turn/start'].includes(String(packet.method))), false);
+    assert.match(f.failures.at(-1)!.message, /no saved history/);
+    assert.match(f.failures.at(-1)!.details!, /no rollout found/);
+    f.drafts.select('unassigned:sibling'); assert.deepEqual(f.drafts.read(), { draft: 'Sibling' });
+  }
+});
+
+test('a runtime-only start does not imply saved history, and delivery has no private checkpoint gate', async () => {
+  const f = fixture();
+  await f.lifecycle.connect(); await flush();
+  assert.equal(f.backend.historyConfirmed, false);
+  assert.deepEqual(f.lifecycle.identity, { kind: 'codex', sessionId: 'thread' });
+  await assert.rejects(f.backend.session!.client.startTurn('Never replay', 'first-send'), /fixture rejection/);
+  assert.equal(f.packets.filter(packet => packet.method === 'turn/start').length, 1);
+  assert.equal(f.packets.filter(packet => packet.method === 'thread/start').length, 1);
+  assert.equal(f.backend.historyConfirmed, false, 'a rejected Send cannot establish durable history');
+  f.teardown(); await f.lifecycle.stop(); f.lifecycle.disconnect('done');
+});
+
+test('successful saved-history reads confirm even an empty native thread without provider work', async () => {
+  const f = fixture({ historyAvailable: true });
+  await f.lifecycle.connect(); await flush();
+  assert.equal(f.backend.historyConfirmed, true);
+  assert.equal(f.packets.some(packet => ['turn/start', 'thread/name/set'].includes(String(packet.method))), false);
+  f.teardown(); await f.lifecycle.stop(); f.lifecycle.disconnect('done');
+});
+
+test('successful exact Resume establishes saved history without changing the draft scope', async () => {
+  const f = fixture({ savedId: 'persisted-thread' });
+  await f.lifecycle.connect();
+  assert.equal(f.backend.historyConfirmed, true);
+  assert.equal(f.lifecycle.draftScope, codexScope('persisted-thread'));
+  assert.equal(f.packets.some(packet => packet.method === 'thread/start' || packet.method === 'turn/start'), false);
+  f.teardown(); await f.lifecycle.stop(); f.lifecycle.disconnect('done');
+});
+
+test('legacy missing threads never fall back to creation', async () => {
+  const f = fixture({ savedId: 'missing-thread', rejectResume: true });
+  await f.lifecycle.connect();
+  assert.equal(f.packets.filter(packet => packet.method === 'thread/resume').length, 1);
+  assert.equal(f.packets.some(packet => packet.method === 'thread/start'), false);
+  assert.equal(f.backend.savedSessionId, 'missing-thread');
+  assert.deepEqual(f.drafts.read(), { draft: 'Keep newer draft' });
+});
+
+test('missing history diagnostics are concise and never claim that saved history exists', () => {
+  const failure = codexConnectionFailure('no rollout found for thread id missing-thread', true);
+  assert.ok(failure.message.length <= 160);
+  assert.match(failure.message, /no saved history/);
+  assert.doesNotMatch(failure.message, /missing-thread|Saved history.*remain/);
+  assert.match(failure.details, /no rollout found for thread id missing-thread/);
+  assert.match(failure.details, /Nothing was replaced, renamed or replayed/);
+});
+
 test('Codex original binding failure survives cleanup failure without retry or fabricated readiness', async () => {
   const f = fixture({ bindError: 'Local identity binding failed', stop: async () => { throw new Error('EPERM while observing owned exit'); } });
   await f.lifecycle.connect({ acceptedAction: true });
   assert.equal(f.lifecycle.connection, 'disconnected'); assert.equal(f.lifecycle.identity, undefined);
   assert.deepEqual(f.drafts.read(), { draft: 'Keep newer draft' });
   assert.equal(f.stops.length, 1); assert.equal(f.starts.length, 1);
-  assert.match(f.failures.at(-1)!.message, /startup failed: Local identity binding failed/);
+  assert.match(f.failures.at(-1)!.message, /startup failed/);
+  assert.match(f.failures.at(-1)!.details!, /Local identity binding failed/);
   assert.doesNotMatch(f.failures.at(-1)!.message, /EPERM/); assert.match(f.failures.at(-1)!.details!, /EPERM/);
   assert.equal(f.packets.filter(packet => packet.method === 'thread/start').length, 1);
   assert.equal(f.packets.some(packet => packet.method === 'model/list' || packet.method === 'turn/start'), false);

@@ -1,4 +1,6 @@
 import type { SessionMessageInput } from '../session-message-input';
+import { commandCatalog, findCommand, parseCommand, SessionCommandQueue, CommandUncertain, type SessionCommands } from '../session-commands';
+import type { ConfigurationOperation } from '../session-configuration';
 import type { TranscriptLogSink } from '../transcript-logs';
 import { AcpClient, type AcpPermissionRequest, type AcpSessionUpdate } from './client';
 import { AcpConnectionError, isRecord, type AcpPacket, type AcpRecord } from './connection';
@@ -37,6 +39,11 @@ function contentText(value: unknown): string {
 export class AcpSession {
   readonly client: AcpClient;
   readonly configuration: SessionConfigurationController;
+  readonly slashCommands: SessionCommands;
+  private readonly commandQueue: SessionCommandQueue;
+  private commandRunning = false;
+  private configurationSource?: readonly ConfigurationOperation[];
+  private commandSource?: readonly ConfigurationOperation[];
   state: AcpSessionState = { messages: [], busy: false, status: 'Connecting ACP…', sessionUnavailable: true,
     statusArea: { capabilities: { metrics: { label: 'ACP-reported context usage' }, information: true }, controlsLabel: 'ACP session configuration', controls: [] } };
   commands: { name: string; description: string }[] = [];
@@ -76,6 +83,7 @@ export class AcpSession {
       disconnected: error => {
         this.capture('connection.disconnected', { error: error.message }, this.client.sessionId || '', '');
         this.ended = true;
+        this.commandQueue?.cancel(error.message);
         this.configuration?.dispose(error.message);
         this.finishMessages();
         this.state = { ...this.state, sessionUnavailable: true, busy: false, status: 'Disconnected' };
@@ -101,11 +109,45 @@ export class AcpSession {
         await this.applyOption(option, value, dispatched);
       },
     }, () => this.publish([]), message => this.ui.notice(`Configuration change failed: ${message}`));
+    this.commandQueue = new SessionCommandQueue(
+      () => this.canSubmit && !this.configuration.operations.some(operation => operation.phase === 'queued' || operation.phase === 'applying'),
+      async (_id, text, signal, dispatched) => {
+        const invalid = this.validateCommand(text); if (invalid) throw new Error(invalid);
+        if (signal.aborted) return false;
+        this.commandRunning = true;
+        this.state = { ...this.state, busy: true, status: 'Working…' }; this.publish([]);
+        try {
+          dispatched(); const reason = await this.client.prompt(text);
+          if (reason === 'refusal') throw new Error('The ACP agent refused this command.');
+          if (reason === 'cancelled') throw new CommandUncertain('The ACP command was cancelled after dispatch; its effects were not confirmed.');
+          this.commandQueue.output('The ACP command turn finished. Command effects remain agent-owned.');
+        } catch (error) { if (error instanceof AcpConnectionError) throw new CommandUncertain(String(error)); throw error; }
+        finally {
+          this.commandRunning = false; this.finishMessages();
+          this.state = { ...this.state, busy: false, status: this.ended ? 'Disconnected' : 'Idle' }; this.controls(); this.publish();
+        }
+      }, () => this.publish([]), 'ACP');
+    const session = this;
+    this.slashCommands = {
+      catalog: commandCatalog(() => this.ended || this.state.sessionUnavailable ? [] : this.commands.map(command => ({ ...command, source: 'Agent' as const }))),
+      validate: text => this.validateCommand(text),
+      invoke: ({ id, text }) => {
+        const invalid = this.validateCommand(text); if (invalid) return Promise.reject(new Error(invalid));
+        return this.commandQueue.enqueue(id, text, this.state.messages.at(-1)?.key ?? null);
+      },
+      get operations() { return session.commandQueue.operations; },
+      cancel: key => this.commandQueue.cancel(undefined, key),
+    };
+  }
+  private validateCommand(value: string): string | undefined {
+    if (!this.canSubmit) return 'This ACP session is not idle. Your draft was kept.';
+    const invocation = parseCommand(value);
+    if (!invocation || !findCommand(this.slashCommands.catalog().commands, invocation.name)) return 'This command was not advertised by the ACP agent. Nothing was invoked; your draft was kept.';
   }
   private configurationId(option: AcpOption): string {
     return option.category === 'model' ? 'model' : option.category === 'thought_level' ? 'effort' : option.category === 'mode' ? 'mode' : `option:${option.id}`;
   }
-  get canSubmit(): boolean { return !this.state.busy && !this.configuring && !this.ended && this.client.phase === 'idle'; }
+  get canSubmit(): boolean { return !this.commandRunning && !this.state.busy && !this.configuring && !this.ended && this.client.phase === 'idle'; }
   supports(kind: 'model' | 'thinking'): boolean { return this.options.some(option => option.category === (kind === 'model' ? 'model' : 'thought_level')); }
   validatePrompt(value: string): string | undefined {
     if (!this.canSubmit) return 'This ACP session is not idle. Your draft was kept.';
@@ -147,7 +189,7 @@ export class AcpSession {
 
   async handle(message: AcpRecord): Promise<void> {
     this.capture('ui.action', message, this.client.sessionId || '', '');
-    if (message.type === 'stop') { this.client.cancel(); return; }
+    if (message.type === 'stop') { this.commandQueue.cancel(); this.client.cancel(); return; }
     if (message.type === 'renderError') { this.ui.notice(text(message.error)); return; }
     if (message.type !== 'prompt') return;
     const value = text(message.text), id = text(message.id);
@@ -202,14 +244,16 @@ export class AcpSession {
   }
   private receipt(id: string, outcome: 'accepted' | 'rejected' | 'unknown', error?: string): void { this.ui.publish({ type: 'submissionReceipt', id, outcome, error }); }
   private publish(rows?: DisplayMessage[]): void {
-    if (this.configuration && this.state.configurationOperations !== this.configuration.operations) {
-      this.capture('ui.configuration', { operations: this.configuration.operations }, this.client.sessionId || '', '');
-      this.state = { ...this.state, configurationOperations: this.configuration.operations };
+    if (this.configurationSource !== this.configuration?.operations || this.commandSource !== this.commandQueue?.operations) {
+      this.configurationSource = this.configuration?.operations; this.commandSource = this.commandQueue?.operations;
+      const operations = [...(this.configurationSource ?? []), ...(this.commandSource ?? [])];
+      this.capture('ui.configuration', { operations }, this.client.sessionId || '', '');
+      this.state = { ...this.state, configurationOperations: operations };
     }
     const base = this.revision++;
     this.ui.publish({ type: 'snapshot', state: this.state, commands: this.commands, transcript: { base, revision: this.revision, ...(rows ? { rows } : {}) } });
     this.ui.changed();
-    this.configuration?.update();
+    this.configuration?.update(); this.commandQueue?.update();
   }
   private replace(key: string, next: DisplayMessage): void {
     const index = this.state.messages.findIndex(message => message.key === key);

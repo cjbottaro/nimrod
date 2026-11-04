@@ -8,8 +8,11 @@ Canonical boundary: [ACP harnesses](../../features/references/acp-harnesses.md)
 and [harness presentation](../../features/references/harness-presentation.md).
 
 ACP command catalogs are agent-specific and dynamic. Nimrod retains only
-advertised-command completion and normal prompt submission; it must not invent
-Pi or Copilot command semantics.
+advertised-command completion and native `session/prompt` command dispatch through
+the [required command consumer port](../../features/references/session-commands.md),
+with one retained command transition and no synthetic ordinary user preview.
+It must not invent Pi or Copilot semantics; terminal-turn completion does not prove
+arbitrary configuration effects. New fixtures remain unrun.
 
 | Command class | Discovery | Execution/UI | Compatibility status |
 | --- | --- | --- | --- |

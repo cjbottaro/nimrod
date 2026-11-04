@@ -48,7 +48,7 @@ export class HarnessRegistry {
   }
   projectActions(): readonly HarnessProjectAction[] {
     const ids = new Set(this.projects.flatMap(project => project.creation.action ? [project.creation.action.id] : []));
-    const actions = this.projects.flatMap(project => project.actions.current());
+    const actions = this.projects.filter(project => project.availability.available()).flatMap(project => project.actions.current());
     for (const action of actions) {
       if (ids.has(action.id)) throw new Error(`Ambiguous harness project action: ${action.id}`);
       ids.add(action.id);
@@ -64,7 +64,7 @@ export class HarnessRegistry {
   assertIdentity(project: HarnessProject, session: HarnessSession): void {
     const { identity, key, draftScope } = session.lifecycle;
     if (!identity) {
-      if (key !== undefined || draftScope !== undefined) throw new Error('An integration published persistence keys without a durable identity');
+      if (key !== undefined || draftScope !== undefined) throw new Error('An integration published persistence keys without a layout identity');
       return;
     }
     if (!project.saved.accepts(identity) || project.saved.key(identity) !== key || project.saved.draftScope(identity) !== draftScope)
@@ -82,10 +82,14 @@ export class HarnessRegistry {
     this.assertIdentity(project, session);
     return {
       get lifecycle() { return session.lifecycle; },
+      get retention() { return session.retention; },
       get conversation() { return session.conversation; },
       get presentation() { return session.presentation; },
       get configuration() { return session.configuration; },
-      get restart() { return session.restart; },
+      get reload() { return session.reload; },
+      get naming() { return session.naming; },
+      get commands() { return session.commands; },
+      get deletion() { return session.deletion; },
       get close() { return session.close; },
       get drafts() { return session.drafts; },
       get selection() { return session.selection; },
@@ -102,6 +106,9 @@ export class HarnessRegistry {
     };
   }
   async initialize(): Promise<void> {
+    await Promise.all(this.projects.map(project => project.availability.discover().catch(error => {
+      this.host.notice({ id: `harness-discovery:${project.id}`, operation: `Find ${project.label} runtime`, message: String(error) });
+    })));
     for (const initialize of this.nativeInitializers) void Promise.resolve().then(initialize).catch(error => this.host.notice({ id: 'native-initialization', operation: 'Initialize native owners', message: String(error) }));
     // Preserve the default/native host's blocking boot contract. Other owners
     // report source-local failures themselves and do not gate the application.

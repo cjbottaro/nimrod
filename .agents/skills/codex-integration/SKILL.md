@@ -27,12 +27,13 @@ The initial reviewed local protocol is **Codex CLI 0.162.0**, with the async-que
 | Approvals | Command/file decisions, native request detail, retained FIFO picker, session-local banner, dismissal independent from settlement; terminal/server-resolved/disconnected callbacks abort. |
 | Model/effort | Advertised catalog, shared deferred configuration operations and exact result confirmation. Idle `thread/resume` overrides; installed-runtime application remains an acceptance gap. |
 | Status, alerts, diagnostics | Shared All/Unread/Working/input state, notices, notifications, pop-outs and native transcript logs. Token totals/last-turn window data only; no fabricated dollars/credits/current-context percent. |
-| Restart | Unavailable, like existing Copilot; Close then explicit Resume. |
+| Rename session | Required [session naming port](../features/references/session-naming.md) through exact-bound-thread `thread/name/set`, ordered name events and native deletion guards. Runtime/native acceptance pending. |
+| Reload session | Required `SessionReload` port; observed owned app-server exit followed by exact-thread Resume, preserving mounted identity/draft without replay. [Shared lifecycle](../features/references/projects-and-sessions.md#reload-session-lifecycle); new fixtures unrun, native acceptance pending. |
 | Delete | Shared reviewed spawned-thread tree deletion through a guarded catalog; see [Codex deletion](references/deletion.md). Cross-project, incomplete-lineage and ambiguous-fork trees fail explicitly. |
-| CLI slash commands | No advertised app-server catalog. Slash input rejects before draft clearing; never prompt-fallback or impersonate native CLI commands. |
+| Slash commands | Required command port: `/model`, `/rename`, native `/compact`, thread-scoped `/mcp`, `/status`, `/pwd` (`/cwd`), `/ps`, plus read-only `/skills` and `/hooks` subsets. No generic app-server command catalog. [Compatibility matrix](../slash-commands/references/codex.md); [complete inventory and upgrade audit](../slash-commands/references/codex-audit.md) is mandatory on Codex upgrades/command anomalies. Native acceptance pending. |
 | Structured questions / protocol opt-in | `experimentalApi: true` permits experimental protocol fields without enabling runtime feature flags. Reviewed non-secret RPC question batches use exact keyed replies. Async assistant questions use the same retained UI with optional Ignore and native-framed ordinary input; they survive completion until answered, ignored or superseded. Unsupported interactions are visible and logged. [Contract/capture guide](references/questions.md). |
 | Plan/Autopilot controls, MCP elicitation, permission amendments | Not implemented. Protocol opt-in does not select a mode or supply invented runtime semantics; unsupported requests return explicit errors, never grants. |
-| Manual compaction, context-tier changes, live permission policy, MCP inspector | Not exposed. No guessed parity or extra provider work. |
+| Context-tier changes, live permission policy, MCP inspector | Not exposed. MCP has a read-only slash report, not Pi's inspector. `/compact` uses the native compaction lifecycle only when explicitly invoked; no live compaction was run during source review. |
 
 This is **nearer to shared core-workflow parity**, not a claim of native acceptance, complete protocol coverage, Pi extension parity or Copilot mode parity. Adding a control/interface alone does not prove substitutability.
 
@@ -58,9 +59,62 @@ This is **nearer to shared core-workflow parity**, not a claim of native accepta
 
 Future extraction must remove actual consumer knowledge or move responsibility. Do not introduce a giant `Harness` interface or translate Codex events into Pi/ACP events just to reuse types. Native supervision registries remain concrete; only the proven process-group exit primitive is shared in this change.
 
+## Untouched-session persistence anomaly
+
+Native CLI interoperability is required, not continuity available only to
+Nimrod-created sessions. The accepted [durability contract](../features/references/session-durability.md)
+separates local layout/drafts, runtime identity and saved history. Codex 0.164.0
+returns a non-ephemeral ID and prospective rollout path before saving a thread.
+The [installed-runtime probe](references/protocol-evidence.md#untouched-native-session-interoperability-01640)
+reproduced native/app-server Resume failure for untouched threads and the distinct
+saved-but-undiscoverable named-empty case. [Existing upstream issues](references/protocol-evidence.md#existing-upstream-issues)
+track both mechanisms; no new issue/comment was posted.
+
+Current behavior in `src/codex/connection.ts`:
+- `savedSessionId` is a compatibility name for the exact layout reconnect
+  candidate, not saved-history evidence. Bind its draft scope synchronously, but
+  do not infer durability from that ID or `ephemeral:false`.
+- Every existing row resumes that exact ID. Never create a replacement thread,
+  auto-rename, send a synthetic prompt, switch to the user's daemon, scan native
+  history files or write private databases to force persistence.
+- Old `codexContinuity` metadata is ignored by layout decoding. Keep the row,
+  title, pin and original draft/attachment scope; even `untouched:true` is not
+  replacement authority. The earlier private checkpoint and saved-scope
+  replacement mechanisms are removed.
+- Runtime-only `historyConfirmed` comes from successful exact Resume or a
+  successful `thread/turns/list` response, including an empty page. The latter is
+  read-only in the reviewed native contract and requires saved materialization;
+  no `includeTurns:true` read or full-resume workaround is used to cause a save.
+  Best-effort checks run after new-session readiness, explicit rename/name
+  notification or a native terminal turn. They coalesce, do not poll, block
+  Send, project history over live rows or turn missing history into an untouched
+  classification. Failures remain unconfirmed; retired/disconnected results
+  cannot promote another runtime.
+- Reload waits for that evidence. Deletion does not: an open row supplies its
+  exact target to the independent catalog/source even when disconnected and
+  unconfirmed. The catalog validates native existence/project/lineage before
+  review and removal. An absent list entry is not
+  enough to discard local state. The same Delete action handles authoritatively
+  absent native targets with reviewed local removal after fenced owned stop and
+  a native absence recheck; if shutdown saves history, it upgrades to native
+  deletion. Unknown lookups/native mutation failures never become local cleanup.
+  [Codex deletion](references/deletion.md#native-absence-and-local-removal) owns the
+  exact classification, native fence and confirmation contract. Close consumes the lifecycle stop port independently of
+  connection/history confirmation. The Codex badge tooltip qualifies
+  unconfirmed history rather than claiming that a runtime ID is saved.
+- Missing-rollout errors retain complete diagnostics and any cleanup failure in
+  Details, with a concise headline that does not falsely promise saved history.
+  Explicit New Codex session is separate user intent, never a recovery side effect.
+
+The user's native-create → no-Send → quit → Nimrod requirement remains limited by
+Codex persistence/Resume/discovery in the reviewed version. Do not present removal
+of Nimrod's workaround as an upstream fix. [Verification](../features/references/verification.md#registered-harness-application-contract)
+separates authored fixtures, executed isolated probes and remaining native
+Nimrod acceptance.
+
 ## Startup binding anomaly
 
-[Startup binding and cleanup diagnostics](references/startup.md) records the user's 0.164.0 successful native thread creation followed by a local draft-scope rejection, and a secondary cleanup error masking that cause. Codex scopes must be accepted by both the actual shared frontend draft store and native staging/deletion boundaries, not merely supplied by a lifecycle adapter. The fix preserves the first failure and adds scoped cleanup/phase diagnostics; the native EPERM mechanism and post-fix startup remain acceptance gaps. No history cleanup or sandbox-policy weakening is implied.
+[Startup binding and cleanup diagnostics](references/startup.md) records the user's 0.164.0 successful native thread creation followed by a local draft-scope rejection, and a secondary cleanup error masking that cause. Codex scopes must be accepted by both the actual shared frontend draft store and native staging/deletion boundaries, not merely supplied by a lifecycle adapter. The fix preserves the first failure and adds scoped cleanup/phase diagnostics. The later [owned-group teardown follow-up](references/startup.md#owned-group-teardown-after-graceful-exit) handles Darwin zombie-only group EPERM through observed child reaping and observation-only group disappearance; genuine permission/live-group failures still retain ownership. Post-fix native startup/Close acceptance remains pending. No history cleanup or sandbox-policy weakening is implied.
 
 ## Invariants and anomalies
 
@@ -69,7 +123,7 @@ Future extraction must remove actual consumer knowledge or move responsibility. 
 - One canonical directory per window. Both opened thread cwd and response cwd must match; resumed ID must match exactly. Native ownership is window/token scoped with reload generations and retired-token fencing. No OS-wide process scans or external-writer exclusion claims.
 - Stop waits for group exit; failures retain the owned child/reservation for explicit retry. A reaped leader never authorizes re-signaling a potentially recycled group ID. macOS/Linux share Unix implementation; Windows launch is blocked until process-tree ownership exists. Actual platform behavior remains unverified.
 - Native wire records cap at 16 MiB, stderr lines at 64 KiB, writer channel at 32 messages, writes at 5 seconds. Large single-item output can fail the record limit even with paginated history. Early events cap at 128 / 1 MiB serialized params and disconnect on overflow, never silently truncate semantic records.
-- Resume is user-triggered for restored Codex rows. History may be discovered on explicit Resume after project association; it never binds a conversation or issues a prompt. Catalog errors remain source-local and must not block Pi history.
+- Resume is user-triggered for restored Codex rows. Explicit Resume/Delete pickers discover history regardless of prior Nimrod project association (see [shared history](../features/references/session-history.md)); it never binds a conversation or issues a prompt. Catalog errors remain source-local and must not block Pi history.
 - Thread ID differs from Codex's tree-wide sessionId. Never key drafts by tree-wide sessionId. Saved identity persists through disconnect; no history migration or prompt replay occurs. Deletion is an explicit reviewed operation, never a connection side effect.
 
 ### Ordering, rendering and delivery

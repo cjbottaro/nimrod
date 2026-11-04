@@ -4,7 +4,8 @@ import { codexConnectionFailure } from './connection-failure';
 import type { CodexTransport } from './native';
 import { ownedProcessStop, type ConnectSessionOptions, type SessionLifecycle, type SessionLifecycleHost, type SessionLifecycleOwner } from '../session-lifecycle';
 
-interface CodexBackend { session?: CodexSession; savedSessionId?: string; }
+/** savedSessionId is the layout's exact reconnect candidate, not saved-history evidence. */
+export interface CodexBackend { session?: CodexSession; savedSessionId?: string; historyConfirmed?: boolean; }
 export interface CodexConnectionHost {
   readonly project: string;
   readonly transport: CodexTransport;
@@ -15,7 +16,7 @@ export interface CodexConnectionHost {
   gate: SessionLifecycleHost['gate'];
   conflicts(identity: string): boolean;
   drafts: { read(): unknown; bindScope(scope: string): void; };
-  ui: Omit<CodexSessionUi, 'identified' | 'disconnected' | 'changed'> & { changed(state: CodexSessionState): void; };
+  ui: Omit<CodexSessionUi, 'identified' | 'disconnected' | 'changed' | 'historyConfirmed'> & { changed(state: CodexSessionState): void; };
   effects: {
     changed(): void;
     identified(): void;
@@ -37,6 +38,8 @@ export function createCodexConnection(readOwner: () => SessionLifecycleOwner, ba
   async function connect(options: ConnectSessionOptions): Promise<void> {
     const owner = readOwner();
     if (!host.current() || !host.available(options) || owner.starting || backend.session && !owner.ended) return;
+    // Every existing candidate resumes exactly, including legacy untouched markers.
+    // Runtime-only threads are never silently replaced or renamed to force persistence.
     const savedId = backend.savedSessionId;
     if (savedId && host.conflicts(savedId)) {
       host.effects.failure({ kind: 'connection', message: 'This Codex thread is already open in this window.', resumable: false });
@@ -74,8 +77,11 @@ export function createCodexConnection(readOwner: () => SessionLifecycleOwner, ba
       identified: id => {
         if (!valid() || savedId !== undefined && savedId !== id || host.conflicts(id)) throw new Error('Codex returned a conflicting or retired identity');
         // Bind synchronously before publishing identity or applying later packets.
-        host.drafts.bindScope(codexScope(id)); backend.savedSessionId = id; host.effects.identified();
+        host.drafts.bindScope(codexScope(id)); backend.savedSessionId = id;
+        backend.historyConfirmed = savedId !== undefined;
+        host.effects.identified();
       },
+      historyConfirmed: () => { if (valid() && !backend.historyConfirmed) { backend.historyConfirmed = true; host.effects.changed(); } },
       changed: () => { if (valid()) host.ui.changed(session.state); },
       approval: (request, signal) => valid() ? host.ui.approval(request, signal) : Promise.resolve('cancel'),
       question: host.ui.question ? (request, signal) => valid() ? host.ui.question!(request, signal) : Promise.resolve(undefined) : undefined,

@@ -24,7 +24,7 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 | New Copilot session | Unbound by default |
 | New named session… | Cmd+Option+N / Ctrl+Alt+N |
 | New temporary session | Cmd/Ctrl+Shift+N |
-| Delete session / Pi session tree… | Cmd/Ctrl+Backspace |
+| Delete session… | Cmd/Ctrl+Backspace |
 | Delete sessions… | Cmd/Ctrl+Shift+Backspace |
 | Select theme… | Unbound by default |
 | MCP servers… | Unbound by default |
@@ -41,7 +41,8 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 | Global Settings… | Cmd/Ctrl+, |
 | Project settings… | Cmd/Ctrl+Shift+, |
 | Edit keybindings… | Unbound |
-| Restart session | Cmd/Ctrl+R |
+| Reload session | Cmd/Ctrl+R |
+| Rename session… | Cmd/Ctrl+Shift+R |
 | Zoom in / out / reset to 100% | Cmd/Ctrl+Plus / Minus / 0 |
 
 **Switch session** searches only open sessions, including temporary sessions and sessions hidden by the sidebar view. **Resume session** searches saved project history, including closed sessions; choosing an already-open entry focuses it. **New named session** opens the name field first; type a name and press Enter to create it. Cmd/Ctrl+P has no Nimrod default binding.
@@ -54,10 +55,10 @@ only when the selected harness contributes that capability. Unsupported
 session-action shortcuts are consumed without falling through to native editing.
 The removed ACP actions are absent from the editor; their old overrides remain
 stored but inert. **Select theme…**, **Select mode…** and **Select context
-window…** have no default shortcut. **Restart session** restarts the selected
-saved session's Pi process, not the window; its existing eligibility and
+window…** have no default shortcut. **Reload session** reopens the selected
+saved Pi, Copilot or Codex conversation with a fresh agent process, not the window; its eligibility and
 interruption-confirmation rules still apply. Plus and Equals both invoke Zoom
-in. Existing user overrides remain unchanged when defaults change; Reset the
+in. Legacy `keybindings.restart` overrides still control Reload unless an explicit `reload` override exists; editing or resetting Reload retires that legacy key. Existing user overrides remain unchanged when defaults change; Reset the
 affected action to adopt its new defaults.
 
 **Delete sessions…** opens a searchable saved-history picker for repeated deletion. Enter opens tree review above the retained picker; Cancel leaves it unchanged, and completed deletion removes only confirmed-deleted rows in place, selecting the next match without refreshing history. Escape from the picker closes it. See [Delete sessions picker](sessions.md#delete-several-conversations).

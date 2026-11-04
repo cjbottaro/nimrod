@@ -7,6 +7,7 @@ import { loadSessionHistory, type SessionHistorySnapshot } from './session-histo
 import { savedSessionKey, resolveSessionListEntry, type SessionListEntry } from './session-list';
 import { availableSessionActions } from './session-actions';
 import { pickConfiguration } from './configuration-picker';
+import { checkSessionRetention, type SessionRetentionState } from './session-retention';
 import { readSavedSidebarSession, type SessionLifecycle, type SessionLifecycleOwner, type SavedSidebarSession, type SavedSessionIdentity } from './session-lifecycle';
 import type { ConversationViewMessage, ConversationView } from './conversation-view-host';
 import { mountConversationView } from './conversation-view';
@@ -16,6 +17,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { notificationPreview, sessionNotifications, type NotificationDispatch, type NotificationClick } from './notifications';
 import { SessionNavigation, SESSION_VIEWS, type SessionView, type SelectionIntent, type NavigationSnapshot } from './session-navigation';
 import { SessionConnection } from './session-connection';
+import { sessionName } from './session-naming';
 import { installSessionContextMenu } from './session-context-menu';
 import { installSidebarResize, sidebarWidthKey } from './sidebar-resize';
 import { lastUsed, sortByRecency, captureSidebarScroll, revealSidebarRow, SessionRecency } from './session-recency';
@@ -152,7 +154,7 @@ interface Tab {
   readonly lifecycle: SessionLifecycle;
   id: string; token?: string; title: string; lastUsed: number; pinned: boolean;
   root: HTMLElement; view: ConversationView; drafts: SessionDrafts; receive?: (message: ConversationViewMessage) => void;
-  starting: boolean; closing: boolean; restarting: boolean; deleting: boolean; deletionExecuting: boolean; ended: boolean;
+  starting: boolean; closing: boolean; reloading: boolean; deleting: boolean; deletionExecuting: boolean; ended: boolean;
   awaitingSelection: boolean;
   inputCount: number; unread: boolean; failed: boolean; focus?: HTMLElement; notice: HTMLElement;
   notices: ReturnType<typeof installApplicationNotices>;
@@ -195,7 +197,7 @@ const notifySession = sessionNotifications({
 const selectedConnection = new SessionConnection<Tab>({
   selected: () => presented,
   eligibility: tab => {
-    if (!ready || unloading || !workspace || !tabs.includes(tab) || tab.closing || tab.restarting || tab.awaitingSelection) return 'unavailable';
+    if (!ready || unloading || !workspace || !tabs.includes(tab) || !tab.project.availability.available() || tab.closing || tab.reloading || tab.awaitingSelection) return 'unavailable';
     return tab.lifecycle.eligibility();
   },
   connect: tab => tab.lifecycle.connect({ acceptedAction: true }),
@@ -224,7 +226,7 @@ const deletions = new SessionDeletionCoordinator({
     if (!ready || unloading || settings.isOpen) return false;
     const tab = tabs.find(tab => tab.lifecycle.key === target.key);
     return !tab || !!tab.lifecycle.identity && savedSessionKey(tab.lifecycle.identity) === savedSessionKey(reference)
-      && !tab.deleting && !tab.starting && !tab.closing && !tab.restarting;
+      && !tab.deleting && !tab.starting && !tab.closing && !tab.reloading;
   },
   participants: key => tabs.filter(tab => tab.lifecycle.key === key).map(tab => ({
     lock: (locked, executing) => {
@@ -252,9 +254,37 @@ const deletions = new SessionDeletionCoordinator({
 });
 deletionCoordinatorReady = true;
 for (const project of harnesses.projects) deletions.register(context => project.deletion(context));
-function tabDeletion(tab: Tab | undefined): SessionDeletionOperation | undefined {
-  const reference = tab?.lifecycle.identity;
-  return reference && tab ? deletions.operation(reference, tab.title) : undefined;
+type SessionDeleteAction = Pick<SessionDeletionOperation, 'label' | 'detail' | 'unavailableReason' | 'available' | 'run'>;
+function tabDeletion(tab: Tab | undefined): SessionDeleteAction | undefined {
+  if (!tab || !tab.project.availability.available()) return;
+  const intent = tab.integration.deletion.current();
+  if (!intent) return;
+  if (intent.kind === 'saved') {
+    const operation = deletions.operation(intent.reference, tab.title);
+    if (!operation) return;
+    return {
+      label: operation.label, detail: operation.detail, unavailableReason: operation.unavailableReason,
+      available: () => operation.available(),
+      async run() {
+        if (!operation.available()) return;
+        // Serialize the read-only classification with this row's other lifecycle actions.
+        tab.closing = true; updateTab(tab);
+        let retention: SessionRetentionState;
+        try { retention = await checkSessionRetention(tab.integration.retention); }
+        finally { tab.closing = false; if (tabs.includes(tab)) updateTab(tab); }
+        if (!tabs.includes(tab) || !operation.available()) return;
+        if (retention === 'absent') await closeTab(tab, true);
+        else await operation.run();
+      },
+    };
+  }
+  return {
+    label: 'Delete session…', detail: 'Close this session; it has no saved history to delete',
+    available: () => ready && !unloading && !settings.isOpen && !deletions.pending && tabs.includes(tab)
+      && !tab.deleting && !tab.starting && !tab.closing && !tab.reloading
+      && tab.integration.deletion.current()?.kind === 'close',
+    run: () => closeTab(tab, true),
+  };
 }
 // A global (Any-target) listener also receives emit_to events for OTHER windows.
 let notificationNavigation = 0;
@@ -262,7 +292,7 @@ const unlistenNotificationClicks = await listen<NotificationClick>('nimrod-notif
   const target = event.payload;
   const tab = tabs.find(tab => tab.id === target?.session && tab.token === target?.token);
   const valid = () => ready && !unloading && !!tab && tabs.includes(tab) && tab.token === target.token &&
-    !tab.starting && !tab.closing && !tab.restarting && !tab.deleting && !locked(tab) && !blocked(tab);
+    !tab.starting && !tab.closing && !tab.reloading && !tab.deleting && !locked(tab) && !blocked(tab);
   if (!valid()) return;
   const navigation = ++notificationNavigation;
   void (async () => {
@@ -305,25 +335,26 @@ function controls(): void {
   for (const id of ['workspace-new', 'workspace-resume', 'start-pi', 'start-temporary', 'resume-last', 'recover-draft', 'browse', 'cwd', 'enter-workspace', 'sidebar-new']) {
     (required(id) as HTMLButtonElement | HTMLInputElement).disabled = !ready;
   }
-  const creation = harnesses.get(harnesses.defaultId).creation;
-  required<HTMLButtonElement>('start-temporary').disabled = !ready || !creation.modes.includes('temporary');
+  const defaultProject = harnesses.get(harnesses.defaultId), creation = defaultProject.creation;
+  for (const id of ['workspace-new', 'start-pi', 'start-temporary', 'sidebar-new']) required(id).hidden = !defaultProject.availability.available();
+  required<HTMLButtonElement>('start-temporary').disabled = !ready || !defaultProject.initialization.ready() || !creation.modes.includes('temporary');
   cwd.readOnly = !!workspace;
-  required('resume-last').hidden = !lastSession();
-  required('recover-draft').hidden = !recoverableDrafts().length;
+  required('resume-last').hidden = !defaultProject.availability.available() || !lastSession();
+  required('recover-draft').hidden = !defaultProject.availability.available() || !recoverableDrafts().length;
   required('session-sidebar').hidden = !workspace || !sidebarVisible;
   sidebarResize.refresh();
   required('toggle-sidebar').setAttribute('aria-expanded', String(!!workspace && sidebarVisible));
-  renderSidebar(); restartControl();
+  renderSidebar(); reloadControl();
 }
 function needsAttention(tab: Tab): boolean { return !!tab.inputCount || tab.unread || tab.failed; }
 function isWorking(tab: Tab): boolean {
   const state = tab.integration.conversation.state;
-  return !tab.starting && !tab.closing && !tab.restarting && !tab.deleting && !tab.ended && !tab.inputCount &&
+  return !tab.starting && !tab.closing && !tab.reloading && !tab.deleting && !tab.ended && !tab.inputCount &&
     !!state && !state.sessionUnavailable && tab.integration.presentation.snapshot().working;
 }
 function isConnected(tab: Tab): boolean {
   return tab.lifecycle.connection === 'connected' &&
-    !tab.closing && !tab.restarting && !tab.deleting && !blocked(tab);
+    !tab.closing && !tab.reloading && !tab.deleting && !blocked(tab);
 }
 function navigationSnapshot(): NavigationSnapshot<Tab> { return navigation.snapshot(sidebarView, presented, active); }
 function sidebarTabs(): readonly Tab[] { return navigationSnapshot().visible; }
@@ -339,12 +370,12 @@ function touchTab(tab: Tab): void {
   persistTabs();
 }
 function canPin(tab: Tab): boolean {
-  return ready && !unloading && tabs.includes(tab) && !tab.closing && !tab.restarting && !tab.deleting && !locked(tab);
+  return ready && !unloading && tabs.includes(tab) && !tab.closing && !tab.reloading && !tab.deleting && !locked(tab);
 }
 function canClose(tab: Tab): boolean {
   return canPin(tab) && !tab.starting;
 }
-async function runSessionRowAction(tab: Tab, action: 'pin' | 'close' | 'delete', pinned = !tab.pinned): Promise<void> {
+async function runSessionRowAction(tab: Tab, action: 'pin' | 'close' | 'delete' | 'rename', pinned = !tab.pinned): Promise<void> {
   if (!ready || unloading || !tabs.includes(tab) || settings.isOpen) return;
   if (action === 'pin') {
     if (!canPin(tab) || tab.pinned === pinned) return;
@@ -355,7 +386,8 @@ async function runSessionRowAction(tab: Tab, action: 'pin' | 'close' | 'delete',
     persistTabs();
   } else if (action === 'close') {
     if (canClose(tab)) await closeTab(tab);
-  } else await deleteSession(tab);
+  } else if (action === 'rename') await renameSession(tab);
+  else await deleteSession(tab);
 }
 async function showSessionContextMenu(tab: Tab, position: { x: number; y: number }): Promise<void> {
   if (!ready || unloading || settings.isOpen || document.querySelector('dialog[open]') || !tabs.includes(tab)) return;
@@ -363,8 +395,9 @@ async function showSessionContextMenu(tab: Tab, position: { x: number; y: number
   await sessionContextMenu.show({
     valid: () => !unloading && tabs.includes(tab) && !settings.isOpen && !document.querySelector('dialog[open]'),
     pin: { label: pinned ? 'Pin session' : 'Unpin session', enabled: canPin(tab), run: () => runSessionRowAction(tab, 'pin', pinned) },
+    rename: { label: 'Rename session…', visible: tab.project.availability.available(), enabled: canClose(tab) && !blocked(tab), run: () => runSessionRowAction(tab, 'rename') },
     close: { label: 'Close session', enabled: canClose(tab), run: () => runSessionRowAction(tab, 'close') },
-    delete: { label: tabDeletion(tab)?.label || 'Delete session…', enabled: deletable(tab), run: () => runSessionRowAction(tab, 'delete') },
+    delete: { label: tabDeletion(tab)?.label || 'Delete session…', visible: tab.project.availability.available(), enabled: deletable(tab), run: () => runSessionRowAction(tab, 'delete') },
     error: error => notices.report({ id: `session-menu:${++noticeSequence}`, owner: tab.id, operation: 'Session menu', message: String(error) }),
   }, { x: position.x * window.devicePixelRatio, y: position.y * window.devicePixelRatio });
 }
@@ -442,7 +475,7 @@ function presentConversation(tab: Tab | undefined, focus = false): void {
     syncPopouts();
   }
   for (const item of tabs) {
-    item.root.inert = item.closing || item.restarting || item.deleting || item !== presented;
+    item.root.inert = item.closing || item.reloading || item.deleting || item !== presented;
     item.row.setAttribute('aria-current', String(item === presented));
   }
   const sessionIdentity = required('project-session'), sessionName = required('project-session-name');
@@ -453,7 +486,7 @@ function presentConversation(tab: Tab | undefined, focus = false): void {
   const badge = required('mode-badge');
   badge.textContent = tab?.integration.presentation.snapshot().badge ?? '';
   badge.title = tab?.integration.presentation.snapshot().badgeTitle ?? '';
-  restartControl();
+  reloadControl();
   // Restore navigation focus after reveal/catch-up and inert reconciliation, but
   // before a pending decision opens a picker and captures its return target.
   if (focus && tab && !document.querySelector('dialog[open]')) (tab.focus?.isConnected ? tab.focus : tab.root.querySelector<HTMLElement>('[data-pi-id="prompt"]'))?.focus({ preventScroll: true });
@@ -461,27 +494,28 @@ function presentConversation(tab: Tab | undefined, focus = false): void {
 }
 function promptPending(tab: Tab): boolean { return tab.integration.presentation.snapshot().pending; }
 function deletionBusy(tab: Tab): boolean {
-  return tab.starting || tab.closing || tab.restarting || !!tab.inputCount || tab.integration.presentation.snapshot().destructiveBusy;
+  return tab.starting || tab.closing || tab.reloading || !!tab.inputCount || tab.integration.presentation.snapshot().destructiveBusy;
 }
-function restartable(tab: Tab): boolean { const restart = tab.integration.restart; return restart.supported && restart.available(); }
+function reloadable(tab: Tab): boolean { return tab.project.availability.available() && tab.integration.reload.available(); }
 function deletable(tab: Tab | undefined): boolean {
   return ready && !deletions.pending && !!tab && tabs.includes(tab) && !!tabDeletion(tab)?.available() &&
-    !tab.deleting && !tab.starting && !tab.closing && !tab.restarting;
+    !tab.deleting && !tab.starting && !tab.closing && !tab.reloading;
 }
-function restartControl(): void {
+function reloadControl(): void {
   const active = presented;
-  const button = required<HTMLButtonElement>('restart-session');
-  button.disabled = !ready || !active || !restartable(active) || active.deleting || locked(active) || blocked(active) || active.starting || active.closing || active.restarting;
+  const button = required<HTMLButtonElement>('reload-session');
+  button.hidden = !!active && !active.project.availability.available();
+  button.disabled = !ready || !active || !reloadable(active) || active.deleting || locked(active) || blocked(active) || active.starting || active.closing || active.reloading;
   const remove = required<HTMLButtonElement>('delete-session');
+  remove.hidden = !!active && !active.project.availability.available();
   remove.disabled = !deletable(active);
   const operation = tabDeletion(active);
   remove.setAttribute('aria-label', operation?.label.replace('…', '') || 'Delete session');
   const unavailable = !active ? 'no open session' : deletions.pending ? 'deletion pending'
     : !operation?.available() ? operation?.unavailableReason || 'requires saved history and harness deletion support'
-    : active.starting || active.closing || active.restarting ? 'session lifecycle operation pending' : undefined;
+    : active.starting || active.closing || active.reloading ? 'session lifecycle operation pending' : undefined;
   remove.title = `${operation?.label || 'Delete session…'}${unavailable ? ` — ${unavailable}` : ''}`;
-  const restart = active?.integration.restart;
-  button.title = !restart ? 'Restart session — no open session' : restart.supported ? restart.reason() : restart.reason;
+  button.title = active?.integration.reload.reason() ?? 'Reload session — no open session';
 }
 function layoutKey(): string { return `nimrod.tabs.v1:${workspace}`; }
 function recencyKey(): string { return `nimrod.recency.v1:${workspace}`; }
@@ -590,7 +624,7 @@ function sessionListItem(entry: SessionListEntry) {
 }
 async function paletteSessions(signal: AbortSignal, publish: (page: PalettePage) => void, kind: 'resume' | 'delete' = 'resume'): Promise<PalettePage> {
   if (!workspace) return { items: [], notice: 'Open a project first.' };
-  const sources = harnesses.projects.flatMap(project => { const source = project.history.source(); return source ? [source] : []; });
+  const sources = harnesses.projects.filter(project => project.availability.available()).flatMap(project => { const source = project.history.source({ discover: true }); return source ? [source] : []; });
   const project = workspace;
   const page = (snapshot: SessionHistorySnapshot): PalettePage => {
     const open = tabs.map(sessionRow);
@@ -599,7 +633,7 @@ async function paletteSessions(signal: AbortSignal, publish: (page: PalettePage)
       .filter(entry => kind !== 'delete' || !!entry.reference && !!deletions.operation(entry.reference, entry.title)?.supported);
     return {
       notice: snapshot.pending.length ? `Loading ${snapshot.pending.join(' and ')} history…` : undefined,
-      items: (kind === 'resume' ? sortByRecency(entries, entry => entry.timestamp) : entries).map(entry => ({
+      items: sortByRecency(entries, entry => entry.timestamp).map(entry => ({
         ...sessionListItem(entry),
         run: () => {
           if (workspace !== project || unloading) throw new Error('The history project is no longer open');
@@ -674,16 +708,17 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     { id: 'delete-sessions', label: 'Delete sessions…', detail: 'Repeatedly review and delete supported saved sessions in this project', next: true, run: () => palette.deleteSessions() },
     ...harnesses.projects.flatMap(project => project.creation.action && project.initialization.ready() ? [{ ...project.creation.action, run: () => newHarnessSession(project) }] : []),
     ...harnesses.projectActions().filter(action => action.available()).map(action => ({ ...action, run: () => runProjectAction(action.id) })),
-    ...(harnesses.get(harnesses.defaultId).creation.named ? [{ id: 'new-named', label: 'New named session…', detail: 'Choose a name before starting', next: true, run: newNamedSession }] : []),
+    ...(harnesses.get(harnesses.defaultId).initialization.ready() && harnesses.get(harnesses.defaultId).creation.named ? [{ id: 'new-named', label: 'New named session…', detail: 'Choose a name before starting', next: true, run: newNamedSession }] : []),
     ...(tabs.length ? [{ id: 'switch-session', label: 'Switch session…', detail: 'All open sessions, regardless of sidebar view', next: true, run: () => palette.openSessions() }] : []),
     ...(active ? sessionCommands(active) : []),
-    ...(active && restartable(active) ? [
-      { id: 'restart', label: 'Restart session', detail: active.integration.restart.supported ? active.integration.restart.detail : '', run: () => restartSession(active!) },
+    ...(active && reloadable(active) ? [
+      { id: 'reload', label: 'Reload session', detail: active.integration.reload.detail, run: () => reloadSession(active!) },
     ] : []),
     ...(active && tabDeletion(active)?.available() ? [{
       id: 'delete', label: tabDeletion(active)!.label, detail: tabDeletion(active)!.detail, run: () => runSessionRowAction(active, 'delete'),
     }] : []),
-    ...(harnesses.get(harnesses.defaultId).creation.modes.includes('temporary') ? [{ id: 'temporary', label: 'New temporary session', detail: 'Conversation without saved history', run: () => newSession('temporary') }] : []),
+    ...(harnesses.get(harnesses.defaultId).initialization.ready() && harnesses.get(harnesses.defaultId).creation.modes.includes('temporary') ? [{ id: 'temporary', label: 'New temporary session', detail: 'Conversation without saved history', run: () => newSession('temporary') }] : []),
+    ...(active && active.project.availability.available() ? [{ id: 'rename', label: 'Rename session…', detail: 'Change this conversation’s harness-owned name', run: () => runSessionRowAction(active, 'rename') }] : []),
     ...(active ? [
       { id: 'pin', label: active.pinned ? 'Unpin session' : 'Pin session', detail: 'Keep this session above unpinned sessions in the sidebar', run: () => runSessionRowAction(active, 'pin') },
       { id: 'close', label: 'Close session', detail: 'Stop its agent and remove it from the sidebar; saved history stays', run: () => runSessionRowAction(active, 'close') },
@@ -740,8 +775,9 @@ function sessionHost(tab: Tab, owner: SessionLifecycleOwner): HarnessSessionHost
   const project = workspace ?? '';
   const current = () => !unloading && workspace === project && tabs.includes(tab);
   const selected = () => presented === tab;
+  let noticeResetToken: string | undefined;
   const focusComposer = () => {
-    if (current() && selected() && !settings.isOpen && !tab.closing && !tab.restarting && !document.querySelector('dialog[open]'))
+    if (current() && selected() && !settings.isOpen && !tab.closing && !tab.reloading && !document.querySelector('dialog[open]'))
       tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true });
   };
   return {
@@ -749,12 +785,20 @@ function sessionHost(tab: Tab, owner: SessionLifecycleOwner): HarnessSessionHost
     performance: settingsSurface.performanceProbe, transcriptLog: settingsSurface.transcriptLog,
     lifetime: {
       current, selected, settingsOpen: () => settings.isOpen,
-      closing: () => tab.closing, restarting: () => tab.restarting, deleting: () => tab.deleting,
+      closing: () => tab.closing, reloading: () => tab.reloading, deleting: () => tab.deleting,
       available: options => ready && !!project && current() && !tab.deleting && !tab.closing && !blocked(tab) && !locked(tab) && (!!options.acceptedAction || !settings.isOpen),
       conflicts: reference => tabs.some(other => other !== tab && other.lifecycle.identity && savedSessionKey(other.lifecycle.identity) === savedSessionKey(reference)),
     },
     effects: {
-      publish: message => tab.receive?.(message), title: () => tab.title,
+      publish: message => {
+        if (current() && message.type === 'sessionReset' && tab.token !== noticeResetToken) {
+          noticeResetToken = tab.token;
+          // Reload retires old-runtime notices only once replacement starts.
+          // Pi can reset again during identity validation; retain new notices.
+          if (tab.reloading) notices.store.resolveOwner(tab.id);
+        }
+        tab.receive?.(message);
+      }, title: () => tab.title,
       changed: change => {
         if (!current()) return;
         if (change?.title !== undefined) tab.title = change.title;
@@ -766,7 +810,7 @@ function sessionHost(tab: Tab, owner: SessionLifecycleOwner): HarnessSessionHost
       retire: () => { tab.cancelPreference?.(); if (tab.token) dialogs.cancel(tab.token); },
       input: delta => { tab.inputCount += delta; if (current()) updateTab(tab); },
       attention: (kind, token, label, response, signal) => {
-        const valid = () => current() && tab.token === token && !tab.closing && !tab.restarting && !tab.deleting && !signal?.aborted && (kind === 'failed' || !tab.ended);
+        const valid = () => current() && tab.token === token && !tab.closing && !tab.reloading && !tab.deleting && !signal?.aborted && (kind === 'failed' || !tab.ended);
         if (!valid()) return;
         if (kind === 'failed') tab.failed = true;
         else if (kind === 'completed' && (!selected() || settings.isOpen)) tab.unread = true;
@@ -781,7 +825,7 @@ function sessionHost(tab: Tab, owner: SessionLifecycleOwner): HarnessSessionHost
       storageFailure: persistenceError,
     },
     ui: { document, root: tab.root, palette, dialogs, focusComposer,
-      canPresent: () => current() && selected() && !tab.closing && !tab.restarting && !tab.deleting && !tab.ended
+      canPresent: () => current() && selected() && !tab.closing && !tab.reloading && !tab.deleting && !tab.ended
         && !settings.isOpen && !document.querySelector('dialog[open]:not(#command-palette)'),
       withDialog: (action, title) => withTabDialog(tab, action, title),
     },
@@ -826,7 +870,7 @@ function createTab(request: SessionRequest, project = harnesses.get(harnesses.de
     get starting() { return owner.starting; }, set starting(value) { owner.starting = value; },
     get ended() { return owner.ended; }, set ended(value) { owner.ended = value; },
     lastUsed: lastUsed(used), root, notice, notices: sessionNotices, closeButton, pinButton, row, rowLabel, rowIndicator, rowTime, rowHarness, rowNode,
-    drafts: drafts.fork(), closing: false, restarting: false, deleting: false, deletionExecuting: false,
+    drafts: drafts.fork(), closing: false, reloading: false, deleting: false, deletionExecuting: false,
     awaitingSelection: false, inputCount: 0, unread: false, failed: false,
     view: { setActive() {}, scrollToBottom() {}, dispose() {} } };
   try { integration = harnesses.create(project, sessionHost(tab, owner), request); }
@@ -843,12 +887,13 @@ function createTab(request: SessionRequest, project = harnesses.get(harnesses.de
   }
   root.addEventListener('nimrod-dispose-images', () => { imagesDisposed = true; for (const id of ephemeralImages) temporaryImages.delete(id); });
   function guardCardAction(): void {
-    if (!ready || !workspace || presented !== tab || !tabs.includes(tab) || tab.closing || tab.restarting || tab.deleting || document.querySelector('dialog[open]')) throw new Error('Card action is no longer available');
+    if (!ready || !workspace || presented !== tab || !tabs.includes(tab) || tab.closing || tab.reloading || tab.deleting || document.querySelector('dialog[open]')) throw new Error('Card action is no longer available');
   }
   tab.view = mountConversationView({
     projectDirectory: workspace,
     interaction: integration.conversation.interaction,
     messageInput: integration.conversation.messageInput,
+    commands: integration.commands,
     sendAutoFollow: () => preferences.sendAutoFollow(),
     autocompleteAccept: () => preferences.autocompleteAccept(),
     performance: settingsSurface.performanceProbe,
@@ -900,7 +945,7 @@ function createTab(request: SessionRequest, project = harnesses.get(harnesses.de
     },
     onMessage: receive => { tab.receive = receive; },
     promptSubmitted: () => {
-      if (!unloading && tabs.includes(tab) && tab.integration.conversation.state && !tab.ended && !tab.closing && !tab.restarting && !tab.deleting) touchTab(tab);
+      if (!unloading && tabs.includes(tab) && tab.integration.conversation.state && !tab.ended && !tab.closing && !tab.reloading && !tab.deleting) touchTab(tab);
     },
     postMessage: message => {
       // Mount readiness is local view bookkeeping, not a harness operation.
@@ -914,7 +959,7 @@ function createTab(request: SessionRequest, project = harnesses.get(harnesses.de
         }
         return;
       }
-      if (tab.closing || tab.restarting) return;
+      if (tab.closing || tab.reloading) return;
       if (message.type === 'cancelOperation') {
         if (typeof message.id === 'string') cancelConfiguration(tab, message.id);
         return;
@@ -974,12 +1019,12 @@ function updateTab(tab: Tab): void {
   measureWork(settingsSurface.performanceProbe, 'sidebar-row-update', () => updateTabPresentation(tab), presented === tab);
 }
 function updateTabPresentation(tab: Tab): void {
-  tab.root.inert = tab.closing || tab.restarting || tab.deleting || tab !== presented;
+  tab.root.inert = tab.closing || tab.reloading || tab.deleting || tab !== presented;
   const entry = sessionRow(tab), name = sessionListLabel(entry);
   tab.root.setAttribute('aria-busy', String(tab.integration.conversation.state?.busy === true));
   updateSessionRowContent(tab, entry, false);
   tab.row.disabled = !ready;
-  tab.row.setAttribute('aria-current', String(tab === presented)); tab.closeButton.setAttribute('aria-label', `Close ${name}`); tab.closeButton.disabled = !ready || tab.deleting || locked(tab) || tab.closing || tab.starting || tab.restarting;
+  tab.row.setAttribute('aria-current', String(tab === presented)); tab.closeButton.setAttribute('aria-label', `Close ${name}`); tab.closeButton.disabled = !ready || tab.deleting || locked(tab) || tab.closing || tab.starting || tab.reloading;
   tab.pinButton.setAttribute('aria-label', `${tab.pinned ? 'Unpin' : 'Pin'} ${name}`);
   tab.pinButton.setAttribute('aria-pressed', String(tab.pinned));
   tab.pinButton.title = tab.pinned ? 'Unpin session' : 'Pin session';
@@ -992,7 +1037,7 @@ function updateTabPresentation(tab: Tab): void {
 function showNotice(tab: Tab, text: string, retry = false, details?: string): void {
   tab.notice.hidden = true; tab.notice.replaceChildren();
   notices.report({ id: `${tab.id}:connection`, owner: tab.id, cause: 'connection', priority: 10, operation: 'Session connection', message: text, ...(details === undefined ? {} : { details }),
-    actions: retry && !blocked(tab) ? [{ label: 'Retry connection', enabled: () => tabs.includes(tab) && !tab.closing && !tab.restarting && !tab.deleting && !locked(tab), run: () => tab.lifecycle.connect() }] : undefined,
+    actions: retry && !blocked(tab) ? [{ label: 'Retry connection', enabled: () => tabs.includes(tab) && !tab.closing && !tab.reloading && !tab.deleting && !locked(tab), run: () => tab.lifecycle.connect() }] : undefined,
   });
   updateTab(tab);
 }
@@ -1006,10 +1051,13 @@ function sessionCommands(tab: Tab) {
     .map(action => ({ ...action, next: action.id !== 'cancel-configuration', run: () => runSessionAction(tab, action.id) }));
 }
 function cancelConfiguration(tab: Tab, key?: string): void {
-  if (!tabs.includes(tab) || tab.ended || tab.closing || tab.restarting || tab.deleting || blocked(tab)) return;
+  if (!tabs.includes(tab) || tab.ended || tab.closing || tab.reloading || tab.deleting || blocked(tab)) return;
   const configuration = sessionConfiguration(tab);
   const target = key ?? configuration?.operations.find(operation => operation.cancellable)?.key;
-  if (target) configuration?.cancel?.(target);
+  if (target) {
+    if (tab.integration.commands.operations.some(operation => operation.key === target)) tab.integration.commands.cancel(target);
+    else configuration?.cancel?.(target);
+  }
 }
 async function pickConfigurationCancellation(tab: Tab): Promise<void> {
   const configuration = sessionConfiguration(tab);
@@ -1031,10 +1079,11 @@ async function runProjectAction(id: `harness-${string}`): Promise<void> {
 }
 function sessionConfiguration(tab: Tab) { return tab.integration.configuration.current(); }
 function sessionActions(tab: Tab): readonly SessionAction[] {
+  if (!tab.project.availability.available()) return [];
   return availableSessionActions(tab.integration, () => pickConfigurationCancellation(tab));
 }
 async function runSessionAction(tab: Tab, id: SessionAction['id']): Promise<void> {
-  if (!tabs.includes(tab) || tab.closing || tab.restarting || tab.deleting) return;
+  if (!tabs.includes(tab) || tab.closing || tab.reloading || tab.deleting) return;
   const action = sessionActions(tab).find(action => action.id === id);
   if (!action) return;
   if (action.run) return action.run();
@@ -1047,10 +1096,10 @@ async function pickConfigurationSetting(tab: Tab, setting: string, operation: st
   });
   if (!request) return;
   const configuration = sessionConfiguration(tab);
-  if (!configuration || tab.ended || tab.closing || tab.restarting || tab.deleting || blocked(tab)) { request.error('Resume this session before changing its configuration.'); return; }
+  if (!configuration || tab.ended || tab.closing || tab.reloading || tab.deleting || blocked(tab)) { request.error('Resume this session before changing its configuration.'); return; }
   tab.cancelPreference?.(); tab.cancelPreference = request.cancel;
   const valid = () => tabs.includes(tab) && sessionConfiguration(tab) === configuration && tab.cancelPreference === request.cancel
-    && !tab.ended && !tab.closing && !tab.restarting && !tab.deleting;
+    && !tab.ended && !tab.closing && !tab.reloading && !tab.deleting;
   try {
     await pickConfiguration(configuration, setting,
       (options, current) => request.chooseItems(options.map(option => ({ id: option.value, label: option.label, detail: option.detail, keywords: option.keywords })), current), valid);
@@ -1086,6 +1135,7 @@ async function openSavedSession(entry: SessionListEntry): Promise<void> {
 async function openSavedReference(reference: SavedSessionIdentity, title = 'Session', timestamp = 0): Promise<void> {
   if (!ready || settings.isOpen || !await ensureWorkspace() || unloading) return;
   const project = harnesses.forReference(reference), key = project.saved.key(reference);
+  if (!project.availability.available()) return;
   const existing = () => tabs.find(tab => tab.project === project && tab.lifecycle.key === key);
   const selectExisting = (tab: Tab) => {
     if (!tab.lifecycle.identity || savedSessionKey(tab.lifecycle.identity) !== savedSessionKey(reference)) throw new Error('This session is open with a different saved session identity. Close it and refresh history before resuming it.');
@@ -1104,21 +1154,39 @@ async function openSavedReference(reference: SavedSessionIdentity, title = 'Sess
   tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
   activate(tab); await tab.lifecycle.connect({ acceptedAction: true });
 }
-async function restartSession(tab: Tab): Promise<void> {
-  if (!ready || tab.deleting || locked(tab) || blocked(tab) || !tabs.includes(tab) || !restartable(tab) || tab.starting || tab.closing || tab.restarting || settings.isOpen) return;
-  const restart = tab.integration.restart;
-  if (!restart.supported) return;
-  const needsConfirmation = restart.needsConfirmation(!!tab.inputCount);
-  tab.restarting = true; updateTab(tab);
+const renamingSessions = new WeakSet<Tab>();
+async function renameSession(tab: Tab): Promise<void> {
+  if (!tab.project.availability.available()) return;
+  if (!canClose(tab) || blocked(tab) || renamingSessions.has(tab)) return;
+  renamingSessions.add(tab);
+  const token = tab.token;
+  try {
+    if (!isConnected(tab)) throw new Error('Resume this session before renaming it.');
+    const value = await dialogs.input('Rename session', tab.title, token, 'Rename session', true);
+    if (value === undefined) return;
+    if (!canClose(tab) || blocked(tab) || settings.isOpen) return;
+    if (tab.token !== token || !isConnected(tab)) throw new Error('The session connection changed. Open Rename session again; nothing was retried.');
+    const name = sessionName(value);
+    await tab.integration.naming.rename(name);
+    notices.resolve(`${tab.id}:rename`);
+  } catch (error) {
+    if (tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:rename`, owner: tab.id, operation: 'Rename session', message: String(error) });
+  } finally { renamingSessions.delete(tab); }
+}
+async function reloadSession(tab: Tab): Promise<void> {
+  if (!ready || tab.deleting || locked(tab) || blocked(tab) || !tabs.includes(tab) || !reloadable(tab) || tab.starting || tab.closing || tab.reloading || settings.isOpen) return;
+  const reload = tab.integration.reload;
+  const needsConfirmation = reload.needsConfirmation(!!tab.inputCount);
+  tab.reloading = true; updateTab(tab);
   let resumed = false;
   try {
-    if (needsConfirmation && !await dialogs.confirm(`Restart ${tab.title}?`, restart.confirmation, undefined, 'Restart session')) return;
-    if (!tabs.includes(tab)) return;
-    resumed = true; await restart.run();
-  } catch (error) { showNotice(tab, `Could not restart ${tab.lifecycle.label}: ${error}`); }
+    if (needsConfirmation && !await dialogs.confirm(`Reload ${tab.title}?`, reload.confirmation, undefined, 'Reload session')) return;
+    if (!ready || !tabs.includes(tab) || !reloadable(tab) || tab.deleting || tab.closing || locked(tab) || blocked(tab)) return;
+    resumed = true; await reload.run();
+  } catch (error) { showNotice(tab, `Could not reload ${tab.lifecycle.label}: ${error}`); }
   finally {
-    tab.restarting = false; if (tabs.includes(tab)) updateTab(tab); controls();
-    if (resumed && presented === tab && !tab.ended && !document.querySelector('dialog[open]')) tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true });
+    tab.reloading = false; if (tabs.includes(tab)) updateTab(tab); controls();
+    if (resumed && presented === tab && tab.lifecycle.connection === 'connected' && !document.querySelector('dialog[open]')) tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true });
   }
 }
 async function deleteSavedSession(saved: SavedSessionIdentity, title: string): Promise<void> {
@@ -1137,7 +1205,7 @@ function removeDeletedSessions(targets: readonly SessionDeletionTarget[]): void 
   if (recency.delete(keys) && workspace) save(recencyKey(), recency.dump());
   const removed = tabs.filter(tab => tab.lifecycle.key !== undefined && deleted.has(tab.lifecycle.key));
   // Dispose the entire subtree before selecting or persisting a replacement.
-  for (const tab of removed) disposeTab(tab);
+  for (const tab of removed) { disposeTab(tab); tab.drafts.discard(); }
   for (const target of targets) {
     try { drafts.deleteScope(target.draftScope); } catch (e) { persistenceError(e); }
   }
@@ -1185,8 +1253,8 @@ function detachTab(tab: Tab): void {
   for (const item of tabs) updateTab(item);
   controls(); persistTabs(); syncPopouts();
 }
-async function closeTab(tab: Tab): Promise<void> {
-  if (tab.deleting || locked(tab) || tab.closing || tab.starting || tab.restarting || settings.isOpen) return;
+async function closeTab(tab: Tab, deletingUnsaved = false): Promise<void> {
+  if (tab.deleting || locked(tab) || tab.closing || tab.starting || tab.reloading || settings.isOpen) return;
   const snapshot = tab.integration.presentation.snapshot(), policy = tab.integration.close;
   const running = !!tab.integration.conversation.state && !tab.ended;
   if ((policy.alwaysConfirm || running && (snapshot.busy || snapshot.pending || tab.inputCount || snapshot.queuePending))
@@ -1194,12 +1262,37 @@ async function closeTab(tab: Tab): Promise<void> {
   if (tab.closing || !tabs.includes(tab)) return;
   tab.closing = true; updateTab(tab);
   try {
+    // A save during confirmation can already require the native review; do not
+    // stop that saved conversation outside its deletion transaction.
+    if (deletingUnsaved && tab.integration.deletion.current()?.kind === 'saved'
+      && await checkSessionRetention(tab.integration.retention) === 'saved') {
+      const intent = tab.integration.deletion.current();
+      tab.closing = false; updateTab(tab);
+      if (intent?.kind === 'saved' && tabs.includes(tab)) return deleteSavedSession(intent.reference, tab.title);
+      return;
+    }
     await nativeDrafts?.flush();
     await tab.lifecycle.stop();
     tab.receive?.({ type: 'sessionDisconnected' }); tab.lifecycle.disconnect('Disconnected');
+    // Only the harness can establish native absence. Errors/connection failures
+    // preserve drafts without trapping a disconnected row in the sidebar.
+    const retention = await checkSessionRetention(tab.integration.retention);
+    if (!tabs.includes(tab)) return;
+    // Shutdown can finish a first save. Explicit Delete must not leave it behind.
+    if (deletingUnsaved && retention !== 'absent' && tab.integration.deletion.current()?.kind === 'saved') {
+      tab.closing = false; updateTab(tab);
+      const intent = tab.integration.deletion.current();
+      if (intent?.kind === 'saved') return deleteSavedSession(intent.reference, tab.title);
+    }
     await nativeDrafts?.flush();
     if (tab.token) dialogs.cancel(tab.token);
-    detachTab(tab);
+    if (retention === 'absent') {
+      const { key, draftScope } = tab.lifecycle;
+      if (key !== undefined && draftScope !== undefined) removeDeletedSessions([{ key, draftScope }]);
+      else { detachTab(tab); tab.drafts.discard(); }
+      try { tab.integration.retention.forget(); } catch (error) { persistenceError(error); }
+      await nativeDrafts?.flush();
+    } else detachTab(tab);
   } catch (e) { tab.closing = false; showNotice(tab, `Could not stop ${tab.lifecycle.label}: ${e}`); updateTab(tab); }
 }
 async function pickWorkspace(): Promise<void> {
@@ -1220,7 +1313,7 @@ required('recover-draft').addEventListener('click', () => {
     const index = choice ? Number.parseInt(choice, 10) - 1 : -1; if (options[index]) return newSession('saved', options[index].key);
   });
 });
-required('restart-session').addEventListener('click', () => { if (presented) void restartSession(presented); });
+required('reload-session').addEventListener('click', () => { if (presented) void reloadSession(presented); });
 required('delete-session').addEventListener('click', () => { if (presented) void runSessionRowAction(presented, 'delete'); });
 required('toggle-sidebar').addEventListener('click', () => { sidebarVisible = !sidebarVisible; save('nimrod.sidebar.visible', sidebarVisible); controls(); });
 for (const view of sidebarViews) required(`sidebar-${view}`).addEventListener('click', () => selectSidebarView(view));
@@ -1279,7 +1372,8 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       for (const action of sessionActions(presented)) contributed.add(action.id);
       contributed.add('close');
       if (canPin(presented)) contributed.add('pin');
-      if (restartable(presented)) contributed.add('restart');
+      if (presented.project.availability.available() && canClose(presented) && !blocked(presented)) contributed.add('rename');
+      if (reloadable(presented)) contributed.add('reload');
       if (tabDeletion(presented)?.available()) contributed.add('delete');
     }
     if (!actionContextAvailable(id, { project: !!workspace, sessionActions: contributed })) return false;
@@ -1292,10 +1386,10 @@ const keybindingDispatch = installKeybindingDispatch(window, {
     // Static integration metadata is bindable before capabilities are ready,
     // but an absent live contribution is unavailable, not an enabled no-op.
     if (id.startsWith('harness-') && actionDefinition(id).context === 'project') return false;
-    if (id === 'new-named') return harnesses.get(harnesses.defaultId).creation.named;
-    if (id === 'temporary') return harnesses.get(harnesses.defaultId).creation.modes.includes('temporary');
+    if (id === 'new-named') return harnesses.get(harnesses.defaultId).initialization.ready() && harnesses.get(harnesses.defaultId).creation.named;
+    if (id === 'temporary') return harnesses.get(harnesses.defaultId).initialization.ready() && harnesses.get(harnesses.defaultId).creation.modes.includes('temporary');
     if (id === 'capture-performance') return preferences.performanceEnabled() && !settingsSurface.capturingPerformance;
-    if (actionDefinition(id).context === 'session' && !['pin', 'close', 'delete', 'restart'].includes(id)) return !!presented && sessionActions(presented).some(action => action.id === id);
+    if (actionDefinition(id).context === 'session' && !['pin', 'close', 'delete', 'reload', 'rename'].includes(id)) return !!presented && sessionActions(presented).some(action => action.id === id);
     return true;
   },
   run: (id: ActionId) => {
@@ -1310,6 +1404,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'new': return newSession();
       case 'temporary': return newSession('temporary');
       case 'delete': return presented ? runSessionRowAction(presented, 'delete') : undefined;
+      case 'rename': return presented ? runSessionRowAction(presented, 'rename') : undefined;
       case 'pin': return presented ? runSessionRowAction(presented, 'pin') : undefined;
       case 'delete-sessions': return palette.deleteSessions();
       case 'capture-performance': return capturePerformance(true);
@@ -1329,7 +1424,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'resume': return palette.sessions();
       case 'switch-session': return palette.openSessions();
       case 'new-named': return newNamedSession();
-      case 'restart': return presented ? restartSession(presented) : undefined;
+      case 'reload': return presented ? reloadSession(presented) : undefined;
     }
   },
   error: message => { error.textContent = String(message); },
@@ -1338,13 +1433,13 @@ refreshShortcutHints();
 async function boot(): Promise<void> {
   controls(); renderRecents();
   try {
-    await harnesses.initialize();
     await zoom.ready;
     const defaults = await invoke<{ pi: string; node: string; cwd: string; home?: string }>('runtime_defaults');
     homeDirectory = defaults.home;
     const saved = stored(settingsKey) as Partial<typeof defaults> | null;
     cwd.value = typeof saved?.cwd === 'string' ? saved.cwd : defaults.cwd;
     settingsSurface.initializeRuntime(defaults);
+    await harnesses.initialize();
     const path = await invoke<string | null>('window_workspace');
     ready = true;
     if (path) { await enterWorkspace(path); syncPopouts(); }

@@ -63,6 +63,32 @@ pub struct Config {
     generation: String,
 }
 
+// Discovery and launch must resolve the same configured executable.
+fn resolve_cli(configured: Option<PathBuf>) -> Result<PathBuf, String> {
+    let cli = configured
+        .map(|path| {
+            if path.is_absolute() {
+                Ok(path)
+            } else {
+                path.to_str()
+                    .and_then(crate::find_program)
+                    .ok_or("Configured Copilot CLI executable was not found".to_owned())
+            }
+        })
+        .transpose()?
+        .or_else(|| crate::find_program("copilot"))
+        .ok_or("Install and authenticate Copilot CLI, or configure its Runtime path")?;
+    crate::executable(&cli)
+}
+
+#[tauri::command]
+pub fn copilot_runtime_available(cli: Option<PathBuf>, node: Option<PathBuf>) -> bool {
+    cfg!(unix)
+        && resolve_cli(cli).is_ok_and(|path| which::which(path).is_ok())
+        && node.or_else(|| crate::find_program("node"))
+            .is_some_and(|path| crate::executable(&path).is_ok_and(|path| which::which(path).is_ok()))
+}
+
 impl CopilotHost {
     pub async fn retire_window(&self, window: &str) {
         self.windows.lock().await.closing.insert(window.into());
@@ -237,13 +263,15 @@ fn validate_message(value: &Value) -> Result<(), String> {
                         .chars()
                         .any(|c| c.is_whitespace() || c.is_control() || c == '/')
             }) && value.get("input").is_none_or(|input| input.is_string()) => {}
+        Some("rename") if value["name"].as_str().is_some_and(|name|
+            !name.trim().is_empty() && name.trim().chars().count() <= 100 && !name.chars().any(char::is_control)) => {}
         Some("prompt") => validate_prompt(value)?,
         Some("configure")
             if matches!(
                 value["setting"].as_str(),
                 Some("model" | "effort" | "mode" | "context-tier")
             ) && value["value"].is_string() => {}
-        Some("delete") if value["sessionId"].as_str().is_some_and(|id| !id.is_empty()) => {}
+        Some("delete" | "retention") if value["sessionId"].as_str().is_some_and(|id| !id.is_empty()) => {}
         Some("decision") if value["decisionId"].is_string() && value["value"].is_object() => {}
         _ => return Err("Unsupported Copilot SDK bridge operation".into()),
     }
@@ -294,21 +322,7 @@ pub async fn start_copilot(
         .or_else(|| crate::find_program("node"))
         .ok_or("Node was not found; configure Runtime paths")?;
     let node = crate::executable(&node)?;
-    let cli = config
-        .cli
-        .map(|path| {
-            if path.is_absolute() {
-                Ok(path)
-            } else {
-                path.to_str()
-                    .and_then(crate::find_program)
-                    .ok_or("Configured Copilot CLI executable was not found".to_owned())
-            }
-        })
-        .transpose()?
-        .or_else(|| crate::find_program("copilot"))
-        .ok_or("Install and authenticate Copilot CLI, or configure its Runtime path")?;
-    let cli = crate::executable(&cli)?;
+    let cli = resolve_cli(config.cli)?;
     let bridge = if cfg!(debug_assertions) {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../copilot/bridge.mjs")
     } else {

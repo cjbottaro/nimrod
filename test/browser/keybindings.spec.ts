@@ -34,7 +34,7 @@ test('session shortcut defaults open Switch, Resume and New named directly witho
     await expect(page.locator('#palette-list')).not.toContainText('Open session file');
     await page.keyboard.press('Escape');
     await expect(page.locator('#start-demo, #resume-file')).toHaveCount(0);
-    await page.keyboard.press(primary + '+R'); // Temporary fixtures cannot restart.
+    await page.keyboard.press(primary + '+R'); // Temporary fixtures cannot reload.
     expect(demo.calls.filter(call => call.command === 'start_pi')).toHaveLength(starts);
     await page.keyboard.press(primary + '+Shift+,');
     await expect(page.locator('#settings-title')).toContainText('Project settings');

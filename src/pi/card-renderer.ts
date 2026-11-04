@@ -19,6 +19,7 @@ export function validatePresentation(value: CardPresentation): CardPresentation 
     || (value.diffStats !== undefined && (!value.diffStats || !Number.isSafeInteger(value.diffStats.added) || value.diffStats.added < 0 || !Number.isSafeInteger(value.diffStats.removed) || value.diffStats.removed < 0))
     || (value.questionAnswer !== undefined && (!value.questionAnswer || typeof value.questionAnswer.answer !== 'string'))
     || (value.rawInputsPlacement !== undefined && !['before', 'after'].includes(value.rawInputsPlacement))
+    || (value.rawOutputDisclosure !== undefined && typeof value.rawOutputDisclosure !== 'boolean')
     || (value.inputDisclosure !== undefined && (!value.inputDisclosure || typeof value.inputDisclosure.label !== 'string' || typeof value.inputDisclosure.field !== 'string'))
     || (value.outputDisclosure !== undefined && typeof value.outputDisclosure !== 'string')
     || !Array.isArray(value.sections)) throw new Error('Invalid card presentation');
@@ -27,6 +28,8 @@ export function validatePresentation(value: CardPresentation): CardPresentation 
     if (!section || typeof section.key !== 'string' || !section.key || keys.has(section.key)
       || typeof section.label !== 'string' || typeof section.text !== 'string'
       || (section.format !== undefined && !['text', 'markdown', 'diff', 'console'].includes(section.format))
+      || (section.hideLabel !== undefined && typeof section.hideLabel !== 'boolean')
+      || (section.wrap !== undefined && typeof section.wrap !== 'boolean')
       || (section.webLinks !== undefined && typeof section.webLinks !== 'boolean')
       || (section.webLinks && section.format !== 'markdown')
       || (section.baseUrl !== undefined && (typeof section.baseUrl !== 'string' || !section.webLinks || section.format !== 'markdown'))) throw new Error('Invalid card section');

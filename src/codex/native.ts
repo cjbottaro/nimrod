@@ -8,7 +8,7 @@ export interface CodexTransport {
   stop(token: string): Promise<void>;
 }
 export interface CodexDeletionControl {
-  reserve(token: string, operationId: string, rootId: string, threadIds: readonly string[]): Promise<void>;
+  reserve(token: string, operationId: string, rootId: string, threadIds: readonly string[], localOnly?: boolean): Promise<void>;
   stop(token: string, operationId: string): Promise<void>;
   release(token: string, operationId: string): Promise<void>;
 }
@@ -20,7 +20,7 @@ export function nativeCodexTransport(cwd: string, runtime: () => { cli?: string;
       return invoke('start_codex', { token, config: { cwd, catalog, ...runtime() }, onEvent });
     },
     deletion: {
-      reserve: (token, operationId, rootId, threadIds) => invoke('reserve_codex_deletion', { token, operationId, rootId, threadIds }),
+      reserve: (token, operationId, rootId, threadIds, localOnly = false) => invoke('reserve_codex_deletion', { token, operationId, rootId, threadIds, localOnly }),
       stop: (token, operationId) => invoke('stop_codex_deletion', { token, operationId }),
       release: (token, operationId) => invoke('release_codex_deletion', { token, operationId }),
     },

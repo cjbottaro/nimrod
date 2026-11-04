@@ -14,20 +14,24 @@ inspector](../../features/references/mcp-inspector.md), and
 
 Nimrod contributes `/name` and `/compact` completion metadata, then merges
 Pi-reported extension, prompt-template and skill commands without overriding
-those names. Suggestions insert text only. The shared global/project acceptance
+those names. Suggestions insert text only. The required [command port](../../features/references/session-commands.md) now
+owns registered composer validation, invocation and Command cards. Pi waits for
+main-agent idle/configuration readiness; every accepted invocation retains a
+command transition even when it expands into native agent work. The shared global/project acceptance
 preference defaults to Tab only, leaving Enter to normal Pi submission; Tab or
 Enter also accepts incomplete/arrow-selected suggestions but exact names submit directly. That remains the
-execution path except for the documented local/intercepted commands below.
+native execution mechanism for dynamic commands, behind the required port rather
+than an ordinary Send lifecycle. Unknown/unadvertised commands reject locally.
 
 ## Matrix
 
 | Command/class | Discovery | Execution | Nimrod UI/state impact | Adapter/status | Evidence |
 | --- | --- | --- | --- | --- | --- |
-| `/name [name]` | Nimrod completion entry; Pi command semantics | Sent through Pi prompt/RPC path | Authoritative rename updates session title/history; no Send navigation | Pi-specific presentation/submission handling; not a Nimrod Rename action | Source/fixtures; native acceptance follows general Pi status |
-| `/compact [focus]` | Nimrod completion entry | Intercepted to Pi's supported compact RPC while idle | Compaction activity/input lock, context/history changes and Status-area updates | Concrete Pi adapter required because compaction has lifecycle beyond ordinary prompt submission | Source/fixtures; live compaction requires explicit authorization |
+| `/name [name]` | Nimrod completion entry; Pi command semantics | Pi naming RPC; bare command collects a name | Authoritative rename updates session title/history; no Send navigation | Pi-specific presentation/submission handling; not a Nimrod Rename action | Source/fixtures; native acceptance follows general Pi status |
+| `/compact [focus]` | Nimrod completion entry | Intercepted to Pi's supported compact RPC at authoritative idle | Compaction activity/input lock, context/history changes and Status-area updates | Concrete Pi adapter required because compaction has lifecycle beyond ordinary prompt submission | Source/fixtures; live compaction requires explicit authorization |
 | Bare `/mcp` | Pi reports builtin; Nimrod recognizes exact builtin identity | Read-only Pi RPC report, not prompt submission | Opens Nimrod MCP inspector; no model turn, recency or transcript navigation | Documented Pi-specific adapter | Source/offline fixtures; native acceptance pending |
 | `/mcp <subcommand>` | Pi-reported | Normal Pi command submission | Harness-defined output/effects | Generic Pi submission; never redirected to MCP inspector | Source/fixtures |
-| Extension command | Pi-reported dynamic catalog | Normal Pi command submission | Unknown until extension behavior/events are observed | Generic pass-through; RPC UI compatibility is extension-dependent | Catalog/source only; audit per extension when claiming support |
+| Extension command | Pi-reported dynamic catalog | Normal Pi command submission | Unknown until extension behavior/events are observed | Advertised-only native command dispatch; RPC UI compatibility is extension-dependent | Catalog/source only; audit per extension when claiming support |
 | Prompt template | Pi-reported dynamic catalog | Normal Pi command submission | Usually expands/sends harness work | Generic pass-through | Catalog/source; concrete templates vary |
 | Skill command | Pi-reported dynamic catalog | Normal Pi command submission | Skill disclosure/turn presentation when Pi reports invocation | Generic pass-through plus Pi skill presentation | Source/fixtures; installed skills vary |
 | Unsupported session-management commands (`/resume`, `/delete`, `/new`, `/fork`, `/clone`, `/tree`, `/reload`, `/quit`) | May be typed regardless of suggestions | Rejected locally | None; draft retained | Deliberate safety boundary—use Nimrod project/session controls, not action substitution | Source/fixtures |

@@ -5,10 +5,12 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 export interface SessionMenuAction {
   label: string;
   enabled: boolean;
+  visible?: boolean;
   run(): void | Promise<void>;
 }
 export interface SessionMenuTarget {
   pin: SessionMenuAction;
+  rename: SessionMenuAction;
   close: SessionMenuAction;
   delete: SessionMenuAction;
   valid(): boolean;
@@ -21,13 +23,13 @@ export interface SessionMenuTarget {
 export function installSessionContextMenu() {
   let disposed = false;
   let target: { request: string; value: SessionMenuTarget } | undefined;
-  const listening = listen<{ request: string; action: 'pin' | 'close' | 'delete' }>('nimrod-session-menu', event => {
+  const listening = listen<{ request: string; action: 'pin' | 'close' | 'delete' | 'rename' }>('nimrod-session-menu', event => {
     const current = target;
     if (disposed || !current || event.payload.request !== current.request) return;
     const key = event.payload.action;
-    if (!['pin', 'close', 'delete'].includes(key)) return;
+    if (!['pin', 'close', 'delete', 'rename'].includes(key)) return;
     target = undefined; // A popup can accept at most one action.
-    if (!current.value.valid() || !current.value[key].enabled) return;
+    if (!current.value.valid() || current.value[key].visible === false || !current.value[key].enabled) return;
     void Promise.resolve().then(() => {
       if (!disposed && current.value.valid()) return current.value[key].run();
     }).catch(error => { if (!disposed && current.value.valid()) current.value.error(error); });
@@ -45,7 +47,8 @@ export function installSessionContextMenu() {
         if (disposed || target?.request !== request || !next.valid()) return;
         await invoke('popup_session_menu', { request, options: {
           pinLabel: next.pin.label, pinEnabled: next.pin.enabled,
-          closeEnabled: next.close.enabled, deleteLabel: next.delete.label, deleteEnabled: next.delete.enabled,
+          renameVisible: next.rename.visible !== false, renameEnabled: next.rename.enabled, closeEnabled: next.close.enabled,
+          deleteVisible: next.delete.visible !== false, deleteLabel: next.delete.label, deleteEnabled: next.delete.enabled,
           x: position.x, y: position.y,
         } });
       } catch (error) {

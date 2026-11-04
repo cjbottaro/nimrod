@@ -55,7 +55,22 @@ export function searchPresentation(value: { title?: string; query: string; scope
 export function questionAnswerPresentation(value: { question: string; answer: string; sections: CardPresentation['sections'] }): CardPresentation {
   return { title: value.question, questionAnswer: { answer: value.answer }, rawInputsPlacement: 'after', sections: value.sections };
 }
-/** Shared command/output component through the public keyed presentation runtime. */
-export function shellPresentation(value: { title: string; command?: string; sections: CardPresentation['sections'] }): CardPresentation {
-  return { title: value.title, preview: value.command, sections: value.sections.map(section => ({ ...section, format: 'console' as const })) };
+/** Match a cumulative console snapshot without throwing away live SGR styles. */
+export function consoleOutputSuffix(live: string, final: string): string | undefined {
+  if (!live || !final) return;
+  if (final.startsWith(live)) return final.slice(live.length);
+  // SGR alone does not change text positions. Never guess through cursor/progress rewrites.
+  const plain = live.replace(/\x1b\[[\d;:]*m/g, '');
+  if (!/[\x00-\x08\x0b-\x1f\x7f-\x9f]/.test(plain) && final.startsWith(plain)) return final.slice(plain.length);
+}
+
+/** Shared command/output layout. A result snapshot supersedes its earlier execution section. */
+export function shellPresentation(value: { title: string; command?: string; sections: CardPresentation['sections']; format?: 'console' | 'text' }): CardPresentation {
+  const execution = value.sections.find(section => section.key === 'execution');
+  const result = value.sections.find(section => section.key === 'result');
+  const suffix = execution && result && value.format !== 'text' ? consoleOutputSuffix(execution.text, result.text) : undefined;
+  return { title: value.title, preview: value.command, rawInputsPlacement: 'after', rawOutputDisclosure: true,
+    sections: value.sections.filter(section => section.key !== 'execution' || !result)
+      .map(section => ({ ...section, ...(section === result && suffix !== undefined ? { text: execution!.text + suffix } : {}),
+        hideLabel: true, wrap: true, format: value.format ?? 'console' })) };
 }

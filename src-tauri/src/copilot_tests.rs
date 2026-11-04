@@ -1,5 +1,47 @@
 use super::*;
+#[test]
+fn startup_discovery_uses_configured_paths_without_launching_a_harness() {
+    let binary = std::env::current_exe().unwrap();
+    let missing = binary.parent().unwrap().join(format!("missing-{}", uuid::Uuid::new_v4()));
+    assert_eq!(copilot_runtime_available(Some(binary.clone()), Some(binary.clone())), cfg!(unix));
+    assert!(!copilot_runtime_available(Some(missing.clone()), Some(binary.clone())));
+    assert_eq!(resolve_cli(Some(binary.clone())).unwrap(), binary);
+    assert!(resolve_cli(Some(missing)).is_err(), "a missing override must not fall back to an installed CLI");
+    assert!(!copilot_runtime_available(Some(binary.clone()), Some(binary.with_file_name("missing-node"))));
+}
+
 use serde_json::json;
+
+#[test]
+fn rename_validates_the_sdk_name_limits() {
+    assert!(validate_message(&json!({"id":"one","method":"rename","name":"Friendly name"})).is_ok());
+    for name in ["".to_string(), " ".into(), "two\nlines".into(), "x".repeat(101)] {
+        assert!(validate_message(&json!({"id":"one","method":"rename","name":name})).is_err());
+    }
+}
+
+#[test]
+fn retention_records_require_an_exact_saved_session_id_at_the_native_boundary() {
+    assert!(
+        validate_message(&json!({"id":"retention","method":"retention","sessionId":"exact-id"}))
+            .is_ok()
+    );
+    for payload in [
+        json!({}),
+        json!({"sessionId":null}),
+        json!({"sessionId":""}),
+        json!({"sessionId":"  "}),
+        json!({"sessionId":true}),
+        json!({"sessionId":42}),
+        json!({"sessionId":[]}),
+        json!({"sessionId":{}}),
+    ] {
+        let mut message = payload;
+        message["id"] = json!("retention");
+        message["method"] = json!("retention");
+        assert!(validate_message(&message).is_err(), "{message}");
+    }
+}
 
 #[test]
 fn bridge_records_are_not_acp_or_pi_packets() {
@@ -161,10 +203,28 @@ async fn owned_offline_sdk_bridge_drains_and_exits_without_a_real_cli() {
         stopped,
         Output::new(move |packet| output.send(packet).map_err(|error| error.to_string())),
     ));
-    for (id, method) in [("init", "initialize"), ("connect", "connect")] {
+    for (message, expected) in [
+        (json!({"id":"init","method":"initialize"}), None),
+        (
+            json!({"id":"saved","method":"retention","sessionId":"fixture-sdk"}),
+            Some(json!("saved")),
+        ),
+        (
+            json!({"id":"absent","method":"retention","sessionId":"missing"}),
+            Some(json!("absent")),
+        ),
+        (
+            json!({"id":"hidden","method":"retention","sessionId":"unlisted"}),
+            Some(json!("saved")),
+        ),
+        (json!({"id":"connect","method":"connect"}), None),
+    ] {
+        // Use the same validation gate as write_copilot, not just direct bridge stdin.
+        assert!(validate_message(&message).is_ok(), "{message}");
+        let id = message["id"].clone();
         let (reply, delivered) = oneshot::channel();
         writer
-            .send((json!({"id":id,"method":method}), reply))
+            .send((message, reply))
             .await
             .unwrap();
         assert!(delivered.await.unwrap().is_ok());
@@ -173,6 +233,9 @@ async fn owned_offline_sdk_bridge_drains_and_exits_without_a_real_cli() {
                 if let Some(Packet::Rpc { value }) = packets.recv().await {
                     if value["kind"] == "result" && value["id"] == id {
                         assert!(value.get("error").is_none(), "{value}");
+                        if let Some(expected) = &expected {
+                            assert_eq!(&value["result"], expected, "{value}");
+                        }
                         break;
                     }
                 } else {

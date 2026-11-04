@@ -13,7 +13,7 @@ export function harnessHostFixture(library = new SessionDrafts(undefined, undefi
   const host: HarnessSessionHost = {
     id, project: '/fixture', ownership: { starting: false, ended: true }, drafts: library.fork(), transcriptLog: log,
     performance: { measure: (_kind, work) => work(), record() {} },
-    lifetime: { current: () => current, selected: () => selected, settingsOpen: () => false, closing: () => false, restarting: () => false, deleting: () => false, available: () => current, conflicts: () => false },
+    lifetime: { current: () => current, selected: () => selected, settingsOpen: () => false, closing: () => false, reloading: () => false, deleting: () => false, available: () => current, conflicts: () => false },
     effects: { publish: message => publications.push(message), title: () => 'Fixture session', changed: () => { changed++; }, identified() {}, retire() {}, input() {}, attention() {},
       notice: notice => notices.push(notice), resolve() {}, connection: message => notices.push({ id: 'connection', operation: 'Connect', message }), hasConnectionOutcome: () => false, storageFailure: error => { throw error; } },
     ui: { document: dom.window.document, root: dom.window.document.querySelector('main')!,

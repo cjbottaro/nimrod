@@ -45,6 +45,30 @@ function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) =>
     },
   };
 }
+test('SDK exact metadata distinguishes native absence, hidden saved history and failed/cross-project lookup', { timeout: 5000 }, async () => {
+  const f = bridge();
+  try {
+    await f.request('initialize');
+    assert.equal(await f.request('retention', { sessionId: 'missing' }), 'absent');
+    assert.equal(await f.request('retention', { sessionId: 'fixture-sdk' }), 'saved');
+    assert.equal(await f.request('retention', { sessionId: 'unlisted' }), 'saved');
+    await assert.rejects(f.request('retention', { sessionId: 'outside' }), /Nothing was loaded or deleted/);
+    await assert.rejects(f.request('retention', { sessionId: 'metadata-error' }), /Metadata unavailable/);
+    assert.equal(f.packets.some(packet => ['identified', 'connected', 'event'].includes(packet.kind)), false);
+  } finally { await f.close(); }
+});
+
+test('SDK bridge renames through the native name API and reads back the authoritative name', { timeout: 5000 }, async () => {
+  const f = bridge();
+  try {
+    await f.request('initialize'); await f.request('connect');
+    assert.deepEqual(await f.request('rename', { name: '  Friendly name  ' }), { name: 'Friendly name' });
+    assert.ok(f.packets.some(packet => packet.kind === 'event' && packet.event.type === 'session.title_changed' && packet.event.data.title === 'Friendly name'));
+    for (const name of ['', 'two\nlines', 'x'.repeat(101)]) await assert.rejects(f.request('rename', { name }), /1–100 characters/);
+    assert.equal(f.packets.some(packet => packet.kind === 'event' && packet.event.type === 'user.message'), false);
+  } finally { await f.close(); }
+});
+
 for (const text of ['', 'Image caption']) test(`SDK bridge maps inline images to blob attachments (${text || 'image only'})`, { timeout: 5000 }, async () => {
   const f = bridge();
   try {
@@ -184,6 +208,41 @@ for (const selectedAction of ['interactive', 'autopilot', 'exit_only', 'revise',
     } finally { await f.close(); }
   });
 }
+for (const permissionMode of ['manual', 'assisted', 'allow-all', null]) {
+  test(`new SDK sessions apply the saved permission default before becoming connected (${permissionMode})`, { timeout: 5000 }, async () => {
+    const f = bridge('interactive', undefined, 'resolved', { defaultPermissionMode: permissionMode });
+    try {
+      await f.request('initialize'); await f.request('connect');
+      const report = await f.request('command', { name: 'permissions', input: 'show' });
+      assert.match(report.text, new RegExp(`\\(${permissionMode ?? 'manual'}\\)`));
+      assert.equal(f.packets.some(packet => ['permission', 'input'].includes(packet.kind)
+        || packet.kind === 'event' && packet.event.type === 'user.message'), false);
+    } finally { await f.close(); }
+  });
+}
+
+test('Resume preserves saved permissions instead of applying current defaults', { timeout: 5000 }, async () => {
+  const f = bridge('interactive', undefined, 'resolved', { defaultPermissionMode: 'allow-all' });
+  try {
+    await f.request('initialize'); await f.request('connect', { sessionId: 'fixture-sdk' });
+    const report = await f.request('command', { name: 'permissions', input: 'show' });
+    assert.match(report.text, /\(manual\)/);
+    assert.equal(f.packets.some(packet => packet.kind === 'event' && packet.event.type === 'session.permissions_changed'), false);
+  } finally { await f.close(); }
+});
+
+for (const [modelState, permissionMode] of [['permission-rejected', 'allow-all'], ['resolved', 'invented']]) {
+  test(`permission-default failures do not expose a ready session (${modelState})`, { timeout: 5000 }, async () => {
+    const f = bridge('interactive', undefined, modelState, { defaultPermissionMode: permissionMode });
+    try {
+      await f.request('initialize');
+      await assert.rejects(f.request('connect'), /default permission mode/);
+      assert.equal(f.packets.some(packet => packet.kind === 'connected'), false);
+      assert.equal(f.packets.some(packet => packet.kind === 'event' && packet.event.type === 'user.message'), false);
+    } finally { await f.close(); }
+  });
+}
+
 for (const modelState of ['resolved', 'model-only', 'unresolved']) {
   test(`new SDK sessions honor configured creation defaults before any prompt (${modelState})`, { timeout: 5000 }, async () => {
     let session: CopilotSession | undefined;
@@ -470,10 +529,16 @@ test('SDK commands use discovery/invocation, retain arguments and choices, and n
     assert.ok(config.input.choices.some((choice: { name: string }) => choice.name === 'dynamicRetrieval.mcp'));
     assert.equal(config.input.valueHint, '[value]');
     assert.equal((await f.request('command', { name: 'config', input: 'memory false' })).kind, 'text');
+    const configured = await f.request('command', { name: 'config', input: 'model large' });
+    assert.equal(configured.text, 'Configured model for future Copilot sessions.');
+    const refreshed = f.packets.filter(packet => packet.kind === 'commands').at(-1)?.commands
+      .find((command: { name: string }) => command.name === 'config');
+    assert.deepEqual(refreshed.configValues.effortLevel, [], 'refreshed defaults use the saved model');
+    assert.equal(f.packets.some(packet => packet.kind === 'event' && packet.event.type === 'session.model_changed'), false);
     const menu = await f.request('command', { name: 'permissions' });
-    assert.equal(menu.kind, 'text'); assert.equal(menu.text, 'Fixture permission report: show');
+    assert.equal(menu.kind, 'text'); assert.equal(menu.text, 'Fixture permission report: show (manual)');
     const report = await f.request('command', { name: 'perms', input: 'show  literal\nrest' });
-    assert.equal(report.kind, 'text'); assert.equal(report.text, 'Fixture permission report: show  literal\nrest');
+    assert.equal(report.kind, 'text'); assert.equal(report.text, 'Fixture permission report: show  literal\nrest (manual)');
     assert.deepEqual(await f.request('command-skills'), { skills: [
       { name: 'fixture-skill', description: 'Fixture skill details', enabled: true },
       { name: 'disabled-skill', description: 'Disabled fixture skill', enabled: false },

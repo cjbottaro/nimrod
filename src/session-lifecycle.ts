@@ -29,7 +29,9 @@ export interface SessionConnectivity {
    */
   connect(options?: ConnectSessionOptions): Promise<void>;
   /** Observe owned child exit; concurrent calls for one token share work. Failure retains ownership
-   * and permits a later explicit retry. This is not the composer's Stop/cancel-turn action.
+   * and permits a later explicit retry. Valid while disconnected or without saved history;
+   * no owned token is a no-op. Consumers must not connect/Resume in order to Close.
+   * This is not the composer's Stop/cancel-turn action.
    */
   stop(): Promise<void>;
   /** Synchronously retire local transport/pending operations. Does not itself await native exit;
@@ -84,6 +86,8 @@ export function readSavedSidebarSession(value: unknown): SavedSidebarSession | u
     lastUsed: lastUsed(entry.lastUsed), ...(entry.pinned === true ? { pinned: true } : {}) };
   if (typeof entry.kind === 'string') {
     try { savedDraftScope(entry.kind, entry.sessionId); } catch { return; }
+    // Ignore retired Codex continuity markers without dropping the row or its draft scope.
+    // Layout IDs are exact reconnect candidates, never permission to replace a thread.
     return { kind: entry.kind, sessionId: entry.sessionId, ...metadata };
   }
   if (entry.kind === undefined && typeof entry.path === 'string') {

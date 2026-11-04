@@ -17,6 +17,36 @@ function fixture() {
   return { session, rpc, sent, published, respond, attention, previews, ui };
 }
 
+test('Pi slash port creates one rename card, confirms state and never submits a prompt', async () => {
+  const f = fixture();
+  const pending = f.session.slashCommands.invoke({ id: 'command-name', text: '/name Command name' });
+  assert.equal(f.sent[0].type, 'set_session_name');
+  const key = f.session.slashCommands.operations[0].key;
+  f.respond(true); await pending;
+  assert.equal(f.session.state.sessionName, 'Command name');
+  assert.equal(f.session.slashCommands.operations[0].key, key);
+  assert.equal(f.session.slashCommands.operations[0].phase, 'completed');
+  assert.equal(f.sent.some(request => request.type === 'prompt'), false);
+  assert.match(f.session.slashCommands.validate('/not-advertised')!, /not advertised/);
+  assert.match(f.session.slashCommands.validate('/reload')!, /session controls/);
+  f.rpc.disconnect('done');
+});
+test('Pi command picker cancellation withdraws intent and retains no fabricated outcome', async () => {
+  const f = fixture();
+  f.ui.commandInteraction = { choice: async () => undefined, input: async () => undefined };
+  await f.session.slashCommands.invoke({ id: 'cancel-name', text: '/name' });
+  assert.equal(f.sent.length, 0); assert.equal(f.session.slashCommands.operations.length, 0);
+  f.rpc.disconnect('done');
+});
+test('Pi queued commands withdraw before dispatch on disconnect', async () => {
+  const f = fixture(); f.session.state.busy = true;
+  const pending = f.session.slashCommands.invoke({ id: 'queued-name', text: '/name Later' });
+  assert.equal(f.session.slashCommands.operations[0].phase, 'queued');
+  f.rpc.disconnect('done'); await pending;
+  assert.equal(f.session.slashCommands.operations[0].phase, 'not-applied');
+  assert.equal(f.sent.length, 0);
+});
+
 test('performance scopes observe ordered reduction/projection/delivery without changing session semantics', () => {
   const f = fixture();
   const scopes: string[] = [];
@@ -109,6 +139,18 @@ for (const boundary of ['agent_end', 'agent_settled', 'another-started-prompt', 
   f.rpc.receive({ kind: 'rpc', value: { type: 'message_end', message: { role: 'user', content: 'unrelated', timestamp: 43 } } });
   assert.equal(f.published.filter(message => message.type === 'submissionMessage').length, 0);
   f.rpc.disconnect('done');
+});
+
+test('application rename applies its response synchronously and never sends a prompt', async () => {
+  const f = fixture();
+  try {
+    const renaming = f.session.rename('Application name');
+    assert.equal(f.sent[0].type, 'set_session_name');
+    f.rpc.receive({ kind: 'rpc', value: { type: 'response', id: f.sent[0].id, success: true } });
+    assert.equal(f.session.state.sessionName, 'Application name');
+    await renaming;
+    assert.equal(f.sent.some(message => message.type === 'prompt'), false);
+  } finally { f.rpc.disconnect('done'); }
 });
 
 test('rename results update the name and report the result', async () => {

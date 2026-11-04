@@ -38,6 +38,8 @@ button { color:var(--nimrod-button-foreground, var(--vscode-button-foreground));
 .transcript-image img { display:block; max-width:100%; max-height:360px; width:auto; height:auto; border-radius:6px; }
 .steering-status { font-size:.78em; color:var(--vscode-descriptionForeground); margin-bottom:6px; }
 .configuration-text { white-space:pre-wrap; overflow-wrap:anywhere; }
+.command-output { margin-top:8px; min-width:0; }
+.command-output-text { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; margin:0; }
 .delivery-status-text { display:inline-block; font:inherit; font-weight:normal; text-transform:uppercase; letter-spacing:.05em; }
 .operation-header { display:flex; align-items:baseline; gap:12px; margin-bottom:6px; }
 .operation-header > .steering-status { margin-bottom:0; }
@@ -104,6 +106,7 @@ details { margin:8px 0; border:0; border-radius:0; padding:0; }
 [data-output-kind="question-options"] .markdown { overflow-wrap:anywhere; }
 [data-output-kind="question-options"] .markdown ol { margin:4px 0; padding-left:1.6em; }
 [data-output-kind="question-options"] .markdown li + li { margin-top:.25em; }
+.tool-output-wrapped { max-width:100%; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-all; }
 .tool-output-web-markdown { font-family:var(--vscode-font-family, sans-serif); white-space:normal; background:transparent; padding:0; }
 .tool-output-web-markdown > .markdown { white-space:normal; overflow-wrap:anywhere; }
 .tool-output-web-markdown .markdown :is(h1, h2) { font-size:1.12em; line-height:1.4; }
@@ -114,6 +117,16 @@ details { margin:8px 0; border:0; border-radius:0; padding:0; }
 [data-output-kind="web-sources"] .markdown ol { margin:0; padding-left:1.8em; }
 [data-output-kind="web-sources"] .markdown li + li { margin-top:.35em; }
 :is([data-output-kind="fetch-source"], [data-output-kind="fetch-redirect"]) .tool-output-web-markdown { font-size:.92em; }
+/* SQL keeps literal results lightweight; the query reuses normal highlighted code. */
+.card-plugin-body:has(> [data-output-kind="sql-query"]) > [data-output-kind="result"] > .tool-output {
+  background:transparent; padding:6px 0 6px 12px;
+  border-left:2px solid var(--vscode-panel-border);
+  font-size:calc(var(--nimrod-monospace-size) * .9);
+}
+.card-plugin-body:has(> [data-output-kind="sql-query"]) > [data-output-kind="result"] > .tool-label { margin-top:10px; }
+[data-output-kind="sql-query"] > .tool-output { background:transparent; padding:0; white-space:normal; }
+[data-output-kind="sql-query"] .markdown { white-space:normal; }
+[data-output-kind="sql-query"] .code-block { margin:0; }
 .card-plugin-copy { margin:4px 0; padding:3px 7px; font-size:.8em; }
 .edit-card-preview { display:flex; flex:1; align-items:baseline; gap:12px; }
 .edit-card-filename { flex:none; max-width:70%; overflow:hidden; text-overflow:ellipsis; color:var(--vscode-foreground); }

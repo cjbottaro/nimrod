@@ -16,18 +16,23 @@ import { piSessionDeletion } from './session-deletion';
 import { piInspection } from './integration-inspection';
 import type { SessionDeletion, DeletionSnapshot, DeletionEvent } from '../session-deletion';
 import { bundledToolRenderer } from './card-plugins/registry';
+import { startupAvailability } from '../harness-availability';
 import { defineHarness } from '../harness-registry';
 import { conversationPort } from '../harness-conversation';
+import { bindSessionCommands } from '../session-commands';
+import { commandInteraction } from '../command-interaction';
 import { configurationActions, noProjectActions, ordinarySelection, savedClose, temporaryClose } from '../harness-defaults';
 import type { HarnessProject, HarnessSession, SessionRequest } from '../harness-contract';
 import type { HarnessProjectHost, HarnessSessionHost } from '../harness-host';
 import { ownedProcessStop } from '../session-lifecycle';
 import { lastUsed } from '../session-recency';
+import { sessionName } from '../session-naming';
 
 const lastKey = 'nimrod.last-session.v1';
 const creation = { action: { id: 'new', label: 'New session', detail: 'Pi · persistent conversation (default harness)' }, defaultMode: 'saved', modes: ['saved', 'temporary'], named: true, title: 'Session' } satisfies import('../harness-contract').HarnessCreation;
 export const piHarness = defineHarness({ creation, cards: bundledToolRenderer, id: 'pi', label: 'Pi', actions: [], create: createPiProject });
 function createPiProject(host: HarnessProjectHost): HarnessProject {
+  const availability = startupAvailability(() => invoke<boolean>('pi_runtime_available', { pi: host.runtime().pi, node: host.runtime().node }));
   let ready = false, transaction: SessionDeletion | undefined, unlisten: UnlistenFn | undefined, disposed = false;
   const history = new PiSessionHistory({ catalog: () => invoke('list_workspace_sessions'), inspect: path => invoke('inspect_workspace_session', { path }),
     open: host.open, removed: path => transaction?.removed(path) ?? false, recency: reference => host.recency().get(reference) });
@@ -64,8 +69,9 @@ function createPiProject(host: HarnessProjectHost): HarnessProject {
   };
   return {
     id: 'pi', label: 'Pi', creation, actions: noProjectActions,
-    initialization: { blocking: true, ready: () => ready, async run() { await invoke('stop_pi'); transaction?.load(await invoke<DeletionSnapshot>('deletion_snapshot')); ready = true; } },
-    saved, history: { source: () => history, associate() {}, async dispose() { await history.dispose(); } },
+    availability,
+    initialization: { blocking: true, ready: () => ready && availability.available(), async run() { await invoke('stop_pi'); transaction?.load(await invoke<DeletionSnapshot>('deletion_snapshot')); ready = true; } },
+    saved, history: { source: () => availability.available() ? history : undefined, associate() {}, async dispose() { await history.dispose(); } },
     deletion(context) {
       const source = piSessionDeletion({
         panels: () => host.participants().flatMap(panel => {
@@ -87,7 +93,7 @@ function createPiProject(host: HarnessProjectHost): HarnessProject {
         .then(dispose => { if (disposed) dispose(); else unlisten = dispose; }).catch(error => host.notice({ id: 'pi-deletion-listener', operation: 'Observe session deletion', message: String(error) }));
       return source;
     },
-    create: (sessionHost, request) => createPiSession(sessionHost, request, host, saved, () => ready),
+    create: (sessionHost, request) => createPiSession(sessionHost, request, host, saved, () => ready && availability.available()),
     dispose() { disposed = true; unlisten?.(); },
   };
 }
@@ -131,9 +137,9 @@ function createPiSession(host: HarnessSessionHost, request: SessionRequest, proj
       sessionFile: mode === 'resume' ? owner.file?.path : undefined, sessionId: mode === 'resume' ? owner.file?.sessionId || undefined : undefined };
     let launchInfo: PiLaunchInfo, identityGeneration = 0, confirmedRaw: { path: string; sessionId: string } | undefined, shellState: ConversationState | undefined, initialized = false;
     const current = new PiSession(rpc, {
-      transcriptLog: host.transcriptLog, performance: host.performance, active: lifetime.selected,
+      transcriptLog: host.transcriptLog, performance: host.performance, active: lifetime.selected, commandInteraction: commandInteraction(host), inspectMcpCommand: inspection.command,
       publish: message => { if (currentToken()) publish(message); },
-      notice: (message, severity, cause) => { if (currentToken() && !lifetime.closing() && !lifetime.restarting() && !lifetime.deleting()) effects.notice({ id: `pi:${++sequence}`, cause, operation: 'Pi operation', message, severity }); },
+      notice: (message, severity, cause) => { if (currentToken() && !lifetime.closing() && !lifetime.reloading() && !lifetime.deleting()) effects.notice({ id: `pi:${++sequence}`, cause, operation: 'Pi operation', message, severity }); },
       attention: (kind, response) => { if (currentToken()) effects.attention(kind, token, backend.session?.state.sessionName || 'Session', response); },
       choose: (title, options) => host.ui.withDialog(label => host.ui.dialogs.choose(label, options, token), title),
       input: (title, prefill) => host.ui.withDialog(label => host.ui.dialogs.input(label, prefill, token), title),
@@ -143,7 +149,7 @@ function createPiSession(host: HarnessSessionHost, request: SessionRequest, proj
         if (!currentToken()) return;
         owner.ended = true; inspection.cancel(); effects.retire(); effects.publish({ type: 'sessionDisconnected' });
         if (initialized && !lifetime.closing() && !lifetime.deleting()) void stopToken(token).catch(error => { if (currentToken()) effects.connection(`Could not stop Pi: ${error}`); });
-        if (!lifetime.closing() && !lifetime.restarting() && !lifetime.deleting() && !effects.hasConnectionOutcome()) effects.connection(`${reason || 'Session disconnected'}. Nothing will be sent automatically.`, !!owner.file?.exists);
+        if (!lifetime.closing() && !lifetime.reloading() && !lifetime.deleting() && !effects.hasConnectionOutcome()) effects.connection(`${reason || 'Session disconnected'}. Nothing will be sent automatically.`, !!owner.file?.exists);
         effects.changed();
       },
       identity: async (file, id) => {
@@ -186,7 +192,7 @@ function createPiSession(host: HarnessSessionHost, request: SessionRequest, proj
         validated: info => { launchInfo = info; if (info.session) { owner.file = info.session; effects.publish({ type: 'sessionReset', composerState: host.drafts.select(`file:${info.session.path}`) }); } },
         initialize: () => current.initialize(attemptName),
       });
-      if (currentToken()) { initialized = true; if (!lifetime.restarting()) host.ui.focusComposer(); }
+      if (currentToken()) { initialized = true; if (!lifetime.reloading()) host.ui.focusComposer(); }
     } catch (error) {
       rpc.disconnect(String(error));
       try { await stopToken(token); } catch (stopError) { if (currentToken()) effects.notice({ id: `stop:${++sequence}`, operation: 'Stop Pi', message: String(stopError) }); }
@@ -199,20 +205,45 @@ function createPiSession(host: HarnessSessionHost, request: SessionRequest, proj
   const readView = () => { if (wrappedSession !== backend.session) { wrappedSession = backend.session; wrapped = viewOwner(); } return wrapped; };
   const snapshot = () => {
     const state = backend.session?.state, subagents = !!state && !!presentActivity(false, '', state.extensionStatuses).subagents;
-    const pending = backend.session?.rpc.hasPendingRequest('prompt', 'set_session_name') ?? false;
-    return { harnessLabel: 'Pi', badge: owner.mode === 'temporary' ? 'Pi · temporary' : owner.file?.exists ? 'Pi' : 'Pi · awaiting first save', badgeTitle: owner.file?.path || '',
+    const pending = (backend.session?.rpc.hasPendingRequest('prompt', 'set_session_name') ?? false) || backend.session?.slashCommands.operations.some(operation => operation.phase === 'queued' || operation.phase === 'applying') === true;
+    return { harnessLabel: 'Pi', badge: owner.mode === 'temporary' ? 'Pi · temporary' : 'Pi', badgeTitle: owner.file?.path || '',
       busy: !!state?.busy, working: !!state?.busy || subagents, pending, compacting: !!state?.compacting, queuePending: !!state?.queue.pendingCount,
       destructiveBusy: pending || !!state && !owner.ended && (!!state.busy || state.compacting || state.modelControls.changing || state.sessionUnavailable || !!state.queue.pendingCount || !!state.queue.steering.length || !!state.queue.followUp.length || subagents) };
   };
   return {
     lifecycle, drafts: { durability: request.mode === 'temporary' ? 'memory' : 'persistent' }, conversation: conversationPort(host, readView, piInteraction), presentation: { snapshot }, configuration: { current: () => backend.session?.configuration },
     actions: { current: () => configurationActions(piSessionActions.map(action => action.id === 'mcp' ? { ...action, run: inspection.run } : action), { model: 'model', thinking: 'effort' }), async control() { throw new Error('This Pi control is no longer available'); } },
-    restart: { supported: true, available: () => !!owner.file?.exists && owner.mode !== 'temporary',
-      reason: () => saved.blocked(owner.file?.path) ? 'Restart session — recover through Resume session first' : owner.mode === 'temporary' ? 'Restart session — unavailable for temporary sessions' : !owner.file?.exists ? 'Restart session — available after the first save' : lifetime.restarting() ? 'Restarting session…' : 'Restart session',
-      detail: 'Restart Pi and retain this conversation', confirmation: 'This interrupts this session’s agent and resumes its saved history. Your draft stays; queued and in-flight work will not continue. Nothing is sent again automatically.',
-      needsConfirmation: inputPending => !!backend.session && !owner.ended && (snapshot().busy || snapshot().pending || snapshot().queuePending || inputPending),
-      async run() { await lifecycle.stop(); inspection.cancel(); effects.retire(); effects.publish({ type: 'sessionDisconnected' }); lifecycle.disconnect('Session restarted'); owner.ended = true; await lifecycle.connect({ acceptedAction: true }); } },
+    deletion: { current: () => {
+      const reference = lifecycle.identity;
+      return reference ? { kind: 'saved', reference } : { kind: 'close' };
+    } },
+    reload: { available: () => !!owner.file?.exists && owner.mode !== 'temporary',
+      reason: () => saved.blocked(owner.file?.path) ? 'Reload session — recover through Resume session first' : owner.mode === 'temporary' ? 'Reload session — unavailable for temporary sessions' : !owner.file?.exists ? 'Reload session — available after the first save' : lifetime.reloading() ? 'Reloading session…' : 'Reload session',
+      detail: 'Reload this conversation with a fresh Pi process', confirmation: 'This interrupts this session’s agent and resumes its saved history. Your draft stays; queued and in-flight work will not continue. Nothing is sent again automatically.',
+      needsConfirmation: inputPending => inputPending || !!backend.session && !owner.ended && snapshot().destructiveBusy,
+      async run() { if (!owner.file?.exists || owner.mode === 'temporary') throw new Error('Reload requires saved Pi history'); await lifecycle.stop(); inspection.cancel(); effects.retire(); effects.publish({ type: 'sessionDisconnected' }); lifecycle.disconnect('Session reloaded'); owner.ended = true; await lifecycle.connect({ acceptedAction: true }); } },
+    commands: bindSessionCommands(() => backend.session?.slashCommands, () => lifetime.current() && !owner.starting && !owner.ended && !lifetime.closing() && !lifetime.reloading() && !lifetime.deleting()),
+    naming: { async rename(name) {
+      if (lifecycle.connection !== 'connected' || !backend.session || backend.session.state.sessionUnavailable) throw new Error('Resume this Pi session before renaming it.');
+      await backend.session.rename(sessionName(name));
+    } },
+    retention: { async check() {
+      if (owner.mode === 'temporary' || !owner.file) return 'absent';
+      const info = await invoke<SessionFile>('workspace_session_file_info', { path: owner.file.path, sessionId: owner.file.sessionId });
+      if (info.sessionId !== owner.file.sessionId || info.path !== owner.file.path || typeof info.exists !== 'boolean') return 'unknown';
+      if (info.exists && !owner.file.exists) {
+        owner.file = info;
+        host.drafts.bind(info.path);
+        host.drafts.remember({ path: info.path, sessionId: info.sessionId, cwd: host.project });
+        project.store.save(lastKey, { path: info.path, sessionId: info.sessionId, cwd: host.project });
+        effects.identified();
+      }
+      return info.exists ? 'saved' : 'absent';
+    }, forget() {
+      const last = project.store.read(lastKey) as { path?: string } | null;
+      if (last?.path && last.path === owner.file?.path) project.store.save(lastKey, null);
+    } },
     close: request.mode === 'temporary' ? temporaryClose : savedClose, selection: ordinarySelection,
-    interactions: { setActive() {}, dispose: inspection.cancel }, references: { file: () => owner.mode !== 'temporary' && owner.file?.exists ? { path: owner.file.path, sessionId: owner.file.sessionId } : undefined },
+    interactions: { setActive(active) { if (!active) backend.session?.slashCommands.cancel(); }, dispose() { backend.session?.slashCommands.cancel(); inspection.cancel(); } }, references: { file: () => owner.mode !== 'temporary' && owner.file?.exists ? { path: owner.file.path, sessionId: owner.file.sessionId } : undefined },
   };
 }

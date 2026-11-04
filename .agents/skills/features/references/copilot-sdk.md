@@ -14,14 +14,15 @@ mandatory internal protocol. Built-in creation is **New Copilot session**;
 **New session** and its shortcuts remain Pi-default. No universal controller,
 duplicated transcript/composer/navigation engine, or SDK-to-ACP/Pi event adapter.
 
-The exact npm dependency is `@github/copilot-sdk@1.0.22`. Its released
-`package.json` declares `copilotCliVersion` and `copilotRuntime.version` **1.0.98**,
-matching the installed CLI version previously inspected. Its engine range is
+The exact npm dependency is `@github/copilot-sdk@1.0.28`. Its released
+`package.json` declares `copilotCliVersion` and `copilotRuntime.version` **1.0.105**.
+The earlier installed-CLI observations below used SDK 1.0.22 / CLI 1.0.98;
+they do not establish native acceptance of the upgraded pair. Its engine range is
 `^20.19.0 || >=22.12.0` (Node 21 is unsupported); mise pins Node 25.9.0.
 The released SDK speaks protocol 3, minimum 3; this is **not ACP protocol 1**.
 
-Evidence: [released package](https://www.npmjs.com/package/@github/copilot-sdk/v/1.0.22),
-[npm tarball](https://registry.npmjs.org/@github/copilot-sdk/-/copilot-sdk-1.0.22.tgz).
+Evidence: [released package](https://www.npmjs.com/package/@github/copilot-sdk/v/1.0.28),
+[npm tarball](https://registry.npmjs.org/@github/copilot-sdk/-/copilot-sdk-1.0.28.tgz).
 Inspect that release's `dist/types.d.ts`, `client.js`, `session.js`,
 `generated/rpc.d.ts` and `generated/session-events.d.ts` when changing this
 boundary; repository main documentation can describe unreleased interfaces.
@@ -51,6 +52,18 @@ roots for both paths. `test/copilot-bridge.test.ts` covers new/Resume connection
 and catalog reads without prompts. These fixtures are authored but unrun;
 installed-CLI discovery parity remains pending user acceptance.
 
+New sessions additionally read `defaultPermissionMode` through user settings.
+The SDK create API has no permission-mode creation input: after publishing the
+new identity and before publishing Connected, the configuration adapter reads
+`permissions.getMode()`, applies a differing explicit default through
+`permissions.setMode({mode, source:'user_setting'})`, and confirms the result
+and a fresh mode read. Copilot still enforces managed permission restrictions;
+rejection or missing confirmation fails connection setup without a prompt or
+retry. Unset defaults leave native startup policy untouched. Resume never
+reapplies current user defaults. Authored bridge/configuration fixtures cover
+manual/assisted/allow-all/unset, rejection, mismatched confirmation and Resume;
+installed-runtime/native acceptance remains pending.
+
 ## Distribution and native ownership
 
 - `copilot/bridge.mjs` imports the bundled official SDK, its concrete
@@ -62,7 +75,7 @@ installed-CLI discovery parity remains pending user acceptance.
 - `scripts/prepare-copilot.mjs`, called by `src-tauri/build.rs`, stages the bridge,
   SDK dist/package metadata and required dependency packages into ignored
   `src-tauri/resources/copilot/`. It excludes every optional SDK CLI runtime
-  package. User installation/authentication of CLI 1.0.98 and a supported Node
+  package. User installation/authentication of CLI 1.0.105 and a supported Node
   remain prerequisites. SDK upgrades require deliberate source/API review.
 - SDK imports `koffi` eagerly even for stdio; ship it and its matching
   `@koromix/koffi-<platform>-<arch>` native dependency, plus zod/vscode-jsonrpc.
@@ -103,7 +116,10 @@ recency/selection and its separate draft. Discovery association is
 
 Opening/restoring a project never prompts a conversation. Its restored selected
 Copilot row reconnects automatically; restored background rows remain disconnected.
-Associated projects can also start one **discovery-only** SDK client. `listSessions`
+Associated projects can also warm up one **discovery-only** SDK client. Explicit
+Resume/Delete pickers discover Copilot even without that association; the
+[shared history contract](session-history.md) owns source eligibility, independent
+loading and stable picker updates. `listSessions`
 does not load history; exact `context.workingDirectory` and nonremote membership
 are checked independently of the server filter. Dates are serialized SDK Dates,
 not invented user-message timestamps. Pi/Copilot sources publish independently
@@ -115,6 +131,12 @@ then verifies fresh project membership and calls `resumeSession` on that **exact
 ID**, with `allowTranscriptRecovery:false` and `continuePendingWork:false`.
 There is no automatic repair, pending-work continuation, new-session fallback,
 prompt replay, replay alert or selection/result-driven recency update.
+[Rename session](session-naming.md) uses the pinned SDK's experimental native
+`session.rpc.name.set/get` API through a narrow bridge operation; it is separate
+from the harness-owned `/session rename` command. Reported native names always
+win over inferred message titles, including a deliberate `Copilot session` name.
+Missing runtime support rejects visibly; no local label or prompt fallback.
+
 Creation uses `createSession({name:'Copilot session',...})`, making the identity
 durable without sending a paid prompt.
 The bridge publishes the authoritative identity before reading mode, transcript
@@ -142,9 +164,7 @@ presentation records. Stable SDK message/reasoning IDs and namespaced agent/tool
 IDs retain mounted cards; event IDs deduplicate replay/live overlap.
 The controller replaces the shared view's permissive `messages` field with
 `DisplayMessage[]`, retaining required stable keys through immutable updates.
-Final content supersedes deltas. Tool-input deltas create one agent/tool-ID-keyed generation row, accumulating only raw input text; complete execution arguments supersede them and late fragments cannot rewind execution. Late start metadata may fill inputs/names without rewinding a terminal result. Idle/Stop finalizes unstarted generation as interrupted. Tool-native snapshots and authoritative input subtrees use the existing detached immutable branding so later output/model updates do not recopy or reparse unchanged rich results. Tool partial results are replacement snapshots,
-shell-output events append with monotonic sequence deduplication, and terminal
-results cannot rewind to progress.
+Final content supersedes deltas. Tool-input deltas create one agent/tool-ID-keyed generation row, accumulating only raw input text; complete execution arguments supersede them and late fragments cannot rewind execution. Late start metadata may fill inputs/names without rewinding a terminal result. Idle/Stop finalizes unstarted generation as interrupted. Tool-native snapshots and authoritative input subtrees use the existing detached immutable branding so later output/model updates do not recopy or reparse unchanged rich results. Deprecated tool partial results are replacement snapshots used only until the first `tool.shell_output` event for that agent/tool call. Shell chunks then own live output: the first chunk starts an independent buffer (never appends to the overlapping snapshot), subsequent chunks append with per-call, cross-stream monotonic sequence deduplication, and later legacy snapshots retain native metadata without overwriting live text/ANSI state. stdout/stderr are presented in publication order, not claimed OS write order. The pinned SDK documents shell output as ephemeral/not replayed to late subscribers; missing earlier chunks cannot be recovered as colored output. Terminal results remain independent and authoritative and cannot rewind to progress. [Command-color evidence](verification.md#copilot-command-colors) records the observed payloads and remaining validation.
 Rich result metadata and unsupported saved attachments remain literal JSON. Supported inline image blobs render as images in live and restored user turns; unavailable/omitted blobs have explicit metadata fallback. The [message-input contract](image-paste.md#message-input-interface) owns capabilities, local draft/preview behavior and evidence.
 History replay finalizes interrupted reasoning/tools without capturing or alerting.
 
@@ -210,7 +230,7 @@ there is no durable queue or replay. Idle-only `setModel` and
 the pinned release's experimental `session.rpc.model.getCurrent()` read actual
 model/effort state; later native events outrank older results. Failed configuration
 disconnects instead of continuing with unconfirmed settings. No synthetic Pi
-slash aliases to Nimrod actions, ACP mode selectors, Restart,
+slash aliases to Nimrod actions, ACP mode selectors,
 MCP inspector or other unsupported controls. [Copilot slash commands](copilot-commands.md)
 use the released SDK's public experimental command discovery/invocation APIs,
 argument metadata and typed results; authored fixtures are unrun. Returned choices
@@ -704,17 +724,32 @@ unverified. Source documentation is API/rate evidence, not runtime acceptance.
 
 ## Close and Delete
 
+**Reload session** implements the required `SessionReload` port through the integration's existing owned-stop and exact-ID Resume paths. It retires pending decisions/commands/configuration, preserves mounted identity/drafts and does not continue pending work. See the canonical [reload lifecycle](projects-and-sessions.md#reload-session-lifecycle) for ordering, interruption confirmation, failure and no-replay contracts. New shell fixtures are authored but unrun; installed-runtime/native acceptance remains pending.
+
 Close awaits owned stop and SDK `session.disconnect()`/`client.stop()`; it never
-calls `deleteSession`, and keeps history/draft. Resume can reopen it explicitly.
+calls `deleteSession`. Its required retention adapter follows the shared
+[local-cleanup contract](session-durability.md#close-and-local-removal).
+`CopilotSessionHistory.retention` uses the public exact-ID
+`client.getSessionMetadata(id)` through the discovery bridge, validating ID,
+nonremote status and project cwd. Undefined metadata confirms absence; list
+omission alone does not. Saved-but-unlisted sessions remain native targets.
+The Rust `write_copilot` validator explicitly allows `retention` only with a
+nonblank exact session ID, alongside the JavaScript bridge dispatch. Changes to
+bridge operations must update both boundaries. The native offline-pipe fixture
+validates retention requests through that same gate before sending them to the
+production bridge; direct JavaScript/shell fixtures alone cannot cover native
+allowlist drift.
 
 SDK deletion uses `client.deleteSession(id)`, which permanently removes history
 and artifacts. The shared target-bound operation requires review, fresh exact
 project membership, locks, observed owned writer shutdown and another fresh
 membership check in the discovery-only bridge. It never resumes, creates,
 prompts, deletes a private directory or replaces Pi's native tree transaction.
-Aborted/failed stop, stale membership or an unknown deletion
-outcome retain identity/draft/references; confirmed success alone cleans the
-SDK scope. No automatic retry; Refresh may inform a later explicit attempt.
+After review, exact metadata is checked before and after owned stop. Confirmed
+post-stop absence removes local state without calling the deletion API; shutdown
+materialization proceeds to native deletion. Aborted/failed stop, invalid metadata
+or an unknown deletion outcome retain identity/draft/references. A failed native
+delete is never downgraded to local cleanup. No automatic retry; Refresh may inform a later explicit attempt.
 External applications remain uncoordinated.
 
 ## Code map and authored verification
