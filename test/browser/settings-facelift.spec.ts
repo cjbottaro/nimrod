@@ -65,12 +65,45 @@ for (const width of [1440, 800, 480]) {
   });
 }
 
+for (const width of [1440, 800, 480]) {
+  test(`theme name, provenance and action stay grouped at ${width}px`, async ({ page }) => {
+    const fixture = await demoFixture(page);
+    try {
+      await page.setViewportSize({ width, height: 760 });
+      await page.locator('#open-settings').click();
+      await expect(page.locator('#settings-scope-description')).toContainText('this project directory');
+      await expect(page.locator('#theme-hint')).toBeHidden();
+      await expect(page.locator('.theme-setting-value .settings-source')).toContainText('Inherited');
+      const layout = await page.locator('.theme-setting-controls').evaluate(element => {
+        const value = element.querySelector<HTMLElement>('.theme-setting-value')!;
+        const button = element.querySelector<HTMLElement>('#theme-picker')!;
+        const name = value.querySelector<HTMLElement>('#theme-current')!;
+        const source = value.querySelector<HTMLElement>('.settings-source')!;
+        const field = element.getBoundingClientRect(), v = value.getBoundingClientRect(), b = button.getBoundingClientRect();
+        return { fits: field.width >= 140 + b.width + 12, inline: Math.abs(v.top - b.top) <= 1 && v.right <= b.left,
+          wrapped: b.top >= v.bottom, sourceBelow: source.getBoundingClientRect().top >= name.getBoundingClientRect().bottom,
+          overflow: element.scrollWidth > element.clientWidth + 1 };
+      });
+      expect(layout.fits ? layout.inline : layout.wrapped).toBe(true);
+      expect(layout.sourceBelow).toBe(true);
+      expect(layout.overflow).toBe(false);
+      await page.locator('#theme-current').evaluate(node => { node.textContent = 'An imported theme with a deliberately very long name for narrow settings panes'; });
+      expect(await page.locator('#settings-panel-appearance').evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+      await page.locator('#theme-picker').click();
+      await page.locator('#palette-input').press('Escape');
+      await expect(page.locator('#settings-page')).toBeVisible();
+      await expect(page.locator('#theme-picker')).toBeFocused();
+      expect(fixture.errors).toEqual([]);
+    } finally { await fixture.close(); }
+  });
+}
+
 test('project provenance stays with its compact field and global-only groups stay hidden', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {
     await page.locator('#open-settings').click();
-    await expect(page.locator('#theme-hint')).toContainText('this project');
-    await expect(page.locator('#theme-picker').locator('..').locator('.settings-source')).toContainText('Inherited');
+    await expect(page.locator('#theme-hint')).toBeHidden();
+    await expect(page.locator('.theme-setting-value .settings-source')).toContainText('Inherited');
     for (const id of ['settings-translucency', 'settings-typography', 'settings-zoom', 'settings-modal-animation', 'settings-send-auto-follow']) {
       await expect(page.locator(`#${id}`)).toBeHidden();
     }

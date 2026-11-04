@@ -115,7 +115,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     libraryEdits: global, selectTheme: () => selectTheme(),
   });
   if (!global) required('theme-library-actions').hidden = true;
-  if (!global) required('theme-hint').textContent = 'Choose a global-library theme for this project. Import or remove themes in global Settings.';
+  if (!global) required('theme-hint').hidden = true;
   const appearance = installNativeWindowAppearance({
     read: () => preferences.windowAppearance(),
     save: patch => preferences.saveWindowAppearance(patch),
@@ -435,7 +435,9 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
       const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'settings-reset secondary'; reset.textContent = 'Remove override';
       reset.setAttribute('aria-label', 'Remove override for ' + (document.querySelector('label[for="' + id + '"]')?.textContent ?? id));
       required(id).setAttribute('aria-describedby', [required(id).getAttribute('aria-describedby'), status.id].filter(Boolean).join(' '));
-      row.append(status, reset); required(id).after(row); sources.set(key, { status, reset });
+      row.append(status, reset);
+      (key === 'appearance.theme' ? required('theme-current') : required(id)).after(row);
+      sources.set(key, { status, reset });
       reset.addEventListener('click', () => {
         const restoreFocus = document.activeElement === reset;
         reset.disabled = true;
@@ -453,7 +455,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     required('settings-title').textContent = global ? 'Settings' : 'Project settings' + (project ? ' — ' + project.split(/[\\/]/).pop() : '');
     required('settings-scope-description').textContent = global
       ? 'Global defaults for all projects. Project overrides take precedence.'
-      : `Changes here apply only to ${project?.split(/[\\/]/).pop() || 'this project'} and override Global Settings.`;
+      : 'Changes here apply only to this project directory and override Global Settings.';
     required('settings-scope-description').title = project ?? '';
     required('settings-title').title = project ?? 'Global Settings';
     required('settings-file-path').textContent = preferences.paths.settings;

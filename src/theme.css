@@ -131,7 +131,12 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 #runtime-fields { min-width:0; margin:0; padding:0; border:0; }
 #runtime-fields input::placeholder { color:var(--vscode-descriptionForeground); opacity:1; }
 #runtime-status { min-height:1.5em; font-size:12px; line-height:1.5; }
-#theme-current { display:block; margin-top:6px; overflow-wrap:anywhere; }
+#settings-theme-row > label { align-self:start; line-height:32px; }
+.theme-setting-controls { display:flex; align-items:flex-start; flex-wrap:wrap; gap:8px 12px; }
+.theme-setting-value { flex:1 1 140px; min-width:0; }
+#theme-current { display:block; margin:0; padding:7px 0; font-size:12px; font-weight:500; line-height:18px; color:var(--vscode-foreground); overflow-wrap:anywhere; }
+.theme-setting-value .settings-source { margin-top:0; }
+#theme-picker { flex:none; }
 #theme-library-actions { display:flex; flex-wrap:wrap; gap:8px; }
 #theme-notice { display:flex; align-items:start; gap:8px; margin:12px 0; padding:10px; background:var(--vscode-editorWidget-background); border:1px solid var(--vscode-panel-border); border-radius:6px; }
 #theme-notice-text { overflow-wrap:anywhere; line-height:1.5; }

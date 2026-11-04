@@ -5522,7 +5522,7 @@ for (const globalSettings of [false, true]) {
       assert.equal(f.element('runtime-inheritance-hint').hidden, globalSettings);
       if (globalSettings) assert.equal(f.element<HTMLInputElement>('pi-path').required, true);
       if (!globalSettings) {
-        assert.match(f.element('settings-scope-description').textContent!, /only to project and override Global Settings/);
+        assert.match(f.element('settings-scope-description').textContent!, /only to this project directory and override Global Settings/);
         assert.equal(f.element('settings-global-link').textContent, 'Global Settings…');
         assert.equal(f.element('project-settings-file-path').textContent, '.nimrod/settings.json');
         assert.equal(f.element('project-settings-file-path').title, f.preferences.value.projectPath);
@@ -5572,13 +5572,17 @@ test('project settings routes scope shortcuts and removes overrides rather than 
     assert.match(f.element('settings-title').textContent!, /Project settings — project/);
     const picker = f.element<HTMLButtonElement>('theme-picker');
     assert.equal(f.element('theme-picker-source').textContent, 'Inherited');
+    assert.equal(f.element('theme-current').nextElementSibling!.contains(f.element('theme-picker-source')), true);
+    assert.equal(f.element('theme-current').parentElement!.contains(picker), false);
+    assert.match(picker.getAttribute('aria-describedby')!, /theme-current/);
+    assert.equal(f.element('theme-hint').hidden, true);
     assert.equal(f.element('theme-library-actions').hidden, true);
     picker.click();
     f.element<HTMLElement>('palette-list').querySelector<HTMLElement>('[data-key="dracula"]')!.click(); await f.tick();
     assert.equal(f.element('theme-picker-source').textContent, 'Project override');
     f.preferences.external('{"appearance.theme":"tokyo-night"}'); await f.tick();
     assert.equal(picker.dataset.theme, 'dracula');
-    picker.nextElementSibling!.querySelector<HTMLButtonElement>('button')!.click(); await f.tick();
+    f.element('theme-picker-source').nextElementSibling!.dispatchEvent(new f.win.MouseEvent('click', { bubbles: true })); await f.tick();
     assert.equal(picker.dataset.theme, 'tokyo-night');
     assert.equal(f.element('theme-picker-source').textContent, 'Inherited');
     assert.equal(JSON.parse(f.preferences.value.projectText!)['appearance.theme'], undefined);
