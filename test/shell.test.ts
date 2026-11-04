@@ -3982,6 +3982,7 @@ test('named-session Escape preserves the existing composer and inline Create lau
 test('welcome stays hidden until startup resolves and appears only without a workspace', async () => {
   const initial = new JSDOM(readFileSync('index.html', 'utf8'));
   assert.equal(initial.window.document.getElementById('welcome')!.hidden, true);
+  assert.equal(initial.window.document.getElementById('mode-badge')!.textContent, '');
   initial.window.close();
   for (const windowWorkspace of [undefined, '/project']) {
     let release!: () => void;
@@ -3990,10 +3991,12 @@ test('welcome stays hidden until startup resolves and appears only without a wor
     try {
       assert.equal(f.element('welcome').hidden, true);
       assert.equal(f.element('workspace-empty').hidden, true);
+      assert.equal(f.element('mode-badge').textContent, '');
       assert.equal(f.element<HTMLButtonElement>('start-pi').disabled, true);
       release(); await f.tick(); await f.tick();
       assert.equal(f.element('welcome').hidden, !!windowWorkspace);
       assert.equal(f.element('workspace-empty').hidden, !windowWorkspace);
+      assert.equal(f.element('mode-badge').textContent, '');
       assert.equal(f.calls.some(c => c.command === 'start_pi'), false);
       if (windowWorkspace) {
         assert.equal(f.element('project-name').textContent, 'project');
@@ -4084,6 +4087,7 @@ test('empty workspace actions work and closing the last session does not return 
     assert.equal(f.element('welcome').hidden, true);
     assert.equal(f.element('workspace-empty').hidden, false);
     assert.equal(f.element('conversation').hidden, true);
+    assert.equal(f.element('mode-badge').textContent, '');
   } finally { f.dom.window.close(); }
 });
 

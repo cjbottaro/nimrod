@@ -104,6 +104,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Empty projects no longer show the obsolete “PoC” placeholder in the Project bar. The harness label appears only when a session is displayed.
+
 - Selecting a session with a pending question or permission request now restores conversation focus before opening its picker, avoiding a stranded sidebar focus outline after answering or dismissing it. Keyboard-focus indicators remain available.
 
 - Settings dropdown fields use the app's theme colors instead of Linux's native grey select surface, with a matching arrow and preserved native keyboard controls.

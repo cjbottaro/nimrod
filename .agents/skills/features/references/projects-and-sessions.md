@@ -61,6 +61,7 @@ One canonical directory per window with independently owned sessions. New is per
 
 ## Project bar identity
 
+- `#mode-badge` starts empty in the static shell and displays only the presented session's harness badge. Startup, welcome, empty projects and empty filtered views show no harness label or placeholder.
 - `index.html`: `#project-identity` groups `#project-name`, the existing muted `#workspace-label`, and `#project-session` (a decorative muted middle dot followed by `#project-session-name`); wordmark/spark live only in the welcome copy.
 - `presentConversation` projects the displayed session’s `tab.title` (the same label as its sidebar row) into the session label and full-label hover title, without changing unchanged text during streaming. Selection and authoritative title updates refresh it; background updates never substitute another session’s name. When no conversation is displayed, both label and dot are hidden, including empty filtered views. Sidebar collapse does not hide the label. It is informational, not a rename/switch control or live region.
 - `enterWorkspace` in `src/main.ts` derives name/parent from the native canonical cwd using `projectPathParts`, abbreviates only the parent with `abbreviateHome`, and gives the group a full-path hover title. No routing, recent-history, draft or session identity changes.
