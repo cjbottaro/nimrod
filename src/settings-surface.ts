@@ -25,7 +25,7 @@ import type { NotificationDispatch } from './notifications';
 import { installTypography } from './typography-controls';
 import type { InstalledFont } from './font-picker';
 
-export function installSettingsSurface(preferences: Awaited<ReturnType<typeof installPreferences>>, notices: ReturnType<typeof installApplicationNotices>, global = false) {
+export function installSettingsSurface(preferences: Awaited<ReturnType<typeof installPreferences>>, notices: ReturnType<typeof installApplicationNotices>, global = false, harnesses: readonly { id: string; label: string }[] = []) {
   const required = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   let unloading = false, noticeSequence = 0;
   let chooseSetting: ChooseSetting = async () => undefined;
@@ -367,6 +367,15 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   };
   sendAutoFollowPicker.addEventListener('change', changeSendAutoFollow);
   reloadSendAutoFollow();
+  const defaultHarnessPicker = required<HTMLButtonElement>('default-harness');
+  const reloadDefaultHarness = () => { defaultHarnessPicker.value = preferences.defaultHarness(); choiceControls?.paint(); };
+  const changeDefaultHarness = () => {
+    void preferences.saveDefaultHarness(defaultHarnessPicker.value)
+      .then(() => notices.resolve('default-harness-settings'))
+      .catch(error => notices.report({ id: 'default-harness-settings', operation: 'Save default harness', message: String(error) }))
+      .finally(() => { if (!unloading) reloadDefaultHarness(); });
+  };
+  reloadDefaultHarness();
   const autocompletePicker = required<HTMLButtonElement>('autocomplete-accept');
   const reloadAutocomplete = () => { autocompletePicker.value = preferences.autocompleteAccept(); choiceControls?.paint(); };
   const changeAutocomplete = () => {
@@ -429,7 +438,8 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
 
   choiceControls = installSettingsChoiceControls(document, {
     choose: (...args) => chooseSetting(...args),
-    apply: { 'zoom-level': value => zoom.select(Number(value)), 'modal-animation-style': changeAnimationStyle,
+    harnesses,
+    apply: { 'default-harness': changeDefaultHarness, 'zoom-level': value => zoom.select(Number(value)), 'modal-animation-style': changeAnimationStyle,
       'send-auto-follow': changeSendAutoFollow, 'autocomplete-accept': changeAutocomplete },
     error: (id, error) => feedback('settings-choice:' + id, 'Change setting')(String(error)),
   });
@@ -439,6 +449,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     const controls: [ProjectSettingKey, string][] = [
       ['appearance.theme', 'theme-picker'],
       ['interaction.autocompleteAccept', 'autocomplete-accept'],
+      ['sessions.defaultHarness', 'default-harness'],
     ];
     for (const [key, id] of controls) {
       const row = document.createElement('div'); row.className = 'settings-source';
@@ -523,7 +534,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   const unsubscribe = preferences.subscribe(() => {
     const width = preferences.readState(settingsSidebarWidthKey);
     if (!Object.is(width, settingsSidebarWidth)) { settingsSidebarWidth = width; settingsSidebarResize.reload(); }
-    runtime.reload(); themes.reload(); typography.reload(); appearance.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadTranscriptLog(); reloadSendAutoFollow(); reloadAutocomplete(); reloadModalAnimation(); keybindingEditor?.reload(); reloadSources();
+    runtime.reload(); themes.reload(); typography.reload(); appearance.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadTranscriptLog(); reloadSendAutoFollow(); reloadAutocomplete(); reloadDefaultHarness(); reloadModalAnimation(); keybindingEditor?.reload(); reloadSources();
   });
   reloadSources();
   return {

@@ -141,7 +141,12 @@ console.log(greeting); // 0123456789</code></pre>
         </div>
       </section>
       <section id="settings-panel-interaction" class="settings-panel" data-category="interaction" role="tabpanel" aria-labelledby="settings-category-interaction" tabindex="0" hidden>
-        <h2>Interaction</h2><p class="settings-description">Keep the keyboard working your way.</p>
+        <h2>Interaction</h2><p class="settings-description">Session defaults and keyboard behavior.</p>
+        <div class="settings-group settings-spaced-group"><div class="settings-row">
+          <label for="default-harness">Default harness</label>
+          <div class="settings-field"><span id="default-harness-current" class="settings-choice-value"></span></div><div class="settings-control-actions"><button id="default-harness" type="button" class="secondary utility-button" aria-haspopup="dialog" aria-describedby="default-harness-current default-harness-hint">Change…</button></div>
+          <p id="default-harness-hint" class="settings-hint settings-row-note">Used for new sessions only. Choosing a harness for one session does not change this default. Unavailable or unsupported defaults open a harness picker instead.</p>
+        </div></div>
         <div class="settings-group"><div class="settings-row">
           <label for="autocomplete-accept">Accept autocomplete with</label>
           <div class="settings-field"><span id="autocomplete-accept-current" class="settings-choice-value"></span></div><div class="settings-control-actions"><button id="autocomplete-accept" type="button" class="secondary utility-button" aria-haspopup="dialog" aria-describedby="autocomplete-accept-current autocomplete-accept-hint">Change…</button></div>

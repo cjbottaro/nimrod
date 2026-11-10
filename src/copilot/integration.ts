@@ -16,7 +16,7 @@ import { ownedProcessStop } from '../session-lifecycle';
 import type { HarnessProject, HarnessSession, SessionRequest } from '../harness-contract';
 import type { HarnessProjectHost, HarnessSessionHost } from '../harness-host';
 
-const creation = { action: { id: 'new-copilot', label: 'New Copilot session', detail: 'Start a Copilot session' }, defaultMode: 'saved', modes: ['saved'], named: false, title: 'Copilot session' } satisfies import('../harness-contract').HarnessCreation;
+const creation = { defaultMode: 'saved', modes: ['saved'], named: false, title: 'Copilot session' } satisfies import('../harness-contract').HarnessCreation;
 export const copilotHarness = defineHarness({ creation, cards: bundledCopilotPlugin, id: 'copilot-sdk', label: 'Copilot', actions: [], create: createCopilotProject });
 function createCopilotProject(projectHost: HarnessProjectHost): HarnessProject {
   const availability = startupAvailability(() => invoke<boolean>('copilot_runtime_available', { cli: projectHost.runtime().copilot, node: projectHost.runtime().node }));

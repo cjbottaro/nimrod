@@ -16,8 +16,10 @@ test('retired ACP sessions and actions stay absent; Copilot uses concise labels'
     await page.keyboard.press('Meta+Shift+P');
     await page.locator('#palette-input').fill('ACP');
     await expect(page.locator('#palette-list [role="option"]')).toHaveCount(0);
-    await page.locator('#palette-input').fill('New Copilot session');
-    await expect(page.locator('#palette-list')).toContainText('Start a Copilot session');
+    await page.locator('#palette-input').fill('New session with harness');
+    await expect(page.locator('#palette-list')).toContainText('Choose a harness for this session only');
+    await page.locator('#palette-input').press('Enter');
+    await expect(page.locator('#palette-list')).toContainText('Copilot');
     await expect(page.locator('#palette-list')).not.toContainText('installed and authenticated');
     await page.keyboard.press('Escape');
     await page.locator('#open-sessions .session-row').filter({ hasText: 'Current Copilot' }).click();

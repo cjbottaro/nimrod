@@ -16,19 +16,33 @@ function fixture(choose?: ChooseSetting) {
   const palette = installCommandPalette(dom.window as unknown as Window, dialog, {
     canOpen: () => true, commands: () => [], sessions: async () => ({ items: [] }), openSessions: () => ({ items: [] }), shortcuts: false,
   });
-  for (const [id, value] of [['zoom-level', '125'], ['modal-animation-style', 'subtle'], ['send-auto-follow', 'whenIdle'], ['autocomplete-accept', 'tab']]) {
+  for (const [id, value] of [['default-harness', 'pi'], ['zoom-level', '125'], ['modal-animation-style', 'subtle'], ['send-auto-follow', 'whenIdle'], ['autocomplete-accept', 'tab']]) {
     const button = get<HTMLButtonElement>(id); button.value = value; button.disabled = false;
   }
   const writes: string[] = [], errors: unknown[] = [];
   const controls = installSettingsChoiceControls(doc, {
     choose: choose ?? settingsChoicePage(palette, parent),
-    apply: { 'zoom-level': value => writes.push(value), 'modal-animation-style': value => writes.push(value),
+    harnesses: [{ id: 'pi', label: 'Pi' }, { id: 'codex', label: 'Codex' }],
+    apply: { 'default-harness': value => writes.push(value), 'zoom-level': value => writes.push(value), 'modal-animation-style': value => writes.push(value),
       'send-auto-follow': value => writes.push(value), 'autocomplete-accept': value => writes.push(value) },
     error: (_id, error) => errors.push(error),
   });
   parent.showModal();
   return { dom, get, parent, dialog, controls, writes, errors, close() { controls.dispose(); palette.dispose(); dom.window.close(); } };
 }
+
+test('default harness choices come from registrations and keep the Settings parent mounted', async () => {
+  const f = fixture();
+  try {
+    assert.equal(f.get('default-harness-current').textContent, 'Pi');
+    f.get<HTMLButtonElement>('default-harness').click();
+    assert.equal(f.parent.open, true);
+    assert.equal(f.get('palette-list').querySelector('[data-key="pi"]')!.getAttribute('aria-current'), 'true');
+    f.get('palette-list').querySelector<HTMLElement>('[data-key="codex"]')!.click(); await tick();
+    assert.deepEqual(f.writes, ['codex']); assert.equal(f.get('default-harness-current').textContent, 'Codex');
+    assert.equal(f.parent.open, true); assert.equal(f.dialog.open, false);
+  } finally { f.close(); }
+});
 
 test('picker controls show plain values, accept after closing and restore their Settings opener', async () => {
   const f = fixture();

@@ -108,7 +108,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
           `import { noProjectActions } from ${JSON.stringify(path.resolve('src/harness-defaults.ts'))};`,
           `const fixture = ${options.fixtureProjectActions === false ? '{ ...fixtureHarness, create: host => ({ ...fixtureHarness.create(host), actions: noProjectActions }) }' : 'fixtureHarness'};`,
           `const retentionFixture = ${options.fixtureRetention ? `{ ...fixture, create: host => { const project = fixture.create(host); return { ...project, create: (host, request) => ({ ...project.create(host, request), retention: { async check() { return ${JSON.stringify(options.fixtureRetention)}; }, forget() {} } }) }; } }` : 'fixture'};`,
-          'const registrations = [piHarness, retentionFixture]; registerHarnessMetadata(registrations);',
+          'export const bundledHarnesses = [piHarness, retentionFixture]; const registrations = bundledHarnesses; registerHarnessMetadata(registrations);',
           'export function createBundledHarnessRegistry(host) { return new HarnessRegistry(registrations, host, "pi"); }',
         ].join('\n') }));
       }
@@ -538,6 +538,58 @@ test('Close after an unavailable Copilot lookup still removes the row and preser
   } finally { f.win.close(); }
 });
 
+test('default harness controls new sessions while one-off choices and settings updates preserve mounted sessions', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    f.preferences.external('{"sessions.defaultHarness":"copilot"}'); await f.tick();
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    assert.equal(f.element('mode-badge').textContent, 'Copilot');
+    const root = f.win.document.querySelector('.session-view:not([hidden])')!;
+    const draft = f.element<HTMLTextAreaElement>('prompt'); draft.value = 'Keep Copilot draft'; draft.dispatchEvent(new f.win.Event('input'));
+    const starts = f.calls.filter(call => call.command === 'start_pi' || call.command === 'start_codex' || call.command === 'start_copilot').length;
+    f.preferences.external('{"sessions.defaultHarness":"codex"}'); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'start_pi' || call.command === 'start_codex' || call.command === 'start_copilot').length, starts);
+    assert.equal(f.win.document.querySelector('.session-view:not([hidden])'), root); assert.equal(draft.value, 'Keep Copilot draft');
+    f.openPalette();
+    assert.doesNotMatch(f.element('palette-list').textContent!, /New Copilot session|New Codex session/);
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="new-with-harness"]')!.click(); await f.tick();
+    assert.equal(f.element('palette-list').querySelector('[data-key="codex"]')!.getAttribute('aria-selected'), 'true');
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="pi"]')!.click(); await f.tick(); await f.tick();
+    assert.equal(f.element('mode-badge').textContent, 'Pi');
+    assert.equal(parseSettings(f.preferences.value.text)['sessions.defaultHarness'], 'codex');
+    assert.equal(draft.value, 'Keep Copilot draft');
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    assert.equal(f.element('mode-badge').textContent, 'Codex');
+    assert.equal(f.rows().length, 3);
+    assert.equal(f.calls.some(call => call.command === 'write_codex' && (call.args.message as JsonRecord).method === 'turn/start'), false);
+  } finally { f.win.close(); }
+});
+
+test('unsupported defaults use a single combined named modal and a capability-filtered temporary picker', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  const enter = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  try {
+    f.preferences.external('{"sessions.defaultHarness":"codex"}'); await f.tick();
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'n', metaKey: true, altKey: true, bubbles: true, cancelable: true })); await f.tick();
+    assert.equal(f.win.document.querySelectorAll('dialog[open]').length, 1);
+    const harness = f.element<HTMLSelectElement>('palette-name-harness');
+    assert.deepEqual([...harness.options].map(option => option.value), ['pi']);
+    assert.equal(harness.parentElement!.hidden, false);
+    assert.match(f.element('palette-status').textContent!, /Codex does not support named sessions/);
+    const name = f.element<HTMLInputElement>('palette-input'); name.value = 'Chosen name'; name.dispatchEvent(new f.win.Event('input'));
+    enter(); await f.tick(); await f.tick();
+    assert.equal(f.element('mode-badge').textContent, 'Pi');
+    const pi = f.calls.filter(call => call.command === 'start_pi').at(-1)!;
+    assert.equal((pi.args.config as JsonRecord).sessionName, 'Chosen name');
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'n', metaKey: true, shiftKey: true, bubbles: true, cancelable: true })); await f.tick();
+    assert.match(f.element('palette-status').textContent!, /Codex does not support temporary sessions/);
+    assert.deepEqual([...f.element('palette-list').children].map(row => (row as HTMLElement).dataset.key), ['pi']);
+    enter(); await f.tick(); await f.tick();
+    assert.equal((f.calls.filter(call => call.command === 'start_pi').at(-1)!.args.config as JsonRecord).mode, 'temporary');
+    assert.equal(parseSettings(f.preferences.value.text)['sessions.defaultHarness'], 'codex');
+  } finally { f.win.close(); }
+});
+
 test('startup discovery silently omits missing harness actions and history until restart', async () => {
   let installed = false;
   const options: ShellOptions = { windowWorkspace: '/project', runtimeAvailable: harness => harness === 'pi' || installed,
@@ -564,8 +616,10 @@ test('startup discovery silently omits missing harness actions and history until
   const restarted = await fixture(undefined, options);
   try {
     await restarted.tick(); restarted.openPalette();
-    assert.match(restarted.element('palette-list').textContent!, /New Codex session/);
-    assert.match(restarted.element('palette-list').textContent!, /New Copilot session/);
+    const input = restarted.element<HTMLInputElement>('palette-input'); input.value = 'New session with harness'; input.dispatchEvent(new restarted.win.Event('input'));
+    input.dispatchEvent(new restarted.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await restarted.tick();
+    assert.match(restarted.element('palette-list').textContent!, /Codex/);
+    assert.match(restarted.element('palette-list').textContent!, /Copilot/);
   } finally { restarted.win.close(); }
 });
 
@@ -590,13 +644,18 @@ test('missing Codex preserves restored rows and drafts but omits runtime actions
   } finally { f.win.close(); }
 });
 
-test('missing Pi hides default creation and history without blocking installed harnesses', async () => {
+test('missing Pi keeps ordinary creation available through explicit harness selection', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project', runtimeAvailable: harness => harness !== 'pi' });
   try {
     await f.tick(); f.openPalette();
-    assert.doesNotMatch(f.element('palette-list').textContent!, /New named session|New temporary session|Pi · persistent/);
-    assert.match(f.element('palette-list').textContent!, /New Codex session|New Copilot session/);
-    assert.equal(f.element<HTMLButtonElement>('sidebar-new').hidden, true);
+    assert.doesNotMatch(f.element('palette-list').textContent!, /New named session|New temporary session/);
+    assert.match(f.element('palette-list').textContent!, /New session with harness/);
+    assert.equal(f.element<HTMLButtonElement>('sidebar-new').hidden, false);
+    f.element<HTMLDialogElement>('command-palette').close(); await f.tick();
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick();
+    assert.match(f.element('palette-status').textContent!, /Default harness Pi is unavailable/);
+    assert.match(f.element('palette-list').textContent!, /Codex/);
+    assert.match(f.element('palette-list').textContent!, /Copilot/);
     assert.equal(f.calls.some(call => call.command === 'start_pi'), false);
     assert.equal(f.element('application-notices').hidden, true);
   } finally { f.win.close(); }
@@ -725,9 +784,10 @@ test('disconnected Codex Close retains membership on failed owned stop and retri
     harnessStop: async () => { if (refuse) throw new Error('EPERM: owned exit unconfirmed'); } });
   try {
     f.openPalette(); const input = f.element<HTMLInputElement>('palette-input');
-    input.value = 'New Codex session'; input.dispatchEvent(new f.win.Event('input'));
+    input.value = 'New session with harness'; input.dispatchEvent(new f.win.Event('input'));
     input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await f.tick(); await f.tick();
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="codex"]')!.click(); await f.tick(); await f.tick();
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Keep failed-close draft'; prompt.dispatchEvent(new f.win.Event('input'));
     const token = String(f.calls.filter(call => call.command === 'start_codex' && !(call.args.config as JsonRecord).catalog).at(-1)!.args.token);
     f.codexSessions.get(token)!.channel.onmessage({ kind: 'disconnected', message: 'Fixture runtime disconnected' });
@@ -786,7 +846,8 @@ test('a registration unknown to the shell creates, sends, renames, reloads, disp
   const enter = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
   const search = (text: string) => { const input = f.element<HTMLInputElement>('palette-input'); input.value = text; input.dispatchEvent(new f.win.Event('input')); };
   try {
-    f.openPalette(); search('New fixture session'); enter(); await f.tick(); await f.tick();
+    f.openPalette(); search('New session with harness'); enter(); await f.tick();
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="fixture-harness"]')!.click(); await f.tick(); await f.tick();
     assert.equal(f.rows().length, 1); assert.equal(f.element('mode-badge').textContent, 'Fixture');
     assert.doesNotMatch(f.win.document.querySelector('.session-view:not([hidden])')!.textContent!, /Session is not connected|Unsupported fixture operation/);
     const layout = f.preferences.value.state['nimrod.tabs.v1:/project'] as { tabs: { kind: string; sessionId: string }[] };
@@ -1029,9 +1090,10 @@ test('Copilot SDK coexists with Pi without changing its draft, default backend o
     f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
     const piRoot = f.win.document.querySelector<HTMLElement>('.session-view')!, pi = f.captureChannel();
     const piPrompt = f.element<HTMLTextAreaElement>('prompt'); piPrompt.value = 'Keep Pi draft'; piPrompt.dispatchEvent(new f.win.Event('input'));
-    f.openPalette(); const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New Copilot session'; input.dispatchEvent(new f.win.Event('input'));
-    assert.equal(f.element('palette-list').firstElementChild!.querySelector('small')!.textContent, 'Start a Copilot session');
+    f.openPalette(); const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New session with harness'; input.dispatchEvent(new f.win.Event('input'));
+    assert.equal(f.element('palette-list').firstElementChild!.querySelector('small')!.textContent, 'Choose a harness for this session only');
     enter(); await f.tick(); await f.tick();
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot"]')!.click(); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(call => call.command === 'start_pi').length, 1);
     assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, 2, 'one discovery process plus one conversation');
     assert.equal(f.calls.some(call => call.command === 'start_acp'), false);
@@ -1078,7 +1140,8 @@ test('Copilot slash commands discover arguments, open harness choice modals and 
     f.openPalette();
     const paletteInput = f.element<HTMLInputElement>('palette-input');
     const enter = () => paletteInput.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-    paletteInput.value = 'New Copilot session'; paletteInput.dispatchEvent(new f.win.Event('input')); enter(); await f.tick(); await f.tick();
+    paletteInput.value = 'New session with harness'; paletteInput.dispatchEvent(new f.win.Event('input')); enter(); await f.tick(); await f.tick();
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot"]')!.click(); await f.tick(); await f.tick();
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.focus();
     const type = (value: string) => { prompt.value = value; prompt.setSelectionRange(value.length, value.length); prompt.dispatchEvent(new f.win.Event('input')); };
     const send = () => f.element<HTMLButtonElement>('send').click();
@@ -1116,8 +1179,9 @@ test('SDK sidebar identity, title, recency and draft survive reopening with sele
     const enter = () => first.element('palette-input').dispatchEvent(new first.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     first.openPalette();
     const input = first.element<HTMLInputElement>('palette-input');
-    input.value = 'New Copilot session'; input.dispatchEvent(new first.win.Event('input'));
+    input.value = 'New session with harness'; input.dispatchEvent(new first.win.Event('input'));
     enter(); await first.tick(); await first.tick();
+    first.element('palette-list').querySelector<HTMLElement>('[data-key="copilot"]')!.click(); await first.tick(); await first.tick();
     const prompt = first.element<HTMLTextAreaElement>('prompt');
     prompt.value = 'Copilot sidebar title'; prompt.dispatchEvent(new first.win.Event('input'));
     prompt.dispatchEvent(new first.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
@@ -1765,7 +1829,8 @@ test('SDK transcript logging uses the global setting and native append bridge fo
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   try {
     const enter = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-    f.openPalette(); const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New Copilot session'; input.dispatchEvent(new f.win.Event('input')); enter(); await f.tick(); await f.tick();
+    f.openPalette(); const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New session with harness'; input.dispatchEvent(new f.win.Event('input')); enter(); await f.tick(); await f.tick();
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot"]')!.click(); await f.tick(); await f.tick();
     const target = [...f.sdkSessions.values()].find(session => session.sessionId === 'sdk-fixture')!;
     const event = (id: string, type: string, data: JsonRecord) => target.channel.onmessage({ kind: 'rpc', value: { kind: 'event', event: { id, type, data } } });
     event('disabled-capture', 'tool.extension_specific', { toolCallId: 'disabled' });
@@ -1794,9 +1859,10 @@ test('Copilot permissions retain one modal, escape without answering, reopen thr
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   try {
     f.openPalette();
-    const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New Copilot session'; input.dispatchEvent(new f.win.Event('input'));
+    const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New session with harness'; input.dispatchEvent(new f.win.Event('input'));
     input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await f.tick(); await f.tick();
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot"]')!.click(); await f.tick(); await f.tick();
     const target = [...f.sdkSessions.values()].find(session => session.sessionId === 'sdk-fixture')!;
     const draft = f.element<HTMLTextAreaElement>('prompt'); draft.value = 'keep draft'; draft.dispatchEvent(new f.win.Event('input')); draft.focus();
     const request = (id: string, path: string) => target.channel.onmessage({ kind: 'rpc', value: { kind: 'permission', id, request: { kind: 'read', path, intention: `Search in directory: ${path}` } } });
@@ -1837,9 +1903,10 @@ test('Copilot questions use retained picker and nested input without cancelling 
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   try {
     f.openPalette();
-    const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New Copilot session'; input.dispatchEvent(new f.win.Event('input'));
+    const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New session with harness'; input.dispatchEvent(new f.win.Event('input'));
     input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await f.tick(); await f.tick();
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot"]')!.click(); await f.tick(); await f.tick();
     const target = [...f.sdkSessions.values()].find(session => session.sessionId === 'sdk-fixture')!;
     const draft = f.element<HTMLTextAreaElement>('prompt'); draft.value = 'keep question draft'; draft.dispatchEvent(new f.win.Event('input')); draft.focus();
     const host = draft.closest('.session-view')!;
@@ -1885,9 +1952,10 @@ test('Copilot plan picker retains pending review and returns feedback without pr
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   try {
     f.openPalette();
-    const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New Copilot session'; input.dispatchEvent(new f.win.Event('input'));
+    const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New session with harness'; input.dispatchEvent(new f.win.Event('input'));
     input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await f.tick(); await f.tick();
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot"]')!.click(); await f.tick(); await f.tick();
     const target = [...f.sdkSessions.values()].find(session => session.sessionId === 'sdk-fixture')!;
     const draft = f.element<HTMLTextAreaElement>('prompt'); draft.value = 'keep draft'; draft.focus();
     const host = draft.closest('.session-view')!;

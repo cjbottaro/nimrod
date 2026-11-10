@@ -13,11 +13,9 @@ and native lifecycle still need verification. Windows SDK launch is unavailable.
 
 ## Start and send
 
-Open a project, then **⌘/Ctrl+Shift+P → New Copilot session**. This command is
-unbound by default and its hint is **Start a Copilot session**. Harness labels
-in the Project bar, Session sidebar and history pickers are simply **Copilot**.
-Ordinary **New session** and **⌘/Ctrl+N** still create Pi sessions, regardless of
-the selected harness.
+Open a project, then **⌘/Ctrl+Shift+P → New session with harness… → Copilot**.
+Set **Settings → Interaction → Default harness** to Copilot globally or for this project to use ordinary **New session** / **⌘/Ctrl+N** instead. One-off picker choices do not change that default. See [session creation](sessions.md#create-a-session).
+Harness labels in the Project bar, Session sidebar and history pickers are simply **Copilot**. Initially named and temporary Copilot creation are not yet offered; existing sessions can be renamed.
 
 Text Send clears the composer and previews your turn immediately. It never
 replays uncertain delivery or restores sent text over a newer draft. While
@@ -458,6 +456,6 @@ not remove private Copilot directories or coordinate external applications.
 The previous Copilot integration has been removed. Its saved sidebar entries are
 no longer restored, and its project association no longer starts history discovery.
 There is no automatic conversion or draft migration. Old stored drafts and
-Copilot-owned history are not deleted. Start **New Copilot session** or use
+Copilot-owned history are not deleted. Start **New session with harness… → Copilot** or use
 Copilot's current project history through **Resume session**; older drafts are not
 attached to newly opened sessions.

@@ -32,8 +32,7 @@ Menu audit: Open recent project, global/project Settings already have palette/sh
 `new-acp` and `acp-options` are absent from the product action registry, palette,
 shared dispatcher and keybinding editor. Existing settings overrides remain inert
 unknown IDs, without migration or deletion. Generic ACP code remains internal;
-retaining an adapter is not permission to expose its actions. `new-copilot` remains
-registered, unbound by default, and labeled **New Copilot session**.
+retaining an adapter is not permission to expose its actions. Harness-specific `new-copilot` and `new-codex` creation actions are also removed; their stored overrides remain inert. [Session creation](session-creation.md) owns the six shared creation actions. Its three picker variants are bindable but initially unbound; existing ordinary-creation shortcuts are unchanged.
 
 ## Action contexts, data and reset semantics
 

@@ -6,12 +6,20 @@ Each session has its own conversation, draft and agent process. Switching sessio
 
 | Action | Use |
 | --- | --- |
-| **New session** / **⌘/Ctrl+N** | Start a normal persistent Pi conversation, regardless of the selected session's backend. |
-| **New Copilot session** | Start built-in official-SDK Copilot (no default shortcut). |
-| **New named session…** / **⌘+Option+N**, **Ctrl+Alt+N** | Enter a single-line name, then press Enter or Create. Escape cancels. Requires Pi's native `--name` support. |
+| **New session** / **⌘/Ctrl+N** | Start a persistent conversation with the effective default harness. |
+| **New named session…** / **⌘+Option+N**, **Ctrl+Alt+N** | Enter a single-line name, then press Enter or Create. Escape cancels. |
 | **New temporary session** / **⌘/Ctrl+Shift+N** | Start without saved conversation history. Closing, quitting or reloading the app window discards its drafts, recovery items and pop-outs. |
+| **New session with harness…** | Pick a harness for one persistent conversation. |
+| **New named session with harness…** | Enter the name and select the harness in one modal, then Create. |
+| **New temporary session with harness…** | Pick a harness supporting unsaved conversations. |
 
-Pi writes persistent history. The Project bar shows **Pi** from the start. Reload is disabled until the first verified save; its tooltip explains why. Naming an empty session alone may not save it. Hover over the Pi badge for its file path when available.
+Set **Settings → Interaction → Default harness** globally, or override it in Project settings. The initial default is Pi. Ordinary palette actions identify the effective harness; selecting another session never changes it. The three **with harness…** actions are initially unbound and can be assigned shortcuts in Keybindings. They replace the former harness-specific creation actions and never change your default.
+
+Pickers offer only available, ready harnesses supporting the creation type. Currently Pi supports named and temporary creation; Copilot and Codex support persistent creation only, although existing conversations can be renamed. Named creation with a picker keeps name and harness in one modal, with the name focused first; changing harness preserves the typed name. Cancel/Escape creates nothing.
+
+If the default is unavailable or does not support the requested type, the ordinary action opens the appropriate picker with an explanation rather than silently using another harness. The configured default remains unchanged. If no harness supports an action, it is unavailable. Runtime availability is discovered at startup; see [Runtime settings](settings.md#runtime).
+
+The default applies only to new conversations—not Resume, Reload or existing sessions. Pi writes persistent history. The Project bar shows **Pi** from the start. Reload is disabled until the first verified save; its tooltip explains why. Naming an empty session alone may not save it. Hover over the Pi badge for its file path when available.
 
 ## Switch or resume
 

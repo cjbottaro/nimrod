@@ -1,3 +1,4 @@
+import { bundledHarnesses } from './bundled-harnesses';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -29,7 +30,7 @@ export async function mountGlobalSettings() {
     const preferences = await installNativePreferences(report);
     presentation.own(() => preferences.dispose());
     if (presentation.disposed) return;
-    const surface = installSettingsSurface(preferences, notices, true);
+    const surface = installSettingsSurface(preferences, notices, true, bundledHarnesses);
     presentation.own(() => surface.dispose());
     const palette = installCommandPalette(window, document.getElementById('command-palette') as HTMLDialogElement, {
       canOpen: () => !presentation.disposed, shortcuts: false,

@@ -4,6 +4,7 @@ import { ZOOM_LEVELS } from './zoom';
 export interface SettingsChoice { id: string; label: string; detail?: string; }
 export type ChooseSetting = (heading: string, choices: readonly SettingsChoice[], current: string) => Promise<string | undefined>;
 export const SETTINGS_CHOICES = {
+  'default-harness': { heading: 'Change default harness', choices: [] as SettingsChoice[] },
   'zoom-level': { heading: 'Change zoom', choices: ZOOM_LEVELS.map(value => ({ id: String(value), label: `${value}%` })) },
   'modal-animation-style': { heading: 'Change modal animation', choices: [
     { id: 'none', label: 'None' }, { id: 'subtle', label: 'Subtle', detail: 'Default · fade and lift' },
@@ -32,6 +33,7 @@ export function settingsChoicePage(palette: ReturnType<typeof installCommandPale
 
 export function installSettingsChoiceControls(doc: Document, host: {
   choose: ChooseSetting;
+  harnesses?: readonly SettingsChoice[];
   apply: Record<SettingChoiceId, (value: string) => void>;
   error(id: SettingChoiceId, error: unknown): void;
 }) {
@@ -41,7 +43,7 @@ export function installSettingsChoiceControls(doc: Document, host: {
     const button = doc.getElementById(id) as HTMLButtonElement;
     const value = doc.getElementById(id + '-current')!;
     button.closest('.settings-row')!.classList.add('settings-column-row');
-    const definition = SETTINGS_CHOICES[id];
+    const definition = id === 'default-harness' ? { ...SETTINGS_CHOICES[id], choices: host.harnesses ?? [] } : SETTINGS_CHOICES[id];
     button.addEventListener('click', () => {
       if (button.disabled || controller.signal.aborted) return;
       void host.choose(definition.heading, definition.choices, button.value).then(selected => {

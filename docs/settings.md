@@ -8,7 +8,7 @@ Pi keeps running. Project settings preserves your draft, conversation and readin
 
 ## Global defaults and project overrides
 
-Project settings shows effective values, not a second independent configuration. **Inherited** means the project follows the global value (or the built-in default when omitted globally). Choosing a theme/autocomplete value or entering a Runtime path creates a **Project override**. For theme and autocomplete, **Remove override** removes that override and immediately follows the current global value again—it does not copy that value into the project file.
+Project settings shows effective values, not a second independent configuration. **Inherited** means the project follows the global value (or the built-in default when omitted globally). Choosing a theme, autocomplete or default-harness value or entering a Runtime path creates a **Project override**. For theme, autocomplete and default harness, **Remove override** removes that override and immediately follows the current global value again—it does not copy that value into the project file.
 
 Overrides stay explicit even if they match the global value. Global edits update inheriting projects, but never replace explicit project values. Global Settings defines defaults only; inspect and reset overrides in the owning project's settings.
 
@@ -19,15 +19,16 @@ These are the complete set of six project-overridable Nimrod preferences, stored
 | Category | Setting | JSONC key | Applies |
 | --- | --- | --- | --- |
 | Appearance | Color theme | `appearance.theme` | Immediately to this project window; built-in or globally imported theme |
+| Interaction | Default harness | `sessions.defaultHarness` | New sessions only; initially `pi` |
 | Interaction | Accept autocomplete with | `interaction.autocompleteAccept` | Immediately; `tab` or `tabOrEnter` |
 | Runtime | Pi executable / CLI JavaScript file | `runtime.piPath` | On the next session launch |
 | Runtime | Node executable | `runtime.nodePath` | On the next session launch |
 | Runtime | Copilot CLI executable | `runtime.copilotPath` | On the next Copilot session launch |
 | Runtime | Codex CLI executable | `runtime.codexPath` | On the next Codex session launch |
 
-Omitted keys inherit global settings, then built-in defaults. Runtime fields save individually when changed and left, or when you press Enter; saving never restarts an existing session. Theme and autocomplete show their source and offer **Remove override** when overridden. Project Runtime fields use empty inputs with inherited values as placeholders instead of source labels and reset buttons.
+Omitted keys inherit global settings, then built-in defaults. Runtime fields save individually when changed and left, or when you press Enter; saving never restarts an existing session. Theme, autocomplete and default harness show their source and offer **Remove override** when overridden. Project Runtime fields use empty inputs with inherited values as placeholders instead of source labels and reset buttons.
 
-**Typography, translucency, zoom, modal animations and auto-follow after sending are global-only**, along with notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration. Project settings contains the theme picker under Appearance, autocomplete acceptance under Interaction and runtime paths under Runtime. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
+**Typography, translucency, zoom, modal animations and auto-follow after sending are global-only**, along with notifications, diagnostics, keybindings, imported-theme storage and card-plugin configuration. Project settings contains the theme picker under Appearance, default harness and autocomplete acceptance under Interaction and runtime paths under Runtime. The project theme picker uses the shared global theme library; import and removal happen in global Settings.
 
 This layering applies only to Nimrod preferences. Pi retains its own configuration and precedence.
 
@@ -51,7 +52,7 @@ Related preferences are grouped into compact rows. **Window** contains the theme
 
 Sliders show the current value with an accent-colored filled track as soon as Settings opens, without needing a first adjustment. The fill follows theme changes and settings reloaded from disk.
 
-- **Theme:** **Change theme…** opens the same searchable, live-preview picker as the **Select theme…** action. The saved theme is the primary value beside the button. Project theme/autocomplete rows have a separate **Inherited** / **Project override** column and action controls; provenance moves below the value in narrow panes. Global changes update inheriting windows; project changes apply only to that project. See [Themes](themes.md) for live previews, bundled themes and imports.
+- **Theme:** **Change theme…** opens the same searchable, live-preview picker as the **Select theme…** action. The saved theme is the primary value beside the button. Project theme/autocomplete/default-harness rows have a separate **Inherited** / **Project override** column and action controls; provenance moves below the value in narrow panes. Global changes update inheriting windows; project changes apply only to that project. See [Themes](themes.md) for live previews, bundled themes and imports.
 - **Typography (global only):** independent conversation and monospace fonts/sizes, with searchable installed-font pickers and a live preview. See [Typography](#typography).
 - **Translucency (global only):** whole-window background opacity (default **100% / Opaque**) and a macOS-only **Background blur** slider (0–40, default **20**) independent of opacity. Linux blur is configured in the desktop compositor. See [Translucency](translucency.md) for preview, accessibility and platform limitations.
 - **Zoom (global only):** scales every project, Settings and reference window, default **125%**, range **75–200%**. Use the picker in global Settings or **⌘/Ctrl + / −** in a project window; shortcuts change the same global value. **⌘/Ctrl+0** resets to 100%. Zoom is remembered and doesn't change drafts.
@@ -86,6 +87,8 @@ The preview contains prose, code and a composer sample. Selections apply immedia
 Installed-font discovery and visual behavior still need native acceptance on macOS; Linux remains unverified.
 
 ## Interaction
+
+**Default harness** shows the effective harness beside **Change…**, globally or as a project override. Initially Pi; choose Pi, Copilot or Codex from the registered harness list. It applies only to new conversations, never existing sessions, Resume or Reload. A one-off **New session with harness…** choice does not modify it. An unavailable or unsupported default opens an explicit picker instead of silently substituting another harness. See [session creation](sessions.md#create-a-session).
 
 **Accept autocomplete with** shows its current value beside **Change…**. Project inheritance stays in the separate provenance column.
 
@@ -172,6 +175,7 @@ The global `settings.json` accepts comments and trailing commas:
   "appearance.modalAnimationDuration": 500,
   "appearance.modalScanSpeed": 1000,
   "interaction.autocompleteAccept": "tab",
+  "sessions.defaultHarness": "pi",
   "notifications.enabled": true,
   "runtime.piPath": "/path/to/pi",
   "runtime.nodePath": "/path/to/node",
@@ -182,7 +186,7 @@ The global `settings.json` accepts comments and trailing commas:
 
 Personal [card plugins](card-plugins.md#personal-typescript-plugins) are discovered/compiled automatically from the dedicated user directory; `cards.autoLoad: false` disables this directory-trusted workflow. Existing manifests use `cards.plugins` / `cards.trustedPlugins`; `cards.renderers` overrides tool matching. Declarative manifests need no executable trust. They are configured in this file, not a dedicated Settings category. Package load errors use the shared notice strip, including while Settings is open; catalog changes affect newly mounted cards without restarting agents.
 
-The project file applies only `appearance.theme`, `interaction.autocompleteAccept`, `runtime.piPath`, `runtime.nodePath`, `runtime.copilotPath`, and `runtime.codexPath`. Earlier project entries for `appearance.zoom` and `appearance.autoFollowAfterSending` are ignored; their bytes/comments are preserved on unrelated saves, never copied into global preferences, and you can remove those obsolete entries manually. Other unsupported project keys still report a configuration error. Nimrod creates it only on an explicit override save, not when opening a project or Settings. There is no ancestor-directory discovery: the canonical project directory is the only project scope. You can choose whether to version-control `.nimrod/settings.json`; imported theme IDs refer to your global theme library.
+The project file applies only `appearance.theme`, `interaction.autocompleteAccept`, `sessions.defaultHarness`, `runtime.piPath`, `runtime.nodePath`, `runtime.copilotPath`, and `runtime.codexPath`. Earlier project entries for `appearance.zoom` and `appearance.autoFollowAfterSending` are ignored; their bytes/comments are preserved on unrelated saves, never copied into global preferences, and you can remove those obsolete entries manually. Other unsupported project keys still report a configuration error. Nimrod creates it only on an explicit override save, not when opening a project or Settings. There is no ancestor-directory discovery: the canonical project directory is the only project scope. You can choose whether to version-control `.nimrod/settings.json`; imported theme IDs refer to your global theme library.
 
 Omitted project keys inherit global settings; omitted global keys use built-in defaults. Imported themes live in `appearance.importedThemes`; [keybinding overrides](keybindings.md#configuration-file) live in `keybindings`. Pi's settings remain Pi-owned. [Drafts](drafts.md) use separate Rust-managed per-session files with debounced asynchronous saves; legacy webview drafts are ignored without migration.
 

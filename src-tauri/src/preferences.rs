@@ -288,6 +288,14 @@ pub(crate) fn validate(text: &str) -> Result<(), String> {
             );
         }
     }
+    if let Some(value) = object.get("sessions.defaultHarness") {
+        let valid = value.as_str().map(|id| {
+            !id.is_empty() && id.len() <= 64
+                && id.as_bytes()[0].is_ascii_lowercase()
+                && id.bytes().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
+        }).unwrap_or(false);
+        if !valid { return Err("sessions.defaultHarness must be a harness ID".into()); }
+    }
     if let Some(mode) = object.get("interaction.autocompleteAccept") {
         if !matches!(mode.as_str(), Some("tab" | "tabOrEnter")) {
             return Err("interaction.autocompleteAccept must be tab or tabOrEnter".into());
@@ -808,6 +816,16 @@ mod tests {
                 ))
                 .is_err()
             );
+        }
+    }
+
+    #[test]
+    fn default_harness_validation() {
+        for id in ["pi", "copilot", "codex", "future-harness"] {
+            validate(&serde_json::json!({"sessions.defaultHarness": id}).to_string()).unwrap();
+        }
+        for value in [serde_json::json!(""), serde_json::json!("Pi"), serde_json::json!("../pi"), serde_json::json!("a".repeat(65)), serde_json::Value::Null, serde_json::json!(true)] {
+            assert!(validate(&serde_json::json!({"sessions.defaultHarness": value}).to_string()).is_err());
         }
     }
 

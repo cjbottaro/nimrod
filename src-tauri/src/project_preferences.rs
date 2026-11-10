@@ -15,6 +15,7 @@ pub const KEYS: &[&str] = &[
     "runtime.copilotPath",
     "runtime.codexPath",
     "interaction.autocompleteAccept",
+    "sessions.defaultHarness",
 ];
 
 #[derive(Clone, Default, PartialEq)]
@@ -228,6 +229,13 @@ pub fn project_preferences_settings(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn default_harness_is_a_validated_project_override() {
+        validate(r#"{"sessions.defaultHarness":"codex"}"#, r#"{"sessions.defaultHarness":"pi"}"#).unwrap();
+        assert_eq!(overrides(r#"{"sessions.defaultHarness":"pi"}"#).unwrap().len(), 1);
+        assert!(validate(r#"{"sessions.defaultHarness":false}"#, "{}").is_err());
+    }
+
     #[test]
     fn autocomplete_acceptance_is_a_validated_project_override() {
         validate(r#"{"interaction.autocompleteAccept":"tabOrEnter"}"#, "{}").unwrap();

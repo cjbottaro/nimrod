@@ -556,6 +556,37 @@ test('session membership is searchable without badges and rows share selected En
   } finally { f.dispose(); }
 });
 
+test('combined named creation preserves text while choosing a harness and settles only after close', async () => {
+  const f = fixture();
+  try {
+    const created: string[] = [];
+    f.palette.namedSession((name, id) => {
+      assert.equal(f.dialog.open, false); created.push(`${id}:${name}`);
+    }, { harnesses: [{ id: 'pi', label: 'Pi' }, { id: 'future', label: 'Future' }], current: 'future', notice: 'Choose a harness for this session.' });
+    const harness = f.win.document.querySelector<HTMLSelectElement>('#palette-name-harness')!;
+    assert.equal(harness.value, 'future'); assert.equal(f.win.document.activeElement, f.input);
+    assert.equal(f.win.document.querySelectorAll('dialog[open]').length, 1);
+    f.query('Keep this name'); harness.value = 'pi'; harness.dispatchEvent(new f.win.Event('change'));
+    assert.equal(f.input.value, 'Keep this name'); assert.match(f.status()!, /Choose a harness/);
+    f.key('Enter', { isComposing: true }); f.key('Enter', { repeat: true }); assert.deepEqual(created, []);
+    f.key('Enter'); f.key('Enter'); await tick();
+    assert.deepEqual(created, ['pi:Keep this name']);
+    for (const native of [false, true]) {
+      f.palette.namedSession(name => { created.push(name); }, { harnesses: [{ id: 'pi', label: 'Pi' }], current: 'pi' });
+      f.query('Cancel this');
+      if (native) f.dialog.dispatchEvent(new f.win.Event('cancel', { cancelable: true })); else f.key('Escape');
+      await tick(); assert.deepEqual(created, ['pi:Keep this name']);
+    }
+    f.palette.namedSession(name => { created.push(name); }, { harnesses: [], current: 'missing' });
+    f.query('No supported harness');
+    assert.equal(f.win.document.querySelector<HTMLButtonElement>('#palette-create')!.disabled, true);
+    f.key('Enter'); assert.equal(f.dialog.open, true); f.key('Escape'); await tick();
+    f.palette.namedSession(name => { created.push(name); });
+    assert.equal(harness.parentElement!.hidden, true, 'name-only creation does not retain the selector');
+    f.key('Escape');
+  } finally { f.dispose(); }
+});
+
 test('named-session step is single-line, compact and keyboard-submit waits for close', async () => {
   const f = fixture();
   try {

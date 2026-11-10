@@ -21,7 +21,9 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 | Minimize / Maximize or Restore / Close window; About Nimrod | Linux palette actions, unbound by default |
 | Open recent project… | Cmd/Ctrl+Shift+O |
 | New session (Pi default) | Cmd/Ctrl+N |
-| New Copilot session | Unbound by default |
+| New session with harness… | Unbound by default |
+| New named session with harness… | Unbound by default |
+| New temporary session with harness… | Unbound by default |
 | New named session… | Cmd+Option+N / Ctrl+Alt+N |
 | New temporary session | Cmd/Ctrl+Shift+N |
 | Delete session… | Cmd/Ctrl+Backspace |

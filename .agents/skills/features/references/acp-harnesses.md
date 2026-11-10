@@ -35,7 +35,7 @@ explicitly revert selected merged commits. Cleanup requires separate authorizati
 ## Command palette ownership
 
 One Nimrod-owned palette and dispatcher owns project/session actions.
-**New session** stays Pi-default; **New Copilot session** uses the SDK;
+[Session creation](session-creation.md) uses the global/project default or an explicit registered-harness picker; Copilot uses the SDK;
 ACP creation/options are absent from the palette, dispatcher and keybinding
 editor. Old `new-acp`/`acp-options` overrides remain stored but inert unknown
 IDs. Shell action contributions are filtered through the registered product

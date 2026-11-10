@@ -8,6 +8,8 @@ Human guide: [Command interactions](../../../../docs/command-palette.md#pickers-
 
 One interaction owns every palette page and entry point. Escape dismisses the whole palette interaction, Back alone returns to commands, accepted actions run after focus restoration, and stale results cannot mutate or reopen dismissed pages. Ordinary one-shot choices resolve as cancelled; retained agent decisions follow [dismiss-and-resume](dismiss-and-resume.md), leaving the underlying request pending.
 
+[Session creation](session-creation.md) owns the default-harness and creation-type contract. `namedSession` supports a name-only form or a combined name/native-Harness selector in this same shell, with shared footer navigation, Cancel and post-close acceptance. `SelectionRequest.chooseItems` accepts optional non-error guidance for explicit default fallback.
+
 ## Ownership and extension points
 
 `src/command-palette.ts` owns the window-local command interaction. Commands, session pickers, model/thinking selections and naming are pages within that interaction—not a stack of parent dialogs. `src/main.ts` supplies commands and session-bound preference operations; `src/keybindings.ts` supplies entry-point dispatch. `index.html` supplies the shared modal and Escape hint.

@@ -17,7 +17,7 @@ The initial reviewed local protocol is **Codex CLI 0.162.0**, with the async-que
 
 | Workflow | Current implementation / boundary |
 | --- | --- |
-| Create, explicit Resume, multiple live sessions | Native app-server process per conversation; exact project/thread identity. Pi remains default New session. |
+| Create, explicit Resume, multiple live sessions | Native app-server process per conversation; exact project/thread identity. Shared [creation actions](../features/references/session-creation.md) use the global/project default (initially Pi) or explicit harness selection. |
 | Saved sidebar, pinning, recency, drafts | Tagged `codex` identity and `codex:<JSON-encoded thread ID>` scope; independent from Pi/Copilot even when IDs match. Restored rows await explicit selection. |
 | Discovery/history | Separate discovery process; project-scoped, non-archived, non-ephemeral top-level CLI/VS Code/app-server threads. Turn/item/model pagination with cursor-cycle protection and cancellation of consumer waits. |
 | Streaming and history reconciliation | Native IDs, optimistic `clientUserMessageId` → `userMessage.clientId` adoption, dirty rows, stable controls and live-over-history precedence. No duplicated transcript/composer engine. |
@@ -104,7 +104,7 @@ Current behavior in `src/codex/connection.ts`:
   unconfirmed history rather than claiming that a runtime ID is saved.
 - Missing-rollout errors retain complete diagnostics and any cleanup failure in
   Details, with a concise headline that does not falsely promise saved history.
-  Explicit New Codex session is separate user intent, never a recovery side effect.
+  Explicit New session with harness… → Codex is separate user intent, never a recovery side effect.
 
 The user's native-create → no-Send → quit → Nimrod requirement remains limited by
 Codex persistence/Resume/discovery in the reviewed version. Do not present removal

@@ -13,6 +13,32 @@ function fixture() {
   return { dom, host, errors, install: () => installPreferences(host, dom.window.localStorage, error => errors.push(error)) };
 }
 
+test('default harness layers future-launch defaults without rewriting equal overrides or unrelated JSONC', async () => {
+  const f = fixture(), p = await f.install();
+  try {
+    assert.equal(p.defaultHarness(), 'pi');
+    f.host.external('// Keep global comments\n{"custom":true}');
+    await p.saveDefaultHarness('copilot');
+    assert.equal(p.defaultHarness(), 'copilot');
+    f.host.value.projectPath = '/project/.nimrod/settings.json'; f.host.externalProject('// Project\n{}');
+    await p.saveDefaultHarness('copilot');
+    assert.equal(p.isOverridden('sessions.defaultHarness'), true);
+    f.host.external('// Global\n{"sessions.defaultHarness":"codex","custom":true}');
+    assert.equal(p.defaultHarness(), 'copilot');
+    await p.useGlobal('sessions.defaultHarness');
+    assert.equal(p.defaultHarness(), 'codex');
+    assert.equal(p.isOverridden('sessions.defaultHarness'), false);
+    assert.match(f.host.value.projectText!, /Project/);
+    assert.equal(parseSettings(f.host.value.text).custom, true);
+    f.host.externalProject('{"sessions.defaultHarness":false}');
+    assert.equal(p.defaultHarness(), 'codex', 'invalid external values retain last valid settings');
+    await assert.rejects(p.saveDefaultHarness('pi'));
+    f.host.externalProject('{}');
+    await p.saveDefaultHarness('future-harness');
+    assert.equal(p.defaultHarness(), 'future-harness', 'availability never rewrites the preference');
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
 test('autocomplete acceptance defaults to Tab, layers project overrides and preserves JSONC and last valid values', async () => {
   const f = fixture(), p = await f.install();
   try {

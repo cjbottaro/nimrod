@@ -46,7 +46,7 @@ test('registration alone connects an unknown harness through real input, draft, 
   assert.match(f.notices.at(-1)!.message, /Which option/); assert.match(f.notices.at(-1)!.details!, /choices/);
   assert.deepEqual(f.host.drafts.read(), { draft: 'Preserved before identity exists' }, 'fallback question display never mutates input or sends an answer');
   assert.equal(actionContextAvailable('harness-fixture-question', { project: true, sessionActions: new Set(actions.map(action => action.id)) }), true);
-  assert.deepEqual(bindingsFor('harness-new-fixture', {}), []);
+  assert.deepEqual(bindingsFor('new-with-harness', {}), []);
   assert.deepEqual(pluginTargets([{ backend: fixtureHarness.id }]), [{ backend: fixtureHarness.id }]);
   assert.equal(selectHarnessCard({ source: { backend: fixtureHarness.id }, name: 'unknown', native: { question: 'literal' } }).id, 'nimrod.tool');
   const source = project.history.source()!, history = await loadSessionHistory([source], new AbortController().signal, () => {});

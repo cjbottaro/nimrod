@@ -15,7 +15,7 @@ import { commandInteraction } from '../command-interaction';
 import type { HarnessProject, HarnessSession, SessionRequest } from '../harness-contract';
 import type { HarnessProjectHost, HarnessSessionHost } from '../harness-host';
 
-const creation = { action: { id: 'new-codex', label: 'New Codex session', detail: 'Start a Codex app-server session' }, defaultMode: 'saved', modes: ['saved'], named: false, title: 'Codex session' } satisfies import('../harness-contract').HarnessCreation;
+const creation = { defaultMode: 'saved', modes: ['saved'], named: false, title: 'Codex session' } satisfies import('../harness-contract').HarnessCreation;
 export const codexHarness = defineHarness({ creation, cards: () => codexToolPlugin, id: 'codex', label: 'Codex', actions: [], create: createCodexProject });
 function createCodexProject(projectHost: HarnessProjectHost): HarnessProject {
   const availability = startupAvailability(() => invoke<boolean>('codex_runtime_available', { cli: projectHost.runtime().codex }));

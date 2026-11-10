@@ -99,10 +99,11 @@ export interface HarnessHistory {
   dispose(): Promise<void>;
 }
 export interface HarnessCreation {
-  readonly action: HarnessActionMetadata | undefined;
   readonly title: string;
   readonly defaultMode: Exclude<LaunchMode, 'resume'>;
+  /** Temporary means unsaved history, never saved-then-delete emulation. */
   readonly modes: readonly Exclude<LaunchMode, 'resume'>[];
+  /** Initial naming at creation; independent of the existing-session naming port. */
   readonly named: boolean;
 }
 export interface HarnessProject {
