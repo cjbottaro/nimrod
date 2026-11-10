@@ -1233,7 +1233,7 @@ function selectCleanupReplacement(before: NavigationSnapshot<Tab>): void {
   const replacement = navigation.replacement(before, navigationSnapshot());
   if (replacement.view !== sidebarView) selectSidebarView(replacement.view);
   if (replacement.target) activate(replacement.target, 'cleanup');
-  else { conversation.hidden = true; required('mode-badge').textContent = ''; }
+  else presentConversation(undefined);
 }
 function disposeTab(tab: Tab): void {
   if (!tabs.includes(tab)) return;

@@ -2435,6 +2435,45 @@ test('Delete sessions shortcut loops native review over closed history without l
   } finally { f.win.close(); }
 });
 
+test('Delete sessions clears the Project bar after deleting every open session in All', async () => {
+  let answer!: (value: boolean) => void;
+  const catalog = ['/sessions/new.jsonl', '/sessions/new-1.jsonl'].map((path, i) => ({
+    path, sessionId: 'fixture-id', name: `Open ${i}`, preview: '', modified: 2 - i,
+  }));
+  const f = await fixture(undefined, { windowWorkspace: '/project', catalog,
+    confirmReview: args => answer(args.confirmed === true), deleteTree: async (emit, args) => {
+      const confirmed = new Promise<boolean>(resolve => { answer = resolve; });
+      emit({ id: String(args.root), phase: 'review', files: [String(args.root)], results: [], pending: true,
+        tree: [{ file: String(args.root), title: 'Open session' }] });
+      return await confirmed ? [{ file: args.root, deleted: true }] : [];
+    },
+  });
+  const pickerKey = (key: string) => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  try {
+    for (let i = 0; i < 2; i++) { f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick(); }
+    assert.equal(f.element('project-session').hidden, false);
+    assert.ok(f.element('project-session-name').textContent);
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Backspace', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+    await f.tick();
+    for (let remaining = 1; remaining >= 0; remaining--) {
+      pickerKey('Enter'); await f.tick();
+      f.element<HTMLButtonElement>('deletion-confirm').click(); await f.tick(); await f.tick(); await f.tick();
+      assert.equal(f.rows().length, remaining);
+      assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
+      assert.equal(f.element('project-session').hidden, remaining === 0);
+      if (remaining) assert.ok(f.element('project-session-name').textContent, 'replacement retains its title');
+    }
+    pickerKey('Escape'); await f.tick();
+    assert.equal(f.element('project-session-name').textContent, '');
+    assert.equal(f.element('project-session').title, '');
+    assert.equal(f.element('mode-badge').textContent, '');
+    assert.equal(f.element('conversation').hidden, true);
+    assert.equal(f.element('workspace-empty').hidden, false);
+    assert.equal(f.element('sidebar-all').getAttribute('aria-selected'), 'true');
+    assert.equal(f.calls.filter(call => call.command === 'start_pi').length, 2, 'deletion never creates a replacement');
+  } finally { f.win.close(); }
+});
+
 test('Cmd-Backspace invokes the existing review and Cancel preserves the selected saved session', async () => {
   let answer!: (value: boolean) => void;
   const f = await fixture(undefined, { windowWorkspace: '/project', confirmReview: args => answer(args.confirmed === true), deleteTree: async emit => {

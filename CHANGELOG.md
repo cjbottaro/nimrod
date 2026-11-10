@@ -114,6 +114,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Deleting the last open session clears its name and tooltip from the Project bar, including repeated deletion through **⌘/Ctrl+Shift+Backspace**.
+
 - Copilot Close/Delete recoverability checks now pass the native IPC validator instead of failing with “Unsupported Copilot SDK bridge operation.”
 
 - Missing harness executables no longer produce unrelated Resume/Delete history errors. Startup discovery hides unavailable harness actions while preserving existing session rows and drafts; installation changes require restarting Nimrod.
