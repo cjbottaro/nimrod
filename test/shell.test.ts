@@ -3141,6 +3141,9 @@ test('Close and Delete share connected-first selection and reconnect an inactive
       else (await f.rowMenu(rows[selectedIndex])).delete.click();
       await f.tick(); await f.tick(); await f.tick();
       assert.equal(rows[expected].getAttribute('aria-current'), 'true', `${action}/${scenario}`);
+      assert.equal(f.element('project-session').hidden, false);
+      assert.equal(f.element('project-session-name').textContent, rows[expected].querySelector('.session-row-label')!.textContent);
+      assert.equal(f.element('project-session').title, f.element('project-session-name').textContent);
       assert.equal(f.element(`sidebar-${view}`).getAttribute('aria-selected'), 'true', `${action}/${scenario} view`);
       const reconnect = scenario.startsWith('inactive');
       assert.equal(f.calls.filter(c => c.command === 'start_pi').length, before + Number(reconnect), `${action}/${scenario}: both actions reconnect inactive replacements`);
@@ -3156,15 +3159,51 @@ test('Close and Delete share connected-first selection and reconnect an inactive
   }
 });
 
+test('Close and Delete clear the final presentation even when the selection is hidden by a filter', async () => {
+  for (const action of ['close', 'delete'] as const) for (const hidden of [false, true]) {
+    const file = '/sessions/new.jsonl';
+    const f = await fixture(undefined, { windowWorkspace: '/project', deleteTree: async () => [{ file, deleted: true }] });
+    try {
+      f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+      const row = f.rows()[0];
+      assert.equal(f.element('project-session').hidden, false);
+      if (hidden) {
+        f.element<HTMLButtonElement>('sidebar-unread').click();
+        assert.equal(f.element('project-session').hidden, true);
+        assert.equal(f.element('project-session-name').textContent, '');
+        assert.equal(f.element('project-session').title, '');
+        assert.equal(f.element('conversation').hidden, true);
+        assert.equal((f.preferences.value.state['nimrod.tabs.v1:/project'] as { active: string }).active, file, 'filtering preserves navigation selection');
+      }
+      (await f.rowMenu(row))[action].click(); await f.tick(); await f.tick(); await f.tick();
+      assert.equal(f.rows().length, 0);
+      assert.equal(f.element('project-session').hidden, true);
+      assert.equal(f.element('project-session-name').textContent, '');
+      assert.equal(f.element('project-session').title, '');
+      assert.equal(f.element('mode-badge').textContent, '');
+      assert.equal(f.element('mode-badge').title, '');
+      assert.equal(f.element('conversation').hidden, true);
+      assert.equal(f.element('workspace-empty').hidden, false);
+      assert.equal(f.element<HTMLButtonElement>('reload-session').disabled, true);
+      assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, true);
+      assert.equal(f.calls.filter(call => call.command === 'start_pi').length, 1);
+    } finally { f.win.close(); }
+  }
+});
+
 test('returning to All loads and connects its selected restored session without sending a prompt', async () => {
   const file = '/sessions/restored.jsonl';
   const f = await fixture(undefined, { windowWorkspace: '/project', history: [{ role: 'user', content: [{ type: 'text', text: 'Restored conversation' }] }],
     appState: { 'nimrod.sidebar.view:/project': 'unread', 'nimrod.tabs.v1:/project': { active: file, tabs: [{ path: file, sessionId: 'fixture-id', name: 'Restored' }] } } });
   try {
     assert.equal(f.element('conversation').hidden, true, 'no selected matching row in Unread');
+    assert.equal(f.element('project-session').hidden, true);
+    assert.equal(f.element('project-session-name').textContent, '');
     assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 0);
     f.element<HTMLButtonElement>('sidebar-all').click(); await f.tick(); await f.tick();
     assert.equal(f.rows()[0].getAttribute('aria-current'), 'true');
+    assert.equal(f.element('project-session').hidden, false);
+    assert.equal(f.element('project-session-name').textContent, f.rows()[0].querySelector('.session-row-label')!.textContent);
     assert.equal(f.rows()[0].querySelector('.session-indicator')!.getAttribute('data-state'), 'ready');
     assert.match(f.element('messages').textContent!, /Restored conversation/);
     assert.equal((f.calls.find(c => c.command === 'start_pi')!.args.config as JsonRecord).sessionFile, file);

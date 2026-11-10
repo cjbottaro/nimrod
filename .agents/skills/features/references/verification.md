@@ -2,6 +2,16 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
+## Session presentation boundary
+
+Source-implemented: private presented-session ownership through `SessionPresenter`,
+shared transition/refresh/removal paths and deactivation before Close/deletion
+port disposal. Authored fixtures cover identity/badge/visibility/row state,
+active-port ordering, same-target refresh, background/final removal, modal-aware
+focus capture, filter-hidden selection and replacement identity. These fixtures
+remain unrun; no build, browser or native app acceptance was performed.
+Mandatory post-merge TypeScript/Rust compile results are reported separately.
+
 ## Session retention cleanup
 
 Source-implemented: required saved/absent/unknown retention port, shared mounted
