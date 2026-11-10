@@ -7,6 +7,8 @@ import { vscodeMruRanking, type CommandRanking } from '../src/command-ranking';
 import { stubDialogs } from './dialog-fixture';
 import { sessionIndicator, sessionTime, type SidebarState } from '../src/session-sidebar';
 
+const namedChoices = { harnesses: [{ id: 'pi', label: 'Pi' }], current: 'pi' };
+
 function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }), projects: (() => Promise<PalettePage>) | CommandRanking = load, ranking?: CommandRanking, history?: PaletteOptions['sessions'], deletion?: PaletteOptions['deleteSessions']) {
   if (typeof projects !== 'function') { ranking = projects; projects = load; }
   const dom = new JSDOM(readFileSync('index.html', 'utf8'), { pretendToBeVisual: true });
@@ -27,7 +29,7 @@ function fixture(load: () => Promise<PalettePage> = async () => ({ items: [] }),
       { id: 'named', label: 'New named session…', detail: 'Choose a name before starting', next: true, run: () => palette.namedSession(name => {
         assert.equal(dialog.open, false); assert.equal(win.document.activeElement, opener);
         calls.push(`named:${name}`);
-      }) },
+      }, namedChoices) },
     ], sessions: history ?? load, deleteSessions: deletion ?? load, sessionDeleted: id => deleted.has(id), projects,
     openSessions: () => ({ items: [{ id: 'open-demo', label: 'Offline demo', detail: 'Ready', run: () => { calls.push('open-demo'); } }] }),
   });
@@ -468,7 +470,7 @@ test('every palette page shares one-step dismissal across entry points and cance
           else if (page === 'resume') await f.palette.sessions();
           else if (page === 'switch') await f.palette.openSessions();
           else if (page === 'projects') await f.palette.projects();
-          else if (page === 'name') { f.palette.namedSession(name => { f.calls.push(name); }); f.query('Discard me'); }
+          else if (page === 'name') { f.palette.namedSession(name => { f.calls.push(name); }, namedChoices); f.query('Discard me'); }
           else {
             // Any future selection feature gets the same lifecycle, without an
             // Escape handler or knowledge of how the user reached it.
@@ -563,11 +565,27 @@ test('combined named creation preserves text while choosing a harness and settle
     f.palette.namedSession((name, id) => {
       assert.equal(f.dialog.open, false); created.push(`${id}:${name}`);
     }, { harnesses: [{ id: 'pi', label: 'Pi' }, { id: 'future', label: 'Future' }], current: 'future', notice: 'Choose a harness for this session.' });
-    const harness = f.win.document.querySelector<HTMLSelectElement>('#palette-name-harness')!;
-    assert.equal(harness.value, 'future'); assert.equal(f.win.document.activeElement, f.input);
+    const current = () => f.list().querySelector('[aria-selected="true"]')?.getAttribute('data-key');
+    assert.equal(current(), 'future'); assert.equal(f.win.document.activeElement, f.input);
     assert.equal(f.win.document.querySelectorAll('dialog[open]').length, 1);
-    f.query('Keep this name'); harness.value = 'pi'; harness.dispatchEvent(new f.win.Event('change'));
+    assert.equal(f.dialog.querySelector('select'), null);
+    f.query('Keep this name');
+    const rows = [...f.list().children]; assert.equal(rows.length, 2, 'typing does not filter harnesses');
+    assert.equal(current(), 'future', 'typing preserves the selected default');
+    f.key('ArrowDown'); assert.equal(current(), 'pi'); assert.equal(f.win.document.activeElement, f.input);
+    f.key('ArrowUp'); assert.equal(current(), 'future');
+    for (const init of [{ isComposing: true }, { keyCode: 229 }, { altKey: true }, { ctrlKey: true }, { metaKey: true }, { shiftKey: true }]) {
+      assert.equal(f.key('ArrowDown', init), true, 'native editing/IME key is not consumed');
+      assert.equal(current(), 'future');
+    }
+    f.input.dispatchEvent(new f.win.CompositionEvent('compositionstart'));
+    f.key('ArrowDown'); assert.equal(current(), 'future');
+    f.input.dispatchEvent(new f.win.CompositionEvent('compositionend'));
+    f.list().querySelector<HTMLElement>('[data-key="pi"]')!.click();
+    assert.equal(current(), 'pi'); assert.equal(f.dialog.open, true, 'click selects without creating');
     assert.equal(f.input.value, 'Keep this name'); assert.match(f.status()!, /Choose a harness/);
+    assert.deepEqual([...f.list().children], rows, 'selection and typing preserve the mounted rows');
+    f.key('ArrowLeft'); assert.equal(current(), 'pi');
     f.key('Enter', { isComposing: true }); f.key('Enter', { repeat: true }); assert.equal(created.length, 0);
     f.key('Enter'); f.key('Enter'); await tick();
     assert.deepEqual(created, ['pi:Keep this name']);
@@ -581,9 +599,31 @@ test('combined named creation preserves text while choosing a harness and settle
     f.query('No supported harness');
     assert.equal(f.win.document.querySelector<HTMLButtonElement>('#palette-create')!.disabled, true);
     f.key('Enter'); assert.equal(f.dialog.open, true); f.key('Escape'); await tick();
-    f.palette.namedSession(name => { created.push(name); });
-    assert.equal(harness.parentElement!.hidden, true, 'name-only creation does not retain the selector');
+    f.palette.namedSession(name => { created.push(name); }, namedChoices);
+    assert.equal(f.list().hasAttribute('hidden'), false, 'every named session shows its harness list');
+    assert.equal(current(), 'pi', 'reopening uses the configured default, not the previous choice');
     f.key('Escape');
+  } finally { f.dispose(); }
+});
+
+test('named harness list supports focus, wrapping arrows and Enter without changing the name', async () => {
+  const f = fixture();
+  try {
+    let created = '';
+    f.palette.namedSession((name, harness) => { created = `${harness}:${name}`; }, {
+      harnesses: [{ id: 'pi', label: 'Pi' }, { id: 'future', label: 'Future' }], current: 'unavailable',
+    });
+    const list = f.list() as HTMLElement;
+    assert.equal(list.tabIndex, 0);
+    assert.equal(list.getAttribute('aria-label'), 'Harness');
+    assert.equal(list.querySelector('[aria-selected="true"]')?.getAttribute('data-key'), 'pi');
+    f.query('Future task'); list.focus();
+    list.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+    assert.equal(list.querySelector('[aria-selected="true"]')?.getAttribute('data-key'), 'future');
+    assert.equal(list.getAttribute('aria-activedescendant'), list.children[1].id);
+    assert.equal(f.input.value, 'Future task'); assert.equal(f.win.document.activeElement, list);
+    list.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await tick(); assert.equal(created, 'future:Future task'); assert.equal(f.dialog.open, false);
   } finally { f.dispose(); }
 });
 
@@ -595,11 +635,11 @@ test('named-session step is single-line, compact and keyboard-submit waits for c
     assert.equal(f.dialog.open, true); assert.equal(f.input.type, 'text');
     assert.equal(f.input.getAttribute('role'), 'textbox');
     assert.equal(f.input.hasAttribute('aria-controls'), false);
-    assert.equal(f.list().hasAttribute('hidden'), true);
+    assert.equal(f.list().hasAttribute('hidden'), false);
     assert.equal(f.win.document.querySelector<HTMLButtonElement>('#palette-back')!.hidden, true);
     assert.equal(f.win.document.querySelector<HTMLButtonElement>('#palette-refresh')!.hidden, true);
     assert.equal(create.hidden, false); assert.equal(create.disabled, true);
-    assert.equal(f.status(), 'Enter to create · Esc to cancel');
+    assert.equal(f.status(), 'Harness: Pi · ↑/↓ to choose · Enter to create · Esc to cancel');
     assert.equal(f.win.document.activeElement, f.input);
     f.query('   '); f.key('Enter'); assert.equal(create.disabled, true); assert.equal(f.dialog.open, true);
     f.query('  Named work  '); assert.equal(create.disabled, false);
@@ -646,9 +686,9 @@ test('late history cannot overwrite naming and leaving the step clears its actio
   let finish!: (page: PalettePage) => void;
   const f = fixture(() => new Promise(resolve => { finish = resolve; }));
   try {
-    void f.palette.sessions(); f.palette.namedSession(name => { f.calls.push(name); }); f.query('Keep this name');
+    void f.palette.sessions(); f.palette.namedSession(name => { f.calls.push(name); }, namedChoices); f.query('Keep this name');
     finish({ items: [{ id: 'stale', label: 'Stale history', run() {} }] }); await tick();
-    assert.equal(f.input.value, 'Keep this name'); assert.equal(f.status(), 'Enter to create · Esc to cancel');
+    assert.equal(f.input.value, 'Keep this name'); assert.equal(f.status(), 'Harness: Pi · ↑/↓ to choose · Enter to create · Esc to cancel');
     await f.palette.openSessions();
     f.win.document.querySelector<HTMLButtonElement>('#palette-create')!.click(); await tick();
     assert.deepEqual(f.calls, []); assert.equal(f.input.getAttribute('role'), 'combobox');

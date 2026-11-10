@@ -8,7 +8,7 @@ Human guide: [Command interactions](../../../../docs/command-palette.md#pickers-
 
 One interaction owns every palette page and entry point. Escape dismisses the whole palette interaction, Back alone returns to commands, accepted actions run after focus restoration, and stale results cannot mutate or reopen dismissed pages. Ordinary one-shot choices resolve as cancelled; retained agent decisions follow [dismiss-and-resume](dismiss-and-resume.md), leaving the underlying request pending.
 
-[Session creation](session-creation.md) owns the default-harness and creation-type contract. `namedSession` supports a name-only form or a combined name/native-Harness selector in this same shell, with shared footer navigation, Cancel and post-close acceptance. `SelectionRequest.chooseItems` accepts optional non-error guidance for explicit default fallback.
+[Session creation](session-creation.md) owns the default-harness and creation-type contract. `namedSession` always combines the name field and inline Harness listbox in this same shell, with shared footer navigation, Cancel and post-close acceptance. Its required choices argument carries adapter-filtered options and the effective default. Name-field Up/Down selects a harness without moving focus, changing the name or filtering choices; the list is separately Tab-focusable. Composition/modified editing keys stay native. `SelectionRequest.chooseItems` accepts optional non-error guidance for explicit default fallback.
 
 ## Ownership and extension points
 

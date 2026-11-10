@@ -1094,7 +1094,6 @@ function creationActions() {
     { id: 'new-named', kind: 'named', picker: false },
     { id: 'temporary', kind: 'temporary', picker: false },
     { id: 'new-with-harness', kind: 'saved', picker: true },
-    { id: 'new-named-with-harness', kind: 'named', picker: true },
     { id: 'temporary-with-harness', kind: 'temporary', picker: true },
   ] as const;
 }
@@ -1105,9 +1104,9 @@ async function requestCreation(kind: SessionCreationKind, pick = false, copyDraf
   const picker = pick || !resolved.project;
   if (kind === 'named') {
     palette.namedSession((name, id) => {
-      const project = picker ? choices.find(project => project.id === id) : resolved.project;
+      const project = choices.find(project => project.id === id);
       if (project) return newHarnessSession(project, 'saved', copyDraft, name);
-    }, picker ? { harnesses: choices, current: preferred, notice: resolved.notice } : undefined);
+    }, { harnesses: choices, current: preferred, notice: resolved.notice });
     return;
   }
   if (!picker) return newHarnessSession(resolved.project!, kind, copyDraft);

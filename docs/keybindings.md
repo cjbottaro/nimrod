@@ -22,7 +22,6 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 | Open recent project… | Cmd/Ctrl+Shift+O |
 | New session (Pi default) | Cmd/Ctrl+N |
 | New session with harness… | Unbound by default |
-| New named session with harness… | Unbound by default |
 | New temporary session with harness… | Unbound by default |
 | New named session… | Cmd+Option+N / Ctrl+Alt+N |
 | New temporary session | Cmd/Ctrl+Shift+N |
@@ -47,7 +46,7 @@ Use **Cmd** on macOS or **Ctrl** on Linux:
 | Rename session… | Cmd/Ctrl+Shift+R |
 | Zoom in / out / reset to 100% | Cmd/Ctrl+Plus / Minus / 0 |
 
-**Switch session** searches only open sessions, including temporary sessions and sessions hidden by the sidebar view. **Resume session** searches saved project history, including closed sessions; choosing an already-open entry focuses it. **New named session** opens the name field first; type a name and press Enter to create it. Cmd/Ctrl+P has no Nimrod default binding.
+**Switch session** searches only open sessions, including temporary sessions and sessions hidden by the sidebar view. **Resume session** searches saved project history, including closed sessions; choosing an already-open entry focuses it. **New named session** always opens the name field and inline harness list together, preselecting the effective default when supported. Type a name, use Up/Down to change harness without leaving the field, then press Enter to create. Tab can also focus the harness list. Cmd/Ctrl+P has no Nimrod default binding.
 
 **Open recent project…** searches recently opened directories and is configurable like other palette commands. **Open project…** opens the native directory-only chooser. On Linux its Ctrl+O binding and **Quit Nimrod**'s Ctrl+Q are configurable here; on macOS those remain native menu shortcuts.
 

@@ -80,11 +80,9 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   const retry = dialog.querySelector<HTMLButtonElement>('#palette-refresh')!;
   const create = dialog.querySelector<HTMLButtonElement>('#palette-create')!;
   const hint = dialog.querySelector<HTMLElement>('#palette-hint')!;
-  const nameHarnessRow = doc.createElement('label');
-  nameHarnessRow.className = 'palette-name-harness'; nameHarnessRow.hidden = true;
-  nameHarnessRow.textContent = 'Harness';
-  const nameHarness = doc.createElement('select'); nameHarness.id = 'palette-name-harness';
-  nameHarnessRow.append(nameHarness); input.parentElement!.after(nameHarnessRow);
+  const nameHarnessLabel = doc.createElement('span');
+  nameHarnessLabel.id = 'palette-name-harness-label'; nameHarnessLabel.hidden = true;
+  nameHarnessLabel.textContent = 'Harness'; list.before(nameHarnessLabel);
   const nameActions = doc.createElement('div'); nameActions.className = 'modal-actions'; nameActions.hidden = true;
   const cancelName = doc.createElement('button'); cancelName.type = 'button'; cancelName.className = 'secondary utility-button'; cancelName.textContent = 'Cancel';
   nameActions.append(cancelName, create); dialog.append(nameActions);
@@ -116,8 +114,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   let afterClose: (() => void | Promise<void>) | undefined;
   let resolveChoice: ((value: string | undefined) => void) | undefined;
   let retryAction: (() => void) | undefined;
-  let createNamed: ((name: string, harness?: string) => void | Promise<void>) | undefined;
-  let choosingNameHarness = false;
+  let createNamed: ((name: string, harness: string) => void | Promise<void>) | undefined;
   let composing = false;
   let closing = false;
   let disposed = false;
@@ -168,7 +165,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     closing = true;
     closeModal(dialog);
   }
-  function validName(): boolean { return !!input.value.trim() && !/[\r\n\0]/.test(input.value) && (!choosingNameHarness || !!nameHarness.value); }
+  function validName(): boolean { return !!input.value.trim() && !/[\r\n\0]/.test(input.value) && !!matches[selected]; }
   function filterItems(values: PaletteItem[]): PaletteItem[] {
     const words = input.value.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
     return values.filter(item => words.every(word => `${item.label} ${item.badge || ''} ${item.detail || ''} ${item.sessionRow ? sessionStatusPresentation(item.sessionRow.status).label : ''} ${item.sessionRow?.harnessLabel || ''} ${item.sessionRow?.open ? 'Open' : ''} ${item.projectOpen ? 'Open' : ''} ${item.keywords || ''}`.toLocaleLowerCase().includes(word)));
@@ -179,23 +176,24 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     const restoreScroll = preserveScroll ? captureSidebarScroll(list, preferredRow ? [preferredRow, ...oldRows.filter(row => row !== preferredRow)] : oldRows) : undefined;
     const naming = mode === 'name';
     dialog.dataset.mode = mode;
-    list.hidden = naming; create.hidden = !naming; hint.hidden = naming;
-    nameActions.hidden = !naming; nameHarnessRow.hidden = !naming || !choosingNameHarness;
+    list.hidden = false; create.hidden = !naming; hint.hidden = naming;
+    nameActions.hidden = !naming; nameHarnessLabel.hidden = !naming;
+    list.setAttribute('aria-label', naming ? 'Harness' : 'Navigation results');
+    if (naming) list.tabIndex = 0;
+    else { list.removeAttribute('tabindex'); list.removeAttribute('aria-activedescendant'); }
     inspection.hidden = mode !== 'inspection';
     if (mode !== 'inspection') inspection.replaceChildren();
     if (naming) {
       input.setAttribute('role', 'textbox');
       for (const attr of ['aria-expanded', 'aria-controls', 'aria-autocomplete', 'aria-activedescendant']) input.removeAttribute(attr);
       input.setAttribute('aria-busy', 'false');
-      create.disabled = !validName();
-      list.replaceChildren();
-      status.textContent = [notice, choosingNameHarness && !nameHarness.options.length ? 'No harnesses support named sessions.' : 'Enter to create · Esc to cancel'].filter(Boolean).join('\n');
-      return;
+    } else {
+      input.setAttribute('role', 'combobox'); input.setAttribute('aria-expanded', 'true');
+      input.setAttribute('aria-controls', 'palette-list'); input.setAttribute('aria-autocomplete', 'list');
     }
-    input.setAttribute('role', 'combobox'); input.setAttribute('aria-expanded', 'true');
-    input.setAttribute('aria-controls', 'palette-list'); input.setAttribute('aria-autocomplete', 'list');
     const previous = preferredId;
-    matches = filterItems(items);
+    // A name is not a harness-search query.
+    matches = naming ? items : filterItems(items);
     if (mode === 'commands') matches = (options.ranking?.strategy ?? vscodeMruRanking).rank(matches, { query: input.value, usage: options.ranking?.usage() ?? [] });
     selected = Math.max(0, matches.findIndex(item => item.id === previous));
     const existing = mode === 'sessions' ? new Map(oldRows.map(row => [row.dataset.key, row])) : new Map<string, HTMLElement>();
@@ -245,7 +243,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       if (item.badge) { const badge = doc.createElement('span'); badge.className = 'palette-item-badge'; badge.textContent = item.badge; heading.append(badge); }
       const detail = doc.createElement('small'); detail.className = 'palette-item-description'; detail.textContent = item.detail || '';
       row.append(heading);
-      if (mode !== 'selection' || item.detail) row.append(detail);
+      if ((mode !== 'selection' && mode !== 'name') || item.detail) row.append(detail);
       row.title = item.keywords || item.detail || item.label;
       return row;
     });
@@ -259,6 +257,11 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     restoreScroll?.();
   }
   function updateStatus(): void {
+    if (mode === 'name') {
+      const harness = matches[selected];
+      status.textContent = [notice, harness ? `Harness: ${harness.label} · ↑/↓ to choose · Enter to create · Esc to cancel` : 'No harnesses support named sessions.'].filter(Boolean).join('\n');
+      return;
+    }
     const noun = mode === 'commands' ? 'commands' : mode === 'sessions' ? 'sessions' : mode === 'projects' ? 'projects' : mode === 'inspection' ? 'servers' : 'options';
     status.textContent = loading ? `Loading ${noun}…` : notice || (matches.length ? `${matches.length} ${noun}` : items.length || mode === 'commands' ? `No matching ${noun}.` : mode === 'sessions' ? 'No sessions yet.' : mode === 'projects' ? 'No recent projects. Use Open project… (Cmd/Ctrl+O by default) to open a folder.' : 'No options available.');
     input.setAttribute('aria-busy', String(loading));
@@ -267,12 +270,13 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     for (const [index, row] of [...list.children].entries()) row.setAttribute('aria-selected', String(index === selected));
     const row = list.children[selected] as HTMLElement | undefined;
     if (row) {
-      input.setAttribute('aria-activedescendant', row.id);
+      (mode === 'name' ? list : input).setAttribute('aria-activedescendant', row.id);
       if (reveal) {
         if (row.offsetTop < list.scrollTop) list.scrollTop = row.offsetTop;
         else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight;
       }
-    } else input.removeAttribute('aria-activedescendant');
+    } else (mode === 'name' ? list : input).removeAttribute('aria-activedescendant');
+    if (mode === 'name') { create.disabled = !validName(); updateStatus(); }
     const item = matches[selected];
     if (mode === 'inspection') {
       inspection.replaceChildren();
@@ -445,7 +449,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       cancel() { if (current()) closeInteraction(); },
     };
   }
-  function namedSession(onCreate: (name: string, harness?: string) => void | Promise<void>, selection?: { harnesses: readonly { id: string; label: string }[]; current: string; notice?: string }): void {
+  function namedSession(onCreate: (name: string, harness: string) => void | Promise<void>, choices: { harnesses: readonly { id: string; label: string }[]; current: string; notice?: string }): void {
     if (anotherDialog()) return;
     if (!dialog.open && !open()) return;
     historyRequest?.abort(); historyRequest = undefined;
@@ -454,17 +458,14 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     endRetained(); endPreview(); cancelChoice(); generation++; mode = 'name'; createNamed = onCreate; composing = false;
     title.textContent = 'New named session'; input.placeholder = 'Session name…'; input.setAttribute('aria-label', 'Session name');
     input.value = ''; back.hidden = true; retry.hidden = true; retryAction = undefined;
-    choosingNameHarness = !!selection;
-    nameHarness.replaceChildren(...(selection?.harnesses ?? []).map(harness => {
-      const option = doc.createElement('option'); option.value = harness.id; option.textContent = harness.label; return option;
-    }));
-    if (selection?.harnesses.some(harness => harness.id === selection.current)) nameHarness.value = selection.current;
-    loading = false; notice = selection?.notice || ''; items = []; matches = []; selected = 0;
+    loading = false; notice = choices.notice || '';
+    items = choices.harnesses.map((harness, index) => ({ ...harness, run: () => { selected = index; selection(); } }));
+    matches = items; selected = Math.max(0, items.findIndex(harness => harness.id === choices.current));
     draw(); input.focus();
   }
   function submitName(): void {
     if (!dialog.open || mode !== 'name' || !createNamed || composing || !validName() || anotherDialog()) return;
-    const action = createNamed, name = input.value.trim(), harness = choosingNameHarness ? nameHarness.value : undefined;
+    const action = createNamed, name = input.value.trim(), harness = matches[selected].id;
     // Use the same post-close action boundary as selection, not a prompt.
     closeInteraction(() => action(name, harness));
   }
@@ -478,7 +479,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   function choose(index = selected): void {
     const item = matches[index];
     if (!dialog.open || !item || loading || deleting || anotherDialog()) return;
-    if (mode === 'inspection') { selected = index; selection(); return; }
+    if (mode === 'inspection' || mode === 'name') { selected = index; selection(); return; }
     if (mode === 'commands') options.ranking?.record(item.id);
     if (item.next) {
       if (dismissRetained) { selected = index; selection(); }
@@ -513,15 +514,24 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   }
   input.addEventListener('compositionstart', () => { composing = true; }, { signal });
   input.addEventListener('compositionend', () => { composing = false; }, { signal });
-  input.addEventListener('input', () => { matches = []; selected = 0; draw(); }, { signal });
+  input.addEventListener('input', () => {
+    if (mode === 'name') { create.disabled = !validName(); return; }
+    matches = []; selected = 0; draw();
+  }, { signal });
   dialog.addEventListener('keydown', event => {
-    if (!dialog.open || event.isComposing || event.keyCode === 229 || anotherDialog()) return;
+    if (!dialog.open || event.isComposing || event.keyCode === 229 || mode === 'name' && composing || anotherDialog()) return;
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeInteraction(); }
     else if (mode === 'name' && navigateDialogActions(event, cancelName, create)) return;
-    else if (!deleting && event.target === input && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+    else if (mode === 'name' && (event.target === input || event.target === list) && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (matches.length) selected = (selected + (event.key === 'ArrowDown' ? 1 : -1) + matches.length) % matches.length;
+        selection();
+      } else if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) submitName(); }
+    } else if (!deleting && event.target === input && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault(); if (matches.length) selected = (selected + (event.key === 'ArrowDown' ? 1 : -1) + matches.length) % matches.length; selection();
-      } else if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) { if (mode === 'name') submitName(); else choose(); } }
+      } else if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) choose(); }
     } else if (event.target === create && event.key === 'Enter' && event.repeat) {
       event.preventDefault();
     }
@@ -553,7 +563,6 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   }, { signal });
   create.addEventListener('click', submitName, { signal });
   cancelName.addEventListener('click', () => closeInteraction(), { signal });
-  nameHarness.addEventListener('change', () => { if (mode === 'name') draw(); }, { signal });
   back.addEventListener('click', () => { if (parentDialog) closeInteraction(); else commands(); }, { signal });
   retry.addEventListener('click', () => retryAction?.(), { signal });
   win.addEventListener('keydown', event => {

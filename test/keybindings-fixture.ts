@@ -7,7 +7,6 @@ export const INTENTIONALLY_UNBOUND_ACTIONS = [
   'close-window',
   'about',
   'new-with-harness',
-  'new-named-with-harness',
   'temporary-with-harness',
   'pin',
   'capture-performance',

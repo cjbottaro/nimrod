@@ -40,7 +40,7 @@ Resume and other saved-history actions live in the command palette, not a sideba
 | **Switch session** | Picker for open sessions, including disconnected and temporary entries. |
 | **Resume session** | Picker for saved top-level project history, including closed sessions. |
 | **New session / New named session** | Persistent conversation using the effective default harness, optionally named before launch. |
-| **Default harness / Harness picker** | Global/project new-session default versus explicit one-off creation selection. **New named session with harness…** combines name and harness in one modal. |
+| **Default harness / Harness picker** | Global/project new-session default versus explicit one-off creation selection. **New named session…** always combines the name field and inline Harness list in one modal. |
 | **Temporary session** | Explicit runtime-only conversation. Close is not deletion for saved sessions. |
 | **Delete sessions picker** | Repeated saved-history cleanup action, distinct from selected-session deletion. |
 | **Delete session** | Shared selected/row-targeted action across harnesses. Closes a session with no saved history; otherwise reviews its harness-owned removal scope. |

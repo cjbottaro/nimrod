@@ -7,15 +7,14 @@ Each session has its own conversation, draft and agent process. Switching sessio
 | Action | Use |
 | --- | --- |
 | **New session** / **⌘/Ctrl+N** | Start a persistent conversation with the effective default harness. |
-| **New named session…** / **⌘+Option+N**, **Ctrl+Alt+N** | Enter a single-line name, then press Enter or Create. Escape cancels. |
+| **New named session…** / **⌘+Option+N**, **Ctrl+Alt+N** | Enter a single-line name and choose a harness in one modal, then press Enter or Create. Escape cancels. |
 | **New temporary session** / **⌘/Ctrl+Shift+N** | Start without saved conversation history. Closing, quitting or reloading the app window discards its drafts, recovery items and pop-outs. |
 | **New session with harness…** | Pick a harness for one persistent conversation. |
-| **New named session with harness…** | Enter the name and select the harness in one modal, then Create. |
 | **New temporary session with harness…** | Pick a harness supporting unsaved conversations. |
 
-Set **Settings → Interaction → Default harness** globally, or override it in Project settings. The initial default is Pi. Ordinary palette actions identify the effective harness; selecting another session never changes it. The three **with harness…** actions are initially unbound and can be assigned shortcuts in Keybindings. They replace the former harness-specific creation actions and never change your default.
+Set **Settings → Interaction → Default harness** globally, or override it in Project settings. The initial default is Pi. Ordinary palette actions identify the effective harness; selecting another session never changes it. The two **with harness…** actions are initially unbound and can be assigned shortcuts in Keybindings. They replace the former harness-specific creation actions and never change your default.
 
-Pickers offer only available, ready harnesses supporting the creation type. Currently Pi supports named and temporary creation; Copilot and Codex support persistent creation only, although existing conversations can be renamed. Named creation with a picker keeps name and harness in one modal, with the name focused first; changing harness preserves the typed name. Cancel/Escape creates nothing.
+Pickers offer only available, ready harnesses supporting the creation type. Currently Pi supports named and temporary creation; Copilot and Codex support persistent creation only, although existing conversations can be renamed. **New named session…** always shows the name field and an inline harness list, with the name focused first. The effective default is selected when eligible; otherwise the first eligible harness is selected with an explanation. Up/Down changes the harness while you keep typing in the name field, or Tab focuses the list for navigation. Typing does not filter the harnesses or reset your selection. Clicking a harness selects it without creating; Enter or Create accepts both inputs. Left/Right and modified editing keys stay native, and IME composition is untouched. Each invocation starts from the effective default, not the last-used harness. Cancel/Escape creates nothing.
 
 If the default is unavailable or does not support the requested type, the ordinary action opens the appropriate picker with an explanation rather than silently using another harness. The configured default remains unchanged. If no harness supports an action, it is unavailable. Runtime availability is discovered at startup; see [Runtime settings](settings.md#runtime).
 

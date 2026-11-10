@@ -9,7 +9,6 @@ const BUILTIN_ACTIONS = [
   { id: 'open-recent-project', label: 'Open recent project…', scope: 'project', context: 'project', defaults: ['primary+shift+o'] },
   { id: 'new', label: 'New session', scope: 'project', context: 'project', defaults: ['primary+n'] },
   { id: 'new-with-harness', label: 'New session with harness…', scope: 'project', context: 'project', defaults: [] },
-  { id: 'new-named-with-harness', label: 'New named session with harness…', scope: 'project', context: 'project', defaults: [] },
   { id: 'temporary-with-harness', label: 'New temporary session with harness…', scope: 'project', context: 'project', defaults: [] },
   { id: 'temporary', label: 'New temporary session', scope: 'project', context: 'project', defaults: ['primary+shift+n'] },
   { id: 'delete', label: 'Delete session…', scope: 'project', context: 'session', defaults: ['primary+backspace'] },

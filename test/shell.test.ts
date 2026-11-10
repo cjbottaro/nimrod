@@ -565,6 +565,25 @@ test('default harness controls new sessions while one-off choices and settings u
   } finally { f.win.close(); }
 });
 
+test('New named session always offers its harness list and the separate named-picker action is absent', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    f.openPalette();
+    assert.equal(f.element('palette-list').querySelector('[data-key="new-named-with-harness"]'), null);
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="new-named"]')!.click(); await f.tick();
+    const name = f.element<HTMLInputElement>('palette-input');
+    assert.equal(f.win.document.activeElement, name);
+    const list = f.element('palette-list');
+    assert.equal(list.hidden, false); assert.equal(list.getAttribute('aria-label'), 'Harness');
+    assert.equal(list.querySelector('[aria-selected="true"]')?.getAttribute('data-key'), 'pi');
+    name.value = 'Keep the typed name'; name.dispatchEvent(new f.win.Event('input'));
+    name.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+    assert.equal(name.value, 'Keep the typed name'); assert.equal(f.win.document.activeElement, name);
+    name.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await f.tick();
+    assert.equal(f.rows().length, 0); assert.equal(f.calls.some(call => call.command === 'start_pi'), false);
+  } finally { f.win.close(); }
+});
+
 test('unsupported defaults use a single combined named modal and a capability-filtered temporary picker', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   const enter = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
@@ -572,9 +591,10 @@ test('unsupported defaults use a single combined named modal and a capability-fi
     f.preferences.external('{"sessions.defaultHarness":"codex"}'); await f.tick();
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'n', metaKey: true, altKey: true, bubbles: true, cancelable: true })); await f.tick();
     assert.equal(f.win.document.querySelectorAll('dialog[open]').length, 1);
-    const harness = f.element<HTMLSelectElement>('palette-name-harness');
-    assert.deepEqual([...harness.options].map(option => option.value), ['pi']);
-    assert.equal(harness.parentElement!.hidden, false);
+    const harness = f.element('palette-list');
+    assert.deepEqual([...harness.children].map(row => (row as HTMLElement).dataset.key), ['pi']);
+    assert.equal(harness.hidden, false);
+    assert.equal(harness.getAttribute('aria-label'), 'Harness');
     assert.match(f.element('palette-status').textContent!, /Codex does not support named sessions/);
     const name = f.element<HTMLInputElement>('palette-input'); name.value = 'Chosen name'; name.dispatchEvent(new f.win.Event('input'));
     enter(); await f.tick(); await f.tick();
