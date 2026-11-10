@@ -1,4 +1,4 @@
-import { sessionName } from '../session-naming';
+import { copilotSessionName } from './session-name';
 import { commandCatalog, type SessionCommands } from '../session-commands';
 import { validateMessageImages, type SessionMessageInput } from '../session-message-input';
 import type { ImageContent } from '../image-attachments';
@@ -166,8 +166,7 @@ export class CopilotSession {
   }
   disconnect(reason: string): void { this.connection.disconnect(reason); }
   async rename(value: string): Promise<void> {
-    const name = sessionName(value);
-    if ([...name].length > 100) throw new Error('Copilot session names must be at most 100 characters.');
+    const name = copilotSessionName(value);
     if (this.ended || this.state.sessionUnavailable) throw new Error('Resume this Copilot session before renaming it.');
     if (this.renaming) throw new Error('A session rename is already in progress.');
     const revision = this.nameRevision;

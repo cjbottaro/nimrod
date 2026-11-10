@@ -42,7 +42,7 @@ These projections read current owner state; they are not captured once at constr
 
 Shared `SessionLifecycleOwner` contains only token/starting/ended bookkeeping. `PiSessionLifecycleOwner` and `src/pi/session-file.ts` own Pi mode/file inputs; ACP receives its concrete profile/saved-ID state. Helpers accept the fields they actually need, and concrete adapters project controller availability to a boolean instead of imposing a common controller-state shape.
 
-Ordinary `connect` options carry only accepted-action context. Initial naming is an explicit creation request gated by the adapter's required `HarnessCreation.named` capability; draft-copy remains Nimrod-owned creation state. [Session creation](session-creation.md) owns discovery and default selection. Unsupported adapters must never silently ignore a requested name. New-session creation and connecting an existing selection are distinct consumers even when they reuse a concrete launch routine.
+Ordinary `connect` options carry only accepted-action context. Initial naming is an explicit creation request gated by the adapter's `HarnessCreation.named` capability and required validator when supported; create-then-native-rename sequencing belongs to the concrete adapters, never a shell fallback; draft-copy remains Nimrod-owned creation state. [Session creation](session-creation.md) owns discovery and default selection. Unsupported adapters must never silently ignore a requested name. New-session creation and connecting an existing selection are distinct consumers even when they reuse a concrete launch routine.
 
 ### Lifecycle guarantees
 

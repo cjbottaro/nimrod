@@ -1,6 +1,7 @@
 import { CodexSession, type CodexSessionState, type CodexSessionUi } from './session';
 import { codexScope, codexSessionLifecycle } from './session-lifecycle';
 import { codexConnectionFailure } from './connection-failure';
+import { sessionName } from '../session-naming';
 import type { CodexTransport } from './native';
 import { ownedProcessStop, type ConnectSessionOptions, type SessionLifecycle, type SessionLifecycleHost, type SessionLifecycleOwner } from '../session-lifecycle';
 
@@ -8,6 +9,8 @@ import { ownedProcessStop, type ConnectSessionOptions, type SessionLifecycle, ty
 export interface CodexBackend { session?: CodexSession; savedSessionId?: string; historyConfirmed?: boolean; }
 export interface CodexConnectionHost {
   readonly project: string;
+  /** Explicit new-session intent only, consumed once before the first launch attempt. */
+  readonly initialName?: string;
   readonly transport: CodexTransport;
   /** Shell/window availability only; attempt and protocol guards belong to this owner. */
   available(options: ConnectSessionOptions): boolean;
@@ -19,6 +22,7 @@ export interface CodexConnectionHost {
   ui: Omit<CodexSessionUi, 'identified' | 'disconnected' | 'changed' | 'historyConfirmed'> & { changed(state: CodexSessionState): void; };
   effects: {
     changed(): void;
+    nameFailed(error: unknown): void;
     identified(): void;
     retire(): void;
     resolved(issue: 'connection' | 'cleanup'): void;
@@ -31,6 +35,7 @@ export interface CodexConnectionHost {
  * startup sequencing, identity validation, packet routing or cleanup decisions.
  */
 export function createCodexConnection(readOwner: () => SessionLifecycleOwner, backend: CodexBackend, host: CodexConnectionHost): SessionLifecycle {
+  let initialName = backend.savedSessionId === undefined && host.initialName !== undefined ? sessionName(host.initialName) : undefined;
   const stopToken = ownedProcessStop(token => host.transport.stop(token));
   const lifecycle = codexSessionLifecycle(readOwner, backend, { connect, stop: stopToken, gate: host.gate });
   return lifecycle;
@@ -45,6 +50,7 @@ export function createCodexConnection(readOwner: () => SessionLifecycleOwner, ba
       host.effects.failure({ kind: 'connection', message: 'This Codex thread is already open in this window.', resumable: false });
       return;
     }
+    const attemptName = savedId === undefined ? initialName : undefined; initialName = undefined;
     owner.starting = true; host.effects.changed();
     try { await lifecycle.stop(); host.effects.resolved('cleanup'); }
     catch (error) {
@@ -116,6 +122,12 @@ export function createCodexConnection(readOwner: () => SessionLifecycleOwner, ba
     } finally {
       // Old completions cannot clear a replacement's connecting state.
       if (owner.token === token) { owner.starting = false; if (valid()) host.effects.changed(); }
+    }
+    // A rename rejection is not a startup failure: keep the exact created thread.
+    if (initialized && valid() && !owner.ended && !host.tearingDown() && attemptName !== undefined) {
+      void session.rename(attemptName).catch(error => {
+        if (valid() && !owner.ended && !host.tearingDown()) host.effects.nameFailed(error);
+      });
     }
   }
 }

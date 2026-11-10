@@ -93,7 +93,7 @@ post-stop materialization are covered by concrete history/deletion fixtures.
    identity. Do not silently substitute a fresh thread, even when Nimrod recorded
    the original as untouched. Do not auto-rename, send synthetic input, replay
    messages, edit native history or change global settings to force persistence.
-   An explicit separate New session remains possible.
+   An explicit separate New session remains possible. Explicit New named session intent may create then natively name a new conversation once; this is not a persistence workaround and is never reapplied on reconnect. [Initial naming](session-naming.md#named-creation-via-native-rename) owns that boundary.
 3. An empty rendered transcript, no known history file, a missing catalog entry,
    a failed Resume or private untouched-session metadata is **not** native
    saved-history evidence. A successful native history read can establish that

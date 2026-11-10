@@ -29,7 +29,7 @@ import { lastUsed } from '../session-recency';
 import { sessionName } from '../session-naming';
 
 const lastKey = 'nimrod.last-session.v1';
-const creation = { defaultMode: 'saved', modes: ['saved', 'temporary'], named: true, title: 'Session' } satisfies import('../harness-contract').HarnessCreation;
+const creation = { defaultMode: 'saved', modes: ['saved', 'temporary'], named: true, validateName: sessionName, title: 'Session' } satisfies import('../harness-contract').HarnessCreation;
 export const piHarness = defineHarness({ creation, cards: bundledToolRenderer, id: 'pi', label: 'Pi', actions: [], create: createPiProject });
 function createPiProject(host: HarnessProjectHost): HarnessProject {
   const availability = startupAvailability(() => invoke<boolean>('pi_runtime_available', { pi: host.runtime().pi, node: host.runtime().node }));

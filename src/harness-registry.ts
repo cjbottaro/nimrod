@@ -72,7 +72,10 @@ export class HarnessRegistry {
       if (!project.saved.accepts(request.reference)) throw new Error('Saved identity belongs to another harness');
     } else {
       if (!project.creation.modes.includes(request.mode)) throw new Error(`${project.label} does not support ${request.mode} sessions`);
-      if (request.initialName !== undefined && !project.creation.named) throw new Error(`${project.label} does not support initial naming`);
+      if (request.initialName !== undefined) {
+        if (!project.creation.named) throw new Error(`${project.label} does not support initial naming`);
+        request = { ...request, initialName: project.creation.validateName(request.initialName) };
+      }
     }
     const session = project.create(host, request);
     this.assertIdentity(project, session);

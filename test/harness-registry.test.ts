@@ -116,6 +116,27 @@ test('registered factories reject duplicate/unknown identities and unsupported c
   f.dom.window.close();
 });
 
+test('named creation validates and normalizes through the advertised adapter before construction', () => {
+  const f = harnessHostFixture();
+  let created = 0, received: import('../src/harness-contract').SessionRequest | undefined;
+  const creation = { ...fixtureHarness.creation, named: true as const, validateName(value: string) {
+    if (value.trim().length > 5) throw new Error('Fixture name limit');
+    return value.trim();
+  } };
+  const registration = defineHarness({ ...fixtureHarness, creation, create(host: import('../src/harness-host').HarnessProjectHost) {
+    const project = fixtureHarness.create(host);
+    return { ...project, creation, create(sessionHost: import('../src/harness-host').HarnessSessionHost, request: import('../src/harness-contract').SessionRequest) {
+      created++; received = request; return project.create(sessionHost, request);
+    } };
+  } });
+  const registry = new HarnessRegistry([registration], f.project, registration.id), project = registry.get(registration.id);
+  assert.throws(() => registry.create(project, f.host, { mode: 'saved', initialName: 'Too long' }), /Fixture name limit/);
+  assert.equal(created, 0);
+  registry.create(project, f.host, { mode: 'saved', initialName: '  Clean  ' });
+  assert.equal(created, 1); assert.deepEqual(received, { mode: 'saved', initialName: 'Clean' });
+  f.dom.window.close();
+});
+
 test('inconsistent identity/key projections are refused before a session reaches application consumers', () => {
   const f = harnessHostFixture();
   const registration = defineHarness({ ...fixtureHarness, create(host: import('../src/harness-host').HarnessProjectHost) {

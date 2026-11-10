@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { CopilotSession } from './session';
+import { copilotSessionName } from './session-name';
 import { copilotSessionLifecycle, copilotSdkScope } from './session-lifecycle';
 import { copilotInteraction, copilotSessionActions } from './view-policy';
 import { CopilotSessionHistory, copilotHistoryKey } from './session-history';
@@ -16,7 +17,7 @@ import { ownedProcessStop } from '../session-lifecycle';
 import type { HarnessProject, HarnessSession, SessionRequest } from '../harness-contract';
 import type { HarnessProjectHost, HarnessSessionHost } from '../harness-host';
 
-const creation = { defaultMode: 'saved', modes: ['saved'], named: false, title: 'Copilot session' } satisfies import('../harness-contract').HarnessCreation;
+const creation = { defaultMode: 'saved', modes: ['saved'], named: true, validateName: copilotSessionName, title: 'Copilot session' } satisfies import('../harness-contract').HarnessCreation;
 export const copilotHarness = defineHarness({ creation, cards: bundledCopilotPlugin, id: 'copilot-sdk', label: 'Copilot', actions: [], create: createCopilotProject });
 function createCopilotProject(projectHost: HarnessProjectHost): HarnessProject {
   const availability = startupAvailability(() => invoke<boolean>('copilot_runtime_available', { cli: projectHost.runtime().copilot, node: projectHost.runtime().node }));
@@ -64,12 +65,15 @@ function createCopilotSession(host: HarnessSessionHost, request: SessionRequest,
   const stopToken = ownedProcessStop(transport.stop);
   const ui = copilotIntegrationUi(host);
   let signature = '', sequence = 0, retiring = false;
+  let initialName = request.mode === 'saved' && request.initialName !== undefined ? copilotSessionName(request.initialName) : undefined;
   const lifecycle = copilotSessionLifecycle(() => owner, backend, { connect, stop: stopToken, gate: () => ready() && !project.deletionPending() && !lifetime.deleting() ? 'ready' : 'blocked' });
   async function connect(options: import('../session-lifecycle').ConnectSessionOptions): Promise<void> {
     if (!ready() || project.deletionPending() || !lifetime.current() || !lifetime.available(options) || owner.starting || backend.session && !owner.ended) return;
     const savedId = backend.savedSessionId;
     const conflict = (id: string) => lifetime.conflicts({ kind: 'copilot-sdk', sessionId: id });
     if (savedId && conflict(savedId)) { effects.connection('This ID is already open in another Copilot session. Select that entry or close it before connecting.'); return; }
+    // Consume this explicit creation intent before any await; reconnect never replays it.
+    const attemptName = savedId === undefined ? initialName : undefined; initialName = undefined;
     owner.starting = true; effects.changed();
     try { await lifecycle.stop(); }
     catch (error) { owner.starting = false; effects.connection(`Could not stop the previous Copilot connection: ${String(error)}`, !!savedId); effects.changed(); return; }
@@ -119,6 +123,13 @@ function createCopilotSession(host: HarnessSessionHost, request: SessionRequest,
       session.disconnect(String(error));
       try { await stopToken(token); } catch (error) { if (valid()) effects.connection(String(error), !!savedId); }
     } finally { if (owner.token === token) { owner.starting = false; if (valid()) effects.changed(); } }
+    // Naming is not part of startup success and must not tear down a created session.
+    if (initialized && valid() && !owner.ended && !lifetime.closing() && !lifetime.reloading() && !lifetime.deleting() && attemptName !== undefined) {
+      void session.rename(attemptName).catch(error => {
+        if (valid() && !owner.ended && !lifetime.closing() && !lifetime.reloading() && !lifetime.deleting()) effects.notice({ id: 'rename', operation: 'Name new session',
+          message: 'The session was created, but its name could not be confirmed. Use Rename session to try again.', details: String(error) });
+      });
+    }
   }
   return {
     lifecycle, drafts: { durability: 'persistent' },

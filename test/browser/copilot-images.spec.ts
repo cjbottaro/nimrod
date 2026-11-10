@@ -17,7 +17,7 @@ for (const caption of ['', 'Look at this screenshot']) test(`Copilot images use 
     await page.locator(visible('prompt')).fill('Keep Pi draft');
     await page.keyboard.press('Meta+Shift+P');
     await page.locator('#palette-input').fill('New session with harness'); await page.locator('#palette-input').press('Enter');
-    await page.locator('#palette-list [data-key="copilot"]').click();
+    await page.locator('#palette-list [data-key="copilot-sdk"]').click();
     await expect(page.locator(visible('model'))).toHaveText('small');
     const sdk = await page.locator('.session-view:not([hidden])').getAttribute('id');
     const prompt = page.locator(visible('prompt'));

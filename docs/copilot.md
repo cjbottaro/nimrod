@@ -15,7 +15,7 @@ and native lifecycle still need verification. Windows SDK launch is unavailable.
 
 Open a project, then **⌘/Ctrl+Shift+P → New session with harness… → Copilot**.
 Set **Settings → Interaction → Default harness** to Copilot globally or for this project to use ordinary **New session** / **⌘/Ctrl+N** instead. One-off picker choices do not change that default. See [session creation](sessions.md#create-a-session).
-Harness labels in the Project bar, Session sidebar and history pickers are simply **Copilot**. Initially named and temporary Copilot creation are not yet offered; existing sessions can be renamed.
+Harness labels in the Project bar, Session sidebar and history pickers are simply **Copilot**. **New named session…** offers Copilot and names the newly created conversation through its native API; the same 100-character limit applies as Rename. See [named creation and failure behavior](sessions.md#create-a-session). Temporary Copilot creation is not supported.
 
 Text Send clears the composer and previews your turn immediately. It never
 replays uncertain delivery or restores sent text over a newer draft. While

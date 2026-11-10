@@ -1121,7 +1121,17 @@ async function newSession(mode: 'saved' | 'temporary' = 'saved', copyDraft?: str
   return requestCreation(mode, false, copyDraft);
 }
 async function newHarnessSession(project: HarnessProject, mode: 'saved' | 'temporary' = project.creation.defaultMode, copyDraft?: string, initialName?: string): Promise<void> {
-  if (!ready || settings.isOpen || !await ensureWorkspace()) return;
+  if (!ready || settings.isOpen) return;
+  if (initialName !== undefined) {
+    try {
+      if (!project.creation.named) throw new Error(`${project.label} does not support named creation.`);
+      initialName = project.creation.validateName(initialName);
+    } catch (error) {
+      notices.report({ id: `create-session:${++noticeSequence}`, operation: 'Create session', message: String(error) });
+      return;
+    }
+  }
+  if (!await ensureWorkspace()) return;
   if (!ready || unloading || settings.isOpen) return;
   if (!project.availability.available() || !project.initialization.ready() || !supportsCreation(project, initialName === undefined ? mode : 'named')) {
     notices.report({ id: `create-session:${++noticeSequence}`, operation: 'Create session', message: `${project.label} is no longer available for this session type. Choose New session again; nothing was created.` });

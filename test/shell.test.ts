@@ -41,6 +41,7 @@ interface ShellOptions {
   codexConversation?: boolean;
   harnessStop?: (harness: 'copilot' | 'codex', token: string) => Promise<void>;
   harnessResumeError?: string;
+  harnessRename?: (harness: 'copilot' | 'codex', name: string, token: string) => Promise<void>;
   harnessInitializationGate?: Promise<void>;
   catalogError?: string;
   globalSettings?: boolean;
@@ -317,6 +318,13 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
           else send({ id: request.id, error: { code: options.codexReadError ? -32000 : -32600, message: options.codexReadError ?? `thread not loaded: ${(request.params as JsonRecord).threadId}` } });
         }
         else if (request.method === 'thread/delete') send({ id: request.id, result: {} });
+        else if (request.method === 'thread/name/set') {
+          const params = request.params as JsonRecord;
+          try { await options.harnessRename?.('codex', String(params.name), String(args.token)); }
+          catch (error) { send({ id: request.id, error: { code: -32000, message: String(error) } }); return; }
+          send({ id: request.id, result: {} });
+          send({ method: 'thread/name/updated', params: { threadId: params.threadId, threadName: params.name } });
+        }
         else if (options.codexConversation && ['thread/start', 'thread/resume'].includes(String(request.method))) {
           if (request.method === 'thread/resume' && options.harnessResumeError) {
             send({ id: request.id, error: { code: -32000, message: options.harnessResumeError } }); return;
@@ -355,6 +363,10 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
               { id: 'saved-assistant', type: 'assistant.message', data: { messageId: 'saved-assistant', content: 'Saved Copilot answer' } },
             ] : [] });
           send({ kind: 'commands', commands: options.sdkCommands ?? [] });
+        } else if (request.method === 'rename') {
+          try { await options.harnessRename?.('copilot', String(request.name), String(args.token)); }
+          catch (error) { send({ kind: 'result', id: request.id, error: String(error) }); return; }
+          result = { name: request.name }; event('session.title_changed', { title: request.name });
         } else if (request.method === 'command') {
           result = await options.sdkCommand?.(request);
         } else if (request.method === 'prompt') {
@@ -539,9 +551,9 @@ test('Close after an unavailable Copilot lookup still removes the row and preser
 });
 
 test('default harness controls new sessions while one-off choices and settings updates preserve mounted sessions', async () => {
-  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true });
   try {
-    f.preferences.external('{"sessions.defaultHarness":"copilot"}'); await f.tick();
+    f.preferences.external('{"sessions.defaultHarness":"copilot-sdk"}'); await f.tick();
     f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
     assert.equal(f.element('mode-badge').textContent, 'Copilot');
     const root = f.win.document.querySelector('.session-view:not([hidden])')!;
@@ -589,23 +601,98 @@ test('New named session always offers its harness list and the separate named-pi
   } finally { f.win.close(); }
 });
 
-test('unsupported defaults use a single combined named modal and a capability-filtered temporary picker', async () => {
+test('Copilot and Codex named creation starts once then renames without gating drafting or replaying on Reload', async () => {
+  for (const id of ['copilot-sdk', 'codex']) {
+    let release!: () => void;
+    const naming = new Promise<void>(resolve => { release = resolve; });
+    const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true, harnessRename: async () => naming });
+    try {
+      f.preferences.external(JSON.stringify({ 'sessions.defaultHarness': id })); await f.tick();
+      f.openPalette(); f.element('palette-list').querySelector<HTMLElement>('[data-key="new-named"]')!.click(); await f.tick();
+      const name = f.element<HTMLInputElement>('palette-input');
+      assert.deepEqual([...f.element('palette-list').children].map(row => (row as HTMLElement).dataset.key), ['pi', 'copilot-sdk', 'codex']);
+      assert.equal(f.element('palette-list').querySelector('[aria-selected="true"]')?.getAttribute('data-key'), id);
+      name.value = '  Named native session  '; name.dispatchEvent(new f.win.Event('input'));
+      name.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+      assert.equal(f.element<HTMLDialogElement>('command-palette').open, false); assert.equal(f.rows().length, 1);
+      const writes = () => f.calls.filter(call => call.command === (id === 'codex' ? 'write_codex' : 'write_copilot')).map(call => call.args.message as JsonRecord);
+      const renames = () => writes().filter(message => message.method === (id === 'codex' ? 'thread/name/set' : 'rename'));
+      assert.equal(renames().length, 1);
+      if (id === 'codex') assert.deepEqual(renames()[0].params, { threadId: 'codex-fixture', name: 'Named native session' });
+      else assert.equal(renames()[0].name, 'Named native session');
+      assert.ok(writes().findIndex(message => message.method === (id === 'codex' ? 'thread/start' : 'connect')) < writes().indexOf(renames()[0]));
+      const draft = f.element<HTMLTextAreaElement>('prompt'); draft.value = 'Newer draft'; draft.dispatchEvent(new f.win.Event('input'));
+      assert.equal(f.element<HTMLButtonElement>('send').disabled, false, 'native naming does not block subsequent input');
+      const row = f.rows()[0]; release(); await f.tick(); await f.tick();
+      assert.equal(f.element('project-session-name').textContent, 'Named native session'); assert.equal(f.rows()[0], row);
+      assert.equal(draft.value, 'Newer draft'); assert.equal(f.element('application-notices').hidden, true);
+      f.element<HTMLButtonElement>('reload-session').click(); await f.tick(); await f.tick();
+      assert.equal(renames().length, 1, 'Reload resumes the identity without repeating initial naming');
+      assert.equal(writes().filter(message => message.method === (id === 'codex' ? 'thread/start' : 'connect') && (id === 'codex' || message.sessionId === undefined)).length, 1);
+      assert.equal(writes().some(message => ['prompt', 'command', 'turn/start'].includes(String(message.method))), false);
+      assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Newer draft');
+    } finally { release(); f.win.close(); }
+  }
+});
+
+test('native initial rename rejection keeps the created session and explicit Rename resolves its notice', async () => {
+  for (const id of ['copilot-sdk', 'codex']) {
+    let attempts = 0;
+    const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true,
+      harnessRename: async () => { if (++attempts === 1) throw new Error('Native name rejected'); } });
+    try {
+      f.preferences.external(JSON.stringify({ 'sessions.defaultHarness': id })); await f.tick();
+      f.openPalette(); f.element('palette-list').querySelector<HTMLElement>('[data-key="new-named"]')!.click(); await f.tick();
+      const name = f.element<HTMLInputElement>('palette-input'); name.value = 'Requested name'; name.dispatchEvent(new f.win.Event('input'));
+      name.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+      assert.equal(f.rows().length, 1); assert.equal(attempts, 1);
+      assert.match(f.win.document.querySelector('.session-view:not([hidden]) .notice-list')!.textContent!, /session was created.*name could not be confirmed/);
+      const renameCall = f.calls.find(call => ['write_codex', 'write_copilot'].includes(call.command) && ['thread/name/set', 'rename'].includes(String((call.args.message as JsonRecord).method)))!;
+      assert.equal(f.calls.some(call => ['stop_codex', 'stop_copilot'].includes(call.command) && call.args.token === renameCall.args.token), false);
+      assert.equal(f.element('application-notices').hidden, true);
+      const draft = f.element<HTMLTextAreaElement>('prompt'); draft.value = 'Keep draft'; draft.dispatchEvent(new f.win.Event('input'));
+      f.openPalette(); f.element('palette-list').querySelector<HTMLElement>('[data-key="rename"]')!.click(); await f.tick();
+      f.element<HTMLTextAreaElement>('host-dialog-input').value = 'Explicit retry'; await f.confirm(); await f.tick();
+      assert.equal(attempts, 2); assert.equal(f.element('project-session-name').textContent, 'Explicit retry');
+      assert.equal(f.win.document.querySelectorAll('.session-view:not([hidden]) .notice-list [data-notice-id]').length, 0);
+      assert.equal(draft.value, 'Keep draft');
+      f.element<HTMLButtonElement>('reload-session').click(); await f.tick(); await f.tick();
+      assert.equal(attempts, 2);
+    } finally { f.win.close(); }
+  }
+});
+
+test('invalid Copilot creation names are rejected before creating a row, history association or native process', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    f.preferences.external('{"sessions.defaultHarness":"copilot-sdk"}'); await f.tick();
+    f.openPalette(); f.element('palette-list').querySelector<HTMLElement>('[data-key="new-named"]')!.click(); await f.tick();
+    const name = f.element<HTMLInputElement>('palette-input'); name.value = '🦉'.repeat(101); name.dispatchEvent(new f.win.Event('input'));
+    name.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 0); assert.match(f.element('application-notices').textContent!, /at most 100 characters/);
+    assert.equal(f.calls.some(call => call.command === 'start_copilot'), false);
+    assert.equal(f.preferences.value.state[copilotHistoryKey('/project')], undefined);
+  } finally { f.win.close(); }
+});
+
+test('Codex default supports named creation while temporary creation still uses a filtered fallback', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true });
   const enter = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
   try {
     f.preferences.external('{"sessions.defaultHarness":"codex"}'); await f.tick();
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'n', metaKey: true, altKey: true, bubbles: true, cancelable: true })); await f.tick();
     assert.equal(f.win.document.querySelectorAll('dialog[open]').length, 1);
     const harness = f.element('palette-list');
-    assert.deepEqual([...harness.children].map(row => (row as HTMLElement).dataset.key), ['pi']);
+    assert.deepEqual([...harness.children].map(row => (row as HTMLElement).dataset.key), ['pi', 'copilot-sdk', 'codex']);
     assert.equal(harness.hidden, false);
     assert.equal(harness.getAttribute('aria-label'), 'Harness');
-    assert.match(f.element('palette-status').textContent!, /Codex does not support named sessions/);
+    assert.equal(harness.querySelector('[aria-selected="true"]')?.getAttribute('data-key'), 'codex');
+    assert.doesNotMatch(f.element('palette-status').textContent!, /does not support named/);
     const name = f.element<HTMLInputElement>('palette-input'); name.value = 'Chosen name'; name.dispatchEvent(new f.win.Event('input'));
     enter(); await f.tick(); await f.tick();
-    assert.equal(f.element('mode-badge').textContent, 'Pi');
-    const pi = f.calls.filter(call => call.command === 'start_pi').at(-1)!;
-    assert.equal((pi.args.config as JsonRecord).sessionName, 'Chosen name');
+    assert.equal(f.element('mode-badge').textContent, 'Codex');
+    const rename = f.calls.find(call => call.command === 'write_codex' && (call.args.message as JsonRecord).method === 'thread/name/set')!;
+    assert.equal(((rename.args.message as JsonRecord).params as JsonRecord).name, 'Chosen name');
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'n', metaKey: true, shiftKey: true, bubbles: true, cancelable: true })); await f.tick();
     assert.match(f.element('palette-status').textContent!, /Codex does not support temporary sessions/);
     assert.deepEqual([...f.element('palette-list').children].map(row => (row as HTMLElement).dataset.key), ['pi']);
@@ -669,11 +756,12 @@ test('missing Codex preserves restored rows and drafts but omits runtime actions
   } finally { f.win.close(); }
 });
 
-test('missing Pi keeps ordinary creation available through explicit harness selection', async () => {
+test('missing Pi keeps ordinary and named creation available through explicit harness selection', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project', runtimeAvailable: harness => harness !== 'pi' });
   try {
     await f.tick(); f.openPalette();
-    assert.doesNotMatch(f.element('palette-list').textContent!, /New named session|New temporary session/);
+    assert.doesNotMatch(f.element('palette-list').textContent!, /New temporary session/);
+    assert.match(f.element('palette-list').textContent!, /New named session/);
     assert.match(f.element('palette-list').textContent!, /New session with harness/);
     assert.equal(f.element<HTMLButtonElement>('sidebar-new').hidden, false);
     f.element<HTMLDialogElement>('command-palette').close(); await f.tick();
@@ -1118,7 +1206,7 @@ test('Copilot SDK coexists with Pi without changing its draft, default backend o
     f.openPalette(); const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New session with harness'; input.dispatchEvent(new f.win.Event('input'));
     assert.equal(f.element('palette-list').firstElementChild!.querySelector('small')!.textContent, 'Choose a harness for this session only');
     enter(); await f.tick(); await f.tick();
-    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot"]')!.click(); await f.tick(); await f.tick();
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot-sdk"]')!.click(); await f.tick(); await f.tick();
     assert.equal(f.calls.filter(call => call.command === 'start_pi').length, 1);
     assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, 2, 'one discovery process plus one conversation');
     assert.equal(f.calls.some(call => call.command === 'start_acp'), false);
@@ -1166,7 +1254,7 @@ test('Copilot slash commands discover arguments, open harness choice modals and 
     const paletteInput = f.element<HTMLInputElement>('palette-input');
     const enter = () => paletteInput.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     paletteInput.value = 'New session with harness'; paletteInput.dispatchEvent(new f.win.Event('input')); enter(); await f.tick(); await f.tick();
-    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot"]')!.click(); await f.tick(); await f.tick();
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot-sdk"]')!.click(); await f.tick(); await f.tick();
     const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.focus();
     const type = (value: string) => { prompt.value = value; prompt.setSelectionRange(value.length, value.length); prompt.dispatchEvent(new f.win.Event('input')); };
     const send = () => f.element<HTMLButtonElement>('send').click();
@@ -1206,7 +1294,7 @@ test('SDK sidebar identity, title, recency and draft survive reopening with sele
     const input = first.element<HTMLInputElement>('palette-input');
     input.value = 'New session with harness'; input.dispatchEvent(new first.win.Event('input'));
     enter(); await first.tick(); await first.tick();
-    first.element('palette-list').querySelector<HTMLElement>('[data-key="copilot"]')!.click(); await first.tick(); await first.tick();
+    first.element('palette-list').querySelector<HTMLElement>('[data-key="copilot-sdk"]')!.click(); await first.tick(); await first.tick();
     const prompt = first.element<HTMLTextAreaElement>('prompt');
     prompt.value = 'Copilot sidebar title'; prompt.dispatchEvent(new first.win.Event('input'));
     prompt.dispatchEvent(new first.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
@@ -1855,7 +1943,7 @@ test('SDK transcript logging uses the global setting and native append bridge fo
   try {
     const enter = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     f.openPalette(); const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New session with harness'; input.dispatchEvent(new f.win.Event('input')); enter(); await f.tick(); await f.tick();
-    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot"]')!.click(); await f.tick(); await f.tick();
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot-sdk"]')!.click(); await f.tick(); await f.tick();
     const target = [...f.sdkSessions.values()].find(session => session.sessionId === 'sdk-fixture')!;
     const event = (id: string, type: string, data: JsonRecord) => target.channel.onmessage({ kind: 'rpc', value: { kind: 'event', event: { id, type, data } } });
     event('disabled-capture', 'tool.extension_specific', { toolCallId: 'disabled' });
@@ -1887,7 +1975,7 @@ test('Copilot permissions retain one modal, escape without answering, reopen thr
     const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New session with harness'; input.dispatchEvent(new f.win.Event('input'));
     input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await f.tick(); await f.tick();
-    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot"]')!.click(); await f.tick(); await f.tick();
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot-sdk"]')!.click(); await f.tick(); await f.tick();
     const target = [...f.sdkSessions.values()].find(session => session.sessionId === 'sdk-fixture')!;
     const draft = f.element<HTMLTextAreaElement>('prompt'); draft.value = 'keep draft'; draft.dispatchEvent(new f.win.Event('input')); draft.focus();
     const request = (id: string, path: string) => target.channel.onmessage({ kind: 'rpc', value: { kind: 'permission', id, request: { kind: 'read', path, intention: `Search in directory: ${path}` } } });
@@ -1931,7 +2019,7 @@ test('Copilot questions use retained picker and nested input without cancelling 
     const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New session with harness'; input.dispatchEvent(new f.win.Event('input'));
     input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await f.tick(); await f.tick();
-    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot"]')!.click(); await f.tick(); await f.tick();
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot-sdk"]')!.click(); await f.tick(); await f.tick();
     const target = [...f.sdkSessions.values()].find(session => session.sessionId === 'sdk-fixture')!;
     const draft = f.element<HTMLTextAreaElement>('prompt'); draft.value = 'keep question draft'; draft.dispatchEvent(new f.win.Event('input')); draft.focus();
     const host = draft.closest('.session-view')!;
@@ -1980,7 +2068,7 @@ test('Copilot plan picker retains pending review and returns feedback without pr
     const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New session with harness'; input.dispatchEvent(new f.win.Event('input'));
     input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await f.tick(); await f.tick();
-    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot"]')!.click(); await f.tick(); await f.tick();
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot-sdk"]')!.click(); await f.tick(); await f.tick();
     const target = [...f.sdkSessions.values()].find(session => session.sessionId === 'sdk-fixture')!;
     const draft = f.element<HTMLTextAreaElement>('prompt'); draft.value = 'keep draft'; draft.focus();
     const host = draft.closest('.session-view')!;

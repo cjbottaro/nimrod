@@ -1,7 +1,7 @@
 // Compiled by tsconfig.json (test is included), never executed as a Node test.
 // An unused @ts-expect-error fails compilation if a mandatory boundary becomes optional.
 import { defineHarness } from '../src/harness-registry';
-import type { HarnessAction, HarnessProject, HarnessRegistration, HarnessSession } from '../src/harness-contract';
+import type { HarnessAction, HarnessCreation, HarnessProject, HarnessRegistration, HarnessSession } from '../src/harness-contract';
 import { fixtureHarness } from './fixtures/fixture-harness';
 
 type OptionalKeys<T> = { [K in keyof T]-?: {} extends Pick<T, K> ? K : never }[keyof T];
@@ -12,6 +12,9 @@ const completeRegistration: HarnessRegistration = fixtureHarness;
 void [sessionPortsAreRequired, projectPortsAreRequired, registrationPortsAreRequired, completeRegistration];
 
 function compileAssertions(session: HarnessSession, project: HarnessProject, registration: HarnessRegistration): void {
+  // @ts-expect-error Advertising named creation requires executable preflight validation.
+  const missingNameValidation: HarnessCreation = { title: 'Broken', defaultMode: 'saved', modes: ['saved'], named: true };
+  void missingNameValidation;
   const { lifecycle, ...withoutLifecycle } = session;
   // @ts-expect-error A factory cannot register a session without lifecycle ownership.
   defineHarness({ ...registration, create: () => ({ ...project, create: () => withoutLifecycle }) });

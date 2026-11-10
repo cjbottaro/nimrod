@@ -156,6 +156,8 @@ transport tags remain `copilot-sdk` for storage/API compatibility.
 Generic ACP protocol/adapters are retained internally without a Copilot preset,
 creation/options actions or keybinding entries.
 
+[Named creation](session-naming.md#named-creation-via-native-rename) uses the existing native naming API once after SDK connection, with preflight validation and session-local failure retention. It does not invoke `/session rename` or submit synthetic input. Temporary Copilot creation remains unsupported.
+
 ## Send, events, controls and decisions
 
 `src/copilot/session.ts` projects real SDK semantic events directly to existing
