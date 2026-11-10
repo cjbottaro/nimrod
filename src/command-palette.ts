@@ -59,7 +59,8 @@ export interface RetainedSelectionRequest {
 }
 export interface SelectionRequest {
   choose(options: string[], current?: string): Promise<string | undefined>;
-  chooseItems(options: readonly { id: string; label: string; detail?: string; keywords?: string }[], current?: string, notice?: string): Promise<string | undefined>;
+  /** Current marks an applied value; selection marks the highlighted candidate (creation pickers). */
+  chooseItems(options: readonly { id: string; label: string; detail?: string; keywords?: string }[], current?: string, notice?: string, marker?: 'current' | 'selection'): Promise<string | undefined>;
   error(message: string): void;
   finish(): void;
   cancel(): void;
@@ -100,6 +101,8 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   let mode: 'commands' | 'sessions' | 'projects' | 'selection' | 'inspection' | 'name' = 'commands';
   let items: PaletteItem[] = [], matches: PaletteItem[] = [];
   let selected = 0;
+  let selectionMarker: 'current' | 'selection' = 'current';
+  const markerTracksSelection = () => mode === 'name' || (mode === 'selection' && selectionMarker === 'selection');
   let generation = 0;
   let historyRequest: AbortController | undefined;
   let bufferedHistory: PalettePage | undefined;
@@ -222,7 +225,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       if (item.marker) {
         if (preview) heading.append(label);
         heading.append(createPaletteItemMarker(doc, item.marker));
-      } else if (mode === 'selection' || mode === 'projects') {
+      } else if (mode === 'selection' || mode === 'projects' || mode === 'name') {
         const marker = doc.createElement('span'); marker.className = 'palette-selection-marker';
         marker.setAttribute('aria-hidden', 'true'); marker.textContent = (mode === 'projects' ? item.projectOpen : item.current) ? '•' : '';
         if (preview) heading.append(label, marker);
@@ -267,7 +270,13 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     input.setAttribute('aria-busy', String(loading));
   }
   function selection(reveal = true): void {
-    for (const [index, row] of [...list.children].entries()) row.setAttribute('aria-selected', String(index === selected));
+    for (const [index, row] of [...list.children].entries()) {
+      row.setAttribute('aria-selected', String(index === selected));
+      if (markerTracksSelection()) {
+        const marker = row.querySelector('.palette-selection-marker');
+        if (marker) marker.textContent = index === selected ? '•' : '';
+      }
+    }
     const row = list.children[selected] as HTMLElement | undefined;
     if (row) {
       (mode === 'name' ? list : input).setAttribute('aria-activedescendant', row.id);
@@ -302,7 +311,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     historyRequest?.abort(); historyRequest = undefined;
     endRetained(); endPreview();
     deletionControls(false);
-    cancelChoice(); createNamed = undefined; generation++; mode = 'commands'; loading = false; notice = ''; items = options.commands(); matches = []; selected = 0;
+    cancelChoice(); createNamed = undefined; selectionMarker = 'current'; generation++; mode = 'commands'; loading = false; notice = ''; items = options.commands(); matches = []; selected = 0;
     title.textContent = 'Commands'; input.placeholder = 'Type a command…'; input.setAttribute('aria-label', 'Search commands');
     input.value = commandQuery; back.hidden = true; retry.hidden = true; retryAction = undefined; draw(); input.focus();
   }
@@ -312,7 +321,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     endRetained(); endPreview();
     deletionControls(false);
     if (mode === 'commands') commandQuery = input.value;
-    cancelChoice(); createNamed = undefined; mode = kind; title.textContent = heading; input.placeholder = placeholder;
+    cancelChoice(); createNamed = undefined; selectionMarker = 'current'; mode = kind; title.textContent = heading; input.placeholder = placeholder;
     input.setAttribute('aria-label', kind === 'sessions' ? 'Search project sessions' : heading);
     back.hidden = false; retry.hidden = false; retryAction = onRetry;
     retry.textContent = kind === 'sessions' ? 'Refresh' : 'Retry';
@@ -382,12 +391,12 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       if (onError) { closeInteraction(); onError(message); }
       else { failure(message); draw(); }
     };
-    const chooseItems: SelectionRequest['chooseItems'] = (values, selectedValue, guidance) => {
+    const chooseItems: SelectionRequest['chooseItems'] = (values, selectedValue, guidance, marker = 'current') => {
       if (!current()) return Promise.resolve(undefined);
       return new Promise(resolve => {
-        cancelChoice(); resolveChoice = resolve;
-        items = values.map(value => ({ ...value, current: value.id === selectedValue,
-          keywords: [value.keywords, value.id === selectedValue ? 'Current' : undefined].filter(Boolean).join(' ') || undefined,
+        cancelChoice(); resolveChoice = resolve; selectionMarker = marker;
+        items = values.map(value => ({ ...value, current: marker === 'current' && value.id === selectedValue,
+          keywords: [value.keywords, marker === 'current' && value.id === selectedValue ? 'Current' : undefined].filter(Boolean).join(' ') || undefined,
           run: () => { accepted = true; resolve(value.id); } }));
         matches = items; selected = Math.max(0, items.findIndex(item => item.id === selectedValue));
         loading = false; notice = guidance || ''; draw();
@@ -480,6 +489,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     const item = matches[index];
     if (!dialog.open || !item || loading || deleting || anotherDialog()) return;
     if (mode === 'inspection' || mode === 'name') { selected = index; selection(); return; }
+    if (markerTracksSelection()) { selected = index; selection(false); }
     if (mode === 'commands') options.ranking?.record(item.id);
     if (item.next) {
       if (dismissRetained) { selected = index; selection(); }
@@ -557,9 +567,9 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     const row = (event.target as HTMLElement).closest<HTMLElement>('[data-index]'); if (row) choose(Number(row.dataset.index));
   }, { signal });
   list.addEventListener('mousemove', event => {
-    if ((!preview && mode !== 'inspection') || !dialog.open || anotherDialog()) return;
+    if ((!preview && mode !== 'inspection' && !markerTracksSelection()) || !dialog.open || anotherDialog()) return;
     const row = (event.target as HTMLElement).closest<HTMLElement>('[data-index]');
-    if (row && selected !== Number(row.dataset.index)) { selected = Number(row.dataset.index); selection(); }
+    if (row && selected !== Number(row.dataset.index)) { selected = Number(row.dataset.index); selection(!markerTracksSelection()); }
   }, { signal });
   create.addEventListener('click', submitName, { signal });
   cancelName.addEventListener('click', () => closeInteraction(), { signal });

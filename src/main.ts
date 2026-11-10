@@ -1112,7 +1112,7 @@ async function requestCreation(kind: SessionCreationKind, pick = false, copyDraf
   if (!picker) return newHarnessSession(resolved.project!, kind, copyDraft);
   const request = palette.startSelection(kind === 'temporary' ? 'New temporary session with harness' : 'New session with harness', () => {}, undefined, true);
   if (!request) return;
-  const id = await request.chooseItems(choices.map(project => ({ id: project.id, label: project.label })), preferred, resolved.notice);
+  const id = await request.chooseItems(choices.map(project => ({ id: project.id, label: project.label })), preferred, resolved.notice, 'selection');
   request.finish();
   const project = choices.find(project => project.id === id);
   if (project) return newHarnessSession(project, kind, copyDraft);

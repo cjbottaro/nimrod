@@ -554,6 +554,11 @@ test('default harness controls new sessions while one-off choices and settings u
     assert.doesNotMatch(f.element('palette-list').textContent!, /New Copilot session|New Codex session/);
     f.element('palette-list').querySelector<HTMLElement>('[data-key="new-with-harness"]')!.click(); await f.tick();
     assert.equal(f.element('palette-list').querySelector('[data-key="codex"]')!.getAttribute('aria-selected'), 'true');
+    assert.equal(f.element('palette-list').querySelector('[data-key="codex"] .palette-selection-marker')!.textContent, '•');
+    f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+    const selected = f.element('palette-list').querySelector('[aria-selected="true"]')!;
+    assert.equal(selected.querySelector('.palette-selection-marker')!.textContent, '•');
+    assert.equal(f.element('palette-list').querySelector('[aria-current]'), null);
     f.element('palette-list').querySelector<HTMLElement>('[data-key="pi"]')!.click(); await f.tick(); await f.tick();
     assert.equal(f.element('mode-badge').textContent, 'Pi');
     assert.equal(parseSettings(f.preferences.value.text)['sessions.defaultHarness'], 'codex');

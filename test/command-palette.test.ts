@@ -565,7 +565,13 @@ test('combined named creation preserves text while choosing a harness and settle
     f.palette.namedSession((name, id) => {
       assert.equal(f.dialog.open, false); created.push(`${id}:${name}`);
     }, { harnesses: [{ id: 'pi', label: 'Pi' }, { id: 'future', label: 'Future' }], current: 'future', notice: 'Choose a harness for this session.' });
-    const current = () => f.list().querySelector('[aria-selected="true"]')?.getAttribute('data-key');
+    const current = () => {
+      for (const row of f.list().children) {
+        assert.equal(row.querySelector('.palette-selection-marker')?.textContent, row.getAttribute('aria-selected') === 'true' ? '•' : '');
+        assert.equal(row.hasAttribute('aria-current'), false, 'creation marks the candidate, not an applied value');
+      }
+      return f.list().querySelector('[aria-selected="true"]')?.getAttribute('data-key');
+    };
     assert.equal(current(), 'future'); assert.equal(f.win.document.activeElement, f.input);
     assert.equal(f.win.document.querySelectorAll('dialog[open]').length, 1);
     assert.equal(f.dialog.querySelector('select'), null);
@@ -581,6 +587,9 @@ test('combined named creation preserves text while choosing a harness and settle
     f.input.dispatchEvent(new f.win.CompositionEvent('compositionstart'));
     f.key('ArrowDown'); assert.equal(current(), 'future');
     f.input.dispatchEvent(new f.win.CompositionEvent('compositionend'));
+    f.list().children[0].dispatchEvent(new f.win.MouseEvent('mousemove', { bubbles: true }));
+    assert.equal(current(), 'pi'); assert.equal(f.win.document.activeElement, f.input);
+    f.key('ArrowUp'); assert.equal(current(), 'future');
     f.list().querySelector<HTMLElement>('[data-key="pi"]')!.click();
     assert.equal(current(), 'pi'); assert.equal(f.dialog.open, true, 'click selects without creating');
     assert.equal(f.input.value, 'Keep this name'); assert.match(f.status()!, /Choose a harness/);
@@ -693,6 +702,39 @@ test('late history cannot overwrite naming and leaving the step clears its actio
     f.win.document.querySelector<HTMLButtonElement>('#palette-create')!.click(); await tick();
     assert.deepEqual(f.calls, []); assert.equal(f.input.getAttribute('role'), 'combobox');
   } finally { f.dispose(); }
+});
+
+test('creation markers follow keyboard, pointer, filtering and click selection without leaking into configuration pickers', async () => {
+  for (const heading of ['New session with harness', 'New temporary session with harness']) {
+    const f = fixture();
+    try {
+      const values = [{ id: 'pi', label: 'Pi' }, { id: 'copilot', label: 'Copilot' }, { id: 'future', label: 'Future' }];
+      const request = f.palette.startSelection(heading, () => {}, undefined, true)!;
+      const chosen = request.chooseItems(values, 'copilot', undefined, 'selection');
+      const marker = () => [...f.list().children].find(row => row.querySelector('.palette-selection-marker')?.textContent === '•')?.getAttribute('data-key');
+      const selected = () => f.list().querySelector('[aria-selected="true"]')?.getAttribute('data-key');
+      assert.equal(marker(), 'copilot'); assert.equal(selected(), 'copilot');
+      assert.equal(f.list().querySelector('[aria-current]'), null);
+      f.key('ArrowDown'); assert.equal(selected(), 'future'); assert.equal(marker(), 'future');
+      const rows = [...f.list().children];
+      rows[0].querySelector('.palette-item-label')!.dispatchEvent(new f.win.MouseEvent('mousemove', { bubbles: true }));
+      assert.equal(selected(), 'pi'); assert.equal(marker(), 'pi'); assert.equal(f.win.document.activeElement, f.input);
+      assert.deepEqual([...f.list().children], rows, 'pointer movement patches markers in place');
+      f.query('Future'); assert.equal(marker(), 'future'); assert.equal(selected(), 'future');
+      f.query('absent'); assert.equal(marker(), undefined);
+      f.query(''); assert.equal(marker(), selected());
+      f.list().querySelector<HTMLElement>('[data-key="copilot"]')!.click();
+      assert.equal(marker(), 'copilot', 'a direct click updates the marker before closing');
+      await tick(); assert.equal(await chosen, 'copilot'); assert.equal(f.dialog.open, false);
+
+      const configuration = f.palette.startSelection('Model', () => {})!;
+      const configured = configuration.chooseItems(values, 'copilot');
+      f.key('ArrowDown'); assert.equal(selected(), 'future'); assert.equal(marker(), 'copilot', 'configuration dot still marks the applied value');
+      f.list().children[0].dispatchEvent(new f.win.MouseEvent('mousemove', { bubbles: true }));
+      assert.equal(selected(), 'future'); assert.equal(marker(), 'copilot', 'configuration pointer behavior is unchanged');
+      f.key('Escape'); assert.equal(await configured, undefined); await tick();
+    } finally { f.dispose(); }
+  }
 });
 
 test('preference picker marks current option, dismisses on Escape and ignores stale loads', async () => {
