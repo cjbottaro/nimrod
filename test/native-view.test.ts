@@ -894,7 +894,9 @@ test('coalesced queue removal and clear_queue recovery do not recreate pending s
     f.receive({ type: 'queueRecovery', steering: ['stop this steer'], followUp: [] }); f.flush();
     assert.equal(f.win.document.querySelectorAll('#messages .user').length, 0);
     assert.match(f.win.document.querySelector('#queue-activity')!.textContent!, /Recovered steering.*stop this steer.*Restore/);
-    f.win.document.querySelector<HTMLButtonElement>('[data-recovery-id]')!.click();
+    const restore = f.win.document.querySelector<HTMLButtonElement>('[data-recovery-id]')!;
+    assert.equal(restore.className, 'ghost-button');
+    restore.click();
     assert.equal(f.prompt.value, 'stop this steer');
     assert.equal(f.sent.filter(m => m.type === 'prompt').length, 1);
   } finally { f.dom.window.close(); }

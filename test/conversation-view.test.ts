@@ -293,6 +293,8 @@ test('shared controls retain mounted identity, hide unsupported controls and dis
     assert.equal(f.win.document.querySelector<HTMLButtonElement>('#model')!.hidden, true);
     assert.equal(f.win.document.querySelector<HTMLButtonElement>('#thinking')!.hidden, true);
     assert.equal(f.win.document.querySelector<HTMLElement>('.status-separator')!.hidden, true);
+    assert.equal(button.classList.contains('ghost-button'), true);
+    assert.equal(button.classList.contains('utility-button'), false);
     button.focus(); button.click();
     assert.deepEqual(JSON.parse(JSON.stringify(f.sent.at(-1))), { type: 'selectControl', id: 'mode' });
     f.snapshot({ statusArea: { ...statusArea, controls: [{ ...mode, label: 'Review', disabled: true }] }, messages: [], busy: true });
@@ -420,6 +422,23 @@ for (const hidden of [false, true]) for (const empty of [false, true]) {
     } finally { f.dom.window.close(); }
   });
 }
+
+test('actionable Status-area metrics use ghost buttons and retain session-bound dispatch', () => {
+  const f = fixture();
+  try {
+    f.snapshot({ messages: [], statusArea: {
+      capabilities: { metrics: { label: 'Usage' } }, controlsLabel: 'Fixture', controls: [],
+      metrics: '25% / 125k', metricParts: [{ text: '25% / ' }, { text: '125k', actionId: 'context-tier', title: 'Select context window' }],
+    } });
+    const metrics = f.win.document.querySelector<HTMLElement>('#session-metrics')!;
+    const button = metrics.querySelector<HTMLButtonElement>('button')!;
+    assert.equal(metrics.firstChild?.nodeType, f.win.Node.TEXT_NODE);
+    assert.equal(button.className, 'ghost-button');
+    assert.equal(button.getAttribute('aria-label'), 'Select context window');
+    button.click();
+    assert.deepEqual(JSON.parse(JSON.stringify(f.sent.at(-1))), { type: 'selectControl', id: 'context-tier' });
+  } finally { f.dom.window.close(); }
+});
 
 test('metric tooltip-only changes invalidate presentation, retain text nodes and catch up without touching the draft', () => {
   const f = fixture();
