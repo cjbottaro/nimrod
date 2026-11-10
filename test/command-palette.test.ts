@@ -568,7 +568,7 @@ test('combined named creation preserves text while choosing a harness and settle
     assert.equal(f.win.document.querySelectorAll('dialog[open]').length, 1);
     f.query('Keep this name'); harness.value = 'pi'; harness.dispatchEvent(new f.win.Event('change'));
     assert.equal(f.input.value, 'Keep this name'); assert.match(f.status()!, /Choose a harness/);
-    f.key('Enter', { isComposing: true }); f.key('Enter', { repeat: true }); assert.deepEqual(created, []);
+    f.key('Enter', { isComposing: true }); f.key('Enter', { repeat: true }); assert.equal(created.length, 0);
     f.key('Enter'); f.key('Enter'); await tick();
     assert.deepEqual(created, ['pi:Keep this name']);
     for (const native of [false, true]) {
