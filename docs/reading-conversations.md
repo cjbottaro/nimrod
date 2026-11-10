@@ -1,6 +1,6 @@
 # Reading conversations
 
-Clickable session-configuration controls, actionable context-window metrics, pending-action review buttons, operation Cancel and edit-preview Copy/Wrap have outlined secondary-button boundaries. Informational metrics, disclosures and navigation controls remain distinct.
+All buttons in the Status area—including model/thinking controls, actionable context-window metrics and recovered-message Restore—use a borderless, transparent ghost style, with hover feedback and a visible keyboard-focus outline. Pending-action review buttons, operation Cancel and edit-preview Copy/Wrap retain outlined secondary-button boundaries. Informational metrics remain plain text.
 
 The **transcript** contains user and assistant turns. An assistant turn can include reasoning, tool activity and response text—not just its final answer. The Status area below shows activity, model/thinking controls and Pi-reported usage metrics.
 

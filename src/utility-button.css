@@ -14,6 +14,21 @@ button.utility-button[aria-pressed=true] {
   border-color:color-mix(in srgb, var(--vscode-foreground) 55%, transparent);
 }
 button.utility-button:focus-visible { outline:2px solid var(--vscode-focusBorder); outline-offset:2px; }
+/* Low-emphasis actions embedded in an existing surface. */
+button.ghost-button {
+  color:var(--ghost-button-foreground, var(--vscode-foreground));
+  background:transparent;
+  border:0;
+  border-radius:3px;
+}
+button.ghost-button:not(:disabled):hover {
+  color:var(--vscode-foreground);
+  background:var(--nimrod-toolbar-hover-background, var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground)));
+}
+button.ghost-button:focus-visible { outline:2px solid var(--vscode-focusBorder); outline-offset:2px; }
 @media (forced-colors:active) {
+  button.ghost-button { color:ButtonText; }
+  button.ghost-button:not(:disabled):hover { color:HighlightText; background:Highlight; }
+  button.ghost-button:focus-visible { outline-color:Highlight; }
   button.utility-button { color:ButtonText; background:ButtonFace; border-color:ButtonText; }
 }

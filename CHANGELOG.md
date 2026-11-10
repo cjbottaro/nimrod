@@ -55,7 +55,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
-- Settings extends value-plus-Change… pickers to autocomplete acceptance, zoom, modal animation, auto-follow and font controls; current values no longer look like dropdowns. Notification/logging/performance booleans use direct Enabled checkboxes. Shared outlined utility buttons make Settings, Keybindings, actionable notices, edit-preview Copy/Wrap, operation Cancel and session-configuration controls visibly clickable, while navigation, disclosures, primary actions and informational metrics retain their roles.
+- Settings extends value-plus-Change… pickers to autocomplete acceptance, zoom, modal animation, auto-follow and font controls; current values no longer look like dropdowns. Notification/logging/performance booleans use direct Enabled checkboxes. Shared outlined utility buttons make Settings, Keybindings, actionable notices, edit-preview Copy/Wrap, operation Cancel visibly clickable. All Status-area buttons use a borderless ghost style with hover and keyboard-focus feedback; navigation, disclosures, primary actions and informational metrics retain their roles.
 
 - Runtime defaults stay as PATH-resolved command names (`pi`, `node`, `copilot`, `codex`) instead of installation-specific Pi/Node paths or mise-selected versions. Saved global/project overrides are preserved.
 
