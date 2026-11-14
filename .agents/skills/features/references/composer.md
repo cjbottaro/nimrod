@@ -128,6 +128,16 @@ Shared title/layout/outcome/cancellation rules live in [Operation cards](operati
 - Projectors, aliases, operation titles and receipt correlation are runtime-only. Explicit sessionReset replaces them; draft persistence retains only editable draft/queue recovery. No replay, fictitious history reconstruction or persisted submission lifecycle.
 - Rendering uses existing queueRender and TranscriptScroll ownership. Same-key updates preserve nodes/disclosures/title animation; no per-frame JS, layout-growing shimmer or draft-keystroke transcript renders. Hidden/inactive animations pause; reduced motion stays readable. Local Send's explicit auto-follow preference remains independent of all outcome handling.
 
+## Prompt layout
+
+The prompt wraps text and explicitly hides horizontal overflow, including while
+empty and showing its placeholder (WebKitGTK can otherwise expose a horizontal
+scrollbar). Vertical scrolling remains available at the composer height cap;
+native content sizing and the coalesced measurement fallback are unchanged.
+`test/browser/composer-layout.spec.ts` covers empty/typed/cleared states, narrow
+widths, long wrapped text and vertical overflow. The fixture is authored but
+unrun; native Linux appearance still requires user validation.
+
 ## Typing hot path
 
 Draft-only edits retain status/control DOM and update the in-memory draft immediately. Native CSS content sizing is used where supported, otherwise one coalesced pre-paint measurement uses the latest text. Hide/dispose cancels pending sizing; selection sizes the latest draft. The fallback retains the shell-height hold/floor measurement so it cannot clamp transcript reading during measurement. Send/Stop retains its SVG unless the action changes.
