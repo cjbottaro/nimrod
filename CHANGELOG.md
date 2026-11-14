@@ -116,6 +116,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Codex model and thinking-level changes now update the live thread instead of trying to resume saved history, avoiding “no rollout found” in new sessions before the first message. Changes require native settings confirmation; no prompt, replacement session or reconnect is used. Installed-runtime acceptance remains pending.
+
 - Empty projects no longer show the obsolete “PoC” placeholder in the Project bar. The harness label appears only when a session is displayed.
 
 - Deleting the last open session clears its name and tooltip from the Project bar, including repeated deletion through **⌘/Ctrl+Shift+Backspace**.

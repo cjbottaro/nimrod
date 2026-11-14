@@ -71,6 +71,25 @@ fn command_operations_have_narrow_reviewed_parameters() {
     }
 }
 #[test]
+fn live_settings_allow_only_one_model_or_effort_change() {
+    for params in [serde_json::json!({"threadId":"thread","model":"gpt-fixture"}), serde_json::json!({"threadId":"thread","effort":"high"})] {
+        assert!(validate_message(&serde_json::json!({"id":1,"method":"thread/settings/update","params":params})).is_ok());
+    }
+    for params in [
+        serde_json::json!({"model":"gpt-fixture"}),
+        serde_json::json!({"threadId":"","model":"gpt-fixture"}),
+        serde_json::json!({"threadId":"thread"}),
+        serde_json::json!({"threadId":"thread","model":""}),
+        serde_json::json!({"threadId":"thread","effort":"invented"}),
+        serde_json::json!({"threadId":"thread","model":"gpt-fixture","effort":"high"}),
+        serde_json::json!({"threadId":"thread","approvalPolicy":"never"}),
+        serde_json::json!({"threadId":"thread","cwd":"/other"}),
+        serde_json::json!({"threadId":"thread","model":"gpt-fixture","sandboxPolicy":{}}),
+    ] {
+        assert!(validate_message(&serde_json::json!({"id":1,"method":"thread/settings/update","params":params})).is_err());
+    }
+}
+#[test]
 fn resume_allows_only_the_reviewed_effort_override_not_arbitrary_configuration() {
     assert!(validate_message(&serde_json::json!({"id":1,"method":"thread/resume","params":{"threadId":"thread","config":{"model_reasoning_effort":"high"}}})).is_ok());
     for config in [serde_json::json!({"approval_policy":"never"}), serde_json::json!({"model_reasoning_effort":"high","arbitrary":true}), serde_json::json!({"model_reasoning_effort":{}})] {
