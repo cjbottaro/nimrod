@@ -18,6 +18,10 @@ The Runtime **Settings files** disclosure uses compact labelled `.settings-file`
 
 Settings categories remain mounted with independent reading/dirty-control state. Its app-wide sidebar width is independent of project widths; browser modality and resize guards preserve the underlying conversation and nested-dialog focus.
 
+## Select inputs
+
+Settings native selects use `appearance:none` and a CSS arrow in `src/theme.css` so WebKitGTK's native grey chrome cannot override themed field surfaces. Native select semantics, keyboard handling and option popups remain browser-owned. Forced-colors restores native appearance. Native macOS/Linux visual acceptance remains pending.
+
 ## Visual hierarchy
 
 Both scopes share a quiet desktop-utility presentation: compact 12px medium-weight category labels, a restrained selected state, a 13px header identity, 22px category headings and small uppercase section labels. The header stays exactly 48px; native title-bar/window behavior is unchanged.

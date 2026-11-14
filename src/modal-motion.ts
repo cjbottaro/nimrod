@@ -302,6 +302,9 @@ function createModalMotion(document: Document) {
       else scan(layer, snapshot.shell, style, snapshot.motion.scanSpeed, true, snapshot.clip, backdrop, box);
       return;
     } else {
+      // Unlike entrance, the exit backdrop is newly mounted after native close.
+      // Fade its filtered surface away so blur does not disappear abruptly at
+      // cleanup; keep the steady-blur/tint entrance optimization in modal.css.
       layer.node.style.background = snapshot.backdrop;
       applyBackdropFilter(layer.node, snapshot.backdropFilter);
       animate(layer, layer.node, [{ opacity: 1 }, { opacity: 0 }], duration);

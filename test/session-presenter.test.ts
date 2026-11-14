@@ -16,7 +16,7 @@ function fixture() {
   });
   const session = (title: string): PresentedSession => {
     const root = document.createElement('section'), row = document.createElement('button');
-    root.hidden = true; root.innerHTML = '<textarea></textarea>';
+    root.hidden = true; root.innerHTML = '<textarea data-pi-id="prompt"></textarea>';
     conversation.append(root); document.body.append(row);
     const result: PresentedSession = {
       title, root, row, closing: false, reloading: false, deleting: false,
@@ -54,7 +54,7 @@ test('presentation transitions update identity, active ports, visibility and row
     assert.equal(b.root.hidden, true); assert.equal(b.root.inert, true); assert.equal(b.row.getAttribute('aria-current'), 'false');
     f.events.length = 0;
     f.presenter.show(b);
-    assert.deepEqual(f.events, ['A:interactions:false', 'A:notices:false', 'A:view:false', 'B:interactions:true', 'B:view:true', 'B:notices:true']);
+    assert.deepEqual(f.events, ['A:interactions:false', 'A:notices:false', 'A:view:false', 'B:view:true', 'B:notices:true', 'B:interactions:true']);
     assert.equal(a.root.hidden, true); assert.equal(a.root.inert, true); assert.equal(a.row.getAttribute('aria-current'), 'false');
     assert.equal(b.root.hidden, false); assert.equal(b.root.inert, false); assert.equal(b.row.getAttribute('aria-current'), 'true');
     assert.equal(f.name.textContent, 'B'); assert.equal(f.switches(), 2);
@@ -98,6 +98,53 @@ test('removing a background target preserves presentation; removing the presente
     const switches = f.switches(); f.presenter.show(undefined);
     assert.equal(f.switches(), switches); assert.equal(f.conversation.hidden, true); assert.equal(f.badge.title, '');
   } finally { f.dom.window.close(); }
+});
+
+test('navigation focus is reconciled before pending interactions activate', () => {
+  for (const remembered of [false, true]) {
+    const f = fixture();
+    try {
+      const a = f.session('A'), b = f.session('B');
+      f.presenter.show(a);
+      const prompt = b.root.querySelector('textarea')!;
+      const rememberedInput = f.document.createElement('input'); b.root.append(rememberedInput);
+      if (remembered) b.focus = rememberedInput;
+      b.row.focus();
+      let activations = 0;
+      b.integration.interactions.setActive = active => {
+        if (!active) return;
+        activations++;
+        assert.equal(b.root.hidden, false); assert.equal(b.root.inert, false);
+        assert.equal(f.document.activeElement, remembered ? rememberedInput : prompt);
+        assert.equal(f.name.textContent, 'B');
+      };
+      f.presenter.show(b, true);
+      assert.equal(activations, 1);
+      b.row.focus(); f.presenter.show(b, true);
+      assert.equal(f.document.activeElement, remembered ? rememberedInput : prompt);
+      assert.equal(activations, 1);
+    } finally { f.dom.window.close(); }
+  }
+});
+
+test('presentation respects focus-free intents and existing dialog priority', () => {
+  for (const modal of [false, true]) {
+    const f = fixture();
+    try {
+      const a = f.session('A'), b = f.session('B'); f.presenter.show(a);
+      const opener = modal ? f.document.querySelector('dialog input')! : b.row;
+      if (modal) f.document.querySelector('dialog')!.setAttribute('open', '');
+      (opener as HTMLElement).focus();
+      let activations = 0;
+      b.integration.interactions.setActive = active => {
+        if (!active) return;
+        activations++; assert.equal(f.document.activeElement, opener);
+        assert.equal(b.root.hidden, false); assert.equal(b.root.inert, false);
+      };
+      f.presenter.show(b, modal);
+      assert.equal(activations, 1); assert.equal(f.document.activeElement, opener);
+    } finally { f.dom.window.close(); }
+  }
 });
 
 test('hiding saves composer focus and moves it to the filter only when no dialog is open', () => {

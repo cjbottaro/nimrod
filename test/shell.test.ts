@@ -2061,6 +2061,70 @@ test('Copilot questions use retained picker and nested input without cancelling 
   } finally { f.win.close(); }
 });
 
+for (const outcome of ['answer', 'custom answer', 'dismiss', 'higher modal'] as const) {
+  test(`switching to a pending question restores conversation focus before presentation: ${outcome}`, async () => {
+    const f = await fixture(undefined, { windowWorkspace: '/project' });
+    try {
+      f.openPalette();
+      const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New Copilot session'; input.dispatchEvent(new f.win.Event('input'));
+      input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      await f.tick(); await f.tick();
+      const target = [...f.sdkSessions.values()].find(session => session.sessionId === 'sdk-fixture')!;
+      const row = f.rows()[0], draft = f.element<HTMLTextAreaElement>('prompt');
+      const root = draft.closest<HTMLElement>('.session-view')!;
+      draft.value = 'Keep question draft'; draft.dispatchEvent(new f.win.Event('input')); draft.focus();
+      f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+      const siblingDraft = f.element<HTMLTextAreaElement>('prompt');
+      siblingDraft.value = 'Keep sibling draft'; siblingDraft.dispatchEvent(new f.win.Event('input')); siblingDraft.focus();
+      target.channel.onmessage({ kind: 'rpc', value: { kind: 'input', id: 'background-question', request: { question: 'What scope?', choices: ['Conversation only'] } } });
+      await f.tick();
+      const picker = f.element<HTMLDialogElement>('command-palette');
+      assert.equal(picker.open, false); assert.equal(f.win.document.activeElement, siblingDraft);
+      assert.equal(root.hidden, true);
+      // Model a pointer/keyboard-focused row explicitly: jsdom click does not focus buttons.
+      row.focus();
+      let opener: Element | null | undefined;
+      const show = picker.showModal.bind(picker);
+      picker.showModal = () => {
+        opener = f.win.document.activeElement;
+        assert.equal(root.hidden, false); assert.equal(root.inert, false);
+        show();
+      };
+      const host = f.element<HTMLDialogElement>('host-dialog');
+      if (outcome === 'higher modal') {
+        host.showModal(); f.element('host-dialog-input').focus();
+      }
+      row.click(); await f.tick();
+      const decisions = () => f.calls.filter(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'decision');
+      if (outcome === 'higher modal') {
+        assert.equal(picker.open, false); assert.equal(opener, undefined);
+        assert.equal(f.win.document.activeElement, f.element('host-dialog-input'));
+        assert.equal(decisions().length, 0);
+      } else {
+        assert.equal(picker.open, true); assert.equal(opener, draft);
+        assert.equal(f.win.document.activeElement, input);
+        if (outcome === 'dismiss') {
+          input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        } else if (outcome === 'custom answer') {
+          const custom = [...f.element('palette-list').querySelectorAll<HTMLElement>('[role=option]')].find(option => option.textContent?.includes('Enter your own answer'))!;
+          custom.click(); await f.tick();
+          assert.equal(host.open, true);
+          f.element<HTMLTextAreaElement>('host-dialog-input').value = 'Custom scope'; host.close('ok');
+        } else {
+          f.element('palette-list').querySelector<HTMLElement>('[role=option]')!.click();
+        }
+        await f.tick(); await f.tick();
+        assert.equal(picker.open, false); assert.equal(f.win.document.activeElement, draft);
+        assert.equal(decisions().length, outcome === 'dismiss' ? 0 : 1);
+        if (outcome !== 'dismiss') assert.deepEqual((decisions()[0].args.message as JsonRecord).value,
+          { answer: outcome === 'custom answer' ? 'Custom scope' : 'Conversation only', wasFreeform: outcome === 'custom answer' });
+      }
+      assert.equal(draft.value, 'Keep question draft'); assert.equal(siblingDraft.value, 'Keep sibling draft');
+      assert.equal(f.calls.some(call => call.command === 'write_copilot' && ['prompt', 'cancel'].includes((call.args.message as JsonRecord).method as string)), false);
+    } finally { f.win.close(); }
+  });
+}
+
 test('Copilot plan picker retains pending review and returns feedback without prompts or draft changes', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project' });
   try {

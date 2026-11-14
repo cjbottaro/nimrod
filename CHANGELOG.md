@@ -63,6 +63,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 - Settings replaces the color-theme dropdown with **Change theme…**, opening the existing searchable **Select theme…** action with live previews. The saved theme sits beside the button; project theme/autocomplete rows use a separate provenance column, collapsing below values in narrow panes. Settings utility buttons—including Global Settings, Change theme, Remove override and Copy path—have visible outlines before hover, while Back stays a text navigation control. Import and removal stay in Global Settings.
 
+- Subtle modal opening keeps background blur steady while fading the dimming and panel, improving Linux entrance smoothness with translucency. Closing retains its blur fade; the attempted steady-blur exit was reverted after a reported regression.
+
 - Close and Delete now discard the local entry and draft/attachments when a harness confirms there is no saved history, including empty Copilot sessions that cannot be restored after restart. Saved or uncertain history still preserves drafts on Close. All harness integrations supply the same required recoverability interface; shutdown is rechecked in case it saves history. Native acceptance remains pending.
 
 - Shell cards across Pi, Copilot and Codex use one unlabeled, soft-wrapping output viewport with closed Raw inputs/Raw output disclosures underneath. Matching final output preserves live ANSI colors without duplication; replacement output remains authoritative and supplied nonzero exit diagnostics stay visible. Copilot’s final preview/metadata stays in Raw output rather than a second result block. The shared component also covers retained ACP execute cards and plugins that use it. Native visual acceptance is pending.
@@ -115,6 +117,10 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 ### Fixed
 
 - Deleting the last open session clears its name and tooltip from the Project bar, including repeated deletion through **⌘/Ctrl+Shift+Backspace**.
+
+- Selecting a session with a pending question or permission request now restores conversation focus before opening its picker, avoiding a stranded sidebar focus outline after answering or dismissing it. Keyboard-focus indicators remain available.
+
+- Settings dropdown fields use the app's theme colors instead of Linux's native grey select surface, with a matching arrow and preserved native keyboard controls.
 
 - Copilot Close/Delete recoverability checks now pass the native IPC validator instead of failing with “Unsupported Copilot SDK bridge operation.”
 

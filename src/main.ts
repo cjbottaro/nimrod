@@ -941,13 +941,12 @@ function activate(tab: Tab, intent: SelectionIntent = 'explicit'): void {
     if (workspace) save(`nimrod.sidebar.view:${workspace}`, sidebarView);
   }
   active = plan.target;
-  presentation.show(navigation.presented(navigationSnapshot()));
+  presentation.show(navigation.presented(navigationSnapshot()), plan.focus);
   if (presentation.current === tab) tab.unread = false;
   // Effects live at this one boundary; the model never touches Pi or drafts.
   for (const item of tabs) updateTab(item);
   persistTabs(); controls(); syncPopouts();
   if (plan.reveal && presentation.current === tab) revealSidebarRow(required('sidebar-session-panel'), tab.rowNode, intent === 'startup' ? 'prefer-top' : 'nearest');
-  if (plan.focus && presentation.current === tab && !document.querySelector('dialog[open]')) (tab.focus?.isConnected ? tab.focus : tab.root.querySelector<HTMLElement>('[data-pi-id="prompt"]'))?.focus({ preventScroll: true });
   selectedConnection.request();
 }
 function refreshTime(tab: Tab): void {

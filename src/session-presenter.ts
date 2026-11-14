@@ -31,9 +31,10 @@ export class SessionPresenter<T extends PresentedSession> {
   constructor(private readonly options: SessionPresenterOptions<T>) {}
   get current(): T | undefined { return this.#current; }
 
-  show(session: T | undefined): void {
+  show(session: T | undefined, focus = false): void {
     const { conversation } = this.options;
-    if (this.#current !== session) {
+    const changed = this.#current !== session;
+    if (changed) {
       const previous = this.#current;
       if (previous) {
         previous.integration.interactions.setActive(false);
@@ -52,7 +53,6 @@ export class SessionPresenter<T extends PresentedSession> {
       conversation.hidden = !session;
       if (session) {
         session.root.hidden = false;
-        session.integration.interactions.setActive(true);
         session.view.setActive(true);
         session.notices.setActive(true);
       }
@@ -62,6 +62,13 @@ export class SessionPresenter<T extends PresentedSession> {
     conversation.hidden = !session;
     for (const item of this.options.sessions()) this.refreshRow(item);
     this.refreshIdentity();
+    // Reveal/catch up and clear inactive inert state before a pending picker
+    // captures the navigation focus target; existing dialogs retain priority.
+    const document = conversation.ownerDocument;
+    if (focus && session && !document.querySelector('dialog[open]')) {
+      (session.focus?.isConnected ? session.focus : session.root.querySelector<HTMLElement>('[data-pi-id="prompt"]'))?.focus({ preventScroll: true });
+    }
+    if (changed && session) session.integration.interactions.setActive(true);
   }
 
   /** Lifecycle/content updates don't constitute selection or reactivate mounted views. */
