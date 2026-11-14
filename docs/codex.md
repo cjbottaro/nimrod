@@ -71,7 +71,7 @@ For capture, enable **Global Settings → Diagnostics → Transcript debug logs*
 
 ## Models, reasoning and usage
 
-Advertised model/effort choices use the shared Status-area controls and pickers. Changes chosen while busy remain local pending intent until idle. Nimrod applies supported resume overrides and requires the returned effective value to match before reporting success; it does not send a prompt or edit global configuration to force a change. Installed-runtime acceptance of already-loaded-thread overrides remains pending. A CLI that cannot confirm a change produces an error instead of showing a speculative effective value.
+Advertised model/effort choices use the shared Status-area controls and pickers. Changes chosen while busy remain local pending intent until idle. Nimrod updates the existing live thread, including before its first message, without requiring saved history or resuming it. It requires Codex's acknowledgement and matching effective-settings notification before reporting success; it does not send a prompt or edit global configuration to force a change. Installed-runtime acceptance remains pending. A CLI that does not support live settings updates or cannot confirm a change produces an error instead of showing a speculative effective value.
 
 Usage shows Codex-reported token totals and the last-turn token amount against the reported model window. This is not a guaranteed current-context measurement or a monetary estimate. No inferred dollar cost, Copilot credit conversion or fabricated context metric is shown.
 

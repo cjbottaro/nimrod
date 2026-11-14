@@ -42,6 +42,7 @@ export class CodexClient {
   private currentTurn?: { id: string; completed: boolean };
   private startingTurn?: StartingTurn;
   private compactAttempt?: CompactAttempt;
+  private configurationAttempt?: { setting: 'model' | 'effort'; value: string; confirmed: boolean; finish(outcome: { settings?: RpcRecord; error?: Error }): void };
   private early: CodexEvent[] = [];
   private earlyBytes = 0;
   private timers = new Set<ReturnType<typeof setTimeout>>();
@@ -54,6 +55,7 @@ export class CodexClient {
       request: (method, params, signal, id) => this.request(method, params, signal, id),
       disconnected: error => {
         this.compactAttempt?.finish({ error });
+        this.configurationAttempt?.finish({ error });
         this.state = 'disconnected'; this.early = []; this.earlyBytes = 0;
         for (const timer of this.timers) clearTimeout(timer);
         this.timers.clear();
@@ -277,21 +279,36 @@ export class CodexClient {
     });
     return result;
   }
-  /** Supported resume overrides, with strict result confirmation; never submits a turn. */
+  /** Update the live thread, including before its first saved rollout. The empty
+   * acknowledgement alone is not effective-state evidence: await native settings
+   * in either response/event order. Never resume, submit a turn or retry.
+   */
   async configure(cwd: string, setting: 'model' | 'effort', value: string): Promise<RpcRecord> {
-    if (this.state !== 'idle') throw new Error('Codex configuration requires idle');
+    if (this.state !== 'idle' || this.configurationAttempt) throw new Error('Codex configuration requires idle');
     const threadId = this.requireBound(); nonempty(value, 'configuration value');
-    let result!: RpcRecord;
-    await this.rpc('thread/resume', { threadId, cwd, excludeTurns: true,
-      ...(setting === 'model' ? { model: value } : { config: { model_reasoning_effort: value } }) }, data => {
-      result = record(data, 'configuration');
-      const identity = thread(result.thread);
-      if (identity.id !== threadId || identity.cwd !== cwd || result.cwd !== cwd) throw new Error('Codex configuration returned a conflicting identity');
-      if (identity.status.type !== 'idle' || this.state !== 'idle') throw new Error('Codex configuration overlapped active work; effective state is uncertain');
-      if ((setting === 'model' ? result.model : result.reasoningEffort) !== value)
-        throw new Error('Codex did not confirm the requested setting on this loaded thread');
-    });
-    return result;
+    if (cwd !== this.bound!.cwd) throw new Error('Codex configuration project does not match the bound thread');
+    let finish!: (outcome: { settings?: RpcRecord; error?: Error }) => void;
+    const confirmation = new Promise<{ settings?: RpcRecord; error?: Error }>(resolve => { finish = resolve; });
+    const attempt = { setting, value, finish, confirmed: false };
+    this.configurationAttempt = attempt;
+    const timer = setTimeout(() => this.disconnect('Codex settings confirmation timed out. Nothing was retried.'), this.timeoutMs);
+    this.timers.add(timer);
+    try {
+      await this.rpc('thread/settings/update', { threadId, [setting]: value }, data => {
+        if (Object.keys(record(data, 'configuration acknowledgement')).length)
+          throw new Error('Invalid Codex configuration acknowledgement');
+      });
+      const outcome = await confirmation;
+      if (outcome.error) throw outcome.error;
+      return outcome.settings!;
+    } catch (error) {
+      // A settings event followed by a rejection is contradictory, not a safe failure.
+      if (error instanceof RpcResponseError && attempt.confirmed) this.disconnect(error);
+      throw error;
+    } finally {
+      clearTimeout(timer); this.timers.delete(timer);
+      if (this.configurationAttempt === attempt) this.configurationAttempt = undefined;
+    }
   }
   async models(cursor?: string): Promise<CodexPage<RpcRecord>> {
     if (!['ready', 'idle', 'working'].includes(this.state)) throw new Error('Codex model catalog unavailable');
@@ -354,6 +371,13 @@ export class CodexClient {
         compact.finish({ error: failure ? new Error(failure) : !compact.compacted
           ? new CodexCompactionUncertain('Codex completed a turn without confirming context compaction. Nothing was retried.') : undefined });
       }
+    }
+    if (method === 'thread/settings/updated' && this.configurationAttempt && !this.configurationAttempt.confirmed) {
+      const settings = record(params.threadSettings, 'thread settings');
+      const attempt = this.configurationAttempt;
+      if (settings.cwd !== this.bound.cwd || this.state !== 'idle' || settings[attempt.setting] !== attempt.value)
+        throw new Error('Codex did not confirm the requested setting on this loaded thread');
+      attempt.confirmed = true; attempt.finish({ settings });
     }
     if (method === 'serverRequest/resolved') {
       if (!isRpcId(params.requestId)) throw new Error('Invalid Codex resolved request ID');

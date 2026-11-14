@@ -209,11 +209,11 @@ fn validate_message(value: &Value) -> Result<(), String> {
             Some("initialize" | "thread/start" | "thread/resume" | "thread/list"
                 | "thread/turns/list" | "thread/items/list"
                 | "turn/start" | "turn/steer" | "turn/interrupt" | "model/list" | "thread/delete" | "thread/name/set"
-                | "thread/compact/start" | "thread/read" | "mcpServerStatus/list" | "thread/backgroundTerminals/list" | "skills/list" | "hooks/list") if valid_id(&value["id"]) => {},
+                | "thread/compact/start" | "thread/read" | "thread/settings/update" | "mcpServerStatus/list" | "thread/backgroundTerminals/list" | "skills/list" | "hooks/list") if valid_id(&value["id"]) => {},
             _ => return Err("Unsupported Codex operation".into()),
         }
         if matches!(method.as_str(), Some("thread/resume" | "thread/turns/list" | "thread/items/list" | "turn/start" | "turn/steer" | "turn/interrupt" | "thread/delete" | "thread/name/set"
-            | "thread/compact/start" | "thread/read" | "mcpServerStatus/list" | "thread/backgroundTerminals/list"))
+            | "thread/compact/start" | "thread/read" | "thread/settings/update" | "mcpServerStatus/list" | "thread/backgroundTerminals/list"))
             && value["params"]["threadId"].as_str().is_none_or(|id| id.is_empty() || id.len() > 128) {
             return Err("Codex operation requires a thread ID".into());
         }
@@ -237,6 +237,16 @@ fn validate_message(value: &Value) -> Result<(), String> {
                 if method.as_str() == Some("mcpServerStatus/list") && !matches!(value["params"]["detail"].as_str(), Some("full" | "toolsAndAuthOnly")) {
                     return Err("Invalid Codex MCP detail".into());
                 }
+            }
+        }
+        if method.as_str() == Some("thread/settings/update") {
+            let params = value["params"].as_object().ok_or("Invalid Codex settings parameters")?;
+            // This boundary permits only one advertised model/effort change,
+            // never cwd, permissions, sandbox or other settings mutations.
+            if params.len() != 2 || params.keys().any(|key| !matches!(key.as_str(), "threadId" | "model" | "effort"))
+                || params.get("model").is_some_and(|model| model.as_str().is_none_or(|model| model.trim().is_empty()))
+                || params.get("effort").is_some_and(|effort| !matches!(effort.as_str(), Some("none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra"))) {
+                return Err("Unsupported Codex settings update".into());
             }
         }
         if method.as_str() == Some("thread/name/set") && value["params"]["name"].as_str().is_none_or(|name|

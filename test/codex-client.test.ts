@@ -81,6 +81,56 @@ test('Codex resume uses exact ID without prompt, history injection, or a replace
   f.client.disconnect();
 });
 
+test('Codex configures an unsaved live thread with settings confirmation in either wire order', async () => {
+  for (const setting of ['model', 'effort'] as const) for (const eventFirst of [true, false]) {
+    const f = fixture(); await f.ready();
+    const value = setting === 'model' ? 'new-model' : 'high';
+    let completed = false;
+    const pending = f.client.configure(cwd, setting, value).then(result => { completed = true; return result; });
+    assert.deepEqual(f.last('thread/settings/update').params, { threadId: 'thread-a', [setting]: value });
+    const settings = { cwd, model: 'new-model', effort: 'high' };
+    if (eventFirst) f.event('thread/settings/updated', { threadSettings: settings });
+    else f.respond('thread/settings/update', {});
+    await flush(); assert.equal(completed, false, 'both acknowledgement and effective settings are required');
+    // Another thread cannot confirm this operation.
+    f.event('thread/settings/updated', { threadSettings: settings }, 'other-thread');
+    if (eventFirst) f.respond('thread/settings/update', {});
+    else f.event('thread/settings/updated', { threadSettings: settings });
+    assert.deepEqual(await pending, settings);
+    assert.equal(f.client.phase, 'idle');
+    assert.equal(f.sent.some(packet => ['thread/resume', 'turn/start', 'thread/name/set'].includes(String(packet.method))), false);
+    f.client.disconnect();
+  }
+});
+
+test('Codex configuration rejects mismatched confirmation, loss and unsupported methods without fallback', async () => {
+  for (const scenario of ['value', 'cwd', 'busy', 'disconnect', 'unsupported']) {
+    const f = fixture(); await f.ready();
+    const checked = assert.rejects(f.client.configure(cwd, 'model', 'new-model'));
+    if (scenario === 'unsupported') f.client.receive({ id: f.last('thread/settings/update').id, error: { code: -32601, message: 'Unsupported method' } });
+    else {
+      f.respond('thread/settings/update', {});
+      if (scenario === 'disconnect') f.client.disconnect('Lost before settings confirmation');
+      else {
+        if (scenario === 'busy') f.event('turn/started', { turn: turn() });
+        f.event('thread/settings/updated', { threadSettings: { cwd: scenario === 'cwd' ? '/other' : cwd, model: scenario === 'value' ? 'different' : 'new-model' } });
+      }
+    }
+    await checked;
+    assert.equal(f.client.phase, scenario === 'unsupported' ? 'idle' : 'disconnected');
+    assert.equal(f.sent.filter(packet => packet.method === 'thread/settings/update').length, 1);
+    assert.equal(f.sent.some(packet => ['thread/resume', 'turn/start'].includes(String(packet.method))), false);
+    f.client.disconnect();
+  }
+});
+
+test('Codex settings confirmation is bounded after an empty acknowledgement', async () => {
+  const f = fixture({}, 10); await f.ready();
+  const checked = assert.rejects(f.client.configure(cwd, 'effort', 'high'), /confirmation timed out/);
+  f.respond('thread/settings/update', {}); await checked;
+  assert.equal(f.client.phase, 'disconnected');
+});
+
 test('Codex identity/project mismatch, ephemeral history and binding rejection fail closed', async () => {
   for (const scenario of ['id', 'cwd', 'outer-cwd', 'ephemeral', 'binding']) {
     const f = fixture({ identified: () => { if (scenario === 'binding') throw new Error('Draft scope conflict'); } });

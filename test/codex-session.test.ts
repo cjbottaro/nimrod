@@ -28,6 +28,9 @@ function fixture(custom?: (packet: CodexPacket, reply: (result: unknown) => void
     switch (packet.method) {
       case 'initialize': reply({ userAgent: 'fixture/0.162.0' }); break;
       case 'thread/start': case 'thread/resume': reply({ cwd, thread: thread(), model: params.model ?? 'fixture-model', reasoningEffort: (params.config as Record<string, unknown> | undefined)?.model_reasoning_effort ?? 'low' }); break;
+      case 'thread/settings/update':
+        event('thread/settings/updated', { threadSettings: { cwd, model: params.model ?? 'fixture-model', effort: params.effort ?? 'low' } });
+        reply({}); break;
       case 'thread/turns/list': reply({ data: [], nextCursor: null }); break;
       case 'model/list': reply({ data: [model], nextCursor: null }); break;
       case 'thread/read': reply({ thread: { ...thread(), name: 'Fixture thread', model: 'fixture-model', reasoningEffort: 'low' } }); break;
@@ -68,6 +71,30 @@ test('native saved-history evidence is separate from zero-message readiness and 
     assert.equal(confirmations, 1, 'saved history is confirmed by its successful read, not the name alone');
     assert.equal(f.session.state.messages.some(row => row.role === 'user'), false);
     assert.equal(f.sent.some(packet => ['turn/start', 'turn/steer', 'thread/compact/start'].includes(String(packet.method))), false);
+  } finally { f.session.disconnect('done'); }
+});
+
+test('a new Codex session can change model before any rollout exists', async () => {
+  const other = { ...model, model: 'other-model', displayName: 'Other model' };
+  const f = fixture((packet, reply, session) => {
+    if (packet.method === 'thread/turns/list') {
+      session.receive({ id: packet.id, error: { code: -32600, message: 'no rollout found for thread id thread' } }); return true;
+    }
+    if (packet.method === 'model/list') { reply({ data: [model, other], nextCursor: null }); return true; }
+    if (packet.method === 'thread/resume') throw new Error('Fresh-thread configuration must not resume');
+    return false;
+  });
+  try {
+    await f.session.initialize(cwd); await flush();
+    const choices = await f.session.configuration.choices('model');
+    f.session.configuration.set('model', choices.find(choice => choice.value === other.model)!);
+    await flush();
+    assert.equal(f.session.configuration.get('model'), other.model);
+    assert.equal(f.session.configuration.operations.at(-1)?.phase, 'completed');
+    assert.equal(f.session.state.sessionUnavailable, false);
+    assert.equal(f.sent.filter(packet => packet.method === 'thread/start').length, 1);
+    assert.equal(f.sent.some(packet => ['thread/resume', 'turn/start', 'thread/name/set'].includes(String(packet.method))), false);
+    assert.deepEqual(f.notices, []);
   } finally { f.session.disconnect('done'); }
 });
 
@@ -127,7 +154,8 @@ test('Codex command catalog and model picker use native configuration, not promp
     await commands.invoke({ id: 'model', text: '/model' });
     assert.equal(commands.operations.at(-1)?.phase, 'completed');
     assert.equal(f.session.configuration.get('model'), 'fixture-model');
-    assert.equal(f.sent.filter(packet => packet.method === 'thread/resume').length, 1);
+    assert.equal(f.sent.filter(packet => packet.method === 'thread/settings/update').length, 1);
+    assert.equal(f.sent.some(packet => packet.method === 'thread/resume'), false);
     assert.equal(f.sent.some(packet => ['turn/start', 'turn/steer'].includes(String(packet.method))), false);
     assert.equal(f.session.state.messages.length, 0);
     assert.match(commands.validate('/model nonexistent')!, /advertised/);
@@ -445,13 +473,14 @@ test('Codex terminal delivery during hydration cannot revive stale history spinn
   f.session.disconnect('done');
 });
 
-test('Codex applies advertised effort through result-confirmed configuration without a prompt', async () => {
+test('Codex applies advertised effort through native settings confirmation without a prompt', async () => {
   const f = fixture(); await f.session.initialize(cwd);
   const choices = await f.session.configuration.choices('effort');
   f.session.configuration.set('effort', choices.find(choice => choice.value === 'high')!);
   await flush();
   assert.equal(f.session.configuration.get('effort'), 'high');
-  assert.equal(f.sent.some(packet => packet.method === 'turn/start'), false);
+  assert.deepEqual(f.sent.find(packet => packet.method === 'thread/settings/update')?.params, { threadId: 'thread', effort: 'high' });
+  assert.equal(f.sent.some(packet => ['thread/resume', 'turn/start'].includes(String(packet.method))), false);
   assert.equal(f.session.configuration.operations.at(-1)?.phase, 'completed'); f.session.disconnect('done');
 });
 

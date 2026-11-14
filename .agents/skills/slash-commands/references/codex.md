@@ -22,7 +22,7 @@ is implied: unsupported native APIs fail explicitly on their Command card.
 
 | Command | Discovery / arguments | Execution / confirmation | Scope and remaining limitation |
 | --- | --- | --- | --- |
-| `/model [model-id]` | Connected advertised model catalog; literal ID completion and bare picker | Refresh `model/list`, validate exact ID, `thread/resume` override through concrete configuration adapter; require effective returned/selected model | Model selection only; native combined effort picker/richer syntax remains partial. Loaded-thread runtime acceptance pending. Outer token whitespace ignored. |
+| `/model [model-id]` | Connected advertised model catalog; literal ID completion and bare picker | Refresh `model/list`, validate exact ID, `thread/settings/update` through concrete configuration adapter; require acknowledgement plus native effective settings | Model selection only; native combined effort picker/richer syntax remains partial. Live-settings runtime acceptance pending. Outer token whitespace ignored. |
 | `/rename [name]` | Connected-thread entry, bare text input | Nonempty single-line name; exact-thread `thread/name/set`, ordered name reconciliation and requested-name confirmation | Conflicting newer name is not overwritten or claimed as this command's success. No generated-name model request. |
 | `/compact` | No arguments; accepted during work, dispatched at native idle | `thread/compact/start` only acknowledges enqueued work. Wait for the identified native turn, canonical `contextCompaction` item and terminal result; failed/interrupted/missing-marker outcomes are not success | May use the model when explicitly invoked by the user. No `turn/start`, hidden prompt, optional focus grammar, polling or automatic retry. Composer locks during compaction; Stop uses the actual identified turn. |
 | `/mcp [verbose]` | Read-only metadata; native `verbose` literal only | Exact-thread `mcpServerStatus/list`, native `toolsAndAuthOnly` or `full`, complete pagination with cursor-cycle detection | Tools/auth/runtime report; verbose adds descriptions/resources. Discovery can contact configured MCP servers. OAuth `login` is rejected before draft clearing. Not the Pi MCP inspector. |
@@ -58,7 +58,7 @@ never replace a draft, navigate or open another session's modal.
 ## Adapter rationale and removal condition
 
 The terminal command UI is client-owned and absent from app-server command
-metadata. These adapters use reviewed `model/list`, `thread/resume`, naming,
+metadata. These adapters use reviewed `model/list`, live settings updates, naming,
 compaction and read-only report APIs—not an invented command RPC or a Nimrod
 action redirect. Migrate to authoritative native command metadata/typed results
 if Codex adds them. Unsupported variants remain rejected, not guessed.

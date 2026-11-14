@@ -95,7 +95,7 @@ New sessions honor non-null Copilot model/effort preferences read through the SD
 
 ### Codex app-server
 
-[Codex](../../codex-integration/SKILL.md) implements this same port over its advertised model/effort catalog and supported idle resume overrides. Busy intent waits for idle; returned effective values must match. Newer native settings events outrank older response snapshots, and uncertainty disconnects rather than claiming success or replaying. No prompt, process restart or global configuration write is used to force mutation. Loaded-thread override acceptance remains unverified; the Codex skill owns that limitation and possible future policy choices.
+[Codex](../../codex-integration/SKILL.md) implements this same port over its advertised model/effort catalog and live `thread/settings/update` API, including new threads without saved rollouts. Busy intent waits for idle; both acknowledgement and matching native effective-settings notification are required. Later native settings events remain authoritative, and uncertainty disconnects rather than claiming success or replaying. No Resume fallback, prompt, process restart or global configuration write is used to force mutation. Installed-runtime acceptance remains unverified; the Codex skill owns the concrete confirmation contract and compatibility boundary.
 
 ### Dormant generic ACP
 
